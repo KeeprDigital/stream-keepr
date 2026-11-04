@@ -610,25 +610,19 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(guide().classes()).toContain('is-selected');
 		});
 
-		// #747: a click on a locked layer falls through to whatever lies beneath it.
-		it('stops offering the layers the editor locked, so a click reaches what lies beneath', async () => {
-			mockConfig.value = guidedConfig();
+		// #747: a click on a layer the layout stores locked falls through to whatever lies beneath it.
+		it('stops offering the layers the layout locks, so a click reaches what lies beneath', async () => {
+			const config = guidedConfig();
+			config.layout.sources = config.layout.sources.map(source => source.id === 'main-source'
+				? { ...source, locked: true }
+				: source);
+			config.layout.composition.items = config.layout.composition.items.map(item => ({ ...item, locked: true }));
+			mockConfig.value = config;
 			mockPreviewGuides.value = true;
 			mockIsPreview.value = true;
 			const postMessage = vi.spyOn(window.parent, 'postMessage');
 
 			const wrapper = await mountComponent();
-			window.dispatchEvent(new MessageEvent('message', {
-				origin: window.location.origin,
-				source: window.parent,
-				data: {
-					type: 'feature-match-overlay:locked-layers',
-					layers: [
-						{ type: 'source', itemId: 'main-source' },
-						{ type: 'item', itemId: 'shared-clock' },
-					],
-				},
-			}));
 			await nextTick();
 
 			expect(wrapper.find('[aria-label="Select Main Match Source"]').exists()).toBe(false);

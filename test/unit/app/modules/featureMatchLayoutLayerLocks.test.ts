@@ -6,37 +6,54 @@ import {
 	isLayerLocked,
 	isLockedByGroup,
 	lockedLayers,
-	readLayerLocks,
 	toggleLayerLocks,
 } from '~~/app/modules/feature-match-overlay/layerLocks';
-import { addGraphicGroupChild, addGraphicItem } from '~~/shared/modules/graphics';
+import { addGraphicGroupChild, addGraphicItem, flattenGraphicItems } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
 /**
- * A Layer Lock keeps a layer from canvas edits (#747): a layer is locked in its
- * own right or through its Graphic Group (E28), and a Source Item locks too.
+ * A Layer Lock keeps a layer from canvas edits (#747) and is stored on the layer
+ * (#943): locked in its own right or through its Graphic Group (E28), a Source
+ * Item too, and a layer stored without one is unlocked.
  */
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
 
-/** Group `g` (children `g1`, `g2`), item `top`, and Source `s1`. */
-function layout(): FeatureMatchLayoutConfig {
+/** Group `g` (children `g1`, `g2`), item `top`, and Source `s1`; the ids in `locked` stored locked. */
+function layout(locked: string[] = []): FeatureMatchLayoutConfig {
 	const base = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
 	let composition: BroadcastGraphicConfig = { ...base.composition, items: [] };
 	composition = addGraphicItem(composition, { kind: 'group', id: 'g', ...CANVAS }).graphic;
 	composition = addGraphicGroupChild(composition, { kind: 'text', groupId: 'g', id: 'g2' }).graphic;
 	composition = addGraphicGroupChild(composition, { kind: 'text', groupId: 'g', id: 'g1' }).graphic;
 	composition = addGraphicItem(composition, { kind: 'text', id: 'top', ...CANVAS }).graphic;
+	const lock = <T extends { id: string }>(item: T): T => locked.includes(item.id)
+		? { ...item, locked: true }
+		: item;
 	return {
 		...base,
-		composition,
+		composition: {
+			...composition,
+			items: composition.items.map(item => lock(item.type === 'group'
+				? {
+						...item,
+						children: item.children.map(lock),
+					}
+				: item)),
+		},
 		sources: [
-			{ ...base.sources[0]!, id: 's1' },
+			lock({ ...base.sources[0]!, id: 's1' }),
 		],
 	};
 }
 
-const LAYOUT = layout();
+/** Each layer stored with a `locked` field, and what it holds. */
+function storedLocks(stored: FeatureMatchLayoutConfig): Record<string, unknown> {
+	return Object.fromEntries([
+		...flattenGraphicItems(stored.composition),
+		...stored.sources,
+	].filter(item => 'locked' in item).map(item => [item.id, item.locked]));
+}
 
 function layer(id: string): FeatureMatchLayoutEditorLayer {
 	return id.startsWith('s')
@@ -48,135 +65,114 @@ describe('feature match layout layer locks', () => {
 	it.each<[string, string[], string, boolean]>([
 		[
 			'a layer locked in its own right',
-			['item:top'],
+			['top'],
 			'top',
 			true,
 		],
 		[
 			'a Source Item',
-			['source:s1'],
+			['s1'],
 			's1',
 			true,
 		],
 		[
 			'a child of a locked group',
-			['item:g'],
+			['g'],
 			'g1',
 			true,
 		],
 		[
 			'a group whose child alone is locked',
-			['item:g1'],
+			['g1'],
 			'g',
 			false,
 		],
 		[
 			'a sibling of a locked child',
-			['item:g1'],
+			['g1'],
 			'g2',
 			false,
 		],
 		[
-			'a Graphic Item that shares an id with a locked Source Item',
-			['source:top'],
-			'top',
-			false,
-		],
-		[
-			'anything, with nothing locked',
+			'a layer stored without a lock',
 			[],
 			'top',
 			false,
 		],
-	])('reads %s as locked: %s → %s', (_, locks, id, locked) => {
-		expect(isLayerLocked(LAYOUT, locks, layer(id))).toBe(locked);
+	])('reads %s as locked: %s → %s', (_, locked, id, expected) => {
+		expect(isLayerLocked(layout(locked), layer(id))).toBe(expected);
 	});
 
 	it.each<[string, string[], string, boolean]>([
 		[
 			'a child of a locked group',
-			['item:g'],
+			['g'],
 			'g1',
 			true,
 		],
 		[
 			'a child locked in its own right',
-			['item:g1'],
+			['g1'],
 			'g1',
 			false,
 		],
 		[
 			'the locked group itself',
-			['item:g'],
+			['g'],
 			'g',
 			false,
 		],
-	])('says whether %s is locked by its group', (_, locks, id, byGroup) => {
-		expect(isLockedByGroup(LAYOUT, locks, layer(id))).toBe(byGroup);
+	])('says whether %s is locked by its group', (_, locked, id, byGroup) => {
+		expect(isLockedByGroup(layout(locked), layer(id))).toBe(byGroup);
 	});
 
-	it.each<[string, string[], string[], string[]]>([
+	it.each<[string, string[], string[], Record<string, unknown>]>([
 		[
 			'locks one unlocked layer',
 			[],
 			['top'],
-			['item:top'],
+			{ top: true },
 		],
 		[
-			'unlocks one locked layer',
-			['item:top', 'source:s1'],
+			'unlocks one locked layer, storing it without a lock',
+			['top', 's1'],
 			['top'],
-			['source:s1'],
+			{ s1: true },
 		],
 		[
 			'locks every one while any is unlocked',
-			['item:top'],
+			['top'],
 			['top', 's1'],
-			['item:top', 'source:s1'],
+			{ top: true, s1: true },
 		],
 		[
 			'unlocks every one once all are locked',
-			['item:top', 'source:s1'],
 			['top', 's1'],
-			[],
+			['top', 's1'],
+			{},
 		],
 		[
 			'cannot unlock a child its group locks',
-			['item:g'],
+			['g'],
 			['g1'],
-			['item:g'],
+			{ g: true },
 		],
-	])('%s', (_, locks, ids, expected) => {
-		expect(toggleLayerLocks(LAYOUT, locks, ids.map(layer))).toEqual(expected);
+		[
+			'locks a group child in its own right',
+			[],
+			['g1'],
+			{ g1: true },
+		],
+	])('%s', (_, locked, ids, expected) => {
+		expect(storedLocks(toggleLayerLocks(layout(locked), ids.map(layer)))).toEqual(expected);
 	});
 
-	it('lists every locked layer of the layout, a locked group\'s children included, and none no longer in it', () => {
-		expect(lockedLayers(LAYOUT, ['item:g', 'source:s1', 'item:gone'])).toEqual([
+	it('lists every locked layer of the layout, a locked group\'s children included', () => {
+		expect(lockedLayers(layout(['g', 's1']))).toEqual([
 			layer('g'),
 			layer('g1'),
 			layer('g2'),
 			layer('s1'),
 		]);
-	});
-
-	it.each<[string, unknown, string[]]>([
-		[
-			'a stored list of keys',
-			['item:a', 'source:b'],
-			['item:a', 'source:b'],
-		],
-		[
-			'a list holding something other than a key',
-			['item:a', 3, null, 'canvas', 'item:'],
-			['item:a'],
-		],
-		[
-			'something other than a list',
-			{ 'item:a': true },
-			[],
-		],
-		['nothing stored', null, []],
-	])('reads %s', (_, stored, expected) => {
-		expect(readLayerLocks(stored)).toEqual(expected);
 	});
 });

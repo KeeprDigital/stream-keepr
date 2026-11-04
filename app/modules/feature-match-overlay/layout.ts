@@ -144,8 +144,8 @@ export const SOURCE_ITEM_DUPLICATE_OFFSET = 20;
 
 /**
  * Duplicate one Source Item directly in front of itself, offset so it does not sit
- * exactly over its original. Returns the same layout and an empty id when the
- * Source Item is unknown.
+ * exactly over its original, and unlocked (ADR-0063). Returns the same layout and
+ * an empty id when the Source Item is unknown.
  */
 export function duplicateSource(layout: FeatureMatchLayoutConfig, id: string): { layout: FeatureMatchLayoutConfig; id: string } {
 	const index = layout.sources.findIndex(item => item.id === id);
@@ -160,8 +160,9 @@ export function duplicateSource(layout: FeatureMatchLayoutConfig, id: string): {
 	for (let suffix = 2; labels.has(label); suffix += 1)
 		label = `${original.label} copy ${suffix}`;
 
+	const { locked: _locked, ...unlocked } = original;
 	const copy: FeatureMatchSourceItemConfig = {
-		...(JSON.parse(JSON.stringify(original)) as FeatureMatchSourceItemConfig),
+		...(JSON.parse(JSON.stringify(unlocked)) as FeatureMatchSourceItemConfig),
 		id: nextId('source'),
 		label,
 		x: original.x + SOURCE_ITEM_DUPLICATE_OFFSET,

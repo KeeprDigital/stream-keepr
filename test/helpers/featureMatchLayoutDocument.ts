@@ -137,8 +137,11 @@ export function maximalFeatureMatchLayoutDocument(
 	};
 	name.surfaceStyle = maximalSurfaceStyle();
 	name.rotation = -2;
+	// Layer Locks travel with the layout (ADR-0063).
+	name.locked = true;
 
 	child.sizing = { mode: 'fill', size: 240, weight: 2 };
+	child.locked = true;
 	child.surfaceStyle = maximalSurfaceStyle();
 
 	clock.surfaceStyle = maximalSurfaceStyle();
@@ -287,6 +290,7 @@ export function maximalFeatureMatchLayoutDocument(
 				id: 'main-source',
 				label: 'Main Match Source',
 				visible: true,
+				locked: true,
 				anchor: 'center',
 				configurationVersion: 1,
 				sourceRole: 'main',

@@ -1592,3 +1592,80 @@ describe('graphic Animation bounds', () => {
 		expect(withDuration(MIN_GRAPHIC_ANIMATION_DURATION_MS - 1)).toBe(false);
 	});
 });
+
+/** A Layer Lock is stored on a Feature Match Layout's layers only (ADR-0063). */
+describe('a Layer Lock', () => {
+	const LOCKED = { locked: true };
+
+	function groupOf(child: Record<string, unknown>) {
+		return {
+			...getGraphicItemDefinition('group').createDefault({
+				id: 'group',
+				label: 'group',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
+			children: [child],
+		};
+	}
+
+	function featureMatchLayoutWith(lock: 'item' | 'child' | 'source') {
+		const config = structuredClone(getDefaultConfigForMode('feature-match-overlay')) as unknown as Record<string, any>;
+		config.layout.composition.items = [
+			lock === 'child'
+				? groupOf({
+						...shapeItem('child'),
+						...LOCKED,
+					})
+				: {
+						...shapeItem('item'),
+						...(lock === 'item'
+							? LOCKED
+							: {}),
+					},
+		];
+		config.layout.sources[0] = {
+			...config.layout.sources[0],
+			...(lock === 'source'
+				? LOCKED
+				: {}),
+		};
+		return modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ layout: config.layout });
+	}
+
+	function broadcastGraphicWith(lock: 'item' | 'child') {
+		return modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+			graphics: [
+				{
+					...graphic('graphic'),
+					items: [
+						lock === 'child'
+							? groupOf({
+									...shapeItem('child'),
+									...LOCKED,
+								})
+							: {
+									...shapeItem('item'),
+									...LOCKED,
+								},
+					],
+				},
+			],
+		});
+	}
+
+	it.each<['item' | 'child' | 'source']>([
+		['item'],
+		['child'],
+		['source'],
+	])('is stored on a Feature Match Layout %s', (lock) => {
+		expect(featureMatchLayoutWith(lock).success).toBe(true);
+	});
+
+	it.each<['item' | 'child']>([
+		['item'],
+		['child'],
+	])('is refused on a Broadcast Graphic %s', (lock) => {
+		expect(messages(broadcastGraphicWith(lock))).toContain('Layer Locks are available only in Feature Match Layouts');
+	});
+});

@@ -17,12 +17,11 @@ const ITEM = { type: 'item', itemId: 'player1-game-wins' } as const;
 /** The backmost Graphic Item, which a reorder can bring forward. */
 const firstItemId = DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.composition.items[0]!.id;
 
-function editorFor(writable: boolean, locks = ref<string[]>([])) {
+function editorFor(writable: boolean) {
 	const config = ref(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
 	const writes: unknown[] = [];
 	const leased = ref(writable);
 	const editor = useFeatureMatchLayoutEditor({
-		locks,
 		config,
 		updateConfig: (patch) => {
 			writes.push(patch);
@@ -79,6 +78,10 @@ describe('useFeatureMatchLayoutEditor without the lease', () => {
 		[
 			'hide',
 			editor => editor.toggleVisible(),
+		],
+		[
+			'lock',
+			editor => editor.toggleLock(),
 		],
 		[
 			'rename',
@@ -439,38 +442,56 @@ describe('useFeatureMatchLayoutEditor grouping and ungrouping', () => {
 
 /** A locked layer is left alone by the canvas and arrow nudges, and edited by its panel (#747). */
 describe('useFeatureMatchLayoutEditor with Layer Locks', () => {
-	function lockedEditor(writable = true) {
-		const locks = ref<string[]>([]);
-		return {
-			...editorFor(writable, locks),
-			locks,
+	type Config = ReturnType<typeof editorFor>['config'];
+
+	/** Store the named Source Items and top-level Graphic Items locked, as another session's write would. */
+	function storeLocked(config: Config, ids: string[]) {
+		const layout = config.value.layout;
+		config.value = {
+			...config.value,
+			layout: {
+				...layout,
+				sources: layout.sources.map(source => ids.includes(source.id)
+					? { ...source, locked: true }
+					: source),
+				composition: {
+					...layout.composition,
+					items: layout.composition.items.map(item => ids.includes(item.id)
+						? { ...item, locked: true }
+						: item),
+				},
+			},
 		};
 	}
 
-	function sourceAt(config: ReturnType<typeof editorFor>['config'], id: string) {
+	function sourceAt(config: Config, id: string) {
 		const source = config.value.layout.sources.find(item => item.id === id)!;
 		return { x: source.x, y: source.y };
 	}
 
-	it('locks the selected layer as editor state, writing nothing to the layout and recording no undo step', () => {
-		const { editor, writes, locks } = lockedEditor();
+	function storedLock(config: Config, id: string) {
+		return config.value.layout.sources.find(item => item.id === id)?.locked;
+	}
+
+	it('locks the selected layer in the layout, as one undo step', () => {
+		const { editor, writes, config } = editorFor(true);
 
 		editor.toggleLock();
 
-		expect(locks.value).toEqual(['source:main-source']);
+		expect(writes).toHaveLength(1);
+		expect(storedLock(config, 'main-source')).toBe(true);
 		expect(editor.isLocked(SOURCE)).toBe(true);
-		expect(writes).toEqual([]);
+		editor.undo();
+		expect(storedLock(config, 'main-source')).toBeUndefined();
 		expect(editor.canUndo.value).toBe(false);
 	});
 
-	it('neither locks nor unlocks without the lease', () => {
-		const { editor, locks } = lockedEditor(false);
+	it('reads a lock another session stored', () => {
+		const { editor, config } = editorFor(false);
 
-		editor.toggleLock();
-		locks.value = ['source:main-source'];
-		editor.toggleLock(SOURCE);
+		storeLocked(config, ['main-source']);
 
-		expect(locks.value).toEqual(['source:main-source']);
+		expect(editor.isLocked(SOURCE)).toBe(true);
 	});
 
 	it.each<[string, (editor: FeatureMatchLayoutEditor) => void]>([
@@ -491,8 +512,8 @@ describe('useFeatureMatchLayoutEditor with Layer Locks', () => {
 			editor => editor.setRotation(ITEM, 45),
 		],
 	])('leaves a locked layer alone on %s, offering the canvas nothing to move', (_, verb) => {
-		const { editor, writes, locks } = lockedEditor();
-		locks.value = ['source:main-source', 'item:player1-game-wins'];
+		const { editor, writes, config } = editorFor(true);
+		storeLocked(config, ['main-source', 'player1-game-wins']);
 
 		verb(editor);
 		editor.select(ITEM);
@@ -503,9 +524,9 @@ describe('useFeatureMatchLayoutEditor with Layer Locks', () => {
 	});
 
 	it('nudges only the unlocked layers of several selected', () => {
-		const { editor, config, locks } = lockedEditor();
+		const { editor, config } = editorFor(true);
 		editor.toggleSelect(OTHER_SOURCE);
-		locks.value = ['source:main-source'];
+		storeLocked(config, ['main-source']);
 		const before = [
 			sourceAt(config, 'main-source'),
 			sourceAt(config, 'player1-source'),
@@ -523,9 +544,9 @@ describe('useFeatureMatchLayoutEditor with Layer Locks', () => {
 	});
 
 	it('still edits a locked layer from the property panel', () => {
-		const { editor, config, locks } = lockedEditor();
+		const { editor, config } = editorFor(true);
 		editor.toggleSelect(OTHER_SOURCE);
-		locks.value = ['source:main-source'];
+		storeLocked(config, ['main-source']);
 
 		editor.setLayersGeometry({ x: 7 });
 

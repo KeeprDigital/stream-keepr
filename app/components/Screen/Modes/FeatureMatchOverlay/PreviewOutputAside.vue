@@ -2,7 +2,7 @@
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import type { EditorSelectionFrame, FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
+import type { EditorSelectionFrame } from '~/modules/feature-match-overlay/editorSelection';
 import type { GraphicsPreviewAnimationPlan } from '~/modules/graphics/previewMessages';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
@@ -11,7 +11,6 @@ import { SCREEN_OUTPUT_OPTIONS } from '~~/shared/screenModeDefinitions';
 import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_CONFIG_MESSAGE,
-	FEATURE_MATCH_OVERLAY_PREVIEW_LOCKED_LAYERS_MESSAGE,
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE,
 	isFeatureMatchOverlayPreviewSelectMessage,
 } from '~/modules/feature-match-overlay/previewMessages';
@@ -54,8 +53,6 @@ const props = defineProps<{
 	/** Where the selected layer sits on the canvas, when the canvas can move it. */
 	selectionFrame?: EditorSelectionFrame | null;
 	selectionLabel?: string;
-	/** Every locked layer (#747), which the frame lets a click fall through. */
-	lockedLayers?: readonly FeatureMatchLayoutEditorLayer[];
 	/** Where each selected locked layer sits on the canvas, badged as locked. */
 	lockedBoxes?: readonly GraphicRect[];
 	/** The tallest the fitted preview is drawn, as a CSS length. */
@@ -158,16 +155,6 @@ function syncCompositorTargetToPreview() {
 	}, window.location.origin);
 }
 
-function syncLockedLayersToPreview() {
-	if (!import.meta.client || !previewFrame.value?.contentWindow)
-		return;
-
-	previewFrame.value.contentWindow.postMessage({
-		type: FEATURE_MATCH_OVERLAY_PREVIEW_LOCKED_LAYERS_MESSAGE,
-		layers: (props.lockedLayers ?? []).map(layer => ({ ...layer })),
-	}, window.location.origin);
-}
-
 function syncThemeToPreview() {
 	if (!import.meta.client || !previewFrame.value?.contentWindow || props.previewThemeValues === undefined)
 		return;
@@ -217,7 +204,6 @@ function syncPreviewState() {
 	syncConfigToPreview();
 	syncSelectedTargetToPreview();
 	syncCompositorTargetToPreview();
-	syncLockedLayersToPreview();
 	syncThemeToPreview();
 	syncAnimationToPreview();
 }
@@ -313,8 +299,6 @@ watch(() => props.compositorTarget, () => {
 watch(() => props.config, () => {
 	syncConfigToPreview();
 }, { deep: true });
-
-watch(() => props.lockedLayers, syncLockedLayersToPreview, { deep: true });
 
 // Each switch changes the preview URL, which reloads the frame; the working
 // state has to be pushed into the new document once it exists.

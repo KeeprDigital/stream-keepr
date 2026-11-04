@@ -1135,6 +1135,18 @@ describe('duplicating and reordering a Graphic Item', () => {
 		expect(new Set(flattenGraphicItems(next).map(item => item.label)).size).toBe(flattenGraphicItems(next).length);
 	});
 
+	it('duplicates a locked Graphic Group unlocked, its children too (ADR-0063)', () => {
+		const built = patchGraphicItem(patchGraphicItem(withGroup(), 'cluster', { locked: true }), 'child', { locked: true });
+
+		const { graphic: next, itemId } = duplicateGraphicItem(built, 'cluster', {
+			nextId: ids(),
+		});
+
+		const copy = next.items.find(item => item.id === itemId) as GraphicGroupItemConfig;
+		expect([copy, ...copy.children].map(item => 'locked' in item)).toEqual([false, false]);
+		expect(group(next).locked).toBe(true);
+	});
+
 	it('duplicates a group child within its group', () => {
 		const { graphic: next, itemId } = duplicateGraphicItem(withGroup(), 'child', {
 			nextId: ids(),
@@ -1865,6 +1877,13 @@ describe('grouping and ungrouping Graphic Items (#920)', () => {
 				width: 50,
 				height: 20,
 			},
+		],
+		[
+			'a locked group\'s child is locked (ADR-0063)',
+			'shape',
+			{ locked: true },
+			null,
+			{ visible: true, locked: true },
 		],
 	] as const)('bakes what a child inherits: %s', (_case, kind, groupPatch, own, baked) => {
 		let built = addGraphicItem(graphic('a'), { kind: 'group', id: 'pack', ...CANVAS }).graphic;

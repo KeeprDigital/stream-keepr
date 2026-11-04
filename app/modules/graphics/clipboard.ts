@@ -362,7 +362,8 @@ export function pasteFeatureMatchLayers(
 	}
 
 	const label = copyLabeller(layout.sources.map(source => source.label), { keep: true });
-	const sources = copied.sources.map(source => ({
+	// A copy lands unlocked, as a pasted Graphic Item does (`cloneGraphicItem`).
+	const sources = copied.sources.map(({ locked: _locked, ...source }) => ({
 		...detached(source),
 		id: options.nextId(),
 		label: label(source.label),
