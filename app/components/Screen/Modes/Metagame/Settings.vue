@@ -14,7 +14,7 @@ import type { Screen } from '~/types';
 import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
-import { headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { columnsSummary, FOLLOWS_THE_THEME, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -145,31 +145,26 @@ function updateArchetypeLimit(value: string | number | boolean | null) {
 	});
 }
 
-/** A closed card's one line: what it is set to, and how many Look overrides it holds. */
+/** For a closed card's summary: how many Screen Theme Overrides the Looks of the mounted `group` holds. */
 function look(group: string) {
 	return lookSummary('metagame', props.screen.themeOverrides, [group]);
 }
 
-const tableSummary = computed(() => {
-	const shown = activeColumns.value.filter(column => column.visible).length;
-	return settingsSummary([
-		`${shown} ${shown === 1
-			? 'column'
-			: 'columns'} shown`,
-		look('table'),
-	]);
-});
+const tableSummary = computed(() => settingsSummary([
+	columnsSummary(activeColumns.value),
+	look('table'),
+]));
 const chartSummary = computed(() => settingsSummary([
 	look('chart'),
-], 'Follows the Theme'));
+], FOLLOWS_THE_THEME));
 const sizeAndSurfaceSummary = computed(() => settingsSummary([
 	look('size-and-surface'),
-], 'Follows the Theme'));
+], FOLLOWS_THE_THEME));
 const headerCardSummary = computed(() => settingsSummary([
 	headerSummary(config.value),
 	look('header'),
 ]));
-const paginationCardSummary = computed(() => paginationSummary({ ...config.value, pageSize: rotation.pageSize.value }));
+const paginationCardSummary = computed(() => paginationSummary(rotation));
 </script>
 
 <template>
@@ -256,7 +251,7 @@ const paginationCardSummary = computed(() => paginationSummary({ ...config.value
 		>
 			<ScreenSettingsField
 				label="Pinned Chart Series"
-				description="Give an Archetype its own chart series on the Metagame page, so it keeps its colour."
+				description="Give an Archetype its own chart series on the Metagame page, so it keeps that series whichever others show."
 			>
 				<NuxtLink
 					:to="`/event/${eventId}/metagame`"

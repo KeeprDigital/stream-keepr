@@ -7,7 +7,7 @@ import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
-import { lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { FOLLOWS_THE_THEME, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSession';
 
@@ -85,7 +85,7 @@ const layoutDescriptions = {
 	columns: 'Number of columns in each group\'s grid.',
 };
 
-/** A closed card's one line: what it is set to, and how many Look overrides it holds. */
+/** For a closed card's summary: how many Screen Theme Overrides the Looks of mounted `groups` hold. */
 function look(...groups: string[]) {
 	return lookSummary('deck', props.screen.themeOverrides, groups);
 }
@@ -106,7 +106,7 @@ const mainboardSummary = computed(() => settingsSummary([
 ]));
 const cardLookSummary = computed(() => settingsSummary([
 	look('card-look'),
-], 'Follows the Theme'));
+], FOLLOWS_THE_THEME));
 const badgesSummary = computed(() => settingsSummary([
 	props.config.showQuantities
 		? 'Quantity badge'

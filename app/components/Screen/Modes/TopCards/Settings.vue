@@ -139,7 +139,7 @@ const layoutDescriptions = {
 	columns: 'Number of cards per row.',
 };
 
-/** A closed card's one line: what it is set to, and how many Look overrides it holds. */
+/** For a closed card's summary: how many Screen Theme Overrides the Looks of mounted `groups` hold. */
 function look(...groups: string[]) {
 	return lookSummary('top-cards', props.screen.themeOverrides, groups);
 }
@@ -185,7 +185,9 @@ const badgesSummary = computed(() => {
 				? 'badge'
 				: 'badges'}`
 			: 'No badges',
-		look('card-badges', 'rank-badge', 'stat-badge', 'points-badge'),
+		look('card-badges', 'rank-badge', 'stat-badge', ...(showsPointsBadges.value
+			? ['points-badge']
+			: [])),
 	]);
 });
 </script>

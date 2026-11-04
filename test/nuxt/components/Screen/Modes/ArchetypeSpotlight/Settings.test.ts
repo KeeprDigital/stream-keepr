@@ -57,7 +57,7 @@ describe('the Archetype Spotlight settings editor', () => {
 		updateConfig.mockClear();
 	});
 
-	// Each Mode Token's Look sits in the card for what it styles (ADR-0071, #975).
+	// Each Mode Token's Look sits in the card for what it styles (ADR-0071).
 	it('lays out Data, Top Cards, Pilots and Header, each holding its Look', async () => {
 		const wrapper = await mountSettings();
 

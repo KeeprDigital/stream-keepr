@@ -1,5 +1,6 @@
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { PageRotationControls } from '~/modules/screen-mode/rotationWrites';
 import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 
 // The one line a closed Screen settings card shows in place of its body
@@ -14,12 +15,21 @@ export function headerSummary(config: { showHeader: boolean; headerText?: string
 		: 'Auto title';
 }
 
+/** What a card holding only a Look shows while every token there follows the Theme. */
+export const FOLLOWS_THE_THEME = 'Follows the Theme';
+
 /** A Page Rotation's page size, and whether it pages itself and how often (ADR-0039). */
-export function paginationSummary(rotation: { pageSize: number; autoPageEnabled: boolean; autoPageIntervalMs: number }): string {
-	const paging = rotation.autoPageEnabled
-		? `Auto-page every ${rotation.autoPageIntervalMs / 1000} s`
+export function paginationSummary(rotation: Pick<PageRotationControls, 'pageSize' | 'rotationConfig'>): string {
+	const { autoPageEnabled, autoPageIntervalMs } = rotation.rotationConfig.value;
+	const paging = autoPageEnabled
+		? `Auto-page every ${autoPageIntervalMs / 1000} s`
 		: 'Manual paging';
-	return `${rotation.pageSize} per page · ${paging}`;
+	return `${rotation.pageSize.value} per page · ${paging}`;
+}
+
+/** How many of a table's columns show. */
+export function columnsSummary(columns: readonly { visible: boolean }[]): string {
+	return `${columns.filter(column => column.visible).length} of ${columns.length} columns shown`;
 }
 
 /**
@@ -36,8 +46,8 @@ export function lookSummary(mode: ScreenMode, themeOverrides: StoredThemeTokens 
 	if (count === 0)
 		return null;
 	return count === 1
-		? '1 Look override'
-		: `${count} Look overrides`;
+		? '1 Screen Theme Override'
+		: `${count} Screen Theme Overrides`;
 }
 
 /** A card's summary parts on one line, or `fallback` when it has none. */

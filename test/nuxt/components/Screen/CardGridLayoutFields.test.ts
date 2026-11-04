@@ -138,19 +138,6 @@ describe('screenCardGridLayoutFields', () => {
 				'cardWidth',
 			],
 		},
-		{
-			name: 'a grid, named as such, as the default view does',
-			props: {
-				view: 'grid',
-				layout: { ...layout, cardSizing: 'fit' },
-			},
-			keys: [
-				'cardSizing',
-				'autoColumns',
-				'columns',
-				'cardGap',
-			],
-		},
 	])('renders $name', ({ props, keys }) => {
 		expect(renderedKeys(mountFields(props))).toEqual(keys);
 	});

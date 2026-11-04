@@ -75,7 +75,7 @@ const rotation = useRotationConfigWrites({
 });
 const { updateConfig } = rotation;
 
-/** A closed card's one line: what it is set to, and how many Look overrides it holds. */
+/** For a closed card's summary: how many Screen Theme Overrides the Looks of the mounted `group` holds. */
 function look(group: string) {
 	return lookSummary('archetype-spotlight', props.screen.themeOverrides, [group]);
 }
@@ -86,7 +86,7 @@ const topCardsSummary = computed(() => settingsSummary([
 	look('top-cards'),
 ]));
 const pilotsSummary = computed(() => settingsSummary([
-	paginationSummary({ ...config.value, pageSize: rotation.pageSize.value }),
+	paginationSummary(rotation),
 	look('pilots'),
 ]));
 const headerCardSummary = computed(() => settingsSummary([

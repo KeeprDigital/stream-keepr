@@ -8,7 +8,7 @@ import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
-import { lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { FOLLOWS_THE_THEME, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -300,7 +300,7 @@ const emptyBoardHint = computed(() => {
 		: null;
 });
 
-/** A closed card's one line: what it is set to, and how many Look overrides it holds. */
+/** For a closed card's summary: how many Screen Theme Overrides the Looks of mounted `groups` hold. */
 function look(...groups: string[]) {
 	return lookSummary('deck', props.screen.themeOverrides, groups);
 }
@@ -317,7 +317,9 @@ const detailsSummary = computed(() => settingsSummary([
 	showsDetailsRow.value
 		? 'Shown'
 		: 'Hidden',
-	look('deck-details', 'pointed-cards'),
+	look('deck-details', ...(showsCardPoints.value
+		? ['pointed-cards']
+		: [])),
 ]));
 
 const BOARD_VIEW_LABELS: Record<SideboardView, string> = { grid: 'Grid', stack: 'Stack', list: 'List' };
@@ -335,7 +337,7 @@ function boardSummary(section: BoardSection): string {
 
 const cardLookSummary = computed(() => settingsSummary([
 	look('card-look'),
-], 'Follows the Theme'));
+], FOLLOWS_THE_THEME));
 const badgesSummary = computed(() => {
 	const shown = [
 		config.value.showQuantities && 'Quantity',
@@ -348,7 +350,9 @@ const badgesSummary = computed(() => {
 				? 'badge'
 				: 'badges'}`
 			: 'No badges',
-		look('quantity-badge', 'points-badge'),
+		look('quantity-badge', ...(showsCardPoints.value
+			? ['points-badge']
+			: [])),
 	]);
 });
 </script>
@@ -549,7 +553,7 @@ const badgesSummary = computed(() => {
 				<ScreenCardGridLayoutFields
 					v-if="section.view !== 'list'"
 					:view="section.view"
-					:layout="{ ...section.layout, stackReveal: resolvedBoards.sideboard.stackReveal }"
+					:layout="section.layout"
 					:fields="boardFields"
 					:show="{ alignment: true, stackReveal: section.view === 'stack' }"
 					:descriptions="{ alignment: alignmentDescription(section.key) }"

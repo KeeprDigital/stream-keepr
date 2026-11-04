@@ -187,7 +187,7 @@ describe('screenMetagameSettings', () => {
 		mockPlayerListStore.isLoaded = false;
 	});
 
-	// Each Mode Token's Look sits in the card for what it styles (ADR-0071, #972):
+	// Each Mode Token's Look sits in the card for what it styles (ADR-0071):
 	// the Table outside chart view, the Chart in it.
 	it.each([
 		[
@@ -264,7 +264,7 @@ describe('screenMetagameSettings', () => {
 		await flushPromises();
 
 		expect(settingsSummaries(wrapper)).toEqual({
-			'metagame:table': '4 columns shown',
+			'metagame:table': '4 of 7 columns shown',
 			'metagame:size-and-surface': 'Follows the Theme',
 			'metagame:header': '“Day 2”',
 			'metagame:pagination': '10 per page · Manual paging',

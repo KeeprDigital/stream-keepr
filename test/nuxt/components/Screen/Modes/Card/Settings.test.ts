@@ -8,7 +8,7 @@ import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/Card/Settings.vue';
 
-// Card Spotlight's settings: its Match Binding, then its Card with the card's motion beside its width (#980).
+// Card Spotlight's settings: its Match Binding, then its Card with the card's motion beside its width.
 
 enableAutoUnmount(afterEach);
 

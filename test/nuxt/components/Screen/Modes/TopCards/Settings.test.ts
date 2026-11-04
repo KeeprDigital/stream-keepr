@@ -191,13 +191,14 @@ function numberInput(wrapper: Awaited<ReturnType<typeof mountComponent>>, label:
 	return field!.getComponent(UInputNumberStub);
 }
 
-async function mountComponent() {
+async function mountComponent(themeOverrides: Record<string, unknown> = {}) {
 	const wrapper = mount(Settings, {
 		props: {
 			// Saved as edited: the Screen reads through its saved configuration.
 			screen: {
 				id: 1,
 				modeConfigs: { 'top-cards': mockConfig.value },
+				themeOverrides,
 			} as unknown as Screen,
 			eventId: 1,
 		},
@@ -230,7 +231,7 @@ describe('screenTopCardsSettings', () => {
 		mockFetch.mockResolvedValue(ranking(10));
 	});
 
-	// Each Mode Token's Look sits in the card for what it styles (ADR-0071, #973).
+	// Each Mode Token's Look sits in the card for what it styles (ADR-0071).
 	it.each([
 		{
 			pointsSystem: '7ph',
@@ -305,6 +306,20 @@ describe('screenTopCardsSettings', () => {
 			'top-cards:header': 'Auto title',
 			'top-cards:card-badges': 'Rank badge',
 		});
+	});
+
+	// A closed card counts only the overrides its mounted Looks show; the rest sit in the Screen-wide look.
+	it.each([
+		{ pointsSystem: '7ph', summary: 'Rank, Stat badges · 2 Screen Theme Overrides' },
+		{ pointsSystem: null, summary: 'Rank, Stat badges · 1 Screen Theme Override' },
+	])('counts the Card Badges overrides it shows with points system $pointsSystem', async ({ pointsSystem, summary }) => {
+		mockEventStore.event = { pointsSystem };
+		const wrapper = await mountComponent({
+			'top-cards.badge-shadow': '#000000',
+			'top-cards.points-badge-surface': '#ff0000',
+		});
+
+		expect(settingsSummaries(wrapper)['top-cards:card-badges']).toBe(summary);
 	});
 
 	it('renders a filter chip per card-type bucket', async () => {

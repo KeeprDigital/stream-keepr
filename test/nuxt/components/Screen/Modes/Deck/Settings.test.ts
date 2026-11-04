@@ -258,7 +258,7 @@ describe('screenDeckSettings', () => {
 		});
 	});
 
-	// Each Mode Token's Look sits in the card for what it styles (ADR-0071, #974).
+	// Each Mode Token's Look sits in the card for what it styles (ADR-0071).
 	it.each([
 		{
 			name: 'a player\'s deck under a points system',
@@ -371,8 +371,8 @@ describe('screenDeckSettings', () => {
 		expect(card(wrapper, 'Header').findAll('[data-testid="settings-toggle"]').map(toggle => toggle.attributes('data-label'))).toEqual(labels);
 	});
 
-	// A stack is one column of overlapping cards: it takes a width whatever its sizing, and has no columns or gap.
-	it('offers a Fit sideboard stack its card width and reveal, and no columns or gap', async () => {
+	// Wiring: the board's view reaches its grid fields, whose home test owns what a stack shows.
+	it('lays out a stacked sideboard\'s grid fields as a stack', async () => {
 		mockConfig.value = {
 			...defaultDeckConfig(),
 			sideboard: {
