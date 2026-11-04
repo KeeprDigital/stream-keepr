@@ -201,7 +201,7 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 						<UIColorPicker
 							:model-value="layer.color"
 							placeholder="#000000"
-							@update:model-value="patchLayer(layer.id, { color: $event || '#000000' })"
+							@update:model-value="color => color && patchLayer(layer.id, { color })"
 						/>
 					</slot>
 				</UFormField>

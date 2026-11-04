@@ -53,17 +53,13 @@ function testId(suffix: string): string {
 		: suffix;
 }
 
-/** An outline or glow always has a colour, so a cleared one is white. */
 function editBorderGlow(edit: BorderGlowEdit) {
 	if (edit.kind === 'border-side')
 		return;
-	const patch = edit.patch && 'color' in edit.patch
-		? { ...edit.patch, color: edit.patch.color || '#ffffff' }
-		: edit.patch;
 	if (edit.kind === 'border')
-		emit('edit', { kind: 'outline', patch: patch as Partial<GraphicOutline> | null });
+		emit('edit', { kind: 'outline', patch: edit.patch as Partial<GraphicOutline> | null });
 	else
-		emit('edit', { kind: 'glow', patch: patch as Partial<GraphicGlow> | null });
+		emit('edit', { kind: 'glow', patch: edit.patch as Partial<GraphicGlow> | null });
 }
 </script>
 

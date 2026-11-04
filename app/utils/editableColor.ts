@@ -1,4 +1,4 @@
-/** A colour as the Theme editor edits it: an opaque `#rrggbb` and its alpha. */
+/** A colour as a colour picker edits it: an opaque `#rrggbb` and its alpha. */
 export interface EditableColor {
 	hex: string;
 	/** 0 (clear) to 1 (opaque). */
