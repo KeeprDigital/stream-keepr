@@ -2,7 +2,7 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
+import { computed, defineComponent, h, nextTick, reactive, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { media } from '~~/test/helpers/graphicsComposition';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
@@ -215,6 +215,27 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
 });
 
+const SETTINGS_STUBS = {
+	ScreenSettingsCard: ScreenSettingsCardStub,
+	FeatureMatchOverlayLayerInspector: LayerInspectorStub,
+	FeatureMatchOverlayLayerList: LayerListStub,
+	FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
+	FeatureMatchOverlayMultiLayerInspector: MultiLayerInspectorStub,
+	FeatureMatchOverlayPreviewOutputAside: PreviewOutputAsideStub,
+	// The Feature Match Layout Template library reads the installation's
+	// library on mount. It has its own suite; here it is only a neighbour of
+	// the editor under test.
+	GraphicsFeatureMatchLayoutTemplateLibrary: TemplateLibraryStub,
+	USlideover: { template: '<div><slot name="body" /></div>' },
+	UPopover: true,
+	UFormField: UFormFieldStub,
+	USelect: USelectStub,
+	UFieldGroup: UFieldGroupStub,
+	UButton: UButtonStub,
+	UAlert: true,
+	UModal: UModalStub,
+};
+
 async function mountComponent(screen: Partial<Screen> = {}, stubs: Record<string, unknown> = {}) {
 	return mount(Settings, {
 		props: {
@@ -227,24 +248,7 @@ async function mountComponent(screen: Partial<Screen> = {}, stubs: Record<string
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: ScreenSettingsCardStub,
-				FeatureMatchOverlayLayerInspector: LayerInspectorStub,
-				FeatureMatchOverlayLayerList: LayerListStub,
-				FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
-				FeatureMatchOverlayMultiLayerInspector: MultiLayerInspectorStub,
-				FeatureMatchOverlayPreviewOutputAside: PreviewOutputAsideStub,
-				// The Feature Match Layout Template library reads the installation's
-				// library on mount. It has its own suite; here it is only a neighbour of
-				// the editor under test.
-				GraphicsFeatureMatchLayoutTemplateLibrary: TemplateLibraryStub,
-				USlideover: { template: '<div><slot name="body" /></div>' },
-				UPopover: true,
-				UFormField: UFormFieldStub,
-				USelect: USelectStub,
-				UFieldGroup: UFieldGroupStub,
-				UButton: UButtonStub,
-				UAlert: true,
-				UModal: UModalStub,
+				...SETTINGS_STUBS,
 				...stubs,
 			},
 		},
@@ -1098,5 +1102,44 @@ describe('featureMatchOverlaySettings — Layer Locks', () => {
 			frame: null,
 		});
 		expect(sourceX()).toBe(start);
+	});
+});
+
+/**
+ * The inspector shows one layer's sections at a time, so the editor holds every
+ * Look group its inspector can show; the Screen-wide look never takes them (#982).
+ */
+describe('featureMatchOverlaySettings — Look groups', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active' });
+		mockLeaseWritable.value = true;
+	});
+
+	it('holds the Frame\'s and the Source Items\' Look groups while open', async () => {
+		let groups: ReturnType<typeof provideScreenSettingsGroups> | undefined;
+		const Host = defineComponent(() => {
+			groups = provideScreenSettingsGroups();
+			return () => h(Settings, {
+				screen: { id: 1, slug: 'main' } as Screen,
+				eventId: 1,
+			});
+		});
+		const wrapper = mount(Host, {
+			global: { stubs: SETTINGS_STUBS },
+		});
+		await flushPromises();
+
+		expect([...groups!.mounted.value].sort()).toEqual([
+			'frame-animation',
+			'frame-surface',
+			'frame-video',
+			'source-appearance',
+		]);
+
+		wrapper.unmount();
+		expect(groups!.mounted.value.size).toBe(0);
 	});
 });

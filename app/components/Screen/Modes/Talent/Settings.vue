@@ -2,7 +2,7 @@
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { TalentScreenLayout, TalentScreenSelection } from '~~/shared/types/enums';
 import type { Screen } from '~/types';
-import { TALENT_SCREEN_MAX_LINEUP } from '~~/shared/screenModeConfigs/talent';
+import { TALENT_SCREEN_AUTO_HEADER_TEXT, TALENT_SCREEN_MAX_LINEUP } from '~~/shared/screenModeConfigs/talent';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
 
@@ -87,30 +87,44 @@ function toggleNetwork(network: SupportedSocialNetwork, shown: boolean) {
 	});
 }
 
-const dwellSeconds = computed(() => Math.round(config.value.socialProfileDwellMs / fields.socialProfileDwellMs.displayScale));
+const layoutSummary = computed(() => [
+	layoutOptions.find(option => option.value === config.value.layout)?.label,
+	config.value.showPhoto ? 'Photo' : null,
+	config.value.showRole ? 'Role' : null,
+].filter(Boolean).join(' · '));
+
+const headerSummary = computed(() => config.value.showHeader
+	? config.value.headerText || TALENT_SCREEN_AUTO_HEADER_TEXT
+	: 'Hidden');
+
+const socialProfilesSummary = computed(() => {
+	const count = config.value.socialNetworks.length;
+	if (count === 0)
+		return 'None shown';
+	const networks = `${count} ${count === 1
+		? 'network'
+		: 'networks'}`;
+	return config.value.rotateSocialProfiles
+		? `${networks} · one at a time, ${config.value.socialProfileDwellMs / fields.socialProfileDwellMs.displayScale} s each`
+		: networks;
+});
 </script>
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Talent">
-			<UFormField
-				:label="fields.selection.label"
+		<ScreenSettingsCard id="talent:talent" title="Talent" :collapsible="false">
+			<ScreenConfigField
+				:field="fields.selection"
+				:model-value="config.selection"
+				:items="selectionOptions"
 				description="One Talent at a time, or a lineup shown together."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					data-testid="talent-selection"
-					:model-value="config.selection"
-					:items="selectionOptions"
-					class="w-64"
-					@update:model-value="updateConfig({ selection: $event })"
-				/>
-			</UFormField>
+				@update:model-value="updateConfig({ selection: $event as TalentScreenSelection })"
+			/>
 
-			<UFormField
+			<ScreenSettingsField
 				v-if="config.selection === 'one'"
 				label="Talent"
-				class="flex max-sm:flex-col justify-between items-start gap-4"
+				description="The Talent shown."
 			>
 				<USelect
 					data-testid="talent-one"
@@ -119,7 +133,7 @@ const dwellSeconds = computed(() => Math.round(config.value.socialProfileDwellMs
 					class="w-64"
 					@update:model-value="updateConfig({ talentId: $event ?? null })"
 				/>
-			</UFormField>
+			</ScreenSettingsField>
 
 			<template v-else>
 				<ol v-if="lineup.length > 0" class="flex flex-col gap-2">
@@ -163,10 +177,9 @@ const dwellSeconds = computed(() => Math.round(config.value.socialProfileDwellMs
 					No Talent in the lineup yet.
 				</p>
 
-				<UFormField
+				<ScreenSettingsField
 					label="Add to lineup"
 					:description="lineupFull ? `A lineup holds at most ${TALENT_SCREEN_MAX_LINEUP} Talents.` : 'Shown in the order listed.'"
-					class="flex max-sm:flex-col justify-between items-start gap-4"
 				>
 					<USelect
 						data-testid="talent-lineup-add"
@@ -177,40 +190,47 @@ const dwellSeconds = computed(() => Math.round(config.value.socialProfileDwellMs
 						class="w-64"
 						@update:model-value="addToLineup($event)"
 					/>
-				</UFormField>
+				</ScreenSettingsField>
 			</template>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Layout">
-			<UFormField
-				:label="fields.layout.label"
+		<ScreenSettingsCard id="talent:layout" title="Layout" :summary="layoutSummary">
+			<ScreenConfigField
+				:field="fields.layout"
+				:model-value="config.layout"
+				:items="layoutOptions"
 				description="A bar across the bottom, or a panel filling the Screen."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					data-testid="talent-layout"
-					:model-value="config.layout"
-					:items="layoutOptions"
-					class="w-64"
-					@update:model-value="updateConfig({ layout: $event })"
-				/>
-			</UFormField>
-			<ScreenSettingsToggle
-				:label="fields.showPhoto.label"
-				description="Show each Talent's photo, or their initials without one."
+				@update:model-value="updateConfig({ layout: $event as TalentScreenLayout })"
+			/>
+			<ScreenConfigField
+				:field="fields.showPhoto"
 				:model-value="config.showPhoto"
-				@update:model-value="updateConfig({ showPhoto: $event })"
+				description="Show each Talent's photo, or their initials without one."
+				@update:model-value="updateConfig({ showPhoto: $event === true })"
 			/>
-			<ScreenSettingsToggle
-				:label="fields.showRole.label"
-				description="Show each Talent's role, such as Host, below their name."
+			<ScreenConfigField
+				:field="fields.showRole"
 				:model-value="config.showRole"
-				@update:model-value="updateConfig({ showRole: $event })"
+				description="Show each Talent's role, such as Host, below their name."
+				@update:model-value="updateConfig({ showRole: $event === true })"
 			/>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="layout" />
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Social Profiles">
-			<UFormField label="Networks" description="The Social Profiles shown, in this order.">
+		<ScreenHeaderSettingsCard
+			id="talent:header"
+			:summary="headerSummary"
+			:config="config"
+			:fields="fields"
+			show-description="Show a title above the Talent."
+			:auto-description="`Leave empty for &quot;${TALENT_SCREEN_AUTO_HEADER_TEXT}&quot;.`"
+			@update="updateConfig($event)"
+		>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
+		</ScreenHeaderSettingsCard>
+
+		<ScreenSettingsCard id="talent:social-profiles" title="Social Profiles" :summary="socialProfilesSummary">
+			<ScreenSettingsField label="Networks" description="The Social Profiles shown, in this order.">
 				<div class="flex flex-wrap gap-x-4 gap-y-2">
 					<UCheckbox
 						v-for="network in SUPPORTED_SOCIAL_NETWORKS"
@@ -220,49 +240,21 @@ const dwellSeconds = computed(() => Math.round(config.value.socialProfileDwellMs
 						@update:model-value="toggleNetwork(network.key, $event === true)"
 					/>
 				</div>
-			</UFormField>
-			<ScreenSettingsToggle
-				:label="fields.rotateSocialProfiles.label"
-				description="Show one Social Profile at a time, in turn, on every output alike."
+			</ScreenSettingsField>
+			<ScreenConfigField
+				:field="fields.rotateSocialProfiles"
 				:model-value="config.rotateSocialProfiles"
-				@update:model-value="updateConfig({ rotateSocialProfiles: $event })"
+				description="Show one Social Profile at a time, in turn, on every output alike."
+				@update:model-value="updateConfig({ rotateSocialProfiles: $event === true })"
 			/>
-			<UFormField
+			<ScreenConfigField
 				v-if="config.rotateSocialProfiles"
-				:label="fields.socialProfileDwellMs.label"
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="dwellSeconds"
-					:min="fields.socialProfileDwellMs.min"
-					:max="fields.socialProfileDwellMs.max"
-					class="w-32"
-					@update:model-value="updateConfig({ socialProfileDwellMs: Number($event) * fields.socialProfileDwellMs.displayScale })"
-				/>
-			</UFormField>
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard title="Header">
-			<ScreenSettingsToggle
-				:label="fields.showHeader.label"
-				description="Show a title above the Talent."
-				:model-value="config.showHeader"
-				@update:model-value="updateConfig({ showHeader: $event })"
+				:field="fields.socialProfileDwellMs"
+				:model-value="config.socialProfileDwellMs"
+				description="How long each Social Profile shows before the next."
+				@update:model-value="updateConfig({ socialProfileDwellMs: Number($event) })"
 			/>
-
-			<UFormField
-				v-if="config.showHeader"
-				:label="fields.headerText.label"
-				description="Leave empty for &quot;On the Desk&quot;."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInput
-					:model-value="config.headerText ?? ''"
-					placeholder="Auto"
-					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || null })"
-				/>
-			</UFormField>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="social-profiles" />
 		</ScreenSettingsCard>
 	</div>
 </template>

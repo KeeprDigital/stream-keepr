@@ -9,6 +9,9 @@ import { DEFAULT_HEADER_CONFIG, headerConfigShape } from './subShapes';
 /** The most Talents a lineup holds. */
 export const TALENT_SCREEN_MAX_LINEUP = 8;
 
+/** The title a shown header carries while its custom text is empty. */
+export const TALENT_SCREEN_AUTO_HEADER_TEXT = 'On the Desk';
+
 /**
  * The Talent Screen Mode's config contract (#782).
  *

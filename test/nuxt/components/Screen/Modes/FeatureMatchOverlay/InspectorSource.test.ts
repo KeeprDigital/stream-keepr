@@ -1,17 +1,40 @@
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { FeatureMatchOverlayAnchorValue, FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig } from '~~/shared/types/screenConfig';
-import { mount } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { fakeScreenThemeNetwork, overrideWrites, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import InspectorSource from '~/components/Screen/Modes/FeatureMatchOverlay/InspectorSource.vue';
 
 /**
  * A Source Item's Bounds section, with the real geometry fields and editor: what
- * each align action and size entry leaves in the layout.
+ * each align action and size entry leaves in the layout. Its Appearance section
+ * ends with the Look of every Source Item, `source-surface` (#982).
  */
+
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
+mockNuxtImport('$fetch', () => mockApiFetch);
+
+enableAutoUnmount(afterEach);
+
+beforeEach(() => {
+	fakeScreenThemeNetwork(mockApiFetch, 'feature-match-overlay');
+});
 
 const PassThroughStub = defineComponent({
 	template: '<div><slot /></div>',
+});
+
+const ControlSectionStub = defineComponent({
+	props: {
+		title: { type: String, required: false },
+	},
+	template: '<section :data-section="title"><slot /></section>',
 });
 
 const UInputNumberStub = defineComponent({
@@ -28,7 +51,7 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" @click="$emit(\'click\', $event)"><slot /></button>',
 });
 
-async function mountBounds(anchor: FeatureMatchOverlayAnchorValue) {
+async function mountBounds(anchor: FeatureMatchOverlayAnchorValue, themeOverrides: StoredThemeTokens = {}) {
 	const config: FeatureMatchOverlayModeConfig = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 	// An odd-sized 401×201 item at (100, 50) on a 1920×1080 canvas, so a
 	// centre anchor sits on a half pixel.
@@ -42,18 +65,21 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue) {
 	};
 	config.layout.sources = [item];
 	const updateConfig = vi.fn();
+	const screen = seedThemedScreen('feature-match-overlay', themeOverrides);
 
 	const wrapper = mount(InspectorSource, {
 		props: {
 			config,
 			updateConfig,
+			screen: screen(),
+			eventId: 1,
 			screenWidth: 1920,
 			screenHeight: 1080,
 			item,
 		},
 		global: {
 			stubs: {
-				FeatureMatchOverlayControlSection: PassThroughStub,
+				FeatureMatchOverlayControlSection: ControlSectionStub,
 				FeatureMatchOverlaySourceFramingStyleFields: true,
 				FeatureMatchOverlayOrderSection: true,
 				ScreenSettingsToggle: true,
@@ -62,11 +88,13 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue) {
 				UINinePointPicker: true,
 				UInput: true,
 				UInputNumber: UInputNumberStub,
-				USelect: true,
+				USelect: USelectStub,
 				UButton: UButtonStub,
+				UBadge: true,
 			},
 		},
 	});
+	await flushPromises();
 
 	function storedRect() {
 		const layout = updateConfig.mock.calls.at(-1)?.[0].layout as FeatureMatchOverlayModeConfig['layout'];
@@ -92,7 +120,7 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue) {
 		await wrapper.get('button[aria-label="Link width and height"]').trigger('click');
 	}
 
-	return { align, enter, link };
+	return { wrapper, align, enter, link };
 }
 
 describe('feature Match Overlay Source Item bounds: align actions', () => {
@@ -159,5 +187,42 @@ describe('feature Match Overlay Source Item bounds: linked width and height', ()
 			width: 802,
 			height: 402,
 		});
+	});
+});
+
+describe('feature Match Overlay Source Item appearance: the Source Item surface', () => {
+	it('shows the `source-surface` row once, in Appearance', async () => {
+		const { wrapper } = await mountBounds('top-left');
+
+		expect(wrapper.findAll('[data-token]').map(row => row.attributes('data-token'))).toEqual(['feature-match-overlay.source-surface']);
+		expect(wrapper.get('[data-section="Appearance"]').find('[data-token="feature-match-overlay.source-surface"]').exists()).toBe(true);
+	});
+
+	it.each([
+		[
+			'writes',
+			{},
+			{
+				'feature-match-overlay.source-surface': { token: 'panel' },
+			},
+		],
+		[
+			'clears',
+			{
+				'feature-match-overlay.source-surface': { token: 'panel' },
+			},
+			{ 'feature-match-overlay.source-surface': null },
+		],
+	] as const)('%s its Screen Theme Override', async (action, stored, written) => {
+		const { wrapper } = await mountBounds('top-left', stored);
+		const row = wrapper.get('[data-token="feature-match-overlay.source-surface"]');
+
+		if (action === 'clears')
+			await row.findAll('button').find(button => button.text() === 'Clear')!.trigger('click');
+		else
+			await row.get('[data-token-part="source"]').setValue('panel');
+		await flushPromises();
+
+		expect(overrideWrites(mockApiFetch)).toEqual([written]);
 	});
 });

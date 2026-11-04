@@ -7,7 +7,7 @@ import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
  * The Source Item framing controls: its shape only. Per-corner radii, which
  * sides of its border show, and which side of the border its glow falls on.
  * Its fill, border and glow are the Theme's `source-surface` Mode Token,
- * shared by every Source Item (#831).
+ * shared by every Source Item (#831), whose row follows these fields.
  */
 
 const props = defineProps<{ framingStyle?: FeatureMatchSourceFramingStyle }>();
@@ -31,10 +31,6 @@ function update(updates: Partial<FeatureMatchSourceFramingStyle>) {
 
 <template>
 	<div class="space-y-3">
-		<p class="text-xs text-muted" data-testid="source-framing-theme-note">
-			Fill, border and glow follow the Theme's Source Item surface.
-		</p>
-
 		<FeatureMatchOverlayBorderRadiusControl
 			:border-radius="style.borderRadius"
 			:border-radius-top-left="style.borderRadiusTopLeft"

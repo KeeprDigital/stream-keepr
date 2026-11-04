@@ -1,6 +1,7 @@
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
+import type { Screen } from '~/types';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
@@ -73,6 +74,7 @@ async function mountComponent(overrides: Partial<{
 			updateConfig,
 			screenWidth: 1920,
 			screenHeight: 1080,
+			screen: { id: 1, currentMode: 'feature-match-overlay' } as Screen,
 			eventId: 7,
 			selectedTarget: overrides.selectedTarget ?? { type: 'canvas' },
 			writable: 'writable' in overrides
@@ -97,6 +99,7 @@ async function mountComponent(overrides: Partial<{
 				UButton: UButtonStub,
 				UBadge: true,
 				UIcon: true,
+				ScreenThemeTokenGroup: true,
 				...overrides.stubs,
 			},
 		},
@@ -120,6 +123,18 @@ describe('featureMatchOverlayLayerInspector', () => {
 		});
 
 		expect(wrapper.get('[data-testid="overlay-layer-inspector-fields"]').attributes('disabled') !== undefined).toBe(disabled);
+	});
+
+	// A Look row edits like any other field: read-only for an observer (#982).
+	it('keeps the Source Item\'s Look inside the read-only fields', async () => {
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'source', itemId: 'main-source' },
+			writable: false,
+		});
+		const fields = wrapper.get('[data-testid="overlay-layer-inspector-fields"]');
+
+		expect(fields.attributes('disabled')).toBeDefined();
+		expect(fields.find('[group="source-appearance"]').exists()).toBe(true);
 	});
 
 	it.each([

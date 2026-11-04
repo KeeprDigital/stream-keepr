@@ -2333,6 +2333,7 @@ All of a Screen's Mode Tokens sat in one flat Theme card above the mode's settin
 - Both closing cards remember their open state as `<mode>:background-and-placement` and `<mode>:screen-wide-look`. Until an operator toggles one in this browser, it follows what it holds, so a group registering after the residual card mounts moves its override out and can close the card again. Once toggled, the remembered state wins over what the card holds, on every Screen of that mode.
 - A Mode Token added later must name a group of its mode, or it fails to compile. It renders in the residual card until its group is mounted.
 - Round Clock's and Talent's Mode Tokens name groups here too, though #968 left them for #983, so every Mode Token is placed by one rule.
+- The Feature Match Overlay's inspector shows one layer's sections at a time, so its editor holds all four of its groups while open (#982). Selecting a Source Item or a Graphic Item never moves the Frame's rows into the Screen-wide look. The rows sit inside the inspector's read-only fieldset, so an observer without the Graphics Authoring Lease sees them disabled, though the override write itself is not lease-gated (ADR-0030).
 
 ### Rejected alternatives
 
