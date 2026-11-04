@@ -1,21 +1,16 @@
 <script setup lang="ts">
 import type {
 	BoardSelection,
-	CardSizing,
 	MetagameCardSortBy,
-	QuantityPosition,
 	TopCardsStat,
 } from '~~/shared/types/enums';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
-import { CARD_SIZING_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
+import { headerSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
-// The badge position pickers never offer the centre, so the casts below are safe.
-import { BADGE_DISABLED_POINTS } from '~/utils/cardBadges';
 
 const props = defineProps<{
 	screen: Screen;
@@ -118,18 +113,6 @@ const statBadgeOptions = [
 	{ label: 'Deck Count', value: 'deckCount' },
 ];
 
-function isTypeExcluded(bucket: CardTypeBucket): boolean {
-	return !isTypeLocked(bucket) && config.value.excludedCardTypes.includes(bucket);
-}
-
-function toggleType(bucket: CardTypeBucket) {
-	const excluded = isTypeExcluded(bucket)
-		? config.value.excludedCardTypes.filter(type => type !== bucket)
-		: [...config.value.excludedCardTypes, bucket];
-
-	updateConfig({ excludedCardTypes: excluded, currentPage: 1 });
-}
-
 // Points come from the Event's points system. A Screen left filtering to
 // pointed cards, or badging their points, keeps its toggle, so it can be
 // turned back off.
@@ -138,20 +121,78 @@ const showsPointedOnly = computed(() => hasPointsSystem.value || config.value.po
 const showsPointsBadges = computed(() => hasPointsSystem.value || config.value.showPointsBadges);
 
 /** Ranking pointed cards keeps nonbasic lands in, whatever the Land filter holds. */
-function isTypeLocked(bucket: CardTypeBucket): boolean {
-	return bucket === 'Land' && config.value.pointedOnly;
+const lockedTypes = computed<CardTypeBucket[]>(() => config.value.pointedOnly
+	? ['Land']
+	: []);
+
+const gridLayout = computed(() => ({
+	cardSizing: config.value.cardSizing,
+	cardWidth: config.value.cardWidth,
+	cardGap: config.value.cardGap,
+	autoColumns: config.value.autoColumns,
+	columns: config.value.columns,
+}));
+
+const layoutDescriptions = {
+	cardSizing: 'Fit shrinks the cards until every one on the page fits the screen; Fixed takes the card width below and may run off the screen.',
+	autoColumns: 'Choose the columns from the space the cards have on the Screen.',
+	columns: 'Number of cards per row.',
+};
+
+/** A closed card's one line: what it is set to, and how many Look overrides it holds. */
+function look(...groups: string[]) {
+	return lookSummary('top-cards', props.screen.themeOverrides, groups);
 }
 
-function typeLabel(bucket: CardTypeBucket): string {
-	return bucket === 'Land'
-		? 'Nonbasic Land'
-		: bucket;
-}
+const filtersSummary = computed(() => {
+	const excluded = config.value.excludedCardTypes.filter(type => !lockedTypes.value.includes(type)).length;
+	return settingsSummary([
+		config.value.pointedOnly && 'Pointed only',
+		excluded > 0 && `${excluded} ${excluded === 1
+			? 'type'
+			: 'types'} excluded`,
+	], 'Every card type');
+});
+const rankingSummary = computed(() => settingsSummary([
+	`Top ${config.value.limit}`,
+	paged.value
+		? `${config.value.cardsPerPage} per page`
+		: 'One page',
+	look('ranking-and-pages'),
+]));
+const layoutSummary = computed(() => settingsSummary([
+	config.value.cardSizing === 'fixed'
+		? `Fixed ${config.value.cardWidth} px`
+		: 'Fit',
+	config.value.autoColumns
+		? 'Auto columns'
+		: `${config.value.columns} columns`,
+	look('layout'),
+]));
+const headerCardSummary = computed(() => settingsSummary([
+	headerSummary(config.value),
+	look('header'),
+]));
+const badgesSummary = computed(() => {
+	const shown = [
+		config.value.showRankBadges && 'Rank',
+		config.value.statBadge !== 'none' && 'Stat',
+		showsPointsBadges.value && config.value.showPointsBadges && 'Point',
+	].filter(Boolean);
+	return settingsSummary([
+		shown.length > 0
+			? `${shown.join(', ')} ${shown.length === 1
+				? 'badge'
+				: 'badges'}`
+			: 'No badges',
+		look('card-badges', 'rank-badge', 'stat-badge', 'points-badge'),
+	]);
+});
 </script>
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Data">
+		<ScreenSettingsCard id="top-cards:data" title="Data" :collapsible="false">
 			<ScreenMetagameScopeFields
 				:config="config"
 				:fields="fields"
@@ -159,81 +200,52 @@ function typeLabel(bucket: CardTypeBucket): string {
 				@update="updateConfig({ ...$event, currentPage: 1 })"
 			/>
 
-			<UFormField
-				:label="fields.board.label"
+			<ScreenConfigField
+				:field="fields.board"
+				:model-value="config.board"
+				:items="boardOptions"
 				description="Count cards from this part of each deck."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.board"
-					:items="boardOptions"
-					class="w-48"
-					@update:model-value="updateConfig({ board: $event as BoardSelection, currentPage: 1 })"
-				/>
-			</UFormField>
-
-			<UFormField
-				:label="fields.sortBy.label"
-				description="Order cards using this metric."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.sortBy"
-					:items="sortByOptions"
-					class="w-48"
-					@update:model-value="updateConfig({ sortBy: $event as MetagameCardSortBy, currentPage: 1 })"
-				/>
-			</UFormField>
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard title="Filters">
-			<ScreenSettingsToggle
-				v-if="showsPointedOnly"
-				:label="fields.pointedOnly.label"
-				description="Rank only cards the Event's points system gives points, pointed lands such as Strip Mine included."
-				:model-value="config.pointedOnly"
-				@update:model-value="updateConfig({ pointedOnly: $event, currentPage: 1 })"
+				@update:model-value="$event !== null && updateConfig({ board: $event as BoardSelection, currentPage: 1 })"
 			/>
 
-			<UFormField
-				label="Card types"
-				description="Toggle which card types appear in the ranking. Basic lands are always excluded."
-				class="flex flex-col gap-3"
-			>
-				<div class="flex flex-wrap gap-2">
-					<UButton
-						v-for="bucket in CARD_TYPE_BUCKET_ORDER"
-						:key="bucket"
-						:label="typeLabel(bucket)"
-						:variant="isTypeExcluded(bucket) ? 'outline' : 'solid'"
-						:color="isTypeExcluded(bucket) ? 'neutral' : 'primary'"
-						size="xs"
-						:disabled="isTypeLocked(bucket)"
-						:data-testid="`top-cards-type-${bucket}`"
-						@click="toggleType(bucket)"
-					/>
-				</div>
-			</UFormField>
+			<ScreenConfigField
+				:field="fields.sortBy"
+				:model-value="config.sortBy"
+				:items="sortByOptions"
+				description="Order cards using this metric."
+				@update:model-value="$event !== null && updateConfig({ sortBy: $event as MetagameCardSortBy, currentPage: 1 })"
+			/>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Cards">
-			<UFormField
-				:label="fields.limit.label"
+		<ScreenSettingsCard id="top-cards:filters" title="Filters" :summary="filtersSummary">
+			<ScreenConfigField
+				v-if="showsPointedOnly"
+				:field="fields.pointedOnly"
+				:model-value="config.pointedOnly"
+				description="Rank only cards the Event's points system gives points, pointed lands such as Strip Mine included."
+				@update:model-value="updateConfig({ pointedOnly: $event === true, currentPage: 1 })"
+			/>
+
+			<ScreenCardTypeFilterField
+				:excluded="config.excludedCardTypes"
+				:locked="lockedTypes"
+				description="Toggle which card types appear in the ranking; basic lands never do."
+				test-id-prefix="top-cards-type"
+				@update="updateConfig({ excludedCardTypes: $event, currentPage: 1 })"
+			/>
+		</ScreenSettingsCard>
+
+		<ScreenSettingsCard id="top-cards:ranking-and-pages" title="Ranking & Pages" :summary="rankingSummary">
+			<ScreenConfigField
+				:field="fields.limit"
+				:model-value="config.limit"
 				description="How many of the top cards the ranking shows."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.limit"
-					:min="fields.limit.min"
-					:max="fields.limit.max"
-					class="w-32"
-					@update:model-value="updateConfig({ limit: Number($event), currentPage: 1 })"
-				/>
-			</UFormField>
+				@update:model-value="$event !== null && updateConfig({ limit: Number($event), currentPage: 1 })"
+			/>
 
 			<ScreenSettingsToggle
 				label="Split into pages"
-				description="Show the cards a page at a time. Off, every card is on one page."
+				description="Show the cards a page at a time; off, every card is on one page."
 				:model-value="paged"
 				:enabled="config.limit > 1"
 				disabled-description="A ranking of one card is one page."
@@ -241,19 +253,13 @@ function typeLabel(bucket: CardTypeBucket): string {
 			/>
 
 			<template v-if="paged">
-				<UFormField
-					:label="fields.cardsPerPage.label"
+				<ScreenConfigField
+					:field="fields.cardsPerPage"
+					:model-value="config.cardsPerPage"
+					:max="config.limit - 1"
 					:description="pageSizeDescription"
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInputNumber
-						:model-value="config.cardsPerPage"
-						:min="fields.cardsPerPage.min"
-						:max="config.limit - 1"
-						class="w-32"
-						@update:model-value="rotation.setPageSize(Number($event))"
-					/>
-				</UFormField>
+					@update:model-value="$event !== null && rotation.setPageSize(Number($event))"
+				/>
 
 				<USeparator />
 
@@ -264,238 +270,96 @@ function typeLabel(bucket: CardTypeBucket): string {
 					:counting="!rowsAnswered"
 				/>
 			</template>
+
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="ranking-and-pages" />
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Layout">
-			<UFormField
-				:label="fields.cardSizing.label"
-				description="Fit shrinks the cards until every one on the page fits the screen. Fixed takes the card width below and may run off the screen."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.cardSizing"
-					:items="CARD_SIZING_SELECT_OPTIONS"
-					class="w-48"
-					@update:model-value="updateConfig({ cardSizing: $event as CardSizing })"
-				/>
-			</UFormField>
-
-			<UFormField
-				v-if="config.cardSizing === 'fixed'"
-				:label="fields.cardWidth.label"
-				description="Each card's width in px."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.cardWidth"
-					:min="fields.cardWidth.min"
-					:max="fields.cardWidth.max"
-					class="w-32"
-					@update:model-value="updateConfig({ cardWidth: Number($event) })"
-				/>
-			</UFormField>
-
-			<UFormField
-				:label="fields.cardGap.label"
-				description="The space between cards in px."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.cardGap"
-					:min="fields.cardGap.min"
-					:max="fields.cardGap.max"
-					class="w-32"
-					@update:model-value="updateConfig({ cardGap: Number($event) })"
-				/>
-			</UFormField>
-
-			<ScreenSettingsToggle
-				:label="fields.autoColumns.label"
-				description="Choose the columns from the space the cards have on the Screen."
-				:model-value="config.autoColumns"
-				@update:model-value="updateConfig({ autoColumns: $event })"
+		<ScreenSettingsCard id="top-cards:layout" title="Layout" :summary="layoutSummary">
+			<ScreenCardGridLayoutFields
+				:layout="gridLayout"
+				:fields="fields"
+				:descriptions="layoutDescriptions"
+				@update="updateConfig($event)"
 			/>
 
-			<UFormField
-				v-if="!config.autoColumns"
-				:label="fields.columns.label"
-				description="Number of cards per row."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInputNumber
-					:model-value="config.columns"
-					:min="fields.columns.min"
-					:max="fields.columns.max"
-					class="w-32"
-					@update:model-value="updateConfig({ columns: Number($event) })"
-				/>
-			</UFormField>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="layout" />
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Header">
-			<ScreenSettingsToggle
-				:label="fields.showHeader.label"
-				description="Show the title above the card grid."
-				:model-value="config.showHeader"
-				@update:model-value="updateConfig({ showHeader: $event })"
-			/>
+		<ScreenHeaderSettingsCard
+			id="top-cards:header"
+			:summary="headerCardSummary"
+			:config="config"
+			:fields="fields"
+			show-description="Show the title above the card grid."
+			auto-description="Leave empty for an auto-generated title."
+			@update="updateConfig($event)"
+		>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
+		</ScreenHeaderSettingsCard>
 
-			<UFormField
-				v-if="config.showHeader"
-				:label="fields.headerText.label"
-				description="Leave empty for an auto-generated title."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
+		<ScreenSettingsCard id="top-cards:card-badges" title="Card Badges" :summary="badgesSummary">
+			<ScreenCardBadgeFields
+				title="Rank Badge"
+				:shown="config.showRankBadges"
+				:shown-field="fields.showRankBadges"
+				shown-description="Number each card by its position in the ranking."
+				:position="config.rankBadgePosition"
+				:position-field="fields.rankBadgePosition"
+				:text-size="config.rankBadgeTextSize"
+				:size-field="fields.rankBadgeTextSize"
+				@update="updateConfig($event)"
 			>
-				<UInput
-					:model-value="config.headerText ?? ''"
-					placeholder="Auto"
-					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || null })"
-				/>
-			</UFormField>
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard title="Card Badges">
-			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-				Rank Badge
-			</p>
-
-			<ScreenSettingsToggle
-				:label="fields.showRankBadges.label"
-				description="Number each card by its position in the ranking."
-				:model-value="config.showRankBadges"
-				@update:model-value="updateConfig({ showRankBadges: $event })"
-			/>
-
-			<template v-if="config.showRankBadges">
-				<USeparator />
-
-				<UFormField
-					:label="fields.rankBadgePosition.label"
-					description="Where the badge appears on the card."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UINinePointPicker
-						:model-value="config.rankBadgePosition"
-						:disabled-points="BADGE_DISABLED_POINTS"
-						aria-label="Rank badge position"
-						@update:model-value="updateConfig({ rankBadgePosition: $event as QuantityPosition })"
-					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.rankBadgeTextSize.label"
-					description="The badge's text size in px; the badge sizes itself around it."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInputNumber
-						:model-value="config.rankBadgeTextSize"
-						:min="fields.rankBadgeTextSize.min"
-						:max="fields.rankBadgeTextSize.max"
-						class="w-32"
-						aria-label="Rank badge text size"
-						@update:model-value="updateConfig({ rankBadgeTextSize: Number($event) })"
-					/>
-				</UFormField>
-			</template>
+				<template #look>
+					<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="rank-badge" />
+				</template>
+			</ScreenCardBadgeFields>
 
 			<USeparator />
 
-			<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-				Stat Badge
-			</p>
-
-			<UFormField
-				:label="fields.statBadge.label"
-				description="Show one metric on each card."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
+			<ScreenCardBadgeFields
+				title="Stat Badge"
+				:shown="config.statBadge !== 'none'"
+				:position="config.statBadgePosition"
+				:position-field="fields.statBadgePosition"
+				:text-size="config.statBadgeTextSize"
+				:size-field="fields.statBadgeTextSize"
+				@update="updateConfig($event)"
 			>
-				<USelect
-					:model-value="config.statBadge"
-					:items="statBadgeOptions"
-					class="w-48"
-					@update:model-value="updateConfig({ statBadge: $event as TopCardsStat })"
-				/>
-			</UFormField>
-
-			<template v-if="config.statBadge !== 'none'">
-				<USeparator />
-
-				<UFormField
-					:label="fields.statBadgePosition.label"
-					description="Where the badge appears on the card."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UINinePointPicker
-						:model-value="config.statBadgePosition"
-						:disabled-points="BADGE_DISABLED_POINTS"
-						aria-label="Stat badge position"
-						@update:model-value="updateConfig({ statBadgePosition: $event as QuantityPosition })"
+				<template #shown>
+					<ScreenConfigField
+						:field="fields.statBadge"
+						:model-value="config.statBadge"
+						:items="statBadgeOptions"
+						description="Show one metric on each card."
+						@update:model-value="$event !== null && updateConfig({ statBadge: $event as TopCardsStat })"
 					/>
-				</UFormField>
-
-				<UFormField
-					:label="fields.statBadgeTextSize.label"
-					description="The badge's text size in px; the badge sizes itself around it."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInputNumber
-						:model-value="config.statBadgeTextSize"
-						:min="fields.statBadgeTextSize.min"
-						:max="fields.statBadgeTextSize.max"
-						class="w-32"
-						aria-label="Stat badge text size"
-						@update:model-value="updateConfig({ statBadgeTextSize: Number($event) })"
-					/>
-				</UFormField>
-			</template>
+				</template>
+				<template #look>
+					<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="stat-badge" />
+				</template>
+			</ScreenCardBadgeFields>
 
 			<template v-if="showsPointsBadges">
 				<USeparator />
 
-				<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-					Point Badge
-				</p>
-
-				<ScreenSettingsToggle
-					:label="fields.showPointsBadges.label"
-					description="Show each pointed card's points from the Event's points system."
-					:model-value="config.showPointsBadges"
-					@update:model-value="updateConfig({ showPointsBadges: $event })"
-				/>
-
-				<template v-if="config.showPointsBadges">
-					<USeparator />
-
-					<UFormField
-						:label="fields.pointsBadgePosition.label"
-						description="Where the badge appears on the card."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UINinePointPicker
-							:model-value="config.pointsBadgePosition"
-							:disabled-points="BADGE_DISABLED_POINTS"
-							aria-label="Point badge position"
-							@update:model-value="updateConfig({ pointsBadgePosition: $event as QuantityPosition })"
-						/>
-					</UFormField>
-
-					<UFormField
-						:label="fields.pointsBadgeTextSize.label"
-						description="The badge's text size in px; the badge sizes itself around it."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UInputNumber
-							:model-value="config.pointsBadgeTextSize"
-							:min="fields.pointsBadgeTextSize.min"
-							:max="fields.pointsBadgeTextSize.max"
-							class="w-32"
-							aria-label="Point badge text size"
-							@update:model-value="updateConfig({ pointsBadgeTextSize: Number($event) })"
-						/>
-					</UFormField>
-				</template>
+				<ScreenCardBadgeFields
+					title="Point Badge"
+					:shown="config.showPointsBadges"
+					:shown-field="fields.showPointsBadges"
+					shown-description="Show each pointed card's points from the Event's points system."
+					:position="config.pointsBadgePosition"
+					:position-field="fields.pointsBadgePosition"
+					:text-size="config.pointsBadgeTextSize"
+					:size-field="fields.pointsBadgeTextSize"
+					@update="updateConfig($event)"
+				>
+					<template #look>
+						<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="points-badge" />
+					</template>
+				</ScreenCardBadgeFields>
 			</template>
+
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="card-badges" />
 		</ScreenSettingsCard>
 	</div>
 </template>

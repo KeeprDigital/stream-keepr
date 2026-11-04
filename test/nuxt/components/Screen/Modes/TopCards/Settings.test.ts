@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/TopCards/Settings.vue';
 import { eventDataResync } from '~/modules/event-data/resync';
 
@@ -104,13 +105,6 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	resetConfig: vi.fn(),
 }));
 
-const ScreenSettingsCardStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-	},
-	template: '<section data-testid="settings-card"><h2>{{ title }}</h2><slot /></section>',
-});
-
 const ScreenSettingsToggleStub = defineComponent({
 	props: {
 		label: { type: String, required: true },
@@ -177,9 +171,12 @@ function control<T>(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: 
 		: field!;
 }
 
-/** The component stub carrying `aria-label`. */
-function labelled<T>(wrapper: Awaited<ReturnType<typeof mountComponent>>, stub: T, label: string) {
-	return wrapper.findAllComponents(stub as any).find(item => item.attributes('aria-label') === label);
+/** The `stub` control of the contract field `key`, if rendered. */
+function configControl<T>(wrapper: Awaited<ReturnType<typeof mountComponent>>, stub: T, key: string) {
+	const field = wrapper.find(`[data-config-field="${key}"]`);
+	return field.exists()
+		? field.getComponent(stub as any)
+		: undefined;
 }
 
 /** The toggle labelled `label`. */
@@ -206,7 +203,7 @@ async function mountComponent() {
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				...screenSettingsLayoutStubs,
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 				UFormField: UFormFieldStub,
 				USelect: USelectStub,
@@ -233,6 +230,83 @@ describe('screenTopCardsSettings', () => {
 		mockFetch.mockResolvedValue(ranking(10));
 	});
 
+	// Each Mode Token's Look sits in the card for what it styles (ADR-0071, #973).
+	it.each([
+		{
+			pointsSystem: '7ph',
+			badgeGroups: [
+				'rank-badge',
+				'stat-badge',
+				'points-badge',
+				'card-badges',
+			],
+		},
+		{
+			pointsSystem: null,
+			badgeGroups: ['rank-badge', 'stat-badge', 'card-badges'],
+		},
+	])('lays out its cards, each holding its Look, with points system $pointsSystem', async ({ pointsSystem, badgeGroups }) => {
+		mockEventStore.event = { pointsSystem };
+		const wrapper = await mountComponent();
+
+		expect(settingsLayout(wrapper)).toEqual([
+			{
+				id: 'top-cards:data',
+				title: 'Data',
+				collapsible: false,
+				groups: [],
+			},
+			{
+				id: 'top-cards:filters',
+				title: 'Filters',
+				collapsible: true,
+				groups: [],
+			},
+			{
+				id: 'top-cards:ranking-and-pages',
+				title: 'Ranking & Pages',
+				collapsible: true,
+				groups: ['ranking-and-pages'],
+			},
+			{
+				id: 'top-cards:layout',
+				title: 'Layout',
+				collapsible: true,
+				groups: ['layout'],
+			},
+			{
+				id: 'top-cards:header',
+				title: 'Header',
+				collapsible: true,
+				groups: ['header'],
+			},
+			{
+				id: 'top-cards:card-badges',
+				title: 'Card Badges',
+				collapsible: true,
+				groups: badgeGroups,
+			},
+		]);
+	});
+
+	it('summarises each closed card', async () => {
+		mockConfig.value = {
+			...mockConfig.value,
+			pointedOnly: true,
+			excludedCardTypes: ['Land', 'Creature'],
+			statBadge: 'none',
+		};
+		const wrapper = await mountComponent();
+
+		expect(settingsSummaries(wrapper)).toEqual({
+			'top-cards:filters': 'Pointed only · 1 type excluded',
+			'top-cards:ranking-and-pages': 'Top 10 · One page',
+			'top-cards:layout': 'Fit · 5 columns',
+			'top-cards:header': 'Auto title',
+			'top-cards:card-badges': 'Rank badge',
+		});
+	});
+
 	it('renders a filter chip per card-type bucket', async () => {
 		const wrapper = await mountComponent();
 
@@ -241,11 +315,11 @@ describe('screenTopCardsSettings', () => {
 		expect(wrapper.get('[data-testid="top-cards-type-Land"]').text()).toBe('Nonbasic Land');
 	});
 
-	it('marks excluded types with the outline variant', async () => {
+	it('presses each included type\'s chip, not an excluded one\'s', async () => {
 		const wrapper = await mountComponent();
 
-		expect(wrapper.get('[data-testid="top-cards-type-Land"]').attributes('data-variant')).toBe('outline');
-		expect(wrapper.get('[data-testid="top-cards-type-Creature"]').attributes('data-variant')).toBe('solid');
+		expect(wrapper.get('[data-testid="top-cards-type-Land"]').attributes('aria-pressed')).toBe('false');
+		expect(wrapper.get('[data-testid="top-cards-type-Creature"]').attributes('aria-pressed')).toBe('true');
 	});
 
 	it('re-includes an excluded type on click', async () => {
@@ -298,9 +372,9 @@ describe('screenTopCardsSettings', () => {
 
 		// The Screen ranks pointed lands whatever the Land filter holds, so the chip shows them in and can't be turned off.
 		it.each([
-			{ pointedOnly: true, variant: 'solid', locked: true },
-			{ pointedOnly: false, variant: 'outline', locked: false },
-		])('shows Nonbasic Land in while filtering $pointedOnly', async ({ pointedOnly, variant, locked }) => {
+			{ pointedOnly: true, pressed: 'true', locked: true },
+			{ pointedOnly: false, pressed: 'false', locked: false },
+		])('shows Nonbasic Land in while filtering $pointedOnly', async ({ pointedOnly, pressed, locked }) => {
 			mockConfig.value = {
 				...mockConfig.value,
 				pointedOnly,
@@ -309,7 +383,7 @@ describe('screenTopCardsSettings', () => {
 			const wrapper = await mountComponent();
 
 			const land = wrapper.get('[data-testid="top-cards-type-Land"]');
-			expect(land.attributes('data-variant')).toBe(variant);
+			expect(land.attributes('aria-pressed')).toBe(pressed);
 			expect(land.attributes('disabled') !== undefined).toBe(locked);
 		});
 	});
@@ -343,8 +417,8 @@ describe('screenTopCardsSettings', () => {
 			mockConfig.value = { ...mockConfig.value, showPointsBadges };
 			const wrapper = await mountComponent();
 
-			expect(labelled(wrapper, UINinePointPickerStub, 'Point badge position') !== undefined).toBe(offered);
-			expect(labelled(wrapper, UInputNumberStub, 'Point badge text size') !== undefined).toBe(offered);
+			expect(configControl(wrapper, UINinePointPickerStub, 'pointsBadgePosition') !== undefined).toBe(offered);
+			expect(configControl(wrapper, UInputNumberStub, 'pointsBadgeTextSize') !== undefined).toBe(offered);
 		});
 	});
 
@@ -550,38 +624,38 @@ describe('screenTopCardsSettings', () => {
 	describe('card badges', () => {
 		it.each([
 			{
-				label: 'Rank badge position',
+				key: 'rankBadgePosition',
 				value: 'bottom-left',
 				patch: { rankBadgePosition: 'bottom-left' },
 			},
 			{
-				label: 'Stat badge position',
+				key: 'statBadgePosition',
 				value: 'top',
 				patch: { statBadgePosition: 'top' },
 			},
-		])('writes the $label', async ({ label, value, patch }) => {
+		])('writes the $key', async ({ key, value, patch }) => {
 			const wrapper = await mountComponent();
 
-			labelled(wrapper, UINinePointPickerStub, label)!.vm.$emit('update:modelValue', value);
+			configControl(wrapper, UINinePointPickerStub, key)!.vm.$emit('update:modelValue', value);
 
 			expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
 		});
 
 		it.each([
 			{
-				label: 'Rank badge text size',
+				key: 'rankBadgeTextSize',
 				value: 20,
 				patch: { rankBadgeTextSize: 20 },
 			},
 			{
-				label: 'Stat badge text size',
+				key: 'statBadgeTextSize',
 				value: 11,
 				patch: { statBadgeTextSize: 11 },
 			},
-		])('writes the $label', async ({ label, value, patch }) => {
+		])('writes the $key', async ({ key, value, patch }) => {
 			const wrapper = await mountComponent();
 
-			labelled(wrapper, UInputNumberStub, label)!.vm.$emit('update:modelValue', value);
+			configControl(wrapper, UInputNumberStub, key)!.vm.$emit('update:modelValue', value);
 
 			expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
 		});
@@ -590,13 +664,13 @@ describe('screenTopCardsSettings', () => {
 		it.each([
 			{
 				hidden: { showRankBadges: false },
-				gone: 'Rank',
-				kept: 'Stat',
+				gone: 'rank',
+				kept: 'stat',
 			},
 			{
 				hidden: { statBadge: 'none' },
-				gone: 'Stat',
-				kept: 'Rank',
+				gone: 'stat',
+				kept: 'rank',
 			},
 		])('offers no $gone badge controls while it is hidden', async ({ hidden, gone, kept }) => {
 			mockConfig.value = {
@@ -605,9 +679,9 @@ describe('screenTopCardsSettings', () => {
 			};
 			const wrapper = await mountComponent();
 
-			expect(labelled(wrapper, UINinePointPickerStub, `${gone} badge position`)).toBeUndefined();
-			expect(labelled(wrapper, UInputNumberStub, `${gone} badge text size`)).toBeUndefined();
-			expect(labelled(wrapper, UINinePointPickerStub, `${kept} badge position`)).toBeDefined();
+			expect(configControl(wrapper, UINinePointPickerStub, `${gone}BadgePosition`)).toBeUndefined();
+			expect(configControl(wrapper, UInputNumberStub, `${gone}BadgeTextSize`)).toBeUndefined();
+			expect(configControl(wrapper, UINinePointPickerStub, `${kept}BadgePosition`)).toBeDefined();
 		});
 	});
 });

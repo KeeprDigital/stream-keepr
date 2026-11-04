@@ -112,6 +112,45 @@ describe('screenCardGridLayoutFields', () => {
 				'cardGap',
 			],
 		},
+		// A stack is one column of overlapping cards, so it always takes a width and has no columns or gap.
+		{
+			name: 'a stack: its width whatever the sizing, and no columns or gap',
+			props: {
+				view: 'stack',
+				layout: { ...layout, cardSizing: 'fit', autoColumns: false },
+				show: { alignment: true, stackReveal: true },
+			},
+			keys: [
+				'cardSizing',
+				'alignment',
+				'cardWidth',
+				'stackReveal',
+			],
+		},
+		{
+			name: 'a Fixed stack',
+			props: {
+				view: 'stack',
+				layout: { ...layout, autoColumns: true },
+			},
+			keys: [
+				'cardSizing',
+				'cardWidth',
+			],
+		},
+		{
+			name: 'a grid, named as such, as the default view does',
+			props: {
+				view: 'grid',
+				layout: { ...layout, cardSizing: 'fit' },
+			},
+			keys: [
+				'cardSizing',
+				'autoColumns',
+				'columns',
+				'cardGap',
+			],
+		},
 	])('renders $name', ({ props, keys }) => {
 		expect(renderedKeys(mountFields(props))).toEqual(keys);
 	});
