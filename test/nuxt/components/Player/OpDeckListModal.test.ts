@@ -46,7 +46,7 @@ function route(path: string, options?: { method?: string }) {
 	throw new Error(`unexpected ${path}`);
 }
 
-function mountModal(player: Parameters<typeof createMockPlayer>[0] = {}) {
+function mountModal(player: Parameters<typeof createMockPlayer>[0] = {}, readonly = false) {
 	return mount(OpDeckListModal, {
 		props: {
 			player: createMockPlayer({
@@ -55,6 +55,7 @@ function mountModal(player: Parameters<typeof createMockPlayer>[0] = {}) {
 				nickname: 'ana',
 				...player,
 			}),
+			readonly,
 		},
 		global: { stubs: nuxtUiStubs },
 	});
@@ -193,6 +194,23 @@ describe('a Player\'s Deck List editor', () => {
 
 		expect(wrapper.get('[data-deck-list]').attributes('data-hand-edited')).toBe('false');
 		expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('1x OP01-016 Nami');
+		expect(useImportedButton(wrapper)).toBeUndefined();
+	});
+
+	// Read from the Metagame, a Deck List is shown, never edited (ADR-0074).
+	it('shows the saved list read-only, under the Player\'s shown name', async () => {
+		mockFetch.mockImplementation((path: string, options?: { method?: string }) => options?.method === 'GET'
+			? Promise.resolve({
+					deckList: { ...SAVED, handEdited: true },
+				})
+			: route(path, options));
+		const wrapper = mountModal({ externalSource: 'tcgplus', externalId: '0001' }, true);
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('Deck List: ana');
+		expect(wrapper.findAll('[data-deck-list-entry]').map(entry => entry.attributes('data-number'))).toEqual(['OP01-001', 'OP01-025']);
+		expect(wrapper.find('textarea').exists()).toBe(false);
+		expect(wrapper.find('button[aria-label="Save Deck List"]').exists()).toBe(false);
 		expect(useImportedButton(wrapper)).toBeUndefined();
 	});
 });

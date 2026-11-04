@@ -11,10 +11,12 @@ import { playerDisplayName } from '~~/shared/utils/playerName';
  * overrules the Leader picked. Saving goes through the OP Deck List write,
  * which warns of rule breaches and never refuses; the saved list's warnings
  * stay shown. A hand-edited list of a Player a TCG+ Import brought can be
- * dropped for the import's.
+ * dropped for the import's. Read-only, as the Metagame opens it, it shows the
+ * saved list and offers no edit.
  */
 const props = defineProps<{
 	player: Player;
+	readonly?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -35,7 +37,7 @@ const saving = ref(false);
 const takingImported = ref(false);
 
 /** A TCG+ Import keeps a hand edit it differs from; the operator may take the import's instead. */
-const canUseImported = computed(() => props.player.externalSource === 'tcgplus' && saved.value?.handEdited === true);
+const canUseImported = computed(() => !props.readonly && props.player.externalSource === 'tcgplus' && saved.value?.handEdited === true);
 
 const leaderModel = computed<OpPlayerGameData>({
 	get: () => ({ type: 'op' as const, leader: pickedLeader.value }),
@@ -110,13 +112,14 @@ async function takeImported() {
 	<UModal
 		open
 		:title="`Deck List: ${playerDisplayName(player)}`"
-		description="One card per line: N[x] CARDNUMBER [name]. A Leader line sets the Leader."
+		:description="readonly ? 'Their Leader and cards, as saved.' : 'One card per line: N[x] CARDNUMBER [name]. A Leader line sets the Leader.'"
 		@update:open="(open: boolean) => { if (!open) emit('close') }"
 	>
 		<template #body>
 			<div class="flex flex-col gap-3">
-				<FeatureMatchSetupOpPlayerFields v-model="leaderModel" />
+				<FeatureMatchSetupOpPlayerFields v-if="!readonly" v-model="leaderModel" />
 				<UTextarea
+					v-if="!readonly"
 					v-model="text"
 					:rows="12"
 					class="w-full font-mono"
@@ -180,6 +183,7 @@ async function takeImported() {
 					@click="emit('close')"
 				/>
 				<UButton
+					v-if="!readonly"
 					label="Save"
 					color="primary"
 					aria-label="Save Deck List"
