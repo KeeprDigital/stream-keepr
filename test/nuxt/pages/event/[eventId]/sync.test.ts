@@ -217,6 +217,7 @@ async function mountPage() {
 				UILoadingSpinner: true,
 				UIcon: true,
 				SyncLiveResultsCard: { template: '<div data-live-results-card />' },
+				SyncTcgPlusImport: { template: '<div data-tcgplus-import />' },
 			},
 		},
 	});
@@ -474,5 +475,18 @@ describe('melee Sync page', () => {
 		expect(wrapper.text()).toContain('2 decks affected');
 		expect(wrapper.text()).toContain('Review Unresolved Cards');
 		expect(wrapper.text()).toContain('Review Group');
+	});
+
+	// An OP Event's Sync is its TCG+ Import (ADR-0074).
+	it.each([
+		['mtg', false],
+		['op', true],
+	] as const)('on a %s Event, shows the TCG+ Import: %s', async (game, shown) => {
+		Object.assign(mockEventStore.event, { game });
+
+		const wrapper = await mountPage();
+
+		expect(wrapper.find('[data-tcgplus-import]').exists()).toBe(shown);
+		expect(wrapper.text().includes('Data Freshness')).toBe(!shown);
 	});
 });

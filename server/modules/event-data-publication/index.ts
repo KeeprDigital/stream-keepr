@@ -17,6 +17,7 @@ import { mapTalentToResponse } from '~~/server/mappers/talent';
 import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { publishMessage, publishMessageStrict } from '~~/server/utils/ably';
+import { publishFailureFields } from '~~/server/utils/realtimePublishFailure';
 import { featureMatchMessages } from './messages';
 
 export type { EventDataMessage } from './messages';
@@ -99,6 +100,8 @@ interface MeleeRoundStandingsSyncedInput extends PublicationInput, MessagePayloa
 
 interface MeleeDataResetInput extends PublicationInput, MessagePayload<'melee:dataReset'> {}
 
+interface TcgPlusImportedInput extends PublicationInput, MessagePayload<'tcgplus:imported'> {}
+
 export class RealtimePublicationError extends Error {
 	constructor(
 		public readonly messageType: MessageType,
@@ -106,6 +109,32 @@ export class RealtimePublicationError extends Error {
 	) {
 		super(`Failed to publish realtime message "${messageType}"`, options);
 		this.name = 'RealtimePublicationError';
+	}
+}
+
+/**
+ * Runs a sync's announcement after its write committed: a realtime failure
+ * then becomes a warning on the answer, never a failure, since retrying would
+ * redo a write that already happened. The provider's account of the refusal is
+ * logged under `logMessage`, so a lost notification says why (#264).
+ */
+export async function publishSyncAfterCommit(
+	warnings: string[],
+	publish: () => Promise<void>,
+	logMessage: string,
+): Promise<void> {
+	try {
+		await publish();
+	}
+	catch (error) {
+		if (!(error instanceof RealtimePublicationError))
+			throw error;
+		console.warn(JSON.stringify({
+			message: logMessage,
+			messageType: error.messageType,
+			...publishFailureFields(error.cause),
+		}));
+		warnings.push(`Data was saved, but realtime notification "${error.messageType}" could not be delivered`);
 	}
 }
 
@@ -480,6 +509,11 @@ export function eventDataPublicationModule() {
 		await publishSyncMessage(eventId, 'melee:decklistsSynced', { playerCount, deckCount }, originConnectionId);
 	}
 
+	/** A TCG+ Import reports its Players and Deck Lists as a count, as a Melee Sync does. */
+	async function tcgPlusImported({ eventId, originConnectionId, playerCount, deckCount }: TcgPlusImportedInput) {
+		await publishSyncMessage(eventId, 'tcgplus:imported', { playerCount, deckCount }, originConnectionId);
+	}
+
 	async function meleePlayersSynced({ eventId, originConnectionId, playerCount }: PlayersSyncedInput) {
 		await publishSyncMessage(eventId, 'melee:playersSynced', { playerCount }, originConnectionId);
 	}
@@ -566,6 +600,7 @@ export function eventDataPublicationModule() {
 		roundMatchesRefreshed,
 		meleeDeckListsSynced,
 		meleePlayersSynced,
+		tcgPlusImported,
 		meleeStructureSynced,
 		meleeFeatureMatchesSynced,
 		meleeMatchResultsSynced,

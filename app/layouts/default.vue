@@ -225,7 +225,8 @@ const navGroups = computed<NavGroup[]>(() => {
 							},
 						]
 					: []),
-				...(meleeEnabled.value && meleeConfigured.value
+				// A One Piece Card Game Event's Sync is its TCG+ Import, which needs no Melee (ADR-0074).
+				...(cardGame.value === 'op' || (meleeEnabled.value && meleeConfigured.value)
 					? [
 							{
 								label: 'Sync',

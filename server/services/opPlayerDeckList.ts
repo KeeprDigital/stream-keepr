@@ -1,3 +1,4 @@
+import type { SQL } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbPlayer } from '~~/server/db/schema';
 import type { OpDeckListView, SavedOpPlayerDeckList } from '~~/shared/types/opDeckList';
@@ -28,25 +29,84 @@ export interface OpPlayerDeckListReplacement {
 	handEdited: boolean;
 }
 
-/** The deck row the replacement inserts, found by the statements batched after it. */
-function primaryDeckIdOf(playerId: number) {
+/** What a Player's stored Deck List holds, to tell whether an import changes it. */
+export interface OpPlayerDeckListContents {
+	leaderNumber: string | null;
+	handEdited: boolean;
+	/** Each entry, and whether its card is catalogued or an Unresolved Deck Card. */
+	entries: Array<{ number: string; quantity: number; resolved: boolean }>;
+}
+
+/** A Player's primary deck row, which the statements batched after its insert find it by. */
+function primaryDeckIdOf(playerId: SQL) {
 	return sql`(select ${playerDecks.id} from ${playerDecks} where ${playerDecks.playerId} = ${playerId} and ${playerDecks.isPrimary} = 1)`;
 }
 
+const PAYLOAD_PLAYER_ID = sql`json_extract(value, '$.playerId')`;
+// `json_each` has an `id` column of its own, so the Player's is named in full.
+const PLAYER_ID = sql.raw('"players"."id"');
+
 export function opPlayerDeckListService() {
 	/**
-	 * The statements replacing a Player's Deck List, for one batch: the old one
-	 * and its entries go, the new one is stored, and the Player's Archetype and
-	 * Deck List reference follow it. The last statement returns the Player.
+	 * The statements replacing each Player's Deck List, for one batch: the old
+	 * ones and their entries go, the new ones are stored, and each Player's
+	 * Archetype and Deck List reference follow theirs. However many Players,
+	 * they are a few bulk statements; the last `playerQueryCount` return the
+	 * Players written.
 	 */
-	const buildReplaceQueries = ({ eventId, playerId, view, archetypeId, handEdited }: OpPlayerDeckListReplacement): BatchItem<'sqlite'>[] => {
-		const leader = view.entries.find(entry => entry.number === view.leaderNumber)?.card ?? null;
+	const buildReplaceManyQueries = (eventId: number, replacements: readonly OpPlayerDeckListReplacement[]): { queries: BatchItem<'sqlite'>[]; playerQueryCount: number } => {
 		const writeAtMs = Date.now();
-		const rows = view.entries.map((entry, sortOrder) => ({ number: entry.number, quantity: entry.quantity, sortOrder }));
-		const catalogued = rows.filter((_, index) => view.entries[index]!.card !== null);
-		const unresolved = rows.filter((_, index) => view.entries[index]!.card === null);
-		const deckId = primaryDeckIdOf(playerId);
+		const decks = replacements.map(({ playerId, view, archetypeId, handEdited }) => {
+			const leader = view.entries.find(entry => entry.number === view.leaderNumber)?.card ?? null;
+			return {
+				playerId,
+				name: leader?.name ?? '',
+				colors: leader
+					? formatOpColors(leader.colors)
+					: '',
+				archetypeId,
+				leaderNumber: view.leaderNumber,
+				handEdited,
+				mainboardCount: view.mainboardCount,
+			};
+		});
+		const rows = replacements.flatMap(({ playerId, view }) => view.entries.map((entry, sortOrder) => ({
+			playerId,
+			number: entry.number,
+			quantity: entry.quantity,
+			sortOrder,
+			catalogued: entry.card !== null,
+		})));
+		const catalogued = rows.filter(row => row.catalogued);
+		const unresolved = rows.filter(row => !row.catalogued);
+		const deckId = primaryDeckIdOf(PAYLOAD_PLAYER_ID);
+		const deckPayloads = chunkJsonRows(decks);
+		const inPayload = (column: SQL | typeof playerDecks.playerId, payload: string) =>
+			sql`${column} in (select json_extract(value, '$.playerId') from json_each(${payload}))`;
 
+		const deleteDecks = deckPayloads.map(payload => db.delete(playerDecks)
+			.where(and(eq(playerDecks.eventId, eventId), inPayload(playerDecks.playerId, payload))));
+		const insertDecks = deckPayloads.map(payload => db
+			.insert(playerDecks)
+			.select(selectForInsert(playerDecks, {
+				id: sql`null`,
+				eventId: sql`${eventId}`,
+				playerId: PAYLOAD_PLAYER_ID,
+				// One Deck List per Player; its identity is the Player's, not an import's.
+				externalId: sql`'player:' || json_extract(value, '$.playerId')`,
+				externalSource: sql`'manual'`,
+				formatExternalId: sql`'op'`,
+				name: sql`json_extract(value, '$.name')`,
+				colors: sql`json_extract(value, '$.colors')`,
+				sortOrder: sql`0`,
+				isPrimary: sql`1`,
+				archetypeId: sql`json_extract(value, '$.archetypeId')`,
+				reviewedAt: sql`null`,
+				leaderCardNumber: sql`json_extract(value, '$.leaderNumber')`,
+				handEdited: sql`json_extract(value, '$.handEdited')`,
+				createdAt: sql`${writeAtMs}`,
+				updatedAt: sql`${writeAtMs}`,
+			}, sql`from json_each(${payload}) where true`)));
 		const insertCards = chunkJsonRows(catalogued).map(payload => db
 			.insert(playerDeckCards)
 			.select(selectForInsert(playerDeckCards, {
@@ -74,46 +134,52 @@ export function opPlayerDeckListService() {
 				createdAt: sql`${writeAtMs}`,
 				updatedAt: sql`${writeAtMs}`,
 			}, sql`from json_each(${payload}) where true`)));
+		const deckOf = (payload: string, expression: SQL) =>
+			sql`(select ${expression} from json_each(${payload}) where json_extract(value, '$.playerId') = ${PLAYER_ID})`;
+		const updatePlayers = deckPayloads.map(payload => db.update(players)
+			.set({
+				archetypeId: deckOf(payload, sql`json_extract(value, '$.archetypeId')`),
+				gameData: deckOf(payload, sql`json_object(
+					'type', 'op',
+					'deckList', json_object(
+						'id', ${primaryDeckIdOf(PLAYER_ID)},
+						'mainboardCount', json_extract(value, '$.mainboardCount'),
+						'leaderNumber', json_extract(value, '$.leaderNumber')
+					)
+				)`),
+				updatedAt: new Date(writeAtMs),
+			})
+			.where(and(eq(players.eventId, eventId), inPayload(PLAYER_ID, payload)))
+			.returning());
 
-		return [
-			db.delete(playerDecks).where(and(eq(playerDecks.eventId, eventId), eq(playerDecks.playerId, playerId))),
-			db.insert(playerDecks).values({
-				eventId,
-				playerId,
-				// One Deck List per Player; its identity is the Player's, not an import's.
-				externalId: `player:${playerId}`,
-				externalSource: 'manual',
-				formatExternalId: 'op',
-				name: leader?.name ?? '',
-				colors: leader
-					? formatOpColors(leader.colors)
-					: '',
-				isPrimary: true,
-				archetypeId,
-				leaderCardNumber: view.leaderNumber,
-				handEdited,
-			}),
-			...insertCards,
-			...insertUnresolved,
-			db.update(players)
-				.set({
-					archetypeId,
-					gameData: sql`json_object(
-						'type', 'op',
-						'deckList', json_object('id', ${deckId}, 'mainboardCount', ${view.mainboardCount}, 'leaderNumber', ${view.leaderNumber})
-					)`,
-					updatedAt: new Date(writeAtMs),
-				})
-				.where(and(eq(players.eventId, eventId), eq(players.id, playerId)))
-				.returning(),
-		];
+		return {
+			queries: [
+				...deleteDecks,
+				...insertDecks,
+				...insertCards,
+				...insertUnresolved,
+				...updatePlayers,
+			],
+			playerQueryCount: updatePlayers.length,
+		};
 	};
 
-	/** Runs `buildReplaceQueries`, answering the Player as written, or `null` when there is none. */
-	const replace = async (replacement: OpPlayerDeckListReplacement): Promise<DbPlayer | null> => {
-		const queries = buildReplaceQueries(replacement);
+	/** The statements replacing one Player's Deck List, for one batch. The last returns the Player. */
+	const buildReplaceQueries = (replacement: OpPlayerDeckListReplacement): BatchItem<'sqlite'>[] =>
+		buildReplaceManyQueries(replacement.eventId, [replacement]).queries;
+
+	/** Replaces each Player's Deck List in one batch, answering the Players as written; a missing Player is left out. */
+	const replaceMany = async (eventId: number, replacements: readonly OpPlayerDeckListReplacement[]): Promise<DbPlayer[]> => {
+		if (replacements.length === 0)
+			return [];
+		const { queries, playerQueryCount } = buildReplaceManyQueries(eventId, replacements);
 		const results = await db.batch(queries as [typeof queries[0], ...typeof queries]);
-		const [player] = results.at(-1) as DbPlayer[];
+		return results.slice(-playerQueryCount).flat() as DbPlayer[];
+	};
+
+	/** Replaces a Player's Deck List, answering the Player as written, or `null` when there is none. */
+	const replace = async (replacement: OpPlayerDeckListReplacement): Promise<DbPlayer | null> => {
+		const [player] = await replaceMany(replacement.eventId, [replacement]);
 		return player ?? null;
 	};
 
@@ -164,5 +230,39 @@ export function opPlayerDeckListService() {
 		};
 	};
 
-	return { buildReplaceQueries, replace, findByPlayer };
+	/** What each Player in the Event holds in their Deck List, by Player. */
+	const findContentsByEvent = async (eventId: number): Promise<Map<number, OpPlayerDeckListContents>> => {
+		const primary = and(eq(playerDecks.eventId, eventId), eq(playerDecks.isPrimary, true));
+		const [decks, catalogued, unresolved] = await Promise.all([
+			db.select({ playerId: playerDecks.playerId, leaderNumber: playerDecks.leaderCardNumber, handEdited: playerDecks.handEdited })
+				.from(playerDecks)
+				.where(primary),
+			db.select({ playerId: playerDecks.playerId, number: cards.cardNumber, quantity: playerDeckCards.quantity })
+				.from(playerDeckCards)
+				.innerJoin(playerDecks, eq(playerDecks.id, playerDeckCards.deckId))
+				.innerJoin(cards, eq(cards.id, playerDeckCards.cardId))
+				.where(primary),
+			db.select({ playerId: playerDecks.playerId, number: playerDeckUnresolvedCards.originalName, quantity: playerDeckUnresolvedCards.quantity })
+				.from(playerDeckUnresolvedCards)
+				.innerJoin(playerDecks, eq(playerDecks.id, playerDeckUnresolvedCards.deckId))
+				.where(primary),
+		]);
+		const contents = new Map<number, OpPlayerDeckListContents>(decks.map(({ playerId, ...deck }) => [
+			playerId,
+			{ ...deck, entries: [] },
+		]));
+		for (const row of catalogued)
+			contents.get(row.playerId)?.entries.push({ number: row.number ?? '', quantity: row.quantity, resolved: true });
+		for (const row of unresolved)
+			contents.get(row.playerId)?.entries.push({ number: row.number, quantity: row.quantity, resolved: false });
+		return contents;
+	};
+
+	return {
+		buildReplaceQueries,
+		replace,
+		replaceMany,
+		findByPlayer,
+		findContentsByEvent,
+	};
 }

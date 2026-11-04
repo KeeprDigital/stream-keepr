@@ -84,8 +84,8 @@ function readRevision(read: DeckSourceRead | null): number | null | undefined {
  * The Event Data a Deck Source is read from. An edit to a Player's deck rolls
  * their `updatedAt` (#483), and a Broadcast Deck List carries its revision, so
  * an announcement at the revision already held carries nothing new. A Melee
- * sync, a deck review or a resolved deck card changes what a Player's deck
- * shows without one.
+ * sync, a TCG+ Import, a deck review or a resolved deck card changes what a
+ * Player's deck shows without one.
  */
 function deckDependencies(selected: () => LoadedDeckSource | null): ScreenModeDependencies<DeckSourceRead | null> {
 	const selectedPlayerId = () => {
@@ -118,6 +118,7 @@ function deckDependencies(selected: () => LoadedDeckSource | null): ScreenModeDe
 		'melee:dataReset': showsPlayer,
 		'melee:playersSynced': showsPlayer,
 		'melee:decklistsSynced': showsPlayer,
+		'tcgplus:imported': showsPlayer,
 		'broadcastDeckList:updated': ({ listId, revision }, held) =>
 			listId === selectedListId() && revision !== readRevision(held),
 	};

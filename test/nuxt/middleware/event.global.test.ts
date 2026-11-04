@@ -113,7 +113,6 @@ describe('event.global middleware', () => {
 		const MTG_ONLY_PAGES = [
 			'/event/1/matches',
 			'/event/1/rounds',
-			'/event/1/sync',
 			'/event/1/archetype-review',
 			'/event/1/config/integrations',
 		];
@@ -122,6 +121,7 @@ describe('event.global middleware', () => {
 			'/event/1/players',
 			'/event/1/metagame',
 			'/event/1/metagame/cards',
+			'/event/1/sync',
 			'/event/1/card',
 			'/event/1/feature-matches',
 			'/event/1/screens',
