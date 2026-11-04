@@ -2,7 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { SocialProfiles, SupportedSocialNetwork } from '~~/shared/socialProfiles';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
-import type { Talent, UpdateTalentInput } from '~/types';
+import type { CreateTalentInput, Talent, UpdateTalentInput } from '~/types';
 import {
 	normalizeSocialProfileInput,
 	SocialProfileInputError,
@@ -13,6 +13,8 @@ import { LazyUIConfirmDeleteModal } from '#components';
 
 interface TalentEditorValue {
 	name: string;
+	/** Free text such as "Host"; blank is none. */
+	role: string;
 	socialProfiles: Record<SupportedSocialNetwork, string>;
 	/** One exact image revision from the Graphics Asset Library, or none (ADR-0067). */
 	photo: GraphicAssetReference | null;
@@ -47,9 +49,10 @@ const editingValue = ref<TalentEditorValue | null>(null);
 const editingErrors = ref<Partial<Record<'name' | SupportedSocialNetwork, string>>>({});
 const saving = ref(false);
 
-function editorValue(talent?: Pick<Talent, 'name' | 'socialProfiles' | 'photo'>): TalentEditorValue {
+function editorValue(talent?: Pick<Talent, 'name' | 'role' | 'socialProfiles' | 'photo'>): TalentEditorValue {
 	return {
 		name: talent?.name ?? '',
+		role: talent?.role ?? '',
 		socialProfiles: Object.fromEntries(
 			SUPPORTED_SOCIAL_NETWORKS.map(network => [network.key, talent?.socialProfiles[network.key] ?? '']),
 		) as Record<SupportedSocialNetwork, string>,
@@ -84,9 +87,16 @@ function cancelTalentEdit() {
 		closeEditor();
 }
 
+interface ParsedTalent {
+	name: string;
+	role: string | null;
+	socialProfiles: SocialProfiles;
+}
+
 /** The editor's value, normalized, or null with each complaint shown at its field. */
-function parseEditor(value: TalentEditorValue): { name: string; socialProfiles: SocialProfiles } | null {
+function parseEditor(value: TalentEditorValue): ParsedTalent | null {
 	const name = value.name.trim();
+	const role = value.role.trim() || null;
 	const errors: typeof editingErrors.value = {};
 	if (!name)
 		errors.name = 'Enter a Talent name';
@@ -108,7 +118,7 @@ function parseEditor(value: TalentEditorValue): { name: string; socialProfiles: 
 	editingErrors.value = errors;
 	return Object.keys(errors).length > 0
 		? null
-		: { name, socialProfiles };
+		: { name, role, socialProfiles };
 }
 
 /**
@@ -116,10 +126,12 @@ function parseEditor(value: TalentEditorValue): { name: string; socialProfiles: 
  * the Talent's current value, which a colleague's change may have moved meanwhile
  * (#612).
  */
-function editedFields(current: Talent, opened: TalentEditorValue, value: TalentEditorValue, parsed: { name: string; socialProfiles: SocialProfiles }): UpdateTalentInput {
+function editedFields(current: Talent, opened: TalentEditorValue, value: TalentEditorValue, parsed: ParsedTalent): UpdateTalentInput {
 	const update: UpdateTalentInput = {};
 	if (value.name !== opened.name && parsed.name !== current.name)
 		update.name = parsed.name;
+	if (value.role !== opened.role && parsed.role !== (current.role ?? null))
+		update.role = parsed.role;
 
 	const socialProfiles: SocialProfiles = {};
 	for (const network of SUPPORTED_SOCIAL_NETWORKS) {
@@ -136,6 +148,20 @@ function editedFields(current: Talent, opened: TalentEditorValue, value: TalentE
 		update.photo = value.photo;
 
 	return update;
+}
+
+/** A new Talent's fields: a role or photo only when it has one. */
+function createdTalent({ role, ...parsed }: ParsedTalent, photo: GraphicAssetReference | null): CreateTalentInput {
+	return {
+		name: parsed.name,
+		...(role
+			? { role }
+			: {}),
+		socialProfiles: parsed.socialProfiles,
+		...(photo
+			? { photo }
+			: {}),
+	};
 }
 
 async function saveTalentEdit() {
@@ -161,9 +187,7 @@ async function saveTalentEdit() {
 		const saved = await runRequest(
 			() => current && update
 				? eventStore.updateTalent(current.id, update)
-				: eventStore.addTalent(value.photo
-						? { ...parsed, photo: value.photo }
-						: parsed),
+				: eventStore.addTalent(createdTalent(parsed, value.photo)),
 			{
 				error: failure => ({
 					title: 'Talent not saved',
@@ -246,6 +270,7 @@ function getDropdownItems(talent: Talent): DropdownMenuItem[] {
 				<div class="text-sm min-w-0 flex-1">
 					<p class="text-highlighted truncate font-medium">
 						{{ talent.name }}
+						<span v-if="talent.role" class="text-muted font-normal" data-talent-role>{{ talent.role }}</span>
 					</p>
 					<div v-if="Object.keys(talent.socialProfiles).length" class="mt-1 flex items-center gap-1 text-muted">
 						<UIcon
@@ -286,7 +311,7 @@ function getDropdownItems(talent: Talent): DropdownMenuItem[] {
 		:open="editorOpen"
 		:dismissible="false"
 		:title="editingTalentId === null ? 'Add Talent' : 'Edit Talent'"
-		description="Manage the Talent name, optional photo and Social Profiles."
+		description="Manage the Talent name, role, optional photo and Social Profiles."
 		:close="{ onClick: cancelTalentEdit }"
 	>
 		<template #body>
@@ -298,6 +323,10 @@ function getDropdownItems(talent: Talent): DropdownMenuItem[] {
 			>
 				<UFormField label="Name" name="name" :error="editingErrors.name">
 					<UInput v-model="editingValue.name" autofocus class="w-full" />
+				</UFormField>
+
+				<UFormField label="Role" name="role" description="Shown on a Talent Screen, such as Host or Commentator.">
+					<UInput v-model="editingValue.role" placeholder="None" class="w-full" />
 				</UFormField>
 
 				<UFormField label="Photo" name="photo">

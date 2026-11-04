@@ -69,3 +69,21 @@ describe('talentService Social Profiles', () => {
 		expect(await stored(talent.id)).toEqual({ ...none, name: 'Renamed', youtubeHandle: 'Caster' });
 	});
 });
+
+describe('talentService role', () => {
+	it('stores a role, keeps it through an update omitting it, and clears it with null', async () => {
+		const [event] = await db.insert(schema.events).values({ name: 'Event', game: 'mtg', featureMatchOrientation: 'horizontal' }).returning();
+		const role = async (id: number) => (await db.query.eventTalents.findFirst({
+			where: eq(schema.eventTalents.id, id),
+		}))?.role;
+
+		const talent = await talentService().create(event!.id, { name: 'Caster', role: 'Host' });
+		expect(await role(talent.id)).toBe('Host');
+
+		await talentService().update(talent.id, event!.id, { name: 'Renamed' });
+		expect(await role(talent.id)).toBe('Host');
+
+		await talentService().update(talent.id, event!.id, { role: null });
+		expect(await role(talent.id)).toBeNull();
+	});
+});

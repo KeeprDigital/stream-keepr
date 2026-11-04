@@ -49,6 +49,7 @@ const SHOWS: Record<Game, Partial<Record<ScreenMode, Shown>>> = {
 			&& text('Sebastián Castellanos-Ruiz')(rendering),
 		'broadcast-graphics': text('Monkey.D.Luffy · Purple'),
 		'feature-match-overlay': text('Enel'),
+		'talent': text('Jordan Reyes'),
 	},
 	mtg: {
 		'card': rendering => rendering.find('[data-testid="spotlight-card"] img').exists(),
@@ -64,6 +65,7 @@ const SHOWS: Record<Game, Partial<Record<ScreenMode, Shown>>> = {
 		'archetype-spotlight': text('Jo Lee'),
 		'head-to-head': text('Kenji Sato'),
 		'round-clock': text('50:00'),
+		'talent': text('Sam Okafor'),
 	},
 };
 

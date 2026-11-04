@@ -102,7 +102,7 @@ A Melee-imported Player field, name or pronouns, that an operator has changed by
 _Avoid_: override, local override.
 
 **Talent**:
-An Event-scoped broadcast presenter or commentator who may be selected for production graphics. A Talent may hold a photo: an ordinary Graphic Asset Reference to one exact image revision from the Graphics Asset Library, or none (ADR-0067).
+An Event-scoped broadcast presenter or commentator who may be selected for production graphics. A Talent may hold a role, free text such as "Host" or "Commentator", and a photo: an ordinary Graphic Asset Reference to one exact image revision from the Graphics Asset Library, or none (ADR-0067).
 
 **Supported Social Network**:
 One of Twitch, YouTube, X, Instagram, TikTok, or Bluesky: the application-owned, ordered catalog of public networks available for Talent profiles, each supplying its label, icon, and profile-URL rule. Events cannot add or reorder networks.
@@ -157,19 +157,27 @@ _Avoid_: player sync, match snapshot refresh.
 A broadcast or control surface that can show Feature Match Slot output, decks/cards, standings, graphics, or other prepared content.
 
 **Screen Mode**:
-A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, Standings, Top Cut Bracket, Feature Match Controls, Feature Match Overlay, Broadcast Graphics, Metagame, Most Played Cards, Player History, Pairings, Archetype Spotlight, Head-to-Head, or Round Clock. Each is named by what it shows or controls. Its key (`card`, `top-cards`, `top-cut`, …) is not its name: renaming a mode leaves its key alone, and a key renamed after release is migrated in storage and still accepted in its former spelling on a Screen write (ADR-0043).
+A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, Standings, Top Cut Bracket, Feature Match Controls, Feature Match Overlay, Broadcast Graphics, Metagame, Most Played Cards, Player History, Pairings, Archetype Spotlight, Head-to-Head, Round Clock, or Talent. Each is named by what it shows or controls. Its key (`card`, `top-cards`, `top-cut`, …) is not its name: renaming a mode leaves its key alone, and a key renamed after release is migrated in storage and still accepted in its former spelling on a Screen write (ADR-0043).
 _Avoid_: Top Cards for the Most Played Cards mode (one word from Top Cut); Feature Match for the control mode (the on-air one is the Feature Match Overlay); Deck Screen and Card Screen for a Screen in Deck List or Card Spotlight mode (say Deck List Screen, Card Spotlight Screen).
 
 **Screen Mode Definition**:
 The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface), and what it declares it carries, such as its Mode Tokens, its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
 
 **Event Reference**:
-A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, an Archetype, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038). Deleting the Phase, Round or Archetype one names unsets it (ADR-0060).
+A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, an Archetype, a Talent, a Talent lineup, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038). Deleting the Phase, Round, Archetype or Talent one names unsets it, and deleting a Talent drops it from a lineup (ADR-0060, ADR-0070).
 _Avoid_: data binding (a Graphic Input Binding is a Broadcast Graphics concept), Graphic Asset Reference (an installation-wide library link, not Event data)
 
 **Head-to-Head**:
 A Screen Mode showing two Players of an Event side by side before their Match: each one's record and points (the Player's own, or their latest Round Standings while they hold none of their own), their Archetype, and the earlier Matches between them at the Event, oldest first, or that this is their first meeting. Its Players come from a Feature Match Slot, following the Slot's current Feature Match Assignment, or are picked directly.
 _Avoid_: meeting, when naming an earlier Match.
+
+**Talent Screen**:
+A Screen in Talent mode, introducing the Event's Talent on air: one Talent, or a **Talent lineup** of up to eight in the order picked, as a lower third or a full panel. Each shows its name, and as the operator chooses its role, its photo, and its Social Profiles on the Supported Social Networks chosen, all at once or one at a time as a Social Profile Rotation. It is offered to Events of every Card Game.
+_Avoid_: desk screen, casters screen
+
+**Talent lineup**:
+The ordered list of Talents a Talent Screen shows together, at most eight; an Event Reference of its own kind. Deleting a Talent drops it from every lineup, keeping the rest in order (ADR-0070).
+_Avoid_: desk, panel (a full panel is a layout)
 
 **Authored Stack**:
 An ordered list in a Screen Mode's configuration holding authored content with no recovery path: the Background Screen's Background Layers and a Broadcast Graphics Screen's stack of Broadcast Graphics. A display reset leaves one untouched, and an edit may replace one but never delete it (ADR-0037).
@@ -251,7 +259,7 @@ A control surface's own live rendering of the Screen it drives. It composes what
 _Avoid_: Preview — which composes the authored state its embedder pushes in and resolves media as the author. Confidence monitor.
 
 **Screen Output Asset Capability**:
-An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, its resolved Theme Tokens' included (ADR-0050), never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
+An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, its resolved Theme Tokens' included (ADR-0050) and, on a Talent Screen showing photos, its Talents' photos (ADR-0070), never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
 
 ### Client and live-state infrastructure
 
@@ -450,7 +458,7 @@ A Graphic Item rendering the application-owned vector icon for one statically se
 The ordinary Graphic Group associated one-to-one with a Social Profile Projection, containing its icon, text, and decoration consumers. The projection transitions the whole group together; its projected values cannot be overridden.
 
 **Social Profile Rotation**:
-The default-on, on-air-only progression of a Social Profile Projection through its Talent's Social Profiles, with an eight-second default dwell configurable from two to sixty seconds. Its state belongs to the Broadcast Graphics Live Session; a Take or selection re-anchors the dwell, and every rendering projects the advance from server time without writing.
+The progression of a Talent's Social Profiles one at a time, with an eight-second default dwell configurable from two to sixty seconds, which every rendering projects from server time without writing. On a Social Profile Projection it is default-on and on-air-only, and its state belongs to the Broadcast Graphics Live Session; a Take or selection re-anchors the dwell. On a Talent Screen it is an operator setting, default off, with no live state: it projects from epoch zero, as a Page Rotation with no anchor does, so every output shows the same profile and every Talent in a lineup steps together, each through its own profiles (ADR-0070).
 
 **Social Profile Transition**:
 The synchronized visual change between profiles in a Social Profile Rotation: Cut, Crossfade, Slide Left, Slide Right, Slide Up, or Slide Down, lasting 100–2,000 ms (default 250). A newer target replaces rather than queues; an explicit Update Graphic uses its own update animation instead.

@@ -1,0 +1,1 @@
+ALTER TABLE `event_talents` ADD `role` text;

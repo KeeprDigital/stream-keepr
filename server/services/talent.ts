@@ -1,15 +1,17 @@
-import type { DbEventTalent } from '~~/server/db/schema';
+import type { DbEventTalent, DbScreen } from '~~/server/db/schema';
 import type { CreateTalentInput, UpdateTalentInput } from '~~/shared/api';
 import type { SocialProfiles } from '~~/shared/socialProfiles';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import { and, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { eventTalents } from '~~/server/db/schema';
+import { graphicAssetReferences } from '~~/server/db/schema/graphicsAsset';
 import {
 	boundGraphicAssetReferenceFacts,
 	jsonElementGraphicAssetRevisionResolution,
 	REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE,
 } from '~~/server/modules/graphic-asset-reference-resolution';
+import { buildReleaseScreenEventReferencesQuery } from '~~/server/services/screen';
 import { TALENT_PHOTO_SLOT, TALENT_REFERENCE_OWNER_KIND } from '~~/shared/utils/graphicsAssetReferences';
 
 /**
@@ -85,11 +87,14 @@ export function talentService() {
 	};
 
 	/** The same columns by their stored names, for the photo write's own statements. */
-	const storedColumns = (fields: { name?: string; socialProfiles?: SocialProfiles }): TalentColumnValues => {
+	const storedColumns = (fields: { name?: string; role?: string | null; socialProfiles?: SocialProfiles }): TalentColumnValues => {
 		const values = {
 			...(fields.name === undefined
 				? {}
 				: { name: fields.name }),
+			...(fields.role === undefined
+				? {}
+				: { role: fields.role }),
 			...(fields.socialProfiles === undefined
 				? {}
 				: socialProfileColumns(fields.socialProfiles)),
@@ -244,18 +249,24 @@ export function talentService() {
 		return updatedTalent;
 	};
 
-	/** Delete a Talent and release its photo in the same commit. */
-	const remove = async (id: number, eventId: number): Promise<boolean> => {
-		const client = db.$client;
-		const [, deleted] = await client.batch([
-			client.prepare(`
-				DELETE FROM graphic_asset_references
-				WHERE owner_kind = '${TALENT_REFERENCE_OWNER_KIND}' AND owner_id = ? AND event_id = ?
-			`).bind(String(id), eventId),
-			client.prepare('DELETE FROM event_talents WHERE id = ? AND event_id = ?').bind(id, eventId),
+	/**
+	 * Delete a Talent, releasing its photo and every Screen's Event Reference to
+	 * it in the same commit (ADR-0067, ADR-0070). Answers the Screens released.
+	 */
+	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
+		const [, deleted, clearedScreens] = await db.batch([
+			db.delete(graphicAssetReferences).where(and(
+				eq(graphicAssetReferences.ownerKind, TALENT_REFERENCE_OWNER_KIND),
+				eq(graphicAssetReferences.ownerId, String(id)),
+				eq(graphicAssetReferences.eventId, eventId),
+			)),
+			db.delete(eventTalents)
+				.where(and(eq(eventTalents.id, id), eq(eventTalents.eventId, eventId)))
+				.returning({ id: eventTalents.id }),
+			buildReleaseScreenEventReferencesQuery(eventId, ['talent', 'talentLineup']),
 		]);
 
-		return (deleted?.meta.changes ?? 0) > 0;
+		return { deleted: deleted.length > 0, clearedScreens };
 	};
 
 	return {
