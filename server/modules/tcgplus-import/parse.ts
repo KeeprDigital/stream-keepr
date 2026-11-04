@@ -1,4 +1,4 @@
-import type { PastedDeckListLine } from '~~/server/modules/op-deck-list-write/paste';
+import type { OpDeckListLine, OpDeckListLines } from '~~/shared/types/opDeckList';
 import { parseOpCardNumber } from '~~/shared/utils/card/op';
 
 /**
@@ -17,14 +17,14 @@ const COLUMNS = {
 } as const;
 
 /** One entry in the export: a Player's member number, Nickname, and Deck List. */
-export interface TcgPlusExportEntry {
+export interface TcgPlusExportEntry extends OpDeckListLines {
 	/** The Bandai member number, kept as written: leading zeros are part of it. */
 	memberNumber: string;
 	nickname: string;
 	/** The card number of the entry's first Leader row; `null` for an entry with none. */
 	leaderNumber: string | null;
 	/** Every card, Leaders included, in first-row order; a number on several rows (printings) is one entry. */
-	entries: PastedDeckListLine[];
+	entries: OpDeckListLine[];
 }
 
 export class TcgPlusExportError extends Error {
@@ -95,7 +95,7 @@ export function parseTcgPlusExport(text: string): TcgPlusExportEntry[] {
 		headers.indexOf(name),
 	])) as Record<keyof typeof COLUMNS, number>;
 
-	const byMember = new Map<string, TcgPlusExportEntry & { byNumber: Map<string, PastedDeckListLine> }>();
+	const byMember = new Map<string, TcgPlusExportEntry & { byNumber: Map<string, OpDeckListLine> }>();
 	rows.forEach((row, index) => {
 		const line = index + 2;
 		const cell = (key: keyof typeof COLUMNS) => (row[column[key]] ?? '').trim();

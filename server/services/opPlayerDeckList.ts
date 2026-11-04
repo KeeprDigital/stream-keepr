@@ -1,11 +1,11 @@
 import type { SQL } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbPlayer } from '~~/server/db/schema';
-import type { OpDeckListView, SavedOpPlayerDeckList } from '~~/shared/types/opDeckList';
+import type { OpDeckListLine, OpDeckListView, SavedOpPlayerDeckList } from '~~/shared/types/opDeckList';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { cards, playerDeckCards, playerDecks, playerDeckUnresolvedCards, players } from '~~/server/db/schema';
-import { opDeckListText, opDeckListView } from '~~/server/modules/op-deck-list-write/paste';
+import { opDeckListLeaderCard, opDeckListText, opDeckListView } from '~~/server/modules/op-deck-list-write/paste';
 import { opCatalogueCardColumns, opCatalogueRowFor, toOpCatalogueCard } from '~~/server/services/opCardCatalogue';
 import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 import { formatOpColors } from '~~/shared/utils/card/op';
@@ -34,7 +34,7 @@ export interface OpPlayerDeckListContents {
 	leaderNumber: string | null;
 	handEdited: boolean;
 	/** Each entry, and whether its card is catalogued or an Unresolved Deck Card. */
-	entries: Array<{ number: string; quantity: number; resolved: boolean }>;
+	entries: Array<OpDeckListLine & { resolved: boolean }>;
 }
 
 /** A Player's primary deck row, which the statements batched after its insert find it by. */
@@ -57,7 +57,7 @@ export function opPlayerDeckListService() {
 	const buildReplaceManyQueries = (eventId: number, replacements: readonly OpPlayerDeckListReplacement[]): { queries: BatchItem<'sqlite'>[]; playerQueryCount: number } => {
 		const writeAtMs = Date.now();
 		const decks = replacements.map(({ playerId, view, archetypeId, handEdited }) => {
-			const leader = view.entries.find(entry => entry.number === view.leaderNumber)?.card ?? null;
+			const leader = opDeckListLeaderCard(view);
 			return {
 				playerId,
 				name: leader?.name ?? '',

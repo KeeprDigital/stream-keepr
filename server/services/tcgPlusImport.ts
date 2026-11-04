@@ -1,4 +1,5 @@
 import type { DbPlayer } from '~~/server/db/schema';
+import type { OpDeckListLines } from '~~/shared/types/opDeckList';
 import { and, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { players, tcgPlusImportedDeckLists } from '~~/server/db/schema';
@@ -13,10 +14,7 @@ import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 export interface TcgPlusPlayerSnapshot {
 	memberNumber: string;
 	nickname: string;
-	deckList: {
-		leaderNumber: string | null;
-		entries: Array<{ number: string; quantity: number }>;
-	};
+	deckList: OpDeckListLines;
 }
 
 export interface TcgPlusReconcileAnswer {

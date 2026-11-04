@@ -1,4 +1,5 @@
 import type { PlayerSide } from '~~/shared/types/enums';
+import type { OpDeckListLine } from '~~/shared/types/opDeckList';
 import type { OpUnresolvedDeckCard, OpUnresolvedDeckCardAnswer, OpUnresolvedDeckCardDeckList } from '~~/shared/types/opUnresolvedDeckCard';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { db } from '~~/server/db';
@@ -10,6 +11,7 @@ import { opCatalogueRowFor } from '~~/server/services/opCardCatalogue';
 import { opPlayerDeckListService } from '~~/server/services/opPlayerDeckList';
 import { bandaiKeeprConfig } from '~~/server/utils/bandaiKeepr';
 import { requireOpEvent } from '~~/server/utils/routeGuards';
+import { SLOT_SIDE_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 import { playerDisplayName } from '~~/shared/utils/playerName';
 
 /**
@@ -25,7 +27,6 @@ interface HeldEntry extends OpUnresolvedDeckCardDeckList {
 }
 
 const SIDES = ['player1', 'player2'] as const satisfies readonly PlayerSide[];
-const SIDE_DATA_KEY = { player1: 'player1Data', player2: 'player2Data' } as const satisfies Record<PlayerSide, string>;
 
 /** Every Deck List entry in the Event holding a number bandai-keepr did not know, or only `number`'s. */
 async function heldEntries(eventId: number, number?: string): Promise<HeldEntry[]> {
@@ -91,7 +92,7 @@ async function heldEntries(eventId: number, number?: string): Promise<HeldEntry[
 
 	// Only a Deck List a side holds is in play; an older one is on its way out.
 	const sideEntries: HeldEntry[] = slots.flatMap(slot => SIDES.flatMap((side) => {
-		const data = slot[SIDE_DATA_KEY[side]];
+		const data = slot[SLOT_SIDE_DATA_KEY[side]];
 		const reference = deckListReferenceOf(data);
 		if (!reference)
 			return [];
@@ -120,7 +121,7 @@ async function heldEntries(eventId: number, number?: string): Promise<HeldEntry[
 
 export function opUnresolvedDeckCardModule() {
 	const catalogue = opCardCatalogueModule();
-	const write = opDeckListWriteModule();
+	const deckListWrite = opDeckListWriteModule();
 	const playerDeckLists = opPlayerDeckListService();
 	const featureMatchDeckLists = featureMatchDeckListService();
 
@@ -151,6 +152,10 @@ export function opUnresolvedDeckCardModule() {
 		const rename = (number: string) => number === from
 			? to
 			: number;
+		const renamed = (entries: readonly OpDeckListLine[]) => entries.map(({ number, quantity }) => ({
+			number: rename(number),
+			quantity,
+		}));
 		let rewritten = 0;
 		const playerIds = new Set<number>();
 		for (const { holder, deckListId } of held) {
@@ -161,14 +166,11 @@ export function opUnresolvedDeckCardModule() {
 				const deckList = await playerDeckLists.findByPlayer(eventId, holder.playerId);
 				if (!deckList)
 					continue;
-				await write.write({
+				await deckListWrite.write({
 					eventId,
 					owner: { kind: 'player', playerId: holder.playerId },
 					input: {
-						entries: deckList.entries.map(entry => ({
-							number: rename(entry.number),
-							quantity: entry.quantity,
-						})),
+						entries: renamed(deckList.entries),
 						leaderNumber: deckList.leaderNumber === null
 							? null
 							: rename(deckList.leaderNumber),
@@ -182,14 +184,11 @@ export function opUnresolvedDeckCardModule() {
 					: await featureMatchDeckLists.findById(deckListId, holder.slotId, eventId);
 				if (!deckList)
 					continue;
-				await write.write({
+				await deckListWrite.write({
 					eventId,
 					owner: { kind: 'slotSide', slotId: holder.slotId, side: holder.side },
 					input: {
-						entries: deckList.entries.map(entry => ({
-							number: rename(entry.number),
-							quantity: entry.quantity,
-						})),
+						entries: renamed(deckList.entries),
 						leaderNumber: null,
 					},
 					source: 'resolution',

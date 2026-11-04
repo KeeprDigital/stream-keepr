@@ -5,6 +5,7 @@ import type { TcgPlusImportAnswer, TcgPlusImportHeldPlayer, TcgPlusImportLeader,
 import type { TcgPlusExportEntry } from './parse';
 import { eventDataPublicationModule, publishSyncAfterCommit } from '~~/server/modules/event-data-publication';
 import { opDeckListWriteModule } from '~~/server/modules/op-deck-list-write';
+import { opDeckListLeaderCard } from '~~/server/modules/op-deck-list-write/paste';
 import { playerUpdateModule } from '~~/server/modules/player-update';
 import { opPlayerDeckListService } from '~~/server/services/opPlayerDeckList';
 import { playerService } from '~~/server/services/player';
@@ -140,7 +141,7 @@ export function tcgPlusImportModule() {
 		const unknown = new Map<string, number>();
 		for (const { deckList } of entries) {
 			if (deckList.leaderNumber !== null) {
-				const card = deckList.entries.find(entry => entry.number === deckList.leaderNumber)?.card ?? null;
+				const card = opDeckListLeaderCard(deckList);
 				const leader = leaders.get(deckList.leaderNumber)
 					?? {
 						number: deckList.leaderNumber,

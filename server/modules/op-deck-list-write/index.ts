@@ -3,9 +3,8 @@ import type { FeatureMatchResponse, ManualPlayerSlotData, PlayerResponse } from 
 import type { OpCatalogueCard } from '~~/shared/types/card/op';
 import type { PlayerSide } from '~~/shared/types/enums';
 import type { SavedFeatureMatchDeckList } from '~~/shared/types/featureMatchDeckList';
-import type { OpDeckListEntry, OpDeckListView, SavedOpPlayerDeckList, WriteOpPlayerDeckListAnswer } from '~~/shared/types/opDeckList';
+import type { OpDeckListEntry, OpDeckListLine, OpDeckListLines, OpDeckListView, SavedOpPlayerDeckList, WriteOpPlayerDeckListAnswer } from '~~/shared/types/opDeckList';
 import type { LeaderArchetype } from './archetypes';
-import type { PastedDeckListLine } from './paste';
 import { and, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { playerDecks, players } from '~~/server/db/schema';
@@ -21,9 +20,10 @@ import { inJsonArray } from '~~/server/utils/db';
 import { runCompensation } from '~~/server/utils/errors';
 import { requireOpEvent } from '~~/server/utils/routeGuards';
 import { catalogueOpLeader } from '~~/shared/utils/card/op';
+import { SLOT_SIDE_DATA_KEY, SLOT_SIDE_PLAYER_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
 import { announceDerivedArchetypes, deriveLeaderArchetype, releaseEmptiedLeaderArchetypes, removeEmptiedLeaderArchetypes } from './archetypes';
-import { opDeckListText, opDeckListView, parseOpDeckListText } from './paste';
+import { opDeckListLeaderCard, opDeckListText, opDeckListView, parseOpDeckListText } from './paste';
 
 /**
  * The OP Deck List write (ADR-0074): every One Piece Card Game Deck List write
@@ -55,7 +55,7 @@ export type OpDeckListInput
 	/** Paste text. A Leader line sets the Leader; with none, `leaderNumber` is the Leader picked. */
 	= | { text: string; leaderNumber?: string | null }
 		/** Entries, a number given twice added together, with the Leader marked, as a TCG+ export does. */
-		| { entries: readonly PastedDeckListLine[]; leaderNumber: string | null };
+		| OpDeckListLines;
 
 /**
  * Where a write came from: a TCG+ Import, an operator's hand (which a later
@@ -81,13 +81,10 @@ export type OpDeckListWriteAnswer<TOwner extends OpDeckListOwner> = TOwner exten
 	? WriteOpPlayerDeckListAnswer<PlayerResponse>
 	: SlotSideDeckListAnswer;
 
-const SIDE_DATA_KEY = { player1: 'player1Data', player2: 'player2Data' } as const satisfies Record<PlayerSide, string>;
-const SIDE_PLAYER_KEY = { player1: 'player1Id', player2: 'player2Id' } as const satisfies Record<PlayerSide, string>;
-
-function inputLines(input: OpDeckListInput): PastedDeckListLine[] {
+function inputLines(input: OpDeckListInput): OpDeckListLine[] {
 	if ('text' in input)
 		return parseOpDeckListText(input.text);
-	const byNumber = new Map<string, PastedDeckListLine>();
+	const byNumber = new Map<string, OpDeckListLine>();
 	for (const { number, quantity } of input.entries) {
 		const held = byNumber.get(number);
 		if (held)
@@ -106,7 +103,7 @@ interface ResolvedInput {
 	marked: string | null;
 }
 
-function inputNumbers(input: OpDeckListInput, lines: readonly PastedDeckListLine[]): string[] {
+function inputNumbers(input: OpDeckListInput, lines: readonly OpDeckListLine[]): string[] {
 	const given = input.leaderNumber ?? null;
 	return [
 		...lines.map(line => line.number),
@@ -117,7 +114,7 @@ function inputNumbers(input: OpDeckListInput, lines: readonly PastedDeckListLine
 }
 
 /** The input's entries with the cards resolved for them. */
-function withCards(input: OpDeckListInput, lines: readonly PastedDeckListLine[], cards: ReadonlyMap<string, OpCatalogueCard | null>): ResolvedInput {
+function withCards(input: OpDeckListInput, lines: readonly OpDeckListLine[], cards: ReadonlyMap<string, OpCatalogueCard | null>): ResolvedInput {
 	const given = input.leaderNumber ?? null;
 	const entries = lines.map(line => ({ ...line, card: cards.get(line.number) ?? null }));
 	// ADR-0057: a pasted Leader line sets the Leader, and only a paste with none keeps the one picked.
@@ -141,10 +138,6 @@ async function resolveInputs(inputs: readonly OpDeckListInput[]): Promise<Resolv
 async function resolveInput(input: OpDeckListInput): Promise<ResolvedInput> {
 	const [resolved] = await resolveInputs([input]);
 	return resolved!;
-}
-
-function leaderCardOf(view: OpDeckListView): OpCatalogueCard | null {
-	return view.entries.find(entry => entry.number === view.leaderNumber)?.card ?? null;
 }
 
 export function opDeckListWriteModule() {
@@ -180,7 +173,7 @@ export function opDeckListWriteModule() {
 		const { entries, marked } = await resolveInput(input);
 		const view = opDeckListView(entries, marked);
 
-		const leader = leaderCardOf(view);
+		const leader = opDeckListLeaderCard(view);
 		const derived = leader && view.leaderNumber !== null
 			? await deriveLeaderArchetype(eventId, view.leaderNumber, leader)
 			: null;
@@ -230,7 +223,7 @@ export function opDeckListWriteModule() {
 		if (!held)
 			throw createError({ statusCode: 404, message: 'Feature match slot not found' });
 		// A linked side shows its Player's Deck List, edited as the Player's (ADR-0074).
-		if (held[SIDE_PLAYER_KEY[side]] != null)
+		if (held[SLOT_SIDE_PLAYER_KEY[side]] != null)
 			throw createError({ statusCode: 409, message: 'This side shows its Player\'s Deck List: edit the Player\'s Deck List instead' });
 
 		const { entries } = await resolveInput('text' in input
@@ -244,11 +237,11 @@ export function opDeckListWriteModule() {
 
 		// Read after the lookup, so an edit to the side made meanwhile is kept.
 		const slot = await slots.findById(slotId, eventId);
-		const key = SIDE_DATA_KEY[side];
+		const key = SLOT_SIDE_DATA_KEY[side];
 		// Provenance is never written by an operator save; an OP Slot carries none.
 		const { externalId: _externalId, externalSource: _externalSource, ...current } = slot?.[key] ?? {};
 		const currentGameData = getOpGameData(current.gameData);
-		const leader = leaderCardOf(view);
+		const leader = opDeckListLeaderCard(view);
 		const sideData: ManualPlayerSlotData = {
 			...current,
 			gameData: {
@@ -330,7 +323,7 @@ export function opDeckListWriteModule() {
 		await requireOpEvent(eventId);
 		const derived = new Map<string, LeaderArchetype>();
 		for (const { deckList } of writes) {
-			const leader = leaderCardOf(deckList);
+			const leader = opDeckListLeaderCard(deckList);
 			if (leader && deckList.leaderNumber !== null && !derived.has(deckList.leaderNumber))
 				derived.set(deckList.leaderNumber, await deriveLeaderArchetype(eventId, deckList.leaderNumber, leader));
 		}

@@ -1,4 +1,5 @@
-import type { OpDeckListEntry, OpDeckListView, OpDeckListWarning } from '~~/shared/types/opDeckList';
+import type { OpCatalogueCard } from '~~/shared/types/card/op';
+import type { OpDeckListEntry, OpDeckListLine, OpDeckListView, OpDeckListWarning } from '~~/shared/types/opDeckList';
 import { parseOpCardNumber } from '~~/shared/utils/card/op';
 
 /**
@@ -11,11 +12,6 @@ import { parseOpCardNumber } from '~~/shared/utils/card/op';
 const OP_MAINBOARD_SIZE = 50;
 const OP_MAX_COPIES = 4;
 
-export interface PastedDeckListLine {
-	number: string;
-	quantity: number;
-}
-
 /**
  * `N[x] CARDNUMBER [name]`: a quantity, an optional `x`, a card number (a
  * Printing id reads as its card number), and anything after it ignored.
@@ -26,8 +22,8 @@ const CARD_LINE = /^(\d+)\s*(?:x\s*)?([a-z]{1,4}\d{0,2}-\d{3})(?:_[a-z]\d+)?(?:\
  * The cards a paste names, in paste order, a number pasted twice added into
  * its first line. Every other line (blank, heading, unreadable) is ignored.
  */
-export function parseOpDeckListText(text: string): PastedDeckListLine[] {
-	const byNumber = new Map<string, PastedDeckListLine>();
+export function parseOpDeckListText(text: string): OpDeckListLine[] {
+	const byNumber = new Map<string, OpDeckListLine>();
 	for (const line of text.split(/\r?\n/)) {
 		const match = CARD_LINE.exec(line.trim());
 		if (!match)
@@ -55,6 +51,11 @@ function cardsWord(count: number): string {
 	return count === 1
 		? 'card'
 		: 'cards';
+}
+
+/** A Deck List's Leader card, or `null` with no Leader or an unresolved one. */
+export function opDeckListLeaderCard(view: Pick<OpDeckListView, 'entries' | 'leaderNumber'>): OpCatalogueCard | null {
+	return view.entries.find(entry => entry.number === view.leaderNumber)?.card ?? null;
 }
 
 /**

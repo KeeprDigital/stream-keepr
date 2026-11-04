@@ -6,6 +6,19 @@ import type { OpCatalogueCard } from './card/op';
  * write and read through the same rules.
  */
 
+/** A Deck List entry by card number, before the card catalogue names its card. */
+export interface OpDeckListLine {
+	number: string;
+	quantity: number;
+}
+
+/** A Deck List as numbered entries with its Leader marked, as a TCG+ export holds one. */
+export interface OpDeckListLines {
+	/** Leaders included; a Leader marked but not among them is added as one copy. */
+	entries: readonly OpDeckListLine[];
+	leaderNumber: string | null;
+}
+
 export interface OpDeckListEntry {
 	number: string;
 	quantity: number;

@@ -9,6 +9,7 @@ import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
+import type { OpDeckListLine } from '~~/shared/types/opDeckList';
 import type { FeatureMatchLayoutConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
@@ -905,7 +906,7 @@ export const tcgPlusImportedDeckLists = sqliteTable('tcgplus_imported_deck_lists
 		.primaryKey()
 		.references(() => players.id, { onDelete: 'cascade' }),
 	leaderCardNumber: text('leader_card_number'),
-	entries: text('entries', { mode: 'json' }).$type<Array<{ number: string; quantity: number }>>().notNull(),
+	entries: text('entries', { mode: 'json' }).$type<OpDeckListLine[]>().notNull(),
 	importedAt: integer('imported_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
