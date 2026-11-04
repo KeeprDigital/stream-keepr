@@ -84,7 +84,7 @@ export interface GraphicAssetUsage {
 		name?: string;
 		slot: string;
 		eventId?: number;
-		/** The name of the Event an Event-scoped owner belongs to. */
+		/** A Talent's Event, by name (ADR-0067). */
 		eventName?: string;
 	};
 }

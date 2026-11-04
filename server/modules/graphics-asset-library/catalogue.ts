@@ -287,9 +287,9 @@ function usageSelect(options: { retireBlockingOnly?: boolean } = {}) {
 				WHEN asset_reference.owner_kind = '${TALENT_REFERENCE_OWNER_KIND}' THEN talent.name
 				ELSE NULL
 			END AS owner_name,
-			owner_event.name AS event_name
+			-- A Talent is named with its Event (ADR-0067).
+			talent_event.name AS event_name
 		FROM graphic_asset_references asset_reference
-		LEFT JOIN events owner_event ON owner_event.id = asset_reference.event_id
 		LEFT JOIN screens
 			ON asset_reference.owner_kind = 'screen'
 			AND CAST(screens.id AS TEXT) = asset_reference.owner_id
@@ -310,6 +310,7 @@ function usageSelect(options: { retireBlockingOnly?: boolean } = {}) {
 			ON asset_reference.owner_kind = '${TALENT_REFERENCE_OWNER_KIND}'
 			AND CAST(talent.id AS TEXT) = asset_reference.owner_id
 			AND talent.event_id = asset_reference.event_id
+		LEFT JOIN events talent_event ON talent_event.id = talent.event_id
 		WHERE asset_reference.asset_id = ?
 			${options.retireBlockingOnly
 				? `AND ${RETIRE_BLOCKING_REFERENCE}`
