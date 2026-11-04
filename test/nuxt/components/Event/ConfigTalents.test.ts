@@ -271,8 +271,18 @@ describe('event config Talents', () => {
 	});
 
 	it.each([
-		['sets a trimmed role', ALICE, ' Host ', { role: 'Host' }],
-		['clears a role left blank', talent(11, 'Alice', {}, null, 'Host'), '  ', { role: null }],
+		[
+			'sets a trimmed role',
+			ALICE,
+			' Host ',
+			{ role: 'Host' },
+		],
+		[
+			'clears a role left blank',
+			talent(11, 'Alice', {}, null, 'Host'),
+			'  ',
+			{ role: null },
+		],
 	])('%s', async (_case, current, role, update) => {
 		const wrapper = mountComponent([current]);
 		await chooseRowAction(wrapper, 0, 'Edit');
@@ -295,7 +305,10 @@ describe('event config Talents', () => {
 	});
 
 	it('shows each Talent\'s role beside its name', () => {
-		const wrapper = mountComponent([talent(11, 'Alice', {}, null, 'Host'), BOB]);
+		const wrapper = mountComponent([
+			talent(11, 'Alice', {}, null, 'Host'),
+			BOB,
+		]);
 
 		expect(wrapper.findAll('[data-talent-role]').map(role => role.text())).toEqual(['Host']);
 	});

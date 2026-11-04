@@ -58,6 +58,7 @@ export function useScreenOutputReads(context: ScreenContext) {
 		pairings: () => repository.pairings(requireScope()),
 		archetypeSpotlight: () => repository.archetypeSpotlight(requireScope()),
 		headToHead: () => repository.headToHead(requireScope()),
+		talent: () => repository.talent(requireScope()),
 		metagame: () => repository.metagame(requireScope()),
 		topCards: () => repository.topCards(requireScope()),
 		topCut: () => repository.topCut(requireScope()),

@@ -104,6 +104,18 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'primary-text': { selector: '.name', property: 'color' },
 		'secondary-text': { selector: '.versus', property: 'color' },
 	},
+	'talent': {
+		'title-typography': { selector: '.talent-header h2' },
+		'title-text': { selector: '.talent-header h2', property: 'color' },
+		'title-divider': { selector: '.talent-header', property: 'borderBottomColor' },
+		'surface': { selector: '.talent-card', property: 'backgroundColor' },
+		'accent': { selector: '.talent-photo', property: 'borderColor' },
+		'name-typography': { selector: '.talent-name' },
+		'name-text': { selector: '.talent-name', property: 'color' },
+		'detail-typography': { selector: '.talent-role' },
+		'role-text': { selector: '.talent-role', property: 'color' },
+		'profile-text': { selector: '.talent-profile', property: 'color' },
+	},
 	'archetype-spotlight': {
 		'title-typography': { selector: '.spotlight-header h2' },
 		'title-text': { selector: '.spotlight-header h2', property: 'color' },
@@ -397,6 +409,36 @@ mockNuxtImport('usePlayerHistoryModeData', () => () => {
 		formatOutcome: (row: { outcome: string }) => row.outcome,
 	};
 });
+
+mockNuxtImport('useTalentModeData', () => () => ({
+	config: computed(() => ({
+		layout: 'fullPanel',
+		showHeader: true,
+		showPhoto: true,
+		showRole: true,
+	})),
+	error: ref(null),
+	ready: computed(() => true),
+	isEmpty: computed(() => false),
+	headerText: computed(() => 'On the Desk'),
+	talents: computed(() => [
+		{
+			id: 1,
+			name: 'Host',
+			role: 'Host',
+			photo: null,
+			socialProfiles: [],
+			shownProfiles: [
+				{
+					network: 'twitch',
+					networkLabel: 'Twitch',
+					handle: 'host',
+					profileUrl: 'https://www.twitch.tv/host',
+				},
+			],
+		},
+	]),
+}));
 
 mockNuxtImport('useHeadToHeadModeData', () => () => {
 	const side = (id: number, name: string) => ({

@@ -48,7 +48,9 @@ async function seed(talentConfig: (ids: { doomed: number; first: number; last: n
 		name: label,
 		slug: label,
 		currentMode: 'talent',
-		modeConfigs: { talent: talentConfig(ids) },
+		modeConfigs: {
+			talent: talentConfig(ids),
+		},
 	} as never, { assetCapabilitySeed: `seed-${label}`, assetCapabilityVersion: 1, assetCapabilityDigest: `digest-${label}` });
 	return { eventId, ids, screen };
 }
@@ -62,13 +64,26 @@ describe('deleting a Talent releases the Talent Screens naming it', () => {
 		},
 		{
 			name: 'drops it from a lineup, keeping the others in order',
-			config: ({ doomed, first, last }: { doomed: number; first: number; last: number }) => ({ selection: 'lineup', talentIds: [last, doomed, first] }),
-			released: ({ first, last }: { first: number; last: number }) => ({ selection: 'lineup', talentIds: [last, first] }),
+			config: ({ doomed, first, last }: { doomed: number; first: number; last: number }) => ({
+				selection: 'lineup',
+				talentIds: [last, doomed, first],
+			}),
+			released: ({ first, last }: { first: number; last: number }) => ({
+				selection: 'lineup',
+				talentIds: [last, first],
+			}),
 		},
 		{
 			name: 'releases a kept choice the Screen is not showing',
-			config: ({ doomed, first }: { doomed: number; first: number }) => ({ selection: 'lineup', talentId: doomed, talentIds: [first] }),
-			released: ({ first }: { first: number }) => ({ selection: 'lineup', talentIds: [first] }),
+			config: ({ doomed, first }: { doomed: number; first: number }) => ({
+				selection: 'lineup',
+				talentId: doomed,
+				talentIds: [first],
+			}),
+			released: ({ first }: { first: number }) => ({
+				selection: 'lineup',
+				talentIds: [first],
+			}),
 		},
 	])('$name, announcing the Screen first', async ({ config, released }) => {
 		const { eventId, ids, screen } = await seed(config);
@@ -79,7 +94,12 @@ describe('deleting a Talent releases the Talent Screens naming it', () => {
 		expect(stored?.stateVersion).toBe(screen.stateVersion + 1);
 		expect(stored?.modeConfigs?.talent).toEqual(released(ids));
 		expect(publication.screenUpdated!.mock.calls).toEqual([
-			[{ eventId, entity: expect.objectContaining({ id: screen.id }) }],
+			[
+				{
+					eventId,
+					entity: expect.objectContaining({ id: screen.id }),
+				},
+			],
 		]);
 		expect(publication.screenUpdated!.mock.invocationCallOrder[0]).toBeLessThan(publication.talentDeleted!.mock.invocationCallOrder[0]!);
 
@@ -93,7 +113,11 @@ describe('deleting a Talent releases the Talent Screens naming it', () => {
 	});
 
 	it('leaves a Screen naming other Talents alone', async () => {
-		const { eventId, ids, screen } = await seed(({ first, last }) => ({ selection: 'lineup', talentId: last, talentIds: [first, last] }));
+		const { eventId, ids, screen } = await seed(({ first, last }) => ({
+			selection: 'lineup',
+			talentId: last,
+			talentIds: [first, last],
+		}));
 
 		await talentWriteModule().deleteTalent({ eventId, talentId: ids.doomed });
 

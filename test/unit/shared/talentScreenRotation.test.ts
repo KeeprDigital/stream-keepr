@@ -6,21 +6,65 @@ import { msUntilNextTalentScreenProfile, projectTalentScreenSocialProfile } from
 // zero: every rendering at one server instant shows the same profile.
 
 function profile(network: SocialProfileProjectionValue['network']): SocialProfileProjectionValue {
-	return { network, networkLabel: network, handle: `${network}-handle`, profileUrl: `https://example.test/${network}` };
+	return {
+		network,
+		networkLabel: network,
+		handle: `${network}-handle`,
+		profileUrl: `https://example.test/${network}`,
+	};
 }
 
-const THREE = [profile('twitch'), profile('x'), profile('bluesky')];
+const THREE = [
+	profile('twitch'),
+	profile('x'),
+	profile('bluesky'),
+];
 const DWELL = 8000;
 
 describe('a Talent Screen Social Profile Rotation', () => {
 	it.each([
-		['the first profile through the first dwell', THREE, 7999, 'twitch'],
-		['the next profile once a dwell ends', THREE, 8000, 'x'],
-		['the last profile in the third dwell', THREE, 16_000, 'bluesky'],
-		['the first again after a full turn', THREE, 24_000, 'twitch'],
-		['each lineup Talent\'s own turn of its own profiles at one instant', THREE.slice(0, 2), 24_000, 'x'],
-		['one profile always', THREE.slice(0, 1), 16_000, 'twitch'],
-		['the first profile while server time is unknown', THREE, undefined, 'twitch'],
+		[
+			'the first profile through the first dwell',
+			THREE,
+			7999,
+			'twitch',
+		],
+		[
+			'the next profile once a dwell ends',
+			THREE,
+			8000,
+			'x',
+		],
+		[
+			'the last profile in the third dwell',
+			THREE,
+			16_000,
+			'bluesky',
+		],
+		[
+			'the first again after a full turn',
+			THREE,
+			24_000,
+			'twitch',
+		],
+		[
+			'each lineup Talent\'s own turn of its own profiles at one instant',
+			THREE.slice(0, 2),
+			24_000,
+			'x',
+		],
+		[
+			'one profile always',
+			THREE.slice(0, 1),
+			16_000,
+			'twitch',
+		],
+		[
+			'the first profile while server time is unknown',
+			THREE,
+			undefined,
+			'twitch',
+		],
 	])('shows %s', (_case, profiles, now, network) => {
 		expect(projectTalentScreenSocialProfile(profiles, { dwellMs: DWELL, now })?.network).toBe(network);
 	});

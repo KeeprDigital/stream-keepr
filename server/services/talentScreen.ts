@@ -22,7 +22,10 @@ export async function findTalentScreen(eventId: number, config: TalentModeConfig
 		.select()
 		.from(eventTalents)
 		.where(and(eq(eventTalents.eventId, eventId), inArray(eventTalents.id, ids)));
-	const byId = new Map(rows.map(row => [row.id, mapTalentToResponse(row)]));
+	const byId = new Map(rows.map(row => [
+		row.id,
+		mapTalentToResponse(row),
+	]));
 
 	return {
 		talents: ids.flatMap((id) => {

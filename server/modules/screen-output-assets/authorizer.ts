@@ -252,8 +252,8 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 				input.assetId,
 				input.revisionId,
 			).first<{ contentIdentity: string }>()
-				?? await authorizeThemeSupplied(input)
-				?? await authorizeTalentSupplied(input);
+			?? await authorizeThemeSupplied(input)
+			?? await authorizeTalentSupplied(input);
 			if (!row)
 				return { outcome: 'missing' as const };
 			return {

@@ -73,6 +73,8 @@ describe('a Talent role', () => {
 		[100, true],
 		[101, false],
 	])('accepts a role of %i characters: %s', (length, accepted) => {
-		expect(updateTalentSchema.safeParse({ role: 'r'.repeat(length) }).success).toBe(accepted);
+		expect(updateTalentSchema.safeParse({
+			role: 'r'.repeat(length),
+		}).success).toBe(accepted);
 	});
 });

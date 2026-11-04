@@ -641,24 +641,51 @@ describe('capability-only Screen Output reads', () => {
 				method: 'POST',
 				body,
 			});
-			const host = await talent({ name: 'Talent Host', role: 'Host', socialProfiles: { twitch: 'host', x: 'host_x', bluesky: 'host.bsky.social' } });
-			const caster = await talent({ name: 'Talent Caster', socialProfiles: { youtube: 'caster' } });
+			const host = await talent({
+				name: 'Talent Host',
+				role: 'Host',
+				socialProfiles: { twitch: 'host', x: 'host_x', bluesky: 'host.bsky.social' },
+			});
+			const caster = await talent({
+				name: 'Talent Caster',
+				socialProfiles: { youtube: 'caster' },
+			});
 
 			const output = await outputScreen('talent');
-			await output.configure({ selection: 'lineup', talentIds: [caster.id, host.id], socialNetworks: ['bluesky', 'twitch'] });
+			await output.configure({
+				selection: 'lineup',
+				talentIds: [caster.id, host.id],
+				socialNetworks: ['bluesky', 'twitch'],
+			});
 
 			const read = await output.read<ScreenOutputTalentResponse>('talent');
 			expect(read.status).toBe(200);
 			expect(read.data.talents).toEqual([
-				{ id: caster.id, name: 'Talent Caster', role: null, photo: null, socialProfiles: [] },
+				{
+					id: caster.id,
+					name: 'Talent Caster',
+					role: null,
+					photo: null,
+					socialProfiles: [],
+				},
 				{
 					id: host.id,
 					name: 'Talent Host',
 					role: 'Host',
 					photo: null,
 					socialProfiles: [
-						{ network: 'twitch', networkLabel: 'Twitch', handle: 'host', profileUrl: 'https://www.twitch.tv/host' },
-						{ network: 'bluesky', networkLabel: 'Bluesky', handle: 'host.bsky.social', profileUrl: 'https://bsky.app/profile/host.bsky.social' },
+						{
+							network: 'twitch',
+							networkLabel: 'Twitch',
+							handle: 'host',
+							profileUrl: 'https://www.twitch.tv/host',
+						},
+						{
+							network: 'bluesky',
+							networkLabel: 'Bluesky',
+							handle: 'host.bsky.social',
+							profileUrl: 'https://bsky.app/profile/host.bsky.social',
+						},
 					],
 				},
 			]);

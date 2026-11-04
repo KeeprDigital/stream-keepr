@@ -60,8 +60,6 @@ async function ingest(): Promise<Revision> {
 	return publishedRevision(await ingestImage(context, { idempotencyKey: `image-${++images}`, initiatedBy: 'author' }));
 }
 
-afterAll(async () => await harness.close());
-
 let eventId: number;
 let alicePhoto: Revision;
 let bobPhoto: Revision;
@@ -77,10 +75,17 @@ beforeEach(async () => {
 		.returning({ id: schema.events.id });
 	eventId = event!.id;
 	const talent = async (name: string, photo: Revision) =>
-		(await createTalent(stubH3Event({ params: { id: String(eventId) }, body: { name, photo } }))).id as number;
+		(await createTalent(stubH3Event({
+			params: {
+				id: String(eventId),
+			},
+			body: { name, photo },
+		}))).id as number;
 	alice = await talent('Alice', alicePhoto);
 	bob = await talent('Bob', bobPhoto);
 });
+
+afterAll(async () => await harness.close());
 
 async function talentScreen(config: Record<string, unknown>, currentMode = 'talent') {
 	const label = `talent-screen-${++screens}`;
@@ -106,10 +111,38 @@ async function resolvable(screen: { id: number; assetCapabilityDigest: string })
 
 describe('a Talent Screen Output\'s capability over its Talents\' photos', () => {
 	it.each([
-		['its one Talent\'s', () => ({ selection: 'one', talentId: alice, talentIds: [bob] }), { alice: true, bob: false }],
-		['each lineup Talent\'s', () => ({ selection: 'lineup', talentId: alice, talentIds: [bob, alice] }), { alice: true, bob: true }],
-		['none while photos are hidden', () => ({ selection: 'lineup', talentIds: [alice, bob], showPhoto: false }), { alice: false, bob: false }],
-		['none while it names no Talent', () => ({}), { alice: false, bob: false }],
+		[
+			'its one Talent\'s',
+			() => ({
+				selection: 'one',
+				talentId: alice,
+				talentIds: [bob],
+			}),
+			{ alice: true, bob: false },
+		],
+		[
+			'each lineup Talent\'s',
+			() => ({
+				selection: 'lineup',
+				talentId: alice,
+				talentIds: [bob, alice],
+			}),
+			{ alice: true, bob: true },
+		],
+		[
+			'none while photos are hidden',
+			() => ({
+				selection: 'lineup',
+				talentIds: [alice, bob],
+				showPhoto: false,
+			}),
+			{ alice: false, bob: false },
+		],
+		[
+			'none while it names no Talent',
+			() => ({}),
+			{ alice: false, bob: false },
+		],
 	])('resolves %s', async (_case, config, expected) => {
 		expect(await resolvable(await talentScreen(config()))).toEqual(expected);
 	});
@@ -123,7 +156,13 @@ describe('a Talent Screen Output\'s capability over its Talents\' photos', () =>
 	it('resolves a Talent\'s replaced photo no longer', async () => {
 		const screen = await talentScreen({ selection: 'one', talentId: alice });
 		const replacement = await ingest();
-		await updateTalent(stubH3Event({ params: { id: String(eventId), talentId: String(alice) }, body: { photo: replacement } }));
+		await updateTalent(stubH3Event({
+			params: {
+				id: String(eventId),
+				talentId: String(alice),
+			},
+			body: { photo: replacement },
+		}));
 
 		expect(await resolvable(screen)).toEqual({ alice: false, bob: false });
 		expect(await authorizer.authorize({ screenId: screen.id, capabilityDigest: screen.assetCapabilityDigest, ...replacement }))
@@ -131,7 +170,10 @@ describe('a Talent Screen Output\'s capability over its Talents\' photos', () =>
 	});
 
 	it('resolves no Talent photo for another Event\'s Screen naming the same ids', async () => {
-		const screen = await talentScreen({ selection: 'lineup', talentIds: [alice, bob] });
+		const screen = await talentScreen({
+			selection: 'lineup',
+			talentIds: [alice, bob],
+		});
 		const [other] = await db.insert(schema.events)
 			.values({ name: 'Other', game: 'mtg', featureMatchOrientation: 'horizontal' })
 			.returning({ id: schema.events.id });

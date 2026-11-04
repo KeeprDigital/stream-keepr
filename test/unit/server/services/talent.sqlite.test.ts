@@ -73,7 +73,9 @@ describe('talentService Social Profiles', () => {
 describe('talentService role', () => {
 	it('stores a role, keeps it through an update omitting it, and clears it with null', async () => {
 		const [event] = await db.insert(schema.events).values({ name: 'Event', game: 'mtg', featureMatchOrientation: 'horizontal' }).returning();
-		const role = async (id: number) => (await db.query.eventTalents.findFirst({ where: eq(schema.eventTalents.id, id) }))?.role;
+		const role = async (id: number) => (await db.query.eventTalents.findFirst({
+			where: eq(schema.eventTalents.id, id),
+		}))?.role;
 
 		const talent = await talentService().create(event!.id, { name: 'Caster', role: 'Host' });
 		expect(await role(talent.id)).toBe('Host');

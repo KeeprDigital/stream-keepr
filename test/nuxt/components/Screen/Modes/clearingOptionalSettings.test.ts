@@ -228,6 +228,15 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		],
 	],
 	[
+		'Talent',
+		'talent',
+		{},
+		[
+			['Custom header text', 'headerText', 'Your Casters'],
+			['Talent', 'talentId', 7],
+		],
+	],
+	[
 		'TopCut',
 		'top-cut',
 		{},

@@ -256,11 +256,11 @@ export { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_BOARD_LAYOUT, DEFAULT_DECK
 export type { FeatureMatchModeConfig } from '../screenModeConfigs/featureMatch';
 export type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from '../screenModeConfigs/featureMatchOverlay';
 export type { HeadToHeadModeConfig } from '../screenModeConfigs/headToHead';
-export type { TalentModeConfig } from '../screenModeConfigs/talent';
 export type { MetagameArchetypeColumnConfig, MetagameCardColumnConfig, MetagameModeConfig } from '../screenModeConfigs/metagame';
 export type { PairingsModeConfig } from '../screenModeConfigs/pairings';
 export type { PlayerHistoryColumnConfig, PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
 export type { StandingsColumnConfig, StandingsModeConfig } from '../screenModeConfigs/standings';
+export type { TalentModeConfig } from '../screenModeConfigs/talent';
 export type { TopCardsModeConfig } from '../screenModeConfigs/topCards';
 export type { TopCutModeConfig } from '../screenModeConfigs/topCut';
 

@@ -52,8 +52,11 @@ export type TalentModeConfig = ScreenModeConfigOf<typeof talentModeConfigContrac
 
 /** The Talents a Talent Screen shows, in order: its one Talent, or its lineup. */
 export function talentScreenTalentIds(config: Pick<TalentModeConfig, 'selection' | 'talentId' | 'talentIds'>): number[] {
-	if (config.selection === 'lineup')
-		return [...new Set(config.talentIds)];
+	if (config.selection === 'lineup') {
+		return [
+			...new Set(config.talentIds),
+		];
+	}
 	return config.talentId == null
 		? []
 		: [config.talentId];

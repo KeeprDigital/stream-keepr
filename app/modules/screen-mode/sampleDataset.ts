@@ -10,11 +10,12 @@ import type { BroadcastGraphicConfig, GraphicItemConfig, TextGraphicItemConfig }
 import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
-import type { ScreenOutputFeatureMatchDeckListResponse, ScreenOutputFeatureMatchResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputFeatureMatchDeckListResponse, ScreenOutputFeatureMatchResponse, ScreenOutputTalentResponse } from '~~/shared/types/screenOutputReads';
 import type { ScryfallCardFetchResult } from '~/composables/data/useScryfallBatch';
 import type { ScreenOutputReadScope, useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { OP_FEATURE_MATCH_SAMPLE_ROUND, OP_FEATURE_MATCH_SAMPLE_SIDES } from '~~/shared/featureMatchSampleDataset';
+import { socialProfileValues } from '~~/shared/modules/broadcast-graphics-live-session/socialProfiles';
 import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import { formatOpColors, opPrintingImageUrl } from '~~/shared/utils/card/op';
@@ -558,6 +559,29 @@ const SAMPLE_LIVE_SESSION: BroadcastGraphicsLiveSessionResponse = {
 
 type SampleReadRepository = ReturnType<typeof useScreenOutputReadRepository>;
 
+/**
+ * The sample desk: a host and a commentator, with no photo, since a photo is
+ * library content a Theme preview has none of. Every Card Game shares them.
+ */
+const SAMPLE_TALENTS: ScreenOutputTalentResponse = {
+	talents: [
+		{
+			id: 1,
+			name: 'Jordan Reyes',
+			role: 'Host',
+			photo: null,
+			socialProfiles: socialProfileValues({ twitch: 'jordanreyes', x: 'jordan_reyes' }),
+		},
+		{
+			id: 2,
+			name: 'Sam Okafor',
+			role: 'Commentator',
+			photo: null,
+			socialProfiles: socialProfileValues({ youtube: 'samokafor', bluesky: 'sam.bsky.social' }),
+		},
+	],
+};
+
 /** What the dataset answers for each read, whatever Screen the preview names. */
 const ANSWERS = {
 	card: { card: SAMPLE_SCREEN_CARD, revision: 1 },
@@ -816,6 +840,14 @@ const OP_ANSWERS = {
 	} satisfies ScreenOutputFeatureMatchDeckListResponse,
 };
 
+/** The sample desk as a full-panel lineup, so the preview shows every part of the mode. */
+const SAMPLE_TALENT_CONFIG = {
+	selection: 'lineup',
+	talentIds: SAMPLE_TALENTS.talents.map(talent => talent.id),
+	layout: 'fullPanel',
+	showHeader: true,
+} as const;
+
 /**
  * Each mode's configuration under each Card Game's sample: what it selects
  * from the dataset, where its defaults select nothing, and Broadcast Graphics'
@@ -834,6 +866,7 @@ const SCREEN_MODE_SAMPLE_CONFIGS: Record<Game, ModeConfigsMap> = {
 		'player-history': { playerId: player(0).id },
 		'archetype-spotlight': { archetypeId: SPOTLIT.id },
 		'head-to-head': { playerSource: 'players', player1Id: player(0).id, player2Id: player(1).id },
+		'talent': SAMPLE_TALENT_CONFIG,
 		'standings': {
 			columns: [
 				{ key: 'position', visible: true },
@@ -852,6 +885,7 @@ const SCREEN_MODE_SAMPLE_CONFIGS: Record<Game, ModeConfigsMap> = {
 		'deck': {
 			deckSource: { type: 'featureMatchSlot', slotId: OP_SAMPLE_SLOT_ID, side: 'player1' },
 		},
+		'talent': SAMPLE_TALENT_CONFIG,
 	},
 };
 
@@ -885,6 +919,7 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		pairings: answer(ANSWERS.pairings),
 		archetypeSpotlight: answer(ANSWERS.archetypeSpotlight),
 		headToHead: answer(ANSWERS.headToHead),
+		talent: answer(SAMPLE_TALENTS),
 		metagame: answer(ANSWERS.metagame),
 		topCards: answer(ANSWERS.topCards),
 		topCut: answer(ANSWERS.topCut),
@@ -902,6 +937,7 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		pairings: none('Pairings'),
 		archetypeSpotlight: none('Archetype'),
 		headToHead: none('Head-to-Head'),
+		talent: answer(SAMPLE_TALENTS),
 		metagame: none('Metagame'),
 		topCards: none('Most Played Cards'),
 		topCut: none('Top Cut'),

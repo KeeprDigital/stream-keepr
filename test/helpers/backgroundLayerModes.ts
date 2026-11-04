@@ -15,4 +15,5 @@ export const MODES_WITH_A_BACKGROUND_LAYER_STACK = [
 	'pairings',
 	'archetype-spotlight',
 	'head-to-head',
+	'talent',
 ] as const;

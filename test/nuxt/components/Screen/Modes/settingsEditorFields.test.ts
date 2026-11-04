@@ -134,6 +134,14 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 			{ playerSource: 'players' },
 		],
 	},
+	// The one-Talent and lineup pickers are Event References; rotating shows its dwell, and the header its text.
+	'talent': {
+		editor: 'Talent',
+		variants: [
+			{},
+			{ selection: 'lineup', rotateSocialProfiles: true, showHeader: true },
+		],
+	},
 	'top-cut': {
 		editor: 'TopCut',
 		variants: [{}],
