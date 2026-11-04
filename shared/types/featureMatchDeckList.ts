@@ -1,26 +1,17 @@
-import type { OpCardCategory, OpCardColor } from './card/op';
+import type { OpCatalogueCard } from './card/op';
 
 /**
  * A Feature Match Deck List: the One Piece Card Game Deck List one player side
  * of a Feature Match Slot holds, pasted by the operator (ADR-0057).
  */
 
-/** The card behind an entry, as bandai-keepr answered it when the Deck List was pasted. */
-export interface FeatureMatchDeckListCard {
-	name: string;
-	category: OpCardCategory;
-	colors: OpCardColor[];
-	cost: number | null;
-	power: number | null;
-	counter: number | null;
-	/** The card's standard Printing image. */
-	imageUrl: string;
-}
+/** The card behind an entry: the card catalogue's row for its number (ADR-0074). */
+export type FeatureMatchDeckListCard = OpCatalogueCard;
 
 export interface FeatureMatchDeckListEntry {
 	number: string;
 	quantity: number;
-	/** `null` for a number bandai-keepr does not know: a number-only placeholder. */
+	/** `null` for a number the catalogue lacks, because bandai-keepr does not know it: a number-only placeholder. */
 	card: FeatureMatchDeckListCard | null;
 }
 

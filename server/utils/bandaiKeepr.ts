@@ -2,7 +2,7 @@ import type { z } from 'zod';
 import type { OpCardSearchQuery } from '~~/server/schemas/api/opCard';
 import type { BandaiKeeprCard, BandaiKeeprCardDetail } from '~~/server/schemas/external/bandaiKeepr';
 import type { OpCardDetail, OpCardSummary } from '~~/shared/types/card/op';
-import { bandaiKeeprCardDetailSchema, bandaiKeeprCardPageSchema } from '~~/server/schemas/external/bandaiKeepr';
+import { bandaiKeeprCardDetailSchema, bandaiKeeprCardPageSchema, bandaiKeeprCollectionSchema } from '~~/server/schemas/external/bandaiKeepr';
 import { opPrintingImageUrl } from '~~/shared/utils/card/op';
 import { readConfiguredSecret } from './configuredSecret';
 
@@ -16,6 +16,8 @@ const REQUEST_TIMEOUT_MS = 10_000;
 /** A Card changes only when bandai-keepr rescrapes, so a number lookup is cached this long. */
 const CARD_CACHE_SECONDS = 300;
 const CARD_CACHE_NAME = 'bandai-keepr-cards';
+/** `POST /cards/collection` takes at most this many identifiers a request. */
+const COLLECTION_CHUNK_SIZE = 1000;
 
 export class BandaiKeeprRequestError extends Error {
 	readonly code = 'BANDAI_KEEPR_UPSTREAM_FAILURE';
@@ -107,6 +109,45 @@ export async function lookupOpCard(config: BandaiKeeprConfig, number: string): P
 	return toDetail(card);
 }
 
+/** What the bulk lookup answers: the cards bandai-keepr knows, and the numbers it does not. */
+export interface OpCardBulkLookupAnswer {
+	cards: OpCardSummary[];
+	notFound: string[];
+}
+
+/**
+ * The bulk lookup port (ADR-0074): many card numbers at once, through
+ * `POST /cards/collection`, asked by number only and at most 1,000 a request.
+ * A number bandai-keepr does not know is `notFound`; any other failure throws.
+ */
+export async function lookUpOpCards(config: BandaiKeeprConfig, numbers: readonly string[]): Promise<OpCardBulkLookupAnswer> {
+	const answer: OpCardBulkLookupAnswer = { cards: [], notFound: [] };
+	for (let start = 0; start < numbers.length; start += COLLECTION_CHUNK_SIZE) {
+		const chunk = numbers.slice(start, start + COLLECTION_CHUNK_SIZE);
+		const response = await request(config, new URL(`${config.apiUrl}/cards/collection`), {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				identifiers: chunk.map(number => ({ number })),
+			}),
+		});
+		if (!response.ok)
+			throw await upstreamFailure(response, 'bulk lookup');
+		const { results } = await parse(response, bandaiKeeprCollectionSchema, 'bulk lookup');
+		const byIndex = new Map(results.map(result => [result.index, result]));
+		chunk.forEach((number, index) => {
+			const result = byIndex.get(index);
+			if (result?.card)
+				answer.cards.push(toSummary(result.card));
+			else if (result?.error?.code === 'not_found')
+				answer.notFound.push(number);
+			else
+				throw new BandaiKeeprRequestError(`bandai-keepr bulk lookup: unexpected answer for ${number}`);
+		});
+	}
+	return answer;
+}
+
 /** The Workers Cache this server keeps number lookups in; absent outside workerd. */
 async function openCardCache(): Promise<Cache | null> {
 	if (typeof caches === 'undefined')
@@ -119,12 +160,15 @@ async function openCardCache(): Promise<Cache | null> {
 	}
 }
 
-async function request(config: BandaiKeeprConfig, url: URL): Promise<Response> {
+async function request(config: BandaiKeeprConfig, url: URL, init: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<Response> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 	try {
 		return await fetch(url, {
+			method: init.method,
+			body: init.body,
 			headers: {
+				...init.headers,
 				Accept: 'application/json',
 				Authorization: `Bearer ${config.apiKey}`,
 			},

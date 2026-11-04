@@ -2,12 +2,12 @@ import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import { bandaiKeeprCard, stubBandaiKeepr } from '~~/test/helpers/opCards';
+import { fakeOpCardBulkLookup, knownOpCard } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 // A Feature Match Deck List belongs to a Slot side (ADR-0057): it stays until replaced
 // or its side is cleared, moves with its player, and a replacement reaches the Session.
-// bandai-keepr is faked at `fetch`.
+// Its cards come from the card catalogue; bandai-keepr is faked at its bulk lookup port.
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) =>
 	Object.assign(new Error(input.message ?? 'error'), input));
@@ -29,24 +29,19 @@ vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOrigi
 	refreshBroadcastGraphicsBindings: async () => {},
 }));
 
-const { featureMatchDeckListModule } = await import('~~/server/modules/feature-match-deck-list');
-const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-match-slot-write');
-const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
-const { featureMatchDeckListService } = await import('~~/server/services/featureMatchDeckList');
-
-const ZORO = bandaiKeeprCard({
+const ZORO = knownOpCard({
 	number: 'OP01-001',
 	name: 'Roronoa Zoro',
 	category: 'leader',
 	colors: ['Red'],
 });
-const NAMI = bandaiKeeprCard({
+const NAMI = knownOpCard({
 	number: 'OP01-016',
 	name: 'Nami',
 	category: 'leader',
 	colors: ['Blue'],
 });
-const RED = bandaiKeeprCard({
+const RED = knownOpCard({
 	number: 'OP01-025',
 	name: 'Roronoa Zoro',
 	category: 'character',
@@ -55,7 +50,7 @@ const RED = bandaiKeeprCard({
 	power: 5000,
 	counter: 1000,
 });
-const BLUE = bandaiKeeprCard({
+const BLUE = knownOpCard({
 	number: 'OP01-040',
 	name: 'Usopp',
 	category: 'character',
@@ -64,14 +59,32 @@ const BLUE = bandaiKeeprCard({
 	power: 3000,
 	counter: 1000,
 });
-const upstream = stubBandaiKeepr([ZORO, NAMI, RED, BLUE]);
+const LATE = knownOpCard({
+	number: 'OP99-999',
+	name: 'Late Card',
+	category: 'event',
+	colors: ['Red'],
+	cost: 1,
+});
+let upstream = fakeOpCardBulkLookup([ZORO, NAMI, RED, BLUE]);
+vi.doMock('~~/server/utils/bandaiKeepr', async importOriginal => ({
+	...await importOriginal<object>(),
+	lookUpOpCards: (...args: Parameters<typeof upstream.lookUpOpCards>) => upstream.lookUpOpCards(...args),
+}));
+
+const { featureMatchDeckListModule } = await import('~~/server/modules/feature-match-deck-list');
+const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-match-slot-write');
+const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
+const { featureMatchDeckListService } = await import('~~/server/services/featureMatchDeckList');
 
 const ZORO_DECK = '1x OP01-001 Roronoa Zoro\n4x OP01-025\n4x OP99-999';
 const NAMI_DECK = '1x OP01-016\n4x OP01-040';
 
-beforeEach(() => {
-	upstream.reset();
+beforeEach(async () => {
+	upstream = fakeOpCardBulkLookup([ZORO, NAMI, RED, BLUE]);
 	runtimeConfig.bandaiKeeprApiKey = 'test-key';
+	// The catalogue is global, so each test starts it empty.
+	await db.delete(schema.cards);
 });
 
 afterAll(async () => {
@@ -105,6 +118,13 @@ async function sessionSnapshot(slotId: number) {
 	return (await db.query.featureMatchSessions.findFirst({
 		where: eq(schema.featureMatchSessions.id, slot.activeSessionId!),
 	}))!;
+}
+
+async function catalogueNumbers() {
+	const rows = await db.select({ number: schema.cards.cardNumber })
+		.from(schema.cards)
+		.where(eq(schema.cards.game, 'op'));
+	return rows.map(row => row.number).toSorted();
 }
 
 async function deckListIds(slotId: number) {
@@ -158,7 +178,9 @@ describe('previewing a pasted Deck List', () => {
 		if (!answer.available)
 			throw new Error('unavailable');
 		expect(answer.deckList.warnings.map(warning => warning.code)).toContain('UNKNOWN_CARD');
-		expect(upstream.lookups().toSorted()).toEqual(['OP01-001', 'OP01-025', 'OP99-999']);
+		expect(upstream.batches()).toEqual([
+			['OP01-001', 'OP01-025', 'OP99-999'],
+		]);
 	});
 
 	it('answers unavailable when no bandai-keepr is configured', async () => {
@@ -172,6 +194,77 @@ describe('previewing a pasted Deck List', () => {
 		const { eventId } = await stageSlot('mtg');
 
 		await expect(featureMatchDeckListModule().preview({ eventId, text: ZORO_DECK })).rejects.toMatchObject({ statusCode: 404 });
+	});
+});
+
+describe('a pasted Deck List\'s cards', () => {
+	it('are looked up only when the catalogue lacks them, all in one batch', async () => {
+		const { eventId, slotId } = await stageSlot();
+		await save(eventId, slotId, 'player1', ZORO_DECK);
+		await featureMatchDeckListModule().preview({ eventId, text: `${NAMI_DECK}\n4x OP01-025` });
+		await save(eventId, slotId, 'player2', `${NAMI_DECK}\n4x OP01-025`);
+
+		expect(upstream.batches()).toEqual([
+			['OP01-001', 'OP01-025', 'OP99-999'],
+			['OP01-016', 'OP01-040'],
+		]);
+		expect(await catalogueNumbers()).toEqual([
+			'OP01-001',
+			'OP01-016',
+			'OP01-025',
+			'OP01-040',
+		]);
+	});
+
+	it('keep an unknown number out of the catalogue, ask for it again, and show it once known', async () => {
+		const { eventId, slotId } = await stageSlot();
+		const first = await save(eventId, slotId, 'player1', ZORO_DECK);
+		if (!first.available)
+			throw new Error('unavailable');
+		expect(await catalogueNumbers()).not.toContain('OP99-999');
+		upstream.know(LATE);
+
+		const second = await save(eventId, slotId, 'player2', '4x OP99-999');
+		if (!second.available)
+			throw new Error('unavailable');
+
+		expect(upstream.batches()).toEqual([
+			['OP01-001', 'OP01-025', 'OP99-999'],
+			['OP99-999'],
+		]);
+		expect(second.deckList.entries).toEqual([
+			{
+				number: 'OP99-999',
+				quantity: 4,
+				card: expect.objectContaining({ name: 'Late Card', category: 'event' }),
+			},
+		]);
+		const reread = await featureMatchDeckListModule().read({ eventId, slotId, deckListId: first.deckList.id });
+		expect(reread.entries.find(entry => entry.number === 'OP99-999')?.card).toMatchObject({ name: 'Late Card' });
+		expect(reread.warnings.map(warning => warning.code)).not.toContain('UNKNOWN_CARD');
+	});
+
+	it('fail the paste whole when the lookup fails', async () => {
+		const { eventId, slotId } = await stageSlot();
+		upstream.fail(Object.assign(new Error('bandai-keepr down'), { code: 'BANDAI_KEEPR_UPSTREAM_FAILURE' }));
+
+		await expect(save(eventId, slotId, 'player1', ZORO_DECK)).rejects.toMatchObject({ code: 'BANDAI_KEEPR_UPSTREAM_FAILURE' });
+
+		expect(await deckListIds(slotId)).toEqual([]);
+		expect((await slotRow(slotId)).player1Data).toEqual({ name: 'Ana', pronouns: 'she/her' });
+		expect(await catalogueNumbers()).toEqual([]);
+	});
+
+	it('are taken however many numbers the paste names', async () => {
+		const { eventId, slotId } = await stageSlot();
+		const numbers = Array.from({ length: 120 }, (_, index) => `OP80-${String(index).padStart(3, '0')}`);
+
+		const answer = await save(eventId, slotId, 'player1', numbers.map(number => `1x ${number}`).join('\n'));
+		if (!answer.available)
+			throw new Error('unavailable');
+
+		expect(answer.deckList.entries).toHaveLength(120);
+		expect(upstream.batches()).toEqual([numbers]);
 	});
 });
 

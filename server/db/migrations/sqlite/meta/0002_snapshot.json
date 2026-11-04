@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d9e950cc-c430-4f7e-a860-c8fa9c4347d5",
+  "id": "857880ff-b94e-4f77-bc22-43e70b6a2792",
   "prevId": "9b9837fc-1e84-44ec-ae73-1e66bd89b1bb",
   "tables": {
     "archetype_cards": {
@@ -754,6 +754,48 @@
           "autoincrement": false,
           "default": "'[]'"
         },
+        "card_number": {
+          "name": "card_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "cost": {
+          "name": "cost",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "power": {
+          "name": "power",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "counter": {
+          "name": "counter",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "image_url": {
+          "name": "image_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -778,7 +820,16 @@
             "name",
             "game"
           ],
-          "isUnique": true
+          "isUnique": true,
+          "where": "\"cards\".\"game\" = 'mtg'"
+        },
+        "cards_op_number_idx": {
+          "name": "cards_op_number_idx",
+          "columns": [
+            "card_number"
+          ],
+          "isUnique": true,
+          "where": "\"cards\".\"game\" = 'op'"
         },
         "cards_game_idx": {
           "name": "cards_game_idx",
@@ -1728,55 +1779,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "category": {
-          "name": "category",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "colors": {
-          "name": "colors",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "cost": {
-          "name": "cost",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "power": {
-          "name": "power",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "counter": {
-          "name": "counter",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "image_url": {
-          "name": "image_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "created_at": {
@@ -3793,13 +3795,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "nickname": {
-          "name": "nickname",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "pronouns": {

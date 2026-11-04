@@ -3,7 +3,6 @@ import type { PlayerSlotData } from '~~/shared/api';
 import type { BroadcastGraphicsLiveState } from '~~/shared/modules/broadcast-graphics-live-session';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { BroadcastGraphicsLiveSessionStatus } from '~~/shared/types/broadcastGraphicsLiveSession';
-import type { OpCardColor } from '~~/shared/types/card/op';
 import type { PlayerManuallyEditedField } from '~~/shared/types/enums';
 import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
@@ -524,7 +523,10 @@ export const featureMatchDeckLists = sqliteTable('feature_match_deck_lists', {
 	index('feature_match_deck_lists_slot_id_idx').on(table.slotId),
 ]);
 
-/** One pasted card number, with an inline snapshot of its card; a number-only entry has none. */
+/**
+ * One pasted card number. Its card is the catalogue's One Piece row with that
+ * number (ADR-0074); a number the catalogue lacks is a number-only entry.
+ */
 export const featureMatchDeckListEntries = sqliteTable('feature_match_deck_list_entries', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	deckListId: integer('deck_list_id')
@@ -533,13 +535,6 @@ export const featureMatchDeckListEntries = sqliteTable('feature_match_deck_list_
 	sortOrder: integer('sort_order').notNull(),
 	quantity: integer('quantity').notNull(),
 	cardNumber: text('card_number').notNull(),
-	name: text('name'),
-	category: text('category', { enum: OP_CARD_CATEGORIES }),
-	colors: text('colors', { mode: 'json' }).$type<OpCardColor[]>(),
-	cost: integer('cost'),
-	power: integer('power'),
-	counter: integer('counter'),
-	imageUrl: text('image_url'),
 	...timestamps,
 }, table => [
 	uniqueIndex('feature_match_deck_list_entries_order_idx').on(table.deckListId, table.sortOrder),
@@ -750,8 +745,10 @@ export const archetypes = sqliteTable('archetypes', {
 ]);
 
 /**
- * Global card catalog — one row per unique card name per game.
- * Populated during Melee deck sync. Scryfall metadata enriched at sync time.
+ * Global card catalogue, unique per game (ADR-0074). A Magic: The Gathering
+ * card is keyed by name: populated during Melee deck sync, Scryfall metadata
+ * enriched at sync time. A One Piece card is keyed by card number, filled only
+ * from bandai-keepr's bulk lookup and never refreshed.
  */
 export const cards = sqliteTable('cards', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
@@ -760,14 +757,24 @@ export const cards = sqliteTable('cards', {
 	scryfallId: text('scryfall_id'),
 	oracleId: text('oracle_id'),
 	cardType: text('card_type'),
+	/** Magic: The Gathering's colour identity letters; One Piece's colours as a JSON array. */
 	colors: text('colors'),
 	cmc: real('cmc'),
 	manaCost: text('mana_cost'),
 	deckCounterTypes: text('deck_counter_types', { mode: 'json' }).$type<string[]>().notNull().default(sql`'[]'`),
 	deckTokens: text('deck_tokens', { mode: 'json' }).$type<DeckTokenRequirement[]>().notNull().default(sql`'[]'`),
+	/** One Piece only, from here down: the card number keying the row. */
+	cardNumber: text('card_number'),
+	category: text('category', { enum: OP_CARD_CATEGORIES }),
+	cost: integer('cost'),
+	power: integer('power'),
+	counter: integer('counter'),
+	/** The card's standard Printing image. */
+	imageUrl: text('image_url'),
 	...timestamps,
 }, table => [
-	uniqueIndex('cards_name_game_idx').on(table.name, table.game),
+	uniqueIndex('cards_name_game_idx').on(table.name, table.game).where(sql`${table.game} = 'mtg'`),
+	uniqueIndex('cards_op_number_idx').on(table.cardNumber).where(sql`${table.game} = 'op'`),
 	index('cards_game_idx').on(table.game),
 ]);
 
@@ -1306,6 +1313,8 @@ export type DbBroadcastDeckListEntryInsert = typeof broadcastDeckListEntries.$in
 export type DbPlayerRoundStandings = typeof playerRoundStandings.$inferSelect;
 export type DbPlayerRoundStandingsInsert = typeof playerRoundStandings.$inferInsert;
 export type DbCard = typeof cards.$inferSelect;
+/** A Magic: The Gathering catalogue row: the columns only One Piece rows fill left out. */
+export type DbMtgCard = Omit<DbCard, 'cardNumber' | 'category' | 'cost' | 'power' | 'counter' | 'imageUrl'>;
 export type DbCardInsert = typeof cards.$inferInsert;
 export type DbPlayerDeck = typeof playerDecks.$inferSelect;
 export type DbPlayerDeckInsert = typeof playerDecks.$inferInsert;
