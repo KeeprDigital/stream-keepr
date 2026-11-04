@@ -14,7 +14,7 @@ describe('the Conversion Target migration', () => {
 	});
 
 	it('gives an existing Event the default Top 8 target', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0015' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await harness.client.execute(`
 			INSERT INTO events (id, name, game, feature_match_orientation)
 			VALUES (1, 'Existing Event', 'mtg', 'horizontal')

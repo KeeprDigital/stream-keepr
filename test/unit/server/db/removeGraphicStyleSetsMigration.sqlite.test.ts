@@ -22,7 +22,7 @@ describe('the Graphic Style Set removal migration', () => {
 	};
 
 	async function arrange() {
-		harness = await createSqliteD1Harness({ throughMigration: '0011' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await harness.client.execute(`
 			INSERT INTO graphic_style_sets (id, name, revision, draft_revision, draft, published)
 			VALUES ('show-style', 'Show style', 3, 4, '[]', '[]')
