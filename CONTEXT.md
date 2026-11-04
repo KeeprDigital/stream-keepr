@@ -71,6 +71,10 @@ Which Players a Metagame read counts: every Player, the top N by placement, thos
 **Archetype**:
 A strategic Deck classification assigned to Players and used for Metagame analysis.
 
+**Pinned Chart Series**:
+One of the Theme's eight chart series, `chart-series-1` to `chart-series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme, or a Screen Theme Override, decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).
+_Avoid_: archetype colour, chart colour (an Archetype's mana colours are its colours).
+
 **Pilot**:
 A Player of an Archetype within the current Metagame scope; an Archetype's pilots are its Players in that scope.
 
