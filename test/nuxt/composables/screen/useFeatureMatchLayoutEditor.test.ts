@@ -109,6 +109,18 @@ describe('useFeatureMatchLayoutEditor without the lease', () => {
 				editor.setLayersGeometry({ x: 5 });
 			},
 		],
+		[
+			'align',
+			editor => editor.align('right'),
+		],
+		[
+			'distribute',
+			(editor) => {
+				editor.toggleSelect(OTHER_SOURCE);
+				editor.toggleSelect(ITEM);
+				editor.distribute('y');
+			},
+		],
 	])('writes nothing on %s', async (_, verb) => {
 		const { editor, writes } = editorFor(false);
 
@@ -187,30 +199,30 @@ describe('useFeatureMatchLayoutEditor gestures', () => {
 	});
 });
 
+function severalSelected() {
+	const editing = editorFor(true);
+	editing.editor.toggleSelect(OTHER_SOURCE);
+	editing.editor.toggleSelect(ITEM);
+	return editing;
+}
+
+function rectOf(config: ReturnType<typeof editorFor>['config'], layer: { type: string; itemId: string }) {
+	const found = layer.type === 'source'
+		? config.value.layout.sources.find(item => item.id === layer.itemId)
+		: config.value.layout.composition.items.find(item => item.id === layer.itemId);
+	return found && {
+		x: found.x,
+		y: found.y,
+		width: found.width,
+		height: found.height,
+		visible: found.visible,
+	};
+}
+
+const SELECTED = [SOURCE, OTHER_SOURCE, ITEM];
+
 /** Several layers selected act together, each verb one undo step (#740). */
 describe('useFeatureMatchLayoutEditor with several layers selected', () => {
-	function severalSelected() {
-		const editing = editorFor(true);
-		editing.editor.toggleSelect(OTHER_SOURCE);
-		editing.editor.toggleSelect(ITEM);
-		return editing;
-	}
-
-	function rectOf(config: ReturnType<typeof editorFor>['config'], layer: { type: string; itemId: string }) {
-		const found = layer.type === 'source'
-			? config.value.layout.sources.find(item => item.id === layer.itemId)
-			: config.value.layout.composition.items.find(item => item.id === layer.itemId);
-		return found && {
-			x: found.x,
-			y: found.y,
-			width: found.width,
-			height: found.height,
-			visible: found.visible,
-		};
-	}
-
-	const SELECTED = [SOURCE, OTHER_SOURCE, ITEM];
-
 	// They cover (24, 16) to (1900, 990).
 	it.each<[string, (editor: FeatureMatchLayoutEditor) => void, { x: number; y: number }]>([
 		[
@@ -330,6 +342,72 @@ describe('useFeatureMatchLayoutEditor with several layers selected', () => {
 		await nextTick();
 
 		expect(editor.layers.value).toEqual([SOURCE, ITEM]);
+	});
+});
+
+/** Align and distribute move the selected layers, each command one undo step (#919). */
+describe('useFeatureMatchLayoutEditor aligning and distributing', () => {
+	// They cover (24, 16) to (1900, 990).
+	it.each<[string, (editor: FeatureMatchLayoutEditor) => void]>([
+		[
+			'aligns them to the bounds they cover',
+			editor => editor.align('bottom'),
+		],
+		[
+			'distributes them',
+			editor => editor.distribute('y'),
+		],
+	])('%s as one undo step', (_, verb) => {
+		const { editor, config, writes } = severalSelected();
+		const before = SELECTED.map(layer => rectOf(config, layer));
+
+		verb(editor);
+
+		expect(writes).toHaveLength(1);
+		expect(SELECTED.map(layer => rectOf(config, layer))).not.toEqual(before);
+		editor.undo();
+		expect(SELECTED.map(layer => rectOf(config, layer))).toEqual(before);
+		expect(editor.canUndo.value).toBe(false);
+	});
+
+	it('aligns one layer to the canvas, and writes nothing when none would move', () => {
+		const { editor, config, writes } = editorFor(true);
+		editor.select(ITEM);
+
+		editor.align('left');
+		editor.align('left');
+
+		expect(rectOf(config, ITEM)?.x).toBe(0);
+		expect(writes).toHaveLength(1);
+	});
+
+	it.each<[string, () => FeatureMatchLayoutEditor, [boolean, boolean]]>([
+		[
+			'none',
+			() => {
+				const { editor } = editorFor(true);
+				editor.select({ type: 'canvas' });
+				return editor;
+			},
+			[false, false],
+		],
+		[
+			'one',
+			() => editorFor(true).editor,
+			[true, false],
+		],
+		[
+			'three',
+			() => severalSelected().editor,
+			[true, true],
+		],
+	])('offers align and distribute to %s selected', (_, selecting, offered) => {
+		const editor = selecting();
+
+		expect([
+			editor.canAlign(),
+			editor.canDistribute(),
+		]).toEqual(offered);
 	});
 });
 

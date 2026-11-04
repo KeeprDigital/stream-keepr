@@ -1,0 +1,211 @@
+import type { GraphicGroupItemConfig, GraphicRect } from '~~/shared/types/graphics';
+import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
+import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
+import type { AlignEdge, BoxMove, DistributeAxis } from '~/modules/graphics/canvasAlignment';
+import { findGraphicItem } from '~~/shared/modules/graphics';
+import { alignBoxes, distributeBoxes } from '~/modules/graphics/canvasAlignment';
+import { rotatedBounds } from '~/modules/graphics/canvasManipulation';
+import { editorLayerCanvasBox, editorSelectionLayer } from './editorSelection';
+
+/**
+ * Aligning and distributing the Feature Match Overlay editor's selected layers
+ * (#919): which of them move, and in which container's pixels.
+ *
+ * Pure. Source Items and Graphic Items align together (E8). Several align to the
+ * bounds they cover, and one to its container (E10): the canvas, or a group
+ * child's group's padded box. Each counts by the box it covers, a rotated one by
+ * the axis-aligned box it turns into, as snapping counts it.
+ *
+ * Children of one Graphic Group align within their group, which may be rotated.
+ * Among canvas layers a child of an unrotated canvas-arranged group counts by
+ * where it sits on the canvas, and moves within its group by as much. A row or
+ * column child is placed by its group, and a rotated group's child turns with it,
+ * so neither moves among canvas layers; the rest still do.
+ */
+
+/** The align commands the property panel and the layer list offer, in their order, each along one axis. */
+export const ALIGN_COMMANDS: readonly { edge: AlignEdge; axis: DistributeAxis; label: string; icon: string }[] = [
+	{
+		edge: 'left',
+		axis: 'x',
+		label: 'Left',
+		icon: 'i-lucide-align-start-vertical',
+	},
+	{
+		edge: 'center',
+		axis: 'x',
+		label: 'Centre',
+		icon: 'i-lucide-align-center-vertical',
+	},
+	{
+		edge: 'right',
+		axis: 'x',
+		label: 'Right',
+		icon: 'i-lucide-align-end-vertical',
+	},
+	{
+		edge: 'top',
+		axis: 'y',
+		label: 'Top',
+		icon: 'i-lucide-align-start-horizontal',
+	},
+	{
+		edge: 'middle',
+		axis: 'y',
+		label: 'Middle',
+		icon: 'i-lucide-align-center-horizontal',
+	},
+	{
+		edge: 'bottom',
+		axis: 'y',
+		label: 'Bottom',
+		icon: 'i-lucide-align-end-horizontal',
+	},
+];
+
+/** The distribute commands the property panel and the layer list offer. */
+export const DISTRIBUTE_COMMANDS: readonly { axis: DistributeAxis; label: string; icon: string }[] = [
+	{ axis: 'x', label: 'Horizontally', icon: 'i-lucide-align-horizontal-space-around' },
+	{ axis: 'y', label: 'Vertically', icon: 'i-lucide-align-vertical-space-around' },
+];
+
+/** Where a layer's stored rectangle moves to. */
+export interface LayerPosition {
+	layer: FeatureMatchLayoutEditorLayer;
+	x: number;
+	y: number;
+}
+
+/** A selected layer that aligns. */
+interface Member {
+	layer: FeatureMatchLayoutEditorLayer;
+	/** The stored top-left rectangle. */
+	rect: GraphicRect;
+	/** The box it covers, in the space they align in. */
+	box: GraphicRect;
+}
+
+/** The Graphic Group a layer is a child of, if any. */
+function parentGroup(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEditorLayer) {
+	return layer.type === 'item'
+		? findGraphicItem(layout.composition, layer.itemId)?.group
+		: undefined;
+}
+
+/**
+ * The selected layers that align, and the group whose padded box they align in
+ * when they are all its children; otherwise they align on the canvas.
+ */
+function alignmentMembers(
+	layout: FeatureMatchLayoutConfig,
+	layers: readonly FeatureMatchLayoutEditorLayer[],
+): { members: Member[]; group?: GraphicGroupItemConfig } {
+	const present = layers.filter((layer) => {
+		const group = parentGroup(layout, layer);
+		return editorSelectionLayer(layout, layer) !== undefined
+			&& (!group || group.arrangement === 'canvas');
+	});
+	const groups = new Set(present.map(layer => parentGroup(layout, layer)));
+	const [group] = groups;
+	if (groups.size === 1 && group) {
+		return {
+			group,
+			members: present.map((layer) => {
+				const item = findGraphicItem(layout.composition, layer.itemId)!.item;
+				return {
+					layer,
+					rect: item,
+					box: rotatedBounds(item, item.rotation, item.anchor),
+				};
+			}),
+		};
+	}
+	return {
+		members: present.flatMap((layer) => {
+			const box = editorLayerCanvasBox(layout, layer);
+			return box
+				? [
+						{
+							layer,
+							rect: editorSelectionLayer(layout, layer)!,
+							box,
+						},
+					]
+				: [];
+		}),
+	};
+}
+
+/** What one layer aligns to: its group's padded box, or the canvas. */
+function container(group: GraphicGroupItemConfig | undefined, canvas: { width: number; height: number }): GraphicRect {
+	if (!group)
+		return { x: 0, y: 0, ...canvas };
+	const padding = Math.max(0, group.padding);
+	return {
+		x: 0,
+		y: 0,
+		width: Math.max(0, group.width - 2 * padding),
+		height: Math.max(0, group.height - 2 * padding),
+	};
+}
+
+function positions(members: readonly Member[], moves: readonly BoxMove[]): LayerPosition[] {
+	return members.flatMap(({ layer, rect }, index) => {
+		const move = moves[index]!;
+		return move.x === 0 && move.y === 0
+			? []
+			: [
+					{ layer, x: rect.x + move.x, y: rect.y + move.y },
+				];
+	});
+}
+
+/**
+ * Whether aligning the selected layers has anything to line up: one that aligns
+ * to its container, or two or more that align to each other.
+ */
+export function canAlignLayers(
+	layout: FeatureMatchLayoutConfig,
+	layers: readonly FeatureMatchLayoutEditorLayer[],
+): boolean {
+	const { members } = alignmentMembers(layout, layers);
+	return members.length > 0 && members.length >= Math.min(2, layers.length);
+}
+
+/** Whether three or more of the selected layers distribute. */
+export function canDistributeLayers(
+	layout: FeatureMatchLayoutConfig,
+	layers: readonly FeatureMatchLayoutEditorLayer[],
+): boolean {
+	return alignmentMembers(layout, layers).members.length >= 3;
+}
+
+/**
+ * Where aligning the selected layers' edge or centre puts each one that moves:
+ * several to the bounds the ones that align cover, one to its container.
+ */
+export function alignLayers(
+	layout: FeatureMatchLayoutConfig,
+	layers: readonly FeatureMatchLayoutEditorLayer[],
+	canvas: { width: number; height: number },
+	edge: AlignEdge,
+): LayerPosition[] {
+	const { members, group } = alignmentMembers(layout, layers);
+	const to = layers.length > 1
+		? undefined
+		: container(group, canvas);
+	return positions(members, alignBoxes(members.map(member => member.box), edge, to));
+}
+
+/**
+ * Where spacing the selected layers evenly along an axis puts each one that
+ * moves: the outermost two stay. Fewer than three that distribute move none.
+ */
+export function distributeLayers(
+	layout: FeatureMatchLayoutConfig,
+	layers: readonly FeatureMatchLayoutEditorLayer[],
+	axis: DistributeAxis,
+): LayerPosition[] {
+	const { members } = alignmentMembers(layout, layers);
+	return positions(members, distributeBoxes(members.map(member => member.box), axis));
+}

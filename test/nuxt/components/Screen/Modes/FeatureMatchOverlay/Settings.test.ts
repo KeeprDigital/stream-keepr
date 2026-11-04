@@ -519,6 +519,15 @@ describe('featureMatchOverlaySettings', () => {
 			expect(positions()).toEqual(before.map(position => ({ x: position!.x + delta.x, y: position!.y + delta.y })));
 		});
 
+		// The main Source's top is at 90, the Game Wins item's at 278 (#919).
+		it('aligns them from the property panel', async () => {
+			const wrapper = await mountWithTwo();
+
+			await wrapper.get('[data-testid="layer-align-controls"] button[aria-label="Align top"]').trigger('click');
+
+			expect(positions().map(position => position?.y)).toEqual([90, 90]);
+		});
+
 		it('escape keeps the layer chosen last, then selects the canvas', async () => {
 			const wrapper = await mountWithTwo();
 
