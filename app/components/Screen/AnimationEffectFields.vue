@@ -103,6 +103,7 @@ function updateParam(field: AnimationEffectParamField, value: AnimationEffectPar
 						v-if="field.control === 'color'"
 						:model-value="String(params[field.key])"
 						:placeholder="String(field.defaultValue)"
+						hex-only
 						@update:model-value="updateParam(field, $event)"
 					/>
 					<UInputNumber

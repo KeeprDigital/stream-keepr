@@ -271,7 +271,6 @@ async function handleMatchChange(matchId: number | null) {
 		<ScreenSettingsCard
 			title="Control Permissions"
 			subtitle="Controls that players can use from the match screen. Disabled controls are still visible as read-only information."
-			:saving="saving"
 		>
 			<ScreenSettingsToggle
 				:label="fields.allowLifeControls.label"
