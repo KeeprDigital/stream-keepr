@@ -5,6 +5,7 @@ import type { SnapLines } from '~/modules/graphics/canvasManipulation';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { findGraphicItem } from '~~/shared/modules/graphics';
+import { unionBox } from '~/modules/graphics/canvasAlignment';
 import { canvasSnapLines, isTurned, rotatedBounds } from '~/modules/graphics/canvasManipulation';
 
 /**
@@ -237,17 +238,8 @@ export function editorLayersFrame(
 			return null;
 		members.push(box);
 	}
-	const left = Math.min(...members.map(rect => rect.x));
-	const top = Math.min(...members.map(rect => rect.y));
-	const right = Math.max(...members.map(rect => rect.x + rect.width));
-	const bottom = Math.max(...members.map(rect => rect.y + rect.height));
 	return {
-		rect: {
-			x: left,
-			y: top,
-			width: right - left,
-			height: bottom - top,
-		},
+		rect: unionBox(members),
 		origin: { x: 0, y: 0 },
 		snapLines: canvasSnapLines(canvas, [
 			...layout.sources,

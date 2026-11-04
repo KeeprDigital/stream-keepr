@@ -2016,7 +2016,7 @@ Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**A Layer Lock keeps a layer of a Feature Match Layout from canvas edits, and nothing else.** A locked layer is not moved, resized or rotated on the canvas and arrow nudges skip it; with several selected, the canvas moves only the unlocked ones. It stays selectable from the layer list, where it shows no canvas handles but a lock badge on its row and its canvas outline, and its property panel still edits it (E27). Delete, duplicate, hide and reorder are not canvas edits and still act on it.
+**A Layer Lock keeps a layer of a Feature Match Layout from canvas edits, and nothing else.** A locked layer is not moved, resized or rotated on the canvas and arrow nudges skip it; with several selected, the canvas moves only the unlocked ones. It stays selectable from the layer list, where it shows no canvas handles but a lock badge on its row and its canvas outline, and its property panel still edits it (E27). Delete, duplicate, hide, reorder (a drag in the layer list included), copy and paste, and align and distribute are not canvas edits and still act on it.
 
 **A click on a locked layer in the preview falls through to the layer beneath it, or to the canvas (E27).** The editor pushes every locked layer to its preview frame on `feature-match-overlay:locked-layers`, and the frame draws their guides without offering them.
 
