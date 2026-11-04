@@ -3,6 +3,7 @@ import type { PlayerSlotData } from '~~/shared/api';
 import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { archetypes, featureMatches, matches, phases, playerDecks, players, rounds } from '~~/server/db/schema';
+import { linkedOpSideGameData } from '~~/server/services/featureMatchSlotLeader';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
 import { chunkJsonRows } from '~~/server/utils/db';
 import { isStateConflictFailure } from '~~/server/utils/errors';
@@ -244,9 +245,13 @@ export function playerFeatureMatchSyncService() {
 				// `Object.assign` also mutates its target where the spread did not, so this now
 				// depends on `playerToMatchData` handing back a fresh object per call. No test
 				// held that property, so one now does — see the pin in this module's suite.
-				// A One Piece Card Game Player's game data already references their Deck List (ADR-0074).
-				const rebuiltData = player.gameData?.type === 'op'
-					? playerToMatchData(player)
+				// A One Piece side linked to a Player shows the Player's Leader and Deck
+				// List, by reference, and holds none of its own (ADR-0074).
+				const isOpSide = player.gameData?.type === 'op' || existingData?.gameData?.type === 'op';
+				const updatedData = isOpSide
+					? Object.assign(playerToMatchData(player), {
+						gameData: linkedOpSideGameData(player.gameData),
+					} satisfies Partial<PlayerSlotData>)
 					: hasDeckIdentity && existingData.deckId != null && !selectedDeck
 						? Object.assign(playerToMatchData(player), {
 						// The exact historical deck is no longer in the current submitted-deck
@@ -267,11 +272,6 @@ export function playerFeatureMatchSyncService() {
 										|| existingData?.gameData?.type === 'mtg',
 								},
 							);
-				// A One Piece Card Game side's Leader and Feature Match Deck List are the
-				// side's own, linked Player or not (ADR-0057), so a Player write leaves them.
-				const updatedData = existingData?.gameData?.type === 'op'
-					? Object.assign(rebuiltData, { gameData: existingData.gameData } satisfies Partial<PlayerSlotData>)
-					: rebuiltData;
 				if (jsonValuesEqual(existingData, updatedData))
 					continue;
 				if (side === 1)

@@ -69,10 +69,10 @@ function onPlayerSelected(value: number | null) {
 				position: selected.position ?? undefined,
 				points: selected.points ?? undefined,
 				lgs: selected.lgs ?? undefined,
-				// A One Piece side's Leader and Feature Match Deck List stay its own
-				// until the Player's Deck List reaches the side (#1006).
+				// A linked One Piece side shows the Player's Deck List and its Leader,
+				// which the save fills in, in place of the side's own (ADR-0074).
 				gameData: props.game === 'op'
-					? player.value.gameData
+					? { type: 'op', leader: null, deckList: getOpGameData(selected.gameData).deckList ?? null }
 					: selected.gameData ?? undefined,
 			};
 		}
@@ -94,6 +94,20 @@ const opGameData = computed({
 		player.value.gameData = value;
 	},
 });
+
+// ──────────────── Linked One Piece Side ────────────────
+
+/**
+ * A One Piece side linked to a Player shows that Player's Leader and Deck List
+ * and holds none of its own (ADR-0074), so it offers the Player's Deck List
+ * editor in place of its own paste and Leader picker. The edit is a Player
+ * write, which reaches this side and every other Slot showing the Player.
+ */
+const linkedPlayer = computed(() => props.game === 'op' && props.playerId != null
+	? props.players?.find(p => p.id === props.playerId) ?? null
+	: null);
+const linkedDeckList = computed(() => opGameData.value.deckList ?? null);
+const editingPlayerDeckList = ref(false);
 </script>
 
 <template>
@@ -145,13 +159,60 @@ const opGameData = computed({
 
 		<!-- Game-Specific Fields -->
 		<FeatureMatchSetupMtgPlayerFields v-if="props.game === 'mtg'" v-model="mtgGameData" />
-		<FeatureMatchSetupOpPlayerFields v-if="props.game === 'op'" v-model="opGameData" />
-		<FeatureMatchSetupDeckListField
-			v-if="props.game === 'op' && props.slotId && props.side"
-			:slot-id="props.slotId"
-			:side="props.side"
-			:deck-list="opGameData.featureMatchDeckList ?? null"
-			:locked="props.deckListLocked ?? false"
+		<UFormField
+			v-if="linkedPlayer"
+			label="Leader and Deck List"
+			name="deckList"
+			description="The linked Player's."
+			class="w-full"
+		>
+			<div
+				class="flex items-center gap-3 rounded-md border border-default p-2"
+				data-linked-deck-list
+				:data-mainboard-count="linkedDeckList?.mainboardCount"
+			>
+				<img
+					v-if="opGameData.leader"
+					:src="opGameData.leader.imageUrl"
+					:alt="opGameData.leader.name"
+					class="h-14 rounded-sm"
+					style="aspect-ratio: 600 / 838"
+					loading="lazy"
+				>
+				<div class="min-w-0 flex-1" data-leader>
+					<p class="truncate font-medium">
+						{{ opGameData.leader?.name ?? linkedDeckList?.leaderNumber ?? 'No Leader' }}
+					</p>
+					<p class="flex items-center gap-2 text-sm text-muted">
+						{{ linkedDeckList ? `${linkedDeckList.mainboardCount} Mainboard cards` : 'No Deck List' }}
+						<OpColorDisplay v-if="opGameData.leader" :colors="opGameData.leader.colors" size="sm" />
+					</p>
+				</div>
+				<UButton
+					label="Edit"
+					icon="i-lucide-pencil"
+					color="neutral"
+					variant="outline"
+					size="sm"
+					aria-label="Edit the Player's Deck List"
+					@click="editingPlayerDeckList = true"
+				/>
+			</div>
+		</UFormField>
+		<template v-else-if="props.game === 'op'">
+			<FeatureMatchSetupOpPlayerFields v-model="opGameData" />
+			<FeatureMatchSetupDeckListField
+				v-if="props.slotId && props.side"
+				:slot-id="props.slotId"
+				:side="props.side"
+				:deck-list="opGameData.featureMatchDeckList ?? null"
+				:locked="props.deckListLocked ?? false"
+			/>
+		</template>
+		<PlayerOpDeckListModal
+			v-if="linkedPlayer && editingPlayerDeckList"
+			:player="linkedPlayer"
+			@close="editingPlayerDeckList = false"
 		/>
 
 		<USeparator v-if="props.standingsEnabled || props.lgsEnabled" />

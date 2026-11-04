@@ -248,14 +248,24 @@ describe('graphic Input Binding field catalog', () => {
 			.toBeUndefined();
 	});
 
-	it('resolves a side\'s Deck List Mainboard count through player.deckCardCount, on One Piece Events only', () => {
-		const withDeckList = {
-			name: 'Ava',
+	// A linked side, and a Player, show the Player's Deck List (ADR-0074); an unlinked side its Feature Match Deck List.
+	it.each([
+		{
+			held: 'a Feature Match Deck List',
 			gameData: {
 				type: 'op' as const,
 				featureMatchDeckList: { id: 7, mainboardCount: 50 },
 			},
-		};
+		},
+		{
+			held: 'a Player\'s Deck List',
+			gameData: {
+				type: 'op' as const,
+				deckList: { id: 7, mainboardCount: 50, leaderNumber: 'OP01-003' },
+			},
+		},
+	])('resolves the Mainboard count of $held through player.deckCardCount, on One Piece Events only', ({ gameData }) => {
+		const withDeckList = { name: 'Ava', gameData };
 
 		expect(resolveGraphicBindingField('player', 'player.deckCardCount', withDeckList, dataSet())).toBe(50);
 		expect(resolveGraphicBindingField('player', 'player.deckCardCount', {
