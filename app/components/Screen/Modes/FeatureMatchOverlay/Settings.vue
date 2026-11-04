@@ -7,7 +7,6 @@ import { useEventListener } from '@vueuse/core';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
-import { useFeatureMatchLayoutLocks } from '~/composables/screen/useFeatureMatchLayoutLocks';
 import { hasTextSelection, useGraphicsClipboard } from '~/composables/useGraphicsClipboard';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import {
@@ -117,8 +116,6 @@ const editor = useFeatureMatchLayoutEditor({
 	canvasWidth,
 	canvasHeight,
 	writable,
-	// Remembered per browser per Screen, never part of the layout (#747).
-	locks: useFeatureMatchLayoutLocks(props.screen.id),
 });
 const { selection, layers } = editor;
 /** Several layers selected: the panel edits what they share, and the preview marks none alone (#740). */
@@ -682,7 +679,6 @@ useEventListener(import.meta.client
 					:publication-block-reason="assetPublicationBlockReason"
 					:selection-frame="selectionFrame"
 					:selection-label="selectionLabel"
-					:locked-layers="editor.locked.value"
 					:locked-boxes="editor.lockedSelectionBoxes.value"
 					fit-height="calc(100vh - 14rem)"
 					@select-target="selectHostTarget"

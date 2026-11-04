@@ -43,6 +43,7 @@ export interface MetagameArchetypeRow {
 	id: number;
 	name: string;
 	colors: string | null;
+	chartSeries: number | null;
 }
 
 export interface ArchetypeAccumulator {
@@ -111,6 +112,7 @@ export function buildArchetypeBreakdownEntries(
 			id: archetypeId,
 			name: archetype.name,
 			colors: archetype.colors,
+			chartSeries: archetype.chartSeries,
 			count: group.count,
 			metaShare: classifiedPlayers > 0
 				? Math.round((group.count / classifiedPlayers) * 10000) / 100
@@ -188,6 +190,7 @@ export function limitArchetypeBreakdownEntries(
 			id: OTHER_ARCHETYPE_ID,
 			name: 'Other',
 			colors: null,
+			chartSeries: null,
 			count: hiddenTotals.count,
 			metaShare: classifiedPlayers > 0
 				? Math.round((hiddenTotals.count / classifiedPlayers) * 10000) / 100

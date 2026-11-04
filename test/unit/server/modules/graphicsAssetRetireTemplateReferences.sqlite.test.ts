@@ -10,7 +10,8 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
  * Retire is refused while a saved template references any revision of the asset, in the
- * retiring statement itself; a Screen's reference does not hold it back (#614, ADR-0034).
+ * retiring statement itself, an Installed Graphics Template's included (ADR-0068); a Screen's
+ * reference does not hold it back (#614, ADR-0034).
  */
 
 const harness = await createSqliteD1Harness();
@@ -66,6 +67,7 @@ describe('retiring a Graphic Asset a saved template references', () => {
 	it.each([
 		['a Broadcast Graphic Template', 'broadcast-graphic-template'],
 		['a Feature Match Layout Template', 'feature-match-layout-template'],
+		['an Installed Graphics Template', 'installed-graphics-template'],
 	])('is refused while %s references it, naming the template', async (_, ownerKind) => {
 		await reference(ownerKind, 'template-1');
 
@@ -114,14 +116,6 @@ describe('retiring a Graphic Asset a saved template references', () => {
 		expect(outcome.outcome).toBe('in-use');
 		expect(outcome.outcome === 'in-use' && outcome.usage.map(item => item.owner.kind))
 			.toEqual(['feature-match-layout-template']);
-	});
-
-	// An Installed Graphics Template is never revised and cannot be deleted, so
-	// counting it would make its assets unretirable for good.
-	it('still retires an asset only an Installed Graphics Template references', async () => {
-		await reference('installed-graphics-template', 'installed-1');
-
-		expect((await retire()).outcome).toBe('retired');
 	});
 
 	it('answers not-allowed, not in-use, for an asset already retired', async () => {

@@ -22,7 +22,12 @@ import type { TemplatePackagePreflightState } from './template-package-preflight
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
-import { GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS, SCREEN_THEME_OVERRIDE_SLOT_PREFIX, THEME_REFERENCE_OWNER_KIND } from '~~/shared/utils/graphicsAssetReferences';
+import {
+	GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS,
+	SCREEN_THEME_OVERRIDE_SLOT_PREFIX,
+	TALENT_REFERENCE_OWNER_KIND,
+	THEME_REFERENCE_OWNER_KIND,
+} from '~~/shared/utils/graphicsAssetReferences';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
 import { createD1GraphicsOperationsCockpitCatalogue } from './catalogue-cockpit';
 import { createD1GraphicsAssetReconciliationCatalogue } from './catalogue-reconciliation';
@@ -117,6 +122,7 @@ interface UsageRow {
 	owner_slot: string;
 	event_id: number | null;
 	owner_name: string | null;
+	event_name: string | null;
 }
 
 function parseJson<T>(value: string | null): T | undefined {
@@ -237,6 +243,7 @@ function usageFromRow(row: UsageRow): GraphicAssetUsage {
 			name: row.owner_name ?? undefined,
 			slot: row.owner_slot,
 			eventId: row.event_id ?? undefined,
+			eventName: row.event_name ?? undefined,
 		},
 	};
 }
@@ -251,11 +258,12 @@ const TEMPLATE_OWNER_KIND_LIST = GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS
 
 /**
  * The references that hold Retire back, about the row aliased
- * `asset_reference`: a saved template's (ADR-0034), a Theme's, and a Screen
- * Theme Override's (ADR-0050). A Screen's own mode references do not.
+ * `asset_reference`: a saved or installed template's (ADR-0034, ADR-0068), a
+ * Theme's, a Screen Theme Override's (ADR-0050), and a Talent's photo
+ * (ADR-0067). A Screen's own mode references do not.
  */
 const RETIRE_BLOCKING_REFERENCE = `(
-	asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST}, '${THEME_REFERENCE_OWNER_KIND}')
+	asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST}, '${THEME_REFERENCE_OWNER_KIND}', '${TALENT_REFERENCE_OWNER_KIND}')
 	OR (asset_reference.owner_kind = 'screen' AND asset_reference.owner_slot LIKE '${SCREEN_THEME_OVERRIDE_SLOT_PREFIX}%')
 )`;
 
@@ -276,8 +284,11 @@ function usageSelect(options: { retireBlockingOnly?: boolean } = {}) {
 				WHEN asset_reference.owner_kind = 'feature-match-layout-template'
 					THEN feature_match_layout_template.name
 				WHEN asset_reference.owner_kind = '${THEME_REFERENCE_OWNER_KIND}' THEN theme.name
+				WHEN asset_reference.owner_kind = '${TALENT_REFERENCE_OWNER_KIND}' THEN talent.name
 				ELSE NULL
-			END AS owner_name
+			END AS owner_name,
+			-- A Talent is named with its Event (ADR-0067).
+			talent_event.name AS event_name
 		FROM graphic_asset_references asset_reference
 		LEFT JOIN screens
 			ON asset_reference.owner_kind = 'screen'
@@ -295,6 +306,11 @@ function usageSelect(options: { retireBlockingOnly?: boolean } = {}) {
 		LEFT JOIN themes theme
 			ON asset_reference.owner_kind = '${THEME_REFERENCE_OWNER_KIND}'
 			AND theme.id = asset_reference.owner_id
+		LEFT JOIN event_talents talent
+			ON asset_reference.owner_kind = '${TALENT_REFERENCE_OWNER_KIND}'
+			AND CAST(talent.id AS TEXT) = asset_reference.owner_id
+			AND talent.event_id = asset_reference.event_id
+		LEFT JOIN events talent_event ON talent_event.id = talent.event_id
 		WHERE asset_reference.asset_id = ?
 			${options.retireBlockingOnly
 				? `AND ${RETIRE_BLOCKING_REFERENCE}`
@@ -1467,7 +1483,7 @@ export function createD1GraphicsAssetCatalogue(
 						) reference
 					), '[]') AS template_references
 				FROM installed_graphics_templates template
-				WHERE template.id = ?
+				WHERE template.id = ? AND template.removed_at IS NULL
 			`).bind(templateId).first<{
 				id: string;
 				kind: InstalledGraphicsTemplateKind;
@@ -1512,7 +1528,7 @@ export function createD1GraphicsAssetCatalogue(
 				SELECT id, kind, name, revision_number, document, source_template_identity,
 					source_template_revision, installed_by_operation_id, event_id, created_at
 				FROM installed_graphics_templates
-				WHERE kind = ?
+				WHERE kind = ? AND removed_at IS NULL
 				ORDER BY name, id
 			`).bind(kind).all<{
 				id: string;
@@ -1538,6 +1554,94 @@ export function createD1GraphicsAssetCatalogue(
 				eventId: row.event_id ?? undefined,
 				installedAt: new Date(row.created_at).toISOString(),
 			}));
+		},
+		async removeInstalledGraphicsTemplate(input) {
+			// One transaction: the references go only with the Template they belong
+			// to, so a removal that loses to another never strips a live Template.
+			const removedAt = new Date(input.removedAt).getTime();
+			const [, removal] = await database.batch([
+				database.prepare(`
+					DELETE FROM graphic_asset_references
+					WHERE owner_kind = 'installed-graphics-template' AND owner_id = ?
+						AND EXISTS (
+							SELECT 1 FROM installed_graphics_templates template
+							WHERE template.id = ? AND template.kind = ? AND template.removed_at IS NULL
+						)
+				`).bind(input.templateId, input.templateId, input.kind),
+				database.prepare(`
+					UPDATE installed_graphics_templates
+					SET removed_at = ?, removed_by = ?, updated_at = ?
+					WHERE id = ? AND kind = ? AND removed_at IS NULL
+				`).bind(removedAt, input.removedBy, removedAt, input.templateId, input.kind),
+			]);
+			if (!removal?.success)
+				throw new Error('Installed Graphics Template removal failed');
+			return removal.meta.changes === 1;
+		},
+		async findRemovedInstalledGraphicsTemplate(templateId) {
+			const row = await database.prepare(`
+				SELECT document FROM installed_graphics_templates
+				WHERE id = ? AND removed_at IS NOT NULL
+			`).bind(templateId).first<{ document: string }>();
+			return row
+				? {
+						document: JSON.parse(row.document),
+					}
+				: undefined;
+		},
+		async reinstallInstalledGraphicsTemplate(input) {
+			const references = JSON.stringify(input.references);
+			const reinstalledAt = new Date(input.reinstalledAt).getTime();
+			// Both statements carry it, so the references and the Template come back
+			// together or not at all: every reference must name an existing revision
+			// of an active Graphic Asset, as installing a reused revision required.
+			const guard = `
+				EXISTS (
+					SELECT 1 FROM installed_graphics_templates removed
+					WHERE removed.id = ? AND removed.removed_at IS NOT NULL
+				)
+				AND (
+					SELECT COUNT(*) FROM json_each(?) AS pinned
+					JOIN graphic_asset_revisions revision
+						ON revision.id = json_extract(pinned.value, '$.revisionId')
+						AND revision.asset_id = json_extract(pinned.value, '$.assetId')
+					JOIN graphic_assets asset
+						ON asset.id = revision.asset_id AND asset.lifecycle_state = 'active'
+				) = ?
+			`;
+			const guardBindings = [input.templateId, references, input.references.length];
+			const [indexed, reinstated] = await database.batch([
+				database.prepare(`
+					INSERT INTO graphic_asset_references (
+						id, asset_id, revision_id, owner_kind, owner_id, owner_slot,
+						event_id, created_at, updated_at
+					)
+					SELECT json_extract(reference.value, '$.id'),
+						json_extract(reference.value, '$.assetId'),
+						json_extract(reference.value, '$.revisionId'),
+						'installed-graphics-template', ?,
+						json_extract(reference.value, '$.ownerSlot'), NULL, ?, ?
+					FROM json_each(?) AS reference
+					WHERE ${guard}
+				`).bind(input.templateId, reinstalledAt, reinstalledAt, references, ...guardBindings),
+				database.prepare(`
+					UPDATE installed_graphics_templates
+					SET removed_at = NULL, removed_by = NULL, updated_at = ?
+					WHERE id = ? AND ${guard}
+				`).bind(reinstalledAt, input.templateId, ...guardBindings),
+			]);
+			if (!indexed?.success || !reinstated?.success)
+				throw new Error('Installed Graphics Template reinstallation failed');
+			if (reinstated.meta.changes === 1)
+				return 'reinstalled';
+			const current = await database.prepare(
+				'SELECT removed_at FROM installed_graphics_templates WHERE id = ?',
+			).bind(input.templateId).first<{ removed_at: number | null }>();
+			if (!current)
+				return 'not-found';
+			return current.removed_at === null
+				? 'installed'
+				: 'unavailable';
 		},
 		async getIngestionOperation(operationId, initiatedBy) {
 			return await firstOperation(database, 'id = ? AND initiated_by = ?', operationId, initiatedBy);
@@ -2495,10 +2599,11 @@ export function createD1GraphicsAssetCatalogue(
 			return result.results.map(assetFromRow);
 		},
 		async retireGraphicAsset(input) {
-			// Refused while a saved template references any revision of the asset
-			// (ADR-0034): a template keeps its references selectable on every write,
-			// so retiring under one would leave it unrevisable. A Theme or a Screen
-			// Theme Override holds it back too, so a show never loses its logo or
+			// Refused while a saved or installed template references any revision of
+			// the asset (ADR-0034, ADR-0068): a template keeps its references
+			// selectable on every write, so retiring under one would leave it
+			// unrevisable; removing an installed one releases its references. A Theme
+			// or a Screen Theme Override holds it back too, so a show never loses its logo or
 			// typeface mid-broadcast (ADR-0050). The condition rides in the
 			// statement that retires, so a reference written after anyone looked
 			// still holds the asset back. A Screen's own mode reference does not: a

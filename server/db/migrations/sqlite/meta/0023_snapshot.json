@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4a152f57-92d9-498e-84a3-f387d521c971",
-  "prevId": "3eb9341a-79f5-457e-99be-5d1f4c578276",
+  "id": "7ddefdc1-b54c-4e78-a21d-5a38e75e7e52",
+  "prevId": "dc23b4a7-8391-4a04-823e-c6f04856825d",
   "tables": {
     "archetype_cards": {
       "name": "archetype_cards",
@@ -120,6 +120,13 @@
         "colors": {
           "name": "colors",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "chart_series": {
+          "name": "chart_series",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -974,6 +981,20 @@
         },
         "bluesky_handle": {
           "name": "bluesky_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "photo": {
+          "name": "photo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "graphic_asset_reference_version": {
+          "name": "graphic_asset_reference_version",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -6477,6 +6498,20 @@
         "event_id": {
           "name": "event_id",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "removed_by": {
+          "name": "removed_by",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

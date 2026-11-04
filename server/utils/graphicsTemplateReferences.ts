@@ -5,13 +5,15 @@ import { graphicAssetId, graphicAssetRevisionId } from '~~/server/modules/graphi
 
 /**
  * What a write belongs to, as an author reads it: a graphics Template library,
- * or a Theme or Screen Theme Override, held to the same rule (ADR-0050).
+ * or a Theme, Screen Theme Override or Talent, held to the same rule (ADR-0050,
+ * ADR-0067).
  */
 export type GraphicsTemplateArtifact
 	= | 'Broadcast Graphic Template'
 		| 'Feature Match Layout Template'
 		| 'Theme'
-		| 'Screen Theme Override';
+		| 'Screen Theme Override'
+		| 'Talent';
 
 const KIND_NOUNS: Record<ScreenGraphicAssetReference['kind'], string> = {
 	'image': 'an image',

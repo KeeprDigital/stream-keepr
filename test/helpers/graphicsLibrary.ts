@@ -7,7 +7,10 @@ import type {
 	InMemoryGraphicsStagingObjectStore,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import type {
+	GraphicAsset,
 	GraphicAssetId,
+	GraphicAssetReference,
+	GraphicAssetReferenceStatus,
 	GraphicAssetRevisionId,
 	GraphicsDuplicateContentPolicy,
 	GraphicsIngestionOperation,
@@ -212,4 +215,74 @@ export async function removeScreenReference(harness: SqliteD1Harness, referenceI
 		sql: 'DELETE FROM graphic_asset_references WHERE id = ?',
 		args: [referenceId],
 	});
+}
+
+/**
+ * The library a write asks about selectability, read from the catalogue with
+ * every content byte available. An asset in `answeredBeforeRetirement` is
+ * answered as active, as a route's question can be overtaken by the commit.
+ */
+export function catalogueSelectability(harness: SqliteD1Harness) {
+	const answeredBeforeRetirement = new Set<string>();
+
+	async function inspectGraphicAssetRevisions(input: { references: GraphicAssetReference[] }): Promise<GraphicAssetReferenceStatus[]> {
+		return await Promise.all(input.references.map(async (reference) => {
+			const { rows: [row] } = await harness.client.execute({
+				sql: `
+					SELECT asset.id AS asset_id, asset.kind, asset.lifecycle_state
+					FROM graphic_asset_revisions revision
+					JOIN graphic_assets asset ON asset.id = revision.asset_id
+					WHERE revision.id = ?
+				`,
+				args: [reference.revisionId],
+			});
+			if (!row)
+				return { outcome: 'missing' as const };
+			const lifecycleState = answeredBeforeRetirement.has(String(row.asset_id))
+				? 'active'
+				: row.lifecycle_state;
+			return { outcome: 'available' as const, kind: row.kind, lifecycleState } as GraphicAssetReferenceStatus;
+		}));
+	}
+
+	return { inspectGraphicAssetRevisions, answeredBeforeRetirement };
+}
+
+const SEEDED_REVISION_FACTS: Record<Exclude<GraphicAsset['kind'], 'image'>, { mime: string; profile: string }> = {
+	'font': { mime: 'font/woff2', profile: 'static-font-v1' },
+	'silent-video': { mime: 'video/webm', profile: 'silent-video-v1' },
+};
+
+/**
+ * A font or silent-video revision, seeded as the catalogue holds one: their
+ * ingestion needs a browser's evidence.
+ */
+export async function seedGraphicAssetRevision(harness: SqliteD1Harness, kind: keyof typeof SEEDED_REVISION_FACTS, name: string) {
+	const facts = SEEDED_REVISION_FACTS[kind];
+	const digest = digestOf(new TextEncoder().encode(name));
+	const assetId = `asset-${name}` as GraphicAssetId;
+	const revisionId = `revision-${name}` as GraphicAssetRevisionId;
+	await harness.client.batch([
+		{
+			sql: 'INSERT INTO graphic_asset_contents (digest, byte_length, canonical_mime) VALUES (?, 70, ?)',
+			args: [digest, facts.mime],
+		},
+		{
+			sql: 'INSERT INTO graphic_assets (id, name, kind) VALUES (?, ?, ?)',
+			args: [assetId, name, kind],
+		},
+		{
+			sql: `
+				INSERT INTO graphic_asset_revisions (id, asset_id, revision_number, content_digest, compatibility_profile, technical_facts)
+				VALUES (?, ?, 1, ?, ?, '{}')
+			`,
+			args: [
+				revisionId,
+				assetId,
+				digest,
+				facts.profile,
+			],
+		},
+	], 'write');
+	return { assetId, revisionId };
 }

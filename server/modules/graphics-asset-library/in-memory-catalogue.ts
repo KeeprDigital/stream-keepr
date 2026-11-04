@@ -95,6 +95,8 @@ export function createInMemoryGraphicsAssetCatalogue(
 		digest: string;
 	}>();
 	const installedTemplates = new Map<InstalledGraphicsTemplateId, InstalledGraphicsTemplate>();
+	/** Removed Installed Graphics Templates, kept as provenance for a retried installation. */
+	const removedTemplates = new Map<InstalledGraphicsTemplateId, InstalledGraphicsTemplate>();
 	/** Persisted Graphic Asset References, which are the authoritative usage. */
 	const references = new Map<string, GraphicAssetUsage>();
 	const usage = options.usage ?? [];
@@ -813,6 +815,56 @@ export function createInMemoryGraphicsAssetCatalogue(
 						: order;
 				})
 				.map(({ references: _references, ...summary }) => structuredClone(summary));
+		},
+		async removeInstalledGraphicsTemplate(input) {
+			const template = installedTemplates.get(input.templateId);
+			if (!template || template.kind !== input.kind)
+				return false;
+			for (const [id, reference] of references) {
+				if (reference.owner.kind === 'installed-graphics-template' && reference.owner.id === template.id)
+					// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+					references.delete(id);
+			}
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+			installedTemplates.delete(template.id);
+			removedTemplates.set(template.id, template);
+			return true;
+		},
+		async findRemovedInstalledGraphicsTemplate(templateId) {
+			const template = removedTemplates.get(templateId);
+			return template
+				? {
+						document: structuredClone(template.document),
+					}
+				: undefined;
+		},
+		async reinstallInstalledGraphicsTemplate(input) {
+			const template = removedTemplates.get(input.templateId);
+			if (!template) {
+				return installedTemplates.has(input.templateId)
+					? 'installed'
+					: 'not-found';
+			}
+			const resolves = input.references.every(reference =>
+				revisionContentFor(reference)?.lifecycleState === 'active');
+			if (!resolves)
+				return 'unavailable';
+			for (const reference of input.references) {
+				references.set(reference.id, {
+					id: reference.id,
+					reference: { assetId: reference.assetId, revisionId: reference.revisionId },
+					owner: {
+						kind: 'installed-graphics-template',
+						id: template.id,
+						name: template.name,
+						slot: reference.ownerSlot,
+					},
+				});
+			}
+			// eslint-disable-next-line drizzle/enforce-delete-with-where -- In-memory Map, not a Drizzle table.
+			removedTemplates.delete(template.id);
+			installedTemplates.set(template.id, template);
+			return 'reinstalled';
 		},
 		async findGraphicAssetByContentDigest(digest) {
 			const revision = [

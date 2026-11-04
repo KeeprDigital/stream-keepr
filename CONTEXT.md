@@ -71,6 +71,10 @@ Which Players a Metagame read counts: every Player, the top N by placement, thos
 **Archetype**:
 A strategic Deck classification assigned to Players and used for Metagame analysis.
 
+**Pinned Chart Series**:
+One of the Theme's eight chart series, `chart-series-1` to `chart-series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme, or a Screen Theme Override, decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).
+_Avoid_: archetype colour, chart colour (an Archetype's mana colours are its colours).
+
 **Pilot**:
 A Player of an Archetype within the current Metagame scope; an Archetype's pilots are its Players in that scope.
 
@@ -98,7 +102,7 @@ A Melee-imported Player field, name or pronouns, that an operator has changed by
 _Avoid_: override, local override.
 
 **Talent**:
-An Event-scoped broadcast presenter or commentator who may be selected for production graphics.
+An Event-scoped broadcast presenter or commentator who may be selected for production graphics. A Talent may hold a photo: an ordinary Graphic Asset Reference to one exact image revision from the Graphics Asset Library, or none (ADR-0067).
 
 **Supported Social Network**:
 One of Twitch, YouTube, X, Instagram, TikTok, or Bluesky: the application-owned, ordered catalog of public networks available for Talent profiles, each supplying its label, icon, and profile-URL rule. Events cannot add or reorder networks.
@@ -471,10 +475,10 @@ The identity of one exact preflight proposal — archive bytes, compatibility pr
 How one packaged asset identity would become a local Graphic Asset, decided by provenance: an exact Graphic Asset Origin match reuses the local revision; a related revision, digest-only match, or new content creates a separate local Graphic Asset (reusing canonical bytes where the digest exists). The same origin identity and revision with a different digest rejects the whole package.
 
 **Template Package Installation**:
-The one atomic act turning a confirmed Template Package Preflight Report into local state. It re-derives the report from the same staged bytes and installs only while the conclusion matches what was confirmed; bytes and derivatives are written first, then one transaction publishes every asset, revision, origin, association, rewritten reference, and the Installed Graphics Template. Repeating it answers with the installation already committed.
+The one atomic act turning a confirmed Template Package Preflight Report into local state. It re-derives the report from the same staged bytes and installs only while the conclusion matches what was confirmed; bytes and derivatives are written first, then one transaction publishes every asset, revision, origin, association, rewritten reference, and the Installed Graphics Template. Repeating it answers with the installation already committed, first reinstalling that Installed Graphics Template if it was removed (ADR-0068).
 
 **Installed Graphics Template**:
-The independent local copy of the single Template a Template Package carried, with its own identity and managed revision. Its Graphic Asset References already point at exact local revisions and protect them; the source identity is provenance only.
+The independent local copy of the single Template a Template Package carried, with its own identity and managed revision. Its Graphic Asset References already point at exact local revisions and protect them; the source identity is provenance only. It is never revised, but any signed-in User may remove it, which releases its references and keeps its record as provenance (ADR-0068).
 _Avoid_: Imported template, template installation record.
 
 ### Graphics Asset Library
@@ -502,7 +506,7 @@ The normal, warning, critical, or full state derived from use of the Canonical G
 A stable-identity library resource for a validated image, silent video, or font, owned by the installation-wide Graphics Asset Library and reusable across Events. Events may associate with or reference one but never own it.
 
 **Retired Graphic Asset**:
-A Graphic Asset hidden from discovery and unavailable for new references while existing references keep resolving. An asset a saved template, a Theme or a Screen Theme Override references cannot be retired (ADR-0034, ADR-0050). It may be restored.
+A Graphic Asset hidden from discovery and unavailable for new references while existing references keep resolving. An asset a saved or installed template, a Theme, a Screen Theme Override or a Talent's photo references cannot be retired (ADR-0034, ADR-0050, ADR-0067, ADR-0068). It may be restored.
 
 **Trashed Graphic Asset**:
 An unreferenced Graphic Asset removed from discovery and new references, restorable for 30 days; afterwards it is purged only after a fresh proof that no reference points to any revision.
@@ -731,7 +735,7 @@ A host-owned Feature Match Overlay element placing an external video source, wit
 _Avoid_: Source Region, camera box, Source Graphic Item
 
 **Layer Lock**:
-An author's lock on one layer of a Feature Match Layout, a Graphic Item or a Source Item, against canvas edits: the canvas neither moves, resizes nor rotates it, arrow nudges skip it, and a click on it falls through to the layer beneath. It stays selectable from the layer list and editable in its property panel. Locking a Graphic Group locks its children. It is editor state, remembered per browser per Screen and never stored in the layout (ADR-0063).
+An author's lock on one layer of a Feature Match Layout, a Graphic Item or a Source Item, against canvas edits: the canvas neither moves, resizes nor rotates it, arrow nudges skip it, and a click on it falls through to the layer beneath. It stays selectable from the layer list and editable in its property panel. Locking a Graphic Group locks its children. It is stored on the layer in the Feature Match Layout, so every operator of the Screen sees it and it travels with a Feature Match Layout Template; a copy of a locked layer arrives unlocked (ADR-0063).
 _Avoid_: Frozen layer, pinned layer
 
 **Feature Match Overlay Preset**:
@@ -951,9 +955,10 @@ _Avoid_: worst-case data, overflow data
 - Two packaged identities claiming one source identity and revision reject the complete package
 - A proposal reusing a **Retired Graphic Asset** or **Trashed Graphic Asset** is reported before confirmation and stays retryable, since neither takes new references until restored
 - A later locally created revision never inherits **Graphic Asset Origin** from an imported one
-- An **Installed Graphics Template** owns one ordinary **Graphic Asset Reference** per asset field, so a pinned asset cannot enter Trash
+- An **Installed Graphics Template** owns one ordinary **Graphic Asset Reference** per asset field, so a pinned asset cannot be retired or enter Trash until the Template is removed
+- Removing an **Installed Graphics Template** releases its references in the same write and leaves placed copies untouched; retrying its **Template Package Installation** reinstalls it while every revision it pins is on an active **Graphic Asset** (ADR-0068)
 - Every write of a **Broadcast Graphic Template** or **Feature Match Layout Template** requires each **Graphic Asset Reference** it holds to name an available revision of an active **Graphic Asset** whose kind fits its slot, including references it already held (ADR-0034)
-- A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template**, **Feature Match Layout Template**, **Theme** or **Screen Theme Override** references any of its revisions, and the refusal names them; a **Screen**'s own mode reference or an **Installed Graphics Template**'s does not hold it back (ADR-0034, ADR-0050)
+- A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template**, **Feature Match Layout Template**, **Installed Graphics Template**, **Theme**, **Screen Theme Override** or **Talent** references any of its revisions, and the refusal names them, a Talent with its Event; a **Screen**'s own mode reference does not hold it back (ADR-0034, ADR-0050, ADR-0067, ADR-0068)
 - A **Template Package Installation** run inside an **Event** associates every asset it created or reused with that Event without changing reused assets' metadata
 - A failed or cancelled installation leaves nothing discoverable
 

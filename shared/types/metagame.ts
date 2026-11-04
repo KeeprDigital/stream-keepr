@@ -67,6 +67,8 @@ export interface ArchetypeBreakdownEntry {
 	id: number;
 	name: string;
 	colors: string | null;
+	/** The Archetype's Pinned Chart Series, 1 to 8; null when unpinned, and for an aggregate row. */
+	chartSeries: number | null;
 	count: number;
 	metaShare: number;
 	winRate: number | null;

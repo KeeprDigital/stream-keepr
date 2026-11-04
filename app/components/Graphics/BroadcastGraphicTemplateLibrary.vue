@@ -206,7 +206,7 @@ async function place(templateId: string) {
 							Place
 						</UButton>
 						<UButton
-							v-if="canRevise(template)"
+							v-if="canAuthor"
 							size="xs"
 							color="neutral"
 							variant="ghost"
@@ -233,7 +233,13 @@ async function place(templateId: string) {
 						@confirm="remove(template.id)"
 						@cancel="cancelRemove"
 					>
-						Delete “{{ template.name }}” from the library? This cannot be undone.
+						Delete “{{ template.name }}” from the library?
+						<template v-if="template.authored">
+							This cannot be undone.
+						</template>
+						<template v-else>
+							Importing its Template Package again adds it back as a new entry.
+						</template>
 						Broadcast Graphics already placed from it are not affected.
 					</GraphicsTemplateLibraryConfirmation>
 				</GraphicsTemplateLibraryEntry>

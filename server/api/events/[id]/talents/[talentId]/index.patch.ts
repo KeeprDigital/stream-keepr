@@ -1,3 +1,4 @@
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { talentWriteModule } from '~~/server/modules/talent-write';
 import { talentParamsSchema, updateTalentSchema } from '~~/server/schemas/api/talent';
 import { getOriginConnectionId } from '~~/server/utils/ably';
@@ -11,5 +12,6 @@ export default defineEventHandler(async (event) => {
 		talentId,
 		input: body,
 		originConnectionId: getOriginConnectionId(event),
+		graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 	});
 });

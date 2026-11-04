@@ -9,6 +9,7 @@ import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES, featureMatchSampleDataset } from '~~
 import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { withLayersLocked } from '~~/test/helpers/featureMatchLayoutDocument';
 import { clock, shape, text } from '~~/test/helpers/graphicsComposition';
 import { LUFFY } from '~~/test/helpers/opCards';
 import Display from '~/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
@@ -610,25 +611,18 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(guide().classes()).toContain('is-selected');
 		});
 
-		// #747: a click on a locked layer falls through to whatever lies beneath it.
-		it('stops offering the layers the editor locked, so a click reaches what lies beneath', async () => {
-			mockConfig.value = guidedConfig();
+		// A click on a layer the layout stores locked falls through to whatever lies beneath it.
+		it('stops offering the layers the layout locks, so a click reaches what lies beneath', async () => {
+			const config = guidedConfig();
+			mockConfig.value = {
+				...config,
+				layout: withLayersLocked(config.layout, ['main-source', 'shared-clock']),
+			};
 			mockPreviewGuides.value = true;
 			mockIsPreview.value = true;
 			const postMessage = vi.spyOn(window.parent, 'postMessage');
 
 			const wrapper = await mountComponent();
-			window.dispatchEvent(new MessageEvent('message', {
-				origin: window.location.origin,
-				source: window.parent,
-				data: {
-					type: 'feature-match-overlay:locked-layers',
-					layers: [
-						{ type: 'source', itemId: 'main-source' },
-						{ type: 'item', itemId: 'shared-clock' },
-					],
-				},
-			}));
 			await nextTick();
 
 			expect(wrapper.find('[aria-label="Select Main Match Source"]').exists()).toBe(false);

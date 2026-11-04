@@ -299,6 +299,8 @@ export interface FeatureMatchSourceItemConfig extends FeatureMatchOverlayRect {
 	id: string;
 	label: string;
 	visible: boolean;
+	/** A Layer Lock (ADR-0063): the canvas leaves the item alone. Absent reads as unlocked. */
+	locked?: boolean;
 	anchor?: FeatureMatchOverlayAnchorValue;
 	configurationVersion?: number;
 	sourceRole?: FeatureMatchSourceRole;

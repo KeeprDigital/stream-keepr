@@ -3,22 +3,24 @@ import type { Talent } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { reactive } from 'vue';
+import { defineComponent, reactive } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import ConfigTalents from '~/components/Event/ConfigTalents.vue';
 
-function talent(id: number, name: string, socialProfiles: Talent['socialProfiles'] = {}): Talent {
+function talent(id: number, name: string, socialProfiles: Talent['socialProfiles'] = {}, photo: Talent['photo'] = null): Talent {
 	return {
 		id,
 		eventId: 1,
 		name,
 		socialProfiles,
+		photo,
 		createdAt: new Date('2026-01-01T00:00:00.000Z'),
 		updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 	};
 }
 
+const PORTRAIT = { assetId: 'asset-portrait', revisionId: 'revision-2' } as NonNullable<Talent['photo']>;
 const ALICE = talent(11, 'Alice');
 const BOB = talent(12, 'Bob');
 const BOB_AGAIN = talent(13, 'Bob');
@@ -52,9 +54,23 @@ mockNuxtImport('useOverlay', () => () => ({
 	}),
 }));
 
+/** The library picker, answering as it does: a choice or a Clear arrives as its model value. */
+const PhotoPicker = defineComponent({
+	name: 'GraphicsAssetFocusPicker',
+	props: [
+		'modelValue',
+		'eventId',
+		'assetKind',
+		'fieldLabel',
+	],
+	emits: ['update:modelValue', 'select'],
+	template: '<div data-photo-picker />',
+});
+
 const stubs = {
 	...nuxtUiStubs,
 	UIEmptyState: { template: '<p data-empty />' },
+	GraphicsAssetFocusPicker: PhotoPicker,
 };
 
 enableAutoUnmount(afterEach);
@@ -70,7 +86,7 @@ beforeEach(() => {
 function mountComponent(talents: Talent[]) {
 	return mount(ConfigTalents, {
 		attachTo: document.body,
-		props: { talents },
+		props: { talents, eventId: 1 },
 		global: { stubs },
 	});
 }
@@ -97,6 +113,11 @@ function profileInput(wrapper: Wrapper, network: string) {
 
 const nameInput = (wrapper: Wrapper) => wrapper.get('[data-field="name"] input');
 const editorIsOpen = (wrapper: Wrapper) => wrapper.find('[role="dialog"]').exists();
+
+async function pickPhoto(wrapper: Wrapper, photo: Talent['photo']) {
+	wrapper.getComponent(PhotoPicker).vm.$emit('update:modelValue', photo ?? undefined);
+	await flushPromises();
+}
 
 async function saveEditor(wrapper: Wrapper) {
 	await button(wrapper, 'Save').trigger('click');
@@ -245,5 +266,78 @@ describe('event config Talents', () => {
 		await chooseRowAction(wrapper, 1, 'Delete');
 
 		expect(eventStore.removeTalent.mock.calls.map(([id]) => id)).toEqual(deleted);
+	});
+
+	it('offers the library\'s images for this Event as the photo', async () => {
+		const wrapper = mountComponent([ALICE]);
+		await chooseRowAction(wrapper, 0, 'Edit');
+
+		expect(wrapper.getComponent(PhotoPicker).props()).toMatchObject({ eventId: 1, assetKind: 'image' });
+	});
+
+	it.each([
+		[
+			'saves a chosen photo with the Talent',
+			ALICE,
+			PORTRAIT,
+			{ photo: PORTRAIT },
+		],
+		[
+			'clears the Talent\'s photo',
+			talent(11, 'Alice', {}, PORTRAIT),
+			null,
+			{ photo: null },
+		],
+	])('%s', async (_case, current, photo, update) => {
+		const wrapper = mountComponent([current]);
+		await chooseRowAction(wrapper, 0, 'Edit');
+
+		await pickPhoto(wrapper, photo);
+		await saveEditor(wrapper);
+
+		expect(eventStore.updateTalent).toHaveBeenCalledWith(11, update);
+	});
+
+	it('creates a Talent with a chosen photo', async () => {
+		const wrapper = mountComponent([]);
+		await button(wrapper, 'Add Talent').trigger('click');
+
+		await nameInput(wrapper).setValue('Dana');
+		await pickPhoto(wrapper, PORTRAIT);
+		await saveEditor(wrapper);
+
+		expect(eventStore.addTalent).toHaveBeenCalledWith({ name: 'Dana', socialProfiles: {}, photo: PORTRAIT });
+	});
+
+	it('keeps a colleague\'s photo when the editor did not change it', async () => {
+		const wrapper = mountComponent([ALICE]);
+		await chooseRowAction(wrapper, 0, 'Edit');
+		await wrapper.setProps({
+			talents: [
+				talent(11, 'Alice', {}, PORTRAIT),
+			],
+		});
+
+		await nameInput(wrapper).setValue('Alicia');
+		await saveEditor(wrapper);
+
+		expect(eventStore.updateTalent).toHaveBeenCalledWith(11, { name: 'Alicia' });
+	});
+
+	it('shows each Talent\'s exact photo revision as a thumbnail, and none without one', () => {
+		const wrapper = mountComponent([
+			talent(11, 'Alice', {}, PORTRAIT),
+			BOB,
+		]);
+
+		expect(wrapper.findAll('[data-talent-photo]').map(row => [
+			row.attributes('data-talent-photo'),
+			row.find('img').exists()
+				? row.get('img').attributes('src')
+				: null,
+		])).toEqual([
+			['revision-2', '/api/graphics-assets/asset-portrait/revisions/revision-2/content'],
+			['none', null],
+		]);
 	});
 });

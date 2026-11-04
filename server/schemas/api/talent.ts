@@ -1,6 +1,7 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { eventTalents } from '~~/server/db/schema';
+import { graphicAssetReferenceSchema } from '~~/shared/modules/theme/background';
 import { normalizeSocialProfileInput, SocialProfileInputError } from '~~/shared/socialProfiles';
 
 const SOCIAL_PROFILE_COLUMN_OMIT = {
@@ -11,6 +12,15 @@ const SOCIAL_PROFILE_COLUMN_OMIT = {
 	tiktokHandle: true,
 	blueskyHandle: true,
 } as const;
+
+/** A photo is library content the write indexes, never a column a client sets directly. */
+const PHOTO_COLUMN_OMIT = {
+	photo: true,
+	graphicAssetReferenceVersion: true,
+} as const;
+
+/** One exact image revision, or `null` for none (ADR-0067). */
+const photoField = graphicAssetReferenceSchema.nullable().optional();
 
 function socialProfileField(network: Parameters<typeof normalizeSocialProfileInput>[0]) {
 	return z.string().transform((value, context) => {
@@ -48,10 +58,12 @@ export const createTalentSchema = createInsertSchema(eventTalents)
 		updatedAt: true,
 		eventId: true,
 		...SOCIAL_PROFILE_COLUMN_OMIT,
+		...PHOTO_COLUMN_OMIT,
 	})
 	.extend({
 		name: z.string().min(1).max(200),
 		socialProfiles: socialProfilesInputSchema.optional(),
+		photo: photoField,
 	})
 	.strict();
 
@@ -63,10 +75,12 @@ export const updateTalentSchema = createUpdateSchema(eventTalents)
 		updatedAt: true,
 		eventId: true,
 		...SOCIAL_PROFILE_COLUMN_OMIT,
+		...PHOTO_COLUMN_OMIT,
 	})
 	.extend({
 		name: z.string().min(1).max(200).optional(),
 		socialProfiles: socialProfilesInputSchema.optional(),
+		photo: photoField,
 	})
 	.strict();
 

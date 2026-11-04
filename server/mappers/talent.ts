@@ -10,11 +10,14 @@ export function mapTalentToResponse(talent: DbEventTalent): TalentResponse {
 		instagramHandle,
 		tiktokHandle,
 		blueskyHandle,
+		graphicAssetReferenceVersion: _graphicAssetReferenceVersion,
+		photo,
 		...fields
 	} = talent;
 
 	return {
 		...mapTimestamps(fields),
+		photo: photo ?? null,
 		socialProfiles: Object.fromEntries([
 			['twitch', twitchHandle],
 			['youtube', youtubeHandle],

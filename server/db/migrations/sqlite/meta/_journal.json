@@ -124,8 +124,29 @@
     {
       "idx": 17,
       "version": "6",
-      "when": 1793755430050,
-      "tag": "0017_round_timing",
+      "when": 1793755359626,
+      "tag": "0020_archetype_chart_series",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1793757869261,
+      "tag": "0021_talent_photo",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1793759043958,
+      "tag": "0022_installed_template_removal",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1793764918550,
+      "tag": "0023_round_timing",
       "breakpoints": true
     }
   ]

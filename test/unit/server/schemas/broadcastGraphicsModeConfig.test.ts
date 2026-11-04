@@ -1592,3 +1592,89 @@ describe('graphic Animation bounds', () => {
 		expect(withDuration(MIN_GRAPHIC_ANIMATION_DURATION_MS - 1)).toBe(false);
 	});
 });
+
+/** A Layer Lock is stored on a Feature Match Layout's layers only (ADR-0063). */
+describe('a Layer Lock', () => {
+	function groupOf(child: Record<string, unknown>) {
+		return {
+			...getGraphicItemDefinition('group').createDefault({
+				id: 'group',
+				label: 'group',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
+			children: [child],
+		};
+	}
+
+	const LOCKED_ITEM = {
+		...shapeItem('item'),
+		locked: true,
+	};
+	const LOCKED_CHILD = groupOf({
+		...shapeItem('child'),
+		locked: true,
+	});
+
+	it.each<[string, Record<string, unknown>[], boolean]>([
+		[
+			'a top-level item',
+			[LOCKED_ITEM],
+			false,
+		],
+		[
+			'a group child',
+			[LOCKED_CHILD],
+			false,
+		],
+		[
+			'a Source Item',
+			[
+				shapeItem('item'),
+			],
+			true,
+		],
+	])('is stored on a Feature Match Layout\'s %s', (_, items, lockSource) => {
+		const config = structuredClone(getDefaultConfigForMode('feature-match-overlay')) as unknown as Record<string, any>;
+		config.layout.composition.items = items;
+		config.layout.sources[0].locked = lockSource;
+
+		expect(modeConfigPatchSchemaMap['feature-match-overlay'].safeParse({ layout: config.layout }).success).toBe(true);
+	});
+
+	it.each<[string, Record<string, unknown>]>([
+		['a locked top-level item', LOCKED_ITEM],
+		['a locked group child', LOCKED_CHILD],
+		[
+			'an item stored unlocked',
+			{
+				...shapeItem('item'),
+				locked: false,
+			},
+		],
+	])('is refused on a Broadcast Graphic\'s %s', (_, item) => {
+		const result = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+			graphics: [
+				{
+					...graphic('graphic'),
+					items: [item],
+				},
+			],
+		});
+
+		expect(messages(result)).toContain('Layer Locks are available only in Feature Match Layouts');
+	});
+
+	it('leaves a Broadcast Graphic holding no lock alone', () => {
+		expect(modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
+			graphics: [
+				{
+					...graphic('graphic'),
+					items: [
+						groupOf(shapeItem('child')),
+					],
+				},
+			],
+		}).success).toBe(true);
+	});
+});

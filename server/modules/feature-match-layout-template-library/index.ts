@@ -29,10 +29,11 @@ import { flattenGraphicItems } from '~~/shared/modules/graphics';
  * the import atomic — nothing at all is written after the installation transaction
  * commits.
  *
- * An imported entry cannot be renamed, described, revised, or deleted here, because
- * this library reads the Graphics Asset Library's record and never writes it. It can
- * be browsed, placed, and exported, which is what a layout is for. An author who
- * wants to change one places it and saves the placed layout.
+ * An imported entry cannot be renamed, described, or revised here, because this
+ * library reads the Graphics Asset Library's record and never writes it. It can be
+ * browsed, placed, exported, and removed, the removal going through the Graphics Asset
+ * Library (ADR-0068). An author who wants to change one places it and saves the placed
+ * layout.
  */
 
 export interface FeatureMatchLayoutTemplateLibraryEntry {
@@ -43,7 +44,7 @@ export interface FeatureMatchLayoutTemplateLibraryEntry {
 	document: FeatureMatchLayoutConfig;
 	/** Present only on an entry a Template Package installed. */
 	provenance?: FeatureMatchLayoutTemplateOrigin;
-	/** Whether this installation authored the entry, and so may revise or delete it. */
+	/** Whether this installation authored the entry, and so may rename or revise it. */
 	authored: boolean;
 	createdAt: Date;
 	updatedAt: Date;

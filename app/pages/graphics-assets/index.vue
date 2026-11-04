@@ -30,7 +30,16 @@ definePageMeta({
 const USAGE_OWNER_KIND_LABELS: Record<string, string> = {
 	screen: 'Screen',
 	theme: 'Theme',
+	talent: 'Talent',
 };
+
+/** How a Retire refusal names one referrer; a Talent is named with its Event (ADR-0067). */
+function usageReferrer(usage: GraphicAssetUsage) {
+	const name = usage.owner.name ?? usage.owner.id;
+	return usage.owner.kind === 'talent'
+		? `${name} (Talent in ${usage.owner.eventName ?? `Event ${usage.owner.eventId}`})`
+		: name;
+}
 
 const eventStore = useEventStore();
 const authorship = useGraphicsAuthorship();
@@ -430,9 +439,9 @@ async function runLifecycleAction(
 		if (outcome.outcome === 'in-use') {
 			usageByAssetId[asset.id] = outcome.usage;
 			lifecycleErrorByAssetId[asset.id] = action === 'retire'
-				? `This Graphic Asset cannot be retired while a saved template references it: ${
+				? `This Graphic Asset cannot be retired while a saved template, Theme, Screen Theme Override or Talent references it: ${
 					[
-						...new Set(outcome.usage.map(item => item.owner.name ?? item.owner.id)),
+						...new Set(outcome.usage.map(usageReferrer)),
 					].join(', ')
 				}.`
 				: 'This Graphic Asset cannot enter Trash while any Graphic Asset Revision is in use.';
@@ -1593,7 +1602,7 @@ onMounted(async () => {
 								</div>
 								<p class="mt-1 text-muted">
 									{{ USAGE_OWNER_KIND_LABELS[usage.owner.kind] ?? usage.owner.kind }} {{ usage.owner.id }}
-									<span v-if="usage.owner.eventId"> · Event {{ usage.owner.eventId }}</span>
+									<span v-if="usage.owner.eventId"> · Event {{ usage.owner.eventName ?? usage.owner.eventId }}</span>
 									· {{ usage.owner.slot }}
 								</p>
 								<p class="mt-1 font-mono text-xs text-dimmed">

@@ -84,6 +84,8 @@ export interface GraphicAssetUsage {
 		name?: string;
 		slot: string;
 		eventId?: number;
+		/** A Talent's Event, by name (ADR-0067). */
+		eventName?: string;
 	};
 }
 

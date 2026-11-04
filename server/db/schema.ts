@@ -9,6 +9,7 @@ import type { FeatureMatchSessionStatus, FeatureMatchSourceSnapshot } from '~~/s
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { PlayerGameData } from '~~/shared/types/game';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchLayoutConfig, ModeConfigsMap } from '~~/shared/types/screenConfig';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
 import { relations, sql } from 'drizzle-orm';
@@ -189,6 +190,14 @@ export const eventTalents = sqliteTable('event_talents', {
 	instagramHandle: text('instagram_handle'),
 	tiktokHandle: text('tiktok_handle'),
 	blueskyHandle: text('bluesky_handle'),
+	/**
+	 * The Talent's photo: one exact image revision, held as the Talent's
+	 * Graphic Asset Reference (`talent`/`photo`), or none (ADR-0067).
+	 * `graphic_asset_reference_version` is the one-shot token a photo write
+	 * stamps, so its index rows are written only beside the row it committed.
+	 */
+	photo: text('photo', { mode: 'json' }).$type<GraphicAssetReference>(),
+	graphicAssetReferenceVersion: text('graphic_asset_reference_version'),
 	...timestamps,
 }, table => [
 	index('talents_event_id_idx').on(table.eventId),
@@ -720,7 +729,14 @@ export const archetypes = sqliteTable('archetypes', {
 		.references(() => events.id, { onDelete: 'cascade' })
 		.notNull(),
 	name: text('name').notNull(),
+	/** Mana colours; the chart's series is the Pinned Chart Series below. */
 	colors: text('colors'),
+	/**
+	 * The Pinned Chart Series: one of the Theme's chart series, 1 to 8, that
+	 * every chart colouring Archetypes gives this one first; null when unpinned.
+	 * An operator's alone; Melee Sync never writes it.
+	 */
+	chartSeries: integer('chart_series'),
 
 	...timestamps,
 }, table => [

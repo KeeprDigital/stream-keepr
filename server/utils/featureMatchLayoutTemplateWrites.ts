@@ -37,7 +37,6 @@ export async function assertFeatureMatchLayoutTemplateReferencesSelectable(
 export async function refuseInstalledFeatureMatchLayoutTemplateWrite(
 	event: H3Event,
 	templateId: string,
-	attempted: 'revised' | 'deleted',
 ): Promise<void> {
 	const entry = await findFeatureMatchLayoutTemplateLibraryEntry(event, templateId);
 	if (!entry || entry.authored)
@@ -45,6 +44,6 @@ export async function refuseInstalledFeatureMatchLayoutTemplateWrite(
 	throw createError({
 		statusCode: 409,
 		statusMessage: 'Conflict',
-		message: `Feature Match Layout Template "${entry.name}" was installed from a Template Package and cannot be ${attempted} here. Place it on a Screen and save the placed layout to get a design this installation owns.`,
+		message: `Feature Match Layout Template "${entry.name}" was installed from a Template Package and cannot be revised here. Place it on a Screen and save the placed layout to get a design this installation owns.`,
 	});
 }
