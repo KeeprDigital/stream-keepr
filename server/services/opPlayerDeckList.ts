@@ -123,6 +123,7 @@ export function opPlayerDeckListService() {
 				id: sql`null`,
 				deckId,
 				entryType: sql`'card'`,
+				// An OP card number is its own normalised name: Unresolved Deck Cards are found by it.
 				originalName: sql`json_extract(value, '$.number')`,
 				normalizedOriginalName: sql`json_extract(value, '$.number')`,
 				setCode: sql`null`,
