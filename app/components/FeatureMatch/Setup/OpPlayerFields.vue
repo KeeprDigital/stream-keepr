@@ -6,8 +6,8 @@ import { useOpCardSearch } from '~/modules/card-screen/opSpotlight';
 
 /**
  * A side's Leader, picked from the Event's One Piece card search narrowed to
- * Leaders. The side holds an inline snapshot of the card (ADR-0057), so the
- * Leader it holds stays shown when card data is unavailable.
+ * Leaders. The side references the card in the card catalogue by its number
+ * (ADR-0074), so the Leader shown is the catalogue's.
  */
 const modelValue = defineModel<OpPlayerGameData>({
 	required: true,

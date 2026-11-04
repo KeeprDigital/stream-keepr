@@ -13,7 +13,10 @@ const mtgGameDataSchema = z.object({
 	deckColors: z.string().max(50).nullable().optional(),
 }).strict();
 
-/** A Leader's inline snapshot. Its image goes on air, so it must be a bandai-keepr Printing image. */
+/**
+ * A picked Leader as a save sends it. The server keeps only its number, a card
+ * catalogue reference (ADR-0074); its image must be a bandai-keepr Printing image.
+ */
 const opLeaderSchema = z.object({
 	number: opCardNumberSchema,
 	name: z.string().trim().min(1).max(200),
