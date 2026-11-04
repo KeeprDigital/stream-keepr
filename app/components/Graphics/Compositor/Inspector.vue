@@ -1388,7 +1388,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						<UIColorPicker
 							:model-value="selectedGroup.defaultChildSurfaceStyle.fill.color"
 							data-testid="graphic-group-child-fill"
-							@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fill: { type: 'solid', color: $event?.toString() || '#000000' } })"
+							@update:model-value="color => color && editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fill: { type: 'solid', color } })"
 						/>
 					</UFormField>
 				</div>
@@ -1453,8 +1453,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					<UFormField label="Accent colour" size="sm">
 						<UIColorPicker
 							:model-value="selectedPlayerLife.lifeAnimationAccentColor"
+							alpha
 							data-testid="player-life-animation-accent"
-							@update:model-value="editItem(patchPlayerLifeGraphicItem, { lifeAnimationAccentColor: $event?.toString() || '#ffffff' })"
+							@update:model-value="color => color && editItem(patchPlayerLifeGraphicItem, { lifeAnimationAccentColor: color })"
 						/>
 					</UFormField>
 				</div>
@@ -1680,7 +1681,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							<UIColorPicker
 								:model-value="selectedSocialNetworkIcon.color"
 								data-testid="social-network-icon-color"
-								@update:model-value="editItem(patchGraphicItem, { color: $event?.toString() || '#ffffff' })"
+								@update:model-value="color => color && editItem(patchGraphicItem, { color })"
 							/>
 						</UFormField>
 						<GraphicsNumberField
@@ -1824,7 +1825,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							/>
 							<UIColorPicker
 								:model-value="selectedTypography.color"
-								@update:model-value="editItem(patchGraphicTypography, { color: $event?.toString() || '#ffffff' })"
+								alpha
+								data-testid="graphic-typography-color"
+								@update:model-value="color => color && editItem(patchGraphicTypography, { color })"
 							/>
 						</UFormField>
 					</template>
@@ -1931,8 +1934,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 									<UFormField label="Colour" size="xs" class="col-span-2">
 										<UIColorPicker
 											:model-value="placeholderStyleFor(inputKey).color ?? selectedTextItem.typography.color"
+											alpha
+											clearable
 											data-testid="graphic-placeholder-style-color"
-											@update:model-value="editItem(patchGraphicPlaceholderStyle, inputKey, { color: $event?.toString() || undefined })"
+											@update:model-value="editItem(patchGraphicPlaceholderStyle, inputKey, { color: $event })"
 										/>
 									</UFormField>
 								</template>
