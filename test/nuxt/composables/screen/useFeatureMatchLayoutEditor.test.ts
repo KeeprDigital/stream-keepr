@@ -2,7 +2,9 @@ import type { FeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMa
 import { describe, expect, it, vi } from 'vitest';
 import { nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { media, shape, surfaceStyle, text } from '~~/test/helpers/graphicsComposition';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
+import { copyGraphicStyle } from '~/modules/graphics/clipboard';
 
 /**
  * The editor writes the Feature Match Layout only while its session holds the
@@ -53,6 +55,17 @@ describe('useFeatureMatchLayoutEditor without the lease', () => {
 		[
 			'remove',
 			editor => editor.remove(),
+		],
+		[
+			'paste layers',
+			editor => editor.paste(editor.copy()!),
+		],
+		[
+			'paste a style',
+			(editor) => {
+				editor.toggleSelect(ITEM);
+				editor.pasteStyle(copyGraphicStyle('feature-match-overlay', shape('from')));
+			},
 		],
 		[
 			'duplicate',
@@ -395,5 +408,56 @@ describe('useFeatureMatchLayoutEditor aligning and distributing', () => {
 			editor.canAlign(),
 			editor.canDistribute(),
 		]).toEqual(offered);
+	});
+});
+
+/** The clipboard module owns the paste rules; the editor selects the copies and records one step. */
+describe('useFeatureMatchLayoutEditor copying and pasting', () => {
+	function withItems(...items: ReturnType<typeof shape | typeof text | typeof media>[]) {
+		const editing = editorFor(true);
+		editing.config.value = {
+			...editing.config.value,
+			layout: {
+				...editing.config.value.layout,
+				composition: { ...editing.config.value.layout.composition, items },
+			},
+		};
+		return editing;
+	}
+
+	it('pastes copied layers as one undo step, selecting the copies', () => {
+		const { editor, config, writes } = editorFor(true);
+		editor.toggleSelect(ITEM);
+		const copied = editor.copy()!;
+		const before = JSON.parse(JSON.stringify(config.value.layout));
+
+		expect(editor.paste(copied)).toBeNull();
+
+		expect(writes).toHaveLength(1);
+		expect(editor.layers.value.map(layer => layer.type)).toEqual(['item', 'source']);
+		expect(editor.layers.value.map(layer => layer.itemId)).not.toContain(SOURCE.itemId);
+		expect(editor.layers.value.map(layer => layer.itemId)).not.toContain(ITEM.itemId);
+		editor.undo();
+		expect(config.value.layout).toEqual(before);
+	});
+
+	it('pastes a style onto every selected Graphic Item it fits, as one undo step', () => {
+		const panel = surfaceStyle({
+			fill: { type: 'solid', color: '#ff0000' },
+		});
+		const { editor, config, writes } = withItems(text('from', { surfaceStyle: panel }), shape('fits', {
+			themeBindings: { surfaceStyle: 'panel' },
+		}), media('does-not'));
+		editor.select({ type: 'item', itemId: 'from' });
+		const copied = editor.copyStyle()!;
+		editor.select({ type: 'item', itemId: 'fits' });
+		editor.toggleSelect({ type: 'item', itemId: 'does-not' });
+		writes.length = 0;
+
+		expect(editor.pasteStyle(copied)).toBeNull();
+
+		expect(writes).toHaveLength(1);
+		expect(config.value.layout.composition.items.map(item => 'surfaceStyle' in item && item.surfaceStyle)).toEqual([panel, panel, false]);
+		expect(config.value.layout.composition.items[1]).not.toHaveProperty('themeBindings');
 	});
 });
