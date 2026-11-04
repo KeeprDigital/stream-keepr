@@ -153,6 +153,18 @@ describe('useEventRealtimeSession', () => {
 		});
 	});
 
+	it('reloads Players and drops cached Deck Lists after a TCG+ Import', async () => {
+		const handlers = await startSession();
+
+		handlers['tcgplus:imported']!({ ...message, playerCount: 2, deckCount: 2 });
+
+		await vi.waitFor(() => {
+			expect(metagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
+			expect(mockClearPlayerDeckCache).toHaveBeenCalledOnce();
+			expect(playerStore.loadPlayersByEventId).toHaveBeenCalledWith(12);
+		});
+	});
+
 	it('refreshes structure after a Melee structure sync and a Melee reset', async () => {
 		const handlers = await startSession();
 

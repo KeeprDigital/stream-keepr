@@ -795,11 +795,14 @@ describe('useDeckModeData', () => {
 			expect(result.pendingSwapVersion.value).toBe(1);
 		});
 
-		it('re-reads on a Melee decklist sync, and on a deck review of the selected Player only', async () => {
+		it.each([
+			['a Melee decklist sync', 'melee:decklistsSynced'],
+			['a TCG+ Import', 'tcgplus:imported'],
+		] as const)('re-reads on %s, and on a deck review of the selected Player only', async (_label, synced) => {
 			mountDeckModeData();
 			await flushPromises();
 
-			deliver('melee:decklistsSynced', { playerCount: 1, deckCount: 1 });
+			deliver(synced, { playerCount: 1, deckCount: 1 });
 			deliver('playerDeck:reviewed', {
 				deck: { playerId: 6 },
 			});

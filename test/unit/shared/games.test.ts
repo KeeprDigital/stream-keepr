@@ -46,12 +46,12 @@ describe('card Game support', () => {
 });
 
 describe('the Event pages each Card Game is offered', () => {
-	// A One Piece Card Game Event has Players (ADR-0074); what needs Rounds, Matches or Melee stays Magic's.
+	// A One Piece Card Game Event has Players and a TCG+ Import Sync (ADR-0074); what needs Rounds, Matches or Melee stays Magic's.
 	it.each([
 		['players', true],
 		['matches', false],
 		['eventStructure', false],
-		['sync', false],
+		['sync', true],
 		['metagame', false],
 		['archetypeReview', false],
 		['cards', true],

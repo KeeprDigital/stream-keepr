@@ -184,13 +184,24 @@ describe('default layout sync navigation', () => {
 		expect(wrapper.text()).toContain('Sync');
 	});
 
+	it.each([
+		['mtg', false],
+		['op', true],
+	] as const)('on a %s Event without Melee, offers Sync: %s', async (game, offered) => {
+		Object.assign(mockEventStore.event, { game, meleeEnabled: false, meleeConfigured: false });
+
+		const wrapper = await mountLayout();
+		const items = wrapper.findAll('[data-nav-item]').map(item => item.attributes('data-nav-item'));
+
+		expect(items.includes('Sync')).toBe(offered);
+	});
+
 	// An OP Event models no Rounds or Matches, holds no Metagame and
 	// never runs Melee Sync (ADR-0057), so the pages for them are not offered.
 	const MTG_ONLY_ENTRIES = [
 		'Matches',
 		'Metagame',
 		'Archetype Review',
-		'Sync',
 		'Event Structure',
 		'Integrations',
 	];
