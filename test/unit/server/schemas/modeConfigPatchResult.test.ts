@@ -323,6 +323,7 @@ describe('per-mode background layers', () => {
 			'archetype-spotlight',
 			'head-to-head',
 			'round-clock',
+			'talent',
 		] as const) {
 			expect(modeConfigPatchSchemaMap[mode].safeParse({
 				backgroundLayers: [

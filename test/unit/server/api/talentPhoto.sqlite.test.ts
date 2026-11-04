@@ -227,6 +227,14 @@ describe('a Talent photo', () => {
 		expect((await trash(portrait)).outcome).toBe('trashed');
 	});
 
+	it('writes the role beside the photo, on create and on update', async () => {
+		const talent = await call(createTalent, { id: eventId }, { name: 'Alice', role: ' Host ', photo: portrait });
+		expect(talent.role).toBe('Host');
+
+		const updated = await call(updateTalent, { id: eventId, talentId: talent.id }, { role: 'Commentator', photo: other });
+		expect(updated).toMatchObject({ role: 'Commentator', photo: other });
+	});
+
 	it('keeps the photo and its reference through an edit that does not name it', async () => {
 		const talent = await call(createTalent, { id: eventId }, { name: 'Alice', photo: portrait });
 

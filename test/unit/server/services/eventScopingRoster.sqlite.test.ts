@@ -178,7 +178,7 @@ describe('talentService event scoping', () => {
 	it('writes with the wrong Event touch nothing', async () => {
 		const service = talentService();
 		expect(await service.update(two.talentId, one.eventId, { name: 'Hijacked' })).toBeUndefined();
-		expect(await service.remove(two.talentId, one.eventId)).toBe(false);
+		expect(await service.remove(two.talentId, one.eventId)).toEqual({ deleted: false, clearedScreens: [] });
 		expect((await service.findById(two.talentId, two.eventId))?.name).toBe('Event Two Talent');
 	});
 });
