@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
 	try {
 		const template = await broadcastGraphicTemplateService().update(templateId, body);
 		if (!template) {
-			await refuseInstalledBroadcastGraphicTemplateWrite(event, templateId, 'revised');
+			await refuseInstalledBroadcastGraphicTemplateWrite(event, templateId);
 			throw createError({
 				statusCode: 404,
 				statusMessage: 'Not Found',

@@ -56,11 +56,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return prototype === Object.prototype || prototype === null;
 }
 
+/** One Graphic Asset Reference a Template document holds, at the owner slot its path names. */
+export interface TemplateDocumentReference {
+	ownerSlot: string;
+	reference: GraphicAssetReference;
+}
+
 export interface TemplateDocumentRewrite {
 	/** An independent copy whose every reference names a local identity and revision. */
 	document: unknown;
 	/** One rewritten reference per document path that carried one. */
-	references: { ownerSlot: string; reference: GraphicAssetReference }[];
+	references: TemplateDocumentReference[];
 	/**
 	 * Document paths carrying a reference no confirmed mapping accounts for.
 	 * Preflight proves a package declares every reference its Template needs, so
@@ -84,48 +90,93 @@ export function rewriteTemplateDocumentReferences(
 	document: unknown,
 	localReferences: ReadonlyMap<string, GraphicAssetReference>,
 ): TemplateDocumentRewrite {
-	const references: { ownerSlot: string; reference: GraphicAssetReference }[] = [];
+	const references: TemplateDocumentReference[] = [];
 	const unmapped: string[] = [];
-
-	function rewrite(value: unknown, path: string): unknown {
-		if (Array.isArray(value))
-			return value.map((item, index) => rewrite(item, `${path}[${index}]`));
-		if (!isPlainObject(value))
-			return value;
-		const rewritten: Record<string, unknown> = {};
-		for (const key of Object.keys(value)) {
-			rewritten[key] = rewrite(value[key], path
-				? `${path}.${key}`
-				: key);
-		}
-		if (typeof value.assetId !== 'string' || typeof value.revisionId !== 'string')
-			return rewritten;
-		if (value.assetId.length === 0 || value.revisionId.length === 0)
-			return rewritten;
+	const rewritten = walkTemplateDocumentReferences(document, (value, ownerSlot) => {
 		const local = localReferences.get(packagedOriginKey({
 			sourceAssetId: value.assetId,
 			sourceRevisionId: value.revisionId,
 		}));
-		const ownerSlot = path === ''
-			? DOCUMENT_ROOT_SLOT
-			: path;
 		if (!local) {
 			unmapped.push(ownerSlot);
-			return rewritten;
+			return value;
 		}
 		references.push({ ownerSlot, reference: local });
 		return {
-			...rewritten,
+			...value,
 			assetId: local.assetId,
 			revisionId: local.revisionId,
 		};
-	}
-
+	});
 	return {
-		document: rewrite(document, ''),
+		document: rewritten,
 		references,
 		unmapped,
 	};
+}
+
+/**
+ * Every Graphic Asset Reference an installed Template document holds, at the
+ * owner slots its installation indexed them under.
+ *
+ * Its document was rewritten to local identities before it was stored, so the
+ * document alone records what it pins, and reinstalling a removed Installed
+ * Graphics Template re-indexes exactly these (ADR-0068).
+ */
+export function installedTemplateDocumentReferences(
+	document: unknown,
+): TemplateDocumentReference[] {
+	const references: TemplateDocumentReference[] = [];
+	walkTemplateDocumentReferences(document, (value, ownerSlot) => {
+		references.push({
+			ownerSlot,
+			reference: {
+				assetId: value.assetId as GraphicAssetReference['assetId'],
+				revisionId: value.revisionId as GraphicAssetReference['revisionId'],
+			},
+		});
+		return value;
+	});
+	return references;
+}
+
+/**
+ * Rebuilds `document`, handing every object carrying a Graphic Asset Reference to
+ * `visit` with the owner slot its path names, and keeping what `visit` returns in
+ * its place. One walk for rewriting a received document and for reading an
+ * installed one, so an owner slot names the same field both times.
+ */
+function walkTemplateDocumentReferences(
+	document: unknown,
+	visit: (
+		value: Record<string, unknown> & { assetId: string; revisionId: string },
+		ownerSlot: string,
+	) => Record<string, unknown>,
+): unknown {
+	function walk(value: unknown, path: string): unknown {
+		if (Array.isArray(value))
+			return value.map((item, index) => walk(item, `${path}[${index}]`));
+		if (!isPlainObject(value))
+			return value;
+		const rebuilt: Record<string, unknown> = {};
+		for (const key of Object.keys(value)) {
+			rebuilt[key] = walk(value[key], path
+				? `${path}.${key}`
+				: key);
+		}
+		const { assetId, revisionId } = value;
+		if (typeof assetId !== 'string' || typeof revisionId !== 'string')
+			return rebuilt;
+		if (assetId.length === 0 || revisionId.length === 0)
+			return rebuilt;
+		return visit(
+			{ ...rebuilt, assetId, revisionId },
+			path === ''
+				? DOCUMENT_ROOT_SLOT
+				: path,
+		);
+	}
+	return walk(document, '');
 }
 
 /**

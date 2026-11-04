@@ -36,7 +36,6 @@ import { findBroadcastGraphicTemplateLibraryEntry } from '~~/server/modules/broa
 export async function refuseInstalledBroadcastGraphicTemplateWrite(
 	event: H3Event,
 	templateId: string,
-	attempted: 'revised' | 'deleted',
 ): Promise<void> {
 	const entry = await findBroadcastGraphicTemplateLibraryEntry(event, templateId);
 	if (!entry || entry.authored)
@@ -44,6 +43,6 @@ export async function refuseInstalledBroadcastGraphicTemplateWrite(
 	throw createError({
 		statusCode: 409,
 		statusMessage: 'Conflict',
-		message: `Broadcast Graphic Template "${entry.name}" was installed from a Template Package and cannot be ${attempted} here. Place it on a Screen and save the placed copy to get a design this installation owns.`,
+		message: `Broadcast Graphic Template "${entry.name}" was installed from a Template Package and cannot be revised here. Place it on a Screen and save the placed copy to get a design this installation owns.`,
 	});
 }

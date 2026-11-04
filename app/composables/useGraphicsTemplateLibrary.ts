@@ -114,12 +114,12 @@ export function useGraphicsTemplateLibrary<Entry extends GraphicsTemplateSummary
 	const authorises = () => toValue(options.canAuthor);
 
 	/**
-	 * Whether this entry can be renamed, described, or deleted here.
+	 * Whether this entry can be renamed or described here.
 	 *
 	 * Two conditions, and they are separate questions: whether this session may author at
 	 * all, and whether *this design* is one the library owns. An entry a Template Package
-	 * installed is browsed, placed, and exported like any other, and changed by placing it
-	 * and saving the placed copy.
+	 * installed is browsed, placed, exported, and removed like any other, and changed by
+	 * placing it and saving the placed copy (ADR-0068).
 	 */
 	function canRevise(template: GraphicsTemplateSummary): boolean {
 		return authorises() && template.authored;

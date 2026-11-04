@@ -1,8 +1,9 @@
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { requireGraphicsTemplateWritable } from '~~/server/modules/graphics-authoring-lease/graphicsTemplate';
 import { broadcastGraphicTemplateParamsSchema } from '~~/server/schemas/api/broadcastGraphicTemplate';
 import { broadcastGraphicTemplateService } from '~~/server/services/broadcastGraphicTemplate';
 import { requireUserId } from '~~/server/utils/auth';
-import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/broadcastGraphicTemplateWrites';
+import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
  * Remove one Broadcast Graphic Template from the library.
@@ -12,23 +13,28 @@ import { refuseInstalledBroadcastGraphicTemplateWrite } from '~~/server/utils/br
  * and no link to the design they were initialised from. Deleting a template can
  * therefore never blank a Screen or a live show.
  *
- * A design a Template Package installed is refused rather than silently reported as
- * missing: it is visible in the library, so "not found" would be a lie about
- * something the author is looking straight at.
+ * A design a Template Package installed is removed through the Graphics Asset
+ * Library, which owns its record: its references are released with it, and
+ * retrying the installation that published it reinstalls it (ADR-0068).
  */
 export default defineEventHandler(async (event) => {
-	await requireUserId(event);
+	const userId = await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(event, broadcastGraphicTemplateParamsSchema.parse);
 	await requireGraphicsTemplateWritable(event, templateId);
 
-	const removed = await broadcastGraphicTemplateService().remove(templateId);
-	if (!removed) {
-		await refuseInstalledBroadcastGraphicTemplateWrite(event, templateId, 'deleted');
-		throw createError({
-			statusCode: 404,
-			statusMessage: 'Not Found',
-			message: 'Broadcast Graphic Template not found',
-		});
+	if (!await broadcastGraphicTemplateService().remove(templateId)) {
+		const installed = await graphicsAssetLibraryForEvent(event).removeInstalledGraphicsTemplate({
+			templateId,
+			kind: 'broadcast-graphic',
+			removedBy: userId,
+		}).catch(error => rethrowGraphicsAssetApiError(error, event));
+		if (installed.outcome === 'not-found') {
+			throw createError({
+				statusCode: 404,
+				statusMessage: 'Not Found',
+				message: 'Broadcast Graphic Template not found',
+			});
+		}
 	}
 
 	setResponseStatus(event, 204);

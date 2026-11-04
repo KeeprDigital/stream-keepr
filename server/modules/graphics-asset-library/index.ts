@@ -163,6 +163,7 @@ import {
 } from './template-package-archive';
 import {
 	installedGraphicsTemplateKind,
+	installedTemplateDocumentReferences,
 	packagedOriginKey,
 	rewriteTemplateDocumentReferences,
 	templatePackageLocalReferences,
@@ -501,6 +502,37 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		kind: InstalledGraphicsTemplateKind,
 	) => Promise<InstalledGraphicsTemplateSummary[]>;
 	/**
+	 * Removes one Installed Graphics Template of `kind`: its Graphic Asset
+	 * References and its place in the library go together, and its row stays as
+	 * provenance (ADR-0068). False when no such Template is installed.
+	 */
+	removeInstalledGraphicsTemplate: (input: {
+		templateId: InstalledGraphicsTemplateId;
+		kind: InstalledGraphicsTemplateKind;
+		removedBy: string;
+		removedAt: string;
+	}) => Promise<boolean>;
+	/** The document of a removed Installed Graphics Template, which is what reinstalling it indexes. */
+	findRemovedInstalledGraphicsTemplate: (
+		templateId: InstalledGraphicsTemplateId,
+	) => Promise<{ document: unknown } | undefined>;
+	/**
+	 * Reinstalls a removed Installed Graphics Template with `references`, only
+	 * while every one names an existing revision of an active Graphic Asset, as
+	 * its installation required. `installed` answers a Template that was never
+	 * removed, and `unavailable` one whose references would not all resolve.
+	 */
+	reinstallInstalledGraphicsTemplate: (input: {
+		templateId: InstalledGraphicsTemplateId;
+		references: readonly {
+			id: string;
+			ownerSlot: string;
+			assetId: GraphicAssetId;
+			revisionId: GraphicAssetRevisionId;
+		}[];
+		reinstalledAt: string;
+	}) => Promise<'reinstalled' | 'installed' | 'unavailable' | 'not-found'>;
+	/**
 	 * What this installation already holds for one packaged Graphic Asset Origin:
 	 * the exact local revision carrying that source identity and revision, and
 	 * whether any other revision of the same source is present.
@@ -769,6 +801,22 @@ export interface GraphicsAssetLibrary {
 	listInstalledGraphicsTemplates: (input: {
 		kind: InstalledGraphicsTemplateKind;
 	}) => Promise<InstalledGraphicsTemplateSummary[]>;
+	/**
+	 * Removes one Installed Graphics Template of `kind` from the library
+	 * (ADR-0068).
+	 *
+	 * Its Graphic Asset References go in the same write, so a revision nothing
+	 * else references becomes eligible for Trash and Revision Pruning, while one
+	 * another artifact still references stays held. Copies already placed from it
+	 * are independent and unaffected. Retrying the installation that published it
+	 * reinstalls it. `not-found` answers an identity that names no installed
+	 * Template of that kind, including one already removed.
+	 */
+	removeInstalledGraphicsTemplate: (input: {
+		templateId: string;
+		kind: InstalledGraphicsTemplateKind;
+		removedBy: string;
+	}) => Promise<{ outcome: 'removed' | 'not-found' }>;
 	cancelGraphicsIngestion: (input: {
 		operationId: GraphicsIngestionOperationId;
 		initiatedBy: string;
@@ -3137,6 +3185,48 @@ export function createGraphicsAssetLibrary(
 	}
 
 	/**
+	 * Reinstalls the Template a completed installation published, when it has
+	 * since been removed (ADR-0068).
+	 *
+	 * The staged package is long released, but nothing needs it: the removed row
+	 * kept the document already rewritten to local revisions, so reinstalling is
+	 * re-indexing those, under the rule its installation applied to a reused
+	 * revision: each must still exist on an active Graphic Asset. A Template still
+	 * installed, or an operation that installed none, leaves nothing to do.
+	 */
+	async function reinstallRemovedTemplate(operation: GraphicsIngestionOperation): Promise<void> {
+		const templateId = operation.templatePackageInstallation?.templateId;
+		if (!templateId)
+			return;
+		const catalogue = requireCatalogue();
+		const removed = await catalogueRequest(
+			() => catalogue.findRemovedInstalledGraphicsTemplate(templateId),
+			'Installed graphics Template state is temporarily unavailable',
+		);
+		if (!removed)
+			return;
+		const outcome = await catalogueRequest(
+			() => catalogue.reinstallInstalledGraphicsTemplate({
+				templateId,
+				references: installedTemplateDocumentReferences(removed.document).map(reference => ({
+					id: generateIdentity(),
+					ownerSlot: reference.ownerSlot,
+					assetId: reference.reference.assetId,
+					revisionId: reference.reference.revisionId,
+				})),
+				reinstalledAt: timestamp(),
+			}),
+			'Installed graphics Template could not be reinstalled',
+		);
+		if (outcome === 'unavailable') {
+			throw new GraphicsAssetLibraryError(
+				'A Graphic Asset this Template pins is retired, trashed, or gone, so it cannot be reinstalled. Restore the asset and retry, or import the Template Package again.',
+				'ingestion-operation-not-uploadable',
+			);
+		}
+	}
+
+	/**
 	 * Runs one complete Template Package preflight over durably staged bytes, and
 	 * — when installing — publishes the proposal it produces.
 	 *
@@ -4268,9 +4358,12 @@ export function createGraphicsAssetLibrary(
 			// Installing what is already installed is the same act twice, not a
 			// conflict. This is also the answer to an installation that committed and
 			// then lost its reply: the terminal result is durable, so a retry reads it
-			// rather than publishing a second copy of the same package.
-			if (operation.stage === 'completed')
+			// rather than publishing a second copy of the same package. A retry after
+			// its Template was removed reinstalls that same Template (ADR-0068).
+			if (operation.stage === 'completed') {
+				await reinstallRemovedTemplate(operation);
 				return operation;
+			}
 			// A cancellation that reached the operation before publication started
 			// wins, and stays won.
 			if (operation.stage === 'cancelled')
@@ -4360,6 +4453,22 @@ export function createGraphicsAssetLibrary(
 				() => requireCatalogue().listInstalledGraphicsTemplates(input.kind),
 				'Installed graphics Template state is temporarily unavailable',
 			);
+		},
+		async removeInstalledGraphicsTemplate(input) {
+			if (input.templateId.length === 0)
+				return { outcome: 'not-found' };
+			const removed = await catalogueRequest(
+				() => requireCatalogue().removeInstalledGraphicsTemplate({
+					templateId: input.templateId as InstalledGraphicsTemplateId,
+					kind: input.kind,
+					removedBy: input.removedBy,
+					removedAt: timestamp(),
+				}),
+				'Installed graphics Template state is temporarily unavailable',
+			);
+			return {
+				outcome: removed ? 'removed' : 'not-found',
+			};
 		},
 		async cancelGraphicsIngestion(input) {
 			const catalogue = requireCatalogue();
