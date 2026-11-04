@@ -12,6 +12,7 @@ import {
 } from '~~/server/db/schema';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { requireMeleeSyncEventData } from '~~/server/modules/melee-sync/eventData';
+import { MTG_CARD_IDENTITY } from '~~/server/services/mtgCard';
 import { playerDeckService } from '~~/server/services/playerDeck';
 import { DeckCompanionValidationError, playerDeckCompanionService } from '~~/server/services/playerDeckCompanion';
 import { playerDeckUnresolvedCardService } from '~~/server/services/playerDeckUnresolvedCard';
@@ -197,7 +198,7 @@ export function deckListResolutionModule() {
 					deckTokens: scryfallData.deckTokens,
 				})
 				.onConflictDoUpdate({
-					target: [cards.name, cards.game],
+					...MTG_CARD_IDENTITY,
 					set: {
 						scryfallId: scryfallData.id,
 						oracleId: scryfallData.oracleId,

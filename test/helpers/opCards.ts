@@ -1,7 +1,6 @@
 import type { OpCardCategory, OpCardSummary } from '~~/shared/types/card/op';
 import type { FeatureMatchDeckListEntry } from '~~/shared/types/featureMatchDeckList';
 import type { OpLeader } from '~~/shared/types/game';
-import { vi } from 'vitest';
 
 /** One Piece card fixtures: a searched card as bandai-keepr's proxy answers it, and a Slot side's Leader snapshot. */
 
@@ -104,29 +103,49 @@ export function bandaiKeeprCard(overrides: {
 	};
 }
 
-/**
- * Fakes bandai-keepr at `fetch`: it knows `cards` by number and answers 404
- * for any other. `lookups()` lists the numbers asked for since `reset()`.
- */
-export function stubBandaiKeepr(cards: ReturnType<typeof bandaiKeeprCard>[]) {
-	const byNumber = new Map(cards.map(card => [card.number, card]));
-	let asked: string[] = [];
-	vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
-		const url = new URL(new Request(input, init).url);
-		const number = /^\/cards\/([^/]+)$/.exec(url.pathname)?.[1];
-		if (!number)
-			return Response.json({ error: `unrouted ${url.pathname}` }, { status: 500 });
-		const decoded = decodeURIComponent(number);
-		asked.push(decoded);
-		const card = byNumber.get(decoded);
-		return card
-			? Response.json(card)
-			: Response.json({ error: 'Card not found' }, { status: 404 });
+/** A card as the bulk lookup port answers it, imaged by its standard Printing. */
+export function knownOpCard(card: Pick<OpCardSummary, 'number' | 'name' | 'category' | 'colors'> & Partial<OpCardSummary>): OpCardSummary {
+	return opCardSummary({
+		cost: null,
+		life: null,
+		power: null,
+		counter: null,
+		types: [],
+		printingId: card.number,
+		imageUrl: `https://cards-img.keepr.digital/${card.number}.png`,
+		...card,
 	});
+}
+
+/**
+ * Fakes the bandai-keepr bulk lookup port (`lookUpOpCards`): it knows `cards`
+ * by number and answers any other as not found. `batches()` lists the numbers
+ * each call asked for since `reset()`; `fail()` makes every call throw.
+ */
+export function fakeOpCardBulkLookup(cards: OpCardSummary[]) {
+	const byNumber = new Map(cards.map(card => [card.number, card]));
+	let batches: string[][] = [];
+	let failure: Error | null = null;
 	return {
-		lookups: () => [...asked],
+		lookUpOpCards: async (_config: unknown, numbers: readonly string[]) => {
+			batches.push([...numbers]);
+			if (failure)
+				throw failure;
+			return {
+				cards: numbers.flatMap(number => byNumber.get(number) ?? []),
+				notFound: numbers.filter(number => !byNumber.has(number)),
+			};
+		},
+		batches: () => batches.map(batch => [...batch]),
+		know: (card: OpCardSummary) => {
+			byNumber.set(card.number, card);
+		},
+		fail: (error: Error) => {
+			failure = error;
+		},
 		reset: () => {
-			asked = [];
+			batches = [];
+			failure = null;
 		},
 	};
 }

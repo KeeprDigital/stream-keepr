@@ -1,4 +1,4 @@
-import type { DbCard } from '~~/server/db/schema';
+import type { DbMtgCard } from '~~/server/db/schema';
 import type { ScryfallCardData } from '~~/server/utils/scryfall';
 import { eventCardNameOverrideService } from '~~/server/services/eventCardNameOverride';
 import {
@@ -24,7 +24,7 @@ export interface ImportedMtgCardResolved extends ImportedMtgCardResolutionBase {
 	source: 'override' | 'exact' | 'fuzzy';
 	resolvedName: string;
 	cardData: ScryfallCardData | null;
-	overrideCard: DbCard | null;
+	overrideCard: DbMtgCard | null;
 }
 
 export interface ImportedMtgCardUnresolved extends ImportedMtgCardResolutionBase {
@@ -55,7 +55,7 @@ function createOverrideLookupKey(name: string, setCode: string | null): string {
 function buildOverrideResolution(
 	inputName: string,
 	inputSetCode: string | null,
-	card: DbCard,
+	card: DbMtgCard,
 ): ImportedMtgCardResolved {
 	return {
 		status: 'resolved',
@@ -105,7 +105,7 @@ export function importedMtgCardResolverService() {
 		}
 
 		const overrides = await eventCardNameOverrideService().listResolvedByEvent(eventId);
-		const overrideMap = new Map<string, DbCard>();
+		const overrideMap = new Map<string, DbMtgCard>();
 		for (const override of overrides) {
 			overrideMap.set(createOverrideLookupKey(override.inputName, override.inputSetCode), override.card);
 		}

@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
+import { knownOpCard } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 // A Deck List Screen showing a Feature Match Slot side reads that Slot, and
@@ -25,6 +26,7 @@ type Handler = (event: StubEvent) => Promise<unknown>;
 const readDeckList = (await import('~~/server/api/screen-output/events/[id]/screens/[screenId]/feature-match-slots/[slotId]/deck-lists/[deckListId].get')).default as unknown as Handler;
 const readSlot = (await import('~~/server/api/screen-output/events/[id]/screens/[screenId]/feature-match-slots/[slotId].get')).default as unknown as Handler;
 const { featureMatchDeckListService } = await import('~~/server/services/featureMatchDeckList');
+const { opCardCatalogueService } = await import('~~/server/services/opCardCatalogue');
 
 let eventId: number;
 let shownSlotId: number;
@@ -71,6 +73,8 @@ beforeAll(async () => {
 	]).returning({ id: schema.featureMatchSlots.id });
 	shownSlotId = shown!.id;
 	otherSlotId = other!.id;
+	// A Deck List's cards are the card catalogue's (ADR-0074).
+	await opCardCatalogueService().add(ENTRIES.map(entry => knownOpCard({ number: entry.number, ...entry.card })));
 	const view = {
 		entries: ENTRIES,
 		leaderNumber: 'OP01-001',
