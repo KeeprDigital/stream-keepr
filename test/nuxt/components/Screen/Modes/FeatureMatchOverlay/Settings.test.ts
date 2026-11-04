@@ -4,6 +4,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { media } from '~~/test/helpers/graphicsComposition';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import NumberField from '~/components/Graphics/NumberField.vue';
@@ -639,6 +640,62 @@ describe('featureMatchOverlaySettings', () => {
 			const copyId = sourceIds().find(id => !before.includes(id));
 			expect(copyId).toBeDefined();
 			expect(selectedTarget(wrapper)).toEqual({ type: 'source', itemId: copyId });
+		});
+
+		it('copies the selected layer with ⌘C, even for an observer, and pastes a selected copy with ⌘V', async () => {
+			localStorage.clear();
+			mockLeaseWritable.value = false;
+			const wrapper = await mountComponent();
+			await flushPromises();
+			const before = sourceIds();
+			preview(wrapper).vm.$emit('selectTarget', { type: 'source', itemId: 'main-source' });
+			await nextTick();
+
+			await press('c', { metaKey: true, code: 'KeyC' });
+			await press('v', { metaKey: true, code: 'KeyV' });
+			await flushPromises();
+			expect(sourceIds()).toEqual(before);
+
+			mockLeaseWritable.value = true;
+			await nextTick();
+			await press('v', { metaKey: true, code: 'KeyV' });
+			await flushPromises();
+
+			const copyId = sourceIds().find(id => !before.includes(id));
+			expect(copyId).toBeDefined();
+			expect(selectedTarget(wrapper)).toEqual({ type: 'source', itemId: copyId });
+		});
+
+		it('refuses a paste naming the layers whose Graphic Asset is no longer selectable (E25)', async () => {
+			localStorage.clear();
+			mockConfig.value = {
+				...mockConfig.value,
+				layout: {
+					...mockConfig.value.layout,
+					composition: {
+						...mockConfig.value.layout.composition,
+						items: [
+							media('Sponsor logo'),
+						],
+					},
+				},
+			};
+			const wrapper = await mountComponent();
+			await flushPromises();
+			preview(wrapper).vm.$emit('selectCompositorTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: 'Sponsor logo' });
+			await nextTick();
+			await press('c', { metaKey: true, code: 'KeyC' });
+			mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'retired', kind: 'image' });
+			mockUpdateConfig.mockClear();
+
+			await press('v', { metaKey: true, code: 'KeyV' });
+			await flushPromises();
+
+			expect(mockUpdateConfig).not.toHaveBeenCalled();
+			expect(mockToastAdd).toHaveBeenLastCalledWith(expect.objectContaining({
+				title: 'Nothing pasted',
+				description: expect.stringContaining('"Sponsor logo"'),
+			}));
 		});
 
 		it('nudges the selected layer, ten pixels with Shift', async () => {
