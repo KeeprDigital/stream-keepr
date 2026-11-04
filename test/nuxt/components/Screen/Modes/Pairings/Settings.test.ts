@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
-import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { UInputStub, USelectStub, USwitchStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Settings from '~/components/Screen/Modes/Pairings/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -149,10 +149,10 @@ async function mountSettings(roundId: number | undefined = savedConfig.roundId) 
 		global: {
 			stubs: {
 				ScreenSettingsCard: { template: '<section><slot /></section>' },
-				ScreenSettingsToggle: true,
 				UFormField: { template: '<div><slot /></div>' },
 				USelect: USelectStub,
-				UInput: true,
+				USwitch: USwitchStub,
+				UInput: UInputStub,
 				UInputNumber: true,
 				USeparator: true,
 				UButton: UButtonStub,
@@ -185,6 +185,32 @@ describe('screenModesPairingsSettings', () => {
 			'Swiss · Round 4',
 			'Top Cut · Round 1',
 		]);
+	});
+
+	type Wrapper = Awaited<ReturnType<typeof mountSettings>>;
+	it.each([
+		{
+			name: 'turns the header off',
+			act: (w: Wrapper) => w.get('[data-config-field="showHeader"] [role="switch"]').trigger('click'),
+			patch: { showHeader: false },
+		},
+		{
+			name: 'sets the custom header',
+			act: (w: Wrapper) => w.get('[data-config-field="headerText"] input').setValue('Top 8'),
+			patch: { headerText: 'Top 8' },
+		},
+		{
+			name: 'clears the custom header as a deletion',
+			act: (w: Wrapper) => w.get('[data-config-field="headerText"] input').setValue(''),
+			patch: { headerText: null },
+		},
+	])('$name through its contract field', async ({ act, patch }) => {
+		mockFetch.mockResolvedValue(pairingsOf(1));
+		mockConfig.value = { ...savedConfig, headerText: 'Round 4' };
+		const wrapper = await mountSettings();
+		await act(wrapper);
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
 	});
 
 	it('counts pages from the pairings the Screen reads for the Round', async () => {

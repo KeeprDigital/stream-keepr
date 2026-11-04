@@ -10,6 +10,8 @@ import { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLA
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { CARD_SIZING_SELECT_OPTIONS, SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+// The badge position pickers never offer the centre, so the casts below are safe.
+import { BADGE_DISABLED_POINTS } from '~/utils/cardBadges';
 
 const props = defineProps<{
 	screen: Screen;
@@ -33,11 +35,6 @@ defineExpose({ resetConfig, saving });
 // blocks label and bound their knobs alike; only their views differ.
 const fields = screenModeConfigContract('deck').fields;
 const boardFields = DECK_SIDEBOARD_LAYOUT_FIELDS;
-
-// A badge in the centre of a Deck List Screen card would cover its art, so the
-// badge position pickers offer every point but this one — which is why what
-// they emit is always a `QuantityPosition`, and why the casts below are safe.
-const BADGE_DISABLED_POINTS: readonly NinePoint[] = ['center'];
 
 /** A One Piece Card Game Event shows a Feature Match Slot side's Deck List, set up in its own settings (ADR-0057). */
 const isOpEvent = computed(() => eventStore.event?.game === 'op');
