@@ -37,7 +37,9 @@ export const playerGameDataSchema = z.discriminatedUnion('type', [mtgGameDataSch
 /**
  * A Slot side's game data, as a setup save writes it: a One Piece side may also
  * reference its Feature Match Deck List, which the setup write checks names one
- * of the Slot's (ADR-0057). Nothing else may write a reference.
+ * of the Slot's (ADR-0057). Nothing else may write a reference. A linked side's
+ * Player Deck List reference, which its form holds, is the server's to write
+ * (ADR-0074), so it is dropped.
  */
 export const slotSideGameDataSchema = z.discriminatedUnion('type', [
 	mtgGameDataSchema,
@@ -46,7 +48,8 @@ export const slotSideGameDataSchema = z.discriminatedUnion('type', [
 			id: z.number().int().positive(),
 			mainboardCount: z.number().int().nonnegative(),
 		}).strict().nullable().optional(),
-	}).strict(),
+		deckList: z.unknown().optional(),
+	}).strict().transform(({ deckList: _deckList, ...gameData }) => gameData),
 ]);
 
 // CREATE

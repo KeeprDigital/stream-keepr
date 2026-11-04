@@ -1,5 +1,5 @@
 import type { PlayerSlotData } from '~~/shared/api';
-import type { OpLeader } from '~~/shared/types/game';
+import type { OpLeader, OpPlayerGameData, PlayerGameData } from '~~/shared/types/game';
 import { opCardCatalogueService } from '~~/server/services/opCardCatalogue';
 import { catalogueOpLeader } from '~~/shared/utils/card/op';
 import { getOpGameData, storedOpLeader } from '~~/shared/utils/gameData';
@@ -47,6 +47,24 @@ function mapLeaderSides<T extends SlotSides>(sides: T, map: (data: PlayerSlotDat
 			mapped[key] = map(data, number);
 	}
 	return mapped;
+}
+
+/**
+ * A One Piece side linked to a Player shows that Player's Leader and Deck List,
+ * by reference (ADR-0074): its game data is the Player's, as a Slot stores it,
+ * and the side holds no Feature Match Deck List of its own.
+ */
+export function linkedOpSideGameData(playerGameData: PlayerGameData | null | undefined): OpPlayerGameData {
+	const deckList = playerGameData?.type === 'op'
+		? playerGameData.deckList ?? null
+		: null;
+	return {
+		type: 'op',
+		leader: deckList?.leaderNumber
+			? { number: deckList.leaderNumber } as OpLeader
+			: null,
+		deckList,
+	};
 }
 
 /** The sides as a Slot stores them: each Leader its card number only. */

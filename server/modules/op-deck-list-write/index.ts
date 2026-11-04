@@ -79,6 +79,7 @@ export type OpDeckListWriteAnswer<TOwner extends OpDeckListOwner> = TOwner exten
 	: SlotSideDeckListAnswer;
 
 const SIDE_DATA_KEY = { player1: 'player1Data', player2: 'player2Data' } as const satisfies Record<PlayerSide, string>;
+const SIDE_PLAYER_KEY = { player1: 'player1Id', player2: 'player2Id' } as const satisfies Record<PlayerSide, string>;
 
 function inputLines(input: OpDeckListInput): PastedDeckListLine[] {
 	if ('text' in input)
@@ -210,8 +211,12 @@ export function opDeckListWriteModule() {
 		const { slotId, side } = owner;
 		const slots = featureMatchService();
 		const deckLists = featureMatchDeckListService();
-		if (!await slots.exists(slotId, eventId))
+		const held = await slots.findById(slotId, eventId);
+		if (!held)
 			throw createError({ statusCode: 404, message: 'Feature match slot not found' });
+		// A linked side shows its Player's Deck List, edited as the Player's (ADR-0074).
+		if (held[SIDE_PLAYER_KEY[side]] != null)
+			throw createError({ statusCode: 409, message: 'This side shows its Player\'s Deck List: edit the Player\'s Deck List instead' });
 
 		const { entries } = await resolveInput('text' in input
 			? { text: input.text }

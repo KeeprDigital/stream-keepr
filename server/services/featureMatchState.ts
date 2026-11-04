@@ -18,7 +18,7 @@ import { events, featureMatches, featureMatchSessions, players } from '~~/server
 import { mapFeatureMatchSessionToResponse, mapFeatureMatchSessionToStarted } from '~~/server/mappers/featureMatch';
 import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
 import { createSequencedLiveEpochs, createSequencedLiveState } from '~~/server/modules/live-state';
-import { withCatalogueLeaders } from '~~/server/services/featureMatchSlotLeader';
+import { linkedOpSideGameData, withCatalogueLeaders } from '~~/server/services/featureMatchSlotLeader';
 import { publishMessage } from '~~/server/utils/ably';
 import { chunkJsonRows, inJsonArray, selectForInsert } from '~~/server/utils/db';
 import {
@@ -144,6 +144,7 @@ export function featureMatchStateService() {
 
 	const resolveSnapshotPlayer = async (
 		eventId: number,
+		game: Game,
 		playerId: number | null,
 		data: FeatureMatchSnapshotPlayerData | null,
 		preloadedPlayers?: ReadonlyMap<number, DbPlayer>,
@@ -176,15 +177,21 @@ export function featureMatchStateService() {
 		const overrides = data
 			? compactSnapshotOverrides(data)
 			: {};
+		const merged = hasSlotData
+			? {
+					...playerData,
+					...overrides,
+				}
+			: playerData;
 
 		return {
 			playerId,
-			data: hasSlotData
-				? {
-						...playerData,
-						...overrides,
-					}
-				: playerData,
+			// A One Piece side linked to a Player shows the Player's Leader and Deck List, whatever the Slot holds (ADR-0074).
+			data: game === 'op'
+				? Object.assign(merged, {
+					gameData: linkedOpSideGameData(player.gameData),
+				} satisfies Partial<FeatureMatchSnapshotPlayerData>)
+				: merged,
 		};
 	};
 
@@ -199,9 +206,11 @@ export function featureMatchStateService() {
 			game: 'mtg',
 		};
 
+		const player1 = await resolveSnapshotPlayer(slot.eventId, eventDefaults.game, slot.player1Id, slot.player1Data ?? null, preloadedPlayers);
+		const player2 = await resolveSnapshotPlayer(slot.eventId, eventDefaults.game, slot.player2Id, slot.player2Data ?? null, preloadedPlayers);
 		// A side's Leader is a catalogue reference; the snapshot holds the card it names.
 		const [sides] = await withCatalogueLeaders([
-			{ player1Data: slot.player1Data, player2Data: slot.player2Data },
+			{ player1Data: player1.data, player2Data: player2.data },
 		]);
 
 		return {
@@ -217,8 +226,8 @@ export function featureMatchStateService() {
 			playerDisplayMode: slot.playerDisplayMode,
 			game: eventDefaults.game,
 			defaults: eventDefaults,
-			player1: await resolveSnapshotPlayer(slot.eventId, slot.player1Id, sides!.player1Data ?? null, preloadedPlayers),
-			player2: await resolveSnapshotPlayer(slot.eventId, slot.player2Id, sides!.player2Data ?? null, preloadedPlayers),
+			player1: { playerId: player1.playerId, data: sides!.player1Data },
+			player2: { playerId: player2.playerId, data: sides!.player2Data },
 			// The build time, which is the right answer only for the builds that open a
 			// Session. A rebuild for a `SnapshotCorrected` has this discarded in favour
 			// of the stamp the Session is already holding — the field means first taken,

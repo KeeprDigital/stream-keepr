@@ -1389,7 +1389,7 @@ Accepted · 2026-10-26
 
 **A Feature Match Slot setup save that edits a seated Player's name, pronouns or LGS writes those fields to the Player.** `featureMatchSlotWriteModule().updateSetup` compares each side's submitted `name`, `pronouns` and `lgs` with the Player seated there (the side's `playerNId` in the save, else the Slot's) and sends the differences through `playerUpdateModule().updatePlayer`. An omitted field was not edited and is left alone. A cleared name is a Player write only for a Player with a Nickname to fall back to (ADR-0074); otherwise it stays on the Slot only, because a Player always shows by something. A side with no Player seated has nothing to write.
 
-**Records, deck and archetype stay Slot snapshot fields.** A setup edit to wins, losses, draws, position, points, deck or archetype is held by the Slot only, and Melee Sync's standings reach it through Reverse Sync as before.
+**Records, deck and archetype stay Slot snapshot fields.** A setup edit to wins, losses, draws, position, points, deck or archetype is held by the Slot only, and Melee Sync's standings reach it through Reverse Sync as before. The exception is a One Piece Card Game side linked to a Player: its Leader and Deck List are the Player's, so a setup save never writes them, and they are edited as the Player's Deck List (ADR-0074).
 
 **The Player write runs before the Slot write, and is published with no origin.** Its Reverse Sync rewrites every Slot seating the Player, the edited one included, from the Player; the Slot write that follows then lands the rest of the save on the edited Slot, so a record edited in the same save is not overwritten. The saving client applied only the Slot, so it must receive the Player's and the other Slots' messages too.
 
@@ -2477,7 +2477,7 @@ Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/i
 
 **A Feature Match Slot side takes a Player as on MTG, or manual data.**
 
-- **Linked side.** Its Leader and Deck List are the Player's, by reference. A re-import or edit reaches the Slot, and the active Feature Match Session's snapshot is corrected, as replacing a paste is today.
+- **Linked side.** Its Leader and Deck List are the Player's, by reference. A re-import or edit reaches the Slot, and the active Feature Match Session's snapshot is corrected, as replacing a paste is today. The side's game data is the server's: a setup save takes it from the Player whatever the form sent, and releases a Feature Match Deck List the side held. Its setup form edits the Player's Deck List, and a paste to the side itself is refused (`409`).
 - **Unlinked side.** Paste and Leader picking stay available. That Feature Match Deck List never counts in Metagame.
 - **Deck List Screen.** On an OP Event it takes a Player or a Slot side as its Deck Source, and both render in the OP layout. A Player source follows every write to the Player's Deck List, by hand or by import, because each write gives the Deck List a new id and rolls the Player's `updatedAt`. A Player holding no Deck List shows nothing. A Screen with neither chosen still starts on the first Slot's left side; a Player chosen stays. Deleting the Player releases the Deck Source (ADR-0032).
 
