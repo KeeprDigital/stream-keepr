@@ -71,6 +71,12 @@ describe('a Screen Settings Group\'s Look', () => {
 			},
 		],
 		[
+			'sets a row\'s colour through its picker, on close,',
+			{},
+			'pick colour',
+			{ 'standings.title-divider': 'rgba(255, 0, 0, 0.4)' },
+		],
+		[
 			'clears a row\'s override',
 			{ 'standings.title-divider': '#ff0000' },
 			'clear',
@@ -80,10 +86,18 @@ describe('a Screen Settings Group\'s Look', () => {
 		const wrapper = await mountGroup('header', stored);
 		const entry = row(wrapper, 'standings.title-divider');
 
-		if (action === 'clear')
+		if (action === 'clear') {
 			await entry.findAll('button').find(button => button.text() === 'Clear')!.trigger('click');
-		else
+		}
+		else if (action === 'pick colour') {
+			await entry.get('[data-token-part="colour"]').trigger('click');
+			await entry.get('[data-color-part="hue"]').setValue('#ff0000');
+			await entry.get('[data-color-part="alpha"]').setValue(40);
+			await entry.get('[data-token-part="colour"]').trigger('click');
+		}
+		else {
 			await entry.get('[data-token-part="source"]').setValue('accent');
+		}
 		await flushPromises();
 
 		expect(overrideWrites(mockApiFetch)).toEqual([written]);
