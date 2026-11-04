@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
 
-/** The Card Screen Mode's config contract: its shape, type, and defaults. */
+/** The Card Spotlight Screen Mode's config contract: its shape, type, and defaults. */
 export const cardModeConfigContract = defineScreenModeConfigContract({
 	// Optional feature match binding (for decklist convenience, not required)
 	featureMatchId: z.number().int().positive().nullable().optional(),

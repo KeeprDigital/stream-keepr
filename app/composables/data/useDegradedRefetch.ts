@@ -11,9 +11,9 @@ export interface DegradedRefetchOptions<TSource> {
 	refetch: () => void;
 	/**
 	 * Whether a freshly built source is the same one the current rendering was
-	 * built from. Identity is the consumer's: the Deck Screen Mode compares a
-	 * source-freshness stamp against what is on program, the card-screen
-	 * surfaces compare deck-response object identity (#465 review, #471).
+	 * built from. Identity is the consumer's: the Deck List Screen Mode compares a
+	 * source-freshness stamp against what is on program, the Card Spotlight
+	 * Screen surfaces compare deck-response object identity (#465 review, #471).
 	 */
 	isUnchanged: (next: TSource) => boolean;
 	/** Called whenever the degraded flag changes hands, e.g. to mirror it into a Screen's card-data health report. */

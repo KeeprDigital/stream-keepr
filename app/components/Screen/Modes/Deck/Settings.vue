@@ -34,7 +34,7 @@ defineExpose({ resetConfig, saving });
 const fields = screenModeConfigContract('deck').fields;
 const boardFields = DECK_SIDEBOARD_LAYOUT_FIELDS;
 
-// A badge in the centre of a Deck Screen card would cover its art, so the badge
+// A badge in the centre of a Deck List Screen card would cover its art, so the badge
 // position pickers offer every point but this one — which is why what they emit
 // is always a `QuantityPosition`, and why the casts below are safe.
 const BADGE_DISABLED_POINTS: readonly NinePoint[] = ['center'];

@@ -12,7 +12,7 @@ import { useConsumedEventData } from '~/modules/event-data/resync';
 import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSession';
 
 /**
- * A One Piece Card Game Event's Deck Screen settings: its Deck Source is one
+ * A One Piece Card Game Event's Deck List Screen settings: its Deck Source is one
  * player side of a Feature Match Slot (ADR-0057), and its Deck List has a
  * Leader and a Mainboard only, so no Sideboard, Companion or points.
  */

@@ -106,7 +106,7 @@ async function saveTimeout() {
 		color="warning"
 		variant="subtle"
 		icon="i-lucide-triangle-alert"
-		title="No card image screen configured"
-		description="Add a screen in card mode to show cards."
+		title="No Card Spotlight Screen configured"
+		description="Add a Screen in Card Spotlight mode to show cards."
 	/>
 </template>

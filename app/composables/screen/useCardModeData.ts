@@ -62,8 +62,8 @@ function followScreenCard(context: ScreenContext, screenId: Readonly<Ref<number 
 	// A rendering of the Screen reads its Card through the Screen (#604).
 	onScopeDispose(cardStore.readActiveCardAsScreenOutput(() => outputReads.card()));
 
-	// Card-screen deck-source loads report their Scryfall degradation through
-	// the same seam the Deck List mode uses (#465, #471): the host carries the report
+	// Card Spotlight Screen deck-source loads report their Scryfall degradation
+	// through the same seam the Deck List mode uses (#465, #471): the host carries the report
 	// to control surfaces via presence instead of showing it on program. The ref
 	// is optional — operator-side consumers of the same store have no
 	// ScreenContext and load with no health reporting.

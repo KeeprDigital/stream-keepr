@@ -84,7 +84,7 @@ export function screenOutputModeConfig<M extends ScreenMode>(screen: DbScreen, m
 	return resolveScreenModeConfig(screen.modeConfigs, mode);
 }
 
-/** The Feature Match Slot the Screen's current mode shows, if that mode shows one: a Deck Screen shows a side of one. */
+/** The Feature Match Slot the Screen's current mode shows, if that mode shows one: a Deck List Screen shows a side of one. */
 export function screenOutputFeatureMatchSlotId(screen: DbScreen): number | null {
 	if (screen.currentMode === 'deck') {
 		const source = screenOutputModeConfig(screen, 'deck').deckSource;

@@ -27,10 +27,10 @@ interface CardDeckSourceRuntimeState {
 }
 
 /**
- * Card Screen Deck List source Module.
+ * Card Spotlight Screen Deck List source Module.
  *
  * Owns Feature Match and Player Deck List source loading, Scryfall enrichment,
- * source availability checks, and source reset behaviour for Card Screens.
+ * source availability checks, and source reset behaviour for Card Spotlight Screens.
  */
 export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 	const { fetchScryfallCards, buildDeckListArrays } = useScryfallBatch();
@@ -93,7 +93,7 @@ export function useCardDeckSourceRuntime(state: CardDeckSourceRuntimeState) {
 
 		// A historical match can outlive the active-player projection. Stable IDs
 		// are still sufficient to load its exact submitted deck, so retain a
-		// deterministic label for card-screen display rather than dropping it.
+		// deterministic label for Card Spotlight display rather than dropping it.
 		return playerId != null && deckId != null
 			? `Player ${playerId}`
 			: undefined;

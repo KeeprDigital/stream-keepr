@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-// A Deck Screen showing a Feature Match Slot side reads that Slot, and its Deck
+// A Deck List Screen showing a Feature Match Slot side reads that Slot, and its Deck
 // Lists, through the Screen: a capability reaches nothing else (ADR-0022).
 
 const harness = await createSqliteD1Harness();
@@ -116,7 +116,7 @@ function params(screen: string, slotId: number, deckListId?: number) {
 	};
 }
 
-describe('a Deck Screen showing a Feature Match Slot side, read with its capability', () => {
+describe('a Deck List Screen showing a Feature Match Slot side, read with its capability', () => {
 	it('reads the Slot it shows, and a Deck List of that Slot', async () => {
 		await expect(readSlot(params('deck', shownSlotId))).resolves.toMatchObject({
 			slot: { id: shownSlotId },

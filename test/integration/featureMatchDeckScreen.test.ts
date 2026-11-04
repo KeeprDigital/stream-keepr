@@ -8,14 +8,14 @@ import { $fetch, anonymousFetch } from './client';
 import { commandId, getFeatureMatchSlot, requireActiveSession, sendFeatureMatchCommand } from './featureMatchSessionHelpers';
 import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
 
-// A Deck Screen showing an OP Slot side reads its Deck List by capability alone,
+// A Deck List Screen showing an OP Slot side reads its Deck List by capability alone,
 // follows the player the Session seats there (ADR-0058), and is released when
 // its Slot is deleted (ADR-0057). bandai-keepr is `./mock-bandai-keepr.mjs`.
 
 const ZORO_DECK = '1x OP01-001 Roronoa Zoro\n4x OP01-025';
 const NAMI_DECK = '1x OP01-016 Nami\n4x OP01-040';
 
-describe('a Deck Screen showing a Feature Match Slot side', () => {
+describe('a Deck List Screen showing a Feature Match Slot side', () => {
 	let eventId: number;
 	let slotId: number;
 	let sessionId: number;
@@ -53,7 +53,7 @@ describe('a Deck Screen showing a Feature Match Slot side', () => {
 	beforeAll(async () => {
 		const event = await $fetch('/api/events', {
 			method: 'POST',
-			body: { name: 'Integration One Piece Deck Screen', game: 'op', featureMatchOrientation: 'horizontal' },
+			body: { name: 'Integration One Piece Deck List Screen', game: 'op', featureMatchOrientation: 'horizontal' },
 		});
 		eventId = event.id;
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {

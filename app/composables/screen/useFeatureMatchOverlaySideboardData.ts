@@ -25,7 +25,7 @@ interface SideboardSourceState {
 	 * and its sideboard — a resolved deck card rewrites that without moving the
 	 * Player's revision (#648), and a Player's revision moves without it. It is
 	 * how a rebuild tells "identical rendering, keep it" from "the source
-	 * changed, swap it in" — the Deck Screen Mode's rule (#465), held per side.
+	 * changed, swap it in" — the Deck List Screen Mode's rule (#465), held per side.
 	 */
 	stamps: Record<PlayerSide, string | null>;
 }
@@ -65,7 +65,7 @@ function snapshotDeckId(match: FeatureMatch | null, playerId: number): number | 
 
 /**
  * Real sideboard card data for the Feature Match Overlay output (#491),
- * resolved client-side through the Deck screen's stack: the Screen Output
+ * resolved client-side through the Deck List Screen's stack: the Screen Output
  * Player read (#604) + `useScryfallBatch` + `useDegradedRefetch`. The server contract is untouched —
  * `FeatureMatchOverlayHostStateInput` stays summary-only, and this joins at the
  * token-values seam via `featureMatchGraphicsContext`'s deck data parameter.
@@ -125,7 +125,7 @@ export function useFeatureMatchOverlaySideboardData(
 	}
 
 	/**
-	 * The reload-free recovery path (#465), shared cadence with the Deck Screen
+	 * The reload-free recovery path (#465), shared cadence with the Deck List Screen
 	 * Mode: a degraded rendering re-fetches itself every `DECK_CARD_DATA_REFETCH_MS`
 	 * until a load resolves completely, the sources change, or the surface goes
 	 * away. Degradation is reported through the screen context's card-data health,
@@ -216,7 +216,7 @@ export function useFeatureMatchOverlaySideboardData(
 			cards: sideboard.map(card => ({
 				name: card.name,
 				quantity: card.quantity,
-				// Deck-screen parity: the Scryfall front face at `normal` size.
+				// Deck List Screen parity: the Scryfall front face at `normal` size.
 				imageUrl: card.mtgCard?.imageData?.front?.normal ?? null,
 			})),
 			degraded,

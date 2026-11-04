@@ -216,11 +216,11 @@ function modeConfigWriteEditsWorkspace(mode: ScreenMode, config: Record<string, 
 }
 
 /**
- * The `modeConfigs` a Screen entering Deck mode on a One Piece Card Game
+ * The `modeConfigs` a Screen entering Deck List mode on a One Piece Card Game
  * Event is written with, its Deck Source on a Feature Match Slot side; or
  * `undefined` where it needs no default.
  *
- * An OP Deck Screen shows a Slot side, never a Player (ADR-0057), so one with
+ * An OP Deck List Screen shows a Slot side, never a Player (ADR-0057), so one with
  * no Slot side chosen (no Deck Source, or the Player source's empty default)
  * starts on the Event's first Slot, left side, or on no Slot while the Event
  * has none. A Magic Event's keeps its Player source.
@@ -332,8 +332,8 @@ export function screenWriteModule() {
 					.endEpochOnLeavingBroadcastGraphics(screenId, eventId, originConnectionId)
 			: undefined;
 
-		// Only a Screen entering Deck mode takes the default, so no other save
-		// moves a Deck Screen already on air.
+		// Only a Screen entering Deck List mode takes the default, so no other save
+		// moves a Deck List Screen already on air.
 		const withDeckSource = data.currentMode === 'deck' && existingScreen.currentMode !== 'deck'
 			? await withOpDeckSourceDefault(
 					eventId,

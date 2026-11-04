@@ -538,7 +538,7 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 		catch {}
 	});
 
-	it('indexes a Deck Screen’s asset-sourced layer under the Deck’s own namespace', async () => {
+	it('indexes a Deck List Screen’s asset-sourced layer under the Deck’s own namespace', async () => {
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/deck`,
 			{

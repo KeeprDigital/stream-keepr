@@ -11,7 +11,7 @@ import { NINE_POINTS } from '~~/shared/utils/ninePoints';
  * grid. Name it with an `aria-label`, which falls through to the group.
  *
  * `disabledPoints` are shown but never chosen, for a vocabulary that is the grid
- * less some points (a badge on a Deck Screen card has no centre); the arrow keys
+ * less some points (a badge on a Deck List Screen card has no centre); the arrow keys
  * step over them.
  */
 const props = withDefaults(defineProps<{
