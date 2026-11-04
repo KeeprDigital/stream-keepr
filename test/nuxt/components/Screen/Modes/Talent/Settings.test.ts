@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { screenSettingsCardSpies, settingsCards, settingsCardSummary } from '~~/test/nuxt/helpers/screenSettingsCards';
 import Settings from '~/components/Screen/Modes/Talent/Settings.vue';
+
+// The Talent Screen's settings: who it shows, then its layout, header and
+// Social Profiles, each card ending with the Look of what it styles (#983).
 
 enableAutoUnmount(afterEach);
 
@@ -44,7 +48,10 @@ async function mountComponent() {
 			eventId: 1,
 		},
 		global: {
-			stubs: { ...nuxtUiStubs, ScreenSettingsToggle: true },
+			stubs: {
+				...nuxtUiStubs,
+				...screenSettingsCardSpies,
+			},
 		},
 	});
 	await flushPromises();
@@ -67,6 +74,178 @@ describe('screenTalentSettings', () => {
 		mockConfig.value = {
 			...getDefaultConfigForMode('talent'),
 		};
+	});
+
+	it('orders its cards Talent, Layout, Header, Social Profiles, each Look in the card it styles', async () => {
+		const wrapper = await mountComponent();
+
+		expect(settingsCards(wrapper)).toEqual([
+			{
+				title: 'Talent',
+				id: undefined,
+				collapsible: false,
+				looks: [],
+			},
+			{
+				title: 'Layout',
+				id: 'talent:layout',
+				collapsible: true,
+				looks: ['layout'],
+			},
+			{
+				title: 'Header',
+				id: 'talent:header',
+				collapsible: true,
+				looks: ['header'],
+			},
+			{
+				title: 'Social Profiles',
+				id: 'talent:social-profiles',
+				collapsible: true,
+				looks: ['social-profiles'],
+			},
+		]);
+	});
+
+	it.each([
+		[
+			'selection',
+			{},
+			'select',
+			'lineup',
+			{ selection: 'lineup' },
+		],
+		[
+			'layout',
+			{},
+			'select',
+			'fullPanel',
+			{ layout: 'fullPanel' },
+		],
+		[
+			'showPhoto',
+			{},
+			'switch',
+			undefined,
+			{ showPhoto: false },
+		],
+		[
+			'showRole',
+			{},
+			'switch',
+			undefined,
+			{ showRole: false },
+		],
+		[
+			'rotateSocialProfiles',
+			{},
+			'switch',
+			undefined,
+			{ rotateSocialProfiles: true },
+		],
+		[
+			'socialProfileDwellMs',
+			{ rotateSocialProfiles: true },
+			'input',
+			'12',
+			{ socialProfileDwellMs: 12000 },
+		],
+		[
+			'showHeader',
+			{},
+			'switch',
+			undefined,
+			{ showHeader: true },
+		],
+		[
+			'headerText',
+			{ showHeader: true, headerText: 'Desk' },
+			'input',
+			'',
+			{ headerText: null },
+		],
+	] as const)('writes %s through its contract field', async (key, stored, control, value, written) => {
+		mockConfig.value = {
+			...mockConfig.value,
+			...stored,
+		};
+		const wrapper = await mountComponent();
+		const field = wrapper.get(`[data-config-field="${key}"]`);
+
+		if (control === 'switch')
+			await field.get('[role="switch"]').trigger('click');
+		else
+			await field.get(control).setValue(value);
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith(written);
+	});
+
+	it.each([
+		[
+			'socialProfileDwellMs',
+			{ rotateSocialProfiles: false },
+		],
+		[
+			'headerText',
+			{ showHeader: false },
+		],
+	] as const)('hides %s while the control revealing it is off', async (key, stored) => {
+		mockConfig.value = {
+			...mockConfig.value,
+			...stored,
+		};
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find(`[data-config-field="${key}"]`).exists()).toBe(false);
+	});
+
+	it.each([
+		['Layout', {}, 'Lower third · Photo · Role'],
+		[
+			'Layout',
+			{ layout: 'fullPanel', showPhoto: false, showRole: false },
+			'Full panel',
+		],
+		['Header', {}, 'Hidden'],
+		[
+			'Header',
+			{ showHeader: true },
+			'On the Desk',
+		],
+		[
+			'Header',
+			{ showHeader: true, headerText: 'Commentary' },
+			'Commentary',
+		],
+		[
+			'Social Profiles',
+			{
+				socialNetworks: ['twitch', 'x'],
+			},
+			'2 networks',
+		],
+		[
+			'Social Profiles',
+			{
+				socialNetworks: ['twitch'],
+				rotateSocialProfiles: true,
+				socialProfileDwellMs: 5000,
+			},
+			'1 network · one at a time, 5 s each',
+		],
+		[
+			'Social Profiles',
+			{ socialNetworks: [] },
+			'None shown',
+		],
+	] as const)('summarises %s when closed: %o', async (title, stored, summary) => {
+		mockConfig.value = {
+			...mockConfig.value,
+			...stored,
+		};
+		const wrapper = await mountComponent();
+
+		expect(settingsCardSummary(wrapper, title)).toBe(summary);
 	});
 
 	it('picks one Talent of the Event', async () => {
