@@ -253,8 +253,8 @@ export function talentService() {
 	 * Delete a Talent, releasing its photo and every Screen's Event Reference to
 	 * it in the same commit (ADR-0067, ADR-0070). Answers the Screens released.
 	 */
-	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; releasedScreens: DbScreen[] }> => {
-		const [, deleted, releasedScreens] = await db.batch([
+	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
+		const [, deleted, clearedScreens] = await db.batch([
 			db.delete(graphicAssetReferences).where(and(
 				eq(graphicAssetReferences.ownerKind, TALENT_REFERENCE_OWNER_KIND),
 				eq(graphicAssetReferences.ownerId, String(id)),
@@ -266,7 +266,7 @@ export function talentService() {
 			buildReleaseScreenEventReferencesQuery(eventId, ['talent', 'talentLineup']),
 		]);
 
-		return { deleted: deleted.length > 0, releasedScreens };
+		return { deleted: deleted.length > 0, clearedScreens };
 	};
 
 	return {

@@ -58,3 +58,13 @@ export function talentScreenTalentIds(config: Pick<TalentModeConfig, 'selection'
 		? []
 		: [config.talentId];
 }
+
+/**
+ * The Talents whose photos a Talent Screen shows: its Talents while it shows
+ * photos, else none. Its Screen Output resolves exactly these photos (ADR-0070).
+ */
+export function talentScreenPhotoTalentIds(config: Pick<TalentModeConfig, 'selection' | 'talentId' | 'talentIds' | 'showPhoto'>): number[] {
+	return config.showPhoto
+		? talentScreenTalentIds(config)
+		: [];
+}

@@ -92,10 +92,10 @@ export function talentWriteModule() {
 	}
 
 	async function deleteTalent({ eventId, talentId, originConnectionId }: DeleteTalentParams) {
-		const { deleted, releasedScreens } = await talents.remove(talentId, eventId);
+		const { deleted, clearedScreens } = await talents.remove(talentId, eventId);
 
 		// No origin, because the deleting client never received these Screens back (ADR-0060).
-		for (const screen of releasedScreens)
+		for (const screen of clearedScreens)
 			await publication.screenUpdated({ eventId, entity: screen });
 
 		if (!deleted) {

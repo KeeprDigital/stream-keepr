@@ -1,6 +1,8 @@
 import type { FeatureMatchResponse, MatchResponse, PhaseResponse, PlayerResponse, RoundResponse } from '~~/shared/api';
 import type { TopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import type { SavedFeatureMatchDeckList } from '~~/shared/types/featureMatchDeckList';
+import type { SocialProfileProjectionValue } from '~~/shared/types/graphics';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ArchetypeBreakdownResponse, CardBreakdownEntry, CardBreakdownResponse, PlayerDeckCollectionResponse } from '~~/shared/types/metagame';
 
 /**
@@ -172,4 +174,21 @@ export type ScreenOutputFeatureMatchDeckListResponse = Pick<SavedFeatureMatchDec
 export interface ScreenOutputPlayerDecksResponse {
 	player: PlayerResponse;
 	decks: PlayerDeckCollectionResponse;
+}
+
+/** One Talent as a Talent Screen shows them (#782). */
+export interface ScreenOutputTalent {
+	id: number;
+	name: string;
+	/** Free text such as "Host"; `null` for none. */
+	role: string | null;
+	/** The exact image revision, while the Screen shows photos and the Talent holds one. */
+	photo: GraphicAssetReference | null;
+	/** The Social Profiles on the networks the Screen shows, in Supported Social Network catalogue order. */
+	socialProfiles: SocialProfileProjectionValue[];
+}
+
+/** What a Talent Screen renders: its Talents in the order it shows them, skipping any the Event no longer holds. */
+export interface ScreenOutputTalentResponse {
+	talents: ScreenOutputTalent[];
 }
