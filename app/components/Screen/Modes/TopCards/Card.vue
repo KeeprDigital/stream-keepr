@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
-import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
+import { metagameCardImageUrl } from '~~/shared/utils/metagame';
 
 /**
  * One ranked card, for any Screen Mode that shows one. Its look comes from the
@@ -34,9 +34,9 @@ const props = defineProps<{
 
 const imageError = ref(false);
 
-const imageUrl = computed(() => scryfallCardImageUrl(props.entry.scryfallId));
+const imageUrl = computed(() => metagameCardImageUrl(props.entry));
 
-watch(() => props.entry.scryfallId, () => {
+watch(imageUrl, () => {
 	imageError.value = false;
 });
 </script>

@@ -14,6 +14,8 @@ const pageData = ref<any[]>([]);
 const topCards = ref<any[]>([]);
 const totalPages = ref(1);
 const currentPage = ref(1);
+const game = ref<'mtg' | 'op'>('mtg');
+const readsStandings = ref(true);
 
 // Canned records keyed by pilot, not a copy of the real formatting, which the
 // composable's own test covers: the component only places what it is handed.
@@ -27,6 +29,8 @@ mockNuxtImport('useArchetypeSpotlightModeData', () => () => ({
 	isEmpty: computed(() => isEmpty.value),
 	headerText: computed(() => headerText.value),
 	conversionLabel: computed(() => conversionLabel.value),
+	game: computed(() => game.value),
+	readsStandings: computed(() => readsStandings.value),
 	spotlight: computed(() => spotlight.value),
 	pageData: computed(() => pageData.value),
 	topCards: computed(() => topCards.value),
@@ -97,6 +101,8 @@ describe('screenModesArchetypeSpotlightDisplay', () => {
 		];
 		totalPages.value = 1;
 		currentPage.value = 1;
+		game.value = 'mtg';
+		readsStandings.value = true;
 		cannedRecords.clear();
 	});
 
@@ -165,6 +171,23 @@ describe('screenModesArchetypeSpotlightDisplay', () => {
 		totalPages.value = 3;
 		currentPage.value = 2;
 		expect((await mountComponent()).get('.broadcast-table-page-indicator').text()).toBe('2 / 3');
+	});
+
+	// An OP Metagame reads participation only (ADR-0074).
+	it('on a One Piece Event, shows no Conversion, place or record, and the Leader\'s colours as pips', async () => {
+		game.value = 'op';
+		readsStandings.value = false;
+		spotlight.value = {
+			...spotlight.value,
+			archetype: { id: 7, name: 'Monkey.D.Luffy', colors: 'Red/Green' },
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('.spotlight-stat .stat-label').map(label => label.text())).toEqual(['Pilots', 'Meta Share']);
+		expect(wrapper.findAll('.pilot-row').map(row => row.text())).toEqual(['Nadia Rivers', 'Oskar Lind']);
+		expect(wrapper.find('.pilot-grid').text()).toBe('Pilot');
+		expect(wrapper.findAll('.spotlight-summary [data-op-color]').map(pip => pip.attributes('data-op-color'))).toEqual(['Red', 'Green']);
 	});
 
 	it('renders nothing while the mode is empty', async () => {

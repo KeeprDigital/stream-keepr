@@ -92,7 +92,7 @@ mockNuxtImport('useServerTime', () => () => ({
 
 const mockEventStore = {
 	eventId: 1,
-	event: { pointsSystem: '7ph' as string | null },
+	event: { pointsSystem: '7ph' as string | null, game: 'mtg' as string | undefined },
 };
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
@@ -226,7 +226,7 @@ describe('screenTopCardsSettings', () => {
 		mockConfig.value = structuredClone(defaultConfig);
 		mockPlayerStore.isLoaded = false;
 		mockPlayerListStore.isLoaded = false;
-		mockEventStore.event = { pointsSystem: '7ph' };
+		mockEventStore.event = { pointsSystem: '7ph', game: 'mtg' };
 		mockFetch.mockReset();
 		mockFetch.mockResolvedValue(ranking(10));
 	});
@@ -247,7 +247,7 @@ describe('screenTopCardsSettings', () => {
 			badgeGroups: ['rank-badge', 'stat-badge', 'card-badges'],
 		},
 	])('lays out its cards, each holding its Look, with points system $pointsSystem', async ({ pointsSystem, badgeGroups }) => {
-		mockEventStore.event = { pointsSystem };
+		mockEventStore.event = { pointsSystem, game: 'mtg' };
 		const wrapper = await mountComponent();
 
 		expect(settingsLayout(wrapper)).toEqual([
@@ -313,7 +313,7 @@ describe('screenTopCardsSettings', () => {
 		{ pointsSystem: '7ph', summary: 'Rank, Stat badges · 2 Screen Theme Overrides' },
 		{ pointsSystem: null, summary: 'Rank, Stat badges · 1 Screen Theme Override' },
 	])('counts the Card Badges overrides it shows with points system $pointsSystem', async ({ pointsSystem, summary }) => {
-		mockEventStore.event = { pointsSystem };
+		mockEventStore.event = { pointsSystem, game: 'mtg' };
 		const wrapper = await mountComponent({
 			'top-cards.badge-shadow': '#000000',
 			'top-cards.points-badge-surface': '#ff0000',
@@ -356,6 +356,39 @@ describe('screenTopCardsSettings', () => {
 		});
 	});
 
+	// An OP Deck List is one Mainboard of Characters, Events and Stages, and carries no points (ADR-0074).
+	describe('on a One Piece Event', () => {
+		beforeEach(() => {
+			mockEventStore.event = { pointsSystem: '7ph', game: 'op' };
+		});
+
+		it('offers a chip per OP card type, and counts a stored Magic type as none excluded', async () => {
+			const wrapper = await mountComponent();
+
+			expect(wrapper.findAll('[data-testid^="top-cards-type-"]').map(chip => chip.text())).toEqual(['Character', 'Event', 'Stage']);
+			expect(settingsSummaries(wrapper)['top-cards:filters']).toBe('Every card type');
+		});
+
+		it('excludes an OP card type on click, keeping what was stored', async () => {
+			const wrapper = await mountComponent();
+
+			await wrapper.get('[data-testid="top-cards-type-Event"]').trigger('click');
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({
+				excludedCardTypes: ['Land', 'Event'],
+				currentPage: 1,
+			});
+		});
+
+		it('offers no board, pointed only or point badges', async () => {
+			const wrapper = await mountComponent();
+
+			expect(wrapper.find('[data-config-field="board"]').exists()).toBe(false);
+			expect(toggle(wrapper, 'Pointed only')).toBeUndefined();
+			expect(toggle(wrapper, 'Show point badges')).toBeUndefined();
+		});
+	});
+
 	describe('pointed only', () => {
 		// Points come from the Event's points system; a Screen left filtering keeps its way back.
 		it.each([
@@ -363,7 +396,7 @@ describe('screenTopCardsSettings', () => {
 			{ pointsSystem: null, pointedOnly: false, offered: false },
 			{ pointsSystem: null, pointedOnly: true, offered: true },
 		])('offers the filter with points system $pointsSystem, filtering $pointedOnly: $offered', async ({ pointsSystem, pointedOnly, offered }) => {
-			mockEventStore.event = { pointsSystem };
+			mockEventStore.event = { pointsSystem, game: 'mtg' };
 			mockConfig.value = { ...mockConfig.value, pointedOnly };
 			const wrapper = await mountComponent();
 
@@ -409,7 +442,7 @@ describe('screenTopCardsSettings', () => {
 			{ pointsSystem: null, showPointsBadges: false, offered: false },
 			{ pointsSystem: null, showPointsBadges: true, offered: true },
 		])('offers point badges with points system $pointsSystem, badging $showPointsBadges: $offered', async ({ pointsSystem, showPointsBadges, offered }) => {
-			mockEventStore.event = { pointsSystem };
+			mockEventStore.event = { pointsSystem, game: 'mtg' };
 			mockConfig.value = { ...mockConfig.value, showPointsBadges };
 			const wrapper = await mountComponent();
 

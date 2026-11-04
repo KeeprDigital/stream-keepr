@@ -1,9 +1,10 @@
 import type { ScreenOutputArchetypePilot, ScreenOutputArchetypeSpotlightResponse } from '~~/shared/types/screenOutputReads';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
+import { getMetagameRules } from '~~/shared/config/games';
 import { conversionTargetLabel, eventConversionTarget } from '~~/shared/conversionTarget';
+import { metagameCardImageUrl, offeredMetagameScope } from '~~/shared/utils/metagame';
 import { archetypeSpotlightScreenQuery } from '~~/shared/utils/metagameQuery';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
-import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
@@ -15,6 +16,9 @@ export function useArchetypeSpotlightModeData(context: ScreenContext) {
 	const config = useScreenModeConfig(context, 'archetype-spotlight');
 	const outputReads = useScreenOutputReads(context);
 	const eventStore = useEventStore();
+	const game = useScreenCardGame(context);
+	/** Whether it shows standings: a Conversion Rate and each pilot's place and record (ADR-0074). */
+	const readsStandings = computed(() => game.value === undefined || getMetagameRules(game.value).readsStandings);
 
 	// The Event's Conversion Target (ADR-0061): an `event:updated` folded into the
 	// held Event context changes it, and so the read.
@@ -49,7 +53,7 @@ export function useArchetypeSpotlightModeData(context: ScreenContext) {
 		() => config.value.archetypeId != null
 			? freshness.data.value
 			: null,
-		read => (read?.topCards ?? []).flatMap(card => scryfallCardImageUrl(card.scryfallId) ?? []),
+		read => (read?.topCards ?? []).flatMap(card => metagameCardImageUrl(card) ?? []),
 	);
 	const pilots = computed(() => spotlight.value?.pilots ?? []);
 	const topCards = computed(() => spotlight.value?.topCards ?? []);
@@ -58,7 +62,7 @@ export function useArchetypeSpotlightModeData(context: ScreenContext) {
 
 	// ── Header ──
 	const scopeLabel = computed(() => {
-		switch (config.value.scope) {
+		switch (offeredMetagameScope(game.value, config.value.scope)) {
 			case 'topN': return `Top ${config.value.topN}`;
 			case 'minPoints': return `${config.value.minPoints}+ Points`;
 			case 'playerList': return 'List';
@@ -97,6 +101,8 @@ export function useArchetypeSpotlightModeData(context: ScreenContext) {
 		ready: computed(() => freshness.answered.value && !staging.value),
 		isEmpty,
 		headerText,
+		game,
+		readsStandings,
 		conversionLabel,
 		spotlight,
 		topCards,

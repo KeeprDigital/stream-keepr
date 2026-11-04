@@ -2,6 +2,7 @@ import type { ScreenOutputArchetypeSpotlightResponse } from '~~/shared/types/scr
 import { projectArchetypeSpotlight } from '~~/server/modules/metagame/archetypeSpotlight';
 import { readEventConversionTarget } from '~~/server/modules/metagame/conversionTarget';
 import { metagameReadModel } from '~~/server/modules/metagame/readModel';
+import { readMetagameGame } from '~~/server/modules/metagame/scopeModel';
 import { metagameArchetypeDetailQuerySchema } from '~~/server/schemas/api/metagame';
 import { requireScreenOutputModeRead, screenOutputReadNotFound } from '~~/server/utils/screenOutputRead';
 import { archetypeSpotlightScreenQuery } from '~~/shared/utils/metagameQuery';
@@ -24,5 +25,9 @@ export default defineEventHandler(async (event): Promise<ScreenOutputArchetypeSp
 	if (!detail)
 		screenOutputReadNotFound();
 
-	return projectArchetypeSpotlight(detail, { cardLimit: config.cardLimit, excludedCardTypes: config.excludedCardTypes });
+	return projectArchetypeSpotlight(detail, {
+		game: await readMetagameGame(eventId),
+		cardLimit: config.cardLimit,
+		excludedCardTypes: config.excludedCardTypes,
+	});
 });

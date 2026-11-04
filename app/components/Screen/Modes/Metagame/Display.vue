@@ -7,7 +7,7 @@ import type {
 	ArchetypeBreakdownEntry,
 	CardBreakdownEntry,
 } from '~~/shared/types/metagame';
-import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
+import { getCardTypeDisplayLabel, isMetagameColumnOffered } from '~~/shared/utils/metagame';
 import { modeMotionVars, modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 
 interface TableColumnDefinition<Key extends string> {
@@ -20,6 +20,7 @@ interface TableColumnDefinition<Key extends string> {
 
 const {
 	config,
+	game,
 	error,
 	ready,
 	isEmpty,
@@ -175,15 +176,16 @@ const cardColumnDefinitions: Record<MetagameCardColumnKey, TableColumnDefinition
 	},
 };
 
+// A column the Event's Metagame does not read never shows, wherever a stored config places it (ADR-0074).
 const visibleArchetypeColumns = computed(() =>
 	config.value.archetypeColumns
-		.filter(column => column.visible)
+		.filter(column => column.visible && isMetagameColumnOffered(game.value, column.key))
 		.map(column => archetypeColumnDefinitions[column.key]),
 );
 
 const visibleCardColumns = computed(() =>
 	config.value.cardColumns
-		.filter(column => column.visible)
+		.filter(column => column.visible && isMetagameColumnOffered(game.value, column.key))
 		.map(column => cardColumnDefinitions[column.key]),
 );
 
@@ -331,6 +333,7 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 				<ScreenModesMetagameChart
 					v-if="config.viewMode === 'chart'"
 					:bars="chartBars"
+					:game="game"
 				/>
 
 				<div v-else class="metagame-table broadcast-table-surface" :style="surfaceStyle">
@@ -368,7 +371,12 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 									:style="cellStyle(column)"
 								>
 									<template v-if="column.key === 'colors'">
-										<MtgManaColorDisplay v-if="entry.colors" :colors="entry.colors" size="sm" />
+										<MetagameArchetypeColors
+											v-if="entry.colors"
+											:colors="entry.colors"
+											:game="game"
+											size="sm"
+										/>
 										<span v-else>-</span>
 									</template>
 									<template v-else>

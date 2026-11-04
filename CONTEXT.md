@@ -70,7 +70,7 @@ A Deck List entry naming no known card: on Magic: The Gathering, one imported by
 Analysis of Players, Deck Lists, cards, archetypes, and standings within an Event or scoped Player group.
 
 **Metagame Scope**:
-Which Players a Metagame read counts: every Player, the top N by placement, those with at least a minimum match-point total, or one Player List's members. A One Piece Card Game Event, having no standings, offers only every Player and a Player List (ADR-0074). The Metagame page and every Screen Mode reading the Metagame carry the same scope, so a scope asks each read the same question; an Archetype's pilots, meta share and Conversion Rate are read within it.
+Which Players a Metagame read counts: every Player, the top N by placement, those with at least a minimum match-point total, or one Player List's members. A One Piece Card Game Event, having no standings, offers only every Player and a Player List, and reads any other scope as every Player (ADR-0074). The Metagame page and every Screen Mode reading the Metagame carry the same scope, so a scope asks each read the same question; an Archetype's pilots, meta share and Conversion Rate are read within it.
 
 **Archetype**:
 A strategic Deck classification assigned to Players and used for Metagame analysis. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand. An operator renaming one or pinning its series customises it, and a customised Archetype stays when its last Player leaves (ADR-0074).

@@ -27,6 +27,8 @@ function makeCard(overrides?: Partial<CardBreakdownEntry>): CardBreakdownEntry {
 		colors: 'R',
 		cmc: 1,
 		manaCost: '{R}',
+		cardNumber: null,
+		imageUrl: null,
 		inclusionRate: 65,
 		avgCopies: 3.2,
 		totalCopies: 32,

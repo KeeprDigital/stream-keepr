@@ -7,7 +7,7 @@ import type {
 } from '~~/shared/types/enums';
 import type { MetagameQueryParams } from '~~/shared/types/metagame';
 import type { ArchetypeSpotlightModeConfig, MetagameModeConfig, TopCardsModeConfig } from '~~/shared/types/screenConfig';
-import type { CardTypeBucket } from '~~/shared/utils/metagame';
+import type { MetagameCardTypeBucket } from '~~/shared/utils/metagame';
 
 /**
  * A Metagame Scope as a read takes it. A Screen's config is one as it stands,
@@ -36,7 +36,7 @@ export interface MetagameCardBreakdownOptions {
 	/** Legacy Screen config filter name; preserved while Screen config stores names instead of ids. */
 	archetype?: string;
 	/** Card-type buckets to drop server-side, before the limit applies. */
-	excludeTypes?: CardTypeBucket[];
+	excludeTypes?: MetagameCardTypeBucket[];
 	/** Only cards the Event's points system points, before the limit applies. */
 	pointedOnly?: boolean;
 }

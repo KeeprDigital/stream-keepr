@@ -13,6 +13,7 @@ import type {
 import type { Screen } from '~/types';
 import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
+import { isMetagameColumnOffered, isMetagameSortOffered } from '~~/shared/utils/metagame';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
 import { columnsSummary, FOLLOWS_THE_THEME, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -37,6 +38,9 @@ defineExpose({ resetConfig, saving });
 const fields = screenModeConfigContract('metagame').fields;
 
 const playerListStore = usePlayerListStore();
+const eventStore = useEventStore();
+// The Event's Card Game decides what its Metagame reads (ADR-0074).
+const game = computed(() => eventStore.event?.game);
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['playerLists']);
@@ -57,12 +61,12 @@ const viewModeOptions = [
 	{ label: 'Chart', value: 'chart' },
 ];
 
-const sortByOptions = [
+const sortByOptions = computed(() => ([
 	{ label: 'Meta Share', value: 'metaShare' },
 	{ label: 'Count', value: 'count' },
 	{ label: 'Win Rate', value: 'winRate' },
 	{ label: 'Conversion Rate', value: 'conversionRate' },
-];
+] satisfies { label: string; value: MetagameSortBy }[]).filter(option => isMetagameSortOffered(game.value, option.value)));
 
 const cardSortByOptions = [
 	{ label: 'Inclusion Rate', value: 'inclusionRate' },
@@ -93,16 +97,20 @@ const columnLabels: Record<MetagameArchetypeColumnKey | MetagameCardColumnKey, s
 
 const { defaults } = screenModeConfigContract('metagame');
 
-const activeColumns = computed<ActiveMetagameColumnConfig[]>(() =>
+const storedColumns = computed<ActiveMetagameColumnConfig[]>(() =>
 	config.value.viewMode === 'cards'
 		? withEveryColumn(config.value.cardColumns, defaults.cardColumns)
 		: withEveryColumn(config.value.archetypeColumns, defaults.archetypeColumns),
 );
+// Only the columns the Event's Metagame reads are offered; the rest keep their stored place.
+const activeColumns = computed(() => storedColumns.value.filter(column => isMetagameColumnOffered(game.value, column.key)));
 
-// The Event's Conversion Target matters while the Conversion Rate shows or orders the archetypes.
+// The Event's Conversion Target matters while the Conversion Rate shows or orders the archetypes,
+// on a Metagame that reads it.
 const showsConversionRate = computed(() =>
-	config.value.sortBy === 'conversionRate'
-	|| config.value.archetypeColumns.some(column => column.key === 'conversionRate' && column.visible),
+	isMetagameSortOffered(game.value, 'conversionRate')
+	&& (config.value.sortBy === 'conversionRate'
+		|| config.value.archetypeColumns.some(column => column.key === 'conversionRate' && column.visible)),
 );
 
 // The table rows the Screen pages (none for a chart, which is one page), read and followed as its Screen Output reads and follows them, so
@@ -127,7 +135,11 @@ const rotation = useRotationConfigWrites({
 });
 const { updateConfig } = rotation;
 
-function persistColumns(columns: ActiveMetagameColumnConfig[]) {
+function persistColumns(offered: ActiveMetagameColumnConfig[]) {
+	const columns = [
+		...offered,
+		...storedColumns.value.filter(column => !isMetagameColumnOffered(game.value, column.key)),
+	];
 	if (config.value.viewMode === 'cards') {
 		updateConfig({ cardColumns: columns as MetagameCardColumnConfig[] });
 		return;

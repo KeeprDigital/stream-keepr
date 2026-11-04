@@ -2,6 +2,7 @@
 import type { TabsItem } from '@nuxt/ui';
 import type { BoardSelection, MetagameCardSortBy } from '~~/shared/types/enums';
 import type { ArchetypeDetailResponse } from '~~/shared/types/metagame';
+import { getMetagameRules } from '~~/shared/config/games';
 import { conversionTargetLabel } from '~~/shared/conversionTarget';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useMetagameClient } from '~/modules/metagame/client';
@@ -17,7 +18,10 @@ const metagameClient = useMetagameClient();
 const { openPlayerDeckList } = usePlayerDeckListModal();
 const { runRequest } = useRequestFeedback();
 
-const isMtg = computed(() => eventStore.event?.game === 'mtg');
+const game = computed(() => eventStore.event?.game);
+const isMtg = computed(() => game.value === 'mtg');
+// An OP Metagame reads participation only (ADR-0074).
+const readsStandings = computed(() => !game.value || getMetagameRules(game.value).readsStandings);
 const archetypeId = computed(() => Number(route.params.archetypeId));
 const archetypeCardSortBy = ref<MetagameCardSortBy>('inclusionRate');
 const archetypeCardBoardFilter = ref<BoardSelection>('full');
@@ -25,7 +29,7 @@ const archetypeCardBoardFilter = ref<BoardSelection>('full');
 const detail = ref<ArchetypeDetailResponse | null>(null);
 const loading = ref(false);
 
-const hasCardsSection = computed(() => isMtg.value && detail.value != null);
+const hasCardsSection = computed(() => detail.value != null);
 const availableSections = computed<DetailSection[]>(() => {
 	if (!detail.value)
 		return [];
@@ -99,7 +103,7 @@ const conversionLabel = computed(() => conversionTargetLabel(metagameStore.conve
 const stats = computed(() => {
 	if (!detail.value)
 		return [];
-	return [
+	const participation = [
 		{ label: 'Players', value: detail.value.playerCount },
 		{
 			label: 'Meta Share',
@@ -107,6 +111,11 @@ const stats = computed(() => {
 				? `${detail.value.metaShare}%`
 				: null,
 		},
+	];
+	if (!readsStandings.value)
+		return participation;
+	return [
+		...participation,
 		{
 			label: 'Win Rate',
 			value: detail.value.winRate != null
@@ -213,11 +222,11 @@ watch(
 					<h2 class="text-2xl font-bold">
 						{{ detail.name }}
 					</h2>
-					<MtgManaColorDisplay
-						v-if="isMtg && detail.colors"
+					<MetagameArchetypeColors
+						v-if="detail.colors"
 						:colors="detail.colors"
+						:game="game"
 						size="lg"
-						:cost="true"
 					/>
 				</div>
 				<MetagameStatStrip :stats="stats" />
@@ -248,7 +257,7 @@ watch(
 			@update:model-value="value => value !== undefined && setActiveSection(value)"
 		/>
 
-		<!-- Card Breakdown (MTG only) -->
+		<!-- Card Breakdown -->
 		<MetagameCardsTable
 			v-if="hasCardsSection"
 			v-show="activeSection === 'cards'"
@@ -256,6 +265,7 @@ watch(
 			:sort-by="archetypeCardSortBy"
 			:board-filter="archetypeCardBoardFilter"
 			:show-deck-count="false"
+			:game="game"
 			:get-row-link="entry => `/event/${eventStore.eventId}/metagame/card/${entry.id}`"
 			@update:sort-by="archetypeCardSortBy = $event"
 			@update:board-filter="archetypeCardBoardFilter = $event"

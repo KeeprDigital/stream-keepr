@@ -1,6 +1,6 @@
 import type { CardBreakdownEntry, CardBreakdownResponse } from '~~/shared/types/metagame';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
+import { metagameCardImageUrl, offeredMetagameScope } from '~~/shared/utils/metagame';
 import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
@@ -16,6 +16,7 @@ export function useTopCardsModeData(context: ScreenContext) {
 	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'top-cards');
 	const outputReads = useScreenOutputReads(context);
+	const game = useScreenCardGame(context);
 
 	// The server derives the breakdown from the saved configuration (#604), so
 	// the read changes with the configuration fields it depends on.
@@ -72,7 +73,7 @@ export function useTopCardsModeData(context: ScreenContext) {
 			currentPage: currentPage.value,
 			totalPages: totalPages.value,
 		}),
-		page => page.entries.flatMap(({ entry }) => scryfallCardImageUrl(entry.scryfallId) ?? []),
+		page => page.entries.flatMap(({ entry }) => metagameCardImageUrl(entry) ?? []),
 	);
 	const pageEntries = computed(() => shownPage.value.entries);
 
@@ -86,7 +87,7 @@ export function useTopCardsModeData(context: ScreenContext) {
 			topN: `Top ${config.value.topN} `,
 			minPoints: `${config.value.minPoints}+ Points `,
 			playerList: 'List ',
-		}[config.value.scope];
+		}[offeredMetagameScope(game.value, config.value.scope)];
 
 		const title = config.value.pointedOnly
 			? 'Most Played Pointed Cards'

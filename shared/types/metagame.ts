@@ -28,6 +28,9 @@ export interface CardResponse {
 	colors: string | null;
 	cmc: number | null;
 	manaCost: string | null;
+	/** One Piece only: the card number keying the card, and its standard Printing's image. */
+	cardNumber?: string | null;
+	imageUrl?: string | null;
 }
 
 export interface MetagameSimpleFact {
@@ -98,6 +101,9 @@ export interface CardBreakdownEntry {
 	colors: string | null;
 	cmc: number | null;
 	manaCost: string | null;
+	/** One Piece only: the card number keying the card, and its standard Printing's image. */
+	cardNumber: string | null;
+	imageUrl: string | null;
 	inclusionRate: number;
 	avgCopies: number;
 	totalCopies: number;
@@ -203,6 +209,9 @@ export interface CardCoOccurrenceEntry {
 	manaCost: string | null;
 	cmc: number | null;
 	colors: string | null;
+	/** One Piece only: the card number keying the card, and its standard Printing's image. */
+	cardNumber: string | null;
+	imageUrl: string | null;
 	coOccurrenceRate: number;
 	deckCount: number;
 }

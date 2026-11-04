@@ -42,11 +42,13 @@ const pageData = ref<any[]>([
 ]);
 
 const chartBars = ref<MetagameChartBar[]>([]);
+const game = ref<'mtg' | 'op'>('mtg');
 
 // The mode's data is faked, so nothing reads the Screen context it is handed.
 mockNuxtImport('useScreenContext', () => () => ({}));
 mockNuxtImport('useMetagameModeData', () => () => ({
 	config: computed(() => config.value),
+	game: computed(() => game.value),
 	loading: ref(false),
 	error: ref<string | null>(null),
 	isEmpty: computed(() => false),
@@ -128,6 +130,7 @@ describe('screenMetagameDisplay', () => {
 			},
 		];
 		chartBars.value = [];
+		game.value = 'mtg';
 	});
 
 	it('sizes rows for the page size before the rows are measured', async () => {
@@ -198,6 +201,87 @@ describe('screenMetagameDisplay', () => {
 
 		expect(wrapper.get('[data-testid="metagame-header-row"]').text()).toContain('Colors');
 		expect(wrapper.get('[data-testid="mana-display"]').text()).toBe('R');
+	});
+
+	// A One Piece Metagame reads participation only, and its cards no mana cost or Sideboard (ADR-0074).
+	describe('on a One Piece Event', () => {
+		beforeEach(() => {
+			game.value = 'op';
+		});
+
+		it('shows no standings column, wherever a stored config places one', async () => {
+			config.value = {
+				...config.value,
+				archetypeColumns: [
+					{ key: 'archetype', visible: true },
+					{ key: 'winRate', visible: true },
+					{ key: 'avgPlace', visible: true },
+					{ key: 'conversionRate', visible: true },
+					{ key: 'metaShare', visible: true },
+				],
+			};
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.findAll('.metagame-header-cell').map(cell => cell.text())).toEqual(['Archetype', 'Share']);
+		});
+
+		it('shows no mana cost or Sideboard count for a card', async () => {
+			config.value = { ...config.value, viewMode: 'cards' };
+			pageData.value = [
+				{
+					id: 3,
+					name: 'Usopp',
+					cardType: 'Character',
+					manaCost: null,
+					inclusionRate: 50,
+					avgCopies: 4,
+					totalCopies: 8,
+					deckCount: 2,
+					mainboardCount: 8,
+					sideboardCount: 0,
+				},
+			];
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.findAll('.metagame-header-cell').map(cell => cell.text())).toEqual([
+				'Card',
+				'Type',
+				'Inclusion',
+				'Avg Copies',
+				'Total Copies',
+				'Decks',
+				'Main',
+			]);
+			expect(wrapper.findAll('.metagame-row .metagame-cell').map(cell => cell.text())).toEqual([
+				'Usopp',
+				'Character',
+				'50%',
+				'4',
+				'8',
+				'2',
+				'8',
+			]);
+		});
+
+		it('shows an Archetype\'s Leader colours as One Piece pips', async () => {
+			config.value = {
+				...config.value,
+				archetypeColumns: [
+					{ key: 'archetype', visible: true },
+					{ key: 'colors', visible: true },
+				],
+			};
+			pageData.value = [
+				{ ...pageData.value[0], name: 'Monkey.D.Luffy', colors: 'Red/Green' },
+			];
+
+			const wrapper = await mountComponent();
+
+			expect(wrapper.findAll('[data-op-color]').map(pip => pip.attributes('data-op-color'))).toEqual(['Red', 'Green']);
+			expect(wrapper.find('[data-testid="mana-display"]').exists()).toBe(false);
+		});
 	});
 
 	describe('chart display', () => {

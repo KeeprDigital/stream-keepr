@@ -6,11 +6,8 @@ const props = defineProps<{
 	loading?: boolean;
 }>();
 
-const eventStore = useEventStore();
 const metagameStore = useMetagameStore();
 const playerListStore = usePlayerListStore();
-
-const isMtg = computed(() => eventStore.event?.game === 'mtg');
 
 const scopeLabel = computed(() => {
 	if (metagameStore.scope === 'topN')
@@ -33,16 +30,13 @@ const stats = computed(() => {
 	if (!props.summary)
 		return [];
 
-	const values: Array<{ label: string; value: string | number | null }> = [
+	// Every Card Game's Players hold Deck Lists: an OP Player's comes from a TCG+ Import (ADR-0074).
+	return [
 		{ label: 'Players', value: props.summary.totalPlayers },
 		{ label: 'Classified', value: `${props.summary.classifiedPlayers} / ${props.summary.totalPlayers}` },
+		{ label: 'Decklists', value: `${props.summary.totalDecks} / ${props.summary.totalPlayers}` },
 		{ label: 'Archetypes', value: props.summary.scopedArchetypeCount },
-	];
-
-	if (isMtg.value)
-		values.splice(2, 0, { label: 'Decklists', value: `${props.summary.totalDecks} / ${props.summary.totalPlayers}` });
-
-	return values;
+	] satisfies Array<{ label: string; value: string | number | null }>;
 });
 </script>
 

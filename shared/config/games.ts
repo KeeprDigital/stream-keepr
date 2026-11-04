@@ -1,10 +1,16 @@
-import type { Game } from '../types/enums';
+import type { Game, ScreenMode } from '../types/enums';
 import type { FeatureMatchDefaults } from '../types/featureMatchDefaults';
-import type { CounterTypeConfig, FeatureMatchStateTracking, GameConfig } from '../types/game';
-import { GAME_VALUES } from '../types/enums';
+import type { CounterTypeConfig, FeatureMatchStateTracking, GameConfig, MetagameRules } from '../types/game';
+import { GAME_VALUES, METAGAME_SCOPE_VALUES } from '../types/enums';
 import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '../types/featureMatchDefaults';
 
-export type { CounterTypeConfig, FeatureMatchStateTracking, Game, GameConfig };
+export type { CounterTypeConfig, FeatureMatchStateTracking, Game, GameConfig, MetagameRules };
+
+/** A Metagame with no standings: every Player or a Player List, counted by participation. */
+const PARTICIPATION_ONLY: MetagameRules = {
+	scopes: ['all', 'playerList'],
+	readsStandings: false,
+};
 
 export const GAME_CONFIGS: Record<Game, GameConfig> = {
 	mtg: {
@@ -36,6 +42,10 @@ export const GAME_CONFIGS: Record<Game, GameConfig> = {
 			overtime: true,
 			sideboard: true,
 		},
+		metagame: {
+			scopes: METAGAME_SCOPE_VALUES,
+			readsStandings: true,
+		},
 	},
 	op: {
 		label: 'One Piece',
@@ -64,6 +74,8 @@ export const GAME_CONFIGS: Record<Game, GameConfig> = {
 			overtime: false,
 			sideboard: false,
 		},
+		// TCG+ exports Deck Lists but no standings (ADR-0074).
+		metagame: PARTICIPATION_ONLY,
 	},
 };
 
@@ -87,11 +99,35 @@ export const EVENT_PAGE_CARD_GAMES = {
 	matches: MTG_ONLY,
 	eventStructure: MTG_ONLY,
 	sync: MTG_ONLY,
-	metagame: MTG_ONLY,
+	metagame: EVERY_CARD_GAME,
 	archetypeReview: MTG_ONLY,
 	cards: MTG_ONLY,
 	integrations: MTG_ONLY,
 } as const satisfies Record<string, readonly Game[]>;
+
+/**
+ * The Card Games each Screen Mode is offered to, read by its Screen Mode
+ * Definition. A One Piece Card Game Event's Metagame reads participation only
+ * (ADR-0074), so the modes needing results or standings stay Magic's.
+ */
+export const SCREEN_MODE_CARD_GAMES = {
+	'background': EVERY_CARD_GAME,
+	'card': EVERY_CARD_GAME,
+	'deck': EVERY_CARD_GAME,
+	'standings': MTG_ONLY,
+	'top-cut': MTG_ONLY,
+	'feature-match': EVERY_CARD_GAME,
+	'feature-match-overlay': EVERY_CARD_GAME,
+	'broadcast-graphics': EVERY_CARD_GAME,
+	'metagame': EVERY_CARD_GAME,
+	'top-cards': EVERY_CARD_GAME,
+	'player-history': MTG_ONLY,
+	'pairings': MTG_ONLY,
+	'archetype-spotlight': EVERY_CARD_GAME,
+	'head-to-head': MTG_ONLY,
+	'round-clock': MTG_ONLY,
+	'talent': EVERY_CARD_GAME,
+} as const satisfies Record<ScreenMode, readonly Game[]>;
 
 /**
  * Whether something declaring `cardGames` is offered to an Event of `game`.
@@ -147,4 +183,9 @@ export function getFeatureMatchStateTracking(game: Game): FeatureMatchStateTrack
 
 export function getPlayerIdentityLabel(game: Game): string {
 	return GAME_CONFIGS[game]?.playerIdentityLabel ?? 'Deck';
+}
+
+/** What a Metagame of `game` reads; participation only for a game with no config. */
+export function getMetagameRules(game: Game): MetagameRules {
+	return GAME_CONFIGS[game]?.metagame ?? PARTICIPATION_ONLY;
 }

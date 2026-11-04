@@ -30,6 +30,8 @@ const route = useRoute();
 const eventId = computed(() => eventStore.eventId);
 const meleeEnabled = computed(() => eventStore.event?.meleeEnabled ?? false);
 const meleeConfigured = computed(() => eventStore.event?.meleeConfigured ?? false);
+// An MTG Event's Players come from Melee; an OP Event's come from a TCG+ Import (ADR-0074).
+const playersImported = computed(() => eventStore.event?.game === 'op' || meleeEnabled.value);
 const cardGame = computed(() => eventStore.event?.game);
 
 // The Event header and the Screen navigation, on every page this layout frames.
@@ -203,7 +205,7 @@ const navGroups = computed<NavGroup[]>(() => {
 					to: `/event/${id}/matches`,
 					cardGames: EVENT_PAGE_CARD_GAMES.matches,
 				},
-				...(meleeEnabled.value
+				...(playersImported.value
 					? [
 							{
 								label: 'Metagame',

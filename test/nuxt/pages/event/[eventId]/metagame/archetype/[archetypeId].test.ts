@@ -35,10 +35,11 @@ mockNuxtImport('useRouter', () => () => ({
 		history: { state: {}, base: '/' },
 	},
 }));
-mockNuxtImport('useEventStore', () => () => reactive({
+const mockEventStore = reactive({
 	eventId: 99,
-	event: { id: 99, game: 'mtg' },
-}));
+	event: { id: 99, game: 'mtg' as 'mtg' | 'op' },
+});
+mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('useMetagameStore', () => () => reactive({
 	scopeQuery: { scope: 'all' },
 	conversionTarget: { conversionMetric: 'topN', conversionThreshold: 8 },
@@ -64,7 +65,10 @@ async function mountPage() {
 				...nuxtUiStubs,
 				UTabs: true,
 				UILoadingSpinner: true,
-				MetagameStatStrip: true,
+				MetagameStatStrip: {
+					props: ['stats'],
+					template: '<dl data-testid="stats">{{ stats.map(stat => stat.label).join("|") }}</dl>',
+				},
 				MtgManaColorDisplay: true,
 				MetagameKeyCards: true,
 				MetagameCardsTable: true,
@@ -101,5 +105,21 @@ describe('archetype metagame detail page', () => {
 
 		expect(wrapper.findComponent({ name: 'MetagameArchetypeChartSeriesField' }).props()).toEqual({ eventId: 99, archetypeId: 1 });
 		wrapper.unmount();
+	});
+
+	// An OP Metagame counts its Archetype's cards and reads participation only; its pin is edited as on Magic (ADR-0074).
+	it.each([
+		['mtg', 'Players|Meta Share|Win Rate|Avg Place|Conversion (Top 8)'],
+		['op', 'Players|Meta Share'],
+	] as const)('on a %s Event, shows the cards, the pin, and the stats %s', async (game, stats) => {
+		mockEventStore.event.game = game;
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="stats"]').text()).toBe(stats);
+		expect(wrapper.findComponent({ name: 'MetagameCardsTable' }).exists()).toBe(true);
+		expect(wrapper.findComponent({ name: 'MetagameArchetypeChartSeriesField' }).exists()).toBe(true);
+		wrapper.unmount();
+		mockEventStore.event.game = 'mtg';
 	});
 });

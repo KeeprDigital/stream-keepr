@@ -7,7 +7,7 @@ import {
 	QUANTITY_POSITION_VALUES,
 	TOP_CARDS_STAT_VALUES,
 } from '../types/enums';
-import { CARD_TYPE_BUCKET_ORDER } from '../utils/metagame';
+import { METAGAME_CARD_TYPE_BUCKETS } from '../utils/metagame';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
 import {
@@ -54,7 +54,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	board: editorField(z.enum(BOARD_SELECTION_VALUES), { label: 'Board' }),
 	sortBy: editorField(z.enum(METAGAME_CARD_SORT_BY_VALUES), { label: 'Rank by' }),
 	limit: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT), { label: 'Card count' }),
-	excludedCardTypes: z.array(z.enum(CARD_TYPE_BUCKET_ORDER)).max(CARD_TYPE_BUCKET_ORDER.length),
+	excludedCardTypes: z.array(z.enum(METAGAME_CARD_TYPE_BUCKETS)).max(METAGAME_CARD_TYPE_BUCKETS.length),
 	/** Only cards the Event's points system points, applied server-side before `limit`. */
 	pointedOnly: editorField(z.boolean(), { label: 'Pointed only' }),
 

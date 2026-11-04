@@ -10,6 +10,8 @@ const entry = {
 	colors: 'R',
 	cmc: 1,
 	manaCost: '{R}',
+	cardNumber: null,
+	imageUrl: null,
 	inclusionRate: 80,
 	avgCopies: 3.6,
 	totalCopies: 18,
@@ -41,6 +43,23 @@ describe('screenTopCardsCard', () => {
 		const img = wrapper.get('img');
 		expect(img.attributes('src')).toBe('https://cards.scryfall.io/normal/front/a/b/abcd1234-0000-0000-0000-000000000000.jpg');
 		expect(img.attributes('alt')).toBe('Lightning Bolt');
+	});
+
+	it('renders a One Piece card\'s standard Printing image', () => {
+		const wrapper = mount(Card, {
+			props: {
+				...baseProps,
+				entry: {
+					...entry,
+					name: 'Usopp',
+					scryfallId: null,
+					cardNumber: 'OP01-040',
+					imageUrl: 'https://cards-img.keepr.digital/OP01-040.png',
+				},
+			},
+		});
+
+		expect(wrapper.get('img').attributes('src')).toBe('https://cards-img.keepr.digital/OP01-040.png');
 	});
 
 	it('falls back to the card name when there is no scryfall id', () => {

@@ -1,6 +1,7 @@
-import type { ComputedRef, Ref } from 'vue';
-import { computed, ref } from 'vue';
-import { CARD_TYPE_BUCKET_ORDER, getCardTypeBucket, getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
+import type { ComputedRef, MaybeRefOrGetter, Ref } from 'vue';
+import type { Game } from '~~/shared/types/enums';
+import { computed, ref, toValue } from 'vue';
+import { getCardTypeDisplayLabel, getMetagameCardTypeBucket, getMetagameCardTypeBuckets } from '~~/shared/utils/metagame';
 
 interface CardFilterEntry {
 	name: string;
@@ -9,6 +10,8 @@ interface CardFilterEntry {
 
 interface UseMetagameCardFiltersOptions {
 	defaultExcludedTypes?: string[];
+	/** The Event's Card Game, whose card types the filters toggle (ADR-0074). */
+	game?: MaybeRefOrGetter<Game | undefined>;
 }
 
 export function useMetagameCardFilters<T extends CardFilterEntry>(
@@ -18,16 +21,17 @@ export function useMetagameCardFilters<T extends CardFilterEntry>(
 	const defaultExcludedTypes = options.defaultExcludedTypes ?? [];
 	const search = ref('');
 	const excludedTypes = ref<Set<string>>(new Set(defaultExcludedTypes));
+	const bucketOf = (cardType: string | null) => getMetagameCardTypeBucket(toValue(options.game), cardType);
 
 	const uniqueCardTypes = computed(() => {
 		const types = new Set<string>();
 		for (const entry of entries.value) {
 			if (entry.cardType) {
-				types.add(getCardTypeBucket(entry.cardType));
+				types.add(bucketOf(entry.cardType));
 			}
 		}
 
-		return CARD_TYPE_BUCKET_ORDER.filter(type => types.has(type));
+		return getMetagameCardTypeBuckets(toValue(options.game)).filter(type => types.has(type));
 	});
 
 	const visibleExcludedTypes = computed(() => uniqueCardTypes.value.filter(type => excludedTypes.value.has(type)));
@@ -71,7 +75,7 @@ export function useMetagameCardFilters<T extends CardFilterEntry>(
 			currentEntries = currentEntries.filter(entry => entry.name.toLowerCase().includes(query));
 		}
 		if (excludedTypes.value.size > 0) {
-			currentEntries = currentEntries.filter(entry => !excludedTypes.value.has(getCardTypeBucket(entry.cardType)));
+			currentEntries = currentEntries.filter(entry => !excludedTypes.value.has(bucketOf(entry.cardType)));
 		}
 		return currentEntries;
 	});

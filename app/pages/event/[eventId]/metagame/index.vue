@@ -129,7 +129,7 @@ const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
 					:entries="archetypeData?.entries ?? []"
 					:total-players="archetypeData?.totalPlayers ?? 0"
 					:loading="archetypeLoading"
-					:is-mtg="isMtg"
+					:game="eventStore.event?.game"
 					:archetypes="archetypeStore.archetypes"
 					:sort-by="archetypeSortBy"
 					@update:sort-by="archetypeSortBy = $event"

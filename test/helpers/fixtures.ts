@@ -198,6 +198,8 @@ export function createMockArchetypeDetailResponse(overrides?: Partial<ArchetypeD
 				cardType: 'Instant',
 				scryfallId: 'counterspell',
 				colors: 'U',
+				cardNumber: null,
+				imageUrl: null,
 				cmc: 2,
 				manaCost: '{U}{U}',
 				inclusionRate: 100,

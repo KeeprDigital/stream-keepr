@@ -2472,6 +2472,7 @@ Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/i
 - Its scopes are every Player and a Player List.
 - With no standings, it shows no Conversion Target, Conversion Rate, win rate or average position.
 - Its card rules are OP's: Character, Event and Stage, with no basic lands, highlander or Scryfall data.
+- The read model holds these rules, read off the Event's Card Game (`getMetagameRules`), so a stored or requested scope it does not offer reads every Player, and a requested Conversion Target, win rate or place reads as none. The page and Screen editors offer only what it reads, and a Screen rendering hides any column it does not.
 
 **A Feature Match Slot side takes a Player as on MTG, or manual data.**
 

@@ -1,4 +1,5 @@
 import type { OpCardColor } from './card/op';
+import type { MetagameScope } from './enums';
 import type { FeatureMatchDeckListReference } from './featureMatchDeckList';
 import type { FeatureMatchDefaults } from './featureMatchDefaults';
 import type { OpPlayerDeckListReference } from './opDeckList';
@@ -24,6 +25,17 @@ export interface FeatureMatchStateTracking {
 	sideboard: boolean;
 }
 
+/** What a Card Game's Metagame reads (ADR-0074). */
+export interface MetagameRules {
+	/** The Metagame Scopes it offers; any other reads every Player. */
+	scopes: readonly MetagameScope[];
+	/**
+	 * Whether it reads standings: win rate, average position, points and the
+	 * Conversion Target. Without them it reads participation only.
+	 */
+	readsStandings: boolean;
+}
+
 export interface GameConfig {
 	label: string;
 	defaults: FeatureMatchDefaults;
@@ -32,6 +44,7 @@ export interface GameConfig {
 	startingHandSize: number;
 	playerIdentityLabel: string;
 	tracks: FeatureMatchStateTracking;
+	metagame: MetagameRules;
 }
 
 // Game-specific player data (discriminated union on `type`)

@@ -17,7 +17,8 @@ function isOpCardColor(value: unknown): value is OpCardColor {
 }
 
 /** One Piece colours are kept in the shared `colors` column as a JSON array. */
-function decodeColors(stored: string | null): OpCardColor[] {
+/** A catalogue row's One Piece colours, stored as a JSON array. */
+export function decodeOpCatalogueColors(stored: string | null): OpCardColor[] {
 	try {
 		const parsed: unknown = JSON.parse(stored ?? '[]');
 		return Array.isArray(parsed)
@@ -62,7 +63,7 @@ export function toOpCatalogueCard(row: OpCatalogueColumns): OpCatalogueCard | nu
 	return {
 		name: row.catalogueName,
 		category: row.category,
-		colors: decodeColors(row.colors),
+		colors: decodeOpCatalogueColors(row.colors),
 		cost: row.cost,
 		power: row.power,
 		counter: row.counter,

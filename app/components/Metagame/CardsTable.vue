@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { TableColumn } from '@nuxt/ui';
-import type { BoardSelection, MetagameCardSortBy } from '~~/shared/types/enums';
+import type { BoardSelection, Game, MetagameCardSortBy } from '~~/shared/types/enums';
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
+import { isMetagameColumnOffered } from '~~/shared/utils/metagame';
 
 const props = withDefaults(defineProps<{
 	entries: CardBreakdownEntry[];
@@ -15,6 +16,8 @@ const props = withDefaults(defineProps<{
 	pointedOnly?: boolean;
 	/** When provided, row clicks navigate to this path */
 	getRowLink?: (entry: CardBreakdownEntry) => string;
+	/** The Event's Card Game: an OP card has no mana cost, and an OP deck no Sideboard (ADR-0074). */
+	game?: Game;
 }>(), {
 	showDeckCount: true,
 	showPoints: false,
@@ -44,7 +47,10 @@ const {
 	filteredEntries,
 } = useMetagameCardFilters(computed(() => props.entries), {
 	defaultExcludedTypes: ['Land'],
+	game: () => props.game,
 });
+
+const hasSideboard = computed(() => isMetagameColumnOffered(props.game, 'sideboardCount'));
 
 // Pointed lands (Strip Mine, Wasteland, …) belong in the pointed view, so it shows lands.
 watch(() => props.pointedOnly, (pointedOnly) => {
@@ -92,7 +98,11 @@ watch(sorting, (value) => {
 
 const columns = computed<TableColumn<CardBreakdownEntry>[]>(() => [
 	createNameColumn<CardBreakdownEntry>(),
-	createManaCostColumn<CardBreakdownEntry>(),
+	...(isMetagameColumnOffered(props.game, 'manaCost')
+		? [
+				createManaCostColumn<CardBreakdownEntry>(),
+			]
+		: []),
 	createCardTypeColumn<CardBreakdownEntry>(),
 	...(props.showPoints
 		? [
@@ -128,11 +138,15 @@ const columns = computed<TableColumn<CardBreakdownEntry>[]>(() => [
 		header: createSortableHeader('MB'),
 		enableSorting: true,
 	},
-	{
-		accessorKey: 'sideboardCount',
-		header: createSortableHeader('SB'),
-		enableSorting: true,
-	},
+	...(hasSideboard.value
+		? [
+				{
+					accessorKey: 'sideboardCount',
+					header: createSortableHeader('SB'),
+					enableSorting: true,
+				} satisfies TableColumn<CardBreakdownEntry>,
+			]
+		: []),
 ]);
 
 function handleRowClick(_e: unknown, row: { original: CardBreakdownEntry }) {
@@ -174,7 +188,7 @@ const maxInclusionRate = computed(() =>
 					placeholder="Search cards…"
 					class="w-56"
 				/>
-				<UFieldGroup size="sm">
+				<UFieldGroup v-if="hasSideboard" size="sm">
 					<UButton
 						:color="showMainboard ? 'primary' : 'neutral'"
 						:variant="showMainboard ? 'soft' : 'outline'"

@@ -25,6 +25,8 @@ function card(id: number, name: string, cardType: string, inclusionRate: number)
 		colors: 'R',
 		cmc: 1,
 		manaCost: '{R}',
+		cardNumber: null,
+		imageUrl: null,
 		inclusionRate,
 		avgCopies: 4,
 		totalCopies: 8,
@@ -64,7 +66,7 @@ const detail: ArchetypeDetailResponse = {
 
 describe('projectArchetypeSpotlight', () => {
 	it('carries the archetype detail page\'s meta share and Conversion Rate unchanged', () => {
-		const spotlight = projectArchetypeSpotlight(detail, { cardLimit: 10, excludedCardTypes: [] });
+		const spotlight = projectArchetypeSpotlight(detail, { game: 'mtg', cardLimit: 10, excludedCardTypes: [] });
 
 		expect(spotlight).toMatchObject({
 			archetype: { id: 7, name: 'Mono Red', colors: 'R' },
@@ -76,7 +78,7 @@ describe('projectArchetypeSpotlight', () => {
 	});
 
 	it('lists the pilots by position, with their record, placed pilots first', () => {
-		const { pilots } = projectArchetypeSpotlight(detail, { cardLimit: 10, excludedCardTypes: [] });
+		const { pilots } = projectArchetypeSpotlight(detail, { game: 'mtg', cardLimit: 10, excludedCardTypes: [] });
 
 		expect(pilots).toEqual([
 			{
@@ -111,6 +113,7 @@ describe('projectArchetypeSpotlight', () => {
 
 	it('shows the most-included cards, up to the card limit, after dropping excluded card types', () => {
 		const { topCards } = projectArchetypeSpotlight(detail, {
+			game: 'mtg',
 			cardLimit: 3,
 			excludedCardTypes: ['Land'],
 		});
@@ -120,7 +123,7 @@ describe('projectArchetypeSpotlight', () => {
 	});
 
 	it('keeps every card type when none is excluded', () => {
-		const { topCards } = projectArchetypeSpotlight(detail, { cardLimit: 2, excludedCardTypes: [] });
+		const { topCards } = projectArchetypeSpotlight(detail, { game: 'mtg', cardLimit: 2, excludedCardTypes: [] });
 
 		expect(topCards.map(entry => entry.name)).toEqual(['Monastery Swiftspear', 'Sunbaked Canyon']);
 	});

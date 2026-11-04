@@ -7,6 +7,8 @@ const {
 	ready,
 	isEmpty,
 	headerText,
+	game,
+	readsStandings,
 	conversionLabel,
 	spotlight,
 	pageData,
@@ -73,12 +75,17 @@ const stats = computed(() => {
 			value: String(data.playerCount),
 		},
 		{ label: 'Meta Share', value: `${data.metaShare}%` },
-		{
-			label: `Conversion (${conversionLabel.value})`,
-			value: data.conversionRate != null && data.convertedCount != null
-				? `${data.conversionRate}% (${data.convertedCount}/${data.playerCount})`
-				: '-',
-		},
+		// A Metagame reading participation only has no Conversion to show (ADR-0074).
+		...(readsStandings.value
+			? [
+					{
+						label: `Conversion (${conversionLabel.value})`,
+						value: data.conversionRate != null && data.convertedCount != null
+							? `${data.conversionRate}% (${data.convertedCount}/${data.playerCount})`
+							: '-',
+					},
+				]
+			: []),
 	];
 });
 
@@ -111,11 +118,11 @@ const cardStyle = {
 			<div v-if="spotlight" class="spotlight-summary flex items-center justify-between gap-6 px-4">
 				<div class="flex items-center gap-3 min-w-0">
 					<span class="spotlight-name truncate" :style="headlineStyle">{{ spotlight.archetype.name }}</span>
-					<MtgManaColorDisplay
+					<MetagameArchetypeColors
 						v-if="spotlight.archetype.colors"
 						:colors="spotlight.archetype.colors"
+						:game="game"
 						size="lg"
-						:cost="true"
 					/>
 				</div>
 				<div class="flex gap-8">
@@ -128,20 +135,21 @@ const cardStyle = {
 
 			<div class="spotlight-body flex gap-6 flex-1 min-h-0 px-4">
 				<div class="spotlight-pilots broadcast-table-surface" :style="surfaceStyle">
-					<div class="pilot-grid broadcast-table-header-row" :style="columnHeaderStyle">
-						<span>#</span>
+					<div class="pilot-grid broadcast-table-header-row" :class="{ 'is-names-only': !readsStandings }" :style="columnHeaderStyle">
+						<span v-if="readsStandings">#</span>
 						<span>Pilot</span>
-						<span class="text-right">Record</span>
+						<span v-if="readsStandings" class="text-right">Record</span>
 					</div>
 					<div
 						v-for="pilot in pageData"
 						:key="pilot.id"
 						class="pilot-row pilot-grid broadcast-table-row"
+						:class="{ 'is-names-only': !readsStandings }"
 						:style="rowStyle"
 					>
-						<span class="pilot-position" :style="secondaryTextStyle">{{ pilot.position ?? '-' }}</span>
+						<span v-if="readsStandings" class="pilot-position" :style="secondaryTextStyle">{{ pilot.position ?? '-' }}</span>
 						<span class="pilot-name truncate" :style="primaryTextStyle">{{ pilot.name }}</span>
-						<span class="pilot-record text-right" :style="primaryTextStyle">{{ formatRecord(pilot) }}</span>
+						<span v-if="readsStandings" class="pilot-record text-right" :style="primaryTextStyle">{{ formatRecord(pilot) }}</span>
 					</div>
 					<div
 						v-if="totalPages > 1"
@@ -195,6 +203,9 @@ const cardStyle = {
 	align-items: center;
 	padding: 0.6rem 0.5rem;
 	font-size: clamp(1rem, 1.8cqw, 1.6rem);
+}
+.pilot-grid.is-names-only {
+	grid-template-columns: minmax(0, 1fr);
 }
 .pilot-row {
 	border-bottom-style: solid;

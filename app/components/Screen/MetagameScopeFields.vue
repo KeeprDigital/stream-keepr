@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
 import type { MetagameScope } from '~~/shared/types/enums';
+import { getMetagameRules } from '~~/shared/config/games';
 
 /**
  * The settings fields of a Metagame Scope (#777), shared by every mode reading
  * the metagame: the scope, the field its current scope reads, and the archetype
  * filter where its mode offers one. Each control's label and bounds come from
- * the mode's contract `fields`. Every mode offers every scope (#904); a filter
- * the contract does not hold is not offered. Each edit is emitted as the patch
+ * the mode's contract `fields`. Every mode offers every scope its Event's Card
+ * Game reads (#904, ADR-0074); a filter the contract does not hold is not offered. Each edit is emitted as the patch
  * naming it, a cleared Player List or filter as the `null` that deletes it
  * (ADR-0041); the editor writes it.
  */
@@ -43,9 +44,10 @@ const emit = defineEmits<{
 }>();
 
 const playerListStore = usePlayerListStore();
+const eventStore = useEventStore();
 
 const scopeOptions = computed(() => {
-	const options = [
+	const options: { label: string; value: MetagameScope }[] = [
 		{ label: 'All Players', value: 'all' },
 		{ label: 'Top N', value: 'topN' },
 		{ label: 'Minimum Points', value: 'minPoints' },
@@ -54,7 +56,10 @@ const scopeOptions = computed(() => {
 	if (playerListStore.lists.length > 0)
 		options.push({ label: 'Player List', value: 'playerList' });
 
-	return options;
+	const game = eventStore.event?.game;
+	return game
+		? options.filter(option => getMetagameRules(game).scopes.includes(option.value))
+		: options;
 });
 </script>
 

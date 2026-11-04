@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { BoardSelection, MetagameCardSortBy } from '~~/shared/types/enums';
 import type { CardBreakdownEntry, CardBreakdownResponse } from '~~/shared/types/metagame';
-import { getMtgGameData } from '~~/shared/utils/gameData';
+import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
 import { useMetagameClient } from '~/modules/metagame/client';
 
 const eventStore = useEventStore();
@@ -16,9 +16,14 @@ const cardSortBy = ref<MetagameCardSortBy>('inclusionRate');
 const cardBoardFilter = ref<BoardSelection>('full');
 const cardPointedOnly = ref(false);
 
-const showsPoints = computed(() => !!eventStore.event?.pointsSystem);
+const game = computed(() => eventStore.event?.game);
+// Highlander points are Magic's.
+const showsPoints = computed(() => game.value !== 'op' && !!eventStore.event?.pointsSystem);
 
-const hasDeckData = computed(() => playerStore.players.some(p => getMtgGameData(p.gameData).deckName));
+// An OP Player holds their Deck List by reference (ADR-0074); a Magic Player's names its deck.
+const hasDeckData = computed(() => playerStore.players.some(p => game.value === 'op'
+	? getOpGameData(p.gameData).deckList != null
+	: getMtgGameData(p.gameData).deckName));
 
 function cardRowLink(entry: CardBreakdownEntry) {
 	return `/event/${eventStore.eventId}/metagame/card/${entry.id}`;
@@ -79,7 +84,9 @@ watch([cardSortBy, cardBoardFilter, cardPointedOnly], () => fetchCards());
 			v-if="!hasDeckData"
 			icon="i-lucide-layers"
 			title="No deck data available"
-			description="Sync deck lists from Melee or add deck info manually."
+			:description="game === 'op'
+				? 'Import the TCG+ deck list export, or enter a Player\'s Deck List on the Players page.'
+				: 'Sync deck lists from Melee or add deck info manually.'"
 		/>
 
 		<MetagameCardsTable
@@ -90,6 +97,7 @@ watch([cardSortBy, cardBoardFilter, cardPointedOnly], () => fetchCards());
 			:sort-by="cardSortBy"
 			:board-filter="cardBoardFilter"
 			:show-points="showsPoints"
+			:game="game"
 			:pointed-only="cardPointedOnly"
 			:get-row-link="cardRowLink"
 			@update:sort-by="cardSortBy = $event"
