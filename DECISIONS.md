@@ -984,7 +984,7 @@ Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/is
 
 **The store asks again in the statement that commits.** The template row's `INSERT` or `UPDATE` carries `REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE`, the rule the Screen write already uses, with no reference allowed to be retired. The reference-index insert reads the same bound array under the same rule. So a template commits only with every reference resolving, and then every reference is indexed. The rule now lives in `server/modules/graphic-asset-reference-resolution.ts`, shared by the Screen and both template stores. A commit the rule refuses answers its own `409`, told apart from a stale `revision` by the revision still standing.
 
-**Retire is refused while a saved template references the asset.** Retiring a Graphic Asset is refused while any Broadcast Graphic Template, Feature Match Layout Template or Installed Graphics Template (since ADR-0068) references any of its revisions. It answers `in-use` with those templates' usage, as Trash answers a referenced asset, and the Library Workspace names them. The condition sits in the catalogue's retiring `UPDATE`, so a template saved concurrently either commits first and holds the asset back, or finds the asset retired and is refused. A Screen's reference does not hold Retire back: a Screen keeps an unchanged retired reference resolving, as before. This matches a selected Broadcast Deck List, which cannot be deleted. A Theme's reference and a Screen Theme Override's do hold it back (ADR-0050).
+**Retire is refused while a saved template references the asset.** Retiring a Graphic Asset is refused while any Broadcast Graphic Template, Feature Match Layout Template or Installed Graphics Template (since ADR-0068) references any of its revisions. It answers `in-use` with those templates' usage, as Trash answers a referenced asset, and the Library Workspace names them. The condition sits in the catalogue's retiring `UPDATE`, so a template saved concurrently either commits first and holds the asset back, or finds the asset retired and is refused. A Screen's reference does not hold Retire back: a Screen keeps an unchanged retired reference resolving, as before. This matches a selected Broadcast Deck List, which cannot be deleted. A Theme's reference, a Screen Theme Override's and a Talent's photo do hold it back (ADR-0050, ADR-0067).
 
 **Content availability is checked at the route only.** It is the byte store's state, which no D1 statement can see.
 
@@ -2105,6 +2105,35 @@ Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/is
 - **Replace the group's surface with a Shape Graphic Item.** It keeps the backdrop, but invents a layer the author never made; E12 drops what is not inherited.
 - **Refuse to ungroup a row or column group.** The author would have to switch it to canvas first, which moves its children, so the only way out of a stack would move what it held.
 
+## ADR-0067: A Talent's photo is a Graphic Asset Reference that holds Retire back
+
+Accepted · 2026-11-04 · [#918](https://github.com/KeeprDigital/stream-keepr/issues/918). Records T4 b from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
+
+### Decision
+
+**A Talent may hold a photo: an ordinary Graphic Asset Reference to one exact image revision, or none.** Image only; a silent video is refused. The Talent row stores `{ assetId, revisionId }` in `event_talents.photo`, and the Talent's existing `talent:created` and `talent:updated` messages carry it.
+
+**It is indexed under a new owner kind, `talent`,** with the Talent's id, slot `photo`, and the Talent's Event as the reference's `event_id`. A write naming the photo is held to ADR-0034's rule: the route asks the library first, so a refusal names the slot, and the statement that commits the Talent row asks again (`REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE`). Setting the photo replaces the slot in that commit; `null` clears it and releases the reference. A write that omits `photo` leaves both alone. Deleting the Talent releases it in the same commit, and deleting the Event drops it through the reference's `event_id` cascade.
+
+**Retire is refused while a Talent references the asset,** as for a Theme (ADR-0050). Trash was already refused for any reference. The usage names the Talent and its Event's name, and the Library Workspace's refusal says both.
+
+**The Screen Output Asset Capability is unchanged.** The photo shows in the operator app only, read through the authenticated revision content route. ADR-0050's capability rule stands; #782 will extend it so a Screen whose mode data publishes a Talent admits that Talent's photo revision.
+
+### Why
+
+The Talent Screen Mode (#782) and productions need a photo per Talent, and all broadcast media comes from the Graphics Asset Library. Without the Retire guard a Talent could keep a photo the library had hidden from discovery, and any write re-stating it would be refused, as ADR-0034 found for templates.
+
+### Consequences
+
+- A Talent cannot hold a retired photo, so a photo write needs no retained-reference allowance.
+- Binding a Talent's photo to a Broadcast Graphics media Graphic Input is not covered; it needs its own ticket.
+- `event_talents.graphic_asset_reference_version` is the one-shot token a photo write stamps, as a Theme's is, so the index rows are written only beside the Talent row the batch committed. A create learns its new Talent's id through it.
+
+### Rejected alternatives
+
+- **Let Retire proceed, as a Screen's own mode reference does.** The Talent would keep a retired photo that #782 would put on air; the maintainer chose the Theme's rule (#918).
+- **Admit the photo in the capability now.** No Screen Mode shows a Talent's photo yet; #782 owns that change.
+
 ## ADR-0068: An Installed Graphics Template may be removed, releasing its references, and a retried installation reinstalls it
 
 Accepted · 2026-11-04 · [#622](https://github.com/KeeprDigital/stream-keepr/issues/622) · Amends ADR-0034
@@ -2129,10 +2158,37 @@ An Installed Graphics Template could not be deleted, so the revisions its refere
 - **A Graphic Asset an Installed Graphics Template references can no longer be Retired** until that Template is removed. This applies to every installation already made, with no backfill: their references were always indexed under `installed-graphics-template`. An asset already retired under an Installed Graphics Template stays retired, and that Template stays unplaceable until the asset is restored.
 - Only the User who started an installation can retry it, as for every Graphics Ingestion Operation, while any signed-in User may remove what it installed. A retry reinstalls only while that operation's record exists; the retention contract plans to clean one up a year after it ends. Either way, importing the Template Package again still works, as a new Installed Graphics Template. The library's Delete prompt says so.
 - Removal records no Evidence: it is not a Graphic Asset lifecycle transition. The removed row's `removed_by` and `removed_at` record who removed it and when.
-- Migration `0019_installed_template_removal` adds the two nullable columns. Existing rows read as installed.
+- Migration `0022_installed_template_removal` adds the two nullable columns. Existing rows read as installed.
 
 ### Rejected alternatives
 
 - **Delete the row.** A retried installation would then have nothing to reinstall from, because its staged bytes are released at completion, and the receipt would name a Template no record explains.
 - **Refuse a retry after removal as already handled.** The maintainer chose to reinstall (#622).
 - **Two-stage removal, like Trash, with a restore window.** Retrying the installation already restores a removed Template, for as long as its assets can take references.
+
+## ADR-0069: An Archetype's Pinned Chart Series names a Theme chart series, and is placed before the id rule
+
+Accepted · 2026-11-04 · [#909](https://github.com/KeeprDigital/stream-keepr/issues/909), settling [#783](https://github.com/KeeprDigital/stream-keepr/issues/783) Q17. Builds on ADR-0049 and ADR-0051.
+
+### Decision
+
+**The pin is a series slot, 1 to 8, stored on the Archetype.** The `archetypes` row holds a nullable `chart_series` (migration 0020). It names one of the Metagame Mode Tokens `chart-series-1` to `chart-series-8`; the Theme, or a Screen Theme Override, still decides what each series looks like, and a Screen holds no look of its own (ADR-0051).
+
+**An operator sets and clears it through the Archetype write.** The Archetype PATCH takes `chartSeries` (an integer 1–8, or null); the write announces `archetype:updated`, which every Metagame Screen already re-reads on. Creating an Archetype takes no pin, and Melee Sync writes no Archetype field, so it never writes one. The Archetype's Metagame page edits it, naming any other Archetype pinning the same series and warning when the chosen one is taken.
+
+**The chart places pins first.** `assignColorSlots` (`shared/utils/metagameChart.ts`) gives each shown pinned Archetype its series, lowest id first; one whose series a lower id already holds is placed as if unpinned. The unpinned then take the remaining slots by the existing preferred-slot rule. The breakdown carries each Archetype's `chartSeries`, so every chart reading it colours alike.
+
+### Why
+
+The id-derived slot moves an Archetype whenever another preferring the same slot enters or leaves the chart, so an operator could not hold one Archetype in one colour for a show. #783 tied the pin to the shared Screen style (#781), which Themes superseded; pinning a literal colour would have given a Screen a look of its own and bypassed the Theme.
+
+### Consequences
+
+- A pinned Archetype keeps its series whichever others enter or leave the chart, unless a lower-id Archetype pinning the same series is shown too.
+- Pins are not unique: two Archetypes may pin one series, and only the chart decides between them, by id, which is creation order.
+- Changing the Theme's chart series recolours every pinned Archetype with it.
+
+### Rejected alternatives
+
+- **Pin a literal colour.** It would bypass the Theme and Screen Theme Overrides, contradicting ADR-0049 and ADR-0051.
+- **Refuse a pin another Archetype holds.** Only Archetypes shown together clash, and which are shown depends on scope and limit; a warning leaves the operator to decide.

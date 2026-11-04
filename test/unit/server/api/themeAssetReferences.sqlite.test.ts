@@ -1,19 +1,20 @@
 import type { H3Event } from 'h3';
-import type { GraphicAssetId, GraphicAssetReference, GraphicAssetReferenceStatus, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
+import type { GraphicAssetId, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import {
-	graphicAssetContents,
-	graphicAssetReferences,
-	graphicAssetRevisions,
-	graphicAssets,
-} from '~~/server/db/schema/graphicsAsset';
+import { graphicAssetReferences } from '~~/server/db/schema/graphicsAsset';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import { createD1ScreenOutputAssetAuthorizer } from '~~/server/modules/screen-output-assets/authorizer';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
-import { createTestGraphicsLibrary, ingestImage, publishedRevision } from '~~/test/helpers/graphicsLibrary';
+import {
+	catalogueSelectability,
+	createTestGraphicsLibrary,
+	ingestImage,
+	publishedRevision,
+	seedGraphicAssetRevision,
+} from '~~/test/helpers/graphicsLibrary';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
@@ -34,24 +35,7 @@ vi.doMock('~~/server/utils/auth', () => ({
 	optionalBrowserSessionId: async () => undefined,
 }));
 
-/** Assets the library answered for before they were retired, as a route's question can be overtaken by the commit. */
-const answeredBeforeRetirement = new Set<string>();
-
-/** The library a write asks about selectability: what the catalogue holds, with every content byte available. */
-async function inspectGraphicAssetRevisions(input: { references: GraphicAssetReference[] }): Promise<GraphicAssetReferenceStatus[]> {
-	return await Promise.all(input.references.map(async (reference) => {
-		const [row] = await db.select({ kind: graphicAssets.kind, lifecycleState: graphicAssets.lifecycleState })
-			.from(graphicAssetRevisions)
-			.innerJoin(graphicAssets, eq(graphicAssets.id, graphicAssetRevisions.assetId))
-			.where(eq(graphicAssetRevisions.id, reference.revisionId));
-		const lifecycleState = answeredBeforeRetirement.has(reference.assetId)
-			? 'active'
-			: row?.lifecycleState;
-		return row
-			? { outcome: 'available' as const, kind: row.kind, lifecycleState } as GraphicAssetReferenceStatus
-			: { outcome: 'missing' as const };
-	}));
-}
+const { inspectGraphicAssetRevisions, answeredBeforeRetirement } = catalogueSelectability(harness);
 vi.doMock('~~/server/modules/graphics-asset-library/runtime', () => ({
 	graphicsAssetLibraryForEvent: () => ({ inspectGraphicAssetRevisions }),
 }));
@@ -104,25 +88,14 @@ async function ingest(): Promise<Revision> {
 	return publishedRevision(await ingestImage(context, { idempotencyKey: `image-${++images}`, initiatedBy: 'author' }));
 }
 
-/** A font revision, seeded as the catalogue holds one: font ingestion needs a browser's evidence. */
-const FACE = { assetId: 'asset-face' as GraphicAssetId, revisionId: 'revision-face' as GraphicAssetRevisionId };
+let face: Revision;
 
 let logo: Revision;
 let plate: Revision;
 let unrelated: Revision;
 
 beforeAll(async () => {
-	const digest = 'f'.repeat(64);
-	await db.insert(graphicAssetContents).values({ digest, byteLength: 70, canonicalMime: 'font/woff2' } as never);
-	await db.insert(graphicAssets).values({ id: FACE.assetId, name: 'Brand face', kind: 'font' } as never);
-	await db.insert(graphicAssetRevisions).values({
-		id: FACE.revisionId,
-		assetId: FACE.assetId,
-		revisionNumber: 1,
-		contentDigest: digest,
-		compatibilityProfile: 'static-font-v1',
-		technicalFacts: {},
-	} as never);
+	face = await seedGraphicAssetRevision(harness, 'font', 'face');
 });
 
 afterAll(async () => await harness.close());
@@ -206,15 +179,15 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 			'a Theme library font',
 			'theme',
 			'heading',
-			() => libraryFont(FACE),
-			() => FACE,
+			() => libraryFont(face),
+			() => face,
 		],
 		[
 			'an override\'s library font',
 			'screen',
 			'heading',
-			() => libraryFont(FACE),
-			() => FACE,
+			() => libraryFont(face),
+			() => face,
 		],
 		[
 			'an override\'s background layer',
@@ -418,13 +391,13 @@ describe('a Screen Output\'s capability over its Theme\'s content', () => {
 			value: { kind: 'image', ...logo },
 		});
 		await call(setToken, { themeId, token: 'heading' }, {
-			value: libraryFont(FACE),
+			value: libraryFont(face),
 		});
 		const screen = await screenRow(screenId);
 
 		expect([
 			await resolves(screen, logo),
-			await resolves(screen, FACE),
+			await resolves(screen, face),
 			await resolves(screen, unrelated),
 		]).toEqual([true, true, false]);
 	});
@@ -446,14 +419,14 @@ describe('a Screen Output\'s capability over its Theme\'s content', () => {
 	it('resolves a dormant override of another mode\'s Mode Token only once the Screen shows that mode again', async () => {
 		await call(patchOverrides, { id: eventId, screenId }, {
 			tokens: {
-				'standings.title-typography': libraryFont(FACE),
+				'standings.title-typography': libraryFont(face),
 			},
 		});
 		await db.update(schema.screens).set({ currentMode: 'card' }).where(eq(schema.screens.id, screenId));
-		expect(await resolves(await screenRow(screenId), FACE)).toBe(false);
+		expect(await resolves(await screenRow(screenId), face)).toBe(false);
 
 		await db.update(schema.screens).set({ currentMode: 'standings' }).where(eq(schema.screens.id, screenId));
-		expect(await resolves(await screenRow(screenId), FACE)).toBe(true);
+		expect(await resolves(await screenRow(screenId), face)).toBe(true);
 	});
 
 	it('resolves nothing of a Theme its Event does not use', async () => {

@@ -20,7 +20,7 @@ const loading = computed(() => eventStore.loading);
 		<h2 class="text-xl font-semibold">
 			Talents
 		</h2>
-		<EventConfigTalents :talents="event.talents" />
+		<EventConfigTalents :talents="event.talents" :event-id="event.id" />
 
 		<EventBroadcastDeckListLibrary :event="event" />
 	</div>

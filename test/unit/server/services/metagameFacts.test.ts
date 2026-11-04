@@ -7,6 +7,7 @@ function makeArchetype(overrides?: Partial<ArchetypeBreakdownEntry>): ArchetypeB
 		id: 1,
 		name: 'Azorius Control',
 		colors: 'WU',
+		chartSeries: null,
 		count: 12,
 		metaShare: 24,
 		winRate: 62.5,

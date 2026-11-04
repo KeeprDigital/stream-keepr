@@ -34,6 +34,10 @@ export const GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS = [
 /** The owner kind a Theme's Graphic Asset References are indexed under (ADR-0050). */
 export const THEME_REFERENCE_OWNER_KIND = 'theme';
 
+/** The owner kind and slot a Talent's photo is indexed under (ADR-0067). */
+export const TALENT_REFERENCE_OWNER_KIND = 'talent';
+export const TALENT_PHOTO_SLOT = 'photo';
+
 export function isGraphicsTemplateReferenceOwnerKind(
 	kind: string,
 ): kind is typeof GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS[number] {

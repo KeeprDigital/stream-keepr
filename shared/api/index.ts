@@ -98,6 +98,7 @@ import type {
 } from '~~/shared/types/enums';
 import type { FeatureMatchSessionCommand, FeatureMatchSessionResponse } from '~~/shared/types/featureMatchSession';
 import type { PlayerGameData } from '~~/shared/types/game';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 
 export interface TalentResponse {
@@ -105,6 +106,8 @@ export interface TalentResponse {
 	eventId: number;
 	name: string;
 	socialProfiles: SocialProfiles;
+	/** One exact image revision from the Graphics Asset Library, or none (ADR-0067). */
+	photo: GraphicAssetReference | null;
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -112,11 +115,14 @@ export interface TalentResponse {
 export interface CreateTalentInput {
 	name: string;
 	socialProfiles?: SocialProfiles;
+	photo?: GraphicAssetReference | null;
 }
 
 export interface UpdateTalentInput {
 	name?: string;
 	socialProfiles?: SocialProfiles;
+	/** Omitted keeps the photo; `null` clears it. */
+	photo?: GraphicAssetReference | null;
 }
 
 export interface EventListResponse {
@@ -529,6 +535,8 @@ export interface ArchetypeResponse {
 	eventId: number;
 	name: string;
 	colors: string | null;
+	/** The Pinned Chart Series, 1 to 8; null when unpinned. */
+	chartSeries: number | null;
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -538,7 +546,9 @@ export interface CreateArchetypeInput {
 	colors?: string | null;
 }
 
-export type UpdateArchetypeInput = Partial<CreateArchetypeInput>;
+export type UpdateArchetypeInput = Partial<CreateArchetypeInput> & {
+	chartSeries?: number | null;
+};
 
 export interface PlayerListResponse {
 	id: number;
