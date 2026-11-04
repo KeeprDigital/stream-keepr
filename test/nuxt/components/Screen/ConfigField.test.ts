@@ -215,6 +215,48 @@ describe('screenConfigField', () => {
 
 	it.each([
 		{
+			name: 'ungated',
+			enabled: undefined,
+			state: { checked: 'true', disabled: false, description: 'Show the title.' },
+			emitted: [
+				[false],
+			],
+		},
+		{
+			name: 'gated on',
+			enabled: true,
+			state: { checked: 'true', disabled: false, description: 'Show the title.' },
+			emitted: [
+				[false],
+			],
+		},
+		{
+			name: 'gated off: shown off, its gate explained, and never written',
+			enabled: false,
+			state: { checked: 'false', disabled: true, description: 'Enable headers in event settings.' },
+			emitted: undefined,
+		},
+	])('a toggle field $name', async ({ enabled, state, emitted }) => {
+		const wrapper = mountField({
+			field: pairings.showHeader,
+			modelValue: true,
+			description: 'Show the title.',
+			enabled,
+			disabledDescription: 'Enable headers in event settings.',
+		});
+		const toggle = wrapper.get('[role="switch"]');
+
+		expect({
+			checked: toggle.attributes('aria-checked'),
+			disabled: toggle.attributes('disabled') !== undefined,
+			description: wrapper.find('p').text(),
+		}).toEqual(state);
+		await toggle.trigger('click');
+		expect(wrapper.emitted('update:modelValue')).toEqual(emitted);
+	});
+
+	it.each([
+		{
 			name: 'its field\'s values, unlabelled',
 			items: undefined,
 			labels: ['archetype', 'cards', 'chart'],
