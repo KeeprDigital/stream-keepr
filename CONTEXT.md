@@ -42,13 +42,17 @@ How many positions a Player moved since the previous Round's Round Standings: th
 _Avoid_: movement, rank delta.
 
 **Player**:
-A competitor in an Event.
+A competitor in an Event. A One Piece Card Game Player is shown by their name if an operator gave one, otherwise by their Nickname (ADR-0074).
+
+**Nickname**:
+A One Piece Card Game Player's handle in Bandai TCG+, owned by the TCG+ Import and refreshed by each import. It is not the Player's name: the operator gives that, and the Nickname stands in only while there is none.
+_Avoid_: name, display name, when meaning the TCG+ handle.
 
 **Deck List**:
-Submitted cards for a game: a Player's for a Phase, or a Feature Match Deck List.
+Submitted cards for a game: a Player's (one per Phase on Magic: The Gathering; one per Player on One Piece Card Game, imported or entered by hand), or a Feature Match Deck List.
 
 **Leader**:
-The single leader card heading a One Piece Card Game Deck List, held apart from its Mainboard. It sets the Deck List's colours and is how the community names the deck. Each player side of a One Piece Feature Match Slot holds its Leader, picked by the operator, which that side's Feature Match Deck List shares (ADR-0057).
+The single leader card heading a One Piece Card Game Deck List, held apart from its Mainboard. It sets the Deck List's colours and is how the community names the deck. A Player's Leader is their Deck List's. A Feature Match Slot side linked to a Player shows that Player's; an unlinked side holds one picked by the operator, which its Feature Match Deck List shares (ADR-0057, ADR-0074).
 
 **Mainboard**:
 The starting portion of a Deck List — the cards a Player begins each game with.
@@ -60,16 +64,16 @@ The reserve portion of a Deck List, exchanged with Mainboard cards between games
 Which boards of a Deck List a rendering surface presents: Full (Mainboard and Sideboard), Mainboard only, or Sideboard only. Shared by every deck-rendering surface, including Metagame card filtering.
 
 **Unresolved Deck Card**:
-A Deck List entry imported by **Melee Sync** whose name matched no known card. Resolving one names the card for every Deck List in the Event holding that entry (ADR-0031).
+A Deck List entry naming no known card: on Magic: The Gathering, one imported by **Melee Sync** whose name matched none; on One Piece Card Game, a card number the card data source does not know, from a **TCG+ Import**, a hand-entered Deck List or a paste. Resolving one names the card for every Deck List in the Event holding that entry (ADR-0031, ADR-0074).
 
 **Metagame**:
 Analysis of Players, Deck Lists, cards, archetypes, and standings within an Event or scoped Player group.
 
 **Metagame Scope**:
-Which Players a Metagame read counts: every Player, the top N by placement, those with at least a minimum match-point total, or one Player List's members. The Metagame page and every Screen Mode reading the Metagame carry the same scope, so a scope asks each read the same question; an Archetype's pilots, meta share and Conversion Rate are read within it.
+Which Players a Metagame read counts: every Player, the top N by placement, those with at least a minimum match-point total, or one Player List's members. A One Piece Card Game Event, having no standings, offers only every Player and a Player List (ADR-0074). The Metagame page and every Screen Mode reading the Metagame carry the same scope, so a scope asks each read the same question; an Archetype's pilots, meta share and Conversion Rate are read within it.
 
 **Archetype**:
-A strategic Deck classification assigned to Players and used for Metagame analysis.
+A strategic Deck classification assigned to Players and used for Metagame analysis. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand (ADR-0074).
 
 **Pinned Chart Series**:
 One of the Theme's eight chart series, `chart-series-1` to `chart-series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme, or a Screen Theme Override, decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).
@@ -93,8 +97,12 @@ The workflow that imports and refreshes Event structure, Players, Deck Lists, st
 A per-Event setting, off by default and on only while Melee Sync is on, under which Melee Sync polls Melee.gg each minute for the Current Round's Match Results, and for the next Round's pairings once the Current Round is complete. It announces only what changed and switches itself off after 12 hours with no change or when Melee refuses its credentials. Its failures are its own Live Results error, apart from the manual sync's (ADR-0052).
 _Avoid_: auto-sync, polling, when naming the setting.
 
+**TCG+ Import**:
+The workflow that imports a One Piece Card Game Event's Players, their Nicknames and their Deck Lists from a Bandai TCG+ deck list export. An operator uploads the export on the Sync page, previews what it changes, and confirms. A re-import updates Players by their Bandai member number and marks those missing from it inactive; a Deck List an operator edited by hand is kept (ADR-0074).
+_Avoid_: CSV import, deck upload.
+
 **Provenance**:
-The Melee-owned identity and lifecycle facts on a synced record: its external identity, sync status, activity, and last-seen time. Only Melee Sync writes Provenance; manual operator edits never carry it.
+The import-owned identity and lifecycle facts on a synced record: its external identity, sync status, activity, and last-seen time. Only Melee Sync and the TCG+ Import write Provenance; manual operator edits never carry it.
 _Avoid_: external fields, sync metadata.
 
 **Manually Edited Field**:
@@ -134,7 +142,7 @@ _Avoid_: Feature Match when referring to the saved Round selection.
 A single mutable plain-text production note belonging to a Feature Match Assignment. It moves with the Assignment between Slots and is discarded when the Assignment ends. Feature Match Notes are off for a new Event; switching them off hides them from production surfaces without deleting any.
 
 **Feature Match Deck List**:
-A Deck List held by one player side of a Feature Match Slot rather than by a Player, pasted by the operator. It stays until replaced or its side is cleared, and moves with its player when the sides are swapped.
+A Deck List held by one player side of a Feature Match Slot rather than by a Player, pasted by the operator. Only a side with no linked Player holds one; a linked side shows its Player's Deck List. It stays until replaced or its side is cleared, moves with its player when the sides are swapped, and never counts in the Metagame (ADR-0074).
 _Avoid_: slot deck, match deck.
 
 **Feature Match Session**:
@@ -789,7 +797,8 @@ _Avoid_: worst-case data, overflow data
 - A **Feature Match Assignment** connects exactly one **Match** to exactly one **Feature Match Slot** for exactly one **Round**, and may have one **Feature Match Note**
 - Within one **Round**, a **Match** and a **Feature Match Slot** each have at most one **Feature Match Assignment**
 - A **Feature Match Slot Promotion** creates or updates one **Feature Match Assignment**
-- A **Feature Match Slot**'s player side has at most one **Feature Match Deck List**; in a One Piece Card Game Event it is the side's only Deck List, and its **Leader** is the side's Leader. Replacing it while a **Feature Match Session** is active updates that Session's source snapshot
+- A **Feature Match Slot**'s player side has at most one **Feature Match Deck List**; in a One Piece Card Game Event a side linked to a **Player** shows that Player's **Deck List** and **Leader** instead, and an unlinked side's Feature Match Deck List is its only Deck List, its **Leader** the side's Leader. Replacing either while a **Feature Match Session** is active updates that Session's source snapshot (ADR-0074)
+- Every One Piece Card Game **Player**'s **Deck List** counts in the **Metagame**; a **Feature Match Deck List** never does (ADR-0074)
 - A **Feature Match Session** belongs to exactly one **Feature Match Slot**; while active, the Slot's identity binding fields resolve from the session's source snapshot and its live binding fields from the session's current state
 - While a **Feature Match Session** is active, it decides which player each side of its **Feature Match Slot** shows; the Slot's own sides keep their pairing order
 

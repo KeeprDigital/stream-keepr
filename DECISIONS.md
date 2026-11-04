@@ -1823,7 +1823,7 @@ A stopgap that works now. Sharing the rules rather than copying them keeps vMix 
 
 ## ADR-0057: A One Piece Card Game Event is Feature Matches only, its Deck Lists held by Slot sides
 
-Accepted · 2026-11-02. Compatible with ADR-0047.
+Accepted · 2026-11-02. Compatible with ADR-0047. **Changed by ADR-0074** (accepted 2026-11-04, implementation pending under [#1000](https://github.com/KeeprDigital/stream-keepr/issues/1000)). TCG+ does export Deck Lists, so OP Events gain Players with Player-owned Deck Lists, a shared card catalogue keyed by card number, and participation Metagame. This section describes OP Events until that lands. Its "no Players" decision, its inline card snapshots, and the rejected alternatives "Player-owned OP Deck Lists" and "Caching OP cards in `cards` keyed by card number" are reversed there.
 
 One Piece Card Game Events run their pairings in Bandai TCG+, which has no export, and are streamed by featuring one or two Matches a Round. Nobody enters results round to round, and without bulk Deck Lists there is no Metagame to compute.
 
@@ -2427,3 +2427,83 @@ How the existing types fit around it:
 - **Give delivery reconciliation itself rather than a reporter.** Building reconciliation needs the staging store, which would put staging back into every delivery. A reporter keeps delivery buildable from the catalogue and the canonical store alone.
 - **Let the reconciliation factory take staging lazily, so a Screen Output could build all of it (#992).** The output would still need the media port, built from the facade's validators, and every repair action would type-check against a staging store that might not be there. The reporter needs neither.
 - **Move export onto delivery now.** Export belongs to the Template Package family (#990).
+
+## ADR-0074: A One Piece Card Game Event's Players and their Deck Lists come from a TCG+ Import, and its cards from one catalogue keyed by card number
+
+Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/issues/1000). Implementation pending. Changes ADR-0057. Blocked by a bulk lookup endpoint in bandai-keepr.
+
+### Decision
+
+**An OP Event has Players, and each Player holds one Deck List.**
+
+- **TCG+ Import.** The operator uploads the Bandai TCG+ deck list export on the OP Sync page, previews what it will change, and confirms. Nothing is saved before the confirm, and there is no undo.
+- **Re-import.** It upserts Players by their Bandai member number. A Player missing from the file is marked inactive, never deleted, as Melee Sync does. A Player's Deck List is replaced only when its cards changed.
+- **What the import ignores.** The export's status column is ignored. Rows sharing a card number, which are printings the export cannot tell apart, are summed into one entry.
+- **Players added by hand.** They are kept as on MTG, and the import never matches them. When a name matches an incoming Nickname, the preview warns about a possible duplicate.
+
+**A Player's Nickname is the import's, and their name is the operator's.** The import owns the Nickname and refreshes it on every import. The name is optional. Wherever a Player is shown, one rule decides what appears: the name if set, otherwise the Nickname.
+
+**An OP Player's Deck List is imported or entered by hand, and a hand edit survives re-import.**
+
+- **Where it's edited:** on the Players page, or from a Feature Match Slot side the Player is linked to, as a Player write (as ADR-0045 treats a seated Player's identity).
+- **How it's edited:** the paste format and paste rules are ADR-0057's.
+- **Re-import:** the preview flags a hand-edited Deck List the import differs from, and the operator may drop the edit to take the import's.
+- **Deck rule breaches** warn and never refuse.
+
+**OP cards live in the shared card catalogue, keyed by card number; MTG cards stay keyed by name.**
+
+- Player Deck Lists, pasted Feature Match Deck Lists and picked Leaders all reference the catalogue, replacing ADR-0057's inline snapshots. A migration builds catalogue rows from the snapshots already stored.
+- Card data comes only from bandai-keepr's bulk lookup. The export's own card fields are not used.
+- A card number the catalogue already holds is never looked up again.
+- If the lookup fails, the import or paste fails whole and saves nothing.
+- A card number bandai-keepr does not know stays out of the catalogue. It is held number-only as an **Unresolved Deck Card**, with a warning, and retried on the next import or paste. The Cards page lists them Event-wide. Resolving one names the card for every Deck List in the Event holding that number, as ADR-0031 does for MTG.
+
+**An OP Player's Archetype is their Leader card.**
+
+- **Created automatically.** One Archetype per distinct Leader card number, named after the Leader (with the card number when two Leaders share a name) and coloured by it.
+- **Derived, not assigned.** A Player's Archetype follows their Leader. It is never reviewed or reassigned, though an operator may rename an Archetype or pin its chart series.
+- **Removed when empty.** An auto-created Archetype left without Players is deleted, unless an operator renamed it or pinned a series.
+- **Unknown Leader.** A Player whose Leader is unresolved is unclassified.
+
+**OP Metagame counts every Player's Deck List, and reads participation only.**
+
+- Its scopes are every Player and a Player List.
+- With no standings, it shows no Conversion Target, Conversion Rate, win rate or average position.
+- Its card rules are OP's: Character, Event and Stage, with no basic lands, highlander or Scryfall data.
+
+**A Feature Match Slot side takes a Player as on MTG, or manual data.**
+
+- **Linked side.** Its Leader and Deck List are the Player's, by reference. A re-import or edit reaches the Slot, and the active Feature Match Session's snapshot is corrected, as replacing a paste is today.
+- **Unlinked side.** Paste and Leader picking stay available. That Feature Match Deck List never counts in Metagame.
+- **Deck List Screen.** On an OP Event it takes a Player or a Slot side as its Deck Source, and both render in the OP layout.
+
+**What OP Events now offer.** The Players, Metagame, Sync and Cards pages, and the Metagame, Most Played Cards and Archetype Spotlight Screen Modes. Standings, Top Cut, Pairings, Player History, Head-to-Head, Round Clock, Matches, Event Structure, Archetype Review and Integrations stay MTG-only.
+
+### Why
+
+ADR-0057 rested on TCG+ having no export. Its deck list export holds every Player's Leader and full 50-card Mainboard (512 of 512 in the Sydney Regionals sample), so a Feature Match can be picked from real Players with their decks attached, and the Metagame has every Deck List to count.
+
+Keying OP cards by card number in the shared catalogue was rejected while nothing aggregated across OP Deck Lists. Metagame now does. One catalogue lets OP reuse the Player Deck List, Archetype and Metagame read model rather than maintain a parallel one. Card data is effectively static, so a card is fetched once and never refreshed. A single source keeps the catalogue from carrying two answers for one card.
+
+The Nickname is the player's handle in Bandai's app, not the name the broadcast wants. Keeping it apart from the operator's name lets a re-import refresh one without touching the other. A cleared name falls back to the Nickname rather than showing blank, which an ADR-0046 Manually Edited Field would.
+
+The Metagame is all or nothing: either the whole field was imported or no Metagame is worth showing. So every Player's Deck List counts, whether imported or entered by hand.
+
+### Consequences
+
+- **Blocked by bandai-keepr.** Nothing lands before its bulk lookup endpoint. Pasting moves to that endpoint too, dropping its 80-number cap.
+- **Picking a featured match.** An OP Feature Match is picked from Players instead of typed. A Player featured in two Rounds no longer needs re-entering, which reverses ADR-0057's first consequence.
+- **No printing.** The export does not say which printing a Player registered, so every entry shows its card's standard printing.
+- **Catalogue corrections.** A card bandai-keepr corrects stays as first fetched until the catalogue row is cleared. Nothing refreshes it.
+- **No standings.** OP standings, records and Conversion Rate wait for a source. The export has none.
+- **Duplicates.** A hand-added Player who later appears in an import is duplicated until the operator deletes one.
+- **CONTEXT.md.** Its Deck List, Leader, Archetype, Unresolved Deck Card and Feature Match Deck List entries, and its new Nickname and TCG+ Import entries, state this decision ahead of the code.
+
+### Rejected alternatives
+
+- **Separate OP deck tables with inline snapshots and their own Metagame read model.** Every Metagame, Archetype and Deck List Screen rule would be duplicated for OP.
+- **Taking card fields from the export when bandai-keepr is missing a card.** Two sources would give one card two answers. The export has no cost, power or image anyway.
+- **Refreshing every card on every import.** Card data barely changes, and the bulk lookup would grow with the field instead of with new cards.
+- **The Nickname as the Player's name, with an operator's name kept as a Manually Edited Field.** A cleared name would show blank instead of the Nickname.
+- **A pasted deck on a linked side as a Slot-only override.** The Metagame would count a different deck from the one on air.
+- **Interpreting the export's status column.** Its meaning is unknown, and every row is a registered Player.
