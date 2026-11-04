@@ -78,6 +78,21 @@ describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_
 		expect((await library.trashGraphicAsset({ assetId: asset.assetId })).outcome).toBe('trashed');
 	});
 
+	it('holds its asset back from Retire until it is removed', async () => {
+		const { library, installation, asset } = await installedTemplate(catalogue);
+		const refused = await library.retireGraphicAsset({ assetId: asset.assetId });
+		expect(refused.outcome === 'in-use' && refused.usage.map(usage => usage.owner.id))
+			.toEqual([installation.templateId]);
+
+		await library.removeInstalledGraphicsTemplate({
+			templateId: installation.templateId,
+			kind: 'broadcast-graphic',
+			removedBy: 'remover',
+		});
+
+		expect((await library.retireGraphicAsset({ assetId: asset.assetId })).outcome).toBe('retired');
+	});
+
 	it('keeps an asset another installation still references out of Trash', async () => {
 		const { library, archive, installation, asset } = await installedTemplate(catalogue);
 		const second = installationOf(await installPackage(library, archive));

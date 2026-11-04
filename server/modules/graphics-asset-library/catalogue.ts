@@ -251,8 +251,9 @@ const TEMPLATE_OWNER_KIND_LIST = GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS
 
 /**
  * The references that hold Retire back, about the row aliased
- * `asset_reference`: a saved template's (ADR-0034), a Theme's, and a Screen
- * Theme Override's (ADR-0050). A Screen's own mode references do not.
+ * `asset_reference`: a saved or installed template's (ADR-0034, ADR-0068), a
+ * Theme's, and a Screen Theme Override's (ADR-0050). A Screen's own mode
+ * references do not.
  */
 const RETIRE_BLOCKING_REFERENCE = `(
 	asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST}, '${THEME_REFERENCE_OWNER_KIND}')
@@ -2583,10 +2584,11 @@ export function createD1GraphicsAssetCatalogue(
 			return result.results.map(assetFromRow);
 		},
 		async retireGraphicAsset(input) {
-			// Refused while a saved template references any revision of the asset
-			// (ADR-0034): a template keeps its references selectable on every write,
-			// so retiring under one would leave it unrevisable. A Theme or a Screen
-			// Theme Override holds it back too, so a show never loses its logo or
+			// Refused while a saved or installed template references any revision of
+			// the asset (ADR-0034, ADR-0068): a template keeps its references
+			// selectable on every write, so retiring under one would leave it
+			// unrevisable; removing an installed one releases its references. A Theme
+			// or a Screen Theme Override holds it back too, so a show never loses its logo or
 			// typeface mid-broadcast (ADR-0050). The condition rides in the
 			// statement that retires, so a reference written after anyone looked
 			// still holds the asset back. A Screen's own mode reference does not: a

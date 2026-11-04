@@ -974,7 +974,7 @@ One function ran about ten steps in a fixed order. It published 3+N messages, an
 
 ## ADR-0034: Every graphics Template write requires each of its references to be selectable, fenced at the commit
 
-Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/issues/614) · Amended 2026-10-28: the Graphic Style Set operations it also covered are gone · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
+Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/issues/614) · Amended 2026-10-28: the Graphic Style Set operations it also covered are gone · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830) · Amended 2026-11-04 by ADR-0068: an Installed Graphics Template's references hold Retire back too · [#622](https://github.com/KeeprDigital/stream-keepr/issues/622)
 
 ### Decision
 
@@ -984,7 +984,7 @@ Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/is
 
 **The store asks again in the statement that commits.** The template row's `INSERT` or `UPDATE` carries `REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE`, the rule the Screen write already uses, with no reference allowed to be retired. The reference-index insert reads the same bound array under the same rule. So a template commits only with every reference resolving, and then every reference is indexed. The rule now lives in `server/modules/graphic-asset-reference-resolution.ts`, shared by the Screen and both template stores. A commit the rule refuses answers its own `409`, told apart from a stale `revision` by the revision still standing.
 
-**Retire is refused while a saved template references the asset.** Retiring a Graphic Asset is refused while any Broadcast Graphic Template or Feature Match Layout Template references any of its revisions. It answers `in-use` with those templates' usage, as Trash answers a referenced asset, and the Library Workspace names them. The condition sits in the catalogue's retiring `UPDATE`, so a template saved concurrently either commits first and holds the asset back, or finds the asset retired and is refused. A Screen's reference does not hold Retire back: a Screen keeps an unchanged retired reference resolving, as before. This matches a selected Broadcast Deck List, which cannot be deleted. A Theme's reference and a Screen Theme Override's do hold it back (ADR-0050).
+**Retire is refused while a saved template references the asset.** Retiring a Graphic Asset is refused while any Broadcast Graphic Template, Feature Match Layout Template or Installed Graphics Template (since ADR-0068) references any of its revisions. It answers `in-use` with those templates' usage, as Trash answers a referenced asset, and the Library Workspace names them. The condition sits in the catalogue's retiring `UPDATE`, so a template saved concurrently either commits first and holds the asset back, or finds the asset retired and is refused. A Screen's reference does not hold Retire back: a Screen keeps an unchanged retired reference resolving, as before. This matches a selected Broadcast Deck List, which cannot be deleted. A Theme's reference and a Screen Theme Override's do hold it back (ADR-0050).
 
 **Content availability is checked at the route only.** It is the byte store's state, which no D1 statement can see.
 
@@ -998,7 +998,7 @@ Without the Retire guard, the rule would turn retiring an asset into making ever
 
 - A template's references cannot become retired, trashed, pruned, or purged under it. Trash, Revision Pruning, and purge each prove no reference points at a revision, and Retire now proves no template does.
 - Unavailable content can still appear under a saved template. It refuses that template's writes until Exact-Byte Repair restores the bytes.
-- An Installed Graphics Template does not hold Retire back. It is never revised, so its references stay as installed until it is removed (ADR-0068). Retiring one of its assets leaves it unplaceable until restored, as before.
+- An Installed Graphics Template holds Retire back like an authored template (amended by ADR-0068). It is never revised, so this once made its assets unretirable for good; removing it now releases them. An asset retired before that amendment can still sit under one, leaving it unplaceable until restored.
 - A template already holding a retired reference (written before this rule, or by a direct database change) is refused on every write until the reference is replaced in that write or the asset restored.
 - A rename on a stale `revision` skips the route's check and gets the revision conflict, so an author is not told about a document they have not read. A revision carrying a new document is checked first, as before.
 - A Template Package Installation writes Installed Graphics Templates through the library's own store, which already maps every reference to one exact local revision.
@@ -2107,7 +2107,7 @@ Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/is
 
 ## ADR-0068: An Installed Graphics Template may be removed, releasing its references, and a retried installation reinstalls it
 
-Accepted · 2026-11-04 · [#622](https://github.com/KeeprDigital/stream-keepr/issues/622)
+Accepted · 2026-11-04 · [#622](https://github.com/KeeprDigital/stream-keepr/issues/622) · Amends ADR-0034
 
 ### Decision
 
@@ -2117,15 +2117,16 @@ Accepted · 2026-11-04 · [#622](https://github.com/KeeprDigital/stream-keepr/is
 
 **Retrying the installation reinstalls the same Template.** Posting the installation of a completed operation answers with that operation, as before. When the Template it published has been removed, the post first reinstalls it under the same identity. The staged package is long released, but nothing needs it: the stored document already names local revisions, so reinstalling re-indexes those (`installedTemplateDocumentReferences`). As installation required of a reused revision, each must exist on an active Graphic Asset. If one is retired, trashed or gone, the retry is refused with `409` and nothing changes; restoring the asset, or importing the Template Package again, is the way back. Importing again creates a new Installed Graphics Template, as it always has.
 
-**Removal follows the Trash rule.** A Graphic Asset is refused Trash while anything references it, and a Template something still referenced would be refused removal the same way. Nothing references an Installed Graphics Template by identity today, because placing one copies it, so no removal is refused on that ground yet.
+**Removal follows the Retire and Trash rules.** A Graphic Asset is refused Trash while anything references it, and Retire while a template does. An Installed Graphics Template's references now hold Retire back like an authored template's (amending ADR-0034), and removing the Template is what releases them. Retire and Trash would also refuse to remove a Template something still referenced. Nothing references an Installed Graphics Template by identity today, because placing one copies it, so no removal is refused on that ground yet.
 
 ### Why
 
-An Installed Graphics Template could not be deleted, so the revisions its references pinned could never be Trashed, pruned or purged, even after nothing else used them (#622).
+An Installed Graphics Template could not be deleted, so the revisions its references pinned could never be Trashed, pruned or purged, even after nothing else used them (#622). ADR-0034 let Retire ignore those references only because nothing could release them. With removal, they can be treated like any other template's.
 
 ### Consequences
 
 - A revision only a removed Template pinned is unreferenced at once: Trash may take its asset, and a superseded one becomes a Revision Pruning candidate at the next Graphics Retention Sweep. A revision another artifact still references stays held by that reference.
+- **A Graphic Asset an Installed Graphics Template references can no longer be Retired** until that Template is removed. This applies to every installation already made, with no backfill: their references were always indexed under `installed-graphics-template`. An asset already retired under an Installed Graphics Template stays retired, and that Template stays unplaceable until the asset is restored.
 - Removal records no Evidence: it is not a Graphic Asset lifecycle transition. The removed row's `removed_by` and `removed_at` record who removed it and when.
 - Migration `0019_installed_template_removal` adds the two nullable columns. Existing rows read as installed.
 
