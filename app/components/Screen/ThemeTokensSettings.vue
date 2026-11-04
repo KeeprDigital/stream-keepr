@@ -1,158 +1,61 @@
 <script setup lang="ts">
-import type { StoredThemeTokens, ThemeTokenValue } from '~~/shared/modules/theme';
 import type { Screen } from '~/types';
-import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, readTokenLiteral, resolveFoundationToken, resolveThemeTokens } from '~~/shared/modules/theme';
-import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
-import { screenModeTokens } from '~~/shared/screenModes';
-import { screenModeBindableFoundationTokens } from '~~/shared/screenThemeOverrides';
-import { parseThemeTokenWrite, themeTokenDefinition } from '~~/shared/themeTokens';
+import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 
-// A Screen's token section: exactly the Theme Tokens its mode consumes (and,
-// on a graphics host, every Foundation Token its Graphic Items may bind), each
-// with what it inherits from the Event's Theme and a Screen Theme Override
-// control. An override is written per token, and clearing one returns the
-// Screen to the Theme's value. What it inherits follows `theme:updated`, as a
-// Screen Output does, through the Event store's held Theme.
+// A Screen's residual "Screen-wide look" card (ADR-0072): its Foundation
+// Tokens (and, on a graphics host, every Foundation Token its Graphic Items
+// may bind), then each Mode Token whose settings group no mounted
+// `ScreenThemeTokenGroup` renders, so a token renders here until its group is
+// mounted and never disappears or doubles. The host's own `inset` and
+// `alignment` sit in Background & Placement instead. It starts closed unless
+// it holds an override, and remembers per browser once toggled.
 
 const props = defineProps<{
 	screen: Screen;
 	eventId: number;
 }>();
 
-const eventStore = useEventStore();
-const screenStore = useScreenStore();
-const themes = useThemeRepository();
-const { runRequest } = useRequestFeedback();
+const mountedGroups = useScreenSettingsGroups()?.mounted;
+const overrides = useScreenThemeOverrides(() => props.screen, () => props.eventId);
 
-const themeId = computed(() => eventStore.event?.themeId ?? null);
-const theme = computed<StoredThemeTokens>(() => themeId.value && eventStore.eventTheme?.id === themeId.value
-	? eventStore.eventTheme.tokens
-	: DEFAULT_THEME_TOKENS);
-const themeName = ref<string | null>(null);
-const themeError = ref<string | null>(null);
+const placement = computed(() => placeScreenThemeTokens(props.screen.currentMode, mountedGroups?.value ?? []).screenWide);
+const sections = computed(() => [
+	{ label: 'This mode', names: placement.value.modeTokens },
+	{ label: 'Foundation', names: placement.value.foundationTokens },
+].filter(section => section.names.length > 0));
 
-async function loadTheme(id: string | null) {
-	themeName.value = null;
-	themeError.value = null;
-	if (!id)
-		return;
-	await runRequest(() => themes.get(id), {
-		latestKey: 'screen-theme',
-		errorRef: themeError,
-		success: false,
-		error: false,
-		onSuccess: (loaded) => {
-			eventStore.holdEventTheme({ id: loaded.id, revision: loaded.revision, tokens: loaded.tokens });
-			themeName.value = loaded.name;
-		},
-	});
-}
+const overridden = computed(() => sections.value.some(section => section.names.some(name => props.screen.themeOverrides?.[name] !== undefined)));
 
-watch(themeId, id => void loadTheme(id), { immediate: true });
-
-const overrides = computed(() => props.screen.themeOverrides ?? {});
-const modeTokens = computed(() => screenModeTokens(props.screen.currentMode));
-const resolved = computed(() => resolveThemeTokens({
-	vocabulary: FOUNDATION_TOKENS,
-	modeTokens: modeTokens.value,
-	theme: theme.value,
-	overrides: overrides.value,
-	hostTokens: screenModeHostTokens(props.screen.currentMode),
-}));
-
-/** What a token reads with no override: the Theme's stored value where it holds one it may, else the default. */
-function inheritedValue(name: string): unknown {
-	const stored = theme.value[name];
-	if (stored !== undefined && parseThemeTokenWrite(name, stored).ok)
-		return stored;
-	const { definition } = themeTokenDefinition(name)!;
-	return readTokenLiteral(definition, stored) ?? definition.default;
-}
-
-/** The mode's consumed tokens, then any further Foundation Token its Graphic Items may bind. */
-const listed = computed(() => {
-	const consumed = resolved.value.consumed;
-	const bindable = screenModeBindableFoundationTokens(props.screen.currentMode).filter(name => !consumed.includes(name));
-	return [
-		...consumed,
-		...bindable,
-	];
-});
-
-const tokens = computed(() => listed.value.map(name => ({
-	name,
-	token: themeTokenDefinition(name)!,
-	inherited: inheritedValue(name),
-	resolved: (resolved.value.values[name]
-		?? resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme: theme.value, overrides: overrides.value }, name)) as ThemeTokenValue,
-})));
-const groups = computed(() => [
-	{
-		label: 'This mode',
-		entries: tokens.value.filter(entry => entry.token.tier === 'mode'),
-	},
-	{
-		label: 'Foundation',
-		entries: tokens.value.filter(entry => entry.token.tier === 'foundation'),
-	},
-]);
-
-const subtitle = computed(() => themeName.value
-	? `Inherits from ${themeName.value}. An override applies to this Screen only.`
+const subtitle = computed(() => overrides.themeName.value
+	? `Inherits from ${overrides.themeName.value}. An override applies to this Screen only.`
 	: 'Inherits from the Default Theme. An override applies to this Screen only.');
-
-/** Tokens with a write out, so a control does not take a second edit over it. */
-const writing = ref(new Set<string>());
-
-async function write(token: string, value: unknown) {
-	writing.value = new Set([...writing.value, token]);
-	try {
-		await runRequest(() => screenStore.updateThemeOverrides(props.eventId, props.screen.id, { [token]: value }), {
-			success: false,
-			error: failure => ({ title: 'Could not save the override', description: failure.message, color: 'error' }),
-		});
-	}
-	finally {
-		const remaining = new Set(writing.value);
-		remaining.delete(token);
-		writing.value = remaining;
-	}
-}
 </script>
 
 <template>
 	<ScreenSettingsCard
-		v-if="tokens.length"
-		title="Theme"
+		v-if="sections.length"
+		:id="`${screen.currentMode}:screen-wide-look`"
+		title="Screen-wide look"
 		:subtitle="subtitle"
+		:default-open="overridden"
 		data-testid="screen-theme-tokens"
 	>
 		<UAlert
-			v-if="themeError"
+			v-if="overrides.themeError.value"
 			color="warning"
 			variant="soft"
 			icon="i-lucide-triangle-alert"
 			title="The Event's Theme could not be loaded"
 			description="Inherited values are shown as the Default Theme ships them."
 		/>
-		<template v-for="group in groups" :key="group.label">
-			<p class="mt-4 text-xs font-medium uppercase text-muted first:mt-0">
-				{{ group.label }}
-			</p>
-			<ThemeTokenField
-				v-for="entry in group.entries"
-				:key="entry.name"
-				scope="screen"
-				:name="entry.name"
-				:token="entry.token"
-				:stored="overrides[entry.name]"
-				:inherited="entry.inherited"
-				:resolved="entry.resolved"
-				:event-id="eventId"
-				:disabled="writing.has(entry.name)"
-				@set="value => write(entry.name, value)"
-				@clear="write(entry.name, null)"
-			/>
-		</template>
+		<ScreenThemeTokenRows
+			v-for="section in sections"
+			:key="section.label"
+			:screen="screen"
+			:event-id="eventId"
+			:heading="section.label"
+			:names="section.names"
+			:compact="false"
+		/>
 	</ScreenSettingsCard>
 </template>

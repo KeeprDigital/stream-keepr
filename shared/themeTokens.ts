@@ -5,7 +5,7 @@
 // Definitions, which already import that module.
 
 import type { FoundationTokenDefinition, ThemeTokenReference, ThemeTokenValue } from './modules/theme/tokens';
-import type { DeclaredModeTokenDefinition, FoundationTokenName } from './modules/theme/vocabulary';
+import type { AnyDeclaredModeTokenDefinition, FoundationTokenName } from './modules/theme/vocabulary';
 import type { ScreenModeTokenName } from './screenModes';
 import type { ScreenMode } from './types/enums';
 import type { ThemeTokenWriteRefusal } from './types/theme';
@@ -20,7 +20,7 @@ import { SCREEN_MODE_VALUES } from './types/enums';
 export interface ThemedScreenModeTokens {
 	mode: ScreenMode;
 	label: string;
-	tokens: Readonly<Record<ScreenModeTokenName, DeclaredModeTokenDefinition>>;
+	tokens: Readonly<Record<ScreenModeTokenName, AnyDeclaredModeTokenDefinition>>;
 }
 
 /** Every Screen Mode that declares Mode Tokens, in Screen Mode order. */
@@ -32,14 +32,14 @@ export const THEMED_SCREEN_MODE_TOKENS: readonly ThemedScreenModeTokens[] = SCRE
 		tokens: screenModeTokens(mode),
 	}));
 
-const MODE_TOKENS: Readonly<Record<string, DeclaredModeTokenDefinition>> = Object.assign(
+const MODE_TOKENS: Readonly<Record<string, AnyDeclaredModeTokenDefinition>> = Object.assign(
 	{},
 	...THEMED_SCREEN_MODE_TOKENS.map(({ tokens }) => tokens),
 );
 
 export type ThemeTokenDefinitionOf
 	= | { tier: 'foundation'; definition: FoundationTokenDefinition }
-		| { tier: 'mode'; definition: DeclaredModeTokenDefinition };
+		| { tier: 'mode'; definition: AnyDeclaredModeTokenDefinition };
 
 /** The Theme Token `name` names, with its tier, or undefined for a name no token has. */
 export function themeTokenDefinition(name: string): ThemeTokenDefinitionOf | undefined {

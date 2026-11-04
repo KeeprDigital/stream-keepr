@@ -30,11 +30,15 @@ const isUpdating = ref(false);
 /**
  * Editor Focus Mode (#744): while a graphics editor's Edit workspace offers it
  * and it is on, the editor gets the page. The layout drops the app sidebar and
- * this page drops the Screen-level cards above the editor — the header and the
- * Theme — keeping the save failure, the way back to Screens, and the
- * Screen's name in the navbar.
+ * this page drops the Screen-level cards around the editor — the header,
+ * Background & Placement and the Screen-wide look — keeping the save failure,
+ * the way back to Screens, and the Screen's name in the navbar.
  */
 const { active: editorFocus } = useEditorFocusMode();
+
+// The settings groups the mode's settings mount, each rendering its own Mode
+// Tokens, so the Screen-wide look after them leaves those out (ADR-0072).
+provideScreenSettingsGroups();
 
 const screenModeConfigurationPolicy = computed(() => {
 	const mode = screen.value?.currentMode;
@@ -553,16 +557,18 @@ async function sendCommand(command: ScreenCommand) {
 					</div>
 				</UCard>
 
-				<!-- Screen Theme Overrides (modes that declare Mode Tokens) -->
-				<ScreenThemeTokensSettings
-					v-if="!editorFocus"
+				<!-- Mode-specific Settings -->
+				<component
+					:is="modeSettingsComponent"
+					v-if="modeSettingsComponent"
+					ref="modeControlsRef"
 					:screen="screen"
 					:event-id="eventId"
 				/>
 
-				<!-- Background Layers (modes that carry their own stack) -->
+				<!-- Background & Placement (modes that carry their own stack) -->
 				<ScreenModeBackgroundLayersSettings
-					v-if="backgroundLayersMode"
+					v-if="backgroundLayersMode && !editorFocus"
 					:key="backgroundLayersMode"
 					ref="backgroundLayersControlsRef"
 					:screen="screen"
@@ -570,11 +576,10 @@ async function sendCommand(command: ScreenCommand) {
 					:mode="backgroundLayersMode"
 				/>
 
-				<!-- Mode-specific Settings -->
-				<component
-					:is="modeSettingsComponent"
-					v-if="modeSettingsComponent"
-					ref="modeControlsRef"
+				<!-- Screen-wide look: what no mounted settings group renders -->
+				<ScreenThemeTokensSettings
+					v-if="!editorFocus"
+					:key="screen.currentMode"
 					:screen="screen"
 					:event-id="eventId"
 				/>
