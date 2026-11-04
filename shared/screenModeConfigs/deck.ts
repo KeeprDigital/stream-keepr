@@ -224,7 +224,7 @@ export interface ResolvedDeckBoards {
  * defaults. Stored blocks are partial fragments — a PATCH may have written a
  * lone `{ columns: 6 }` — so every rendering and settings surface resolves
  * through this rather than reading the fragments directly. A mainboard stack,
- * which only a client older than migration 0014 could still write, reads as
+ * which only a client from before ADR-0054 could still write, reads as
  * a grid (ADR-0054), so neither a rendering nor the next board write carries it.
  */
 export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeckBoards {

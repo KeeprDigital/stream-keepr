@@ -1,1 +1,0 @@
-ALTER TABLE `archetypes` ADD `chart_series` integer;

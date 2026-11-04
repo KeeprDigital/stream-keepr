@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Feature Match Overlay settings groups its Mode Tokens may name (ADR-0071). */
+/** The Feature Match Overlay settings groups its Mode Tokens may name (ADR-0072). */
 export type FeatureMatchOverlaySettingsGroup = 'frame-surface' | 'frame-video' | 'frame-animation' | 'source-appearance';
 
 /**

@@ -83,7 +83,7 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 	}
 
 	it('moves a Screen in Top Cut Bracket mode, and its Top Cut Bracket config, to the top-cut key', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0002' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await insertEvent();
 		await insertScreen(1, 'topCut', {
 			topCut: {
@@ -128,7 +128,7 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 	});
 
 	it('moves a Top Cut Bracket config held by a Screen in another mode, and leaves Screens without one alone', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0002' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await insertEvent();
 		await insertScreen(1, 'standings', {
 			topCut: { phaseId: 4 },
@@ -156,7 +156,7 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 	});
 
 	it('keeps the top-cut config of a Screen holding both keys, as a Screen write does', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0002' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await insertEvent();
 		await insertScreen(1, 'topCut', {
 			'topCut': { phaseId: 4 },
@@ -174,7 +174,7 @@ describe('the Top Cut Bracket Screen Mode key migration', () => {
 	});
 
 	it('re-roots a Screen\'s Top Cut Bracket Background Layer references, and only those', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0002' });
+		harness = await createSqliteD1Harness({ throughMigration: '0000' });
 		await insertEvent();
 		await insertGraphicAsset();
 		await insertScreen(1, 'topCut', {

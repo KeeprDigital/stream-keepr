@@ -1,1 +1,0 @@
-ALTER TABLE `themes` ADD `graphic_asset_reference_version` text;

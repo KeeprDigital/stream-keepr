@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Player History settings groups its Mode Tokens may name (ADR-0071). */
+/** The Player History settings groups its Mode Tokens may name (ADR-0072). */
 export type PlayerHistorySettingsGroup = 'header' | 'table' | 'outcome-badge';
 
 /** How the Player History Screen Mode looks: its Mode Tokens, by name within the mode. */

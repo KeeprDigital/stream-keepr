@@ -34,10 +34,11 @@ function edit(change: GraphicFillEdit) {
 		test-id-prefix="theme-fill"
 		@edit="edit"
 	>
-		<template #color="{ value, label: colorLabel, testId, update }">
+		<template #color="{ target, value, label: colorLabel, testId, update }">
 			<ThemeColorSourceField
 				:value="value"
 				:label="colorLabel"
+				:alpha="target === 'solid'"
 				:test-id="testId"
 				@update="update"
 			/>

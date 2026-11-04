@@ -41,14 +41,10 @@ const previewTheme = useGraphicsPreviewTheme(() => previewEventStore.event?.them
  * Every Mode Token's Look sits in an inspector section (#982), but the
  * inspector shows one layer's sections at a time. The editor holds each group
  * while open, so selecting a Source Item or a Graphic Item never moves the
- * Frame's rows into the Screen-wide look (ADR-0071).
+ * Frame's rows into the Screen-wide look (ADR-0072).
  */
-const settingsGroups = useScreenSettingsGroups();
-const releaseLookGroups = [
-	...new Set(Object.values(featureMatchOverlayModeTokens).map(token => token.settingsGroup)),
-]
-	.map(group => settingsGroups?.register(group));
-onScopeDispose(() => releaseLookGroups.forEach(release => release?.()));
+for (const group of new Set(Object.values(featureMatchOverlayModeTokens).map(token => token.settingsGroup)))
+	useScreenSettingsGroup(group);
 
 const featureMatchStore = useFeatureMatchStore();
 const screenStore = useScreenStore();

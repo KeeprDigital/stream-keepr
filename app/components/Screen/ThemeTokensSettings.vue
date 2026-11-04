@@ -2,7 +2,7 @@
 import type { Screen } from '~/types';
 import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 
-// A Screen's residual "Screen-wide look" card (ADR-0071): its Foundation
+// A Screen's residual "Screen-wide look" card (ADR-0072): its Foundation
 // Tokens (and, on a graphics host, every Foundation Token its Graphic Items
 // may bind), then each Mode Token whose settings group no mounted
 // `ScreenThemeTokenGroup` renders, so a token renders here until its group is

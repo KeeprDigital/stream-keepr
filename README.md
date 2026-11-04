@@ -458,15 +458,31 @@ The history starts at `0000_baseline.sql`, squashed before first ship while no
 database held data (ADR-0019). Its tail is hand-written — a seed row and the
 Screen Deck-source triggers — because drizzle-kit cannot generate either;
 `test/unit/server/db/baselineMigration.sqlite.test.ts` fails if a re-squash
-drops them. `0015_screen_deck_source_slot_side` replaced those triggers; a
-re-squash takes its version.
+drops them. The `screen_deck_source_slot_side` section of `0001_since_v1_5_0`
+replaced those triggers; a re-squash takes its version.
 
-The squash was a one-time transition. A D1 whose `_hub_migrations` still lists
+The baseline squash was a one-time transition. A D1 whose `_hub_migrations` still lists
 the old `0000`–`0031` names reads `0000_baseline` as unapplied and fails on its
 existing tables, so such a database is dropped and recreated once (ADR-0019
 required this of production before the squash deployed). A D1 that has applied
 `0000_baseline` is past the transition: it takes later migrations as they come
 and is never wiped for this.
+
+`0001_since_v1_5_0.sql` holds every change made after v1.5.0 shipped with only
+the baseline: 21 unreleased migrations concatenated verbatim, in order, so a
+v1.5.0 database's rows take every backfill (ADR-0071). Production applies it as
+one migration. A local D1 that applied the old separately numbered files
+reads it as unapplied and fails on tables it already has; reset it once with
+`rm -rf .wrangler/state && pnpm db:migrate`.
+
+**The next migration takes the next journal number.** drizzle-kit numbers a
+new migration by its count of journal entries and diffs against the snapshot
+that sorts last, so migration N must be journal entry N with
+`meta/NNNN_snapshot.json` beside it. Never reserve a number ahead or rename a
+file to claim one. If `main` gains a migration before your branch merges,
+delete yours (SQL file, snapshot and journal entry), merge, and run
+`pnpm db:generate` again. `test/unit/server/db/migrationJournal.test.ts`
+fails on a gap.
 
 **Read every generated migration before committing it.** SQLite refuses
 `ALTER TABLE … ADD COLUMN … NOT NULL` without a `DEFAULT`, but only when the

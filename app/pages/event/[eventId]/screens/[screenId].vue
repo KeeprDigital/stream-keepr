@@ -37,7 +37,7 @@ const isUpdating = ref(false);
 const { active: editorFocus } = useEditorFocusMode();
 
 // The settings groups the mode's settings mount, each rendering its own Mode
-// Tokens, so the Screen-wide look after them leaves those out (ADR-0071).
+// Tokens, so the Screen-wide look after them leaves those out (ADR-0072).
 provideScreenSettingsGroups();
 
 const screenModeConfigurationPolicy = computed(() => {

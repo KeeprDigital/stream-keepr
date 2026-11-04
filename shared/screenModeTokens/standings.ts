@@ -1,7 +1,7 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 import { EVENT_CANVAS_SIDE_BOUNDS } from '../eventCanvas';
 
-/** The Standings settings groups its Mode Tokens may name (ADR-0071). */
+/** The Standings settings groups its Mode Tokens may name (ADR-0072). */
 export type StandingsSettingsGroup = 'header' | 'data' | 'table';
 
 /** How the Standings Screen Mode looks: its Mode Tokens, by name within the mode. */
