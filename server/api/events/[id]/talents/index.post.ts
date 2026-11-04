@@ -1,3 +1,4 @@
+import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { talentWriteModule } from '~~/server/modules/talent-write';
 import { eventParamsSchema } from '~~/server/schemas/api/event';
 import { createTalentSchema } from '~~/server/schemas/api/talent';
@@ -11,6 +12,7 @@ export default defineEventHandler(async (event) => {
 		eventId,
 		input: body,
 		originConnectionId: getOriginConnectionId(event),
+		graphicsAssets: () => graphicsAssetLibraryForEvent(event),
 	});
 
 	setResponseStatus(event, 201);

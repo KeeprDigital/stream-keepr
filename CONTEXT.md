@@ -98,7 +98,7 @@ A Melee-imported Player field, name or pronouns, that an operator has changed by
 _Avoid_: override, local override.
 
 **Talent**:
-An Event-scoped broadcast presenter or commentator who may be selected for production graphics.
+An Event-scoped broadcast presenter or commentator who may be selected for production graphics. A Talent may hold a photo: an ordinary Graphic Asset Reference to one exact image revision from the Graphics Asset Library, or none (ADR-0067).
 
 **Supported Social Network**:
 One of Twitch, YouTube, X, Instagram, TikTok, or Bluesky: the application-owned, ordered catalog of public networks available for Talent profiles, each supplying its label, icon, and profile-URL rule. Events cannot add or reorder networks.
@@ -498,7 +498,7 @@ The normal, warning, critical, or full state derived from use of the Canonical G
 A stable-identity library resource for a validated image, silent video, or font, owned by the installation-wide Graphics Asset Library and reusable across Events. Events may associate with or reference one but never own it.
 
 **Retired Graphic Asset**:
-A Graphic Asset hidden from discovery and unavailable for new references while existing references keep resolving. An asset a saved template, a Theme or a Screen Theme Override references cannot be retired (ADR-0034, ADR-0050). It may be restored.
+A Graphic Asset hidden from discovery and unavailable for new references while existing references keep resolving. An asset a saved template, a Theme, a Screen Theme Override or a Talent's photo references cannot be retired (ADR-0034, ADR-0050, ADR-0067). It may be restored.
 
 **Trashed Graphic Asset**:
 An unreferenced Graphic Asset removed from discovery and new references, restorable for 30 days; afterwards it is purged only after a fresh proof that no reference points to any revision.
@@ -949,7 +949,7 @@ _Avoid_: worst-case data, overflow data
 - A later locally created revision never inherits **Graphic Asset Origin** from an imported one
 - An **Installed Graphics Template** owns one ordinary **Graphic Asset Reference** per asset field, so a pinned asset cannot enter Trash
 - Every write of a **Broadcast Graphic Template** or **Feature Match Layout Template** requires each **Graphic Asset Reference** it holds to name an available revision of an active **Graphic Asset** whose kind fits its slot, including references it already held (ADR-0034)
-- A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template**, **Feature Match Layout Template**, **Theme** or **Screen Theme Override** references any of its revisions, and the refusal names them; a **Screen**'s own mode reference or an **Installed Graphics Template**'s does not hold it back (ADR-0034, ADR-0050)
+- A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template**, **Feature Match Layout Template**, **Theme**, **Screen Theme Override** or **Talent** references any of its revisions, and the refusal names them, a Talent with its Event; a **Screen**'s own mode reference or an **Installed Graphics Template**'s does not hold it back (ADR-0034, ADR-0050, ADR-0067)
 - A **Template Package Installation** run inside an **Event** associates every asset it created or reused with that Event without changing reused assets' metadata
 - A failed or cancelled installation leaves nothing discoverable
 

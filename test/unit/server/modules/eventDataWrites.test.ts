@@ -63,6 +63,10 @@ vi.stubGlobal('createError', (input: { statusCode: number; message?: string }) =
 const { phaseWriteModule } = await import('~~/server/modules/phase-write');
 const { roundWriteModule } = await import('~~/server/modules/round-write');
 const { talentWriteModule } = await import('~~/server/modules/talent-write');
+/** A write naming no photo never asks the library. */
+function noLibrary() {
+	throw new Error('The library was asked about a write naming no photo');
+}
 const { matchWriteModule } = await import('~~/server/modules/match-write');
 const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-match-slot-write');
 const { playerListWriteModule } = await import('~~/server/modules/player-list-write');
@@ -130,6 +134,7 @@ describe('a write to an entity the Event does not hold', () => {
 				talentId: 9,
 				input: {},
 				originConnectionId: origin,
+				graphicsAssets: noLibrary,
 			}),
 		],
 		[
@@ -318,7 +323,12 @@ describe('a committed write', () => {
 		[
 			'creating a Talent',
 			'talentCreated',
-			() => talentWriteModule().createTalent({ eventId: 1, input: {} as never, originConnectionId: origin }),
+			() => talentWriteModule().createTalent({
+				eventId: 1,
+				input: {} as never,
+				originConnectionId: origin,
+				graphicsAssets: noLibrary,
+			}),
 		],
 		[
 			'updating a Talent',
@@ -328,6 +338,7 @@ describe('a committed write', () => {
 				talentId: 9,
 				input: {},
 				originConnectionId: origin,
+				graphicsAssets: noLibrary,
 			}),
 		],
 		[

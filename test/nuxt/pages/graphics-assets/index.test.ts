@@ -705,21 +705,37 @@ describe('the Graphics Asset Library Workspace', () => {
 		);
 	});
 
-	// ADR-0034: a saved template holds Retire back, and the refusal names it.
-	it('names the saved templates that hold back a retirement', async () => {
+	// ADR-0034, ADR-0067: a saved template or a Talent's photo holds Retire back, and the refusal names it.
+	it.each([
+		[
+			{
+				kind: 'broadcast-graphic-template',
+				id: 'template-1',
+				name: 'Lower third',
+				slot: 'graphics.lower-third.items.plate.asset',
+			},
+			'references it: Lower third.',
+		],
+		[
+			{
+				kind: 'talent',
+				id: '11',
+				name: 'Alice',
+				slot: 'photo',
+				eventId: 7,
+				eventName: 'Finals',
+			},
+			'references it: Alice (Talent in Finals).',
+		],
+	])('names the referrer holding back a retirement (%o)', async (owner, named) => {
 		const usage: GraphicAssetUsage[] = [
 			{
-				id: 'usage-template',
+				id: 'usage-retire',
 				reference: {
 					assetId: 'asset-1' as never,
 					revisionId: 'revision-1' as never,
 				},
-				owner: {
-					kind: 'broadcast-graphic-template',
-					id: 'template-1',
-					name: 'Lower third',
-					slot: 'graphics.lower-third.items.plate.asset',
-				},
+				owner,
 			},
 		];
 		mockApiFetch.mockResolvedValueOnce({ outcome: 'in-use', usage });
@@ -730,7 +746,7 @@ describe('the Graphics Asset Library Workspace', () => {
 		await retire!.trigger('click');
 		await flushPromises();
 
-		expect(wrapper.text()).toContain('cannot be retired while a saved template references it: Lower third');
+		expect(wrapper.text()).toContain(`cannot be retired while a saved template, Theme or Talent ${named}`);
 	});
 
 	it('exposes reversible retirement and Trash actions with blocked usage and recovery facts', async () => {

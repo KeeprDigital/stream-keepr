@@ -84,6 +84,8 @@ export interface GraphicAssetUsage {
 		name?: string;
 		slot: string;
 		eventId?: number;
+		/** The name of the Event an Event-scoped owner belongs to. */
+		eventName?: string;
 	};
 }
 
