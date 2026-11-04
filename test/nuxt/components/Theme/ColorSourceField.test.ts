@@ -11,7 +11,7 @@ enableAutoUnmount(afterEach);
 describe('a Theme colour source field', () => {
 	it('updates its own colour once the picker closes, carrying its alpha', async () => {
 		const wrapper = mount(ThemeColorSourceField, {
-			props: { value: '#112233', label: 'Fill colour' },
+			props: { value: '#112233', label: 'Fill colour', alpha: true },
 			global: { stubs: nuxtUiStubs },
 		});
 		const trigger = wrapper.get('[data-token-part="colour"]');

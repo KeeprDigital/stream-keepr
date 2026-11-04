@@ -33,6 +33,8 @@ const emit = defineEmits<{ edit: [edit: GraphicFillEdit] }>();
 defineSlots<{
 	/** Replaces the colour picker for a solid fill's colour and each stop's. */
 	color?: (props: {
+		/** A stop has its own opacity beside its colour; a solid fill does not. */
+		target: 'solid' | 'stop';
 		value: string;
 		label: string;
 		disabled: boolean;
@@ -85,6 +87,7 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 		<UFormField v-if="fill.type === 'solid'" label="Fill colour" :size="size">
 			<slot
 				name="color"
+				target="solid"
 				:value="fill.color"
 				:label="ariaLabel('Fill colour')"
 				:disabled="disabled"
@@ -123,6 +126,7 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 				<UFormField :label="`Stop ${index + 1}`" :size="size">
 					<slot
 						name="color"
+						target="stop"
 						:value="stop.color"
 						:label="ariaLabel(`Stop ${index + 1} colour`)"
 						:disabled="disabled"

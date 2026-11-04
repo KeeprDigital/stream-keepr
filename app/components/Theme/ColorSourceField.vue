@@ -8,6 +8,8 @@ import { THEME_COLOR_SOURCE_ITEMS } from '~/modules/theme-editor/themeColor';
 const props = defineProps<{
 	value: string;
 	label: string;
+	/** Edits its own colour's alpha; off where an opacity control sits beside it (#955 decision 4). */
+	alpha?: boolean;
 	disabled?: boolean;
 	testId?: string;
 }>();
@@ -48,7 +50,7 @@ function chooseSource(source: string) {
 		<UIColorPicker
 			v-if="!follows"
 			:model-value="value"
-			alpha
+			:alpha="alpha"
 			commit="close"
 			size="xs"
 			:disabled="disabled"
