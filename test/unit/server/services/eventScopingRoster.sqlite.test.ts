@@ -107,7 +107,7 @@ describe('playerService event scoping', () => {
 	it('writes with the wrong Event touch nothing', async () => {
 		const service = playerService();
 		expect(await service.update(two.playerId, one.eventId, { name: 'Hijacked' })).toBeUndefined();
-		expect(await service.remove(two.playerId, one.eventId)).toEqual({ deleted: false, clearedScreens: [] });
+		expect(await service.remove(two.playerId, one.eventId)).toEqual({ deleted: false, archetypeId: null, clearedScreens: [] });
 		expect((await service.findById(two.playerId, two.eventId))?.name).toBe('Event Two Player');
 	});
 
