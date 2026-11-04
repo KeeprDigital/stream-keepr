@@ -6,6 +6,7 @@ import { computed, defineComponent, h, ref } from 'vue';
 import { TOP_CUT_BRACKET_SIZES } from '~~/shared/screenModeConfigs/topCut';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { UFormFieldStub, USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/TopCut/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
@@ -76,17 +77,15 @@ const ScreenSettingsToggleStub = defineComponent({
 	},
 });
 
-async function mountEditor() {
+async function mountEditor(themeOverrides: Record<string, unknown> = {}) {
 	const wrapper = mount(Settings, {
 		props: {
-			screen: { id: 1 } as Screen,
+			screen: { id: 1, currentMode: 'top-cut', themeOverrides } as unknown as Screen,
 			eventId: 1,
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: defineComponent({
-					setup: (_, { slots }) => () => h('section', slots.default?.()),
-				}),
+				...screenSettingsLayoutStubs,
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 				UFormField: UFormFieldStub,
 				USelect: USelectStub,
@@ -156,15 +155,15 @@ describe('screenModesTopCutSettings', () => {
 		expect(writes.at(-1)).toEqual(write);
 	});
 
-	function toggle(wrapper: Awaited<ReturnType<typeof mountEditor>>, label: string) {
-		return wrapper.findAll('[data-testid="settings-toggle"]').find(button => button.text() === label)!;
+	function toggle(wrapper: Awaited<ReturnType<typeof mountEditor>>, field: string) {
+		return wrapper.get(`[data-config-field="${field}"]`);
 	}
 
 	it('leaves seeds and Archetypes off for a Screen that never set them, so it renders as before', async () => {
 		const wrapper = await mountEditor();
 
-		expect(toggle(wrapper, 'Show Seeds').attributes('data-on')).toBe('false');
-		expect(toggle(wrapper, 'Show Archetypes').attributes('data-on')).toBe('false');
+		expect(toggle(wrapper, 'showSeeds').attributes('data-on')).toBe('false');
+		expect(toggle(wrapper, 'showArchetypes').attributes('data-on')).toBe('false');
 	});
 
 	it.each([
@@ -173,9 +172,81 @@ describe('screenModesTopCutSettings', () => {
 	])('writes %s as the Screen\'s %s', async (label, field) => {
 		const wrapper = await mountEditor();
 
-		await toggle(wrapper, label).trigger('click');
+		expect(toggle(wrapper, field).text()).toBe(label);
+		await toggle(wrapper, field).trigger('click');
 		expect(writes.at(-1)).toEqual({ [field]: true });
-		await toggle(wrapper, label).trigger('click');
+		await toggle(wrapper, field).trigger('click');
 		expect(writes.at(-1)).toEqual({ [field]: false });
+	});
+
+	// Data, then one card per element of the bracket, each Mode Token in its group's Look (ADR-0071).
+	it('lays out its cards in order', async () => {
+		const wrapper = await mountEditor();
+
+		expect(settingsLayout(wrapper)).toEqual([
+			{
+				id: 'top-cut:data',
+				title: 'Data',
+				collapsible: false,
+				groups: [],
+			},
+			{
+				id: 'top-cut:entrants',
+				title: 'Entrants',
+				collapsible: true,
+				groups: ['entrants'],
+			},
+			{
+				id: 'top-cut:bracket',
+				title: 'Bracket',
+				collapsible: true,
+				groups: ['bracket'],
+			},
+			{
+				id: 'top-cut:champion',
+				title: 'Champion',
+				collapsible: true,
+				groups: ['champion'],
+			},
+			{
+				id: 'top-cut:header',
+				title: 'Header',
+				collapsible: true,
+				groups: ['header'],
+			},
+		]);
+	});
+
+	it.each([
+		[
+			'no override',
+			{},
+			{},
+			{
+				'top-cut:entrants': 'Seeds hidden · Archetypes hidden',
+				'top-cut:bracket': 'Follows the Theme',
+				'top-cut:champion': 'Follows the Theme',
+				'top-cut:header': 'Auto title',
+			},
+		],
+		[
+			'seeds shown and overridden bracket and champion tokens',
+			{ showSeeds: true, headerText: 'Top 8' },
+			{ 'top-cut.connector': '#ffffff', 'top-cut.winner-surface': '#00ff00', 'top-cut.champion-border': '#ffd700' },
+			{
+				'top-cut:entrants': 'Seeds shown · Archetypes hidden',
+				'top-cut:bracket': '2 Screen Theme Overrides',
+				'top-cut:champion': '1 Screen Theme Override',
+				'top-cut:header': '“Top 8”',
+			},
+		],
+	])('summarises each closed card with %s', async (_case, edits, themeOverrides, summaries) => {
+		config.value = {
+			...config.value,
+			...edits,
+		};
+		const wrapper = await mountEditor(themeOverrides);
+
+		expect(settingsSummaries(wrapper)).toEqual(summaries);
 	});
 });

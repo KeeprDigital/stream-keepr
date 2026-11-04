@@ -214,6 +214,10 @@ _Avoid_: Auto-paging when naming the projection itself — auto-page is the oper
 The single-elimination bracket a Top Cut Bracket Screen shows, derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size, unless the operator sets a larger one; a set size smaller than the first Round needs is ignored. The first Round is placed by Seed in standard order (1v8, 4v5, 2v7, 3v6 for a bracket of 8), the best Seeds taking any byes it leaves out, and each later Match at the Bracket Position its Players advance from, so no Bracket Position moves as later Rounds are paired; a first Round with no Seeds is placed by the next Round's pairings, else table order. A Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
 _Avoid_: bracket slot (a Slot is a Feature Match Slot)
 
+**Entrant**:
+A Player as a Top Cut Bracket shows them at a Bracket Position: their name, and, as its operator chooses, their Seed and archetype. A side naming no Player of the Event is no Entrant.
+_Avoid_: competitor, participant
+
 **Seed**:
 A Player's final position before a Top Cut Bracket's Phase began: their position in the Round Standings of the last Round holding Round Standings before that Phase's first Round, in the Event's Round order. A Player absent from that Round, or a Phase no such Round precedes, has none. Derived from stored Round Standings, never imported.
 _Avoid_: rank, bracket position (a Bracket Position is where a Match sits)
