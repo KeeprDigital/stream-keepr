@@ -322,6 +322,7 @@ const stubs = {
 	UBadge: true,
 	ScreenColumnVisibilityList: true,
 	MtgManaColorDisplay: true,
+	ScreenThemeTokenGroup: true,
 };
 
 // ── Reading which contract field a control wrote ──

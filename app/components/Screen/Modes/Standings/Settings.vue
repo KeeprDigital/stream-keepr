@@ -4,6 +4,7 @@ import type { StandingsColumnConfig, StandingsModeConfig } from '~~/shared/types
 import type { Screen } from '~/types';
 import { isColumnVisible, withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
+import { columnsSummary, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -26,49 +27,25 @@ defineExpose({ resetConfig, saving });
 const fields = screenModeConfigContract('standings').fields;
 
 // ── Stores ──
+// The Round picker loads its own Rounds and Phases; the watchlist's Player List picker reads this store.
 const playerListStore = usePlayerListStore();
-const roundStore = useRoundStore();
-const phaseStore = usePhaseStore();
 
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['phases', 'playerLists', 'rounds']);
+// What the Player List picker reads, re-read on Reconnect Resync (#610).
+useConsumedEventData(['playerLists']);
 
 onMounted(async () => {
-	if (props.eventId) {
-		if (!playerListStore.isLoaded) {
-			await playerListStore.loadByEventId(props.eventId);
-		}
-		if (!roundStore.isLoaded) {
-			await roundStore.loadRoundsByEventId(props.eventId);
-		}
-		if (!phaseStore.isLoaded) {
-			await phaseStore.loadPhasesByEventId(props.eventId);
-		}
-	}
+	if (props.eventId && !playerListStore.isLoaded)
+		await playerListStore.loadByEventId(props.eventId);
 });
 
 // ── View Mode Options ──
-const viewModeOptions = [
+const viewModeOptions: { label: string; value: StandingsViewMode }[] = [
 	{ label: 'All', value: 'all' },
 	{ label: 'Top N', value: 'topN' },
 	{ label: 'Slice', value: 'slice' },
 	{ label: 'Watchlist', value: 'watchlist' },
 	{ label: 'Reveal', value: 'reveal' },
 ];
-
-// ── Player List Options (for watchlist) ──
-const playerListOptions = computed(() => [
-	{ label: 'Select a list...', value: null },
-	...playerListStore.lists.map(l => ({
-		label: `${l.name} (${l.memberCount})`,
-		value: l.id,
-	})),
-]);
-
-const roundOptions = computed(() => [
-	{ label: 'Current', value: null },
-	...roundPickerOptions(roundStore.rounds, phaseStore.phases),
-]);
 
 // ── Column Reordering ──
 const COLUMN_LABELS: Record<StandingsColumnConfig['key'], string> = {
@@ -145,162 +122,104 @@ watch(() => config.value.viewMode, (newMode) => {
 });
 
 // ── Reveal Order Options ──
-const revealOrderOptions = [
+const revealOrderOptions: { label: string; value: RevealOrder }[] = [
 	{ label: 'Bottom up', value: 'bottomUp' },
 	{ label: 'Top down', value: 'topDown' },
 ];
 
-const modeSettingsLabel = computed(() => {
-	switch (config.value.viewMode) {
-		case 'topN':
-			return 'Top N Settings';
-		case 'slice':
-			return 'Range Settings';
-		case 'watchlist':
-			return 'Player List';
-		case 'reveal':
-			return 'Reveal Settings';
-		default:
-			return '';
-	}
-});
+// ── Closed card summaries ──
+const lookOf = (...groups: string[]) => lookSummary('standings', props.screen.themeOverrides, groups);
+const tableSummary = computed(() => settingsSummary([
+	columnsSummary(editorColumns.value),
+	lookOf('table'),
+]));
+const headerCardSummary = computed(() => settingsSummary([
+	headerSummary(config.value),
+	lookOf('header'),
+]));
+const paginationCardSummary = computed(() => paginationSummary(rotation));
 </script>
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="View Mode">
-			<UFormField
-				label="Round"
+		<ScreenSettingsCard id="standings:data" title="Data" :collapsible="false">
+			<ScreenRoundField
+				:model-value="config.roundId"
+				null-label="Current standings"
 				description="Show current standings or a saved completed-round snapshot."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.roundId ?? null"
-					:items="roundOptions"
-					class="w-64"
-					@update:model-value="updateRoundId($event)"
-				/>
-			</UFormField>
+				:event-id="eventId"
+				@update:model-value="updateRoundId"
+			/>
 
-			<USeparator />
-
-			<UFormField
-				:label="fields.viewMode.label"
+			<ScreenConfigField
+				:field="fields.viewMode"
+				:model-value="config.viewMode"
+				:items="viewModeOptions"
 				description="How standings are filtered and displayed."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<USelect
-					:model-value="config.viewMode"
-					:items="viewModeOptions"
-					class="w-48"
-					@update:model-value="updateConfig({ viewMode: $event as StandingsViewMode })"
+				@update:model-value="updateConfig({ viewMode: $event as StandingsViewMode })"
+			/>
+
+			<ScreenConfigField
+				v-if="config.viewMode === 'topN'"
+				:field="fields.topNCount"
+				:model-value="config.topNCount"
+				description="Show the top N players by position."
+				@update:model-value="updateConfig({ topNCount: Number($event) })"
+			/>
+
+			<template v-else-if="config.viewMode === 'slice'">
+				<ScreenConfigField
+					:field="fields.sliceStart"
+					:model-value="config.sliceStart"
+					description="First position to include."
+					@update:model-value="updateConfig({ sliceStart: Number($event) })"
 				/>
-			</UFormField>
-
-			<template v-if="config.viewMode !== 'all'">
-				<USeparator />
-
-				<p class="text-xs font-semibold uppercase tracking-wider text-muted">
-					{{ modeSettingsLabel }}
-				</p>
-
-				<UFormField
-					v-if="config.viewMode === 'topN'"
-					:label="fields.topNCount.label"
-					description="Show the top N players by position."
-					class="flex max-sm:flex-col justify-between items-start gap-4"
-				>
-					<UInputNumber
-						:model-value="config.topNCount"
-						:min="fields.topNCount.min"
-						:max="fields.topNCount.max"
-						class="w-32"
-						@update:model-value="updateConfig({ topNCount: Number($event) })"
-					/>
-				</UFormField>
-
-				<template v-else-if="config.viewMode === 'slice'">
-					<UFormField
-						:label="fields.sliceStart.label"
-						description="First position to include."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UInputNumber
-							:model-value="config.sliceStart"
-							:min="fields.sliceStart.min"
-							:max="fields.sliceStart.max"
-							class="w-32"
-							@update:model-value="updateConfig({ sliceStart: Number($event) })"
-						/>
-					</UFormField>
-
-					<UFormField
-						:label="fields.sliceEnd.label"
-						description="Last position to include."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UInputNumber
-							:model-value="config.sliceEnd"
-							:min="fields.sliceEnd.min"
-							:max="fields.sliceEnd.max"
-							class="w-32"
-							@update:model-value="updateConfig({ sliceEnd: Number($event) })"
-						/>
-					</UFormField>
-				</template>
-
-				<template v-else-if="config.viewMode === 'watchlist'">
-					<template v-if="playerListStore.lists.length > 0">
-						<UFormField
-							label="Select list"
-							description="Show standings for players in this list."
-							class="flex max-sm:flex-col justify-between items-start gap-4"
-						>
-							<USelect
-								:model-value="config.playerListId ?? null"
-								:items="playerListOptions"
-								class="w-64"
-								@update:model-value="updateConfig({ playerListId: $event ?? null })"
-							/>
-						</UFormField>
-					</template>
-					<div v-else class="text-sm text-muted text-center py-2">
-						No player lists available. Create one on the Players page.
-					</div>
-				</template>
-
-				<template v-else-if="config.viewMode === 'reveal'">
-					<UFormField
-						:label="fields.revealCount.label"
-						description="Total number of players in the reveal."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<UInputNumber
-							:model-value="config.revealCount"
-							:min="fields.revealCount.min"
-							:max="fields.revealCount.max"
-							class="w-32"
-							@update:model-value="updateConfig({ revealCount: Number($event) })"
-						/>
-					</UFormField>
-
-					<UFormField
-						:label="fields.revealOrder.label"
-						description="Direction players are revealed."
-						class="flex max-sm:flex-col justify-between items-start gap-4"
-					>
-						<USelect
-							:model-value="config.revealOrder"
-							:items="revealOrderOptions"
-							class="w-40"
-							@update:model-value="updateConfig({ revealOrder: $event as RevealOrder })"
-						/>
-					</UFormField>
-				</template>
+				<ScreenConfigField
+					:field="fields.sliceEnd"
+					:model-value="config.sliceEnd"
+					description="Last position to include."
+					@update:model-value="updateConfig({ sliceEnd: Number($event) })"
+				/>
 			</template>
+
+			<ScreenPlayerListField
+				v-else-if="config.viewMode === 'watchlist'"
+				:model-value="config.playerListId"
+				description="Show standings for players in this list."
+				@update:model-value="updateConfig({ playerListId: $event })"
+			/>
+
+			<template v-else-if="config.viewMode === 'reveal'">
+				<ScreenConfigField
+					:field="fields.revealCount"
+					:model-value="config.revealCount"
+					description="Total number of players in the reveal."
+					@update:model-value="updateConfig({ revealCount: Number($event) })"
+				/>
+				<ScreenConfigField
+					:field="fields.revealOrder"
+					:model-value="config.revealOrder"
+					:items="revealOrderOptions"
+					description="Direction players are revealed."
+					@update:model-value="updateConfig({ revealOrder: $event as RevealOrder })"
+				/>
+			</template>
+
+			<!-- The reveal's own motion: mounted in every view mode, so its token never falls to the Screen-wide look, and shown in reveal only. -->
+			<ScreenThemeTokenGroup
+				v-show="config.viewMode === 'reveal'"
+				:screen="screen"
+				:event-id="eventId"
+				group="data"
+			/>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard v-if="config.viewMode === 'reveal'" title="Reveal Controls">
+		<ScreenSettingsCard
+			v-if="config.viewMode === 'reveal'"
+			id="standings:reveal-controls"
+			title="Reveal Controls"
+			:collapsible="false"
+		>
 			<div class="flex items-center justify-between gap-4 max-sm:flex-col max-sm:items-stretch">
 				<div class="flex items-center gap-2 max-sm:flex-wrap">
 					<UButton
@@ -326,11 +245,24 @@ const modeSettingsLabel = computed(() => {
 			</div>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Columns" subtitle="Drag to reorder, toggle to show/hide.">
+		<ScreenSettingsCard
+			id="standings:table"
+			title="Table"
+			subtitle="Drag to reorder, toggle to show/hide."
+			:summary="tableSummary"
+		>
 			<ScreenColumnVisibilityList
 				:columns="editorColumns"
 				:labels="COLUMN_LABELS"
 				@update="updateConfig({ columns: $event })"
+			/>
+
+			<ScreenConfigField
+				v-if="isDeckColumnVisible"
+				:field="fields.showArchetypeColors"
+				:model-value="config.showArchetypeColors"
+				description="Show mana colors inline after the archetype name in the deck column."
+				@update:model-value="updateConfig({ showArchetypeColors: $event === true })"
 			/>
 
 			<UAlert
@@ -343,43 +275,25 @@ const modeSettingsLabel = computed(() => {
 				description="No Round before this Screen's Round holds Round Standings to compare with, so every Position Change cell is blank until Melee Sync stores them."
 			/>
 
-			<template v-if="isDeckColumnVisible">
-				<USeparator />
-
-				<ScreenSettingsToggle
-					:label="fields.showArchetypeColors.label"
-					description="Show mana colors inline after the archetype name in the deck column."
-					:model-value="config.showArchetypeColors"
-					@update:model-value="updateConfig({ showArchetypeColors: $event })"
-				/>
-			</template>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="table" />
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Header">
-			<ScreenSettingsToggle
-				:label="fields.showHeader.label"
-				description="Show the standings header above the table."
-				:model-value="config.showHeader"
-				@update:model-value="updateConfig({ showHeader: $event })"
-			/>
-
-			<UFormField
-				v-if="config.showHeader"
-				:label="fields.headerText.label"
-				description="Leave empty for auto-generated header based on view mode."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInput
-					:model-value="config.headerText ?? ''"
-					placeholder="Auto"
-					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || null })"
-				/>
-			</UFormField>
-		</ScreenSettingsCard>
+		<ScreenHeaderSettingsCard
+			id="standings:header"
+			:config="config"
+			:fields="fields"
+			:summary="headerCardSummary"
+			show-description="Show the standings header above the table."
+			auto-description="Leave empty for auto-generated header based on view mode."
+			@update="updateConfig($event)"
+		>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
+		</ScreenHeaderSettingsCard>
 
 		<ScreenPaginationSettingsCard
+			id="standings:pagination"
 			:rotation="rotation"
+			:summary="paginationCardSummary"
 			page-size-description="Number of players shown per page."
 			auto-page-description="Automatically cycle through pages on the display."
 			:loading="loadingRows"

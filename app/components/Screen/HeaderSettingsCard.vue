@@ -7,7 +7,7 @@ import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
  * is the mode's own title. Clearing the text emits the `null` that deletes it
  * (ADR-0041). Its default slot, after the fields, takes the title Mode Tokens.
  */
-defineProps<{
+withDefaults(defineProps<{
 	config: { showHeader: boolean; headerText?: string | null };
 	/** The mode's contract field views of `headerConfigShape`. */
 	fields: { showHeader: ScreenModeConfigField; headerText: ScreenModeConfigField };
@@ -15,7 +15,13 @@ defineProps<{
 	showDescription: string;
 	/** What an empty custom text shows instead. */
 	autoDescription: string;
-}>();
+	/** The card's title. */
+	title?: string;
+	/** `mode:card`; remembers the open state per browser. */
+	id?: string;
+	/** One line shown in the header while closed. */
+	summary?: string;
+}>(), { title: 'Header' });
 
 const emit = defineEmits<{
 	update: [patch: { showHeader?: boolean; headerText?: string | null }];
@@ -23,7 +29,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-	<ScreenSettingsCard title="Header">
+	<ScreenSettingsCard :id="id" :title="title" :summary="summary">
 		<ScreenConfigField
 			:field="fields.showHeader"
 			:model-value="config.showHeader"

@@ -151,6 +151,7 @@ async function mountEditor(editor: string) {
 				USeparator: true,
 				UIcon: true,
 				UBadge: true,
+				ScreenThemeTokenGroup: true,
 			},
 		},
 	});
