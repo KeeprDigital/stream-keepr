@@ -19,6 +19,7 @@ describe('metagameArchetypeTable', () => {
 						id: 1,
 						name: 'Azorius Control',
 						colors: 'WU',
+						chartSeries: null,
 						count: 12,
 						metaShare: 37.5,
 						winRate: 55.2,

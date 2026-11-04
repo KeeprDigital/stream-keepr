@@ -648,6 +648,7 @@ const ANSWERS = {
 				const pilots = SAMPLE_PLAYERS.filter(pilot => pilot.archetypeId === archetype.id);
 				return {
 					...archetype,
+					chartSeries: null,
 					count: pilots.length,
 					metaShare: (pilots.length / PLAYERS.length) * 100,
 					winRate: 70 - index * 6.5,
