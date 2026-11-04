@@ -17,7 +17,7 @@ _Avoid_: game, game mode, game system, TCG.
 A segment of an Event structure, such as Swiss or Top Cut.
 
 **Round**:
-A unit of tournament play within a Phase, containing Matches and optional tournament-state metadata synced from Melee. A Melee-managed Round is complete when every Match stored from Melee in it has a Match Result (reported or a bye), or when the next Melee-managed Round in the Event's Round order has pairings: Rounds run strictly in sequence, so pairing the next one means this one is done. Completion is derived from synced data; no operator completes a Round (ADR-0052).
+A unit of tournament play within a Phase, containing Matches and optional tournament-state metadata synced from Melee. A Melee-managed Round is complete when every Match stored from Melee in it has a Match Result (reported or a bye), or when the next Melee-managed Round in the Event's Round order has pairings: Rounds run strictly in sequence, so pairing the next one means this one is done. Completion is derived from synced data; no operator completes a Round (ADR-0052). A Round may carry operator-entered timing, a start and a duration in minutes, which a Round Clock counts down; Melee Sync never writes either (ADR-0066).
 
 **Current Round**:
 The latest Melee-managed Round, in the Event's Round order (Phase sort order, round number, id), that has pairings: at least one Match stored from Melee. None before any Round is paired. Derived from stored Matches, never set by an operator (ADR-0052).
@@ -153,7 +153,7 @@ _Avoid_: player sync, match snapshot refresh.
 A broadcast or control surface that can show Feature Match Slot output, decks/cards, standings, graphics, or other prepared content.
 
 **Screen Mode**:
-A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, Standings, Top Cut Bracket, Feature Match Controls, Feature Match Overlay, Broadcast Graphics, Metagame, Most Played Cards, Player History, Pairings, Archetype Spotlight, or Head-to-Head. Each is named by what it shows or controls. Its key (`card`, `top-cards`, `top-cut`, …) is not its name: renaming a mode leaves its key alone, and a key renamed after release is migrated in storage and still accepted in its former spelling on a Screen write (ADR-0043).
+A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, Standings, Top Cut Bracket, Feature Match Controls, Feature Match Overlay, Broadcast Graphics, Metagame, Most Played Cards, Player History, Pairings, Archetype Spotlight, Head-to-Head, or Round Clock. Each is named by what it shows or controls. Its key (`card`, `top-cards`, `top-cut`, …) is not its name: renaming a mode leaves its key alone, and a key renamed after release is migrated in storage and still accepted in its former spelling on a Screen write (ADR-0043).
 _Avoid_: Top Cards for the Most Played Cards mode (one word from Top Cut); Feature Match for the control mode (the on-air one is the Feature Match Overlay).
 
 **Screen Mode Definition**:
@@ -189,6 +189,10 @@ _Avoid_: hotlink, external asset
 **Animation Effect**:
 A named, autonomously animating background renderer that ships with Stream Keepr, with its own per-effect configuration. Its hosts are the Feature Match Overlay Frame, a Background Layer (on the Background Screen and every plain overlay mode), and the Broadcast Graphics Background; the vocabulary is closed, so a config or package naming an unimplemented effect is refused rather than approximated (ADR-0014).
 _Avoid_: Vanta effect, frame animation, shader background, background effect
+
+**Round Clock**:
+A Screen Mode showing a Round's name and the time left in it, projected from the Round's operator-entered start and duration and server time, so every rendering of the same Round shows the same time. Before the start it shows the full duration, not running; after the end, `0:00`. Like Card Timeout and Page Rotation, nothing writes as it runs or when it runs out. It shows the Current Round unless its operator picks a Round. Magic: The Gathering only (ADR-0066).
+_Avoid_: round timer (the Feature Match Session clock is a Match's, not a Round's).
 
 **Page Rotation**:
 The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).

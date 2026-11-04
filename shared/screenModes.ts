@@ -17,6 +17,7 @@ import { headToHeadModeConfigContract } from './screenModeConfigs/headToHead';
 import { metagameModeConfigContract } from './screenModeConfigs/metagame';
 import { pairingsModeConfigContract } from './screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHistory';
+import { roundClockModeConfigContract } from './screenModeConfigs/roundClock';
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
 import { topCutModeConfigContract } from './screenModeConfigs/topCut';
@@ -28,6 +29,7 @@ import { headToHeadModeTokens } from './screenModeTokens/headToHead';
 import { metagameModeTokens } from './screenModeTokens/metagame';
 import { pairingsModeTokens } from './screenModeTokens/pairings';
 import { playerHistoryModeTokens } from './screenModeTokens/playerHistory';
+import { roundClockModeTokens } from './screenModeTokens/roundClock';
 import { standingsModeTokens } from './screenModeTokens/standings';
 import { topCardsModeTokens } from './screenModeTokens/topCards';
 import { topCutModeTokens } from './screenModeTokens/topCut';
@@ -306,6 +308,17 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: headToHeadModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' },
 		modeTokens: headToHeadModeTokens,
+	},
+	'round-clock': {
+		label: 'Round Clock',
+		icon: 'i-lucide-timer',
+		displayType: 'overlay',
+		description: 'Time remaining in a Round',
+		cardGames: MTG_ONLY,
+		backgroundLayers: true,
+		config: roundClockModeConfigContract,
+		eventReferences: { roundId: 'round' },
+		modeTokens: roundClockModeTokens,
 	},
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 

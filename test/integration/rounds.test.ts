@@ -93,6 +93,27 @@ describe('rounds API', () => {
 		expect(updated.name).toBe('Round 1 (Updated)');
 	});
 
+	it('stores a Round\'s timing, and "Start now" sets its start to server time (ADR-0066)', async () => {
+		const timed = await $fetch(`/api/events/${eventId}/rounds/${roundId}`, {
+			method: 'PATCH',
+			body: { startedAt: '2026-11-04T11:00:00+01:00', durationMinutes: 50 },
+		});
+		expect(timed).toMatchObject({ startedAt: '2026-11-04T10:00:00.000Z', durationMinutes: 50 });
+
+		const before = Date.now();
+		const started = await $fetch(`/api/events/${eventId}/rounds/${roundId}/start`, { method: 'POST' });
+		const startedAt = Date.parse(started.startedAt as unknown as string);
+		expect(started.durationMinutes).toBe(50);
+		// The server's clock and this one agree within the request's own span, plus some drift.
+		expect(Math.abs(startedAt - before)).toBeLessThan(60_000);
+
+		const refused = await $fetchRaw(`/api/events/${eventId}/rounds/${roundId}`, {
+			method: 'PATCH',
+			body: { durationMinutes: 0 },
+		});
+		expect(refused.status).toBe(400);
+	});
+
 	it('deletes a round', async () => {
 		const round = await $fetch(`/api/events/${eventId}/rounds`, {
 			method: 'POST',

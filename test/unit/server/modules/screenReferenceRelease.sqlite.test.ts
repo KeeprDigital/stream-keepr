@@ -134,6 +134,7 @@ describe('deleting a Phase, Round or Archetype releases the Screens naming it', 
 			'top-cut.phaseId: phase',
 			'pairings.roundId: round',
 			'archetype-spotlight.archetypeId: archetype',
+			'round-clock.roundId: round',
 		]);
 	});
 

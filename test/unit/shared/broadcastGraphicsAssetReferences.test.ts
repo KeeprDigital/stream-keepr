@@ -314,6 +314,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 			'pairings',
 			'archetype-spotlight',
 			'head-to-head',
+			'round-clock',
 		]);
 
 		for (const mode of GRAPHIC_ASSET_REFERENCING_SCREEN_MODES) {

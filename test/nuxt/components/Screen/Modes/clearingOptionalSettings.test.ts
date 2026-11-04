@@ -237,6 +237,15 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 			['Bracket size', 'bracketSizeOverride', 8],
 		],
 	],
+	// A cleared Round follows the Current Round (ADR-0066).
+	[
+		'RoundClock',
+		'round-clock',
+		{},
+		[
+			['Round', 'roundId', 31],
+		],
+	],
 	[
 		'ArchetypeSpotlight',
 		'archetype-spotlight',

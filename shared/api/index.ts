@@ -391,6 +391,10 @@ export interface RoundResponse {
 	roundNumber: number;
 	controlMode: RoundControlMode;
 	lastSyncedAt: Date | null;
+	/** When the Round started, as its operator entered it; Melee Sync never writes it (ADR-0066). */
+	startedAt: Date | null;
+	/** How long the Round runs, in minutes, as its operator entered it (ADR-0066). */
+	durationMinutes: number | null;
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -402,7 +406,11 @@ export interface CreateRoundInput {
 	controlMode?: RoundControlMode;
 }
 
-export type UpdateRoundInput = Partial<CreateRoundInput>;
+/** A Round edit. Its timing is sent as an ISO instant and whole minutes; `null` clears either (ADR-0066). */
+export type UpdateRoundInput = Partial<CreateRoundInput> & {
+	startedAt?: string | null;
+	durationMinutes?: number | null;
+};
 
 export interface MatchResponse {
 	id: number;

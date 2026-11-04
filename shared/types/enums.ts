@@ -27,6 +27,7 @@ export const SCREEN_MODE_VALUES = [
 	'pairings',
 	'archetype-spotlight',
 	'head-to-head',
+	'round-clock',
 ] as const;
 /**
  * Each Screen Mode key renamed after release, and the key it is now (#773, ADR-0043).

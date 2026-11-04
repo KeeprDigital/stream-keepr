@@ -108,6 +108,20 @@ export interface ScreenOutputPairingsResponse {
 	matches: ScreenOutputRoundMatch[];
 }
 
+/** The Round a Round Clock shows, with its operator-entered timing (ADR-0066). */
+export interface ScreenOutputRoundClockRound {
+	id: number;
+	name: string;
+	/** Its start as an ISO instant, or `null` before an operator starts it. */
+	startedAt: string | null;
+	durationMinutes: number | null;
+}
+
+/** What a Round Clock Screen renders from: its Round, or `null` with none to show. */
+export interface ScreenOutputRoundClockResponse {
+	round: ScreenOutputRoundClockRound | null;
+}
+
 /** One side of a Head-to-Head: the Player, their current record and points, and their deck as a broadcast names it. */
 export interface ScreenOutputHeadToHeadPlayer {
 	id: number;
