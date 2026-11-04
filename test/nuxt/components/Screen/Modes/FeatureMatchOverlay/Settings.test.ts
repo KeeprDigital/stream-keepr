@@ -142,9 +142,10 @@ const MultiLayerInspectorStub = defineComponent({
 	props: {
 		layers: { type: Array, required: true },
 		writable: { type: Boolean, required: false },
+		groupRefusal: { type: String, required: false },
 	},
-	emits: ['update'],
-	template: '<div data-testid="multi-layer-inspector" :data-layers="JSON.stringify(layers)" :data-writable="String(writable)" />',
+	emits: ['update', 'group'],
+	template: '<div data-testid="multi-layer-inspector" :data-layers="JSON.stringify(layers)" :data-writable="String(writable)" :data-group-refusal="groupRefusal" />',
 });
 
 const TemplateLibraryStub = defineComponent({
@@ -521,6 +522,18 @@ describe('featureMatchOverlaySettings', () => {
 			expect(positions()).toEqual(before.map(position => ({ x: position!.x + delta.x, y: position!.y + delta.y })));
 		});
 
+		// E8: a Source Item never joins a Graphic Group, and ⌘G says so rather than doing nothing (#920).
+		it('says why ⌘G cannot group a selection holding a Source Item, and groups nothing', async () => {
+			const wrapper = await mountWithTwo();
+			const before = JSON.stringify(mockConfig.value.layout);
+
+			await press('g', { metaKey: true });
+
+			expect(wrapper.get('[data-testid="multi-layer-inspector"]').attributes('data-group-refusal')).toBe('source-item');
+			expect(mockToastAdd).toHaveBeenCalledWith(expect.objectContaining({ description: 'Source Items can\'t be grouped' }));
+			expect(JSON.stringify(mockConfig.value.layout)).toBe(before);
+		});
+
 		// The main Source's top is at 90, the Game Wins item's at 278 (#919).
 		it('aligns them from the property panel', async () => {
 			const wrapper = await mountWithTwo();
@@ -649,6 +662,34 @@ describe('featureMatchOverlaySettings', () => {
 			const copyId = sourceIds().find(id => !before.includes(id));
 			expect(copyId).toBeDefined();
 			expect(selectedTarget(wrapper)).toEqual({ type: 'source', itemId: copyId });
+		});
+
+		it.each<[string, (wrapper: Awaited<ReturnType<typeof mountComponent>>) => Promise<void> | void]>([
+			[
+				'⌘G',
+				() => press('g', { metaKey: true }),
+			],
+			[
+				'the multi-layer panel\'s Group',
+				wrapper => wrapper.getComponent(MultiLayerInspectorStub).vm.$emit('group'),
+			],
+		])('groups two Graphic Items with %s, and ⌘⇧G ungroups them', async (_, group) => {
+			const wrapper = await mountComponent();
+			await flushPromises();
+			const before = mockConfig.value.layout.composition.items;
+			preview(wrapper).vm.$emit('selectCompositorTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: 'player1-game-wins' });
+			await nextTick();
+			preview(wrapper).vm.$emit('selectCompositorTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: 'player2-game-wins' }, true);
+			await nextTick();
+
+			await group(wrapper);
+			await nextTick();
+			const created = mockConfig.value.layout.composition.items.find(item => !before.some(entry => entry.id === item.id));
+			expect(created?.type === 'group' && created.children.map(child => child.id)).toEqual(['player1-game-wins', 'player2-game-wins']);
+			expect(compositorTarget(wrapper)).toEqual({ type: 'item', graphicId: 'feature-match-layout', itemId: created!.id });
+
+			await press('G', { metaKey: true, shiftKey: true });
+			expect(mockConfig.value.layout.composition.items.map(item => item.id)).toEqual(before.map(item => item.id));
 		});
 
 		it('copies the selected layer with ⌘C, even for an observer, and pastes a selected copy with ⌘V', async () => {

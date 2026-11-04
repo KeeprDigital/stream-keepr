@@ -230,6 +230,50 @@ describe('featureMatchOverlayLayerList', () => {
 		]).toEqual(visible);
 	});
 
+	// #920: a selected row's menu groups the selection, saying why it cannot, and a group's row ungroups it.
+	it.each<[string, string, string | undefined, string[]]>([
+		[
+			'groups two Graphic Items',
+			'item:front',
+			undefined,
+			['cluster', 'Group 2'],
+		],
+		[
+			'says why a Source Item keeps the selection from grouping',
+			'source:main-source',
+			'Source Items can\'t be grouped',
+			['back', 'cluster', 'front'],
+		],
+	])('%s from a selected row\'s menu', async (_, second, refusal, topLevel) => {
+		const { wrapper, config, sync } = await mountList();
+		const composition = addGraphicItem(config.value.layout.composition, { kind: 'shape', id: 'front', ...CANVAS }).graphic;
+		config.value = {
+			...config.value,
+			layout: { ...config.value.layout, composition },
+		};
+		await sync();
+		await wrapper.get('[data-layer-key="item:back"] [data-testid="layer-select"]').trigger('click');
+		await wrapper.get(`[data-layer-key="${second}"] [data-testid="layer-select"]`).trigger('click', { metaKey: true });
+		const entry = wrapper.get('[data-layer-key="item:back"] [data-menu-entry="Group selection"]');
+
+		await entry.trigger('click');
+		await sync();
+
+		expect(entry.attributes('data-menu-description')).toBe(refusal);
+		expect(config.value.layout.composition.items.map(item => item.type === 'group' && item.id !== 'cluster'
+			? item.label
+			: item.id)).toEqual(topLevel);
+	});
+
+	it('ungroups a Graphic Group from its row\'s menu', async () => {
+		const { wrapper, config, sync } = await mountList();
+
+		await wrapper.get('[data-layer-key="item:cluster"] [data-menu-entry="Ungroup"]').trigger('click');
+		await sync();
+
+		expect(config.value.layout.composition.items.map(item => item.id)).toEqual(['back', 'child']);
+	});
+
 	// #919. Player 1's Source is 340×250 at (24, 16), Player 2's at (24, 800), and the main Source 1500×900 at (400, 90).
 	it.each<[string, string[], string, string, Record<string, { x: number; y: number }>]>([
 		[

@@ -19,6 +19,8 @@ import {
 	flattenGraphicItems,
 	GRAPHIC_RULE_PRESET_HEIGHT,
 	graphicItemPlacementRefusal,
+	graphicItemsGroupRefusal,
+	groupGraphicItems,
 	moveBroadcastGraphic,
 	moveGraphicItem,
 	moveGraphicItemToEdge,
@@ -43,7 +45,9 @@ import {
 	placeGraphicItem,
 	selectMediaGraphicItemAsset,
 	setMediaClipGeometry,
+	ungroupGraphicGroup,
 } from '~~/shared/modules/graphics';
+import { MAX_GRAPHIC_GROUP_CHILDREN } from '~~/shared/types/graphics';
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
 
@@ -1338,5 +1342,568 @@ describe('placing a Graphic Item in or out of a Graphic Group (#741)', () => {
 			expect(placed).toBe(built);
 		else
 			expect(located(placed, itemId).parent).toBe(groupId);
+	});
+});
+
+describe('grouping and ungrouping Graphic Items (#920)', () => {
+	/** Back to front: shapes `back` (100, 100, 200×100), `mid` (50, 400, 10×10) and `front` (500, 300, 100×50). */
+	function stage(patches: Record<string, Partial<GraphicItemConfig>> = {}) {
+		let built = graphic('a');
+		for (const id of ['back', 'mid', 'front'])
+			built = addGraphicItem(built, { kind: 'shape', id, ...CANVAS }).graphic;
+		built = patchGraphicItem(built, 'back', {
+			x: 100,
+			y: 100,
+			width: 200,
+			height: 100,
+		});
+		built = patchGraphicItem(built, 'mid', { x: 50, y: 400, width: 10, height: 10 });
+		built = patchGraphicItem(built, 'front', {
+			x: 500,
+			y: 300,
+			width: 100,
+			height: 50,
+		});
+		for (const [id, patch] of Object.entries(patches))
+			built = patchGraphicItem(built, id, patch);
+		return built;
+	}
+
+	function groupOf(built: BroadcastGraphicConfig, id: string): GraphicGroupItemConfig {
+		const found = built.items.find(item => item.id === id);
+		if (found?.type !== 'group')
+			throw new Error('expected a Graphic Group');
+		return found;
+	}
+
+	function rectOf(item: GraphicItemConfig | GraphicGroupChildConfig | undefined) {
+		return item && {
+			x: item.x,
+			y: item.y,
+			width: item.width,
+			height: item.height,
+			rotation: item.rotation ?? 0,
+		};
+	}
+
+	// E11: the box is the union of what the members draw, and children keep where they are drawn.
+	it.each([
+		[
+			'unrotated members',
+			{},
+			{
+				x: 100,
+				y: 100,
+				width: 500,
+				height: 250,
+			},
+			{
+				back: {
+					x: 0,
+					y: 0,
+					width: 200,
+					height: 100,
+					rotation: 0,
+				},
+				front: {
+					x: 400,
+					y: 200,
+					width: 100,
+					height: 50,
+					rotation: 0,
+				},
+			},
+		],
+		[
+			'a member turned a quarter about its centre, by the box it turns into',
+			{
+				back: { anchor: 'center', rotation: 90 },
+			},
+			{
+				x: 150,
+				y: 50,
+				width: 450,
+				height: 300,
+			},
+			{
+				back: {
+					x: -50,
+					y: 50,
+					width: 200,
+					height: 100,
+					rotation: 90,
+				},
+				front: {
+					x: 350,
+					y: 250,
+					width: 100,
+					height: 50,
+					rotation: 0,
+				},
+			},
+		],
+	] as const)('wraps %s in a canvas group drawn where they were', (_case, patches, box, children) => {
+		const grouped = groupGraphicItems(stage(patches as Record<string, Partial<GraphicItemConfig>>), ['front', 'back'], { id: 'pack' });
+
+		expect(grouped.itemId).toBe('pack');
+		expect(grouped.graphic.items.map(item => item.id)).toEqual(['mid', 'pack']);
+		const pack = groupOf(grouped.graphic, 'pack');
+		expect(pack).toMatchObject({
+			arrangement: 'canvas',
+			padding: 0,
+			clip: false,
+			visible: true,
+			...box,
+		});
+		expect(pack.surfaceStyle).toBeUndefined();
+		expect(pack.children.map(child => child.id)).toEqual(['back', 'front']);
+		expect(Object.fromEntries(pack.children.map(child => [
+			child.id,
+			rectOf(child),
+		]))).toEqual(children);
+	});
+
+	it('takes the frontmost member\'s slot among the layers it leaves', () => {
+		const grouped = groupGraphicItems(stage(), ['back', 'mid'], { id: 'pack' }).graphic;
+
+		expect(grouped.items.map(item => item.id)).toEqual(['pack', 'front']);
+		expect(groupOf(grouped, 'pack').children.map(child => child.id)).toEqual(['back', 'mid']);
+	});
+
+	// E9: Graphic Groups do not nest, so only two or more top-level non-group items are grouped.
+	// A Graphic Group holds at most MAX_GRAPHIC_GROUP_CHILDREN children, which the write schema enforces.
+	it.each([
+		[MAX_GRAPHIC_GROUP_CHILDREN, null],
+		[MAX_GRAPHIC_GROUP_CHILDREN + 1, 'too-many'],
+	] as const)('refuses or admits grouping %i items against the group child cap', (count, refusal) => {
+		let built = graphic('a');
+		const ids = Array.from({ length: count }, (_, index) => `item-${index}`);
+		for (const id of ids)
+			built = addGraphicItem(built, { kind: 'shape', id, ...CANVAS }).graphic;
+
+		expect(graphicItemsGroupRefusal(built, ids)).toBe(refusal);
+	});
+
+	// Rows marked `packed` group `back` and `mid` into `pack` first.
+	it.each([
+		[
+			'one item',
+			false,
+			['back'],
+			'too-few',
+		],
+		[
+			'one item named twice',
+			false,
+			['back', 'back'],
+			'too-few',
+		],
+		[
+			'an item and an unknown id',
+			false,
+			['back', 'missing'],
+			'too-few',
+		],
+		[
+			'a group with an item',
+			true,
+			['pack', 'front'],
+			'group-into-group',
+		],
+		[
+			'a group child with an item',
+			true,
+			['back', 'front'],
+			'group-child',
+		],
+		[
+			'two top-level items',
+			false,
+			['mid', 'front'],
+			null,
+		],
+	] as const)('refuses or admits grouping %s', (_case, packed, itemIds, refusal) => {
+		const built = packed
+			? groupGraphicItems(stage(), ['back', 'mid'], { id: 'pack' }).graphic
+			: stage();
+
+		expect(graphicItemsGroupRefusal(built, itemIds)).toBe(refusal);
+		const grouped = groupGraphicItems(built, itemIds, { id: 'next' });
+		if (refusal)
+			expect(grouped.graphic).toBe(built);
+		else
+			expect(grouped.itemId).toBe('next');
+	});
+
+	/** Back to front: shape `lone`, then group `pack` holding shapes `a`, `b` and `c`, then shape `top`. */
+	function packed(groupPatch: Partial<GraphicGroupItemConfig>, children: Record<'a' | 'b' | 'c', Partial<GraphicGroupChildConfig>>) {
+		let built = addGraphicItem(graphic('a'), { kind: 'shape', id: 'lone', ...CANVAS }).graphic;
+		built = addGraphicItem(built, { kind: 'group', id: 'pack', ...CANVAS }).graphic;
+		for (const id of ['a', 'b', 'c'] as const) {
+			built = addGraphicGroupChild(built, { kind: 'shape', groupId: 'pack', id }).graphic;
+			built = patchGraphicItem(built, id, children[id] as Partial<GraphicItemConfig>);
+		}
+		built = addGraphicItem(built, { kind: 'shape', id: 'top', ...CANVAS }).graphic;
+		return patchGraphicItem(built, 'pack', groupPatch as Partial<GraphicItemConfig>);
+	}
+
+	// E12: children land on the canvas where their group drew them, in its slot and their order.
+	// Row: 380 inner, less a 20 gap and `a`'s fixed 100, leaves 260 for `b` to fill; both centred across 80.
+	// Turned: `a`'s corner (115, 66) turned a quarter about the group's corner (100, 50) lands on (84, 65); `b` turns 300 + 90, a 30.
+	it.each([
+		[
+			'a canvas group',
+			{
+				arrangement: 'canvas',
+				x: 100,
+				y: 50,
+				width: 400,
+				height: 300,
+				padding: 10,
+			},
+			{
+				a: { x: 5, y: 6, width: 30, height: 10 },
+				b: {
+					x: 50,
+					y: 60,
+					width: 20,
+					height: 20,
+					rotation: 45,
+				},
+				c: { x: 0, y: 0, width: 10, height: 10 },
+			},
+			{
+				a: {
+					x: 115,
+					y: 66,
+					width: 30,
+					height: 10,
+					rotation: 0,
+				},
+				b: {
+					x: 160,
+					y: 120,
+					width: 20,
+					height: 20,
+					rotation: 45,
+				},
+				c: {
+					x: 110,
+					y: 60,
+					width: 10,
+					height: 10,
+					rotation: 0,
+				},
+			},
+		],
+		[
+			'a canvas group turned a quarter about its corner',
+			{
+				arrangement: 'canvas',
+				x: 100,
+				y: 50,
+				width: 400,
+				height: 300,
+				padding: 10,
+				rotation: 90,
+			},
+			{
+				a: { x: 5, y: 6, width: 30, height: 10 },
+				b: {
+					x: 0,
+					y: 0,
+					width: 10,
+					height: 10,
+					rotation: 300,
+				},
+				c: { x: 0, y: 0, width: 10, height: 10 },
+			},
+			{
+				a: {
+					x: 84,
+					y: 65,
+					width: 30,
+					height: 10,
+					rotation: 90,
+				},
+				b: {
+					x: 90,
+					y: 60,
+					width: 10,
+					height: 10,
+					rotation: 30,
+				},
+				c: {
+					x: 90,
+					y: 60,
+					width: 10,
+					height: 10,
+					rotation: 90,
+				},
+			},
+		],
+		[
+			'a row group, one child filling and a hidden one laid out by nobody',
+			{
+				arrangement: 'row',
+				x: 100,
+				y: 50,
+				width: 400,
+				height: 100,
+				padding: 10,
+				gap: 20,
+				align: 'center',
+				justify: 'start',
+			},
+			{
+				a: {
+					width: 999,
+					height: 40,
+					sizing: { mode: 'fixed', size: 100, weight: 1 },
+				},
+				b: {
+					width: 5,
+					height: 20,
+					sizing: { mode: 'fill', size: 0, weight: 1 },
+				},
+				c: {
+					x: 1,
+					y: 2,
+					width: 10,
+					height: 10,
+					visible: false,
+				},
+			},
+			{
+				a: {
+					x: 110,
+					y: 80,
+					width: 100,
+					height: 40,
+					rotation: 0,
+				},
+				b: {
+					x: 230,
+					y: 90,
+					width: 260,
+					height: 20,
+					rotation: 0,
+				},
+				c: {
+					x: 111,
+					y: 62,
+					width: 10,
+					height: 10,
+					rotation: 0,
+				},
+			},
+		],
+		[
+			'a column group, stretched across and packed to its end',
+			{
+				arrangement: 'column',
+				x: 0,
+				y: 0,
+				width: 200,
+				height: 300,
+				padding: 0,
+				gap: 10,
+				align: 'stretch',
+				justify: 'end',
+			},
+			{
+				a: { width: 80, height: 50 },
+				b: {
+					width: 80,
+					height: 999,
+					sizing: { mode: 'fixed', size: 60, weight: 1 },
+				},
+				c: { width: 80, height: 20, rotation: 30 },
+			},
+			{
+				a: {
+					x: 0,
+					y: 150,
+					width: 200,
+					height: 50,
+					rotation: 0,
+				},
+				b: {
+					x: 0,
+					y: 210,
+					width: 200,
+					height: 60,
+					rotation: 0,
+				},
+				c: {
+					x: 0,
+					y: 280,
+					width: 200,
+					height: 20,
+					rotation: 0,
+				},
+			},
+		],
+		[
+			'a row group spacing its children between its ends',
+			{
+				arrangement: 'row',
+				x: 0,
+				y: 0,
+				width: 300,
+				height: 100,
+				padding: 0,
+				gap: 0,
+				align: 'start',
+				justify: 'space-between',
+			},
+			{
+				a: { width: 50, height: 10 },
+				b: { width: 50, height: 20 },
+				c: { width: 50, height: 30 },
+			},
+			{
+				a: {
+					x: 0,
+					y: 0,
+					width: 50,
+					height: 10,
+					rotation: 0,
+				},
+				b: {
+					x: 125,
+					y: 0,
+					width: 50,
+					height: 20,
+					rotation: 0,
+				},
+				c: {
+					x: 250,
+					y: 0,
+					width: 50,
+					height: 30,
+					rotation: 0,
+				},
+			},
+		],
+	] as const)('ungroups %s without moving a child', (_case, groupPatch, children, landed) => {
+		const built = packed(groupPatch as Partial<GraphicGroupItemConfig>, children as Record<'a' | 'b' | 'c', Partial<GraphicGroupChildConfig>>);
+
+		const ungrouped = ungroupGraphicGroup(built, 'pack');
+
+		expect(ungrouped.itemIds).toEqual(['a', 'b', 'c']);
+		expect(ungrouped.graphic.items.map(item => item.id)).toEqual(['lone', 'a', 'b', 'c', 'top']);
+		expect(Object.fromEntries(['a', 'b', 'c'].map(id => [
+			id,
+			rectOf(findGraphicItem(ungrouped.graphic, id)?.item),
+		]))).toEqual(landed);
+		expect(ungrouped.graphic.items.some(item => item.sizing)).toBe(false);
+	});
+
+	it('ungroups what it grouped back where it was drawn', () => {
+		const built = stage({
+			back: { anchor: 'center', rotation: 90 },
+		});
+		const ungrouped = ungroupGraphicGroup(groupGraphicItems(built, ['back', 'front'], { id: 'pack' }).graphic, 'pack').graphic;
+
+		expect(ungrouped.items.map(item => item.id)).toEqual(['mid', 'back', 'front']);
+		expect(ungrouped.items.map(rectOf)).toEqual(['mid', 'back', 'front'].map(id => rectOf(findGraphicItem(built, id)?.item)));
+	});
+
+	// E12: what a child inherited is baked in; the group's clipping and animation go with it.
+	// The group defaults its children's surface to fill opacity 0.5, bound to `panel`, clips, and staggers `kid`.
+	// Hidden row: 380 inner less `kid`'s 50 leaves 330, packed to the end of a row padded 10 at (100, 50).
+	it.each([
+		[
+			'a Text Graphic Item holding no surface takes the group\'s default, bound as it was',
+			'text',
+			{},
+			null,
+			{
+				visible: true,
+				surfaceStyle: { fillOpacity: 0.5 },
+				themeBindings: { surfaceStyle: 'panel' },
+			},
+		],
+		[
+			'a Shape Graphic Item keeps its own surface',
+			'shape',
+			{},
+			0.25,
+			{
+				visible: true,
+				surfaceStyle: { fillOpacity: 0.25 },
+			},
+		],
+		[
+			'a Media Graphic Item paints no surface, so takes none',
+			'media',
+			{},
+			null,
+			{ visible: true },
+		],
+		[
+			'a hidden row group\'s child is hidden, where the row laid it out',
+			'shape',
+			{
+				arrangement: 'row',
+				visible: false,
+				x: 100,
+				y: 50,
+				width: 400,
+				height: 100,
+				padding: 10,
+				gap: 0,
+				align: 'start',
+				justify: 'end',
+			},
+			null,
+			{
+				visible: false,
+				x: 440,
+				y: 60,
+				width: 50,
+				height: 20,
+			},
+		],
+	] as const)('bakes what a child inherits: %s', (_case, kind, groupPatch, own, baked) => {
+		let built = addGraphicItem(graphic('a'), { kind: 'group', id: 'pack', ...CANVAS }).graphic;
+		built = addGraphicGroupChild(built, { kind, groupId: 'pack', id: 'kid' }).graphic;
+		built = patchGraphicItem(built, 'kid', { x: 0, y: 0, width: 50, height: 20 });
+		if (own !== null)
+			built = patchGraphicSurfaceStyle(built, 'kid', { fillOpacity: own });
+		built = patchGraphicGroupDefaultChildSurfaceStyle(built, 'pack', { fillOpacity: 0.5 });
+		built = patchGraphicItem(built, 'pack', {
+			arrangement: 'canvas',
+			clip: true,
+			...groupPatch,
+			themeBindings: { defaultChildSurfaceStyle: 'panel' },
+		} as Partial<GraphicItemConfig>);
+		built = patchGraphicItemAnimationStagger(built, 'pack', 'enter', {
+			itemIds: ['kid'],
+		});
+
+		const ungrouped = ungroupGraphicGroup(built, 'pack').graphic;
+
+		expect(ungrouped.items.map(item => item.id)).toEqual(['kid']);
+		expect(ungrouped.items[0]).toMatchObject(baked);
+		expect('surfaceStyle' in ungrouped.items[0]!).toBe(kind !== 'media');
+		expect(ungrouped.items[0]!.animation).toBeUndefined();
+	});
+
+	it.each([
+		['a Graphic Item that is not a group', 'lone'],
+		['an unknown id', 'missing'],
+		['a Social Profile Projection\'s Presentation Group', 'pack'],
+	])('answers the same graphic ungrouping %s', (_case, itemId) => {
+		let built = packed({ arrangement: 'canvas' }, { a: {}, b: {}, c: {} });
+		built = {
+			...built,
+			socialProfileProjections: [
+				{ key: 'talent', sourceKey: 'talent', presentationGroupId: 'pack' },
+			],
+		} as BroadcastGraphicConfig;
+
+		expect(ungroupGraphicGroup(built, itemId)).toEqual({ graphic: built, itemIds: [] });
 	});
 });
