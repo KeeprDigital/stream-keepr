@@ -11,8 +11,9 @@ import type { PageRotationControls } from '~/modules/screen-mode/rotationWrites'
  * The page count is the rotation's `totalPages`, counted from the row count
  * the editor gives `useRotationConfigWrites` — the rows the Screen Output
  * renders, from the mode's own data (#780); the card never estimates it.
+ * Its default slot, after the controls, takes the Look of what it pages.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	/** The mode's Page Rotation, from its editor's `useRotationConfigWrites`. */
 	rotation: PageRotationControls;
 	/** What a page holds, in the mode's own words. */
@@ -23,7 +24,13 @@ const props = defineProps<{
 	loading?: boolean;
 	/** The rows have yet to answer their first read, so there is no page count to show. */
 	counting?: boolean;
-}>();
+	/** The card's title. */
+	title?: string;
+	/** `mode:card`; remembers the open state per browser. */
+	id?: string;
+	/** One line shown in the header while closed. */
+	summary?: string;
+}>(), { title: 'Pagination' });
 
 // Each control's label and bounds, read from the mode's config contract (#498).
 const fields = computed(() => props.rotation.fields);
@@ -31,7 +38,7 @@ const pageSize = computed(() => props.rotation.pageSize.value);
 </script>
 
 <template>
-	<ScreenSettingsCard title="Pagination">
+	<ScreenSettingsCard :id="id" :title="title" :summary="summary">
 		<UFormField
 			:label="fields.pageSize.label"
 			:description="pageSizeDescription"
@@ -54,5 +61,7 @@ const pageSize = computed(() => props.rotation.pageSize.value);
 			:loading="loading"
 			:counting="counting"
 		/>
+
+		<slot />
 	</ScreenSettingsCard>
 </template>

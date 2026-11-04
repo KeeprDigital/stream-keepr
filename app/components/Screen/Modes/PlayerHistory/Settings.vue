@@ -3,6 +3,7 @@ import type { PlayerHistoryColumnConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
+import { columnsSummary, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -64,6 +65,18 @@ const rotation = useRotationConfigWrites({
 });
 const { updateConfig } = rotation;
 
+// ── Closed card summaries ──
+const lookOf = (...groups: string[]) => lookSummary('player-history', props.screen.themeOverrides, groups);
+const tableSummary = computed(() => settingsSummary([
+	columnsSummary(columns.value),
+	lookOf('table', 'outcome-badge'),
+]));
+const headerCardSummary = computed(() => settingsSummary([
+	headerSummary(config.value),
+	lookOf('header'),
+]));
+const paginationCardSummary = computed(() => paginationSummary(rotation));
+
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['players']);
 
@@ -76,11 +89,10 @@ onMounted(async () => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Data">
-			<UFormField
+		<ScreenSettingsCard id="player-history:data" title="Data" :collapsible="false">
+			<ScreenSettingsField
 				label="Player"
 				description="Select the player whose match history should be shown."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
 			>
 				<USelect
 					:model-value="config.playerId"
@@ -88,42 +100,44 @@ onMounted(async () => {
 					class="w-64"
 					@update:model-value="updateConfig({ playerId: $event, currentPage: 1 })"
 				/>
-			</UFormField>
+			</ScreenSettingsField>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Columns" subtitle="Drag to reorder, toggle to show/hide.">
+		<ScreenSettingsCard
+			id="player-history:table"
+			title="Table"
+			subtitle="Drag to reorder, toggle to show/hide."
+			:summary="tableSummary"
+		>
 			<ScreenColumnVisibilityList
 				:columns="columns"
 				:labels="columnLabels"
 				@update="updateConfig({ columns: $event })"
 			/>
+
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="table" />
+
+			<ScreenSettingsGroup title="Outcome Badge">
+				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="outcome-badge" />
+			</ScreenSettingsGroup>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Header">
-			<ScreenSettingsToggle
-				:label="fields.showHeader.label"
-				description="Show the player name and record above the match history."
-				:model-value="config.showHeader"
-				@update:model-value="updateConfig({ showHeader: $event })"
-			/>
-
-			<UFormField
-				v-if="config.showHeader"
-				:label="fields.headerText.label"
-				description="Leave empty for the player's name and match history."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInput
-					:model-value="config.headerText ?? ''"
-					placeholder="Auto"
-					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || null })"
-				/>
-			</UFormField>
-		</ScreenSettingsCard>
+		<ScreenHeaderSettingsCard
+			id="player-history:header"
+			:config="config"
+			:fields="fields"
+			:summary="headerCardSummary"
+			show-description="Show the player name and record above the match history."
+			auto-description="Leave empty for the player's name and match history."
+			@update="updateConfig($event)"
+		>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
+		</ScreenHeaderSettingsCard>
 
 		<ScreenPaginationSettingsCard
+			id="player-history:pagination"
 			:rotation="rotation"
+			:summary="paginationCardSummary"
 			page-size-description="Number of match rows shown per page."
 			auto-page-description="Automatically cycle through match history pages."
 			:loading="loadingHistory"

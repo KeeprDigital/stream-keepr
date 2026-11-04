@@ -322,6 +322,8 @@ const stubs = {
 	UBadge: true,
 	ScreenColumnVisibilityList: true,
 	MtgManaColorDisplay: true,
+	// A group's Look writes Screen Theme Overrides, never config (ADR-0072).
+	ScreenThemeTokenGroup: true,
 };
 
 // ── Reading which contract field a control wrote ──
