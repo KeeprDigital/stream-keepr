@@ -937,6 +937,7 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		topCut: answer(ANSWERS.topCut),
 		roundClock: answer(ANSWERS.roundClock),
 		playerDecks: answer(ANSWERS.playerDecks),
+		opPlayerDeckList: none('One Piece Player'),
 	},
 	// A One Piece Event models no Players, Rounds, results or Metagame (ADR-0057).
 	op: {
@@ -956,6 +957,8 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		topCut: none('Top Cut'),
 		roundClock: none('Round'),
 		playerDecks: none('Player'),
+		// A One Piece Deck List Screen's sample is a Feature Match Slot side's.
+		opPlayerDeckList: none('Player'),
 	},
 };
 

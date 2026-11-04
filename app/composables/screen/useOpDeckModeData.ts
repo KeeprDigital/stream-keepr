@@ -1,8 +1,11 @@
 import type { OpLeader } from '~~/shared/types/game';
-import type { ScreenOutputFeatureMatchDeckListResponse } from '~~/shared/types/screenOutputReads';
+import type { OpDeckListEntry } from '~~/shared/types/opDeckList';
+import type { DeckModeConfig } from '~~/shared/types/screenConfig';
+import type { ScreenOutputFeatureMatchDeckListResponse, ScreenOutputOpPlayerDeckListResponse } from '~~/shared/types/screenOutputReads';
 import type { OpDeckLayout } from '~~/shared/utils/opDeckLayout';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { FeatureMatch } from '~/types';
+import { catalogueOpLeader } from '~~/shared/utils/card/op';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
 import { opDeckLayout } from '~~/shared/utils/opDeckLayout';
@@ -46,22 +49,38 @@ function holdSampleSlot(context: ScreenContext, slotId: () => number | null) {
 	};
 }
 
-/** Who sits on the side shown, and the Deck List they hold. */
+/** Who the Deck Source shows, and the Deck List they hold. */
 interface SideShown {
 	playerName: string;
 	leader: OpLeader | null;
 	deckListId: number | null;
 }
 
-/** The Deck List on program, with the side it was read for. */
+/** A Deck List as read for program. */
+interface DeckRead {
+	id: number;
+	entries: OpDeckListEntry[];
+}
+
+/** The Deck List on program, with who it was read for. */
 interface DisplayedDeck extends OpDeckLayout {
 	deckListId: number;
 	side: SideShown;
 }
 
+/** What one kind of Deck Source answers: who it shows now, and their Deck List once read. */
+interface OpDeckSourceRead {
+	/** A Slot or a Player is selected. */
+	selected: () => boolean;
+	side: Readonly<Ref<SideShown | null>>;
+	deck: Readonly<Ref<DeckRead | null>>;
+	/** Who the source shows is known: false only while its first read is in flight. */
+	answered: Readonly<Ref<boolean>>;
+	error: Readonly<Ref<string | null>>;
+}
+
 /**
- * A Deck List Screen whose Deck Source is one player side of a Feature Match
- * Slot (ADR-0057), followed live.
+ * One player side of a Feature Match Slot (ADR-0057).
  *
  * The Slot and its Session follow through the stores (`useScreenFeatureMatchSlot`).
  * The side shows whichever player sits there now: the active Session's, or the
@@ -70,16 +89,11 @@ interface DisplayedDeck extends OpDeckLayout {
  * a clear removes, so the Deck List is read again whenever the id changes. A
  * Deck List never changes under its id.
  *
- * Program keeps the Deck List it shows, and the side it was read for, until the
- * incoming one is read and its images are loaded (ADR-0053). A side holding no
- * Deck List shows nothing.
- *
  * A Theme preview shows the One Piece Screen Mode Sample Dataset's Slot and
  * Deck List, read once, and holds no Slot in the stores.
  */
-export function useFeatureMatchDeckModeData(context: ScreenContext) {
+function useSlotSideSource(context: ScreenContext, config: ComputedRef<DeckModeConfig>): OpDeckSourceRead {
 	const { eventId, sampleDataset } = context;
-	const config = useScreenModeConfig(context, 'deck');
 	const outputReads = useScreenOutputReads(context);
 
 	const source = computed(() => {
@@ -128,11 +142,104 @@ export function useFeatureMatchDeckModeData(context: ScreenContext) {
 		dependsOn: {},
 	});
 
+	return {
+		selected: () => slotId() !== null,
+		side,
+		deck: deckRead.data,
+		answered: slotRead.answered,
+		error: computed(() => slotRead.error.value ?? deckRead.error.value ?? null),
+	};
+}
+
+/** The Leader a Player's Deck List marks, as the catalogue names it; none for an Unresolved Deck Card. */
+function deckListLeader(deckList: ScreenOutputOpPlayerDeckListResponse['deckList']): OpLeader | null {
+	const entry = deckList?.entries.find(candidate => candidate.number === deckList.leaderNumber);
+	return entry?.card
+		? catalogueOpLeader(entry.number, entry.card)
+		: null;
+}
+
+function updatedAtStamp(updatedAt: Date | string | null | undefined): number | null {
+	return updatedAt == null
+		? null
+		: new Date(updatedAt).getTime();
+}
+
+/**
+ * A Player's own Deck List (ADR-0074), read with the Player through the
+ * Screen. Every Deck List write, by hand or by a TCG+ Import, gives the Deck
+ * List a new id and rolls the Player's `updatedAt`, as a rename does, so an
+ * announced Player at the revision held carries nothing new.
+ */
+function usePlayerSource(context: ScreenContext, config: ComputedRef<DeckModeConfig>): OpDeckSourceRead {
+	const outputReads = useScreenOutputReads(context);
+	const playerId = () => {
+		const deckSource = config.value.deckSource;
+		return deckSource.type === 'player'
+			? deckSource.playerId
+			: null;
+	};
+
+	const read = useScreenModeFreshness<ScreenOutputOpPlayerDeckListResponse | null>({
+		eventId: context.eventId,
+		source: () => {
+			const id = playerId();
+			return id !== null && outputReads.scopeKey.value
+				? `${outputReads.scopeKey.value}:player:${id}`
+				: null;
+		},
+		read: () => outputReads.opPlayerDeckList(playerId()!),
+		initialData: null,
+		errorMessage: DECK_LOAD_FAILED,
+		dependsOn: {
+			'player:updated': ({ player }, held) =>
+				player.id === playerId() && updatedAtStamp(player.updatedAt) !== updatedAtStamp(held?.player.updatedAt),
+		},
+	});
+
+	return {
+		selected: () => playerId() !== null,
+		side: computed(() => {
+			const answer = read.data.value;
+			return answer
+				? {
+						playerName: playerDisplayName(answer.player),
+						leader: deckListLeader(answer.deckList),
+						deckListId: answer.deckList?.id ?? null,
+					}
+				: null;
+		}),
+		deck: computed(() => read.data.value?.deckList ?? null),
+		answered: read.answered,
+		error: read.error,
+	};
+}
+
+/**
+ * A One Piece Card Game Deck List Screen's Deck List (ADR-0057, ADR-0074), from
+ * its Deck Source followed live: one player side of a Feature Match Slot, or a
+ * Player.
+ *
+ * Program keeps the Deck List it shows, and who it was read for, until the
+ * incoming one is read and its images are loaded (ADR-0053). A side or Player
+ * holding no Deck List shows nothing.
+ */
+export function useOpDeckModeData(context: ScreenContext) {
+	const config = useScreenModeConfig(context, 'deck');
+	const slotSide = useSlotSideSource(context, config);
+	const player = usePlayerSource(context, config);
+	const source = computed(() => config.value.deckSource.type === 'player'
+		? player
+		: slotSide);
+
+	const side = computed(() => source.value.side.value);
+	const deckListId = computed(() => side.value?.deckListId ?? null);
+
 	const displayed = shallowRef<DisplayedDeck | null>(null);
 	const builds = createGuardedSequence();
 
-	/** Lays out the Deck List read for the side shown, once its images have loaded. */
-	async function show(read: ScreenOutputFeatureMatchDeckListResponse, sideShown: SideShown) {
+	/** Lays out the Deck List read for who is shown, once its images have loaded. */
+	async function show(read: DeckRead, sideShown: SideShown) {
 		const flight = builds.begin();
 		const layout = opDeckLayout(read.entries);
 		const failed = import.meta.client
@@ -141,7 +248,7 @@ export function useFeatureMatchDeckModeData(context: ScreenContext) {
 					...layout.groups.flatMap(group => group.cards.map(card => card.imageUrl)),
 				].filter((url): url is string => !!url))
 			: new Set<string>();
-		// The side may have moved on while the images loaded, back to what is shown.
+		// The source may have moved on while the images loaded, back to what is shown.
 		if (flight.stale || deckListId.value !== read.id)
 			return;
 		// A card whose image failed shows its name instead.
@@ -152,9 +259,12 @@ export function useFeatureMatchDeckModeData(context: ScreenContext) {
 		displayed.value = { ...layout, deckListId: read.id, side: sideShown };
 	}
 
-	watch([deckListId, deckRead.data], ([id, read]) => {
+	watch([
+		deckListId,
+		() => source.value.deck.value,
+	], ([id, read]) => {
 		if (id === null || displayed.value?.deckListId === id) {
-			// What the side holds is shown, or nothing is: no build in flight may replace it.
+			// What the source holds is shown, or nothing is: no build in flight may replace it.
 			builds.supersede();
 			if (id === null)
 				displayed.value = null;
@@ -164,7 +274,7 @@ export function useFeatureMatchDeckModeData(context: ScreenContext) {
 			void show(read, side.value);
 	}, { immediate: true });
 
-	/** The Deck List shown is the side's own: its name and Leader follow live. */
+	/** The Deck List shown is its holder's own: their name and Leader follow live. */
 	const shownSide = computed(() => {
 		const deck = displayed.value;
 		if (!deck)
@@ -176,15 +286,15 @@ export function useFeatureMatchDeckModeData(context: ScreenContext) {
 
 	const error = computed(() => displayed.value
 		? null
-		: slotRead.error.value ?? deckRead.error.value ?? null);
+		: source.value.error.value);
 
-	/** Rendering Readiness: the side's Deck List is on program, or there is none to show. */
+	/** Rendering Readiness: the source's Deck List is on program, or there is none to show. */
 	const ready = computed(() => {
 		if (error.value)
 			return true;
-		if (!slotId())
+		if (!source.value.selected())
 			return true;
-		if (!slotRead.answered.value)
+		if (!source.value.answered.value)
 			return false;
 		return deckListId.value === null || displayed.value?.deckListId === deckListId.value;
 	});

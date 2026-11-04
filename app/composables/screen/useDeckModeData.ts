@@ -42,7 +42,7 @@ type LoadedDeckSource
 
 /**
  * The Deck Source a configuration selects; `null` while it selects no Player,
- * or a Feature Match Slot side, which `useFeatureMatchDeckModeData` reads.
+ * or a Feature Match Slot side, which `useOpDeckModeData` reads.
  */
 function selectedDeckSource(source: DeckSource): LoadedDeckSource | null {
 	if (source.type === 'broadcast')

@@ -6,10 +6,10 @@ import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
 /**
  * A One Piece Card Game Deck List, from one player side of a Feature Match
- * Slot (ADR-0057): the side's Leader large, a cost curve under it, and the
- * Mainboard grouped Character, Event, Stage, each by cost. It has no
- * Sideboard, so no Board Selection; its cards are laid out by the Mainboard's
- * layout block (ADR-0054).
+ * Slot or from a Player (ADR-0057, ADR-0074): its Leader large, a cost curve
+ * under it, and the Mainboard grouped Character, Event, Stage, each by cost.
+ * It has no Sideboard, so no Board Selection; its cards are laid out by the
+ * Mainboard's layout block (ADR-0054).
  */
 const context = useScreenContext();
 const {
@@ -21,7 +21,7 @@ const {
 	costCurve,
 	error,
 	ready,
-} = useFeatureMatchDeckModeData(context);
+} = useOpDeckModeData(context);
 
 const primaryTextStyle = {
 	color: modeTokenVar('deck', 'primary-text'),

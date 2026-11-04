@@ -5,10 +5,9 @@ import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
- * A Deck List Screen on a One Piece Card Game Event shows a Feature Match Slot
- * side, never a Player (ADR-0057), so one with no Slot side chosen starts on
- * the Event's first Slot, left side. A Magic Deck List Screen keeps its Player
- * source.
+ * A Deck List Screen on a One Piece Card Game Event with no Deck Source chosen
+ * starts on the Event's first Slot, left side (ADR-0057); a Player chosen stays
+ * (ADR-0074). A Magic Deck List Screen keeps its Player source.
  */
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string; statusMessage?: string }) =>
@@ -140,6 +139,36 @@ describe('a new Deck List Screen\'s Deck Source', () => {
 		});
 
 		expect(renamed.modeConfigs?.deck?.deckSource).toEqual({ type: 'player', playerId: null });
+	});
+
+	it.each([
+		{
+			name: 'on a new Screen',
+			save: async (deckSource: unknown) => await createScreen('op', 'deck', {
+				deck: { deckSource },
+			}),
+		},
+		{
+			name: 'when an existing Screen switches to Deck',
+			save: async (deckSource: unknown) => {
+				const background = await createScreen('op', 'background', {
+					deck: { deckSource },
+				});
+				return await screenWriteModule().updateScreen({
+					authoringSessionId: undefined,
+					eventId: events.op.id,
+					screenId: background.id,
+					input: { stateVersion: background.stateVersion, currentMode: 'deck' } as never,
+				});
+			},
+		},
+	])('keeps a Player the operator chose $name', async ({ save }) => {
+		const [player] = await db.insert(schema.players).values({ eventId: events.op.id, name: '', nickname: 'ana' }).returning({ id: schema.players.id });
+		const chosen = { type: 'player', playerId: player!.id };
+
+		const screen = await save(chosen);
+
+		expect(screen.modeConfigs?.deck?.deckSource).toEqual(chosen);
 	});
 
 	it('keeps a Slot side the operator chose', async () => {

@@ -4,6 +4,7 @@ import type { SavedFeatureMatchDeckList } from '~~/shared/types/featureMatchDeck
 import type { SocialProfileProjectionValue } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ArchetypeBreakdownResponse, CardBreakdownEntry, CardBreakdownResponse, PlayerDeckCollectionResponse } from '~~/shared/types/metagame';
+import type { SavedOpPlayerDeckList } from '~~/shared/types/opDeckList';
 
 /**
  * The answers of the Screen Output read family (#604, ADR-0022): what one
@@ -188,6 +189,16 @@ export type ScreenOutputFeatureMatchDeckListResponse = Pick<SavedFeatureMatchDec
 export interface ScreenOutputPlayerDecksResponse {
 	player: PlayerResponse;
 	decks: PlayerDeckCollectionResponse;
+}
+
+/**
+ * A One Piece Card Game Player a Deck List Screen shows, with their Deck List:
+ * its cards, not its paste, warnings or hand-edited mark; `null` while they
+ * hold none (ADR-0074).
+ */
+export interface ScreenOutputOpPlayerDeckListResponse {
+	player: PlayerResponse;
+	deckList: Pick<SavedOpPlayerDeckList, 'id' | 'playerId' | 'entries' | 'leaderNumber' | 'mainboardCount'> | null;
 }
 
 /** One Talent as a Talent Screen shows them (#782). */

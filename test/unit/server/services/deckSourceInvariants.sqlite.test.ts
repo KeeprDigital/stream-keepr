@@ -26,6 +26,7 @@ vi.doMock('~~/server/services/card', () => ({
 
 const { broadcastDeckListService } = await import('~~/server/services/broadcastDeckList');
 const { eventService } = await import('~~/server/services/event');
+const { opPlayerDeckListService } = await import('~~/server/services/opPlayerDeckList');
 const { screenService } = await import('~~/server/services/screen');
 const { screenWriteModule } = await import('~~/server/modules/screen-write');
 const { playerUpdateModule } = await import('~~/server/modules/player-update');
@@ -326,30 +327,63 @@ describe('deck source write invariants', () => {
 });
 
 describe('deleting the Player a Deck Source selects (#651)', () => {
-	it('clears every Deck Source naming the Player to no Player, announces each, and keeps later writes open', async () => {
-		const [deleted] = await db.insert(schema.players).values({ eventId, name: 'Deleted Player' }).returning({ id: schema.players.id });
+	/** A One Piece Card Game Player holds a Deck List the delete takes with them (ADR-0074). */
+	async function stageOpPlayer() {
+		const [event] = await db.insert(schema.events).values({ name: 'OP Source Event', game: 'op', featureMatchOrientation: 'horizontal' }).returning({ id: schema.events.id });
+		const [bystanderPlayer, deleted] = await db.insert(schema.players).values([
+			{ eventId: event!.id, name: 'Player' },
+			{ eventId: event!.id, name: '', nickname: 'deleted_op' },
+		]).returning({ id: schema.players.id });
+		await opPlayerDeckListService().replace({
+			eventId: event!.id,
+			playerId: deleted!.id,
+			view: {
+				entries: [
+					{ number: 'OP99-001', quantity: 4, card: null },
+				],
+				leaderNumber: null,
+				mainboardCount: 4,
+				warnings: [],
+			},
+			archetypeId: null,
+			handEdited: true,
+		});
+		return { eventId: event!.id, playerId: bystanderPlayer!.id, deletedId: deleted!.id };
+	}
+
+	it.each([
+		{
+			game: 'Magic: The Gathering',
+			stage: async () => {
+				const [deleted] = await db.insert(schema.players).values({ eventId, name: 'Deleted Player' }).returning({ id: schema.players.id });
+				return { eventId, playerId, deletedId: deleted!.id };
+			},
+		},
+		{ game: 'One Piece Card Game', stage: stageOpPlayer },
+	])('clears every Deck Source naming the Player to no Player, announces each, and keeps later writes open on a $game Event', async ({ stage }) => {
+		const { eventId, playerId, deletedId } = await stage();
 		const selecting = await screenService().create(eventId, {
 			name: 'Selects Deleted',
-			slug: 'selects-deleted',
+			slug: `selects-deleted-${deletedId}`,
 			currentMode: 'deck',
 			modeConfigs: {
 				deck: {
-					deckSource: { type: 'player', playerId: deleted!.id },
+					deckSource: { type: 'player', playerId: deletedId },
 				},
 			},
-		} as never, capability('selects-deleted'));
+		} as never, capability(`selects-deleted-${deletedId}`));
 		const bystander = await screenService().create(eventId, {
 			name: 'Selects Other',
-			slug: 'selects-other',
+			slug: `selects-other-${deletedId}`,
 			modeConfigs: {
 				deck: {
 					deckSource: { type: 'player', playerId },
 				},
 			},
-		} as never, capability('selects-other'));
+		} as never, capability(`selects-other-${deletedId}`));
 		mockPublication.screenUpdated.mockClear();
 
-		await expect(playerUpdateModule().deletePlayer({ eventId, playerId: deleted!.id, originConnectionId: 'delete-origin' }))
+		await expect(playerUpdateModule().deletePlayer({ eventId, playerId: deletedId, originConnectionId: 'delete-origin' }))
 			.resolves
 			.toEqual({ success: true });
 

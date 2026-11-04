@@ -4,21 +4,44 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
 import { opSlotSide } from '~~/test/helpers/opCards';
+import { UInputMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/Deck/Settings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
 enableAutoUnmount(afterEach);
 
-const mockPlayerStore = {
-	players: [
-		{
-			id: 1,
-			name: 'Alice',
-			updatedAt: '2026-08-01T00:00:00.000Z',
-			gameData: { type: 'mtg', deckName: 'Mono Blue', deckColors: 'U' },
+const MTG_PLAYERS = [
+	{
+		id: 1,
+		name: 'Alice',
+		updatedAt: '2026-08-01T00:00:00.000Z',
+		gameData: { type: 'mtg', deckName: 'Mono Blue', deckColors: 'U' },
+	},
+];
+/** One Piece Players: one imported, known by Nickname and member number, with a Deck List; one hand-added with none. */
+const OP_PLAYERS = [
+	{
+		id: 5,
+		name: '',
+		nickname: 'zoro_main',
+		externalSource: 'tcgplus',
+		externalId: '0001234',
+		gameData: {
+			type: 'op',
+			deckList: { id: 601, mainboardCount: 50, leaderNumber: 'OP01-001' },
 		},
-	],
+	},
+	{
+		id: 6,
+		name: 'Bea',
+		nickname: null,
+		gameData: { type: 'op' },
+	},
+];
+
+const mockPlayerStore = {
+	players: MTG_PLAYERS as Array<Record<string, unknown>>,
 	loadPlayersByEventId: vi.fn().mockResolvedValue(undefined),
 };
 
@@ -209,6 +232,7 @@ async function mountComponent() {
 				UISegmentedTabs: UISegmentedTabsStub,
 				USelect: USelectStub,
 				UTabs: UTabsStub,
+				UInputMenu: UInputMenuStub,
 				UInputNumber: UInputNumberStub,
 				UIColorPicker: true,
 				USeparator: true,
@@ -853,6 +877,11 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 		};
 		mockFeatureMatchStateStore.featureMatchSessions = new Map();
 		mockFeatureMatchStateStore.sessionIdBySlotId = new Map();
+		mockPlayerStore.players = OP_PLAYERS;
+	});
+
+	afterEach(() => {
+		mockPlayerStore.players = MTG_PLAYERS;
 	});
 
 	it('picks a Feature Match Slot side as the Deck Source, and offers nothing MTG-only', async () => {
@@ -897,7 +926,39 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 			{ type: 'featureMatchSlot', slotId: 11, side: 'player1' },
 			{ type: 'featureMatchSlot', slotId: 11, side: 'player2' },
 		]);
-		expect(mockPlayerStore.loadPlayersByEventId).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{ by: 'Nickname', search: 'zoro' },
+		{ by: 'Bandai member number', search: '0001234' },
+	])('picks a Player as the Deck Source, found by $by', async ({ search }) => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await wrapper.get('[data-testid="source-tabs"] [data-value="player"]').trigger('click');
+		await wrapper.get('[data-testid="deck-source-player"]').setValue(search);
+		const options = card(wrapper, 'Deck Source').findAll('[role="option"]');
+		expect(options.map(option => option.text())).toEqual(['zoro_main']);
+		await options[0]!.trigger('click');
+
+		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
+		expect(mockUpdateConfig.mock.calls.map(([patch]) => patch.deckSource)).toEqual([
+			{ type: 'player', playerId: 5 },
+		]);
+	});
+
+	it.each([
+		{ name: 'a Player holding a Deck List', playerId: 5, hint: false },
+		{ name: 'a Player holding none', playerId: 6, hint: true },
+	])('says the Screen shows nothing only for $name', async ({ playerId, hint }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			deckSource: { type: 'player', playerId },
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(wrapper.find('[data-testid="empty-player-hint"]').exists()).toBe(hint);
 	});
 
 	it.each([
@@ -919,7 +980,7 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 			swapped: true,
 			hint: true,
 		},
-	])('says the Screen shows nothing only for $name', async ({ side, swapped, hint }) => {
+	])('says the Screen shows nothing only for $name of a Slot', async ({ side, swapped, hint }) => {
 		mockConfig.value = {
 			...defaultDeckConfig(),
 			deckSource: { type: 'featureMatchSlot', slotId: 11, side },
