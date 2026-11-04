@@ -331,6 +331,12 @@ describe('screen settings saves', () => {
 			7,
 			{ playerSource: 'players' },
 		],
+		[
+			'talent',
+			'talentId',
+			7,
+			{ layout: 'fullPanel' },
+		],
 	])('clearing %s %s', (mode, field, storedValue, unrelated) => {
 		it.each([
 			['null, the deletion the PATCH contract defines', null],

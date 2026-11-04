@@ -179,6 +179,12 @@ const EVENT_REFERENCE_CHECKS: { readonly [K in EventReferenceKind]: (eventId: nu
 	playerList: (eventId, value) => requirePlayerListInEvent(eventId, referencedId(value)),
 	featureMatchSlot: (eventId, value) => requireFeatureMatchSlotInEvent(eventId, referencedId(value)),
 	archetype: (eventId, value) => requireArchetypeInEvent(eventId, referencedId(value)),
+	talent: (eventId, value) => requireTalentInEvent(eventId, referencedId(value)),
+	talentLineup: async (eventId, value) => {
+		if (!Array.isArray(value))
+			return;
+		await Promise.all(uniqueNumbers(value.map(referencedId)).map(talentId => requireTalentInEvent(eventId, talentId)));
+	},
 	deckSource: requireDeckSourceInEvent,
 };
 

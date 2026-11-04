@@ -1,11 +1,16 @@
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 import type { ScreenOutputAssetAuthorizationInput } from '.';
+import { talentScreenPhotoTalentIds } from '~~/shared/screenModeConfigs/talent';
 import { screenThemeGraphicAssetReferences } from '~~/shared/themeAssetReferences';
+import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
 	SCREEN_THEME_OVERRIDE_SLOT_PREFIX,
 	screenOutputResolvableSlotPrefixes,
+	TALENT_PHOTO_SLOT,
+	TALENT_REFERENCE_OWNER_KIND,
 	THEME_REFERENCE_OWNER_KIND,
 } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -36,6 +41,20 @@ const MODE_SLOT_SCOPE = MODE_SLOT_SCOPES
 	.join(' OR ');
 
 const MODE_SLOT_SCOPE_BINDINGS = MODE_SLOT_SCOPES.flatMap(scope => [...scope]);
+
+function parseStoredModeConfigs(stored: string | null): ModeConfigsMap | null {
+	if (!stored)
+		return null;
+	try {
+		const parsed: unknown = JSON.parse(stored);
+		return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+			? parsed as ModeConfigsMap
+			: null;
+	}
+	catch {
+		return null;
+	}
+}
 
 function parseStoredTokens(stored: string | null): StoredThemeTokens {
 	if (!stored)
@@ -105,6 +124,48 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 		).first<{ contentIdentity: string }>() ?? undefined;
 	}
 
+	/**
+	 * Whether the revision is the photo of a Talent the Screen's Talent mode
+	 * shows, while it shows photos (ADR-0070). The Talent's own `talent`/`photo`
+	 * reference must name it, in the Screen's Event, so a replaced or cleared
+	 * photo stops resolving with the write that released it.
+	 */
+	async function authorizeTalentSupplied(input: ScreenOutputAssetAuthorizationInput) {
+		const screen = await database.prepare(`
+			SELECT screen.current_mode AS mode, screen.mode_configs AS modeConfigs, screen.event_id AS eventId
+			FROM screens screen
+			WHERE screen.id = ? AND screen.asset_capability_digest = ?
+			LIMIT 1
+		`).bind(input.screenId, input.capabilityDigest).first<{
+			mode: ScreenMode;
+			modeConfigs: string | null;
+			eventId: number;
+		}>();
+		if (screen?.mode !== 'talent')
+			return undefined;
+		const talentIds = talentScreenPhotoTalentIds(resolveScreenModeConfig(parseStoredModeConfigs(screen.modeConfigs), 'talent'));
+		if (talentIds.length === 0)
+			return undefined;
+		return await database.prepare(`
+			SELECT revision.content_digest AS contentIdentity
+			FROM graphic_asset_references reference
+			JOIN graphic_asset_revisions revision
+				ON revision.id = reference.revision_id
+				AND revision.asset_id = reference.asset_id
+			WHERE reference.owner_kind = '${TALENT_REFERENCE_OWNER_KIND}'
+				AND reference.owner_slot = '${TALENT_PHOTO_SLOT}'
+				AND reference.event_id = ?
+				AND reference.owner_id IN (SELECT CAST(value AS TEXT) FROM json_each(?))
+				AND reference.asset_id = ? AND reference.revision_id = ?
+			LIMIT 1
+		`).bind(
+			screen.eventId,
+			JSON.stringify(talentIds),
+			input.assetId,
+			input.revisionId,
+		).first<{ contentIdentity: string }>() ?? undefined;
+	}
+
 	return {
 		/** Whether this capability may open a session at all. */
 		async authorizeCapability(input: {
@@ -161,7 +222,8 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 
 		/**
 		 * Whether this Screen Output may resolve one exact Graphic Asset Revision now:
-		 * one its current mode publishes, or one its resolved Theme Tokens supply.
+		 * one its current mode publishes, one its resolved Theme Tokens supply, or
+		 * the photo of a Talent its Talent mode shows.
 		 *
 		 * Every engine is answered alike: Chromium is the only supported engine for
 		 * transparent video (ADR-0020), so there is no per-engine refusal to make.
@@ -189,7 +251,9 @@ export function createD1ScreenOutputAssetAuthorizer(database: D1Database) {
 				input.capabilityDigest,
 				input.assetId,
 				input.revisionId,
-			).first<{ contentIdentity: string }>() ?? await authorizeThemeSupplied(input);
+			).first<{ contentIdentity: string }>()
+			?? await authorizeThemeSupplied(input)
+			?? await authorizeTalentSupplied(input);
 			if (!row)
 				return { outcome: 'missing' as const };
 			return {

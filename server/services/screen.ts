@@ -7,7 +7,7 @@ import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { archetypes, phases, rounds, screens } from '~~/server/db/schema';
+import { archetypes, eventTalents, phases, rounds, screens } from '~~/server/db/schema';
 import {
 	graphicsAuthoringLeaseConflict,
 	graphicsAuthoringLeaseFenceCondition,
@@ -69,7 +69,12 @@ const RELEASED_EVENT_REFERENCE_TABLES = {
 	phase: phases,
 	round: rounds,
 	archetype: archetypes,
+	talent: eventTalents,
+	talentLineup: eventTalents,
 };
+
+/** The released kinds whose field holds a list of ids: a release drops the missing ids and keeps the rest in order. */
+const RELEASED_EVENT_REFERENCE_LISTS: ReadonlySet<ReleasedEventReferenceKind> = new Set(['talentLineup']);
 
 export type ReleasedEventReferenceKind = keyof typeof RELEASED_EVENT_REFERENCE_TABLES;
 
@@ -78,7 +83,8 @@ export type ReleasedEventReferenceKind = keyof typeof RELEASED_EVENT_REFERENCE_T
  * `shared/screenModes.ts`) naming a record the Event no longer holds, from each
  * Screen in the Event, as a new Screen version (ADR-0060). Batch it after the
  * delete, so it also releases what the delete cascaded away and what an
- * imported structure removal decided to delete as it ran.
+ * imported structure removal decided to delete as it ran. A list of ids, such
+ * as a Talent lineup, loses only the missing ids, the rest in order (ADR-0070).
  */
 export function buildReleaseScreenEventReferencesQuery(eventId: number, kinds: readonly ReleasedEventReferenceKind[]) {
 	const released = SCREEN_MODE_VALUES.flatMap(mode =>
@@ -87,15 +93,30 @@ export function buildReleaseScreenEventReferencesQuery(eventId: number, kinds: r
 			if (!releasedKind)
 				return [];
 			const table = RELEASED_EVENT_REFERENCE_TABLES[releasedKind];
-			const value = sql`json_extract(${screens.modeConfigs}, ${`$."${mode}".${field}`})`;
+			const path = `$."${mode}".${field}`;
+			const held = sql`(select ${table.id} from ${table} where ${table.eventId} = ${eventId})`;
+			if (RELEASED_EVENT_REFERENCE_LISTS.has(releasedKind)) {
+				const kept = sql`(select json_group_array(value) from (
+					select item.value from json_each(${screens.modeConfigs}, ${path}) as item
+					where item.value in ${held} order by item.key
+				))`;
+				return [
+					{
+						missing: sql`exists (select 1 from json_each(${screens.modeConfigs}, ${path}) as item where item.value not in ${held})`,
+						// A merge patch replaces an array whole.
+						removal: sql`json_object(${mode}, json_object(${field}, json(${kept})))`,
+					},
+				];
+			}
+			const value = sql`json_extract(${screens.modeConfigs}, ${path})`;
 			return [
 				{
 				// Unset is not missing: `NULL NOT IN` an empty set is true.
-					missing: sql`(${value} is not null and ${value} not in (select ${table.id} from ${table} where ${table.eventId} = ${eventId}))`,
+					missing: sql`(${value} is not null and ${value} not in ${held})`,
 					// A merge patch's null removes the field, leaving it unset as an optional field is.
-					removal: JSON.stringify({
+					removal: sql`${JSON.stringify({
 						[mode]: { [field]: null },
-					}),
+					})}`,
 				},
 			];
 		}));

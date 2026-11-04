@@ -54,3 +54,27 @@ describe('updateTalentSchema', () => {
 		expect(updateTalentSchema.parse({ socialProfiles: {} })).toEqual({ socialProfiles: {} });
 	});
 });
+
+describe('a Talent role', () => {
+	it.each([
+		['trimmed', '  Host  ', 'Host'],
+		['blank, stored as none', '   ', null],
+		['cleared', null, null],
+	])('is %s', (_case, role, stored) => {
+		expect(createTalentSchema.parse({ name: 'Alice', role }).role).toBe(stored);
+		expect(updateTalentSchema.parse({ role }).role).toBe(stored);
+	});
+
+	it('is left alone when an update omits it', () => {
+		expect(updateTalentSchema.parse({ name: 'Alice' })).not.toHaveProperty('role');
+	});
+
+	it.each([
+		[100, true],
+		[101, false],
+	])('accepts a role of %i characters: %s', (length, accepted) => {
+		expect(updateTalentSchema.safeParse({
+			role: 'r'.repeat(length),
+		}).success).toBe(accepted);
+	});
+});

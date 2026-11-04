@@ -184,6 +184,8 @@ export const eventTalents = sqliteTable('event_talents', {
 		.references(() => events.id, { onDelete: 'cascade' })
 		.notNull(),
 	name: text('name').notNull(),
+	/** Free text naming what the Talent does on the broadcast, such as Host or Commentator (#782). */
+	role: text('role'),
 	twitchHandle: text('twitch_handle'),
 	youtubeHandle: text('youtube_handle'),
 	xHandle: text('x_handle'),

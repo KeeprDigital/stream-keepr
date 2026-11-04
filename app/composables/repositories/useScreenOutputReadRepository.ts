@@ -11,6 +11,7 @@ import type {
 	ScreenOutputPlayerDecksResponse,
 	ScreenOutputRoundClockResponse,
 	ScreenOutputStandingsResponse,
+	ScreenOutputTalentResponse,
 	ScreenOutputTopCutResponse,
 } from '~~/shared/types/screenOutputReads';
 import type { ScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
@@ -57,6 +58,7 @@ export function useScreenOutputReadRepository() {
 		archetypeSpotlight: (scope: ScreenOutputReadScope) =>
 			read<ScreenOutputArchetypeSpotlightResponse>(scope, 'archetype-spotlight'),
 		headToHead: (scope: ScreenOutputReadScope) => read<ScreenOutputHeadToHeadResponse>(scope, 'head-to-head'),
+		talent: (scope: ScreenOutputReadScope) => read<ScreenOutputTalentResponse>(scope, 'talent'),
 		metagame: (scope: ScreenOutputReadScope) => read<ScreenOutputMetagameResponse>(scope, 'metagame'),
 		topCards: (scope: ScreenOutputReadScope) => read<CardBreakdownResponse>(scope, 'top-cards'),
 		topCut: (scope: ScreenOutputReadScope) => read<ScreenOutputTopCutResponse>(scope, 'top-cut'),

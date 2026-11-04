@@ -1,5 +1,5 @@
 import type { ScreenResponse } from '~~/shared/api';
-import type { ScreenOutputFeatureMatchResponse, ScreenOutputHeadToHeadResponse, ScreenOutputPairingsResponse, ScreenOutputPlayerDecksResponse, ScreenOutputRoundClockResponse, ScreenOutputStandingsResponse, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
+import type { ScreenOutputFeatureMatchResponse, ScreenOutputHeadToHeadResponse, ScreenOutputPairingsResponse, ScreenOutputPlayerDecksResponse, ScreenOutputRoundClockResponse, ScreenOutputStandingsResponse, ScreenOutputTalentResponse, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch, anonymousFetch } from './client';
 import { $fetchRaw } from './helpers';
@@ -666,6 +666,68 @@ describe('capability-only Screen Output reads', () => {
 			expect(after.data.earlierMatches).toEqual([]);
 
 			expect((await headToHead.read('head-to-head', capability)).status).toBe(404);
+		});
+	});
+
+	describe('talent', () => {
+		it('reads its lineup in order, with each role and the Social Profiles on the networks it shows', async () => {
+			const talent = async (body: Record<string, unknown>) => await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+				method: 'POST',
+				body,
+			});
+			const host = await talent({
+				name: 'Talent Host',
+				role: 'Host',
+				socialProfiles: { twitch: 'host', x: 'host_x', bluesky: 'host.bsky.social' },
+			});
+			const caster = await talent({
+				name: 'Talent Caster',
+				socialProfiles: { youtube: 'caster' },
+			});
+
+			const output = await outputScreen('talent');
+			await output.configure({
+				selection: 'lineup',
+				talentIds: [caster.id, host.id],
+				socialNetworks: ['bluesky', 'twitch'],
+			});
+
+			const read = await output.read<ScreenOutputTalentResponse>('talent');
+			expect(read.status).toBe(200);
+			expect(read.data.talents).toEqual([
+				{
+					id: caster.id,
+					name: 'Talent Caster',
+					role: null,
+					photo: null,
+					socialProfiles: [],
+				},
+				{
+					id: host.id,
+					name: 'Talent Host',
+					role: 'Host',
+					photo: null,
+					socialProfiles: [
+						{
+							network: 'twitch',
+							networkLabel: 'Twitch',
+							handle: 'host',
+							profileUrl: 'https://www.twitch.tv/host',
+						},
+						{
+							network: 'bluesky',
+							networkLabel: 'Bluesky',
+							handle: 'host.bsky.social',
+							profileUrl: 'https://bsky.app/profile/host.bsky.social',
+						},
+					],
+				},
+			]);
+
+			await $fetch(`/api/events/${eventId}/talents/${caster.id}`, { method: 'DELETE' });
+			expect((await output.read<ScreenOutputTalentResponse>('talent')).data.talents.map(entry => entry.id)).toEqual([host.id]);
+
+			expect((await output.read('talent', capability)).status).toBe(404);
 		});
 	});
 

@@ -112,6 +112,7 @@ export function createMockTalent(overrides?: Partial<DbEventTalent>): DbEventTal
 		id: 1,
 		eventId: 1,
 		name: 'Test Commentator',
+		role: null,
 		twitchHandle: null,
 		youtubeHandle: null,
 		xHandle: null,

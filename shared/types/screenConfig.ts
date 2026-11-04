@@ -21,6 +21,7 @@ import { playerHistoryModeConfigContract } from '../screenModeConfigs/playerHist
 import { roundClockModeConfigContract } from '../screenModeConfigs/roundClock';
 import { standingsModeConfigContract } from '../screenModeConfigs/standings';
 import { METAGAME_SCOPE_FIELDS } from '../screenModeConfigs/subShapes';
+import { talentModeConfigContract } from '../screenModeConfigs/talent';
 import { topCardsModeConfigContract } from '../screenModeConfigs/topCards';
 import { topCutModeConfigContract } from '../screenModeConfigs/topCut';
 
@@ -261,6 +262,7 @@ export type { PairingsModeConfig } from '../screenModeConfigs/pairings';
 export type { PlayerHistoryColumnConfig, PlayerHistoryModeConfig } from '../screenModeConfigs/playerHistory';
 export type { RoundClockModeConfig } from '../screenModeConfigs/roundClock';
 export type { StandingsColumnConfig, StandingsModeConfig } from '../screenModeConfigs/standings';
+export type { TalentModeConfig } from '../screenModeConfigs/talent';
 export type { TopCardsModeConfig } from '../screenModeConfigs/topCards';
 export type { TopCutModeConfig } from '../screenModeConfigs/topCut';
 
@@ -361,6 +363,7 @@ const MODE_CONFIG_CONTRACTS = {
 	'archetype-spotlight': archetypeSpotlightModeConfigContract,
 	'head-to-head': headToHeadModeConfigContract,
 	'round-clock': roundClockModeConfigContract,
+	'talent': talentModeConfigContract,
 } as const;
 
 /** Any one mode's config. */
@@ -478,6 +481,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 		'player2Id',
 	],
 	'round-clock': ['roundId'],
+	'talent': ['selection', 'talentId', 'talentIds'],
 } as const satisfies ModeResetPreservedKeysMap;
 
 // Helper to get default config for a mode

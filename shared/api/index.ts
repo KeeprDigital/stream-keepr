@@ -105,6 +105,8 @@ export interface TalentResponse {
 	id: number;
 	eventId: number;
 	name: string;
+	/** Free text naming what the Talent does on the broadcast, or none (#782). */
+	role: string | null;
 	socialProfiles: SocialProfiles;
 	/** One exact image revision from the Graphics Asset Library, or none (ADR-0067). */
 	photo: GraphicAssetReference | null;
@@ -114,12 +116,15 @@ export interface TalentResponse {
 
 export interface CreateTalentInput {
 	name: string;
+	role?: string | null;
 	socialProfiles?: SocialProfiles;
 	photo?: GraphicAssetReference | null;
 }
 
 export interface UpdateTalentInput {
 	name?: string;
+	/** Omitted keeps the role; `null` or blank clears it. */
+	role?: string | null;
 	socialProfiles?: SocialProfiles;
 	/** Omitted keeps the photo; `null` clears it. */
 	photo?: GraphicAssetReference | null;

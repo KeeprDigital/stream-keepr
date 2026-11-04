@@ -148,6 +148,13 @@
       "when": 1793764918550,
       "tag": "0023_round_timing",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1793766300810,
+      "tag": "0024_talent_role",
+      "breakpoints": true
     }
   ]
 }
