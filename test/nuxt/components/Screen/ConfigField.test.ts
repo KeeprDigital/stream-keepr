@@ -239,6 +239,22 @@ describe('screenConfigField', () => {
 		]);
 	});
 
+	it('emits null for a select\'s own null option', async () => {
+		const wrapper = mountField({
+			field: metagame.viewMode,
+			modelValue: 'cards',
+			items: [
+				{ label: 'Default', value: null },
+				{ label: 'Cards', value: 'cards' },
+			],
+		});
+		await wrapper.get('select').setValue('null');
+
+		expect(wrapper.emitted('update:modelValue')).toEqual([
+			[null],
+		]);
+	});
+
 	it('refuses select items naming a value outside its field\'s values', () => {
 		expect(() => mountField({
 			field: metagame.viewMode,

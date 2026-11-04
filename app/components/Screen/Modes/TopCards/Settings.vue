@@ -7,7 +7,6 @@ import type {
 	TopCardsStat,
 } from '~~/shared/types/enums';
 import type { CardTypeBucket } from '~~/shared/utils/metagame';
-import type { NinePoint } from '~~/shared/utils/ninePoints';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { CARD_TYPE_BUCKET_ORDER } from '~~/shared/utils/metagame';
@@ -15,6 +14,8 @@ import { CARD_SIZING_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
+// The badge position pickers never offer the centre, so the casts below are safe.
+import { BADGE_DISABLED_POINTS } from '~/utils/cardBadges';
 
 const props = defineProps<{
 	screen: Screen;
@@ -96,11 +97,6 @@ function setPaged(enabled: boolean) {
 		? Math.ceil(config.value.limit / 2)
 		: fields.cardsPerPage.max!);
 }
-
-// A badge in the centre of a card would cover its art, so the badge position
-// pickers offer every point but this one — which is why what they emit is
-// always a `QuantityPosition`, and why the casts below are safe.
-const BADGE_DISABLED_POINTS: readonly NinePoint[] = ['center'];
 
 const boardOptions = [
 	{ label: 'Full Deck', value: 'full' },

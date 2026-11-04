@@ -30,11 +30,17 @@ describe('screenCardTypeFilterField', () => {
 	it('offers a chip for every card type, the land bucket as Nonbasic Land', () => {
 		const wrapper = mountField([]);
 
-		expect(CARD_TYPE_BUCKET_ORDER.map(bucket => chip(wrapper, bucket).text())).toEqual(
-			CARD_TYPE_BUCKET_ORDER.map(bucket => bucket === 'Land'
-				? 'Nonbasic Land'
-				: bucket),
-		);
+		expect(CARD_TYPE_BUCKET_ORDER.map(bucket => chip(wrapper, bucket).text())).toEqual([
+			'Creature',
+			'Planeswalker',
+			'Battle',
+			'Instant',
+			'Sorcery',
+			'Artifact',
+			'Enchantment',
+			'Nonbasic Land',
+			'Other',
+		]);
 	});
 
 	it.each([

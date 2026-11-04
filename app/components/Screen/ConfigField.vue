@@ -21,7 +21,7 @@ const props = defineProps<{
 	items?: { label: string; value: Value | null }[];
 	placeholder?: string;
 	nullable?: boolean;
-	/** A tighter upper bound than the field's own, such as a page smaller than the ranking. */
+	/** A tighter upper bound than the field's own, in displayed units, such as a page smaller than the ranking. */
 	max?: number;
 }>();
 
@@ -95,6 +95,14 @@ function updateValue(value: unknown) {
 		emit('update:modelValue', value as Value);
 }
 
+/** A select's null option, where it offers one, is a choice of its own, `nullable` or not. */
+function updateSelect(value: unknown) {
+	if (value === null && selectItems.value.some(item => item.value === null))
+		emit('update:modelValue', null);
+	else
+		updateValue(value);
+}
+
 function updateText(value: unknown) {
 	if (isEmpty(value))
 		emitEmpty('' as Value);
@@ -133,7 +141,7 @@ function updateText(value: unknown) {
 			:items="selectItems"
 			:placeholder="placeholder"
 			class="w-48"
-			@update:model-value="updateValue($event)"
+			@update:model-value="updateSelect($event)"
 		/>
 		<UIColorPicker
 			v-else-if="field.control === 'color'"

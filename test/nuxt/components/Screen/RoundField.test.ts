@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { reactive } from 'vue';
 import { nuxtUiStubs, USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import RoundField from '~/components/Screen/RoundField.vue';
 
@@ -20,17 +21,20 @@ const { roundStore, phaseStore } = vi.hoisted(() => ({
 	},
 }));
 
-mockNuxtImport('useRoundStore', () => () => roundStore);
-mockNuxtImport('usePhaseStore', () => () => phaseStore);
+// Reactive, as a Pinia store is, so a load shows in the options.
+const rounds = reactive(roundStore);
+const phases = reactive(phaseStore);
+mockNuxtImport('useRoundStore', () => () => rounds);
+mockNuxtImport('usePhaseStore', () => () => phases);
 vi.mock('~/modules/event-data/resync', () => ({
 	useConsumedEventData: vi.fn(),
 }));
 
 describe('screenRoundField', () => {
 	beforeEach(() => {
-		roundStore.isLoaded = true;
-		phaseStore.isLoaded = true;
-		roundStore.rounds = [
+		rounds.isLoaded = true;
+		phases.isLoaded = true;
+		rounds.rounds = [
 			{
 				id: 41,
 				phaseId: 4,
@@ -44,11 +48,11 @@ describe('screenRoundField', () => {
 				roundNumber: 4,
 			},
 		];
-		phaseStore.phases = [
+		phases.phases = [
 			{ id: 3, name: 'Swiss', sortOrder: 1 },
 			{ id: 4, name: 'Top Cut', sortOrder: 2 },
 		];
-		vi.clearAllMocks();
+		vi.resetAllMocks();
 	});
 
 	function mountField(nullLabel: string, modelValue: number | null = 31) {
@@ -86,13 +90,24 @@ describe('screenRoundField', () => {
 		]);
 	});
 
-	it('loads the Event\'s Rounds and Phases it lacks', async () => {
-		roundStore.isLoaded = false;
-		phaseStore.isLoaded = false;
-		mountField('Current standings');
+	it('offers the Event\'s Rounds once it has loaded those it lacked', async () => {
+		const loaded = {
+			rounds: [...rounds.rounds],
+			phases: [...phases.phases],
+		};
+		Object.assign(rounds, { isLoaded: false, rounds: [] });
+		Object.assign(phases, { isLoaded: false, phases: [] });
+		rounds.loadRoundsByEventId.mockImplementation(async (eventId: number) => {
+			if (eventId === 1)
+				Object.assign(rounds, { isLoaded: true, rounds: loaded.rounds });
+		});
+		phases.loadPhasesByEventId.mockImplementation(async (eventId: number) => {
+			if (eventId === 1)
+				Object.assign(phases, { isLoaded: true, phases: loaded.phases });
+		});
+		const wrapper = mountField('Current standings');
 		await flushPromises();
 
-		expect(roundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
-		expect(phaseStore.loadPhasesByEventId).toHaveBeenCalledWith(1);
+		expect(wrapper.findAll('option').map(option => option.text())).toEqual(['Current standings', 'Swiss · Round 4', 'Top Cut · Round 1']);
 	});
 });

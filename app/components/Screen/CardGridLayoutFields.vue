@@ -81,13 +81,13 @@ function write<K extends CardGridLayoutKey>(key: K, value: CardGridLayout[K] | n
 	/>
 
 	<ScreenSettingsField
-		v-if="show.alignment && fields.alignment"
+		v-if="show.alignment && fields.alignment && layout.alignment"
 		:data-config-field="fields.alignment.key"
 		:label="fields.alignment.label"
 		:description="description('alignment')"
 	>
 		<UINinePointPicker
-			:model-value="layout.alignment ?? 'center'"
+			:model-value="layout.alignment"
 			:aria-label="`${gridName} alignment`"
 			@update:model-value="write('alignment', $event)"
 		/>

@@ -15,7 +15,7 @@ import { BADGE_DISABLED_POINTS } from '~/utils/cardBadges';
  * `sizeField` the badge has no text size. The `look` slot, after the fields,
  * takes the badge's Mode Tokens.
  */
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
 	/** The badge's name, heading its fields. */
 	title: string;
 	shown: boolean;
@@ -39,8 +39,6 @@ const emit = defineEmits<{
 function write(field: ScreenModeConfigField, value: boolean | number | QuantityPosition) {
 	emit('update', { [field.key]: value });
 }
-
-const showsControl = computed(() => !!props.shownField);
 </script>
 
 <template>
@@ -59,7 +57,7 @@ const showsControl = computed(() => !!props.shownField);
 		<slot v-else name="shown" />
 
 		<template v-if="shown">
-			<USeparator v-if="showsControl || $slots.shown" />
+			<USeparator v-if="shownField || $slots.shown" />
 
 			<ScreenSettingsField
 				:data-config-field="positionField.key"

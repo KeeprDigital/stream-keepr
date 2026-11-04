@@ -81,24 +81,13 @@ onMounted(async () => {
 			</UFormField>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Header">
-			<ScreenConfigField
-				:field="fields.showHeader"
-				description="Show the round name above the pairings."
-				:model-value="config.showHeader"
-				@update:model-value="updateConfig({ showHeader: $event === true })"
-			/>
-
-			<ScreenConfigField
-				v-if="config.showHeader"
-				:field="fields.headerText"
-				description="Leave empty for the round's name and pairings."
-				:model-value="config.headerText"
-				placeholder="Auto"
-				nullable
-				@update:model-value="updateConfig({ headerText: $event })"
-			/>
-		</ScreenSettingsCard>
+		<ScreenHeaderSettingsCard
+			:config="config"
+			:fields="fields"
+			show-description="Show the round name above the pairings."
+			auto-description="Leave empty for the round's name and pairings."
+			@update="updateConfig($event)"
+		/>
 
 		<ScreenPaginationSettingsCard
 			:rotation="rotation"
