@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
-import type { FeatureMatchOverlaySelectionTarget } from '~/types';
+import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import {
 	FEATURE_MATCH_SOURCE_ITEM_ICON,
 	FEATURE_MATCH_SOURCE_ITEM_LABEL,
@@ -25,6 +25,8 @@ const props = defineProps<{
 	updateConfig: FeatureMatchOverlayConfigUpdater;
 	screenWidth: number;
 	screenHeight: number;
+	/** The Screen whose Theme Overrides the sections' Look rows write. */
+	screen: Screen;
 	eventId: number;
 	selectedTarget: FeatureMatchOverlaySelectionTarget;
 	/** Whether this session holds the Graphics Authoring Lease; read-only otherwise (#738). */
@@ -101,6 +103,7 @@ const header = computed(() => {
 				v-if="selection.kind === 'canvas'"
 				:config="config"
 				:patch-frame="patchFrame"
+				:screen="screen"
 				:event-id="eventId"
 			/>
 
@@ -110,6 +113,8 @@ const header = computed(() => {
 				:update-config="updateConfig"
 				:screen-width="screenWidth"
 				:screen-height="screenHeight"
+				:screen="screen"
+				:event-id="eventId"
 				:item="selection.item"
 				@remove="emit('remove', $event)"
 				@duplicate="emit('duplicate', $event)"

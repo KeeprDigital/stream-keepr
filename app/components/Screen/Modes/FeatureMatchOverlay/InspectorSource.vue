@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, FeatureMatchSourceRole } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
+import type { Screen } from '~/types';
 import GraphicsGeometryFields from '~/components/Graphics/GeometryFields.vue';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import { appearanceSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
@@ -10,6 +11,9 @@ import FeatureMatchOverlaySourceFramingStyleFields from './SourceFramingStyleFie
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
 	updateConfig: FeatureMatchOverlayConfigUpdater;
+	/** The Screen whose Theme Override the Appearance section's Look writes. */
+	screen: Screen;
+	eventId: number;
 	screenWidth: number;
 	screenHeight: number;
 	item: FeatureMatchSourceItemConfig;
@@ -129,10 +133,14 @@ const SOURCE_ROLE_OPTIONS = [
 			title="Appearance"
 			:summary="appearanceSummary(item.framingStyle)"
 		>
-			<FeatureMatchOverlaySourceFramingStyleFields
-				:framing-style="item.framingStyle"
-				@update="updates => editor.updateSourceFramingStyle(item.id, updates)"
-			/>
+			<div class="space-y-4">
+				<FeatureMatchOverlaySourceFramingStyleFields
+					:framing-style="item.framingStyle"
+					@update="updates => editor.updateSourceFramingStyle(item.id, updates)"
+				/>
+				<!-- Every Source Item shares this Look, so it writes the Screen's override, not this item. -->
+				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="source-appearance" />
+			</div>
 		</FeatureMatchOverlayControlSection>
 	</div>
 </template>

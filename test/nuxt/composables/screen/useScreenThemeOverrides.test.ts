@@ -81,6 +81,15 @@ describe('useScreenThemeOverrides', () => {
 		});
 	});
 
+	// An unset `asset` Mode Token resolves to null, which is its value, not a miss.
+	it('reads a Mode Token resolving to nothing as nothing', async () => {
+		const screen = seedThemedScreen('feature-match-overlay');
+		const overrides = scope.run(() => useScreenThemeOverrides(screen, 1))!;
+		await flushPromises();
+
+		expect(overrides.entry('feature-match-overlay.frame-media')).toMatchObject({ inherited: null, resolved: null });
+	});
+
 	it('follows a Theme edit announced after it loaded', async () => {
 		const overrides = setUp();
 		await flushPromises();

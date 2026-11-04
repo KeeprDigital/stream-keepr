@@ -1,6 +1,7 @@
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { FeatureMatchOverlaySelectionTarget } from '~/modules/feature-match-overlay/selection';
+import type { Screen } from '~/types';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
@@ -73,6 +74,7 @@ async function mountComponent(overrides: Partial<{
 			updateConfig,
 			screenWidth: 1920,
 			screenHeight: 1080,
+			screen: { id: 1, currentMode: 'feature-match-overlay' } as Screen,
 			eventId: 7,
 			selectedTarget: overrides.selectedTarget ?? { type: 'canvas' },
 			writable: 'writable' in overrides
@@ -97,6 +99,7 @@ async function mountComponent(overrides: Partial<{
 				UButton: UButtonStub,
 				UBadge: true,
 				UIcon: true,
+				ScreenThemeTokenGroup: true,
 				...overrides.stubs,
 			},
 		},

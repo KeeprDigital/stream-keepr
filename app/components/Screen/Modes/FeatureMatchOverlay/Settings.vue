@@ -6,6 +6,7 @@ import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { useEventListener } from '@vueuse/core';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
+import { featureMatchOverlayModeTokens } from '~~/shared/screenModeTokens/featureMatchOverlay';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
 import { hasTextSelection, useGraphicsClipboard } from '~/composables/useGraphicsClipboard';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -35,6 +36,19 @@ const props = defineProps<{ screen: Screen; eventId: number }>();
  */
 const previewEventStore = useEventStore();
 const previewTheme = useGraphicsPreviewTheme(() => previewEventStore.event?.themeId);
+
+/**
+ * Every Mode Token's Look sits in an inspector section (#982), but the
+ * inspector shows one layer's sections at a time. The editor holds each group
+ * while open, so selecting a Source Item or a Graphic Item never moves the
+ * Frame's rows into the Screen-wide look (ADR-0071).
+ */
+const settingsGroups = useScreenSettingsGroups();
+const releaseLookGroups = [
+	...new Set(Object.values(featureMatchOverlayModeTokens).map(token => token.settingsGroup)),
+]
+	.map(group => settingsGroups?.register(group));
+onScopeDispose(() => releaseLookGroups.forEach(release => release?.()));
 
 const featureMatchStore = useFeatureMatchStore();
 const screenStore = useScreenStore();
@@ -721,6 +735,7 @@ useEventListener(import.meta.client
 					:update-config="updateFields"
 					:screen-width="canvasWidth"
 					:screen-height="canvasHeight"
+					:screen="screen"
 					:event-id="eventId"
 					:writable="writable"
 					@remove="itemId => editor.remove({ type: 'source', itemId })"

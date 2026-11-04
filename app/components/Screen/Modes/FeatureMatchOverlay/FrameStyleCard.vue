@@ -2,6 +2,7 @@
 import type { FeatureMatchOverlayFrameAnimationConfig } from '~~/shared/animationEffects';
 import type { MediaFit } from '~~/shared/types/graphicItem';
 import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayModeConfig, ScreenMediaBackgroundConfig } from '~~/shared/types/screenConfig';
+import type { Screen } from '~/types';
 import { parseFrameAnimationConfig } from '~~/shared/animationEffects';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
 import { MEDIA_FIT_OPTIONS } from '~/utils/mediaFields';
@@ -10,13 +11,14 @@ import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
 import FeatureMatchOverlayControlSection from './ControlSection.vue';
 
 /**
- * The Frame's own fields. Its fill, border and glow are the Theme's
- * `frame-surface` Mode Token, its effect `frame-animation-effect`, and the
- * Theme may add media beneath its own (#831); a Screen overrides those in its
- * Theme section.
+ * The Frame's own fields, each section ending with the Look of what it styles:
+ * its fill, border and glow are the Theme's `frame-surface` Mode Token, its
+ * effect `frame-animation-effect`, and the Theme may add media beneath its own
+ * (#831). Each row writes the Screen's Theme Override (ADR-0071).
  */
 const props = defineProps<{
 	config: FeatureMatchOverlayModeConfig;
+	screen: Screen;
 	eventId: number;
 	/** Frame mutation seam from the Feature Match Layout writer. */
 	patchFrame: (updates: Partial<FeatureMatchLayoutFrameConfig>) => void;
@@ -66,10 +68,6 @@ const backgroundSummary = computed(() => {
 
 <template>
 	<div class="min-w-0">
-		<p class="mb-3 text-xs text-muted" data-testid="frame-theme-note">
-			Fill, border, glow and Animation Effect follow the Theme's Frame tokens.
-		</p>
-
 		<FeatureMatchOverlayControlSection title="Background" :summary="backgroundSummary" default-open>
 			<div class="space-y-3">
 				<GraphicsNumberField
@@ -105,11 +103,14 @@ const backgroundSummary = computed(() => {
 		</FeatureMatchOverlayControlSection>
 
 		<FeatureMatchOverlayControlSection title="Video" :summary="mediaBackground.enabled ? 'On' : 'Off'">
-			<ScreenMediaBackgroundFields
-				:media="mediaBackground"
-				:event-id="eventId"
-				@update="updateMediaBackground"
-			/>
+			<div class="space-y-4">
+				<ScreenMediaBackgroundFields
+					:media="mediaBackground"
+					:event-id="eventId"
+					@update="updateMediaBackground"
+				/>
+				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="frame-video" />
+			</div>
 		</FeatureMatchOverlayControlSection>
 
 		<FeatureMatchOverlayControlSection title="Animation" :summary="animation.enabled ? `opacity ${animation.opacity}` : 'Off'">
@@ -128,15 +129,20 @@ const backgroundSummary = computed(() => {
 					size="sm"
 					@update:model-value="updateAnimation({ opacity: Number($event) })"
 				/>
+
+				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="frame-animation" />
 			</div>
 		</FeatureMatchOverlayControlSection>
 
-		<FeatureMatchOverlayControlSection title="Border" summary="Theme surface">
-			<FeatureMatchOverlayBorderSidesControl
-				label="Frame border sides"
-				:sides="config.layout.frame"
-				@update="updateFrame"
-			/>
+		<FeatureMatchOverlayControlSection title="Surface" summary="Fill, border and glow">
+			<div class="space-y-4">
+				<FeatureMatchOverlayBorderSidesControl
+					label="Frame border sides"
+					:sides="config.layout.frame"
+					@update="updateFrame"
+				/>
+				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="frame-surface" />
+			</div>
 		</FeatureMatchOverlayControlSection>
 	</div>
 </template>

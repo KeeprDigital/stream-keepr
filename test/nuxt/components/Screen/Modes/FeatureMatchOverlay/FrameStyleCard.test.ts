@@ -1,9 +1,23 @@
+import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
-import { mount } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { fakeScreenThemeNetwork, overrideWrites, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import FrameStyleCard from '~/components/Screen/Modes/FeatureMatchOverlay/FrameStyleCard.vue';
+
+const { mockApiFetch } = vi.hoisted(() => ({
+	mockApiFetch: vi.fn(),
+}));
+mockNuxtImport('$fetch', () => mockApiFetch);
+
+enableAutoUnmount(afterEach);
+
+beforeEach(() => {
+	fakeScreenThemeNetwork(mockApiFetch, 'feature-match-overlay');
+});
 
 const UFormFieldStub = defineComponent({
 	props: {
@@ -67,7 +81,7 @@ const ControlSectionStub = defineComponent({
 	props: {
 		title: { type: String, required: false },
 	},
-	template: '<section data-testid="control-section"><h3>{{ title }}</h3><slot /></section>',
+	template: '<section data-testid="control-section" :data-section="title"><h3>{{ title }}</h3><slot /></section>',
 });
 
 const USwitchStub = defineComponent({
@@ -82,12 +96,15 @@ const USwitchStub = defineComponent({
 async function mountComponent(options: Partial<{
 	config: FeatureMatchOverlayModeConfig;
 	patchFrame: (updates: Partial<FeatureMatchLayoutFrameConfig>) => void;
+	themeOverrides: StoredThemeTokens;
 }> = {}) {
-	return mount(FrameStyleCard, {
+	const screen = seedThemedScreen('feature-match-overlay', options.themeOverrides);
+	const wrapper = mount(FrameStyleCard, {
 		props: {
 			config: options.config ?? structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
 			patchFrame: options.patchFrame ?? vi.fn<(updates: Partial<FeatureMatchLayoutFrameConfig>) => void>(),
-			eventId: 7,
+			screen: screen(),
+			eventId: 1,
 		},
 		global: {
 			stubs: {
@@ -102,20 +119,71 @@ async function mountComponent(options: Partial<{
 				USwitch: USwitchStub,
 				UButton: defineComponent({ template: '<button type="button"><slot /></button>' }),
 				UIOpacityInput: defineComponent({ template: '<input />' }),
+				UBadge: defineComponent({
+					props: {
+						label: { type: String, required: false },
+					},
+					template: '<span>{{ label }}</span>',
+				}),
 			},
 		},
 	});
+	await flushPromises();
+	return wrapper;
 }
 
 describe('featureMatchOverlayFrameStyleCard', () => {
-	// The Frame's fill, border, glow and effect are the Theme's Mode Tokens (#831).
+	// The Frame's fill, border, glow and effect are the Theme's Mode Tokens (#831),
+	// each edited only as a Screen Theme Override row.
 	it('offers no colour, gradient, border or glow of the Frame\'s own', async () => {
 		const wrapper = await mountComponent();
+		const outsideRows = (selector: string) => wrapper.findAll(selector).filter(found => !found.element.closest('[data-token]'));
 
-		expect(wrapper.find('[data-testid="color-picker"]').exists()).toBe(false);
-		expect(wrapper.find('[data-testid="u-input"]').exists()).toBe(false);
-		expect(wrapper.find('[role="switch"]').exists()).toBe(false);
-		expect(wrapper.get('[data-testid="frame-theme-note"]').text()).toContain('Theme');
+		expect(outsideRows('[data-testid="color-picker"]')).toHaveLength(0);
+		expect(outsideRows('[data-testid="u-input"]')).toHaveLength(0);
+		expect(outsideRows('[role="switch"]')).toHaveLength(0);
+	});
+
+	// Each Frame Mode Token's override sits in the section for what it styles (#982).
+	it.each([
+		['Surface', 'feature-match-overlay.frame-surface'],
+		['Video', 'feature-match-overlay.frame-media'],
+		['Animation', 'feature-match-overlay.frame-animation-effect'],
+	])('shows the %s section\'s Look: %s, once', async (section, token) => {
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll(`[data-token="${token}"]`)).toHaveLength(1);
+		expect(wrapper.get(`[data-section="${section}"]`).findAll('[data-token]').map(row => row.attributes('data-token'))).toEqual([token]);
+	});
+
+	it.each([
+		[
+			'writes',
+			'feature-match-overlay.frame-surface',
+			{},
+			{
+				'feature-match-overlay.frame-surface': { token: 'panel' },
+			},
+		],
+		[
+			'clears',
+			'feature-match-overlay.frame-surface',
+			{
+				'feature-match-overlay.frame-surface': { token: 'panel' },
+			},
+			{ 'feature-match-overlay.frame-surface': null },
+		],
+	] as const)('%s a Frame row\'s Screen Theme Override', async (action, token, stored, written) => {
+		const wrapper = await mountComponent({ themeOverrides: stored });
+		const row = wrapper.get(`[data-token="${token}"]`);
+
+		if (action === 'clears')
+			await row.findAll('button').find(button => button.text() === 'Clear')!.trigger('click');
+		else
+			await row.get('[data-token-part="source"]').setValue('panel');
+		await flushPromises();
+
+		expect(overrideWrites(mockApiFetch)).toEqual([written]);
 	});
 
 	it.each([

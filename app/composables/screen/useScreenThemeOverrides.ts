@@ -102,8 +102,10 @@ export function useScreenThemeOverrides(screen: MaybeRefOrGetter<Screen>, eventI
 			token: themeTokenDefinition(name)!,
 			stored: overrides.value[name],
 			inherited: inheritedValue(name),
-			resolved: (resolved.value.values[name]
-				?? resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme: theme.value, overrides: overrides.value }, name)) as ThemeTokenValue,
+			// A Mode Token may resolve to null, as an unset `asset` does, so ask whether it resolved at all.
+			resolved: (Object.hasOwn(resolved.value.values, name)
+				? resolved.value.values[name]
+				: resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme: theme.value, overrides: overrides.value }, name)) as ThemeTokenValue,
 		};
 	}
 
