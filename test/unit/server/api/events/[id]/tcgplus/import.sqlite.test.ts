@@ -409,8 +409,18 @@ describe('a TCG+ Import', () => {
 
 	// A hand-edited Deck List keeps its own cards and its flag; only the card is named.
 	it.each([
-		['the import brought', null, 'OP99-999', 1],
-		['a hand edit holds', '1x OP01-001\n3x OP99-998', 'OP99-998', 3],
+		[
+			'the import brought',
+			null,
+			'OP99-999',
+			1,
+		],
+		[
+			'a hand edit holds',
+			'1x OP01-001\n3x OP99-998',
+			'OP99-998',
+			3,
+		],
 	] as const)('names an Unresolved Deck Card %s once bandai-keepr knows it, as previewed', async (_holder, handEdit, late, copies) => {
 		const eventId = await stageEvent();
 		const csv = tcgPlusExport([
