@@ -2010,6 +2010,37 @@ The sample is typical, so overflow shows up on show day rather than while author
 - **Amend the Sample Dataset to be the worst case.** A preview of only worst cases stops looking like a show, and the sample is shared with the Screen Mode Sample Dataset.
 - **Push the toggle by message instead of the URL.** It avoids a reload, but a frame listening for it must also be shown to refuse it on a live output; the URL flag reuses the guide flags' proven gate.
 
+## ADR-0063: A Layer Lock is editor state, remembered per browser per Screen, and the canvas clicks through it
+
+Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/issues/747). Records E27 and E28 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
+
+### Decision
+
+**A Layer Lock keeps a layer of a Feature Match Layout from canvas edits, and nothing else.** A locked layer is not moved, resized or rotated on the canvas and arrow nudges skip it; with several selected, the canvas moves only the unlocked ones. It stays selectable from the layer list, where it shows no canvas handles but a lock badge on its row and its canvas outline, and its property panel still edits it (E27). Delete, duplicate, hide, reorder (a drag in the layer list included), copy and paste, and align and distribute are not canvas edits and still act on it.
+
+**A click on a locked layer in the preview falls through to the layer beneath it, or to the canvas (E27).** The editor pushes every locked layer to its preview frame on `feature-match-overlay:locked-layers`, and the frame draws their guides without offering them.
+
+**Locking a Graphic Group locks its children; a Source Item locks too (E28).** A child locked through its group cannot be unlocked on its own.
+
+**A Layer Lock is editor state, not layout.** It is remembered per browser per Screen in local storage, keyed by layer, and is never part of the Feature Match Layout, so the config contract, its saves and its Template Packages are unchanged, and nothing needs back-compat. Locking records no undo step. Like every edit, it needs the Graphics Authoring Lease (ADR-0030): an observer sees locks but cannot change them.
+
+### Why
+
+Frame bars and backgrounds sit under everything and were dragged by accident. Clicking through a locked layer lets the author reach what lies beneath it on the canvas, which is the point of locking it.
+
+### Consequences
+
+- Another browser, or another Screen with the same layout, keeps its own locks. A placed Template or reapplied preset keeps the locks of any layer ids it reuses.
+- A lock on a deleted layer is kept, so undoing the delete brings the layer back locked.
+- A locked child of an unlocked Graphic Group still moves with its group, since the group places it; lock the group to hold both.
+- One unlocked layer selected among locked ones only moves, as several do; select it alone to resize or rotate it.
+- A row or column child, or a rotated group's child, has no box of its own on the canvas, so locked it is badged on its row only.
+- `app/modules/feature-match-overlay/layerLocks.ts` holds the lock rules, and `editorLayersFrame` leaves locked layers out of what the canvas moves.
+
+### Rejected alternatives
+
+- **A `locked` field on each stored layer.** It would change the config contract and every Template Package for what is one author's convenience, and lock the layer for every author of the Screen.
+
 ## ADR-0064: Copied layers and styles stay in this browser, paste within their host, and paste whole or not at all
 
 Accepted · 2026-11-04 · [#746](https://github.com/KeeprDigital/stream-keepr/issues/746). Records E23–E26 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783), and #746's Theme-bindings note.

@@ -22,10 +22,18 @@ import {
 } from '~~/shared/modules/graphics';
 import { randomUuid } from '~~/shared/utils/uuid';
 import { emptyEditHistory, recordEdit, redoEdit, undoEdit } from '~/modules/feature-match-overlay/editHistory';
-import { CANVAS_SELECTION, editorLayersFrame, editorSelectionKey, editorSelectionLabel, editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
+import {
+	CANVAS_SELECTION,
+	editorLayerCanvasBox,
+	editorLayersFrame,
+	editorSelectionKey,
+	editorSelectionLabel,
+	editorSelectionLayer,
+} from '~/modules/feature-match-overlay/editorSelection';
 import { alignLayers, canAlignLayers, canDistributeLayers, distributeLayers } from '~/modules/feature-match-overlay/layerAlignment';
 import { dropLayer } from '~/modules/feature-match-overlay/layerDrag';
 import { layerGroupRefusal } from '~/modules/feature-match-overlay/layerGrouping';
+import { isLayerLocked, isLockedByGroup, lockedLayers, toggleLayerLocks } from '~/modules/feature-match-overlay/layerLocks';
 import {
 	collapseLayerSelection,
 	extendLayerSelection,
@@ -65,6 +73,11 @@ interface FeatureMatchLayoutEditorOptions {
 	 * Required, so an editor that forgot the lease cannot write.
 	 */
 	writable: MaybeRefOrGetter<boolean>;
+	/**
+	 * The Layer Locks (#747), editor state the caller remembers per browser per
+	 * Screen and never part of the layout. None are kept without one.
+	 */
+	locks?: Ref<string[]>;
 }
 
 /**
@@ -89,10 +102,16 @@ interface FeatureMatchLayoutEditorOptions {
  * Only a session holding the Graphics Authoring Lease writes (#738): without it
  * every verb writes and records nothing, and losing it ends the undo history,
  * since the next holder's changes would be undone over.
+ *
+ * A locked layer (#747) is left alone by every canvas verb — a move, a resize, a
+ * rotation and an arrow nudge — and still edited by the property panel. Locking
+ * is editor state, so it records no undo step, but like every edit it needs the
+ * lease.
  */
 export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOptions) {
 	const { config, updateConfig } = options;
 	const writable = computed(() => toValue(options.writable));
+	const locks = options.locks ?? ref<string[]>([]);
 
 	const layerSelection = shallowRef<LayerSelection>(NO_LAYERS);
 	/** Every selected layer, in the order the author chose them. */
@@ -467,9 +486,48 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 			patchLayer(target, { label });
 	}
 
-	/** Set a layer's stored rectangle, as the canvas moves or resizes it. */
+	/* ── Layer Locks ───────────────────────────────── */
+
+	/** Whether the canvas leaves a layer alone: locked in its own right, or through its group. */
+	function isLocked(target: FeatureMatchLayoutEditorSelection): boolean {
+		return target.type !== 'canvas' && isLayerLocked(config.value.layout, locks.value, target);
+	}
+
+	/** Whether a Graphic Item is locked only because its Graphic Group is, so its own lock cannot free it. */
+	function isLockedByItsGroup(target: FeatureMatchLayoutEditorLayer): boolean {
+		return isLockedByGroup(config.value.layout, locks.value, target);
+	}
+
+	/**
+	 * Lock or unlock a layer, or every selected layer: all lock while any is
+	 * unlocked, and all unlock once all are locked. Only while leased.
+	 */
+	function toggleLock(target?: FeatureMatchLayoutEditorSelection) {
+		const toggling = targets(target);
+		if (!writable.value || toggling.length === 0)
+			return;
+		locks.value = toggleLayerLocks(config.value.layout, locks.value, toggling);
+	}
+
+	/** Every locked layer in the layout, for the preview to click through. */
+	const locked = computed(() => lockedLayers(config.value.layout, locks.value));
+
+	/** Where each selected locked layer sits on the canvas, for its lock badge. */
+	const lockedSelectionBoxes = computed(() => layers.value.flatMap((layer) => {
+		const box = isLocked(layer)
+			? editorLayerCanvasBox(config.value.layout, layer)
+			: null;
+		return box
+			? [box]
+			: [];
+	}));
+
+	/* ── The canvas ────────────────────────────────── */
+
+	/** Set a layer's stored rectangle, as the canvas moves or resizes it. A locked layer stays put. */
 	function setRect(target: FeatureMatchLayoutEditorSelection, rect: GraphicRect, editOptions: FeatureMatchLayoutEditOptions = {}) {
-		patchLayer(target, rect, editOptions);
+		if (!isLocked(target))
+			patchLayer(target, rect, editOptions);
 	}
 
 	const canvasSize = () => ({
@@ -477,14 +535,14 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		height: toValue(options.canvasHeight),
 	});
 
-	/** Where the selected layers sit on the canvas, when the canvas can move them. */
-	const selectionFrame = computed(() => editorLayersFrame(config.value.layout, layers.value, canvasSize()));
+	/** Where the selected layers sit on the canvas, when the canvas can move them; a locked one cannot be. */
+	const selectionFrame = computed(() => editorLayersFrame(config.value.layout, layers.value, canvasSize(), isLocked));
 
-	/** Move every selected layer by the same whole-pixel delta, as one edit. */
+	/** Move every selected unlocked layer by the same whole-pixel delta, as one edit. */
 	function translateLayers(delta: { x: number; y: number }, editOptions: FeatureMatchLayoutEditOptions) {
 		if (!selectionFrame.value || (delta.x === 0 && delta.y === 0))
 			return;
-		patchLayers(layers.value.flatMap((layer) => {
+		patchLayers(layers.value.filter(layer => !isLocked(layer)).flatMap((layer) => {
 			const rect = layerConfig(layer);
 			if (!rect)
 				return [];
@@ -512,13 +570,13 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 			setRect(selection.value, rect, editOptions);
 	}
 
-	/** Set a Graphic Item's Graphic Rotation, as the canvas turns it. A Source Item does not turn. */
+	/** Set a Graphic Item's Graphic Rotation, as the canvas turns it. A Source Item does not turn, nor a locked item. */
 	function setRotation(target: FeatureMatchLayoutEditorSelection, rotation: number, editOptions: FeatureMatchLayoutEditOptions = {}) {
-		if (target.type === 'item')
+		if (target.type === 'item' && !isLocked(target))
 			editComposition(composition => patchGraphicItem(composition, target.itemId, { rotation }), editOptions);
 	}
 
-	/** Nudge every selected layer the canvas can move; one undo step per run of presses. */
+	/** Nudge every selected layer the canvas can move, skipping a locked one; one undo step per run of presses. */
 	function nudge(delta: { x: number; y: number }) {
 		translateLayers(delta, {
 			coalesce: `nudge:${layers.value.map(editorSelectionKey).join(',')}`,
@@ -668,6 +726,11 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 		setLayersGeometry,
 		setRotation,
 		nudge,
+		isLocked,
+		isLockedByItsGroup,
+		toggleLock,
+		locked,
+		lockedSelectionBoxes,
 		canAlign,
 		canDistribute,
 		align,

@@ -331,5 +331,64 @@ describe('feature match layout editor selection', () => {
 				},
 			]);
 		});
+
+		describe('with Layer Locks (#747)', () => {
+			const TITLE = { type: 'item', itemId: 'title' } as const;
+			const CHILD = { type: 'item', itemId: 'child' } as const;
+			const SOURCE = { type: 'source', itemId: 'main-source' } as const;
+
+			function lockedOnly(...keys: string[]) {
+				return (layer: { type: string; itemId: string }) => keys.includes(`${layer.type}:${layer.itemId}`);
+			}
+
+			it.each([
+				[
+					'one locked layer',
+					[TITLE],
+				],
+				[
+					'several, every one locked',
+					[TITLE, SOURCE],
+				],
+			])('offers nothing to move for %s', (_, layers) => {
+				expect(editorLayersFrame(layoutOfThree(), layers, CANVAS_SIZE, lockedOnly('item:title', 'source:main-source'))).toBeNull();
+			});
+
+			it('moves only the unlocked ones, leaving a locked one where it is to snap to', () => {
+				const frame = editorLayersFrame(layoutOfThree(), [CHILD, TITLE, SOURCE], CANVAS_SIZE, lockedOnly('item:title'));
+
+				expect(frame).toMatchObject({
+					rect: {
+						x: 64,
+						y: 84,
+						width: 236,
+						height: 116,
+					},
+					members: [
+						{ x: 64, y: 84, width: 30, height: 40 },
+						{
+							x: 100,
+							y: 100,
+							width: 200,
+							height: 100,
+						},
+					],
+				});
+				expect(frame?.snapLines.x).toContain(600);
+				expect(frame?.snapLines.x).not.toContain(300);
+			});
+
+			it('still only moves one unlocked layer selected among locked ones, offering no resize', () => {
+				expect(editorLayersFrame(layoutOfThree(), [TITLE, SOURCE], CANVAS_SIZE, lockedOnly('item:title'))?.members)
+					.toEqual([
+						{
+							x: 100,
+							y: 100,
+							width: 200,
+							height: 100,
+						},
+					]);
+			});
+		});
 	});
 });
