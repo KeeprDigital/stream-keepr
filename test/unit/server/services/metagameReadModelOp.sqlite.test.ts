@@ -6,13 +6,8 @@ import { fakeOpCardBulkLookup, knownOpCard, mockOpWriteBoundaries } from '~~/tes
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 // A One Piece Event's Metagame (ADR-0074): every Player's Deck List counts,
-// participation only, under OP card rules. Deck Lists are staged through the
-// real OP Deck List write; bandai-keepr is faked at its bulk lookup port.
-//
-//   ana (Nickname only) Zoro  4x Zoro (Character), 2x Gum-Gum (Event), 1x Sunny (Stage), 4x OP99-999 (unknown)
-//   Bo                  Luffy 4x Zoro, 4x Usopp (Character)
-//   Cy                  unknown Leader OP99-001, 4x Usopp
-// An unlinked Feature Match Slot side holds 4x Kaido, which no Player runs.
+// participation only, under OP card rules. Deck Lists go through the real OP
+// Deck List write; bandai-keepr is faked at its bulk lookup port.
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) =>
 	Object.assign(new Error(input.message ?? 'error'), input));
@@ -72,6 +67,21 @@ const upstream = fakeOpCardBulkLookup([
 ]);
 mockOpWriteBoundaries(db, () => upstream);
 
+/** ana, by Nickname only: a Zoro Leader, Zoro (Character), Gum-Gum (Event), Sunny (Stage) and an unknown card. */
+const ANA_DECK = '1x OP01-001\n4x OP01-025\n2x OP01-029\n1x OP01-119\n4x OP99-999';
+/** Bo: a Luffy Leader, Zoro and Usopp (Characters). */
+const BO_DECK = '1x OP01-003\n4x OP01-025\n4x OP01-040';
+/** Cy: an unknown Leader, and Usopp. */
+const CY_DECK = {
+	entries: [
+		{ number: 'OP99-001', quantity: 1 },
+		{ number: 'OP01-040', quantity: 4 },
+	],
+	leaderNumber: 'OP99-001',
+};
+/** An unlinked Feature Match Slot side's Deck List: Kaido, which no Player runs. */
+const UNLINKED_SIDE_DECK = '4x OP01-094';
+
 const { metagameReadModel } = await import('~~/server/modules/metagame/readModel');
 const { opDeckListWriteModule } = await import('~~/server/modules/op-deck-list-write');
 
@@ -106,15 +116,9 @@ beforeAll(async () => {
 			input,
 			source: 'import',
 		});
-	await write(ana!.id, { text: '1x OP01-001\n4x OP01-025\n2x OP01-029\n1x OP01-119\n4x OP99-999' });
-	await write(bo!.id, { text: '1x OP01-003\n4x OP01-025\n4x OP01-040' });
-	await write(cy!.id, {
-		entries: [
-			{ number: 'OP99-001', quantity: 1 },
-			{ number: 'OP01-040', quantity: 4 },
-		],
-		leaderNumber: 'OP99-001',
-	});
+	await write(ana!.id, { text: ANA_DECK });
+	await write(bo!.id, { text: BO_DECK });
+	await write(cy!.id, CY_DECK);
 
 	// Standings an OP Event has no source for: the Metagame reads none of them.
 	await db.update(schema.players)
@@ -137,7 +141,7 @@ beforeAll(async () => {
 	await opDeckListWriteModule().write({
 		eventId,
 		owner: { kind: 'slotSide', slotId: slot!.id, side: 'player1' },
-		input: { text: '4x OP01-094' },
+		input: { text: UNLINKED_SIDE_DECK },
 		source: 'hand',
 	});
 

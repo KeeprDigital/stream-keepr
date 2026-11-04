@@ -19,7 +19,7 @@ describe('screen Mode Definition module', () => {
 	});
 
 	// An OP Event has no results, so it is offered only the modes that work without them: its
-	// Metagame reads participation only (ADR-0074), and Talent needs neither (#782).
+	// Metagame reads participation only (ADR-0074), and Talent needs neither.
 	it.each([
 		['mtg', SCREEN_MODE_VALUES],
 		[
