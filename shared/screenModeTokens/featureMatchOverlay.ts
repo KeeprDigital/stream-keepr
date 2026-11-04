@@ -1,5 +1,8 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
+/** The Feature Match Overlay settings groups its Mode Tokens may name (ADR-0071). */
+export type FeatureMatchOverlaySettingsGroup = 'frame-surface' | 'frame-video' | 'frame-animation' | 'source-appearance';
+
 /**
  * How the Feature Match Overlay's host-owned parts look: the Frame's and the
  * Source Items' Mode Tokens, by name within the mode (#831). Its Graphic Items
@@ -16,6 +19,7 @@ export const featureMatchOverlayModeTokens = {
 	'frame-surface': {
 		type: 'surface-style',
 		label: 'Frame surface',
+		settingsGroup: 'frame-surface',
 		default: {
 			fill: {
 				type: 'solid',
@@ -31,6 +35,7 @@ export const featureMatchOverlayModeTokens = {
 	'frame-media': {
 		type: 'asset',
 		label: 'Frame media',
+		settingsGroup: 'frame-video',
 		assetKinds: ['image', 'silent-video'],
 		// None: the Frame shows its own fill, image and video.
 		default: null,
@@ -38,11 +43,13 @@ export const featureMatchOverlayModeTokens = {
 	'frame-animation-effect': {
 		type: 'animationEffect',
 		label: 'Frame Animation Effect',
+		settingsGroup: 'frame-animation',
 		default: { token: 'animation-effect' },
 	},
 	'source-surface': {
 		type: 'surface-style',
 		label: 'Source Item surface',
+		settingsGroup: 'source-appearance',
 		default: {
 			fill: {
 				type: 'solid',
@@ -55,4 +62,4 @@ export const featureMatchOverlayModeTokens = {
 			},
 		},
 	},
-} as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition>>;
+} as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition<FeatureMatchOverlaySettingsGroup>>>;

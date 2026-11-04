@@ -2,10 +2,13 @@
 import type { BackgroundLayersCapableMode } from '~~/shared/screenModes';
 import type { BackgroundLayer } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
+import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 
 /**
- * The Background Layers card a plain overlay mode gets on the Screen
- * configuration page, editing that mode's own `backgroundLayers` stack.
+ * The Background & Placement card a plain overlay mode gets on the Screen
+ * configuration page: that mode's own `backgroundLayers` stack, then the
+ * Screen inset and alignment its host places it by, as Screen Theme Overrides
+ * (ADR-0051, ADR-0071). It starts closed unless it holds a layer or an override.
  *
  * `mode` is captured once at setup — the configuration composable binds to it —
  * so the owner remounts this component (keyed by mode) when the Screen's mode
@@ -28,6 +31,9 @@ const { config, saving, updateConfig } = useModeConfigUpdate(
 defineExpose({ saving });
 
 const layers = computed<BackgroundLayer[]>(() => config.value.backgroundLayers ?? []);
+const placementTokens = computed(() => placeScreenThemeTokens(props.screen.currentMode, []).placement);
+const holdsSomething = computed(() => layers.value.length > 0
+	|| placementTokens.value.some(name => props.screen.themeOverrides?.[name] !== undefined));
 
 function writeLayers(nextLayers: BackgroundLayer[]) {
 	updateConfig({ backgroundLayers: nextLayers });
@@ -36,14 +42,20 @@ function writeLayers(nextLayers: BackgroundLayer[]) {
 
 <template>
 	<ScreenSettingsCard
-		title="Background Layers"
-		subtitle="Painted behind this mode's content. With no layers, the Theme's background shows."
-		:default-open="layers.length > 0"
+		title="Background & Placement"
+		subtitle="Layers behind this mode's content, and where the content sits in the Event Canvas."
+		:default-open="holdsSomething"
 	>
 		<ScreenBackgroundLayersEditor
 			:layers="layers"
 			:event-id="eventId"
 			@update:layers="writeLayers"
+		/>
+		<ScreenThemeTokenRows
+			:screen="screen"
+			:event-id="eventId"
+			heading="Placement"
+			:names="placementTokens"
 		/>
 	</ScreenSettingsCard>
 </template>

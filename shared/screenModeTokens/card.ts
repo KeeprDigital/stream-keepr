@@ -1,5 +1,8 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
+/** The Card Spotlight settings groups its Mode Tokens may name (ADR-0071). */
+export type CardSettingsGroup = 'card';
+
 /** How the Card Spotlight Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const cardModeTokens = {
 	// How the card enters and, reversed, leaves: the zoom and fade it shipped with.
@@ -7,6 +10,7 @@ export const cardModeTokens = {
 	motion: {
 		type: 'animation-recipe',
 		label: 'Card enter and exit',
+		settingsGroup: 'card',
 		default: {
 			duration: 200,
 			easing: 'ease-in-out',
@@ -15,4 +19,4 @@ export const cardModeTokens = {
 			scale: { factor: 0.7, origin: 'center' },
 		},
 	},
-} as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition>>;
+} as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition<CardSettingsGroup>>>;

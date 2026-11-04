@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, nextTick, reactive } from 'vue';
+import { ScreenSettingsCardStub } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import EditorFocusModeToggle from '~/components/Graphics/EditorFocusModeToggle.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 import { getScreenModeConfigurationPolicy, getScreenModeSettingsComponent } from '~/modules/screen-mode';
@@ -72,21 +73,13 @@ const NuxtLayoutStub = defineComponent({
 	template: '<div data-testid="layout" :data-focus="String(editorFocus)"><slot name="navbar-center" /><slot name="actions" /><slot /></div>',
 });
 
-/** A Screen-level settings card, named by its title. */
-const ScreenSettingsCardStub = defineComponent({
-	props: {
-		title: { type: String, default: '' },
-	},
-	template: '<section :data-settings-card="title"><slot /></section>',
-});
-
 const UContainerStub = defineComponent({
 	template: '<div><slot /></div>',
 });
 
-/** The Screen's Theme card, which loads its Event's Theme; here it only has to be on the page or not. */
+/** The Screen-wide look, which loads its Event's Theme; here it only has to be on the page or not. */
 const ThemeTokensSettingsStub = defineComponent({
-	template: '<div data-settings-card="Theme" />',
+	template: '<div data-settings-card="Screen-wide look" />',
 });
 
 const CardStub = defineComponent({
@@ -174,7 +167,7 @@ function resolveLoad(screenId: number, screen: unknown) {
 	load!.resolve(screen);
 }
 
-async function mountPage() {
+async function mountPage(stubOverrides: Record<string, unknown> = {}) {
 	const pagePath = '../../../../../../app/pages/event/[eventId]/screens/[screenId].vue';
 	const { default: ScreenPage } = await import(pagePath);
 
@@ -198,6 +191,7 @@ async function mountPage() {
 				UAlert: true,
 				ScreenSettingsCard: ScreenSettingsCardStub,
 				ScreenThemeTokensSettings: ThemeTokensSettingsStub,
+				...stubOverrides,
 			},
 		},
 	});
@@ -507,13 +501,13 @@ describe('screen config page — Editor Focus Mode', () => {
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
 		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
-		expect(page.find('[data-settings-card="Theme"]').exists()).toBe(true);
+		expect(page.find('[data-settings-card="Screen-wide look"]').exists()).toBe(true);
 
 		await page.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('true');
 		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(false);
-		expect(page.find('[data-settings-card="Theme"]').exists()).toBe(false);
+		expect(page.find('[data-settings-card="Screen-wide look"]').exists()).toBe(false);
 		expect(page.find('[data-testid="mode-editor"]').exists()).toBe(true);
 		expect(page.get('[data-testid="focused-screen-name"]').text()).toBe('Screen 1');
 		expect(page.text()).toContain('Back to Screens');
@@ -544,5 +538,57 @@ describe('screen config page — Editor Focus Mode', () => {
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
 		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
 		expect(page.find('[data-testid="focused-screen-name"]').exists()).toBe(false);
+	});
+});
+
+/**
+ * A plain overlay mode's page ends with Background & Placement, then the
+ * Screen-wide look, each closed unless it holds a layer or an override (#970).
+ */
+describe('screen config page — Background & Placement, then the Screen-wide look', () => {
+	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
+
+	const ModeSettingsStub = defineComponent({
+		template: '<section data-settings-card="Mode settings" />',
+	});
+
+	beforeEach(() => {
+		pendingLoads = [];
+		route.params.screenId = '1';
+		mockScreenStore.screenPresence = new Map();
+		stubModePolicy({ displayType: 'overlay', outputOptions: [] });
+		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => ModeSettingsStub as never);
+	});
+
+	afterEach(() => {
+		wrapper?.unmount();
+		wrapper = null;
+		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => null);
+	});
+
+	// Each card's own open rule is tested at its home; this shows the page wires the Screen to both.
+	it('orders the cards after the mode\'s settings, each opening on what it holds', async () => {
+		const themeOverrides = { inset: 40 };
+		const screen = {
+			...makeScreen(1),
+			currentMode: 'standings',
+			modeConfigs: {},
+			themeOverrides,
+		};
+		mockScreenStore.screens = [screen];
+		wrapper = await mountPage({ ScreenThemeTokensSettings: false });
+		await flushPromises();
+		resolveLoad(1, screen);
+		await flushPromises();
+
+		const cards = wrapper.findAll('[data-settings-card]');
+		expect(cards.map(card => card.attributes('data-settings-card'))).toEqual([
+			'Mode settings',
+			'Background & Placement',
+			'Screen-wide look',
+		]);
+		expect(cards.slice(1).map(card => card.attributes('data-default-open'))).toEqual(['true', 'false']);
+		expect(wrapper.findAll('[data-token="inset"]')).toHaveLength(1);
+		expect(wrapper.findAll('[data-token="alignment"]')).toHaveLength(1);
 	});
 });

@@ -1,6 +1,6 @@
 import type { PageRotationDeclaration } from './modules/page-rotation';
 import type { ThemeTokenType } from './modules/theme/tokens';
-import type { DeclaredModeTokenDefinition } from './modules/theme/vocabulary';
+import type { AnyDeclaredModeTokenDefinition } from './modules/theme/vocabulary';
 import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeConfigs/contract';
 import type { DeckSource } from './screenModeConfigs/deck';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
@@ -141,7 +141,7 @@ export interface ScreenModeDefinition {
 	 * Theme Tokens leaves it out; Feature Match Controls, an operator surface,
 	 * always will.
 	 */
-	modeTokens?: Readonly<Record<string, DeclaredModeTokenDefinition>>;
+	modeTokens?: Readonly<Record<string, AnyDeclaredModeTokenDefinition>>;
 }
 
 /**
@@ -426,7 +426,7 @@ export function screenModeTokenName(mode: ScreenMode, token: string): ScreenMode
 }
 
 /** A mode's declared Mode Tokens by full name, as `resolveThemeTokens` reads them; none for a mode declaring none. */
-export function screenModeTokens(mode: ScreenMode): Readonly<Record<ScreenModeTokenName, DeclaredModeTokenDefinition>> {
+export function screenModeTokens(mode: ScreenMode): Readonly<Record<ScreenModeTokenName, AnyDeclaredModeTokenDefinition>> {
 	const declared = SCREEN_MODES[mode].modeTokens ?? {};
 	return Object.fromEntries(Object.entries(declared).map(([token, definition]) => [
 		screenModeTokenName(mode, token),

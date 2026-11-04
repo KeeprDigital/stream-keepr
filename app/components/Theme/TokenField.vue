@@ -28,6 +28,11 @@ const props = defineProps<{
 	inherited?: unknown;
 	/** The Event whose adopted library assets a picker offers first; a Theme has none. */
 	eventId?: number;
+	/**
+	 * One row, as a Screen settings group's Look shows it (ADR-0071): label,
+	 * source, control, state badge and reset. What it inherits is announced only.
+	 */
+	compact?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -62,12 +67,14 @@ const SCOPE_TEXT = {
 	theme: {
 		inherited: 'Default',
 		set: 'Set in this Theme',
+		compactSet: 'Set',
 		reset: 'Reset',
 		resetLabel: (label: string) => `Reset ${label} to its default`,
 	},
 	screen: {
 		inherited: 'Theme',
 		set: 'Overridden on this Screen',
+		compactSet: 'Overridden',
 		reset: 'Clear',
 		resetLabel: (label: string) => `Clear the ${label} override`,
 	},
@@ -75,6 +82,11 @@ const SCOPE_TEXT = {
 const text = computed(() => SCOPE_TEXT[props.scope ?? 'theme']);
 const inheritedValue = computed(() => props.inherited ?? definition.value.default);
 const inherited = computed(() => `${text.value.inherited}: ${valueText(inheritedValue.value)}`);
+const badge = computed(() => {
+	if (!props.compact)
+		return isSet.value ? text.value.set : 'Inherited';
+	return isSet.value ? text.value.compactSet : text.value.inherited;
+});
 
 /** The Foundation Tokens of this token's type, which a Mode Token may follow. */
 const sourceItems = computed(() => [
@@ -117,16 +129,17 @@ function chooseSource(value: string) {
 
 <template>
 	<div
-		class="flex flex-col gap-3 border-b border-default py-4 last:border-b-0"
+		class="flex flex-col border-b border-default last:border-b-0"
+		:class="compact ? 'gap-2 py-2' : 'gap-3 py-4'"
 		:data-token="name"
 		:data-token-state="isSet ? 'set' : 'inherited'"
 	>
 		<div class="flex flex-wrap items-start justify-between gap-2">
 			<div>
-				<p class="font-medium text-highlighted">
+				<p class="font-medium text-highlighted" :class="{ 'text-sm': compact }">
 					{{ definition.label }}
 				</p>
-				<p class="text-xs text-muted" data-token-inherited>
+				<p :class="compact ? 'sr-only' : 'text-xs text-muted'" data-token-inherited>
 					{{ inherited }}
 				</p>
 			</div>
@@ -135,7 +148,8 @@ function chooseSource(value: string) {
 					:color="isSet ? 'primary' : 'neutral'"
 					variant="subtle"
 					size="sm"
-					:label="isSet ? text.set : 'Inherited'"
+					:label="badge"
+					:title="compact ? inherited : undefined"
 				/>
 				<UButton
 					v-if="isSet"
@@ -151,26 +165,28 @@ function chooseSource(value: string) {
 				</UButton>
 			</div>
 		</div>
-		<USelect
-			v-if="token.tier === 'mode'"
-			:model-value="source"
-			:items="sourceItems"
-			size="sm"
-			class="w-64"
-			:disabled="disabled"
-			:aria-label="`${definition.label} source`"
-			data-token-part="source"
-			@update:model-value="chooseSource"
-		/>
-		<component
-			:is="input"
-			:model-value="editable"
-			:label="definition.label"
-			:bounds="definition.type === 'dimension' ? definition.bounds : undefined"
-			:asset-kinds="definition.type === 'asset' ? definition.assetKinds : undefined"
-			:event-id="eventId"
-			:class="{ 'pointer-events-none opacity-50': disabled }"
-			@commit="(value: unknown) => emit('set', value)"
-		/>
+		<div :class="compact ? 'flex flex-wrap items-center gap-2' : 'flex flex-col gap-3'">
+			<USelect
+				v-if="token.tier === 'mode'"
+				:model-value="source"
+				:items="sourceItems"
+				size="sm"
+				:class="compact ? 'w-48' : 'w-64'"
+				:disabled="disabled"
+				:aria-label="`${definition.label} source`"
+				data-token-part="source"
+				@update:model-value="chooseSource"
+			/>
+			<component
+				:is="input"
+				:model-value="editable"
+				:label="definition.label"
+				:bounds="definition.type === 'dimension' ? definition.bounds : undefined"
+				:asset-kinds="definition.type === 'asset' ? definition.assetKinds : undefined"
+				:event-id="eventId"
+				:class="{ 'pointer-events-none opacity-50': disabled }"
+				@commit="(value: unknown) => emit('set', value)"
+			/>
+		</div>
 	</div>
 </template>
