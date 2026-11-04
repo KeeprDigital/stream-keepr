@@ -739,7 +739,7 @@ A host-owned Feature Match Overlay element placing an external video source, wit
 _Avoid_: Source Region, camera box, Source Graphic Item
 
 **Layer Lock**:
-An author's lock on one layer of a Feature Match Layout, a Graphic Item or a Source Item, against canvas edits: the canvas neither moves, resizes nor rotates it, arrow nudges skip it, and a click on it falls through to the layer beneath. It stays selectable from the layer list and editable in its property panel. Locking a Graphic Group locks its children. It is editor state, remembered per browser per Screen and never stored in the layout (ADR-0063).
+An author's lock on one layer of a Feature Match Layout, a Graphic Item or a Source Item, against canvas edits: the canvas neither moves, resizes nor rotates it, arrow nudges skip it, and a click on it falls through to the layer beneath. It stays selectable from the layer list and editable in its property panel. Locking a Graphic Group locks its children. It is stored on the layer in the Feature Match Layout, so every operator of the Screen sees it and it travels with a Feature Match Layout Template; a copy of a locked layer arrives unlocked (ADR-0063).
 _Avoid_: Frozen layer, pinned layer
 
 **Feature Match Overlay Preset**:

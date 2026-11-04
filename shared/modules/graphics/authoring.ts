@@ -1381,12 +1381,15 @@ export function groupGraphicItems(
 /**
  * A Graphic Group child carrying what it inherited from its group: the group's
  * local style default where the child paints a surface but holds none of its own
- * (bound to the group's Theme token when the default is), and the group's hiding.
+ * (bound to the group's Theme token when the default is), the group's hiding, and
+ * its Layer Lock (ADR-0063).
  */
 function bakeInheritedStyle(group: GraphicGroupItemConfig, child: GraphicGroupChildConfig): GraphicGroupChildConfig {
 	let baked: GraphicItemConfig = group.visible
 		? child
 		: { ...child, visible: false };
+	if (group.locked)
+		baked = { ...baked, locked: true };
 	const inherited = group.defaultChildSurfaceStyle;
 	if (inherited && ownsGraphicSurfaceStyle(baked, 'surfaceStyle') && baked.surfaceStyle === undefined) {
 		const binding = group.themeBindings?.defaultChildSurfaceStyle;
@@ -1552,19 +1555,30 @@ export interface CloneGraphicItemOptions {
 }
 
 /**
+ * A layer without its Layer Lock (ADR-0063): how a copy of a locked layer
+ * arrives, and how an unlocked layer is stored.
+ */
+export function withoutLayerLock<T extends { locked?: boolean }>(item: T): T {
+	const { locked: _locked, ...unlocked } = item;
+	return unlocked as T;
+}
+
+/**
  * A detached copy of one Graphic Item, a Graphic Group with copies of its
- * children, each under a fresh id and the name `label` gives it. It keeps
- * everything else, its Graphic Theme Bindings included; nothing referencing the
- * original, such as a stagger or a Social Profile Projection, is extended to it.
+ * children, each under a fresh id and the name `label` gives it, and unlocked:
+ * a Layer Lock holds the original where it is, and a copy lands somewhere new to
+ * be placed (ADR-0063). It keeps everything else, its Graphic Theme Bindings
+ * included; nothing referencing the original, such as a stagger or a Social
+ * Profile Projection, is extended to it.
  */
 export function cloneGraphicItem<T extends GraphicItemConfig>(item: T, options: CloneGraphicItemOptions): T {
 	// A JSON copy: the item is stored configuration, and may arrive as a reactive proxy.
-	const copy = JSON.parse(JSON.stringify(item)) as T;
+	const copy = withoutLayerLock(JSON.parse(JSON.stringify(item)) as T);
 	copy.id = options.nextId();
 	copy.label = options.label(copy.label);
 	if (copy.type === 'group') {
 		copy.children = copy.children.map(child => ({
-			...child,
+			...withoutLayerLock(child),
 			id: options.nextId(),
 			label: options.label(child.label),
 		}));

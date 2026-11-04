@@ -2,7 +2,6 @@
 import type { FeatureMatchSample } from '~~/shared/featureMatchSampleDataset';
 import type { FeatureMatchOverlayOutput, ScreenVideoPlayback } from '~~/shared/types/screenConfig';
 import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
-import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
@@ -16,9 +15,9 @@ import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureM
 import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFeatureMatchOverlaySideboardData';
 import { useFeatureMatchOverlaySideboardRevealAnimation } from '~/composables/screen/useFeatureMatchOverlaySideboardRevealAnimation';
 import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
+import { lockedLayers } from '~/modules/feature-match-overlay/layerLocks';
 import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE,
-	isFeatureMatchOverlayPreviewLockedLayersMessage,
 	isFeatureMatchOverlayPreviewSelectedTargetMessage,
 } from '~/modules/feature-match-overlay/previewMessages';
 import { frameBorderLine, resolveFeatureMatchOverlayRenderModel } from '~/modules/feature-match-overlay/renderModel';
@@ -343,32 +342,22 @@ function isPreviewTargetSelected(target: FeatureMatchOverlaySelectionTarget) {
 }
 
 /**
- * The layers the editor locked (#747). Their guides are drawn but not offered, so
- * a click on one falls through to the layer beneath it, or to the canvas.
+ * The layout's locked layers (#747), read from the layout the frame renders
+ * (#943). Their guides are drawn but not offered, so a click on one falls through
+ * to the layer beneath it, or to the canvas.
  */
-const lockedLayers = ref<FeatureMatchLayoutEditorLayer[]>([]);
-const lockedItemIds = computed(() => lockedLayers.value.flatMap(layer => layer.type === 'item'
+const locked = computed(() => lockedLayers(config.value.layout));
+const lockedItemIds = computed(() => locked.value.flatMap(layer => layer.type === 'item'
 	? [layer.itemId]
 	: []));
 
 function isSourceLocked(itemId: string) {
-	return lockedLayers.value.some(layer => layer.type === 'source' && layer.itemId === itemId);
+	return locked.value.some(layer => layer.type === 'source' && layer.itemId === itemId);
 }
 
 function selectSourceGuide(itemId: string, event?: MouseEvent | KeyboardEvent) {
 	if (!isSourceLocked(itemId))
 		selectPreviewTarget({ type: 'source', itemId }, event);
-}
-
-function handleLockedLayersMessage(message: MessageEvent) {
-	if (!isFeatureMatchOverlayPreviewLockedLayersMessage(message, {
-		origin: window.location.origin,
-		source: window.parent,
-	})) {
-		return;
-	}
-
-	lockedLayers.value = message.data.layers;
 }
 
 function handleSelectedPreviewTargetMessage(message: MessageEvent) {
@@ -437,7 +426,6 @@ onMounted(() => {
 	if (isPreview?.value) {
 		window.addEventListener('message', handleSelectedPreviewTargetMessage);
 		window.addEventListener('message', handleSelectedCompositorTargetMessage);
-		window.addEventListener('message', handleLockedLayersMessage);
 	}
 	announcePreviewReady();
 });
@@ -448,7 +436,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
 	window.removeEventListener('message', handleSelectedPreviewTargetMessage);
 	window.removeEventListener('message', handleSelectedCompositorTargetMessage);
-	window.removeEventListener('message', handleLockedLayersMessage);
 });
 </script>
 

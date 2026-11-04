@@ -152,6 +152,16 @@ describe('feature match layout writer', () => {
 		expect(again.layout.sources[1]!.label).toBe('Source copy 2');
 	});
 
+	it('duplicates a locked Source Item unlocked (ADR-0063)', () => {
+		const layout = layoutOf([
+			source({ locked: true }),
+		]);
+
+		const { layout: next } = duplicateSource(layout, 's1');
+
+		expect(next.sources.map(item => item.locked)).toEqual([true, undefined]);
+	});
+
 	it('duplicates nothing for an unknown Source Item', () => {
 		const layout = layoutOf([
 			source(),

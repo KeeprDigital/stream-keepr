@@ -1,70 +1,79 @@
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
-import { findGraphicItem } from '~~/shared/modules/graphics';
-import { editorSelectionKey } from './editorSelection';
+import { findGraphicItem, replaceGraphicItemById, withoutLayerLock } from '~~/shared/modules/graphics';
 import { layerOrder } from './layerSelection';
 
 /**
  * The Feature Match Overlay editor's Layer Locks (#747): the layers an author has
- * kept from canvas edits, each named by its `editorSelectionKey`.
+ * kept from canvas edits.
  *
- * Pure, and editor state only: a lock is remembered per browser per Screen and
- * never stored in the Feature Match Layout. A layer is locked in its own right,
- * or through the Graphic Group it is a child of (E28). A Source Item locks like
- * any Graphic Item. A key naming a layer no longer in the layout is harmless, and
- * kept, so undoing a delete brings the layer back locked.
+ * Pure. A lock is the layer's own `locked` field in the Feature Match Layout
+ * (#943, ADR-0063), so it reaches every session and travels with the layout; a
+ * layer stored without one is unlocked. A layer is locked in its own right, or
+ * through the Graphic Group it is a child of (E28). A Source Item locks like any
+ * Graphic Item.
  */
-export type LayerLocks = readonly string[];
 
-const LAYER_KEY = /^(?:item|source):.+$/;
-
-/** The locks a stored value holds: its layer keys, and nothing else. */
-export function readLayerLocks(stored: unknown): string[] {
-	return Array.isArray(stored)
-		? stored.filter((key): key is string => typeof key === 'string' && LAYER_KEY.test(key))
-		: [];
-}
-
-function lockedInOwnRight(locks: LayerLocks, layer: FeatureMatchLayoutEditorLayer): boolean {
-	return locks.includes(editorSelectionKey(layer));
+function lockedInOwnRight(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEditorLayer): boolean {
+	return layer.type === 'source'
+		? layout.sources.find(source => source.id === layer.itemId)?.locked === true
+		: findGraphicItem(layout.composition, layer.itemId)?.item.locked === true;
 }
 
 /** Whether a Graphic Item is locked only because its Graphic Group is. */
-export function isLockedByGroup(layout: FeatureMatchLayoutConfig, locks: LayerLocks, layer: FeatureMatchLayoutEditorLayer): boolean {
-	if (layer.type !== 'item' || lockedInOwnRight(locks, layer))
+export function isLockedByGroup(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEditorLayer): boolean {
+	if (layer.type !== 'item' || lockedInOwnRight(layout, layer))
 		return false;
-	const group = findGraphicItem(layout.composition, layer.itemId)?.group;
-	return group !== undefined && lockedInOwnRight(locks, { type: 'item', itemId: group.id });
+	return findGraphicItem(layout.composition, layer.itemId)?.group?.locked === true;
 }
 
 /** Whether the canvas leaves this layer alone: locked in its own right, or through its group. */
-export function isLayerLocked(layout: FeatureMatchLayoutConfig, locks: LayerLocks, layer: FeatureMatchLayoutEditorLayer): boolean {
-	return lockedInOwnRight(locks, layer) || isLockedByGroup(layout, locks, layer);
+export function isLayerLocked(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEditorLayer): boolean {
+	return lockedInOwnRight(layout, layer) || isLockedByGroup(layout, layer);
+}
+
+/** A layer's own lock set, or its field dropped, so an unlocked layer is stored as one never locked. */
+function withLock<T extends { locked?: boolean }>(item: T, locked: boolean): T {
+	return locked
+		? { ...item, locked: true }
+		: withoutLayerLock(item);
 }
 
 /**
  * Lock or unlock layers together, as the layer list's toggle does: every one
  * locks while any is unlocked, and all unlock once all are locked. A child stays
- * locked while its group is.
+ * locked while its group is. Answers the layout with each layer's lock written.
  */
 export function toggleLayerLocks(
 	layout: FeatureMatchLayoutConfig,
-	locks: LayerLocks,
 	layers: readonly FeatureMatchLayoutEditorLayer[],
-): string[] {
-	const lock = layers.some(layer => !isLayerLocked(layout, locks, layer));
-	const keys = layers.filter(layer => !lock || !isLayerLocked(layout, locks, layer)).map(editorSelectionKey);
-	return lock
-		? [
-				...locks,
-				...keys.filter((key, index) => keys.indexOf(key) === index),
-			]
-		: locks.filter(key => !keys.includes(key));
+): FeatureMatchLayoutConfig {
+	const lock = layers.some(layer => !isLayerLocked(layout, layer));
+	// Locking writes the unlocked ones; unlocking, those locked in their own right.
+	return layers
+		.filter(layer => lock
+			? !isLayerLocked(layout, layer)
+			: lockedInOwnRight(layout, layer))
+		.reduce((next, layer) => {
+			if (layer.type === 'source') {
+				return {
+					...next,
+					sources: next.sources.map(source => source.id === layer.itemId
+						? withLock(source, lock)
+						: source),
+				};
+			}
+			const item = findGraphicItem(next.composition, layer.itemId)?.item;
+			return item
+				? {
+						...next,
+						composition: replaceGraphicItemById(next.composition, withLock(item, lock)),
+					}
+				: next;
+		}, layout);
 }
 
 /** Every locked layer of the layout, in the layer list's order, a locked group's children included. */
-export function lockedLayers(layout: FeatureMatchLayoutConfig, locks: LayerLocks): FeatureMatchLayoutEditorLayer[] {
-	if (locks.length === 0)
-		return [];
-	return layerOrder(layout).filter(layer => isLayerLocked(layout, locks, layer));
+export function lockedLayers(layout: FeatureMatchLayoutConfig): FeatureMatchLayoutEditorLayer[] {
+	return layerOrder(layout).filter(layer => isLayerLocked(layout, layer));
 }

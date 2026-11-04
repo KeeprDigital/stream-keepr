@@ -5,6 +5,7 @@ import type {
 	FeatureMatchSourceItemConfig,
 } from '~~/shared/types/screenConfig';
 import { createFeatureMatchSourceItem } from '~~/shared/featureMatchSourceItems';
+import { withoutLayerLock } from '~~/shared/modules/graphics';
 
 /**
  * The host-owned Feature Match Layout writer: every mutation of the Frame or of
@@ -144,8 +145,8 @@ export const SOURCE_ITEM_DUPLICATE_OFFSET = 20;
 
 /**
  * Duplicate one Source Item directly in front of itself, offset so it does not sit
- * exactly over its original. Returns the same layout and an empty id when the
- * Source Item is unknown.
+ * exactly over its original, and unlocked (ADR-0063). Returns the same layout and
+ * an empty id when the Source Item is unknown.
  */
 export function duplicateSource(layout: FeatureMatchLayoutConfig, id: string): { layout: FeatureMatchLayoutConfig; id: string } {
 	const index = layout.sources.findIndex(item => item.id === id);
@@ -161,7 +162,7 @@ export function duplicateSource(layout: FeatureMatchLayoutConfig, id: string): {
 		label = `${original.label} copy ${suffix}`;
 
 	const copy: FeatureMatchSourceItemConfig = {
-		...(JSON.parse(JSON.stringify(original)) as FeatureMatchSourceItemConfig),
+		...(JSON.parse(JSON.stringify(withoutLayerLock(original))) as FeatureMatchSourceItemConfig),
 		id: nextId('source'),
 		label,
 		x: original.x + SOURCE_ITEM_DUPLICATE_OFFSET,

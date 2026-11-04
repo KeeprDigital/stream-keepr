@@ -1,5 +1,4 @@
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
-import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
 import type { FeatureMatchOverlaySelectionTarget } from './selection';
 import type { ExpectedSender, MessageEnvelope } from '~/modules/graphics/previewMessages';
 import { isFromExpectedSender } from '~/modules/graphics/previewMessages';
@@ -50,34 +49,6 @@ export const FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE = 'feature-ma
  * its selection or take it out rather than select it alone (#740).
  */
 export const FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE = 'feature-match-overlay:select';
-
-/**
- * Every layer the editor has locked (#747), pushed into the frame so a click on
- * one falls through to the layer beneath it. Layer Locks are editor state, so
- * they travel beside the configuration push rather than inside it.
- */
-export const FEATURE_MATCH_OVERLAY_PREVIEW_LOCKED_LAYERS_MESSAGE = 'feature-match-overlay:locked-layers';
-
-function isEditorLayer(value: unknown): value is FeatureMatchLayoutEditorLayer {
-	if (typeof value !== 'object' || value === null)
-		return false;
-	const layer = value as Record<string, unknown>;
-	return (layer.type === 'source' || layer.type === 'item') && typeof layer.itemId === 'string';
-}
-
-/** The editor's locked layers, pushed into an embedded preview. */
-export function isFeatureMatchOverlayPreviewLockedLayersMessage(
-	message: MessageEnvelope,
-	expected: ExpectedSender,
-): message is MessageEnvelope & { data: { type: string; layers: FeatureMatchLayoutEditorLayer[] } } {
-	if (!isFromExpectedSender(message, expected))
-		return false;
-
-	const data = message.data as Record<string, unknown>;
-	return data.type === FEATURE_MATCH_OVERLAY_PREVIEW_LOCKED_LAYERS_MESSAGE
-		&& Array.isArray(data.layers)
-		&& data.layers.every(isEditorLayer);
-}
 
 /**
  * The working Feature Match Layout a validated push carries.
