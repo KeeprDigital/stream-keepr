@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Deck List settings groups its Mode Tokens may name (ADR-0071). */
+/** The Deck List settings groups its Mode Tokens may name (ADR-0072). */
 export type DeckSettingsGroup = 'header' | 'deck-details' | 'pointed-cards' | 'card-look' | 'quantity-badge' | 'points-badge';
 
 /**

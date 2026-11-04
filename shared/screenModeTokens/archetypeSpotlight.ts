@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Archetype Spotlight settings groups its Mode Tokens may name (ADR-0071). */
+/** The Archetype Spotlight settings groups its Mode Tokens may name (ADR-0072). */
 export type ArchetypeSpotlightSettingsGroup = 'header' | 'data' | 'top-cards' | 'pilots';
 
 /** How the Archetype Spotlight Screen Mode looks: its Mode Tokens, by name within the mode. */

@@ -189,7 +189,7 @@ Operator handlers: `matchResultsSynced` → `useMatchStore().applyRemoteMatchesR
 
 **Files:**
 
-- Modify: `server/db/schema.ts:91-104`; generate `server/db/migrations/sqlite/0007_melee_live_results.sql` via `pnpm db:generate`
+- Modify: `server/db/schema.ts:91-104`; generate the `melee_live_results` migration via `pnpm db:generate` (now a section of `0001_since_v1_5_0.sql`, #953)
 - Modify: `server/mappers/event.ts` (strip internal columns)
 - Modify: `server/modules/melee-sync/configuration.ts` (disabling sync clears Live Results)
 - Modify: `server/utils/meleeSyncState.ts` (`MeleeSyncCommandName` gains `'live-results'`; operator wait)
@@ -206,7 +206,7 @@ Operator handlers: `matchResultsSynced` → `useMatchStore().applyRemoteMatchesR
 
 - [ ] **Step 1: Failing tests:** enable with sync off → 400; enable → row state reset + `event:updated`; disable → enabled false, data untouched; turning Melee Sync off via config → `meleeLiveResultsEnabled` false; event GET response has no NextCheckAt/BackoffStep; lease: `live-results` lease released after 1 s → operator `acquireMeleeSyncLease(…,'update')` succeeds (fake clock); `live-results` held past 10 s → 409; another operator command held → immediate 409 (unchanged).
 - [ ] **Step 2:** Run. Expected: FAIL.
-- [ ] **Step 3:** Implement; `pnpm db:generate`, rename the file to `0007_melee_live_results.sql` and its journal entry.
+- [ ] **Step 3:** Implement; `pnpm db:generate`, naming it `melee_live_results`.
 - [ ] **Step 4:** Run `pnpm verify:quick`. Expected: PASS.
 - [ ] **Step 5:** Commit `feat(melee-sync): a Live Results setting beside Melee Sync`.
 

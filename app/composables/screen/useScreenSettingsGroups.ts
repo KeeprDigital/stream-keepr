@@ -3,7 +3,7 @@ import type { ComputedRef, EffectScope, InjectionKey } from 'vue';
 /**
  * The Screen Settings Groups whose Look is mounted on a Screen's settings
  * page, each rendering its Mode Tokens itself, so the residual Screen-wide
- * look leaves them out (ADR-0071). A group counts while any holder of it is
+ * look leaves them out (ADR-0072). A group counts while any holder of it is
  * on the page.
  */
 export interface ScreenSettingsGroups {

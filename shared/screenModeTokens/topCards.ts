@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Most Played Cards settings groups its Mode Tokens may name (ADR-0071). */
+/** The Most Played Cards settings groups its Mode Tokens may name (ADR-0072). */
 export type TopCardsSettingsGroup = 'header' | 'ranking-and-pages' | 'layout' | 'card-badges' | 'rank-badge' | 'stat-badge' | 'points-badge';
 
 /**

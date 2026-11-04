@@ -1,6 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
-/** The Round Clock settings groups its Mode Tokens may name (ADR-0071). */
+/** The Round Clock settings groups its Mode Tokens may name (ADR-0072). */
 export type RoundClockSettingsGroup = 'round-name' | 'clock';
 
 /** How the Round Clock Screen Mode looks: its Mode Tokens, by name within the mode. */

@@ -8,7 +8,7 @@ import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
  * The Background & Placement card a plain overlay mode gets on the Screen
  * configuration page: that mode's own `backgroundLayers` stack, then the
  * Screen inset and alignment its host places it by, as Screen Theme Overrides
- * (ADR-0051, ADR-0071). It starts closed unless it holds a layer or an override.
+ * (ADR-0051, ADR-0072). It starts closed unless it holds a layer or an override.
  *
  * `mode` is captured once at setup — the configuration composable binds to it —
  * so the owner remounts this component (keyed by mode) when the Screen's mode

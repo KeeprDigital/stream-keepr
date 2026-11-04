@@ -108,14 +108,14 @@ These values were checked against the formula. The 60-card row is capped at 12 c
 - Modify: `shared/screenModeConfigs/topCards.ts`: drop `dynamicCardSize`; add `cardSizing: editorField(z.enum(CARD_SIZING_VALUES), { label: 'Card sizing' })` and `autoColumns: editorField(z.boolean(), { label: 'Auto columns' })`; defaults `'fit'` / `false`; add `'dynamicCardSize'` to `formerFields`; update the contract doc comment.
 - Modify: `shared/screenModeConfigs/deck.ts`: `deckBoardLayoutShape(views)` builds the shape per board; the mainboard block takes `MAINBOARD_VIEW_VALUES` and the sideboard block takes `SIDEBOARD_VIEW_VALUES`; each block has `cardSizing` and `autoColumns` (optional, like its neighbours); defaults `'fixed'` / `false`; export `DECK_MAINBOARD_LAYOUT_FIELDS`, `DECK_SIDEBOARD_LAYOUT_FIELDS` in place of `DECK_BOARD_LAYOUT_FIELDS`; add `'dynamicCardSize'` to `FORMER_BOARD_LAYOUT_FIELDS`; `ResolvedDeckBoards.mainboard` / `.sideboard` get their own resolved types.
 - Modify: `shared/screenModeTokens/deck.ts`: delete `mainboard-stack-reveal`; reword the header comment.
-- Create: `server/db/migrations/sqlite/0014_card_sizing.sql` via `pnpm drizzle-kit generate --custom --name card_sizing` (journal and snapshot come with it).
+- Create: a `card_sizing` migration in `server/db/migrations/sqlite/` via `pnpm drizzle-kit generate --custom --name card_sizing` (journal and snapshot come with it).
 - Test: `test/unit/server/db/cardSizingMigration.sqlite.test.ts`; update `test/unit/server/schemas/screen.test.ts`, `formerModeConfigFields.test.ts`, `storedModeConfigClamp.test.ts`, `screenModeConfigContracts.test.ts` where they name the old fields.
 
 **Interfaces:**
 
 - Produces: `CardSizing`, `CARD_SIZING_VALUES`, `MainboardView`, `SideboardView`; `TopCardsModeConfig.cardSizing` / `.autoColumns`; `ResolvedDeckBoards['mainboard' | 'sideboard'].cardSizing` / `.autoColumns`; `DECK_MAINBOARD_LAYOUT_FIELDS`, `DECK_SIDEBOARD_LAYOUT_FIELDS`.
 
-**Migration SQL** (hand-written; follow `0008_event_canvas.sql` for the `json_valid` guard; the top-cards key must be quoted as `'$."top-cards"'`, see `0003_top_cut_screen_mode_key.sql`):
+**Migration SQL** (hand-written; follow the `event_canvas` section of `0001_since_v1_5_0.sql` for the `json_valid` guard; the top-cards key must be quoted as `'$."top-cards"'`, see its `top_cut_screen_mode_key` section):
 
 - `$."top-cards".dynamicCardSize` → `$."top-cards".cardSizing`: `true → 'fit'`, `false → 'fixed'`, removing the old key.
 - The same for `$.deck.mainboard.dynamicCardSize` and `$.deck.sideboard.dynamicCardSize`.
