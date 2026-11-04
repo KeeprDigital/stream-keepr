@@ -56,14 +56,6 @@ const scopeOptions = computed(() => {
 
 	return options;
 });
-
-const playerListOptions = computed(() => [
-	{ label: 'Select a list...', value: null },
-	...playerListStore.lists.map(list => ({
-		label: `${list.name} (${list.memberCount})`,
-		value: list.id,
-	})),
-]);
 </script>
 
 <template>
@@ -110,24 +102,12 @@ const playerListOptions = computed(() => [
 		/>
 	</UFormField>
 
-	<template v-if="config.scope === 'playerList'">
-		<UFormField
-			v-if="playerListStore.lists.length > 0"
-			label="Select list"
-			description="Include players from this list only."
-			class="flex max-sm:flex-col justify-between items-start gap-4"
-		>
-			<USelect
-				:model-value="config.playerListId ?? null"
-				:items="playerListOptions"
-				class="w-64"
-				@update:model-value="emit('update', { playerListId: $event ?? null })"
-			/>
-		</UFormField>
-		<div v-else class="text-sm text-muted text-center py-2">
-			No player lists available. Create one on the Players page.
-		</div>
-	</template>
+	<ScreenPlayerListField
+		v-if="config.scope === 'playerList'"
+		:model-value="config.playerListId"
+		description="Include players from this list only."
+		@update:model-value="emit('update', { playerListId: $event })"
+	/>
 
 	<UFormField
 		v-if="showArchetypeFilter && fields.archetypeFilter"

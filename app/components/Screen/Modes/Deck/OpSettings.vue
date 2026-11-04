@@ -9,6 +9,7 @@ import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
 import { CARD_SIZING_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { BADGE_DISABLED_POINTS } from '~/utils/cardBadges';
 import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSession';
 
 /**
@@ -30,7 +31,6 @@ const featureMatchStateStore = useFeatureMatchStateStore();
 
 const fields = screenModeConfigContract('deck').fields;
 const layoutFields = DECK_MAINBOARD_LAYOUT_FIELDS;
-const BADGE_DISABLED_POINTS: readonly NinePoint[] = ['center'];
 
 const slotOptions = useFeatureMatchMenuItems();
 const sideOptions: { label: string; value: PlayerSide }[] = [

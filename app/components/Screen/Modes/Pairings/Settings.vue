@@ -81,28 +81,13 @@ onMounted(async () => {
 			</UFormField>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard title="Header">
-			<ScreenSettingsToggle
-				:label="fields.showHeader.label"
-				description="Show the round name above the pairings."
-				:model-value="config.showHeader"
-				@update:model-value="updateConfig({ showHeader: $event })"
-			/>
-
-			<UFormField
-				v-if="config.showHeader"
-				:label="fields.headerText.label"
-				description="Leave empty for the round's name and pairings."
-				class="flex max-sm:flex-col justify-between items-start gap-4"
-			>
-				<UInput
-					:model-value="config.headerText ?? ''"
-					placeholder="Auto"
-					class="w-64"
-					@update:model-value="updateConfig({ headerText: $event || null })"
-				/>
-			</UFormField>
-		</ScreenSettingsCard>
+		<ScreenHeaderSettingsCard
+			:config="config"
+			:fields="fields"
+			show-description="Show the round name above the pairings."
+			auto-description="Leave empty for the round's name and pairings."
+			@update="updateConfig($event)"
+		/>
 
 		<ScreenPaginationSettingsCard
 			:rotation="rotation"

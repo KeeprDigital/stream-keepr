@@ -170,17 +170,6 @@ describe('screenMetagameScopeFields', () => {
 		]);
 	});
 
-	it('says there is no list to pick while the Event has none', () => {
-		mockPlayerListStore.lists = [];
-		const wrapper = mountFields({
-			config: { ...baseConfig, scope: 'playerList' },
-			fields: metagameFields,
-		});
-
-		expect(field(wrapper, 'Select list')).toBeUndefined();
-		expect(wrapper.text()).toContain('No player lists available');
-	});
-
 	it('edits the archetype filter where offered, and clears it as a deletion', () => {
 		const wrapper = mountFields({ config: baseConfig, fields: topCardsFields });
 		const filter = field(wrapper, 'Archetype filter')!.getComponent(UInputStub);
