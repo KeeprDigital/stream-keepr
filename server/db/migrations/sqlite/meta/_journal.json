@@ -127,6 +127,13 @@
       "when": 1793755359626,
       "tag": "0020_archetype_chart_series",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1793757869261,
+      "tag": "0021_talent_photo",
+      "breakpoints": true
     }
   ]
 }

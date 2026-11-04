@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { SocialProfiles, SupportedSocialNetwork } from '~~/shared/socialProfiles';
+import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { Talent, UpdateTalentInput } from '~/types';
 import {
 	normalizeSocialProfileInput,
@@ -13,11 +14,24 @@ import { LazyUIConfirmDeleteModal } from '#components';
 interface TalentEditorValue {
 	name: string;
 	socialProfiles: Record<SupportedSocialNetwork, string>;
+	/** One exact image revision from the Graphics Asset Library, or none (ADR-0067). */
+	photo: GraphicAssetReference | null;
 }
 
 const props = defineProps<{
 	talents: Talent[];
+	/** The Event whose adopted assets the photo picker offers first. */
+	eventId: number;
 }>();
+
+/** The exact revision's bytes: the thumbnail shows what the Talent holds, not the asset's latest. */
+function photoSource(photo: GraphicAssetReference) {
+	return `/api/graphics-assets/${encodeURIComponent(photo.assetId)}/revisions/${encodeURIComponent(photo.revisionId)}/content`;
+}
+
+function samePhoto(a: GraphicAssetReference | null, b: GraphicAssetReference | null) {
+	return a?.assetId === b?.assetId && a?.revisionId === b?.revisionId;
+}
 
 const eventStore = useEventStore();
 const overlay = useOverlay();
@@ -33,13 +47,20 @@ const editingValue = ref<TalentEditorValue | null>(null);
 const editingErrors = ref<Partial<Record<'name' | SupportedSocialNetwork, string>>>({});
 const saving = ref(false);
 
-function editorValue(talent?: Pick<Talent, 'name' | 'socialProfiles'>): TalentEditorValue {
+function editorValue(talent?: Pick<Talent, 'name' | 'socialProfiles' | 'photo'>): TalentEditorValue {
 	return {
 		name: talent?.name ?? '',
 		socialProfiles: Object.fromEntries(
 			SUPPORTED_SOCIAL_NETWORKS.map(network => [network.key, talent?.socialProfiles[network.key] ?? '']),
 		) as Record<SupportedSocialNetwork, string>,
+		photo: talent?.photo ?? null,
 	};
+}
+
+/** The picker's choice, or its Clear. */
+function choosePhoto(photo: GraphicAssetReference | undefined) {
+	if (editingValue.value)
+		editingValue.value.photo = photo ?? null;
 }
 
 function openEditor(talent?: Talent) {
@@ -111,6 +132,9 @@ function editedFields(current: Talent, opened: TalentEditorValue, value: TalentE
 	if (SUPPORTED_SOCIAL_NETWORK_KEYS.some(network => socialProfiles[network] !== current.socialProfiles[network]))
 		update.socialProfiles = socialProfiles;
 
+	if (!samePhoto(value.photo, opened.photo) && !samePhoto(value.photo, current.photo))
+		update.photo = value.photo;
+
 	return update;
 }
 
@@ -137,7 +161,9 @@ async function saveTalentEdit() {
 		const saved = await runRequest(
 			() => current && update
 				? eventStore.updateTalent(current.id, update)
-				: eventStore.addTalent(parsed),
+				: eventStore.addTalent(value.photo
+						? { ...parsed, photo: value.photo }
+						: parsed),
 			{
 				error: failure => ({
 					title: 'Talent not saved',
@@ -205,6 +231,18 @@ function getDropdownItems(talent: Talent): DropdownMenuItem[] {
 				:key="talent.id"
 				class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
 			>
+				<div
+					class="size-10 shrink-0 overflow-hidden rounded-full bg-elevated flex items-center justify-center"
+					:data-talent-photo="talent.photo?.revisionId ?? 'none'"
+				>
+					<img
+						v-if="talent.photo"
+						:src="photoSource(talent.photo)"
+						:alt="`${talent.name} photo`"
+						class="size-full object-cover"
+					>
+					<UIcon v-else name="i-lucide-user" class="text-muted" />
+				</div>
 				<div class="text-sm min-w-0 flex-1">
 					<p class="text-highlighted truncate font-medium">
 						{{ talent.name }}
@@ -248,7 +286,7 @@ function getDropdownItems(talent: Talent): DropdownMenuItem[] {
 		:open="editorOpen"
 		:dismissible="false"
 		:title="editingTalentId === null ? 'Add Talent' : 'Edit Talent'"
-		description="Manage the Talent name and optional Social Profiles."
+		description="Manage the Talent name, optional photo and Social Profiles."
 		:close="{ onClick: cancelTalentEdit }"
 	>
 		<template #body>
@@ -260,6 +298,24 @@ function getDropdownItems(talent: Talent): DropdownMenuItem[] {
 			>
 				<UFormField label="Name" name="name" :error="editingErrors.name">
 					<UInput v-model="editingValue.name" autofocus class="w-full" />
+				</UFormField>
+
+				<UFormField label="Photo" name="photo">
+					<div class="flex items-start gap-3">
+						<img
+							v-if="editingValue.photo"
+							:src="photoSource(editingValue.photo)"
+							alt="Talent photo"
+							class="size-16 shrink-0 rounded-md object-cover bg-elevated"
+						>
+						<GraphicsAssetFocusPicker
+							:model-value="editingValue.photo ?? undefined"
+							:event-id="eventId"
+							field-label="Talent photo"
+							asset-kind="image"
+							@update:model-value="choosePhoto"
+						/>
+					</div>
 				</UFormField>
 
 				<UFormField

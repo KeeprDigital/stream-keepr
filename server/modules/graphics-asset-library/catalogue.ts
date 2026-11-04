@@ -22,7 +22,12 @@ import type { TemplatePackagePreflightState } from './template-package-preflight
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
-import { GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS, SCREEN_THEME_OVERRIDE_SLOT_PREFIX, THEME_REFERENCE_OWNER_KIND } from '~~/shared/utils/graphicsAssetReferences';
+import {
+	GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS,
+	SCREEN_THEME_OVERRIDE_SLOT_PREFIX,
+	TALENT_REFERENCE_OWNER_KIND,
+	THEME_REFERENCE_OWNER_KIND,
+} from '~~/shared/utils/graphicsAssetReferences';
 import { GRAPHICS_RETENTION_GUARANTEES } from '~~/shared/utils/graphicsAssetRetention';
 import { createD1GraphicsOperationsCockpitCatalogue } from './catalogue-cockpit';
 import { createD1GraphicsAssetReconciliationCatalogue } from './catalogue-reconciliation';
@@ -117,6 +122,7 @@ interface UsageRow {
 	owner_slot: string;
 	event_id: number | null;
 	owner_name: string | null;
+	event_name: string | null;
 }
 
 function parseJson<T>(value: string | null): T | undefined {
@@ -237,6 +243,7 @@ function usageFromRow(row: UsageRow): GraphicAssetUsage {
 			name: row.owner_name ?? undefined,
 			slot: row.owner_slot,
 			eventId: row.event_id ?? undefined,
+			eventName: row.event_name ?? undefined,
 		},
 	};
 }
@@ -251,11 +258,12 @@ const TEMPLATE_OWNER_KIND_LIST = GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS
 
 /**
  * The references that hold Retire back, about the row aliased
- * `asset_reference`: a saved template's (ADR-0034), a Theme's, and a Screen
- * Theme Override's (ADR-0050). A Screen's own mode references do not.
+ * `asset_reference`: a saved template's (ADR-0034), a Theme's, a Screen
+ * Theme Override's (ADR-0050), and a Talent's photo (ADR-0067). A Screen's
+ * own mode references do not.
  */
 const RETIRE_BLOCKING_REFERENCE = `(
-	asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST}, '${THEME_REFERENCE_OWNER_KIND}')
+	asset_reference.owner_kind IN (${TEMPLATE_OWNER_KIND_LIST}, '${THEME_REFERENCE_OWNER_KIND}', '${TALENT_REFERENCE_OWNER_KIND}')
 	OR (asset_reference.owner_kind = 'screen' AND asset_reference.owner_slot LIKE '${SCREEN_THEME_OVERRIDE_SLOT_PREFIX}%')
 )`;
 
@@ -276,8 +284,11 @@ function usageSelect(options: { retireBlockingOnly?: boolean } = {}) {
 				WHEN asset_reference.owner_kind = 'feature-match-layout-template'
 					THEN feature_match_layout_template.name
 				WHEN asset_reference.owner_kind = '${THEME_REFERENCE_OWNER_KIND}' THEN theme.name
+				WHEN asset_reference.owner_kind = '${TALENT_REFERENCE_OWNER_KIND}' THEN talent.name
 				ELSE NULL
-			END AS owner_name
+			END AS owner_name,
+			-- A Talent is named with its Event (ADR-0067).
+			talent_event.name AS event_name
 		FROM graphic_asset_references asset_reference
 		LEFT JOIN screens
 			ON asset_reference.owner_kind = 'screen'
@@ -295,6 +306,11 @@ function usageSelect(options: { retireBlockingOnly?: boolean } = {}) {
 		LEFT JOIN themes theme
 			ON asset_reference.owner_kind = '${THEME_REFERENCE_OWNER_KIND}'
 			AND theme.id = asset_reference.owner_id
+		LEFT JOIN event_talents talent
+			ON asset_reference.owner_kind = '${TALENT_REFERENCE_OWNER_KIND}'
+			AND CAST(talent.id AS TEXT) = asset_reference.owner_id
+			AND talent.event_id = asset_reference.event_id
+		LEFT JOIN events talent_event ON talent_event.id = talent.event_id
 		WHERE asset_reference.asset_id = ?
 			${options.retireBlockingOnly
 				? `AND ${RETIRE_BLOCKING_REFERENCE}`

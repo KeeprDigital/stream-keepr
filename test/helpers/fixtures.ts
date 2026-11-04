@@ -118,6 +118,8 @@ export function createMockTalent(overrides?: Partial<DbEventTalent>): DbEventTal
 		instagramHandle: null,
 		tiktokHandle: null,
 		blueskyHandle: null,
+		photo: null,
+		graphicAssetReferenceVersion: null,
 		...defaultTimestamps(overrides),
 		...overrides,
 	};

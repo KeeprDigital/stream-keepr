@@ -69,6 +69,10 @@ const { playerListWriteModule } = await import('~~/server/modules/player-list-wr
 const { featureMatchSessionModule } = await import('~~/server/modules/feature-match-session');
 
 const origin = 'origin-1';
+/** A write naming no photo never asks the library. */
+function noLibrary(): never {
+	throw new Error('The library was asked about a write naming no photo');
+}
 const matchInput = { roundId: 2, player1Id: 3, player2Id: 4 } as never;
 
 beforeEach(() => {
@@ -130,6 +134,7 @@ describe('a write to an entity the Event does not hold', () => {
 				talentId: 9,
 				input: {},
 				originConnectionId: origin,
+				graphicsAssets: noLibrary,
 			}),
 		],
 		[
@@ -318,7 +323,12 @@ describe('a committed write', () => {
 		[
 			'creating a Talent',
 			'talentCreated',
-			() => talentWriteModule().createTalent({ eventId: 1, input: {} as never, originConnectionId: origin }),
+			() => talentWriteModule().createTalent({
+				eventId: 1,
+				input: {} as never,
+				originConnectionId: origin,
+				graphicsAssets: noLibrary,
+			}),
 		],
 		[
 			'updating a Talent',
@@ -328,6 +338,7 @@ describe('a committed write', () => {
 				talentId: 9,
 				input: {},
 				originConnectionId: origin,
+				graphicsAssets: noLibrary,
 			}),
 		],
 		[
