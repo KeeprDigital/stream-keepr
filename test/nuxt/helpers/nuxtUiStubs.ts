@@ -587,21 +587,6 @@ export const nuxtUiStubs = {
 	UTooltip: UTooltipStub,
 };
 
-/**
- * Nuxt UI's colour area, as an `<input type="color">`. Kept out of `nuxtUiStubs`,
- * which suites rendering the real picker spread: pass `{ ...nuxtUiStubs, UColorPicker: UColorPickerStub }`.
- */
-export const UColorPickerStub = defineComponent({
-	name: 'UColorPicker',
-	inheritAttrs: false,
-	props: {
-		...presentation,
-		modelValue: { type: String, required: false },
-	},
-	emits: ['update:modelValue'],
-	template: '<input v-bind="$attrs" type="color" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
-});
-
 interface NavigationItemLike {
 	label?: string;
 	to?: string;
