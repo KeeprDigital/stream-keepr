@@ -73,6 +73,7 @@ import type { GraphicsOperationalQueuesCatalogue } from './operational-queues';
 import type { GraphicsOperationsCockpitCatalogue } from './operations-cockpit';
 import type {
 	GraphicsAssetReconciliationCatalogue,
+	GraphicsObservedDisagreementCatalogue,
 	GraphicsReconciliationMedia,
 	RegenerateGraphicsDerivativeOutcome,
 	VerifyGraphicsContentBytesOutcome,
@@ -139,6 +140,7 @@ import {
 	sha256HexStream,
 } from './png';
 import {
+	createGraphicsDisagreementReporter,
 	createGraphicsReconciliation,
 	reconciliationWorkingCopyIdentity,
 	reconciliationWorkingCopyOperationId,
@@ -1608,12 +1610,15 @@ export function createGraphicsAssetLibrary(
 			| { digest: string },
 	) {
 		try {
-			const reconciliation = findReconciliation();
-			if (!reconciliation)
+			const catalogue = requireCatalogue();
+			if (!('findExpectedContent' in catalogue))
 				return;
-			await ('digest' in input
-				? reconciliation.reconcileObservedDigest(input)
-				: reconciliation.reconcileObservedContent(input));
+			await createGraphicsDisagreementReporter({
+				catalogue: catalogue as GraphicsAssetCatalogue & GraphicsObservedDisagreementCatalogue,
+				canonical: requireCanonical(),
+				now,
+				generateIdentity,
+			})(input);
 		}
 		catch {
 			// The scheduled pass re-observes the same disagreement, so a failure to
