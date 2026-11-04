@@ -119,7 +119,6 @@ import {
 	createGraphicsAssetDelivery,
 	observeCanonicalContent,
 	readCanonicalContent,
-	requireCanonicalStore,
 } from './delivery';
 import { GraphicsAssetLibraryError } from './errors';
 import { processStaticFont } from './font';
@@ -1193,7 +1192,9 @@ export function createGraphicsAssetLibrary(
 	}
 
 	function requireCanonical(): GraphicsCanonicalObjectStore {
-		return requireCanonicalStore(dependencies.canonical);
+		if (!('createImmutable' in dependencies.canonical))
+			throw new GraphicsAssetLibraryError('Graphics Asset canonical byte store is unavailable', 'graphics-asset-library-unavailable');
+		return dependencies.canonical;
 	}
 
 	function requireTemplatePayloads(): TemplatePackagePayloads {

@@ -1,10 +1,3 @@
-import type {
-	GraphicAsset,
-	GraphicAssetCanonicalMime,
-	GraphicAssetId,
-	GraphicAssetReferenceStatus,
-	GraphicAssetRevisionId,
-} from '~~/shared/types/graphicsAsset';
 /**
  * Graphics Asset delivery: answering whether an exact Graphic Asset Revision,
  * or an asset's preview, can be served now, and serving its bytes.
@@ -18,6 +11,14 @@ import type {
  * - A contradiction the store answered with is reported for Graphics
  *   Reconciliation, and the report never changes or fails the read.
  */
+
+import type {
+	GraphicAsset,
+	GraphicAssetCanonicalMime,
+	GraphicAssetId,
+	GraphicAssetReferenceStatus,
+	GraphicAssetRevisionId,
+} from '~~/shared/types/graphicsAsset';
 import type { GraphicsAssetCatalogueHealth } from '.';
 import type {
 	GraphicsCanonicalObjectStore,
@@ -41,7 +42,11 @@ export interface GraphicsRevisionContent {
 	facts: GraphicAsset['facts'];
 }
 
-/** The catalogue reads delivery needs, and nothing else. */
+/**
+ * The catalogue reads delivery needs. `findRevisionContent` answers the
+ * metadata snapshot a Template Package also reads, so its shape is wider than
+ * delivery itself uses.
+ */
 export interface GraphicsAssetDeliveryCatalogue {
 	findRevisionContent: (input: {
 		assetId: GraphicAssetId;
@@ -139,9 +144,9 @@ export interface GraphicsAssetDelivery {
 }
 
 export interface GraphicsAssetDeliveryDependencies {
-	/** Anything short of the delivery reads answers every read as unavailable. */
+	/** Anything short of the delivery reads refuses every read with `graphics-asset-library-unavailable`. */
 	catalogue: GraphicsAssetCatalogueHealth | GraphicsAssetDeliveryCatalogue;
-	/** Anything short of a canonical store answers every byte read as unavailable. */
+	/** Anything short of a canonical store refuses every byte read with `graphics-asset-library-unavailable`. */
 	canonical: GraphicsObjectStoreHealth | GraphicsCanonicalObjectStore;
 	/**
 	 * Told of each contradiction a read observed, before the read answers. A
@@ -151,14 +156,6 @@ export interface GraphicsAssetDeliveryDependencies {
 }
 
 type CanonicalContentFacts = Pick<GraphicsRevisionContent, 'digest' | 'byteLength' | 'canonicalMime'>;
-
-export function requireCanonicalStore(
-	canonical: GraphicsObjectStoreHealth | GraphicsCanonicalObjectStore,
-): GraphicsCanonicalObjectStore {
-	if (!('createImmutable' in canonical))
-		throw new GraphicsAssetLibraryError('Graphics Asset canonical byte store is unavailable', 'graphics-asset-library-unavailable');
-	return canonical;
-}
 
 /**
  * Canonical bytes are only usable when the store agrees with the catalogue in
@@ -251,7 +248,9 @@ export function createGraphicsAssetDelivery(
 	}
 
 	function requireCanonical(): GraphicsCanonicalObjectStore {
-		return requireCanonicalStore(dependencies.canonical);
+		if (!('createImmutable' in dependencies.canonical))
+			throw new GraphicsAssetLibraryError('Graphics Asset canonical byte store is unavailable', 'graphics-asset-library-unavailable');
+		return dependencies.canonical;
 	}
 
 	/**

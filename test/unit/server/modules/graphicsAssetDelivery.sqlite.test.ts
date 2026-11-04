@@ -1,15 +1,16 @@
+import type { GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
 import type {
 	GraphicsAssetDelivery,
-	GraphicsAssetDeliveryCatalogue,
 	GraphicsCanonicalDisagreement,
 } from '~~/server/modules/graphics-asset-library/delivery';
+import type { InMemoryGraphicsCanonicalObjectStore } from '~~/server/modules/graphics-asset-library/object-store';
 import type { GraphicAssetId, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInMemoryGraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import { createGraphicsAssetDelivery } from '~~/server/modules/graphics-asset-library/delivery';
-import { createInMemoryCanonicalGraphicsObjectStore } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
+import { createBoundedByteStream } from '~~/server/modules/graphics-asset-library/object-store';
 import { digestOf, pixelPng } from '~~/test/helpers/graphicsFixtures';
 import {
 	canonicalIdentity,
@@ -31,7 +32,7 @@ afterEach(async () => {
 
 // Delivery's contract holds over both catalogue adapters: their delivery
 // reads truly match, so one table runs against each.
-const CATALOGUES: [string, () => GraphicsAssetDeliveryCatalogue & Parameters<typeof createTestGraphicsLibrary>[0]['catalogue']][] = [
+const CATALOGUES: [string, () => GraphicsAssetCatalogue][] = [
 	[
 		'the in-memory catalogue',
 		() => createInMemoryGraphicsAssetCatalogue(),
@@ -43,6 +44,30 @@ const CATALOGUES: [string, () => GraphicsAssetDeliveryCatalogue & Parameters<typ
 ];
 
 const missingRevision = 'missing-revision' as GraphicAssetRevisionId;
+
+/** The object's own bytes stored again without the digest metadata publication wrote beside them. */
+async function stripDigestMetadata(canonical: InMemoryGraphicsCanonicalObjectStore, digest: string) {
+	const identity = canonicalIdentity(digest);
+	const stored = await canonical.read(identity);
+	if (stored.outcome !== 'available')
+		throw new Error('Expected the stored object to be readable');
+	const bytes = new Uint8Array(await new Response(stored.body).arrayBuffer());
+	await canonical.delete(identity);
+	await canonical.createImmutable({
+		identity,
+		bytes: createBoundedByteStream(bytes, { byteLength: bytes.byteLength, maximumByteLength: bytes.byteLength }),
+		metadata: { contentType: stored.object.contentType },
+	});
+}
+
+/** Ways the byte store answers while contradicting what the catalogue recorded. */
+const CONTRADICTIONS: [string, (canonical: InMemoryGraphicsCanonicalObjectStore, digest: string) => Promise<unknown>][] = [
+	[
+		'holds no object',
+		async (canonical, digest) => await canonical.delete(canonicalIdentity(digest)),
+	],
+	['holds the bytes without their digest metadata', stripDigestMetadata],
+];
 
 /** One published PNG, and a delivery built over only its catalogue and canonical store. */
 async function publishedForDelivery(catalogueFactory: (typeof CATALOGUES)[number][1]) {
@@ -127,6 +152,19 @@ describe.each(CATALOGUES)('delivery over %s', (_name, catalogueFactory) => {
 			.toEqual({ outcome: 'available', lifecycleState: 'active', kind: 'image' });
 	});
 
+	it('serves exactly the byte range asked for', async () => {
+		const { delivery, reference } = await publishedForDelivery(catalogueFactory);
+
+		const resolved = await delivery.resolveGraphicAssetRevision({
+			...reference,
+			range: { offset: 24, length: 8 },
+		});
+		expect(resolved).toMatchObject({ outcome: 'available', byteLength: pixelPng.byteLength });
+		if (resolved.outcome !== 'available')
+			throw new Error('Expected the ranged revision to resolve');
+		expect(new Uint8Array(await new Response(resolved.body).arrayBuffer())).toEqual(pixelPng.slice(24, 32));
+	});
+
 	it.each([
 		[
 			'resolving a revision',
@@ -165,15 +203,42 @@ describe.each(CATALOGUES)('delivery over %s', (_name, catalogueFactory) => {
 		expect(await delivery.inspectGraphicAssetRevisions({ references: [] })).toEqual([]);
 	});
 
-	// Readers feed Graphics Reconciliation every contradiction they observe.
-	it.each(READS)('reports what it saw, and answers unavailable, when the byte store contradicts the catalogue on %s', async (_read, read, disagreement, digest) => {
+	// Readers share reconciliation's definition of agreement, and feed it every
+	// contradiction they observe.
+	it.each(CONTRADICTIONS.flatMap(([contradiction, contradict]) =>
+		READS.map(([read, ...rest]) => [
+			read,
+			contradiction,
+			contradict,
+			...rest,
+		] as const),
+	))('answers unavailable on %s, and reports it, when the byte store %s', async (_read, _contradiction, contradict, read, disagreement, digest) => {
 		const published = await publishedForDelivery(catalogueFactory);
-		await published.canonical.delete(canonicalIdentity(digest(published)));
+		await contradict(published.canonical, digest(published));
 
 		expect(await read(published)).toEqual({ outcome: 'unavailable', retryable: true });
 		expect(published.reported).toEqual([
 			disagreement(published),
 		]);
+	});
+
+	// #374: revisions sharing content share one canonical object.
+	it('observes each distinct content once in a set-wise inspection', async () => {
+		const catalogue = catalogueFactory();
+		const context = createTestGraphicsLibrary({ catalogue });
+		const first = publishedRevision(await ingestImage(context, { idempotencyKey: 'first' }));
+		const twin = publishedRevision(await ingestImage(context, { idempotencyKey: 'twin' }));
+		const readMetadata = vi.fn(context.canonical.readMetadata);
+		const delivery = createGraphicsAssetDelivery({
+			catalogue,
+			canonical: { ...context.canonical, readMetadata },
+		});
+
+		expect(await delivery.inspectGraphicAssetRevisions({
+			references: [first, twin, first],
+		}))
+			.toEqual(Array.from({ length: 3 }, () => ({ outcome: 'available', lifecycleState: 'active', kind: 'image' })));
+		expect(readMetadata).toHaveBeenCalledTimes(1);
 	});
 
 	// A store that could not answer proves nothing about the object.
@@ -210,21 +275,19 @@ describe('delivery and its collaborators', () => {
 	it.each([
 		[
 			'catalogue',
-			(_catalogue: GraphicsAssetDeliveryCatalogue) => createGraphicsAssetDelivery({
-				catalogue: healthOnly,
-				canonical: createInMemoryCanonicalGraphicsObjectStore(),
-			}),
+			{ catalogue: healthOnly },
 		],
 		[
 			'canonical byte store',
-			(catalogue: GraphicsAssetDeliveryCatalogue) => createGraphicsAssetDelivery({ catalogue, canonical: healthOnly }),
+			{ canonical: healthOnly },
 		],
-	])('is built without a usable %s, and answers retryably unavailable when read', async (_missing, build) => {
+	])('is built without a usable %s, and refuses a read as the library being unavailable', async (_missing, unusable) => {
 		const catalogue = createInMemoryGraphicsAssetCatalogue();
 		const context = createTestGraphicsLibrary({ catalogue });
 		const reference = publishedRevision(await ingestImage(context, { idempotencyKey: 'delivered' }));
+		const delivery = createGraphicsAssetDelivery({ catalogue, canonical: context.canonical, ...unusable });
 
-		await expect(build(catalogue).resolveGraphicAssetRevision(reference)).rejects.toMatchObject({
+		await expect(delivery.resolveGraphicAssetRevision(reference)).rejects.toMatchObject({
 			code: 'graphics-asset-library-unavailable',
 		});
 	});
