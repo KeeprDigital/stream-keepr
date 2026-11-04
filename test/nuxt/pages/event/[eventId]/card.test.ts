@@ -175,6 +175,10 @@ async function openCardsPage(query: Record<string, string> = {}) {
 				MtgCardDeckList: true,
 				MtgCardPlayerDeck: true,
 				MtgCardControls: true,
+				OpCardSearch: true,
+				OpCardList: true,
+				OpCardControls: true,
+				OpUnresolvedDeckCards: true,
 			},
 		},
 	});
@@ -252,5 +256,25 @@ describe('cards page matchup Deck Lists', () => {
 		expect(shownDecks()).toEqual(['Mallory', 'Bob']);
 		expect(pickedMatchId(wrapper)).toBe(9);
 		await vi.waitFor(() => expect(useRoute().query).toEqual({ mode: 'match-decklist', roundId: '4', matchId: '9' }));
+	});
+});
+
+describe('cards page by Card Game', () => {
+	afterEach(() => {
+		eventStore.event.game = 'mtg';
+	});
+
+	// An OP Event's Cards page lists its Unresolved Deck Cards (ADR-0074); Magic's Card Spotlight modes stay Magic's.
+	it.each([
+		['op', true, false],
+		['mtg', false, true],
+	])('on a %s Event, lists Unresolved Deck Cards: %s, offers the Deck List modes: %s', async (game, listsUnresolved, offersModes) => {
+		eventStore.event.game = game;
+
+		const wrapper = await openCardsPage();
+
+		expect(wrapper.findComponent({ name: 'OpUnresolvedDeckCards' }).exists()).toBe(listsUnresolved);
+		expect(wrapper.findComponent({ name: 'MtgCardModeToggle' }).exists()).toBe(offersModes);
+		wrapper.unmount();
 	});
 });

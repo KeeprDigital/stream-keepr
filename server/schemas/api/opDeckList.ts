@@ -6,3 +6,8 @@ export const writeOpPlayerDeckListSchema = z.object({
 	text: z.string().max(20_000),
 	leaderNumber: opCardNumberSchema.nullable().optional(),
 }).strict();
+
+/** The card an Unresolved Deck Card is resolved to, picked from a bandai-keepr search. */
+export const resolveOpUnresolvedDeckCardSchema = z.object({
+	cardNumber: opCardNumberSchema,
+}).strict();
