@@ -2189,7 +2189,7 @@ Accepted · 2026-11-04 · [#782](https://github.com/KeeprDigital/stream-keepr/is
 
 **It is offered to Events of every Card Game.** It needs no results and no Deck Lists, so ADR-0057 does not exclude it.
 
-**A Talent holds a free-text role** (`event_talents.role`, migration 0019), at most 100 characters, trimmed, blank stored as none. It is edited with the Talent, carried on `talent:created` and `talent:updated`, and shown on the Screen while `showRole` is on (T5 b).
+**A Talent holds a free-text role** (`event_talents.role`, migration 0024), at most 100 characters, trimmed, blank stored as none. It is edited with the Talent, carried on `talent:created` and `talent:updated`, and shown on the Screen while `showRole` is on (T5 b).
 
 ### Why
 
