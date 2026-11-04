@@ -187,6 +187,37 @@ describe('screenModesPairingsSettings', () => {
 		]);
 	});
 
+	it.each([
+		{
+			name: 'turns the header off',
+			field: 'showHeader',
+			control: 'ScreenSettingsToggle',
+			value: false,
+			patch: { showHeader: false },
+		},
+		{
+			name: 'sets the custom header',
+			field: 'headerText',
+			control: 'UInput',
+			value: 'Top 8',
+			patch: { headerText: 'Top 8' },
+		},
+		{
+			name: 'clears the custom header as a deletion',
+			field: 'headerText',
+			control: 'UInput',
+			value: '',
+			patch: { headerText: null },
+		},
+	])('$name through its contract field', async ({ field, control, value, patch }) => {
+		mockFetch.mockResolvedValue(pairingsOf(1));
+		const wrapper = await mountSettings();
+		const configField = wrapper.findAllComponents({ name: 'ScreenConfigField' }).find(found => found.attributes('data-config-field') === field)!;
+		configField.findComponent({ name: control }).vm.$emit('update:modelValue', value);
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
+	});
+
 	it('counts pages from the pairings the Screen reads for the Round', async () => {
 		mockFetch.mockResolvedValue(pairingsOf(10));
 

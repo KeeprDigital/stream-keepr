@@ -274,6 +274,8 @@ function controlStub(kind: ControlKind, next: (props: Record<string, any>) => un
 				'data-guard-control': kind,
 				'data-label': props.label ?? fieldLabel(),
 				'data-aria-label': attrs['aria-label'] as string | undefined,
+				// A toggle rendered by `ScreenConfigField` carries its field's key on itself.
+				'data-config-field': attrs['data-config-field'] as string | undefined,
 				'data-min': props.min,
 				'data-max': props.max,
 				'data-step': props.step,
@@ -414,6 +416,13 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 			const wrapper = await mountEditor(entry.editor);
 			const count = wrapper.findAll('[data-guard-control]').length;
 
+			// A declared field rendered by `ScreenConfigField` is found by its key.
+			const editorKeys = new Set([
+				...fields.keys(),
+			].map(path => path.split('.').at(-1)));
+			for (const declared of wrapper.findAll('[data-config-field]').map(found => found.attributes('data-config-field')!))
+				expect(editorKeys.has(declared), `${mode} editor renders "${declared}", which is no editor field of its contract`).toBe(true);
+
 			for (let index = 0; index < count; index++) {
 				config.value = structuredClone(initial);
 				await nextTick();
@@ -436,6 +445,9 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 				const field = fields.get(key);
 				const where = `${mode} editor control writing ${key}`;
 				expect(field, `${where}: its contract field carries no editor metadata`).toBeDefined();
+				const declared = (control.element as HTMLElement).closest('[data-config-field]')?.getAttribute('data-config-field');
+				if (declared)
+					expect(declared, `${where}: rendered as another field`).toBe(path.at(-1));
 				const { guardControl, label, ariaLabel, min, max, step, values } = (control.element as HTMLElement).dataset;
 				expect(guardControl, `${where}: control kind`).toBe(field!.control);
 				// Labelled by its field, visibly or, inside a group of controls, by its accessible name.

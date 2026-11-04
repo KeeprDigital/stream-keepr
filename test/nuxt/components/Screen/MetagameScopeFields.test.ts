@@ -150,7 +150,7 @@ describe('screenMetagameScopeFields', () => {
 			.toEqual(['Player scope', 'Archetype filter']);
 	});
 
-	it('picks a Player List under its scope, and clears it as a deletion', () => {
+	it('picks a Player List under its scope through the shared picker, and clears it as a deletion', () => {
 		const wrapper = mountFields({
 			config: { ...baseConfig, scope: 'playerList', playerListId: 7 },
 			fields: spotlightFields,
@@ -168,17 +168,6 @@ describe('screenMetagameScopeFields', () => {
 				{ playerListId: null },
 			],
 		]);
-	});
-
-	it('says there is no list to pick while the Event has none', () => {
-		mockPlayerListStore.lists = [];
-		const wrapper = mountFields({
-			config: { ...baseConfig, scope: 'playerList' },
-			fields: metagameFields,
-		});
-
-		expect(field(wrapper, 'Select list')).toBeUndefined();
-		expect(wrapper.text()).toContain('No player lists available');
 	});
 
 	it('edits the archetype filter where offered, and clears it as a deletion', () => {

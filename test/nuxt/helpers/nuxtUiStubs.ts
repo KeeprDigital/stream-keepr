@@ -284,6 +284,26 @@ interface StandardSchema {
 }
 
 /**
+ * As `UFormFieldStub`, but its label sits beside the control rather than wrapping it, as
+ * Nuxt UI's does. Use it for a control that is a group of buttons (chips, a nine-point
+ * picker): a wrapping `<label>` forwards every click inside it to its first button.
+ * Kept out of `nuxtUiStubs`: spread `{ ...nuxtUiStubs, UFormField: UFormFieldBesideStub }`.
+ */
+export const UFormFieldBesideStub = defineComponent({
+	name: 'UFormField',
+	props: {
+		...presentation,
+		label: { type: String, required: false },
+		description: { type: String, required: false },
+	},
+	template: `<div>
+		<span>{{ label }}</span>
+		<slot />
+		<p v-if="description">{{ description }}</p>
+	</div>`,
+});
+
+/**
  * `<form>` that, like `UForm`, validates `state` against a Standard Schema
  * `schema` on submit: `@submit` gets `{ data }` (the parsed output), or
  * `@error` gets `{ errors: [{ name, message }] }`. Submission is async: `await flushPromises()`.
