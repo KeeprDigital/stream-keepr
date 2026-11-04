@@ -41,7 +41,7 @@ const cardSummary = computed(() => settingsSummary([
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="card:match-binding" title="Match Binding" :collapsible="false">
+		<ScreenSettingsCard id="card:feature-match-slot" title="Feature Match Slot" :collapsible="false">
 			<ScreenSettingsField
 				label="Linked Match"
 				description="Optionally link a match, whose Deck Lists then load on the card search page."

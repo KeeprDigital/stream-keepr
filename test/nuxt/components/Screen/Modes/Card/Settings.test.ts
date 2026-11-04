@@ -8,7 +8,7 @@ import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/Card/Settings.vue';
 
-// Card Spotlight's settings: its Match Binding, then its Card with the card's motion beside its width.
+// Card Spotlight's settings: its Feature Match Slot, then its Card with the card's motion beside its width.
 
 enableAutoUnmount(afterEach);
 
@@ -63,13 +63,13 @@ async function mountSettings() {
 }
 
 describe('the Card Spotlight settings editor', () => {
-	it('shows its Match Binding open, then a collapsible Card holding its motion', async () => {
+	it('shows its Feature Match Slot open, then a collapsible Card holding its motion', async () => {
 		const wrapper = await mountSettings();
 
 		expect(settingsLayout(wrapper)).toEqual([
 			{
-				id: 'card:match-binding',
-				title: 'Match Binding',
+				id: 'card:feature-match-slot',
+				title: 'Feature Match Slot',
 				collapsible: false,
 				groups: [],
 			},
