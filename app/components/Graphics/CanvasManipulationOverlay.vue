@@ -52,6 +52,11 @@ const props = defineProps<{
 	rotation?: number;
 	/** The Graphic Anchor Point the layer turns about. */
 	anchor?: GraphicAnchorPoint;
+	/**
+	 * Each selected locked layer's box, in canvas pixels (#747): outlined with a
+	 * lock badge and offering nothing to move.
+	 */
+	locked?: readonly GraphicRect[];
 }>();
 
 const emit = defineEmits<{
@@ -83,14 +88,19 @@ if (import.meta.client) {
 	});
 }
 
-const memberStyles = computed(() => scale.value === 0
-	? []
-	: (props.members ?? []).map(member => ({
-			left: `${member.x * scale.value}px`,
-			top: `${member.y * scale.value}px`,
-			width: `${member.width * scale.value}px`,
-			height: `${member.height * scale.value}px`,
-		})));
+function canvasBoxStyles(boxes: readonly GraphicRect[] | undefined) {
+	return scale.value === 0
+		? []
+		: (boxes ?? []).map(box => ({
+				left: `${box.x * scale.value}px`,
+				top: `${box.y * scale.value}px`,
+				width: `${box.width * scale.value}px`,
+				height: `${box.height * scale.value}px`,
+			}));
+}
+
+const memberStyles = computed(() => canvasBoxStyles(props.members));
+const lockedStyles = computed(() => canvasBoxStyles(props.locked));
 
 const snapLines = computed<SnapLines>(() => {
 	if (props.snapLines)
@@ -371,6 +381,22 @@ const readout = computed(() => {
 				<span class="whitespace-nowrap rounded bg-pink-500 px-1 font-mono text-[0.6875rem] text-white">{{ gap.size }}</span>
 			</div>
 		</template>
+
+		<div
+			v-for="(style, index) in lockedStyles"
+			:key="`locked-${index}`"
+			class="absolute outline-1 outline-primary/70 outline-dashed"
+			:style="style"
+			data-testid="canvas-locked-layer"
+		>
+			<span
+				class="absolute -right-2 -top-2 flex size-4 items-center justify-center rounded-full bg-inverted text-inverted"
+				role="img"
+				aria-label="Locked"
+			>
+				<UIcon name="i-lucide-lock" class="size-2.5" />
+			</span>
+		</div>
 
 		<template v-if="boxStyle && !live">
 			<div

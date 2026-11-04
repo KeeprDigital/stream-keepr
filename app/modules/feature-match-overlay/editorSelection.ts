@@ -212,19 +212,27 @@ export function editorLayerCanvasBox(layout: FeatureMatchLayoutConfig, layer: Fe
  * (#740): a delta in canvas pixels is the same delta in a canvas-arranged group's
  * padded box, and moves a rotated layer by as much. If the canvas cannot move
  * one of them, it moves none.
+ *
+ * A locked layer is left where it is (#747), and stays something to snap to: one
+ * locked layer offers nothing, and several move only their unlocked ones, still
+ * only moving when one is left.
  */
 export function editorLayersFrame(
 	layout: FeatureMatchLayoutConfig,
 	layers: readonly FeatureMatchLayoutEditorLayer[],
 	canvas: { width: number; height: number },
+	isLocked: (layer: FeatureMatchLayoutEditorLayer) => boolean = () => false,
 ): EditorSelectionFrame | null {
 	if (layers.length <= 1) {
-		return layers[0]
+		return layers[0] && !isLocked(layers[0])
 			? editorSelectionFrame(layout, layers[0], canvas)
 			: null;
 	}
+	const moving = layers.filter(layer => !isLocked(layer));
+	if (moving.length === 0)
+		return null;
 	const members: GraphicRect[] = [];
-	for (const layer of layers) {
+	for (const layer of moving) {
 		const box = editorLayerCanvasBox(layout, layer);
 		if (!box)
 			return null;
@@ -236,7 +244,7 @@ export function editorLayersFrame(
 		snapLines: canvasSnapLines(canvas, [
 			...layout.sources,
 			...layout.composition.items,
-		], layers.map(layer => layer.itemId)),
+		], moving.map(layer => layer.itemId)),
 		members,
 	};
 }

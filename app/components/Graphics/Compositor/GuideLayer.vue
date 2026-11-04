@@ -37,6 +37,11 @@ const props = defineProps<{
 	 * safe-area guides are shown, because there is then no selection to make.
 	 */
 	selectableCanvas?: boolean;
+	/**
+	 * Graphic Items the host has locked against canvas edits (#747): their guides
+	 * are drawn but not offered, so a click falls through to what lies beneath.
+	 */
+	lockedItemIds?: readonly string[];
 }>();
 
 const emit = defineEmits<{
@@ -44,8 +49,13 @@ const emit = defineEmits<{
 	select: [target: GraphicsSelectionTarget, toggle: boolean];
 }>();
 
+function isLocked(guide: GraphicsItemGuide): boolean {
+	return props.lockedItemIds?.includes(guide.itemId) === true;
+}
+
 function selectItem(guide: GraphicsItemGuide, event?: MouseEvent | KeyboardEvent) {
-	emit('select', { type: 'item', graphicId: guide.graphicId, itemId: guide.itemId }, isSelectionToggle(event));
+	if (!isLocked(guide))
+		emit('select', { type: 'item', graphicId: guide.graphicId, itemId: guide.itemId }, isSelectionToggle(event));
 }
 
 const hasGuideLayer = computed(() =>
@@ -77,13 +87,13 @@ const hasGuideLayer = computed(() =>
 			v-for="guide in itemGuides"
 			:key="`${guide.graphicId}:${guide.itemId}`"
 			class="item-guide"
-			:class="{ 'is-selected': guide.selected, 'is-in-selected-graphic': guide.inSelectedGraphic }"
+			:class="{ 'is-selected': guide.selected, 'is-in-selected-graphic': guide.inSelectedGraphic, 'is-locked': isLocked(guide) }"
 			:data-in-selected-graphic="String(guide.inSelectedGraphic)"
 			:data-item-guide="guide.itemId"
 			:style="guide.style"
-			role="button"
-			tabindex="0"
-			:aria-label="`Select ${guide.label}`"
+			v-bind="isLocked(guide)
+				? { 'data-locked': 'true', 'aria-hidden': 'true' }
+				: { 'role': 'button', 'tabindex': 0, 'aria-label': `Select ${guide.label}` }"
 			@click.stop="selectItem(guide, $event)"
 			@keydown.enter.stop="selectItem(guide)"
 			@keydown.space.prevent.stop="selectItem(guide)"
@@ -146,6 +156,11 @@ const hasGuideLayer = computed(() =>
 	border: 2px dashed rgba(56, 189, 248, 0.35);
 	background: rgba(0, 119, 163, 0.04);
 	cursor: pointer;
+}
+
+.item-guide.is-locked {
+	pointer-events: none;
+	cursor: default;
 }
 
 .item-guide.is-in-selected-graphic {
