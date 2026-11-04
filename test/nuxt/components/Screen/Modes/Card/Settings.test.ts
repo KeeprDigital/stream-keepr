@@ -98,6 +98,8 @@ describe('the Card Spotlight settings editor', () => {
 		config.value.featureMatchId = 4;
 		const wrapper = await mountSettings();
 
+		// Named as Feature Match Controls names its Slot picker.
+		expect(wrapper.get('[data-settings-card="card:feature-match-slot"] label > span').text()).toBe('Feature Match Slot');
 		await wrapper.get('select').setValue(String(value));
 
 		expect(writes).toEqual([written]);

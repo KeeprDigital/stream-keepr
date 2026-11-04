@@ -43,8 +43,8 @@ const cardSummary = computed(() => settingsSummary([
 	<div class="flex flex-col gap-6">
 		<ScreenSettingsCard id="card:feature-match-slot" title="Feature Match Slot" :collapsible="false">
 			<ScreenSettingsField
-				label="Linked Match"
-				description="Optionally link a match, whose Deck Lists then load on the card search page."
+				label="Feature Match Slot"
+				description="Optionally link a Slot, whose Deck Lists then load on the card search page."
 			>
 				<ScreenFeatureMatchSelect
 					:model-value="config.featureMatchId"
