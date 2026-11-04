@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { ANIMATION_EFFECT_VALUES } from '~~/shared/animationEffects';
-import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { nuxtUiStubs, UColorPickerStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import AnimationEffectFields from '~/components/Screen/AnimationEffectFields.vue';
 
 const UIColorPickerStub = defineComponent({
@@ -25,7 +25,7 @@ const ScreenSettingsToggleStub = defineComponent({
 	template: '<button type="button" data-testid="settings-toggle" :data-description="description" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
 });
 
-async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi.fn()) {
+async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi.fn(), { realColorPicker = false } = {}) {
 	const wrapper = mount(AnimationEffectFields, {
 		props: {
 			selection,
@@ -34,12 +34,20 @@ async function mountComponent(selection: AnimationEffectSelection, onUpdate = vi
 		global: {
 			stubs: {
 				...nuxtUiStubs,
-				UIColorPicker: UIColorPickerStub,
+				...(realColorPicker
+					? { UColorPicker: UColorPickerStub }
+					: { UIColorPicker: UIColorPickerStub }),
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 			},
 		},
 	});
 	return { wrapper, onUpdate };
+}
+
+/** Opens the first colour param's picker and returns its typed-value input. */
+async function openFirstColorPicker(wrapper: Awaited<ReturnType<typeof mountComponent>>['wrapper']) {
+	await wrapper.get('[aria-label="Choose color"]').trigger('click');
+	return wrapper.get('input[type="text"]');
 }
 
 describe('screenAnimationEffectFields', () => {
@@ -98,5 +106,28 @@ describe('screenAnimationEffectFields', () => {
 
 		const selection = onUpdate.mock.calls.at(-1)?.[0] as { params: Record<string, unknown> };
 		expect(selection.params.showLines).toBe(false);
+	});
+
+	// Effect colours are hex-only by schema (THREE.Color misreads anything richer).
+	it('offers no Transparent choice on an effect colour', async () => {
+		const { wrapper } = await mountComponent({ effect: 'fog' }, vi.fn(), { realColorPicker: true });
+
+		await openFirstColorPicker(wrapper);
+
+		expect(wrapper.text()).not.toContain('Transparent');
+	});
+
+	it.each([
+		{ typed: '', written: null },
+		{ typed: '#abcdef', written: '#abcdef' },
+	])('typing "$typed" into an effect colour writes $written', async ({ typed, written }) => {
+		const { wrapper, onUpdate } = await mountComponent({ effect: 'fog' }, vi.fn(), { realColorPicker: true });
+
+		await (await openFirstColorPicker(wrapper)).setValue(typed);
+
+		const highlightColors = onUpdate.mock.calls.map(([selection]) => (selection as { params: Record<string, unknown> }).params.highlightColor);
+		expect(highlightColors).toEqual(written === null
+			? []
+			: [written]);
 	});
 });
