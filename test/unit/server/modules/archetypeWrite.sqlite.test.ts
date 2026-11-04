@@ -152,7 +152,12 @@ describe('updating an Archetype', () => {
 		['pins a chart series', null, 3, 3],
 		['moves a pin', 3, 7, 7],
 		['clears a pin', 3, null, null],
-		['keeps a pin an unrelated edit leaves out', 3, undefined, 3],
+		[
+			'keeps a pin an unrelated edit leaves out',
+			3,
+			undefined,
+			3,
+		],
 	])('%s, and announces the stored Archetype', async (_case, pinned, chartSeries, stored) => {
 		const eventId = await createEvent();
 		const [archetype] = await db.insert(schema.archetypes).values({ eventId, name: 'Boros Energy', chartSeries: pinned }).returning();

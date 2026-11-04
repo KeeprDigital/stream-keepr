@@ -148,11 +148,49 @@ describe('projectMetagameChart', () => {
 
 	// Each row: the shown Archetypes as [id, pinned series], and the slot each gets.
 	it.each([
-		['a pin takes its series ahead of the id that prefers it', [[1, null], [9, 1]], { 1: 2, 9: 1 }],
-		['a pin outside the preferred-slot order', [[3, 7], [7, null]], { 3: 7, 7: 8 }],
-		['unpinned ones fill around every pin', [[1, 2], [2, 1], [3, null]], { 1: 2, 2: 1, 3: 3 }],
-		['a shared pin goes to the lower id; the other is placed as if unpinned', [[5, 3], [2, 3], [4, null]], { 2: 3, 4: 4, 5: 5 }],
-		['a clash loser joins the unpinned in id order', [[11, 1], [1, 1], [3, null]], { 1: 1, 3: 3, 11: 4 }],
+		[
+			'a pin takes its series ahead of the id that prefers it',
+			[
+				[1, null],
+				[9, 1],
+			],
+			{ 1: 2, 9: 1 },
+		],
+		[
+			'a pin outside the preferred-slot order',
+			[
+				[3, 7],
+				[7, null],
+			],
+			{ 3: 7, 7: 8 },
+		],
+		[
+			'unpinned ones fill around every pin',
+			[
+				[1, 2],
+				[2, 1],
+				[3, null],
+			],
+			{ 1: 2, 2: 1, 3: 3 },
+		],
+		[
+			'a shared pin goes to the lower id; the other is placed as if unpinned',
+			[
+				[5, 3],
+				[2, 3],
+				[4, null],
+			],
+			{ 2: 3, 4: 4, 5: 5 },
+		],
+		[
+			'a clash loser joins the unpinned in id order',
+			[
+				[11, 1],
+				[1, 1],
+				[3, null],
+			],
+			{ 1: 1, 3: 3, 11: 4 },
+		],
 	] as const)('%s', (_case, shown, expected) => {
 		const bars = projectMetagameChart(breakdown(
 			shown.map(([id, chartSeries]) => entry(id, `Archetype ${id}`, 1, { chartSeries })),
@@ -164,8 +202,27 @@ describe('projectMetagameChart', () => {
 
 	it.each([
 		// Unpinned, id 9 would take slot 1 alone and slot 2 beside id 1.
-		['enters', [[9, 2]], [[9, 2], [1, null], [2, null]]],
-		['leaves', [[9, 2], [1, null]], [[9, 2]]],
+		[
+			'enters',
+			[
+				[9, 2],
+			],
+			[
+				[9, 2],
+				[1, null],
+				[2, null],
+			],
+		],
+		[
+			'leaves',
+			[
+				[9, 2],
+				[1, null],
+			],
+			[
+				[9, 2],
+			],
+		],
 	] as const)('keeps a pinned Archetype\'s series when another %s the chart', (_case, before, after) => {
 		const slotOf9 = (shown: readonly (readonly [number, number | null])[]) => projectMetagameChart(breakdown(
 			shown.map(([id, chartSeries]) => entry(id, `Archetype ${id}`, 1, { chartSeries })),

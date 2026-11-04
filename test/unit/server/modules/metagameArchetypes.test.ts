@@ -39,8 +39,18 @@ describe('metagame archetype rules', () => {
 		const entries = buildArchetypeBreakdownEntries(
 			groups,
 			[
-				{ id: 1, name: 'Burn', colors: 'R', chartSeries: 3 },
-				{ id: 2, name: 'Control', colors: 'U', chartSeries: null },
+				{
+					id: 1,
+					name: 'Burn',
+					colors: 'R',
+					chartSeries: 3,
+				},
+				{
+					id: 2,
+					name: 'Control',
+					colors: 'U',
+					chartSeries: null,
+				},
 			],
 			3,
 			new Map([
@@ -97,7 +107,12 @@ describe('metagame archetype rules', () => {
 		]);
 
 		const entries = buildArchetypeBreakdownEntries(groups, [
-			{ id: 1, name: 'Burn', colors: 'R', chartSeries: null },
+			{
+				id: 1,
+				name: 'Burn',
+				colors: 'R',
+				chartSeries: null,
+			},
 		], 1, new Map());
 
 		expect(entries[0]!.conversionRate).toBeNull();
@@ -145,8 +160,18 @@ describe('metagame archetype rules', () => {
 		const entries = buildArchetypeBreakdownEntries(
 			groups,
 			[
-				{ id: 1, name: 'Burn', colors: 'R', chartSeries: null },
-				{ id: 2, name: 'Control', colors: 'U', chartSeries: null },
+				{
+					id: 1,
+					name: 'Burn',
+					colors: 'R',
+					chartSeries: null,
+				},
+				{
+					id: 2,
+					name: 'Control',
+					colors: 'U',
+					chartSeries: null,
+				},
 			],
 			5,
 			new Map(),
@@ -187,7 +212,12 @@ describe('metagame archetype rules', () => {
 		const entries = buildArchetypeBreakdownEntries(
 			groups,
 			[
-				{ id: 1, name: 'Burn', colors: 'R', chartSeries: null },
+				{
+					id: 1,
+					name: 'Burn',
+					colors: 'R',
+					chartSeries: null,
+				},
 			],
 			3,
 			new Map(),
