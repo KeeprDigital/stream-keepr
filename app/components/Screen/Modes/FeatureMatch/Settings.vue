@@ -81,6 +81,8 @@ const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 
 defineExpose({ resetConfig, saving });
 
+const NO_COUNTER_TYPES = 'No counter types available for this game.';
+
 type ToggleKey = Exclude<keyof typeof fields, 'leftSidePlayer'>;
 
 /** One toggle of a card: its contract field, and the feature gate the Event and Card Game put on it. */
@@ -92,18 +94,18 @@ interface ToggleSetting {
 	disabledDescription?: string;
 }
 
-function toggle(key: ToggleKey, setting: Omit<ToggleSetting, 'key' | 'field'>): ToggleSetting {
+function toggleSetting(key: ToggleKey, setting: Omit<ToggleSetting, 'key' | 'field'>): ToggleSetting {
 	return { key, field: fields[key], ...setting };
 }
 
 const playerInfo = computed(() => [
-	toggle('showPronouns', {
+	toggleSetting('showPronouns', {
 		description: 'Show player pronouns next to their name.',
 		enabled: hasPronouns.value,
 		disabledDescription: 'Enable player pronouns in event settings to use this.',
 	}),
 	{
-		...toggle('showDeckNames', {
+		...toggleSetting('showDeckNames', {
 			description: `Show player ${identityLabel.value.toLowerCase()} names below their name.`,
 		}),
 		// The contract labels it for Magic; each Card Game names its own player identity.
@@ -112,12 +114,12 @@ const playerInfo = computed(() => [
 			label: fields.showDeckNames.label.replace('Deck', identityLabel.value),
 		},
 	},
-	toggle('showRecords', {
+	toggleSetting('showRecords', {
 		description: 'Show the player record or position next to their name.',
 		enabled: hasStandings.value,
 		disabledDescription: 'Enable player standings in event settings to use this.',
 	}),
-	toggle('showLgs', {
+	toggleSetting('showLgs', {
 		description: 'Show the player\'s Local Game Store.',
 		enabled: hasLgs.value,
 		disabledDescription: 'Enable LGS tracking in event settings to use this.',
@@ -125,36 +127,36 @@ const playerInfo = computed(() => [
 ]);
 
 const matchDisplay = computed(() => [
-	toggle('showClock', { description: 'Show the match clock.' }),
-	toggle('showTableNumber', {
+	toggleSetting('showClock', { description: 'Show the match clock.' }),
+	toggleSetting('showTableNumber', {
 		description: 'Show the match table number in the header.',
 		enabled: hasTableNumber.value,
 		disabledDescription: 'Enable table numbers in event settings to use this.',
 	}),
-	toggle('showSeatLabels', {
+	toggleSetting('showSeatLabels', {
 		description: `Show ${isVerticalArena.value ? 'Top/Bottom' : 'Left/Right'} labels next to player names.`,
 	}),
 ]);
 
 const gameState = computed(() => [
-	toggle('showCounters', {
+	toggleSetting('showCounters', {
 		description: 'Show player counters (poison, energy, etc.).',
 		enabled: hasCounterTypes.value,
-		disabledDescription: 'No counter types available for this game.',
+		disabledDescription: NO_COUNTER_TYPES,
 	}),
-	toggle('showTurnControls', {
+	toggleSetting('showTurnControls', {
 		description: 'Show the turn counter and active player controls.',
 		enabled: hasTurnTracking.value,
 		disabledDescription: 'Enable turn or active player tracking in event settings to use this.',
 	}),
-	toggle('showOvertime', {
+	toggleSetting('showOvertime', {
 		description: 'Show the extra turns tracker when overtime begins.',
 		enabled: hasExtraTurns.value,
 		disabledDescription: tracks.value?.overtime === false
 			? notTracked.value
 			: 'Enable extra turns in event format settings to use this.',
 	}),
-	toggle('showMulliganInfo', {
+	toggleSetting('showMulliganInfo', {
 		description: 'Show the cards kept indicator during mulligan phase.',
 		enabled: hasMulliganTracking.value,
 		disabledDescription: tracks.value?.mulligan === false
@@ -164,39 +166,65 @@ const gameState = computed(() => [
 ]);
 
 const controlPermissions = computed(() => [
-	toggle('allowLifeControls', {
+	toggleSetting('allowLifeControls', {
 		description: 'Allow players to adjust life totals.',
 		enabled: hasLifeTracking.value,
 		disabledDescription: notTracked.value,
 	}),
-	toggle('allowGameWinControls', { description: 'Allow players to record and undo game wins.' }),
-	toggle('allowCounterControls', {
+	toggleSetting('allowGameWinControls', { description: 'Allow players to record and undo game wins.' }),
+	toggleSetting('allowCounterControls', {
 		description: 'Allow players to add, remove, and adjust counters.',
 		enabled: hasCounterTypes.value,
-		disabledDescription: 'No counter types available for this game.',
+		disabledDescription: NO_COUNTER_TYPES,
 	}),
 ]);
 
-/** On as the Screen shows it: a gated-off toggle is off, and an unset one is on. */
+/** On as the Screen shows it: a gated-off toggle is off whatever its saved value. */
 function isOn(setting: ToggleSetting): boolean {
-	return setting.enabled !== false && (config.value[setting.key] ?? true);
+	return setting.enabled !== false && config.value[setting.key] === true;
 }
 
-/** A closed card's summary: the labels of its toggles that are on, `Show` dropped. */
+/** The labels of the toggles that are on, `Show` dropped: a closed card's summary. */
 function onLabels(settings: ToggleSetting[]): string[] {
 	return settings.filter(isOn).map(setting => setting.field.label.replace(/^Show /, ''));
 }
 
-const playerInfoSummary = computed(() => onLabels(playerInfo.value).join(' · ') || 'Nothing shown');
-const matchDisplaySummary = computed(() => {
-	const leftSide = leftSidePlayerItems.value.find(item => item.value === (config.value.leftSidePlayer ?? 'player1'));
+const MATCH_DISPLAY_CARD = 'feature-match:match-display';
+
+/** A card of toggles, summarised by those that are on, or `none`. */
+interface ToggleCard {
+	id: string;
+	title: string;
+	subtitle?: string;
+	settings: ToggleSetting[];
+	summary: string;
+}
+
+function toggleCard(card: Omit<ToggleCard, 'summary'>, none: string, ...extra: string[]): ToggleCard {
+	return {
+		...card,
+		summary: [
+			...onLabels(card.settings),
+			...extra,
+		].join(' · ') || none,
+	};
+}
+
+const toggleCards = computed(() => {
+	const leftSide = leftSidePlayerItems.value.find(item => item.value === config.value.leftSidePlayer);
 	return [
-		...onLabels(matchDisplay.value),
-		`${fields.leftSidePlayer.label}: ${leftSide?.label}`,
-	].join(' · ');
+		toggleCard({ id: 'feature-match:player-info', title: 'Player Info', settings: playerInfo.value }, 'Nothing shown'),
+		// Match Display ends with the left side select, so its summary does too.
+		toggleCard({ id: MATCH_DISPLAY_CARD, title: 'Match Display', settings: matchDisplay.value }, 'Nothing shown', `${fields.leftSidePlayer.label}: ${leftSide?.label}`),
+		toggleCard({ id: 'feature-match:game-state', title: 'Game State', settings: gameState.value }, 'Nothing shown'),
+		toggleCard({
+			id: 'feature-match:control-permissions',
+			title: 'Control Permissions',
+			subtitle: 'Controls that players can use from the match screen. Disabled controls are still visible as read-only information.',
+			settings: controlPermissions.value,
+		}, 'None allowed'),
+	];
 });
-const gameStateSummary = computed(() => onLabels(gameState.value).join(' · ') || 'Nothing shown');
-const controlPermissionsSummary = computed(() => onLabels(controlPermissions.value).join(' · ') || 'None allowed');
 
 function writeToggle(key: ToggleKey, value: unknown) {
 	updateConfig({ [key]: value === true } as Partial<Record<ToggleKey, boolean>>);
@@ -225,19 +253,26 @@ async function handleMatchChange(matchId: number | null) {
 <template>
 	<div class="flex flex-col gap-6">
 		<ScreenSettingsCard title="Match Selection" :collapsible="false">
-			<ScreenSettingsField label="Match" description="Select a feature match to show.">
+			<ScreenSettingsField label="Feature Match Slot" description="The Slot whose Match this Screen controls.">
 				<ScreenFeatureMatchSelect
 					:model-value="config.featureMatchId"
-					placeholder="Select a match..."
+					placeholder="Select a slot…"
 					detailed
 					@update:model-value="handleMatchChange($event)"
 				/>
 			</ScreenSettingsField>
 		</ScreenSettingsCard>
 
-		<ScreenSettingsCard id="feature-match:player-info" title="Player Info" :summary="playerInfoSummary">
+		<ScreenSettingsCard
+			v-for="card in toggleCards"
+			:id="card.id"
+			:key="card.id"
+			:title="card.title"
+			:subtitle="card.subtitle"
+			:summary="card.summary"
+		>
 			<ScreenConfigField
-				v-for="setting in playerInfo"
+				v-for="setting in card.settings"
 				:key="setting.key"
 				:field="setting.field"
 				:model-value="config[setting.key]"
@@ -246,56 +281,13 @@ async function handleMatchChange(matchId: number | null) {
 				:disabled-description="setting.disabledDescription"
 				@update:model-value="writeToggle(setting.key, $event)"
 			/>
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard id="feature-match:match-display" title="Match Display" :summary="matchDisplaySummary">
 			<ScreenConfigField
-				v-for="setting in matchDisplay"
-				:key="setting.key"
-				:field="setting.field"
-				:model-value="config[setting.key]"
-				:description="setting.description"
-				:enabled="setting.enabled"
-				:disabled-description="setting.disabledDescription"
-				@update:model-value="writeToggle(setting.key, $event)"
-			/>
-			<ScreenConfigField
+				v-if="card.id === MATCH_DISPLAY_CARD"
 				:field="fields.leftSidePlayer"
-				:model-value="config.leftSidePlayer ?? 'player1'"
+				:model-value="config.leftSidePlayer"
 				:items="leftSidePlayerItems"
 				description="Which player seat appears on the left side of the match screen."
 				@update:model-value="$event && updateConfig({ leftSidePlayer: $event })"
-			/>
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard id="feature-match:game-state" title="Game State" :summary="gameStateSummary">
-			<ScreenConfigField
-				v-for="setting in gameState"
-				:key="setting.key"
-				:field="setting.field"
-				:model-value="config[setting.key]"
-				:description="setting.description"
-				:enabled="setting.enabled"
-				:disabled-description="setting.disabledDescription"
-				@update:model-value="writeToggle(setting.key, $event)"
-			/>
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard
-			id="feature-match:control-permissions"
-			title="Control Permissions"
-			subtitle="Controls that players can use from the match screen. Disabled controls are still visible as read-only information."
-			:summary="controlPermissionsSummary"
-		>
-			<ScreenConfigField
-				v-for="setting in controlPermissions"
-				:key="setting.key"
-				:field="setting.field"
-				:model-value="config[setting.key]"
-				:description="setting.description"
-				:enabled="setting.enabled"
-				:disabled-description="setting.disabledDescription"
-				@update:model-value="writeToggle(setting.key, $event)"
 			/>
 		</ScreenSettingsCard>
 	</div>

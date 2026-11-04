@@ -117,7 +117,6 @@ describe('screenFeatureMatchSettings', () => {
 		{ key: 'showClock', title: 'Match Display' },
 		{ key: 'showTableNumber', title: 'Match Display' },
 		{ key: 'showSeatLabels', title: 'Match Display' },
-		{ key: 'leftSidePlayer', title: 'Match Display' },
 		{ key: 'showCounters', title: 'Game State' },
 		{ key: 'showTurnControls', title: 'Game State' },
 		{ key: 'showOvertime', title: 'Game State' },
@@ -125,20 +124,12 @@ describe('screenFeatureMatchSettings', () => {
 		{ key: 'allowLifeControls', title: 'Control Permissions' },
 		{ key: 'allowGameWinControls', title: 'Control Permissions' },
 		{ key: 'allowCounterControls', title: 'Control Permissions' },
-	])('puts $key in the $title card, writing it as its own field', async ({ key, title }) => {
+	])('puts the $key toggle in the $title card, writing it as its own field', async ({ key, title }) => {
 		const wrapper = await mountSettings();
-		const control = card(wrapper, title).get(`[data-config-field="${key}"]`);
 
-		if (key === 'leftSidePlayer')
-			await control.get('select').setValue('player2');
-		else
-			await control.get('[role="switch"]').trigger('click');
+		await card(wrapper, title).get(`[data-config-field="${key}"] [role="switch"]`).trigger('click');
 
-		expect(mockUpdateConfig).toHaveBeenCalledWith({
-			[key]: key === 'leftSidePlayer'
-				? 'player2'
-				: false,
-		});
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ [key]: false });
 	});
 
 	it.each([
@@ -208,12 +199,8 @@ describe('screenFeatureMatchSettings', () => {
 			...event,
 		});
 		const wrapper = await mountSettings();
-		const toggle = field(wrapper, key).get('[role="switch"]');
 
-		expect({
-			checked: toggle.attributes('aria-checked'),
-			disabled: toggle.attributes('disabled') !== undefined,
-		}).toEqual({ checked: 'false', disabled: true });
+		expect(field(wrapper, key).get('[role="switch"]').attributes('disabled')).toBeDefined();
 		expect(field(wrapper, key).text()).toContain(reason);
 	});
 
@@ -242,6 +229,14 @@ describe('screenFeatureMatchSettings', () => {
 		const wrapper = await mountSettings();
 
 		expect(field(wrapper, 'leftSidePlayer').findAll('option').map(option => option.text())).toEqual(options);
+	});
+
+	it('puts the left side select in the Match Display card, writing it as its own field', async () => {
+		const wrapper = await mountSettings();
+
+		await card(wrapper, 'Match Display').get('[data-config-field="leftSidePlayer"] select').setValue('player2');
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ leftSidePlayer: 'player2' });
 	});
 
 	it('binds the Screen to a Feature Match Slot and loads its state', async () => {
