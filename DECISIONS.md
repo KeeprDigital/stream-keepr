@@ -2340,3 +2340,88 @@ All of a Screen's Mode Tokens sat in one flat Theme card above the mode's settin
 - **List each group's tokens in its Settings component.** It is a second copy of the declaration, and nothing would catch a token placed twice or left out.
 - **Remove Foundation Tokens from a plain Screen's page, leaving them to the Theme.** It drops a per-Screen override that operators use today.
 - **Have display Reset offer to clear the overrides shown in the same groups.** Reset restores mode config, and an override is not config (ADR-0049). Today's behaviour stays.
+
+## ADR-0073: The Graphics Asset Library keeps one facade, and an operation family moves behind its own smaller interface only where its invariants get a home
+
+Accepted · 2026-11-04 · [#623](https://github.com/KeeprDigital/stream-keepr/issues/623) · Follow-ups [#989](https://github.com/KeeprDigital/stream-keepr/issues/989), [#990](https://github.com/KeeprDigital/stream-keepr/issues/990), [#991](https://github.com/KeeprDigital/stream-keepr/issues/991), [#992](https://github.com/KeeprDigital/stream-keepr/issues/992)
+
+### Evaluation
+
+The evidence is from `main` at `82c22f49`, after #949 (Talent photo) and #950 (Installed Graphics Template removal).
+
+**The current interface.** Every reader and writer sees one facade, `GraphicsAssetLibrary`: 53 methods (`server/modules/graphics-asset-library/index.ts:659–1077`), all built by one 4,600-line factory, `createGraphicsAssetLibrary` (`index.ts:1259–5878`). The factory takes one catalogue port, `GraphicsAssetCatalogue`, which has 42 methods plus `checkHealth` (`index.ts:362–657`), and a staging and a canonical byte store (`index.ts:1112–1131`). The port has two adapters: D1 (`catalogue.ts:486`) and in-memory (`in-memory-catalogue.ts:51`). The D1 adapter also spreads three further catalogues, for retention, reconciliation and the cockpit (`catalogue.ts:492–495`).
+
+**The real operation families,** found by tracing which facade methods call which catalogue methods and which invariants change together:
+
+| Family                  | Facade                                       | Catalogue                                                                      | Where it lives                                                                         | Verdict                                                   |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Delivery                | 5 reads (`index.ts:5446–5553`)               | `findRevisionContent(s)`, `findThumbnailContent` (`index.ts:607–657`)          | Closures in the factory (`index.ts:1693–1710`, `1802–1882`)                            | **Moved here**                                            |
+| Ingestion               | 15 (`index.ts:4210–4249`, `4473–5275`)       | 19, among them publish, reuse, claim, multipart and staged bytes               | `continueGraphicsIngestion` (`index.ts:3707`), helpers (`1891–2631`)                   | Worth doing: #989                                         |
+| Template Packages       | 8 (`index.ts:4250–4472`, export `5554–5717`) | 12, plus `findRevisionContent` (`index.ts:3339`, `5580`)                       | `index.ts:2692–3706`                                                                   | Worth doing after the ingestion operation interface: #990 |
+| Discovery and lifecycle | 6 (`index.ts:5276–5445`)                     | 6; Retire-blocking SQL (`catalogue.ts:265`)                                    | Facade plus Evidence hooks (`index.ts:1717–1775`)                                      | Worth doing, as a contract across both adapters: #991     |
+| Retention               | 6 (`index.ts:5718–5779`, `5801–5818`)        | `GraphicsAssetRetentionCatalogue`, 32 (`retention.ts:160`)                     | `createGraphicsRetention` (`retention.ts:426`)                                         | Already split; no ticket                                  |
+| Reconciliation          | 7 (`index.ts:5819–5876`)                     | `GraphicsAssetReconciliationCatalogue`, 30 (`reconciliation.ts:151`)           | `createGraphicsReconciliation` (`reconciliation.ts:356`), media port (`index.ts:1433`) | Already split; no ticket                                  |
+| Operational reads       | 4 (`index.ts:4174`, `5780–5800`)             | Cockpit 9 (`operations-cockpit.ts:91`), queues 14 (`operational-queues.ts:64`) | Their own modules                                                                      | Already split; no ticket                                  |
+| Health and capacity     | 3                                            | `checkHealth`, `getCapacity`, `updateCapacityLimits`                           | Facade                                                                                 | A split would only pass through; no ticket                |
+
+Ingestion and Template Packages share the Graphics Ingestion Operation lifecycle: `get/updateIngestionOperation`, `claimGraphicsIngestion`, `recordCanonicalWrites` and `getCapacity`. That shared lifecycle is one sub-interface, and #989 proposes landing it first.
+
+**Behaviour contracts across both catalogue adapters:**
+
+- **Delivery's reads match.** Its seam test (`test/unit/server/modules/graphicsAssetDelivery.sqlite.test.ts`) runs against both adapters.
+- **Retire, Trash, Restore and usage match in type but not in behaviour.** The in-memory `retireGraphicAsset` holds Retire back for template owners only (`in-memory-catalogue.ts:1250–1255`). D1 also counts Themes, Screen Theme Overrides and Talents. #991 makes that a shared contract.
+- **Publication, claim and Template Package installation** exist in both adapters and are contract candidates in #989 and #990.
+- **Retention, reconciliation, cockpit and queue catalogues** have only the D1 adapter, so they stay on the SQLite harness.
+
+### Decision
+
+**`GraphicsAssetLibrary` stays the one facade routes and modules build.** Families move behind smaller internal interfaces inside it, not into separate services a caller has to choose between.
+
+**A family moves only when it gains something.** Its invariants must be nameable and testable at its own seam, and something must vary across that seam: both catalogue adapters, or a caller needing only that family. No generic repository or table abstraction is introduced to fold together SQL that merely looks alike.
+
+**Delivery is the first.** `server/modules/graphics-asset-library/delivery.ts` holds it:
+
+- **Interface:** `GraphicsAssetDelivery` has the five reads, unchanged: `inspectGraphicAssetRevision(s)`, `inspectGraphicAssetRevisionContent`, `resolveGraphicAssetRevision` and `resolveGraphicAssetThumbnail`.
+- **Catalogue:** `GraphicsAssetDeliveryCatalogue` has the three catalogue reads.
+- **Built from:** `createGraphicsAssetDelivery({ catalogue, canonical, reportDisagreement? })`.
+
+It owns three rules:
+
+- Bytes are served only while the canonical store agrees with the catalogue, by reconciliation's own definition of agreement.
+- A revision the catalogue lacks is `missing`, and bytes the store cannot produce are retryably `unavailable`.
+- A contradiction the store answered with is reported, and the report never changes or fails the read.
+
+How the existing types fit around it:
+
+- `GraphicsAssetCatalogue` extends the delivery catalogue, and `GraphicsAssetLibrary` extends `GraphicsAssetDelivery`.
+- The facade wires `reportDisagreement` to reconciliation, as before.
+- `catalogueRequest` moved to `catalogue-request.ts`, unchanged, so every family shares one way of failing as unavailable.
+
+**Template Package export keeps the shared agreement rule.** It reads through delivery's `readCanonicalContent` and `observeCanonicalContent` until #990 moves it.
+
+### Why
+
+**Before,** a reader learned the 53-method facade and built it from the 43-method catalogue port plus a staging store. The Screen Output Asset Capability, which only ever reads bytes, built the whole library over a stub staging store to reach two methods (`screen-output-assets/runtime.ts:60–97`). Delivery's rules were spread across closures in the factory, and were tested only through the full library.
+
+**After,** a reader learns five methods and builds them from three catalogue reads and the canonical store. The rules sit in one module, which is tested at its own interface against both catalogue adapters. The deletion test agrees: delete `delivery.ts` and the agreement, missing-versus-unavailable and reporting rules reappear in the facade and in every reader that wants delivery alone.
+
+### Consequences
+
+- **Routes and write modules:** nothing changes. Their `Pick<GraphicsAssetLibrary, 'inspectGraphicAssetRevisions'>` (`screen-write/index.ts:104`, `talent-write/index.ts:10`, `theme-library/index.ts:99`, `server/utils/graphicsTemplateReferences.ts:66`) still compiles. A new caller can depend on `GraphicsAssetDelivery` directly.
+- **The Screen Output Asset Capability** now builds `createGraphicsAssetDelivery` with no stub staging store.
+- **Screen Output reads never fed reconciliation.** Reaching reconciliation needed the staging store the stub lacked, and that failure was swallowed. CONTEXT.md's rule that every reader observing a contradiction feeds Graphics Reconciliation did not hold for them. This change keeps that behaviour but makes it visible: the capability passes no reporter. #992 tracks the fix.
+- **A catalogue double needs only the three reads** to back delivery.
+- **The estimated cost** of each split:
+  - Delivery: small, done (5 facade methods, 3 catalogue reads, 1 caller rewired).
+  - Ingestion: large (#989).
+  - Template Packages: medium to large (#990).
+  - Discovery and lifecycle: medium (#991).
+
+### Rejected alternatives
+
+- **One application-facing service per family.** Every route would have to learn which one to build. #623 asked for a stable facade.
+- **A generic repository or table-name SQL abstraction.** #623 rules it out: SQL that looks alike does not share invariants.
+- **Splitting the retention, reconciliation, cockpit or queue catalogues further.** Each already has its own module and port. Another layer would only delegate.
+- **Its own interface for health and capacity.** Three pass-through methods; the deletion test removes it.
+- **Give delivery reconciliation itself rather than a reporter.** Building reconciliation needs the staging store, which would put staging back into every delivery. A reporter keeps delivery buildable from the catalogue and the canonical store alone.
+- **Move export onto delivery now.** Export belongs to the Template Package family (#990).

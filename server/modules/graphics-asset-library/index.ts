@@ -6,7 +6,6 @@ import type {
 	GraphicAssetLifecycleState,
 	GraphicAssetPurgeOutcome,
 	GraphicAssetReference,
-	GraphicAssetReferenceStatus,
 	GraphicAssetRetentionView,
 	GraphicAssetRevisionId,
 	GraphicAssetSilentVideoFacts,
@@ -57,6 +56,7 @@ import type {
 } from '~~/shared/types/templatePackage';
 import type { GraphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperationalQueues';
+import type { GraphicsAssetDelivery, GraphicsAssetDeliveryCatalogue } from './delivery';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
 import type { GraphicsAssetMultipartState } from './multipart';
 import type {
@@ -113,7 +113,13 @@ import {
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { GRAPHICS_RETENTION_ACTOR } from '~~/shared/utils/graphicsAssetRetention';
-import { canonicalContentIdentity, canonicalObjectAgreement } from './canonical-integrity';
+import { canonicalContentIdentity } from './canonical-integrity';
+import { catalogueRequest } from './catalogue-request';
+import {
+	createGraphicsAssetDelivery,
+	observeCanonicalContent,
+	readCanonicalContent,
+} from './delivery';
 import { GraphicsAssetLibraryError } from './errors';
 import { processStaticFont } from './font';
 import { graphicsIngestionPartIdentity } from './multipart';
@@ -187,6 +193,8 @@ import {
 } from './validation';
 import { createStoredZipArchive, storedZipArchiveByteLength } from './zip-archive';
 
+export { createGraphicsAssetDelivery } from './delivery';
+export type { GraphicsAssetDelivery, GraphicsAssetDeliveryCatalogue } from './delivery';
 export { GraphicsAssetLibraryError } from './errors';
 export { createInMemoryGraphicsAssetCatalogue } from './in-memory-catalogue';
 
@@ -359,7 +367,12 @@ export type GraphicAssetLifecycleTransition
 	}
 	| { outcome: 'not-found' | 'not-allowed' };
 
-export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
+/**
+ * Everything the library reads and writes in its catalogue. Delivery's reads are
+ * their own smaller interface (ADR-0073); Template Package installation and
+ * export read revision content through it too.
+ */
+export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth, GraphicsAssetDeliveryCatalogue {
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
 	initiateGraphicsIngestion: (operation: GraphicsIngestionOperation) => Promise<GraphicsIngestionOperation>;
 	recordStagedBytes: (input: {
@@ -604,59 +617,15 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth {
 		assetId: GraphicAssetId;
 		restoredAt: string;
 	}) => Promise<GraphicAssetLifecycleTransition>;
-	findRevisionContent: (input: {
-		assetId: GraphicAssetId;
-		revisionId: GraphicAssetRevisionId;
-	}) => Promise<{
-		digest: string;
-		byteLength: number;
-		canonicalMime: GraphicAssetCanonicalMime;
-		kind: 'image' | 'silent-video' | 'font';
-		lifecycleState: 'active' | 'retired' | 'trashed';
-		/** The catalogue metadata snapshot a Template Package carries as provenance. */
-		name: string;
-		revisionNumber: number;
-		compatibilityProfile: string;
-		facts: GraphicAsset['facts'];
-	} | undefined>;
-	/**
-	 * `findRevisionContent`, set-wise: one lookup for every pair an authored
-	 * save changes, because paying one catalogue round-trip per reference is
-	 * what put the documented-cap save at ~90 s on deployed remote D1 (#374).
-	 *
-	 * Input pairs are treated as a set — duplicates resolve to one row — and a
-	 * pair that does not resolve contributes no row rather than a hole.
-	 */
-	findRevisionContents: (references: Array<{
-		assetId: GraphicAssetId;
-		revisionId: GraphicAssetRevisionId;
-	}>) => Promise<Array<{
-		assetId: GraphicAssetId;
-		revisionId: GraphicAssetRevisionId;
-		digest: string;
-		byteLength: number;
-		canonicalMime: GraphicAssetCanonicalMime;
-		kind: 'image' | 'silent-video' | 'font';
-		lifecycleState: 'active' | 'retired' | 'trashed';
-		/** The catalogue metadata snapshot a Template Package carries as provenance. */
-		name: string;
-		revisionNumber: number;
-		compatibilityProfile: string;
-		facts: GraphicAsset['facts'];
-	}>>;
 	listGraphicAssetUsage: (assetId: GraphicAssetId) => Promise<GraphicAssetUsage[]>;
-	/**
-	 * The preview content for one Graphic Asset, with the facts a reader needs to
-	 * prove the stored object is the one the catalogue recorded.
-	 */
-	findThumbnailContent: (assetId: GraphicAssetId) => Promise<{
-		digest: string;
-		byteLength: number;
-		canonicalMime: GraphicAssetCanonicalMime;
-	} | undefined>;
 }
 
-export interface GraphicsAssetLibrary {
+/**
+ * The application-facing facade. Its delivery reads are
+ * {@link GraphicsAssetDelivery}, which a reader needing only them can build on
+ * its own (ADR-0073).
+ */
+export interface GraphicsAssetLibrary extends GraphicsAssetDelivery {
 	getHealth: () => Promise<GraphicsAssetLibraryHealth>;
 	/**
 	 * The administrator-only Operations Cockpit reading: whether the library is
@@ -895,63 +864,6 @@ export interface GraphicsAssetLibrary {
 		eventIds: number[];
 	}) => Promise<GraphicAsset>;
 	listGraphicAssetUsage: (input: { assetId: GraphicAssetId }) => Promise<GraphicAssetUsage[]>;
-	inspectGraphicAssetRevision: (input: {
-		assetId: GraphicAssetId;
-		revisionId: GraphicAssetRevisionId;
-	}) => Promise<GraphicAssetReferenceStatus>;
-	/**
-	 * `inspectGraphicAssetRevision`, set-wise: every reference an authored save
-	 * changes, answered in one catalogue round-trip plus one canonical
-	 * observation per distinct content digest — never one of each per
-	 * reference, which is what put the documented-cap save at ~90 s (#374).
-	 *
-	 * Statuses align with the input by index; duplicate pairs share one
-	 * resolution.
-	 */
-	inspectGraphicAssetRevisions: (input: {
-		references: Array<{
-			assetId: GraphicAssetId;
-			revisionId: GraphicAssetRevisionId;
-		}>;
-	}) => Promise<GraphicAssetReferenceStatus[]>;
-	inspectGraphicAssetRevisionContent: (input: {
-		assetId: GraphicAssetId;
-		revisionId: GraphicAssetRevisionId;
-	}) => Promise<
-		| {
-			outcome: 'available';
-			byteLength: number;
-			contentType: GraphicAssetCanonicalMime;
-		}
-		| { outcome: 'missing' }
-		| { outcome: 'unavailable'; retryable: true }
-	>;
-	resolveGraphicAssetRevision: (input: {
-		assetId: GraphicAssetId;
-		revisionId: GraphicAssetRevisionId;
-		range?: { offset: number; length: number };
-	}) => Promise<
-		| {
-			outcome: 'available';
-			body: ReadableStream<Uint8Array>;
-			byteLength: number;
-			contentType: GraphicAssetCanonicalMime;
-		}
-		| { outcome: 'missing' }
-		| { outcome: 'unavailable'; retryable: true }
-	>;
-	resolveGraphicAssetThumbnail: (input: {
-		assetId: GraphicAssetId;
-	}) => Promise<
-		| {
-			outcome: 'available';
-			body: ReadableStream<Uint8Array>;
-			byteLength: number;
-			contentType: 'image/png';
-		}
-		| { outcome: 'missing' }
-		| { outcome: 'unavailable'; retryable: true }
-	>;
 	/**
 	 * The single contract both Template Package exporters use. Each workflow
 	 * supplies its own Template payload and the requirements its own vocabulary
@@ -1709,6 +1621,12 @@ export function createGraphicsAssetLibrary(
 		}
 	}
 
+	const delivery = createGraphicsAssetDelivery({
+		catalogue: dependencies.catalogue,
+		canonical: dependencies.canonical,
+		reportDisagreement: observeCanonicalDisagreement,
+	});
+
 	/**
 	 * Trash and restore change revision pruning deadlines inside their own
 	 * transaction; this records the resulting Evidence. It never fails the
@@ -1774,111 +1692,8 @@ export function createGraphicsAssetLibrary(
 		}
 	}
 
-	async function catalogueRequest<T>(
-		request: () => Promise<T>,
-		message: string,
-	): Promise<T> {
-		try {
-			return await request();
-		}
-		catch (error) {
-			if (error instanceof GraphicsAssetLibraryError)
-				throw error;
-			// The failure log reads only the nearest code, which is ours; what the
-			// catalogue threw is logged here or nowhere (#633).
-			logGraphicsStoreFailure('graphics_catalogue_unavailable', { refusal: message }, error);
-			throw new GraphicsAssetLibraryError(
-				message,
-				'graphics-asset-library-unavailable',
-				{ cause: error },
-			);
-		}
-	}
-
 	function timestamp() {
 		return now().toISOString();
-	}
-
-	type CanonicalContentFacts = Pick<
-		NonNullable<Awaited<ReturnType<GraphicsAssetCatalogue['findRevisionContent']>>>,
-		'digest' | 'byteLength' | 'canonicalMime'
-	>;
-
-	/**
-	 * Canonical bytes are only usable when the store agrees with the catalogue in
-	 * every respect `canonicalObjectAgreement` checks — the same rule
-	 * reconciliation applies. Delivery and reconciliation deliberately share one
-	 * definition of agreement, so content reconciliation has isolated as a
-	 * critical integrity incident can never still be served on air.
-	 *
-	 * Any disagreement reads as unavailable rather than being served, so no
-	 * caller ever receives content that does not match its recorded facts.
-	 */
-	async function readCanonicalContent(
-		content: CanonicalContentFacts,
-		range?: { offset: number; length: number },
-	): Promise<
-		| { outcome: 'available'; body: ReadableStream<Uint8Array>; byteLength: number }
-		| { outcome: 'unavailable'; retryable: true; disagreement: boolean }
-	> {
-		const result = await requireCanonical().read(
-			canonicalContentIdentity(content.digest),
-			range,
-		);
-		if (
-			result.outcome !== 'available'
-			|| canonicalObjectAgreement(content, result.object).outcome !== 'agrees'
-			|| result.range.completeLength !== content.byteLength
-			|| (
-				range !== undefined
-				&& (result.range.offset !== range.offset || result.range.length !== range.length)
-			)
-		) {
-			return {
-				outcome: 'unavailable',
-				retryable: true,
-				// A store that could not answer proves nothing about this object; a
-				// store that answered and disagreed is a real integrity observation
-				// worth reconciling.
-				disagreement: result.outcome !== 'unavailable',
-			};
-		}
-		return {
-			outcome: 'available',
-			body: result.body,
-			byteLength: result.object.byteLength,
-		};
-	}
-
-	async function observeCanonicalContent(content: CanonicalContentFacts): Promise<
-		{ outcome: 'available' } | { outcome: 'unavailable'; disagreement: boolean }
-	> {
-		const result = await requireCanonical().readMetadata(
-			canonicalContentIdentity(content.digest),
-		);
-		if (
-			result.outcome === 'available'
-			&& canonicalObjectAgreement(content, result.object).outcome === 'agrees'
-		) {
-			return { outcome: 'available' };
-		}
-		return { outcome: 'unavailable', disagreement: result.outcome !== 'unavailable' };
-	}
-
-	/**
-	 * The `available` reference status both inspect methods answer for a
-	 * resolvable, observed revision — one shape, so the set-wise batch can never
-	 * drift from the singular's answer.
-	 */
-	function availableReferenceStatus(content: Pick<
-		NonNullable<Awaited<ReturnType<GraphicsAssetCatalogue['findRevisionContent']>>>,
-		'lifecycleState' | 'kind' | 'facts'
-	>): GraphicAssetReferenceStatus {
-		return {
-			outcome: 'available',
-			lifecycleState: content.lifecycleState,
-			kind: content.kind,
-		};
 	}
 
 	function timestampAfter(updatedAt: string) {
@@ -4170,6 +3985,7 @@ export function createGraphicsAssetLibrary(
 	}
 
 	return {
+		...delivery,
 		getHealth: probeLibraryHealth,
 		async getOperationsCockpit() {
 			return await catalogueRequest(
@@ -5443,114 +5259,6 @@ export function createGraphicsAssetLibrary(
 				'Graphic Asset usage is temporarily unavailable',
 			);
 		},
-		async inspectGraphicAssetRevision(input) {
-			const content = await catalogueRequest(
-				() => requireCatalogue().findRevisionContent(input),
-				'Graphic Asset Revision lookup is temporarily unavailable',
-			);
-			if (!content)
-				return { outcome: 'missing' };
-			const observation = await observeCanonicalContent(content);
-			if (observation.outcome !== 'available') {
-				if (observation.disagreement)
-					await observeCanonicalDisagreement(input);
-				return { outcome: 'unavailable', retryable: true };
-			}
-			return availableReferenceStatus(content);
-		},
-		async inspectGraphicAssetRevisions(input) {
-			if (input.references.length === 0)
-				return [];
-			const contents = await catalogueRequest(
-				() => requireCatalogue().findRevisionContents(input.references),
-				'Graphic Asset Revision lookup is temporarily unavailable',
-			);
-			const contentByPair = new Map(
-				contents.map(content => [`${content.assetId}\n${content.revisionId}`, content]),
-			);
-			// One observation per distinct digest: revisions sharing content share
-			// the canonical object, so they cannot disagree with it differently.
-			const contentByDigest = new Map(contents.map(content => [content.digest, content]));
-			const observations = new Map(await Promise.all(
-				[...contentByDigest].map(async ([digest, content]) =>
-					[digest, await observeCanonicalContent(content)] as const),
-			));
-			for (const [digest, observation] of observations) {
-				if (observation.outcome !== 'available' && observation.disagreement)
-					await observeCanonicalDisagreement({ digest });
-			}
-			return input.references.map((reference) => {
-				const content = contentByPair.get(`${reference.assetId}\n${reference.revisionId}`);
-				if (!content)
-					return { outcome: 'missing' };
-				if (observations.get(content.digest)?.outcome !== 'available')
-					return { outcome: 'unavailable', retryable: true };
-				return availableReferenceStatus(content);
-			});
-		},
-		async inspectGraphicAssetRevisionContent(input) {
-			const content = await catalogueRequest(
-				() => requireCatalogue().findRevisionContent(input),
-				'Graphic Asset Revision lookup is temporarily unavailable',
-			);
-			if (!content)
-				return { outcome: 'missing' };
-			const observation = await observeCanonicalContent(content);
-			if (observation.outcome !== 'available') {
-				if (observation.disagreement)
-					await observeCanonicalDisagreement(input);
-				return { outcome: 'unavailable', retryable: true };
-			}
-			return {
-				outcome: 'available',
-				byteLength: content.byteLength,
-				contentType: content.canonicalMime,
-			};
-		},
-		async resolveGraphicAssetRevision(input) {
-			const content = await catalogueRequest(
-				() => requireCatalogue().findRevisionContent(input),
-				'Graphic Asset Revision lookup is temporarily unavailable',
-			);
-			if (!content)
-				return { outcome: 'missing' };
-			const result = await readCanonicalContent(content, input.range);
-			if (result.outcome !== 'available') {
-				if (result.disagreement)
-					await observeCanonicalDisagreement(input);
-				return { outcome: 'unavailable', retryable: true };
-			}
-			return {
-				outcome: 'available',
-				body: result.body,
-				byteLength: result.byteLength,
-				contentType: content.canonicalMime,
-			};
-		},
-		async resolveGraphicAssetThumbnail(input) {
-			const content = await catalogueRequest(
-				() => requireCatalogue().findThumbnailContent(input.assetId),
-				'Graphic Asset preview lookup is temporarily unavailable',
-			);
-			// No Graphics Derivative recorded at all is genuinely missing. Bytes the
-			// catalogue does expect but the store cannot produce are a retryable
-			// operational failure, not an absent preview: reporting those as missing
-			// would tell a caller there is nothing to show when there is.
-			if (!content)
-				return { outcome: 'missing' };
-			const result = await readCanonicalContent(content);
-			if (result.outcome !== 'available') {
-				if (result.disagreement)
-					await observeCanonicalDisagreement({ digest: content.digest });
-				return { outcome: 'unavailable', retryable: true };
-			}
-			return {
-				outcome: 'available',
-				body: result.body,
-				byteLength: result.byteLength,
-				contentType: 'image/png',
-			};
-		},
 		async exportTemplatePackage(input) {
 			const checkedAt = timestamp();
 			const identity = input.template.identity.trim();
@@ -5598,7 +5306,7 @@ export function createGraphicsAssetLibrary(
 				// advisory availability flag, because a package must contain the
 				// bytes that exist now. A disagreement it finds is fed straight back
 				// into reconciliation so the incident is not lost with the report.
-				const observation = await observeCanonicalContent(content);
+				const observation = await observeCanonicalContent(requireCanonical(), content);
 				if (observation.outcome !== 'available') {
 					if (observation.disagreement)
 						await observeCanonicalDisagreement(requirement.reference);
@@ -5695,7 +5403,7 @@ export function createGraphicsAssetLibrary(
 							// Bytes are fetched only when the archive reaches this entry, so
 							// no complete asset is ever held in Worker memory.
 							open: async () => {
-								const result = await readCanonicalContent(content);
+								const result = await readCanonicalContent(requireCanonical(), content);
 								if (result.outcome !== 'available') {
 									// Content that resolved during the report and then failed
 									// mid-stream is the sharpest integrity observation the
