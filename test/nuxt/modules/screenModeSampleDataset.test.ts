@@ -64,6 +64,7 @@ const SHOWS: Record<Game, Partial<Record<ScreenMode, Shown>>> = {
 		'pairings': text('Ana Lúcia Ferreira'),
 		'archetype-spotlight': text('Jo Lee'),
 		'head-to-head': text('Kenji Sato'),
+		'round-clock': text('50:00'),
 		'talent': text('Sam Okafor'),
 	},
 };

@@ -253,6 +253,7 @@ describe('screen Mode Event References', () => {
 			'head-to-head.featureMatchId: featureMatchSlot',
 			'head-to-head.player1Id: player',
 			'head-to-head.player2Id: player',
+			'round-clock.roundId: round',
 			'talent.talentId: talent',
 			'talent.talentIds: talentLineup',
 		]);

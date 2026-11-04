@@ -17,6 +17,7 @@ import { headToHeadModeConfigContract } from './screenModeConfigs/headToHead';
 import { metagameModeConfigContract } from './screenModeConfigs/metagame';
 import { pairingsModeConfigContract } from './screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHistory';
+import { roundClockModeConfigContract } from './screenModeConfigs/roundClock';
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
 import { talentModeConfigContract } from './screenModeConfigs/talent';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
@@ -29,6 +30,7 @@ import { headToHeadModeTokens } from './screenModeTokens/headToHead';
 import { metagameModeTokens } from './screenModeTokens/metagame';
 import { pairingsModeTokens } from './screenModeTokens/pairings';
 import { playerHistoryModeTokens } from './screenModeTokens/playerHistory';
+import { roundClockModeTokens } from './screenModeTokens/roundClock';
 import { standingsModeTokens } from './screenModeTokens/standings';
 import { talentModeTokens } from './screenModeTokens/talent';
 import { topCardsModeTokens } from './screenModeTokens/topCards';
@@ -311,6 +313,17 @@ const SCREEN_MODE_DEFINITIONS = {
 		config: headToHeadModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' },
 		modeTokens: headToHeadModeTokens,
+	},
+	'round-clock': {
+		label: 'Round Clock',
+		icon: 'i-lucide-timer',
+		displayType: 'overlay',
+		description: 'Time remaining in a Round',
+		cardGames: MTG_ONLY,
+		backgroundLayers: true,
+		config: roundClockModeConfigContract,
+		eventReferences: { roundId: 'round' },
+		modeTokens: roundClockModeTokens,
 	},
 	// Talent needs no results or Deck Lists, so ADR-0057 leaves it to every Card Game.
 	'talent': {

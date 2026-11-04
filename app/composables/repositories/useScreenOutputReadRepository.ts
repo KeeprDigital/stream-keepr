@@ -9,6 +9,7 @@ import type {
 	ScreenOutputMetagameResponse,
 	ScreenOutputPairingsResponse,
 	ScreenOutputPlayerDecksResponse,
+	ScreenOutputRoundClockResponse,
 	ScreenOutputStandingsResponse,
 	ScreenOutputTalentResponse,
 	ScreenOutputTopCutResponse,
@@ -61,6 +62,7 @@ export function useScreenOutputReadRepository() {
 		metagame: (scope: ScreenOutputReadScope) => read<ScreenOutputMetagameResponse>(scope, 'metagame'),
 		topCards: (scope: ScreenOutputReadScope) => read<CardBreakdownResponse>(scope, 'top-cards'),
 		topCut: (scope: ScreenOutputReadScope) => read<ScreenOutputTopCutResponse>(scope, 'top-cut'),
+		roundClock: (scope: ScreenOutputReadScope) => read<ScreenOutputRoundClockResponse>(scope, 'round-clock'),
 		featureMatchSlot: (scope: ScreenOutputReadScope, slotId: number) =>
 			read<ScreenOutputFeatureMatchResponse>(scope, `feature-match-slots/${slotId}`),
 		featureMatchDeckList: (scope: ScreenOutputReadScope, slotId: number, deckListId: number) =>

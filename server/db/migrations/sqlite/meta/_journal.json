@@ -138,7 +138,21 @@
     {
       "idx": 19,
       "version": "6",
-      "when": 1793759418425,
+      "when": 1793759043958,
+      "tag": "0022_installed_template_removal",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1793764918550,
+      "tag": "0023_round_timing",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1793766300810,
       "tag": "0024_talent_role",
       "breakpoints": true
     }

@@ -276,6 +276,9 @@ export const rounds = sqliteTable('rounds', {
 	roundNumber: integer('round_number').notNull(),
 	controlMode: text('control_mode', { enum: ROUND_CONTROL_MODE_VALUES }).notNull().default('default'),
 	lastSyncedAt: integer('last_synced_at', { mode: 'timestamp_ms' }),
+	// Operator-entered timing, which Melee Sync never writes (ADR-0066).
+	startedAt: integer('started_at', { mode: 'timestamp_ms' }),
+	durationMinutes: integer('duration_minutes'),
 
 	...timestamps,
 }, table => [

@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2eac8788-4054-40ff-aed1-a0b620d4a78a",
-  "prevId": "124a8b93-bf7f-49ff-96e8-77620228632d",
+  "id": "9b9837fc-1e84-44ec-ae73-1e66bd89b1bb",
+  "prevId": "7ddefdc1-b54c-4e78-a21d-5a38e75e7e52",
   "tables": {
     "archetype_cards": {
       "name": "archetype_cards",
@@ -4043,6 +4043,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "started_at": {
+          "name": "started_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "duration_minutes": {
+          "name": "duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -6491,6 +6505,20 @@
         "event_id": {
           "name": "event_id",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "removed_by": {
+          "name": "removed_by",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false

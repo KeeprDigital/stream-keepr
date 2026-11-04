@@ -115,6 +115,18 @@ async function handleEditRound(round: Round) {
 	await modal.open({ roundId: round.id });
 }
 
+async function handleStartRound(round: Round) {
+	if (!eventId.value)
+		return;
+	await runRequest(
+		() => roundStore.startRound(eventId.value!, round.id),
+		{
+			success: { title: 'Round Started', description: `${round.name} started now.`, color: 'success' },
+			error: ({ message }) => ({ title: 'Failed to Start Round', description: message, color: 'error' }),
+		},
+	);
+}
+
 async function handleDeleteRound(round: Round) {
 	if (!eventId.value)
 		return;
@@ -237,6 +249,7 @@ async function handleEnableManualOverride(round: Round) {
 			@sync-matches="handleSyncRoundMatches"
 			@enable-manual-override="handleEnableManualOverride"
 			@edit-round="handleEditRound"
+			@start-round="handleStartRound"
 			@delete-round="handleDeleteRound"
 		/>
 

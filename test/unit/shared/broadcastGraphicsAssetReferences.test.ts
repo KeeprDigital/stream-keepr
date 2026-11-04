@@ -314,6 +314,7 @@ describe('broadcastGraphicsGraphicAssetReferences', () => {
 			'pairings',
 			'archetype-spotlight',
 			'head-to-head',
+			'round-clock',
 			'talent',
 		]);
 

@@ -29,9 +29,8 @@ import { flattenGraphicItems } from '~~/shared/modules/graphics';
  *
  * - Both would pin the same revisions, under two owner kinds. Deleting the copy an
  *   author can see removes only that owner's Graphic Asset References; the Installed
- *   Graphics Template keeps pinning those revisions, and nothing exposes a way to
- *   remove one. The assets become permanently unreleasable, with no artifact an
- *   author can point at to explain why.
+ *   Graphics Template keeps pinning those revisions, with no artifact an author can
+ *   see to explain why.
  * - Revising the copy rewrites only the copy's references. The Installed Graphics
  *   Template goes on pinning the revisions the design used to need.
  *
@@ -42,9 +41,9 @@ import { flattenGraphicItems } from '~~/shared/modules/graphics';
  * ## What an imported entry cannot do, and why that is honest
  *
  * An Installed Graphics Template is the Graphics Asset Library's own record, so this
- * library reads it and never writes it: an imported entry cannot be renamed,
- * described, revised, or deleted here. It can be browsed, placed, and exported, which
- * is what a design is for. An author who wants to *change* an imported design places
+ * library never revises it: an imported entry cannot be renamed, described, or revised
+ * here. It can be browsed, placed, and exported, which is what a design is for, and
+ * removed, which the Graphics Asset Library does (ADR-0068). An author who wants to *change* an imported design places
  * it and saves the placed copy — the same route every authored entry took, and one
  * that produces a design this installation genuinely owns.
  */
@@ -58,7 +57,7 @@ export interface BroadcastGraphicTemplateLibraryEntry {
 	/** Present only on an entry a Template Package installed. */
 	provenance?: BroadcastGraphicTemplateOrigin;
 	/**
-	 * Whether this installation authored the entry, and so may revise or delete it.
+	 * Whether this installation authored the entry, and so may rename or revise it.
 	 *
 	 * Stated rather than inferred from {@link provenance} being absent, because the
 	 * two answer different questions: where a design came from, and who may change

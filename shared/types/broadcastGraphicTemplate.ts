@@ -53,11 +53,11 @@ export interface BroadcastGraphicTemplateSummary {
 	provenance?: BroadcastGraphicTemplateOrigin;
 	/**
 	 * Whether this installation authored the entry, and so may rename, describe,
-	 * revise, or delete it.
+	 * or revise it.
 	 *
 	 * An installed entry is the Graphics Asset Library's own record — this library
-	 * reads it and never writes it — so it can be browsed, placed, and exported but
-	 * not changed. Changing an imported design means placing it and saving the placed
+	 * reads it and never revises it — so it can be browsed, placed, exported, and
+	 * removed (ADR-0068), but not changed. Changing an imported design means placing it and saving the placed
 	 * copy, which is the same route every authored entry took.
 	 */
 	authored: boolean;

@@ -44,6 +44,8 @@ const ScreenModesArchetypeSpotlightDisplay = defineAsyncComponent(() => import('
 const ScreenModesArchetypeSpotlightSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/ArchetypeSpotlight/Settings.vue'));
 const ScreenModesHeadToHeadDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/HeadToHead/Display.vue'));
 const ScreenModesHeadToHeadSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/HeadToHead/Settings.vue'));
+const ScreenModesRoundClockDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/RoundClock/Display.vue'));
+const ScreenModesRoundClockSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/RoundClock/Settings.vue'));
 const ScreenModesTalentDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Talent/Display.vue'));
 const ScreenModesTalentSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Talent/Settings.vue'));
 
@@ -88,6 +90,7 @@ export const SCREEN_MODE_RUNTIME = {
 	'pairings': { displayComponent: ScreenModesPairingsDisplay, settingsComponent: ScreenModesPairingsSettings },
 	'archetype-spotlight': { displayComponent: ScreenModesArchetypeSpotlightDisplay, settingsComponent: ScreenModesArchetypeSpotlightSettings },
 	'head-to-head': { displayComponent: ScreenModesHeadToHeadDisplay, settingsComponent: ScreenModesHeadToHeadSettings },
+	'round-clock': { displayComponent: ScreenModesRoundClockDisplay, settingsComponent: ScreenModesRoundClockSettings },
 	'talent': { displayComponent: ScreenModesTalentDisplay, settingsComponent: ScreenModesTalentSettings },
 } satisfies { [M in ScreenMode]: ScreenModeRuntimeDefinition };
 

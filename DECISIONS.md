@@ -540,11 +540,11 @@ Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**Every read a rendering of a Screen makes goes through that Screen**, under `/api/screen-output/events/:id/screens/:screenId/**`, and is admitted by its Screen Output Asset Capability or an operator Session (ADR-0010's dual credential). The family is: `event` (the Event context), `card`, `broadcast-graphics/live-session`, `player-history`, `standings`, `metagame`, `top-cards`, `pairings` (#751), `top-cut` (#752), `head-to-head` (#760), `archetype-spotlight` (#761), `feature-match-slots/:slotId`, `players/:playerId/decks`, and the Screen itself by id (for re-reading it after `screen:updated`), beside the existing slug lookup, `broadcast-deck-list` and asset delivery. Each new read is admitted by `requireScreenOutputRead`, and refuses with its one non-enumerating 404.
+**Every read a rendering of a Screen makes goes through that Screen**, under `/api/screen-output/events/:id/screens/:screenId/**`, and is admitted by its Screen Output Asset Capability or an operator Session (ADR-0010's dual credential). The family is: `event` (the Event context), `card`, `broadcast-graphics/live-session`, `player-history`, `standings`, `metagame`, `top-cards`, `pairings` (#751), `top-cut` (#752), `head-to-head` (#760), `archetype-spotlight` (#761), `round-clock` (#916), `feature-match-slots/:slotId`, `players/:playerId/decks`, and the Screen itself by id (for re-reading it after `screen:updated`), beside the existing slug lookup, `broadcast-deck-list` and asset delivery. Each new read is admitted by `requireScreenOutputRead`, and refuses with its one non-enumerating 404.
 
 **A capability reaches a mode's data only while its Screen is in that mode** (`requireScreenOutputModeRead`): a Screen publishes what it is showing, not every mode it holds configuration for.
 
-**The server derives the resource from the Screen's saved configuration.** No id in the URL names what to read where the configuration already does: Player History reads its configured Player, Standings its Round and watchlist, Pairings its Round's Matches, Top Cut Bracket the bracket of its Phase, Head-to-Head the two Players its Feature Match Slot seats now or the two it picks (#760), Metagame and Most Played Cards the breakdown their fields describe, Archetype Spotlight the archetype detail its Archetype and scope describe, each counting Conversion Rate against the Event's Conversion Target (ADR-0061) (one shared query builder, `shared/utils/metagameQuery.ts`, serves both sides), Talent the Talents it picks (#782). Two reads take a path id, because a rendering legitimately asks for something the configuration names only indirectly:
+**The server derives the resource from the Screen's saved configuration.** No id in the URL names what to read where the configuration already does: Player History reads its configured Player, Standings its Round and watchlist, Pairings its Round's Matches, Top Cut Bracket the bracket of its Phase, Head-to-Head the two Players its Feature Match Slot seats now or the two it picks (#760), Metagame and Most Played Cards the breakdown their fields describe, Round Clock its Round, or the Current Round with none picked (#916), Archetype Spotlight the archetype detail its Archetype and scope describe, each counting Conversion Rate against the Event's Conversion Target (ADR-0061) (one shared query builder, `shared/utils/metagameQuery.ts`, serves both sides), Talent the Talents it picks (#782). Two reads take a path id, because a rendering legitimately asks for something the configuration names only indirectly:
 
 - `feature-match-slots/:slotId` — a capability reaches only the Slot the current mode shows; a Session reaches any, because the Feature Match Overlay's editor preview renders a Slot not yet saved.
 - `players/:playerId/decks` — a capability reaches only the Deck List mode's selected Player or the shown Slot's two Players, so it cannot read the Event's decklists ahead of their broadcast.
@@ -974,7 +974,7 @@ One function ran about ten steps in a fixed order. It published 3+N messages, an
 
 ## ADR-0034: Every graphics Template write requires each of its references to be selectable, fenced at the commit
 
-Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/issues/614) · Amended 2026-10-28: the Graphic Style Set operations it also covered are gone · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830)
+Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/issues/614) · Amended 2026-10-28: the Graphic Style Set operations it also covered are gone · [#830](https://github.com/KeeprDigital/stream-keepr/issues/830) · Amended 2026-11-04 by ADR-0068: an Installed Graphics Template's references hold Retire back too · [#622](https://github.com/KeeprDigital/stream-keepr/issues/622)
 
 ### Decision
 
@@ -984,7 +984,7 @@ Accepted · 2026-10-21 · [#614](https://github.com/KeeprDigital/stream-keepr/is
 
 **The store asks again in the statement that commits.** The template row's `INSERT` or `UPDATE` carries `REQUIRED_GRAPHIC_ASSET_REFERENCES_RESOLVE`, the rule the Screen write already uses, with no reference allowed to be retired. The reference-index insert reads the same bound array under the same rule. So a template commits only with every reference resolving, and then every reference is indexed. The rule now lives in `server/modules/graphic-asset-reference-resolution.ts`, shared by the Screen and both template stores. A commit the rule refuses answers its own `409`, told apart from a stale `revision` by the revision still standing.
 
-**Retire is refused while a saved template references the asset.** Retiring a Graphic Asset is refused while any Broadcast Graphic Template or Feature Match Layout Template references any of its revisions. It answers `in-use` with those templates' usage, as Trash answers a referenced asset, and the Library Workspace names them. The condition sits in the catalogue's retiring `UPDATE`, so a template saved concurrently either commits first and holds the asset back, or finds the asset retired and is refused. A Screen's reference does not hold Retire back: a Screen keeps an unchanged retired reference resolving, as before. This matches a selected Broadcast Deck List, which cannot be deleted. A Theme's reference, a Screen Theme Override's and a Talent's photo do hold it back (ADR-0050, ADR-0067).
+**Retire is refused while a saved template references the asset.** Retiring a Graphic Asset is refused while any Broadcast Graphic Template, Feature Match Layout Template or Installed Graphics Template (since ADR-0068) references any of its revisions. It answers `in-use` with those templates' usage, as Trash answers a referenced asset, and the Library Workspace names them. The condition sits in the catalogue's retiring `UPDATE`, so a template saved concurrently either commits first and holds the asset back, or finds the asset retired and is refused. A Screen's reference does not hold Retire back: a Screen keeps an unchanged retired reference resolving, as before. This matches a selected Broadcast Deck List, which cannot be deleted. A Theme's reference, a Screen Theme Override's and a Talent's photo do hold it back (ADR-0050, ADR-0067).
 
 **Content availability is checked at the route only.** It is the byte store's state, which no D1 statement can see.
 
@@ -998,7 +998,7 @@ Without the Retire guard, the rule would turn retiring an asset into making ever
 
 - A template's references cannot become retired, trashed, pruned, or purged under it. Trash, Revision Pruning, and purge each prove no reference points at a revision, and Retire now proves no template does.
 - Unavailable content can still appear under a saved template. It refuses that template's writes until Exact-Byte Repair restores the bytes.
-- An Installed Graphics Template does not hold Retire back. It is never revised and cannot be deleted, so counting it would make its assets unretirable for good. Retiring one of its assets leaves it unplaceable until restored, as before.
+- An Installed Graphics Template holds Retire back like an authored template (amended by ADR-0068). It is never revised, so this once made its assets unretirable for good; removing it now releases them. An asset retired before that amendment can still sit under one, leaving it unplaceable until restored.
 - A template already holding a retired reference (written before this rule, or by a direct database change) is refused on every write until the reference is replaced in that write or the asset restored.
 - A rename on a stale `revision` skips the route's check and gets the revision conflict, so an author is not told about a document they have not read. A revision carrying a new document is checked first, as before.
 - A Template Package Installation writes Installed Graphics Templates through the library's own store, which already maps every reference to one exact local revision.
@@ -1158,7 +1158,7 @@ Accepted · 2026-10-21 · [#585](https://github.com/KeeprDigital/stream-keepr/is
 
 **The checks are unchanged.** An id outside the Event is refused with 404, as before. A Deck Source naming another Event's Player is refused with 404, and a Broadcast Deck List that is not selectable with 409 `SCREEN_DECK_SOURCE_CONFLICT`. The Deck Source guard triggers (`screens_deck_source_insert_guard` and `screens_deck_source_update_guard`) stay. They prove the Deck Source again inside the Screen write's own statement, so a Player or Broadcast Deck List that goes away between the check and the write still cannot be saved.
 
-The declarations are Card Spotlight, Feature Match Controls and Feature Match Overlay `featureMatchId` (Feature Match Slot), Deck List `deckSource`, Standings `roundId` and `playerListId`, Metagame and Most Played Cards `playerListId`, Player History `playerId`, Pairings `roundId` (#751), Top Cut Bracket `phaseId` (#752), Head-to-Head `featureMatchId` (Feature Match Slot), `player1Id` and `player2Id` (#760), Archetype Spotlight `archetypeId` (Archetype) and `playerListId` (#761), and Talent `talentId` (Talent) and `talentIds` (Talent lineup, an ordered list of Talent ids) (#782). Background and Broadcast Graphics declare none. A Broadcast Graphics stack declares only which kind each Graphic Source Selection picks; the pick itself is Live Session state.
+The declarations are Card Spotlight, Feature Match Controls and Feature Match Overlay `featureMatchId` (Feature Match Slot), Deck List `deckSource`, Standings `roundId` and `playerListId`, Metagame and Most Played Cards `playerListId`, Player History `playerId`, Pairings `roundId` (#751), Top Cut Bracket `phaseId` (#752), Head-to-Head `featureMatchId` (Feature Match Slot), `player1Id` and `player2Id` (#760), Archetype Spotlight `archetypeId` (Archetype) and `playerListId` (#761), Round Clock `roundId` (#916), and Talent `talentId` (Talent) and `talentIds` (Talent lineup, an ordered list of Talent ids) (#782). Background and Broadcast Graphics declare none. A Broadcast Graphics stack declares only which kind each Graphic Source Selection picks; the pick itself is Live Session state.
 
 ### Why
 
@@ -1927,7 +1927,7 @@ Accepted · 2026-11-03 · [#907](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**A Phase, Round or Archetype a Screen names can be deleted, and the delete unsets that Event Reference in the same write.** `buildReleaseScreenEventReferencesQuery` removes, from each Screen in the Event, every Event Reference of the given kinds naming a record the Event no longer holds, and bumps its `stateVersion`. The fields come from the Screen Mode Definitions' `eventReferences` of kind `phase`, `round` and `archetype` (ADR-0038), not a list kept here, so a new mode declaring one is released with no further change. Today they are Top Cut Bracket `phaseId`, Standings and Pairings `roundId`, and Archetype Spotlight `archetypeId`. The field is removed, not nulled: each is optional, and a Standings Screen with no Round shows the Current Round.
+**A Phase, Round or Archetype a Screen names can be deleted, and the delete unsets that Event Reference in the same write.** `buildReleaseScreenEventReferencesQuery` removes, from each Screen in the Event, every Event Reference of the given kinds naming a record the Event no longer holds, and bumps its `stateVersion`. The fields come from the Screen Mode Definitions' `eventReferences` of kind `phase`, `round` and `archetype` (ADR-0038), not a list kept here, so a new mode declaring one is released with no further change. Today they are Top Cut Bracket `phaseId`, Standings, Pairings and Round Clock `roundId`, and Archetype Spotlight `archetypeId`. The field is removed, not nulled: each is optional, and a Standings Screen with no Round shows the Current Round.
 
 **Every path that deletes one runs it, in the delete's batch, after the delete.** Deleting a Round releases Rounds; deleting a Phase releases Phases and the Rounds it cascades away; deleting an Archetype releases Archetypes. Melee Sync's removal of stale imported structure and the Melee data reset release Phases and Rounds (`buildRemoveImportedStructureQueries`). It runs after the delete, unlike ADR-0032's clear, and selects by absence rather than by id: a cascade and an imported structure removal decide what they delete as the batch runs (ADR-0040), so only afterwards does the Event say what is gone.
 
@@ -2113,6 +2113,41 @@ Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/is
 - **Replace the group's surface with a Shape Graphic Item.** It keeps the backdrop, but invents a layer the author never made; E12 drops what is not inherited.
 - **Refuse to ungroup a row or column group.** The author would have to switch it to canvas first, which moves its children, so the only way out of a stack would move what it held.
 
+## ADR-0066: A Round's start and duration are the operator's, and a Round Clock projects from them
+
+Accepted · 2026-11-04 · [#916](https://github.com/KeeprDigital/stream-keepr/issues/916). Records N1 b from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783). Extends ADR-0040 and ADR-0046; follows ADR-0009 and ADR-0022.
+
+### Decision
+
+**A Round gains an optional start and duration, entered by an operator.** `rounds.started_at` (a server timestamp) and `rounds.duration_minutes` (whole minutes, 1 to 600) are added by migration `0023`. Both are `manualWritable` in `PROVENANCE_ENTITIES`, so a Round edit (`PATCH …/rounds/:roundId`) accepts them, an ISO instant and a number, and `null` clears either. A new Round starts untimed: the create write refuses them. They ride the Round's response, so `round:updated` announces them.
+
+**"Start now" sets the start to server time.** `POST …/rounds/:roundId/start` (`roundWriteModule().start`) writes the server's own clock as the start, so the operator's browser clock never sets it. The Event Structure page offers it on each Round row until the Round has started, then in the Round's menu, where it restarts the clock. The Round edit modal edits the start and duration, and sends either only when edited, so a save never undoes a "Start now" made while it was open.
+
+**Melee Sync never writes either field, whether the Round is imported or manual.** Melee imports no timing, and neither its Round upsert (`upsertByExternalId`) nor its removal of imported structure (ADR-0040) names them, so an imported Round keeps its operator's timing through every sync, and through being kept as manual structure. Unlike ADR-0046, no edited-field list is needed: there is no Melee value to keep apart.
+
+**The Round Clock Screen Mode shows a Round's time remaining as a clock projection.** `projectRoundClock` (`shared/utils/roundClock.ts`) is a pure function of the Round's start, its duration and server time: before the start, or with none, it shows the full duration, not running; after the end, `0:00`; with no duration, no clock. Every rendering evaluates it on the shared clock (`useServerTime`) and re-evaluates exactly when it next changes (a start further off than one timer can wait is waited for in steps), so renderings of the same Round agree, and nothing writes as it runs or when it runs out, as with Page Rotation (ADR-0009) and Card Timeout (ADR-0022). The display uses `formatClockTime`.
+
+**It shows the Current Round unless it picks a Round.** Its `roundId` is an Event Reference of kind `round` (ADR-0038), released when that Round is deleted (ADR-0060). Unset, its Screen Output read (`round-clock`) answers the Current Round (ADR-0052), so a Melee Event's clock follows the Event from Round to Round. Its data re-reads on its Round's `round:updated`, so "Start now" starts every output counting without a reload, and while following the Current Round, on any Round, Phase, Match or Melee pairing change that may move it.
+
+**It is a plain overlay mode, Magic: The Gathering only.** It declares `cardGames: MTG_ONLY` (a One Piece Card Game Event has no Rounds, ADR-0057), a Background Layer stack, and Mode Tokens defaulting to Foundation Tokens: its surface, the Round name's type and colour, and the clock's type and its colour running, before the start and after the end. A Theme preview shows it through the Screen Mode Sample Dataset's Round 8, not yet started, at 50:00.
+
+### Why
+
+Productions want an on-air clock of the time left in the Round, and Rounds stored no timing and Melee Sync imports none, so the operator enters it. A projection, rather than a ticking state an output persists, keeps every output in step without a writer and survives a realtime outage, the reasons ADR-0009 gives.
+
+### Consequences
+
+- The clock is only as right as the operator's entry. A Round started late on the floor is corrected by editing its start or pressing "Start now" again.
+- A manual Event has no Current Round, so its Round Clock must pick a Round.
+- The sample shows the clock before its start, so a Theme preview paints the clock's colour before the start, not its running or ended colours; the Theme token tests probe all three.
+- Tests: `test/unit/shared/roundClock.test.ts` holds the projection on a fake clock; `test/unit/server/schemas/round.test.ts` the duration's bounds; `test/unit/server/modules/roundTiming.sqlite.test.ts` the Round writes, "Start now" and both Melee Sync paths; `test/unit/server/services/roundClock.sqlite.test.ts` which Round the read shows; `test/nuxt/composables/screen/useRoundClockModeData.test.ts` the ticking and re-reads.
+
+### Rejected alternatives
+
+- **Melee-imported Round timing.** Melee Sync imports none today, and #783 chose operator entry (N1 b).
+- **The browser's clock stamps "Start now".** Two operators' browsers can disagree by seconds; the server's clock is the one every rendering already syncs to.
+- **A Round Clock that counts up past the end, or a timer state an operator pauses.** The ticket asks for `0:00` after the end; a pause is a Feature Match Session clock's concern, not a Round's.
+
 ## ADR-0067: A Talent's photo is a Graphic Asset Reference that holds Retire back
 
 Accepted · 2026-11-04 · [#918](https://github.com/KeeprDigital/stream-keepr/issues/918). Records T4 b from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
@@ -2141,6 +2176,38 @@ The Talent Screen Mode (#782) and productions need a photo per Talent, and all b
 
 - **Let Retire proceed, as a Screen's own mode reference does.** The Talent would keep a retired photo that #782 would put on air; the maintainer chose the Theme's rule (#918).
 - **Admit the photo in the capability now.** No Screen Mode shows a Talent's photo yet; #782 owns that change, made by ADR-0070.
+
+## ADR-0068: An Installed Graphics Template may be removed, releasing its references, and a retried installation reinstalls it
+
+Accepted · 2026-11-04 · [#622](https://github.com/KeeprDigital/stream-keepr/issues/622) · Amends ADR-0034
+
+### Decision
+
+**Any signed-in User may remove an Installed Graphics Template.** It is the library's own Delete, for an imported entry as for an authored one. #411 will narrow who may. Removal releases the Template's Graphic Asset References and takes it out of the library in one transaction (`removeInstalledGraphicsTemplate` in the Graphics Asset Library). Copies placed from it are independent and unaffected. Editing an Installed Graphics Template stays out of scope: it is still never renamed or revised, and is changed by placing it and saving the placed copy.
+
+**The row stays, as provenance.** A removed Template keeps its document, source identity and installing operation, marked with `removed_at` and `removed_by`. It is in no listing, reads as not found, and holds no reference, so nothing in the library counts it. The Graphics Ingestion Operation that installed it keeps its idempotency key and its `packageInstallation` receipt unchanged.
+
+**Retrying the installation reinstalls the same Template.** Posting the installation of a completed operation answers with that operation, as before. When the Template it published has been removed, the post first reinstalls it under the same identity. The staged package is long released, but nothing needs it: the stored document already names local revisions, so reinstalling re-indexes those (`installedTemplateDocumentReferences`). As installation required of a reused revision, each must exist on an active Graphic Asset. If one is retired, trashed or gone, the retry is refused with `409` and nothing changes; restoring the asset, or importing the Template Package again, is the way back. Importing again creates a new Installed Graphics Template, as it always has.
+
+**Removal follows the Retire and Trash rules.** A Graphic Asset is refused Trash while anything references it, and Retire while a template does. An Installed Graphics Template's references now hold Retire back like an authored template's (amending ADR-0034), and removing the Template is what releases them. Retire and Trash would also refuse to remove a Template something still referenced. Nothing references an Installed Graphics Template by identity today, because placing one copies it, so no removal is refused on that ground yet.
+
+### Why
+
+An Installed Graphics Template could not be deleted, so the revisions its references pinned could never be Trashed, pruned or purged, even after nothing else used them (#622). ADR-0034 let Retire ignore those references only because nothing could release them. With removal, they can be treated like any other template's.
+
+### Consequences
+
+- A revision only a removed Template pinned is unreferenced at once: Trash may take its asset, and a superseded one becomes a Revision Pruning candidate at the next Graphics Retention Sweep. A revision another artifact still references stays held by that reference.
+- **A Graphic Asset an Installed Graphics Template references can no longer be Retired** until that Template is removed. This applies to every installation already made, with no backfill: their references were always indexed under `installed-graphics-template`. An asset already retired under an Installed Graphics Template stays retired, and that Template stays unplaceable until the asset is restored.
+- Only the User who started an installation can retry it, as for every Graphics Ingestion Operation, while any signed-in User may remove what it installed. A retry reinstalls only while that operation's record exists; the retention contract plans to clean one up a year after it ends. Either way, importing the Template Package again still works, as a new Installed Graphics Template. The library's Delete prompt says so.
+- Removal records no Evidence: it is not a Graphic Asset lifecycle transition. The removed row's `removed_by` and `removed_at` record who removed it and when.
+- Migration `0022_installed_template_removal` adds the two nullable columns. Existing rows read as installed.
+
+### Rejected alternatives
+
+- **Delete the row.** A retried installation would then have nothing to reinstall from, because its staged bytes are released at completion, and the receipt would name a Template no record explains.
+- **Refuse a retry after removal as already handled.** The maintainer chose to reinstall (#622).
+- **Two-stage removal, like Trash, with a restore window.** Retrying the installation already restores a removed Template, for as long as its assets can take references.
 
 ## ADR-0069: An Archetype's Pinned Chart Series names a Theme chart series, and is placed before the id rule
 

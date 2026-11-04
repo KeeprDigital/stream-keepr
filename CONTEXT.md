@@ -17,7 +17,7 @@ _Avoid_: game, game mode, game system, TCG.
 A segment of an Event structure, such as Swiss or Top Cut.
 
 **Round**:
-A unit of tournament play within a Phase, containing Matches and optional tournament-state metadata synced from Melee. A Melee-managed Round is complete when every Match stored from Melee in it has a Match Result (reported or a bye), or when the next Melee-managed Round in the Event's Round order has pairings: Rounds run strictly in sequence, so pairing the next one means this one is done. Completion is derived from synced data; no operator completes a Round (ADR-0052).
+A unit of tournament play within a Phase, containing Matches and optional tournament-state metadata synced from Melee. A Melee-managed Round is complete when every Match stored from Melee in it has a Match Result (reported or a bye), or when the next Melee-managed Round in the Event's Round order has pairings: Rounds run strictly in sequence, so pairing the next one means this one is done. Completion is derived from synced data; no operator completes a Round (ADR-0052). A Round may carry operator-entered timing, a start and a duration in minutes, which a Round Clock counts down; Melee Sync never writes either (ADR-0066).
 
 **Current Round**:
 The latest Melee-managed Round, in the Event's Round order (Phase sort order, round number, id), that has pairings: at least one Match stored from Melee. None before any Round is paired. Derived from stored Matches, never set by an operator (ADR-0052).
@@ -157,7 +157,7 @@ _Avoid_: player sync, match snapshot refresh.
 A broadcast or control surface that can show Feature Match Slot output, decks/cards, standings, graphics, or other prepared content.
 
 **Screen Mode**:
-A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, Standings, Top Cut Bracket, Feature Match Controls, Feature Match Overlay, Broadcast Graphics, Metagame, Most Played Cards, Player History, Pairings, Archetype Spotlight, Head-to-Head, or Talent. Each is named by what it shows or controls. Its key (`card`, `top-cards`, `top-cut`, …) is not its name: renaming a mode leaves its key alone, and a key renamed after release is migrated in storage and still accepted in its former spelling on a Screen write (ADR-0043).
+A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, Standings, Top Cut Bracket, Feature Match Controls, Feature Match Overlay, Broadcast Graphics, Metagame, Most Played Cards, Player History, Pairings, Archetype Spotlight, Head-to-Head, Round Clock, or Talent. Each is named by what it shows or controls. Its key (`card`, `top-cards`, `top-cut`, …) is not its name: renaming a mode leaves its key alone, and a key renamed after release is migrated in storage and still accepted in its former spelling on a Screen write (ADR-0043).
 _Avoid_: Top Cards for the Most Played Cards mode (one word from Top Cut); Feature Match for the control mode (the on-air one is the Feature Match Overlay); Deck Screen and Card Screen for a Screen in Deck List or Card Spotlight mode (say Deck List Screen, Card Spotlight Screen).
 
 **Screen Mode Definition**:
@@ -201,6 +201,10 @@ _Avoid_: hotlink, external asset
 **Animation Effect**:
 A named, autonomously animating background renderer that ships with Stream Keepr, with its own per-effect configuration. Its hosts are the Feature Match Overlay Frame, a Background Layer (on the Background Screen and every plain overlay mode), and the Broadcast Graphics Background; the vocabulary is closed, so a config or package naming an unimplemented effect is refused rather than approximated (ADR-0014).
 _Avoid_: Vanta effect, frame animation, shader background, background effect
+
+**Round Clock**:
+A Screen Mode showing a Round's name and the time left in it, projected from the Round's operator-entered start and duration and server time, so every rendering of the same Round shows the same time. Before the start it shows the full duration, not running; after the end, `0:00`. Like Card Timeout and Page Rotation, nothing writes as it runs or when it runs out. It shows the Current Round unless its operator picks a Round. Magic: The Gathering only (ADR-0066).
+_Avoid_: round timer (the Feature Match Session clock is a Match's, not a Round's).
 
 **Page Rotation**:
 The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
@@ -479,10 +483,10 @@ The identity of one exact preflight proposal — archive bytes, compatibility pr
 How one packaged asset identity would become a local Graphic Asset, decided by provenance: an exact Graphic Asset Origin match reuses the local revision; a related revision, digest-only match, or new content creates a separate local Graphic Asset (reusing canonical bytes where the digest exists). The same origin identity and revision with a different digest rejects the whole package.
 
 **Template Package Installation**:
-The one atomic act turning a confirmed Template Package Preflight Report into local state. It re-derives the report from the same staged bytes and installs only while the conclusion matches what was confirmed; bytes and derivatives are written first, then one transaction publishes every asset, revision, origin, association, rewritten reference, and the Installed Graphics Template. Repeating it answers with the installation already committed.
+The one atomic act turning a confirmed Template Package Preflight Report into local state. It re-derives the report from the same staged bytes and installs only while the conclusion matches what was confirmed; bytes and derivatives are written first, then one transaction publishes every asset, revision, origin, association, rewritten reference, and the Installed Graphics Template. Repeating it answers with the installation already committed, first reinstalling that Installed Graphics Template if it was removed (ADR-0068).
 
 **Installed Graphics Template**:
-The independent local copy of the single Template a Template Package carried, with its own identity and managed revision. Its Graphic Asset References already point at exact local revisions and protect them; the source identity is provenance only.
+The independent local copy of the single Template a Template Package carried, with its own identity and managed revision. Its Graphic Asset References already point at exact local revisions and protect them; the source identity is provenance only. It is never revised, but any signed-in User may remove it, which releases its references and keeps its record as provenance (ADR-0068).
 _Avoid_: Imported template, template installation record.
 
 ### Graphics Asset Library
@@ -510,7 +514,7 @@ The normal, warning, critical, or full state derived from use of the Canonical G
 A stable-identity library resource for a validated image, silent video, or font, owned by the installation-wide Graphics Asset Library and reusable across Events. Events may associate with or reference one but never own it.
 
 **Retired Graphic Asset**:
-A Graphic Asset hidden from discovery and unavailable for new references while existing references keep resolving. An asset a saved template, a Theme, a Screen Theme Override or a Talent's photo references cannot be retired (ADR-0034, ADR-0050, ADR-0067). It may be restored.
+A Graphic Asset hidden from discovery and unavailable for new references while existing references keep resolving. An asset a saved or installed template, a Theme, a Screen Theme Override or a Talent's photo references cannot be retired (ADR-0034, ADR-0050, ADR-0067, ADR-0068). It may be restored.
 
 **Trashed Graphic Asset**:
 An unreferenced Graphic Asset removed from discovery and new references, restorable for 30 days; afterwards it is purged only after a fresh proof that no reference points to any revision.
@@ -959,9 +963,10 @@ _Avoid_: worst-case data, overflow data
 - Two packaged identities claiming one source identity and revision reject the complete package
 - A proposal reusing a **Retired Graphic Asset** or **Trashed Graphic Asset** is reported before confirmation and stays retryable, since neither takes new references until restored
 - A later locally created revision never inherits **Graphic Asset Origin** from an imported one
-- An **Installed Graphics Template** owns one ordinary **Graphic Asset Reference** per asset field, so a pinned asset cannot enter Trash
+- An **Installed Graphics Template** owns one ordinary **Graphic Asset Reference** per asset field, so a pinned asset cannot be retired or enter Trash until the Template is removed
+- Removing an **Installed Graphics Template** releases its references in the same write and leaves placed copies untouched; retrying its **Template Package Installation** reinstalls it while every revision it pins is on an active **Graphic Asset** (ADR-0068)
 - Every write of a **Broadcast Graphic Template** or **Feature Match Layout Template** requires each **Graphic Asset Reference** it holds to name an available revision of an active **Graphic Asset** whose kind fits its slot, including references it already held (ADR-0034)
-- A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template**, **Feature Match Layout Template**, **Theme**, **Screen Theme Override** or **Talent** references any of its revisions, and the refusal names them, a Talent with its Event; a **Screen**'s own mode reference or an **Installed Graphics Template**'s does not hold it back (ADR-0034, ADR-0050, ADR-0067)
+- A **Graphic Asset** cannot be retired while any **Broadcast Graphic Template**, **Feature Match Layout Template**, **Installed Graphics Template**, **Theme**, **Screen Theme Override** or **Talent** references any of its revisions, and the refusal names them, a Talent with its Event; a **Screen**'s own mode reference does not hold it back (ADR-0034, ADR-0050, ADR-0067, ADR-0068)
 - A **Template Package Installation** run inside an **Event** associates every asset it created or reused with that Event without changing reused assets' metadata
 - A failed or cancelled installation leaves nothing discoverable
 

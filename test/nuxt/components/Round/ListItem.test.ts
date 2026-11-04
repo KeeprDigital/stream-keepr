@@ -19,6 +19,8 @@ function makeRound(overrides: Partial<RoundResponse> = {}): RoundResponse {
 		externalSource: null,
 		externalId: null,
 		lastSyncedAt: null,
+		startedAt: null,
+		durationMinutes: null,
 		createdAt: new Date('2026-01-01'),
 		updatedAt: new Date('2026-01-01'),
 		...overrides,
@@ -82,6 +84,54 @@ describe('roundListItem', () => {
 		const wrapper = mountRow(makeRound(overrides as Partial<RoundResponse>), isMeleeEvent);
 
 		expect(await menuLabels(wrapper)).toEqual(menu);
+	});
+
+	// "Start now" is one click until the Round starts; after, restarting its clock waits in the menu (ADR-0066).
+	it.each([
+		[
+			'an unstarted Round',
+			{ durationMinutes: 50 },
+			true,
+			false,
+			'50 min',
+		],
+		[
+			'a started Round',
+			{ durationMinutes: 50, startedAt: '2026-11-04T10:00:00.000Z' },
+			false,
+			true,
+			'50 min · started',
+		],
+		[
+			'an untimed Round',
+			{},
+			true,
+			false,
+			null,
+		],
+	] as const)('offers %s "Start now" and shows its timing', async (_, overrides, button, inMenu, timing) => {
+		const wrapper = mountRow(makeRound(overrides as unknown as Partial<RoundResponse>));
+
+		const startButton = wrapper.findAll('button').find(candidate => candidate.text() === 'Start now');
+		expect(!!startButton).toBe(button);
+		expect((await menuLabels(wrapper)).includes('Start now')).toBe(inMenu);
+		const badge = wrapper.find('[data-testid="round-timing"]');
+		expect(badge.exists()
+			? badge.text()
+			: null).toEqual(timing
+			? expect.stringContaining(timing)
+			: null);
+	});
+
+	it('asks to start the Round from its "Start now"', async () => {
+		const round = makeRound();
+		const wrapper = mountRow(round);
+
+		await wrapper.findAll('button').find(candidate => candidate.text() === 'Start now')!.trigger('click');
+
+		expect(wrapper.emitted('startRound')).toEqual([
+			[round],
+		]);
 	});
 
 	it('renders no sync badge until the Round has been synced', () => {

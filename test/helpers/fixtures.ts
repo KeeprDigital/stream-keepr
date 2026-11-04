@@ -349,6 +349,8 @@ export function createMockRound(overrides?: Partial<DbRound>): DbRound {
 		roundNumber: 1,
 		controlMode: 'default',
 		lastSyncedAt: null,
+		startedAt: null,
+		durationMinutes: null,
 		...defaultTimestamps(overrides),
 		...overrides,
 	};

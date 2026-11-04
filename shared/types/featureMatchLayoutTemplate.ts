@@ -49,8 +49,8 @@ export interface FeatureMatchLayoutTemplateSummary {
 	provenance?: FeatureMatchLayoutTemplateOrigin;
 	/**
 	 * Whether this installation authored the entry, and so may rename, describe,
-	 * revise, or delete it. An imported entry is the Graphics Asset Library's own
-	 * record: browsed, placed, and exported here, never written.
+	 * or revise it. An imported entry is the Graphics Asset Library's own record:
+	 * browsed, placed, exported, and removed here, never revised (ADR-0068).
 	 */
 	authored: boolean;
 	/** Graphic Items in the saved composition, Graphic Group children included. */

@@ -1487,6 +1487,7 @@ const modeConfigForms = {
 	'pairings': configContractModeForms('pairings'),
 	'archetype-spotlight': configContractModeForms('archetype-spotlight'),
 	'head-to-head': configContractModeForms('head-to-head'),
+	'round-clock': configContractModeForms('round-clock'),
 	'talent': configContractModeForms('talent'),
 } satisfies Record<ScreenMode, unknown>;
 
@@ -1519,6 +1520,7 @@ export const playerHistoryModeConfigSchema = modeConfigCompleteSchemaMap['player
 export const pairingsModeConfigSchema = modeConfigCompleteSchemaMap.pairings;
 export const archetypeSpotlightModeConfigSchema = modeConfigCompleteSchemaMap['archetype-spotlight'];
 export const headToHeadModeConfigSchema = modeConfigCompleteSchemaMap['head-to-head'];
+export const roundClockModeConfigSchema = modeConfigCompleteSchemaMap['round-clock'];
 export const talentModeConfigSchema = modeConfigCompleteSchemaMap.talent;
 
 /**

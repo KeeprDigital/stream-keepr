@@ -27,6 +27,7 @@ export const SCREEN_MODE_VALUES = [
 	'pairings',
 	'archetype-spotlight',
 	'head-to-head',
+	'round-clock',
 	'talent',
 ] as const;
 /**

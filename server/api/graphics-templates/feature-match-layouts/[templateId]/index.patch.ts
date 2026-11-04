@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
 	try {
 		const template = await featureMatchLayoutTemplateService().update(templateId, body);
 		if (!template) {
-			await refuseInstalledFeatureMatchLayoutTemplateWrite(event, templateId, 'revised');
+			await refuseInstalledFeatureMatchLayoutTemplateWrite(event, templateId);
 			throw createError({
 				statusCode: 404,
 				statusMessage: 'Not Found',

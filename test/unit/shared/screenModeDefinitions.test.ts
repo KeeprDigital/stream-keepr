@@ -50,6 +50,7 @@ describe('screen Mode Definition module', () => {
 		'pairings',
 		'archetype-spotlight',
 		'head-to-head',
+		'round-clock',
 		'talent',
 	];
 	it.each(SCREEN_MODE_VALUES.map(mode => [

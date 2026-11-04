@@ -146,6 +146,11 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 		editor: 'TopCut',
 		variants: [{}],
 	},
+	// Its Round picker is an Event Reference; only the name toggle is scalar.
+	'round-clock': {
+		editor: 'RoundClock',
+		variants: [{}],
+	},
 	// Each scope's own field, a Fixed card width, and auto-page.
 	'top-cards': {
 		editor: 'TopCards',

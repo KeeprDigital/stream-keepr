@@ -334,17 +334,26 @@ export const installedGraphicsTemplates = sqliteTable('installed_graphics_templa
 	 * Which Graphics Ingestion Operation installed this Template, recorded as a
 	 * plain identity rather than a foreign key.
 	 *
-	 * A Template is permanent library state; the operation that installed it is a
-	 * transient workflow record the retention contract plans to clean up a year
-	 * after it goes terminal. A cascade would let that cleanup delete the Template
-	 * — and leave its owner-less references behind, permanently blocking Trash on
-	 * assets nothing can be shown to use. A restrict would instead make the
-	 * cleanup fail forever on every operation that ever installed anything. So
-	 * this outlives what it names, exactly as a Graphic Asset Tombstone does.
+	 * A Template is lasting library state, kept as provenance even once removed;
+	 * the operation that installed it is a transient workflow record the retention
+	 * contract plans to clean up a year after it goes terminal. A cascade would let
+	 * that cleanup delete the Template — and leave its owner-less references
+	 * behind, permanently blocking Trash on assets nothing can be shown to use. A
+	 * restrict would instead make the cleanup fail forever on every operation that
+	 * ever installed anything. So this outlives what it names, exactly as a Graphic
+	 * Asset Tombstone does.
 	 */
 	installedByOperationId: text('installed_by_operation_id').notNull(),
 	/** The Event the installation ran inside, when it ran inside one. */
 	eventId: integer('event_id').references(() => events.id, { onDelete: 'set null' }),
+	/**
+	 * When a User removed this Template, and who (ADR-0068). A removed Template
+	 * holds no Graphic Asset References and is in no library listing; its row stays
+	 * as provenance for the installation that published it, so retrying that
+	 * installation reinstalls this same Template.
+	 */
+	removedAt: integer('removed_at', { mode: 'timestamp_ms' }),
+	removedBy: text('removed_by'),
 	createdAt,
 	updatedAt,
 }, table => [

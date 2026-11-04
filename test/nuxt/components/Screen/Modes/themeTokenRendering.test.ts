@@ -104,6 +104,24 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'primary-text': { selector: '.name', property: 'color' },
 		'secondary-text': { selector: '.versus', property: 'color' },
 	},
+	// The clock's colour follows its state, which the mocked data takes from `clockState`.
+	'round-clock': {
+		'surface': { selector: '.round-clock-display', property: 'backgroundColor' },
+		'round-name-typography': { selector: '.round-clock-name' },
+		'round-name-text': { selector: '.round-clock-name', property: 'color' },
+		'clock-typography': { selector: '.round-clock-time' },
+		'running-clock-text': { selector: '[data-clock-state="running"] .round-clock-time', property: 'color' },
+		'pending-clock-text': {
+			selector: '[data-clock-state="pending"] .round-clock-time',
+			property: 'color',
+			config: { clockState: 'pending' },
+		},
+		'ended-clock-text': {
+			selector: '[data-clock-state="ended"] .round-clock-time',
+			property: 'color',
+			config: { clockState: 'ended' },
+		},
+	},
 	'talent': {
 		'title-typography': { selector: '.talent-header h2' },
 		'title-text': { selector: '.talent-header h2', property: 'color' },
@@ -530,6 +548,23 @@ function position(status: 'reported' | 'awaiting', entrants: [number, number] | 
 		status,
 	};
 }
+
+mockNuxtImport('useRoundClockModeData', () => () => {
+	const config = computed(() => ({ showRoundName: true, clockState: 'running', ...probeConfig.value }));
+	return {
+		config,
+		error: ref(null),
+		ready: computed(() => true),
+		isEmpty: computed(() => false),
+		round: computed(() => ({
+			id: 1,
+			name: 'Round 4',
+			startedAt: null,
+			durationMinutes: 50,
+		})),
+		clock: computed(() => ({ state: config.value.clockState, display: '12:34', nextChangeInMs: null })),
+	};
+});
 
 mockNuxtImport('useTopCutModeData', () => () => ({
 	config: computed(() => ({
