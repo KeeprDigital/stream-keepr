@@ -187,7 +187,7 @@ describe('screenMetagameSettings', () => {
 		mockPlayerListStore.isLoaded = false;
 	});
 
-	// Each Mode Token's Look sits in the card for what it styles (ADR-0071):
+	// Each Mode Token's Look sits in the card for what it styles (ADR-0072):
 	// the Table outside chart view, the Chart in it.
 	it.each([
 		[

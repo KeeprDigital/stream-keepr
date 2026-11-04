@@ -258,7 +258,7 @@ describe('screenDeckSettings', () => {
 		});
 	});
 
-	// Each Mode Token's Look sits in the card for what it styles (ADR-0071).
+	// Each Mode Token's Look sits in the card for what it styles (ADR-0072).
 	it.each([
 		{
 			name: 'a player\'s deck under a points system',

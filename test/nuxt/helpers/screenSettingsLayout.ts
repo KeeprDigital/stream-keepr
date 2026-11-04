@@ -1,7 +1,7 @@
 /**
  * A Screen settings page's layout as the shared rules shape it (#955): each
  * card's `mode:card` id, title, whether it collapses and its closed summary,
- * and the Screen Settings Groups whose Look it mounts (ADR-0071). Spread
+ * and the Screen Settings Groups whose Look it mounts (ADR-0072). Spread
  * `screenSettingsLayoutStubs` into `global.stubs` and read `settingsLayout`.
  */
 import type { VueWrapper } from '@vue/test-utils';

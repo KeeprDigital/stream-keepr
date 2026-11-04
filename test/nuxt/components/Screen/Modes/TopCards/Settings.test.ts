@@ -231,7 +231,7 @@ describe('screenTopCardsSettings', () => {
 		mockFetch.mockResolvedValue(ranking(10));
 	});
 
-	// Each Mode Token's Look sits in the card for what it styles (ADR-0071).
+	// Each Mode Token's Look sits in the card for what it styles (ADR-0072).
 	it.each([
 		{
 			pointsSystem: '7ph',
