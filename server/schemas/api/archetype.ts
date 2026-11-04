@@ -1,10 +1,10 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { archetypes } from '~~/server/db/schema';
-import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
+import { METAGAME_CHART_SERIES_COUNT } from '~~/shared/utils/metagameChart';
 
 /** A Pinned Chart Series: one of the Theme's chart series, or null for none. Set by editing an Archetype. */
-const chartSeriesSchema = z.number().int().min(1).max(METAGAME_CHART_MAX_ARCHETYPES).nullable().optional();
+const chartSeriesSchema = z.number().int().min(1).max(METAGAME_CHART_SERIES_COUNT).nullable().optional();
 
 // ── Archetype CRUD Schemas ──
 

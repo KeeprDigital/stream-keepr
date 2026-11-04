@@ -717,7 +717,7 @@ export const archetypes = sqliteTable('archetypes', {
 		.references(() => events.id, { onDelete: 'cascade' })
 		.notNull(),
 	name: text('name').notNull(),
-	/** Mana colours, not the chart colour. */
+	/** Mana colours; the chart's series is the Pinned Chart Series below. */
 	colors: text('colors'),
 	/**
 	 * The Pinned Chart Series: one of the Theme's chart series, 1 to 8, that

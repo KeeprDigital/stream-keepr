@@ -5,6 +5,10 @@ describe('createArchetypeSchema', () => {
 	it('refuses fields the server owns', () => {
 		expect(createArchetypeSchema.safeParse({ name: 'Azorius Control', eventId: 2 }).success).toBe(false);
 	});
+
+	it('takes no Pinned Chart Series, which only an edit sets', () => {
+		expect(createArchetypeSchema.safeParse({ name: 'Azorius Control', chartSeries: 3 }).success).toBe(false);
+	});
 });
 
 describe('updateArchetypeSchema', () => {

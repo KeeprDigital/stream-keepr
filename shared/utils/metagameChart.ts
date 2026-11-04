@@ -8,6 +8,9 @@ import { OTHER_ARCHETYPE_ID } from '~~/shared/types/metagame';
  */
 export const METAGAME_CHART_MAX_ARCHETYPES = 8;
 
+/** The Theme's chart series, `chart-series-1` to this; a Pinned Chart Series names one. */
+export const METAGAME_CHART_SERIES_COUNT = METAGAME_CHART_MAX_ARCHETYPES;
+
 /** One bar of the Metagame chart: an Archetype, or the Other group. */
 export interface MetagameChartBar {
 	/** Archetype id, or {@link OTHER_ARCHETYPE_ID} for Other. */

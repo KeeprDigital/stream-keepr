@@ -128,9 +128,11 @@ describe('metagame ArchetypeChartSeriesField', () => {
 		].find(option => option.text.startsWith(`Series ${chartSeries}`))!.value);
 		await flushPromises();
 
-		const warning = wrapper.find('[data-testid="chart-series-taken"]');
-		expect(warning.exists()).toBe(warnedAbout != null);
-		if (warnedAbout)
-			expect(warning.text()).toContain(warnedAbout);
+		const warnings = wrapper.findAll('[data-testid="chart-series-taken"]').map(warning => warning.text());
+		expect(warnings).toEqual(warnedAbout == null
+			? []
+			: [
+					expect.stringContaining(`Series ${chartSeries} is also pinned by ${warnedAbout}`),
+				]);
 	});
 });

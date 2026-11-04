@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
+import { METAGAME_CHART_SERIES_COUNT } from '~~/shared/utils/metagameChart';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 /**
@@ -14,7 +14,7 @@ const props = defineProps<{
 
 const archetypeStore = useArchetypeStore();
 
-// The other Archetypes' pins, read for the taken warning (#610).
+// The other Archetypes' pins, read for the taken warning and re-read on Reconnect Resync.
 useConsumedEventData(['archetypes']);
 
 onMounted(async () => {
@@ -31,7 +31,7 @@ function pinnedBy(series: number) {
 
 const items = computed(() => [
 	{ label: 'None', value: null },
-	...Array.from({ length: METAGAME_CHART_MAX_ARCHETYPES }, (_, index) => {
+	...Array.from({ length: METAGAME_CHART_SERIES_COUNT }, (_, index) => {
 		const series = index + 1;
 		const others = pinnedBy(series).map(item => item.name);
 		return {
