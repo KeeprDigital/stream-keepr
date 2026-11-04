@@ -204,6 +204,40 @@ describe('a Player\'s Deck List', () => {
 		]);
 	});
 
+	it.each([
+		[
+			'import',
+			{
+				entries: [
+					{ number: 'OP99-999', quantity: 4 },
+				],
+				leaderNumber: 'OP01-001',
+			},
+		],
+		[
+			'paste',
+			{ text: '1x OP01-001\n4x OP99-999' },
+		],
+	] as const)('retries a number bandai-keepr did not know when an %s sees it again', async (_input, input) => {
+		const eventId = await stageEvent();
+		const [ana, ben] = [await stagePlayer(eventId, 'ana'), await stagePlayer(eventId, 'ben')];
+		await write(eventId, ana.id, { text: ZORO_DECK });
+		upstream.know(knownOpCard({
+			number: 'OP99-999',
+			name: 'Late Card',
+			category: 'event',
+			colors: ['Red'],
+		}));
+		upstream.reset();
+
+		const { deckList } = await write(eventId, ben.id, input, 'import');
+
+		expect(upstream.batches()).toEqual([
+			['OP99-999'],
+		]);
+		expect(deckList.entries.find(entry => entry.number === 'OP99-999')?.card?.name).toBe('Late Card');
+	});
+
 	it('saves nothing when the lookup fails', async () => {
 		const eventId = await stageEvent();
 		const player = await stagePlayer(eventId);
@@ -471,25 +505,46 @@ describe('a Player\'s Deck List write announces', () => {
 	it('to every Session showing the Player, through its corrected snapshot', async () => {
 		const eventId = await stageEvent();
 		const player = await stagePlayer(eventId);
-		const [slot] = await db.insert(schema.featureMatches)
-			.values({
-				eventId,
-				player1Id: player.id,
-				player1Data: { name: '', nickname: 'ana' },
-				player2Data: { name: 'Ben' },
-			})
+		const slots = await db.insert(schema.featureMatches)
+			.values([
+				{
+					eventId,
+					player1Id: player.id,
+					player1Data: { name: '', nickname: 'ana' },
+					player2Data: { name: 'Ben' },
+				},
+				{
+					eventId,
+					player1Data: { name: 'Cy' },
+					player2Id: player.id,
+					player2Data: { name: '', nickname: 'ana' },
+				},
+			])
 			.returning();
-		const session = (await featureMatchStateService().createSessionForSlot(slot!.id, eventId))!;
+		const sessions = await Promise.all(slots.map(async slot =>
+			(await featureMatchStateService().createSessionForSlot(slot.id, eventId))!));
 
 		const { deckList } = await write(eventId, player.id, { text: ZORO_DECK });
 
-		const active = await db.query.featureMatchSessions.findFirst({
-			where: and(eq(schema.featureMatchSessions.id, session.id), eq(schema.featureMatchSessions.status, 'active')),
-		});
-		expect(active!.sourceSnapshot.player1.data?.gameData).toEqual({
+		const shown = await Promise.all(sessions.map(async (session, index) => {
+			const active = await db.query.featureMatchSessions.findFirst({
+				where: and(eq(schema.featureMatchSessions.id, session.id), eq(schema.featureMatchSessions.status, 'active')),
+			});
+			return active!.sourceSnapshot[index === 0
+				? 'player1'
+				: 'player2'].data?.gameData;
+		}));
+		const expected = {
 			type: 'op',
+			leader: {
+				number: ZORO.number,
+				name: ZORO.name,
+				colors: ZORO.colors,
+				imageUrl: ZORO.imageUrl,
+			},
 			deckList: { id: deckList.id, mainboardCount: 8, leaderNumber: 'OP01-001' },
-		});
-		expect(published.map(message => message.type)).toContain('featureMatch:updated');
+		};
+		expect(shown).toEqual([expected, expected]);
+		expect(published.filter(message => message.type === 'featureMatch:updated')).toHaveLength(2);
 	});
 });

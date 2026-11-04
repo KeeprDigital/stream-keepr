@@ -115,7 +115,6 @@ describe('event.global middleware', () => {
 			'/event/1/rounds',
 			'/event/1/sync',
 			'/event/1/archetype-review',
-			'/event/1/card',
 			'/event/1/config/integrations',
 		];
 		const EVERY_CARD_GAME_PAGES = [
@@ -123,6 +122,7 @@ describe('event.global middleware', () => {
 			'/event/1/players',
 			'/event/1/metagame',
 			'/event/1/metagame/cards',
+			'/event/1/card',
 			'/event/1/feature-matches',
 			'/event/1/screens',
 			'/event/1/config',

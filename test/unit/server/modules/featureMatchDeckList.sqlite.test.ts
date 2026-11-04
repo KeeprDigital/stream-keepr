@@ -491,4 +491,19 @@ describe('a Feature Match Deck List on a Slot side', () => {
 		await expect(save(other.eventId, slotId, 'player1', ZORO_DECK)).rejects.toMatchObject({ statusCode: 404 });
 		expect(await db.select().from(schema.featureMatchDeckLists).where(and(eq(schema.featureMatchDeckLists.slotId, slotId)))).toEqual([]);
 	});
+
+	// A linked side shows its Player's Deck List, which is edited as the Player's (ADR-0074).
+	it('is refused for a side linked to a Player, which holds none of its own', async () => {
+		const { eventId, slotId } = await stageSlot();
+		const [player] = await db.insert(schema.players).values({ eventId, name: 'Ana' }).returning();
+		await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId,
+			input: { player1Id: player!.id },
+		});
+
+		await expect(save(eventId, slotId, 'player1', ZORO_DECK)).rejects.toMatchObject({ statusCode: 409 });
+		expect(await deckListIds(slotId)).toEqual([]);
+		expect(upstream.batches()).toEqual([]);
+	});
 });

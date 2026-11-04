@@ -454,14 +454,18 @@ const PLAYER_FIELDS: readonly GraphicBindingField<GraphicBindingPlayer>[] = [
 		game: 'op',
 		resolve: player => textOf(getOpGameData(player.gameData).leader?.imageUrl),
 	},
-	// A Feature Match Slot side's Deck List, counted without its Leader: 50 in a legal deck.
+	// The Deck List a side shows, counted without its Leader: 50 in a legal deck. An
+	// unlinked side holds a Feature Match Deck List; a Player, and a side linked to one, theirs.
 	{
 		id: 'player.deckCardCount',
 		label: 'Mainboard card count',
 		type: 'number',
 		shape: 'atomic',
 		game: 'op',
-		resolve: player => numberOf(getOpGameData(player.gameData).featureMatchDeckList?.mainboardCount),
+		resolve: (player) => {
+			const gameData = getOpGameData(player.gameData);
+			return numberOf((gameData.featureMatchDeckList ?? gameData.deckList)?.mainboardCount);
+		},
 	},
 ];
 

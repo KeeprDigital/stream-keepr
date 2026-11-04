@@ -6,7 +6,7 @@ import type { OpDeckListEntry, OpDeckListView, SavedOpPlayerDeckList, WriteOpPla
 import type { PastedDeckListLine } from './paste';
 import { and, eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { players } from '~~/server/db/schema';
+import { playerDecks, players } from '~~/server/db/schema';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { featureMatchSlotWriteModule } from '~~/server/modules/feature-match-slot-write';
 import { opCardCatalogueModule } from '~~/server/modules/op-card-catalogue';
@@ -20,7 +20,7 @@ import { requireOpEvent } from '~~/server/utils/routeGuards';
 import { catalogueOpLeader } from '~~/shared/utils/card/op';
 import { getOpGameData } from '~~/shared/utils/gameData';
 import { deriveLeaderArchetype, removeEmptiedLeaderArchetypes } from './archetypes';
-import { opDeckListView, parseOpDeckListText } from './paste';
+import { opDeckListText, opDeckListView, parseOpDeckListText } from './paste';
 
 /**
  * The OP Deck List write (ADR-0074): every One Piece Card Game Deck List write
@@ -54,8 +54,12 @@ export type OpDeckListInput
 		/** Entries, a number given twice added together, with the Leader marked, as a TCG+ export does. */
 		| { entries: readonly PastedDeckListLine[]; leaderNumber: string | null };
 
-/** Where a write came from: a TCG+ Import, or an operator's hand (which a later import keeps). */
-export type OpDeckListWriteSource = 'import' | 'hand';
+/**
+ * Where a write came from: a TCG+ Import, an operator's hand (which a later
+ * import keeps), or an Unresolved Deck Card's retry or resolution, which
+ * keeps whether the Deck List was hand-edited.
+ */
+export type OpDeckListWriteSource = 'import' | 'hand' | 'resolution';
 
 interface WriteParams<TOwner extends OpDeckListOwner> {
 	eventId: number;
@@ -75,6 +79,7 @@ export type OpDeckListWriteAnswer<TOwner extends OpDeckListOwner> = TOwner exten
 	: SlotSideDeckListAnswer;
 
 const SIDE_DATA_KEY = { player1: 'player1Data', player2: 'player2Data' } as const satisfies Record<PlayerSide, string>;
+const SIDE_PLAYER_KEY = { player1: 'player1Id', player2: 'player2Id' } as const satisfies Record<PlayerSide, string>;
 
 function inputLines(input: OpDeckListInput): PastedDeckListLine[] {
 	if ('text' in input)
@@ -135,6 +140,16 @@ export function opDeckListWriteModule() {
 		return player;
 	}
 
+	async function isHandEdited(eventId: number, playerId: number, source: OpDeckListWriteSource): Promise<boolean> {
+		if (source !== 'resolution')
+			return source === 'hand';
+		const deck = await db.query.playerDecks.findFirst({
+			where: and(eq(playerDecks.eventId, eventId), eq(playerDecks.playerId, playerId), eq(playerDecks.isPrimary, true)),
+			columns: { handEdited: true },
+		});
+		return deck?.handEdited ?? false;
+	}
+
 	// Announced with no origin: the writing client applied none of it, so it follows the messages too.
 	async function writePlayer(
 		{ eventId, owner, input, source }: WriteParams<{ kind: 'player'; playerId: number }>,
@@ -155,7 +170,7 @@ export function opDeckListWriteModule() {
 			playerId,
 			view,
 			archetypeId: derived?.archetype.id ?? null,
-			handEdited: source === 'hand',
+			handEdited: await isHandEdited(eventId, playerId, source),
 		});
 		if (!written) {
 			await removeEmptiedLeaderArchetypes(eventId, derived?.created
@@ -196,8 +211,12 @@ export function opDeckListWriteModule() {
 		const { slotId, side } = owner;
 		const slots = featureMatchService();
 		const deckLists = featureMatchDeckListService();
-		if (!await slots.exists(slotId, eventId))
+		const held = await slots.findById(slotId, eventId);
+		if (!held)
 			throw createError({ statusCode: 404, message: 'Feature match slot not found' });
+		// A linked side shows its Player's Deck List, edited as the Player's (ADR-0074).
+		if (held[SIDE_PLAYER_KEY[side]] != null)
+			throw createError({ statusCode: 409, message: 'This side shows its Player\'s Deck List: edit the Player\'s Deck List instead' });
 
 		const { entries } = await resolveInput('text' in input
 			? { text: input.text }
@@ -205,7 +224,7 @@ export function opDeckListWriteModule() {
 		const view = opDeckListView(entries);
 		const sourceText = 'text' in input
 			? input.text
-			: '';
+			: opDeckListText(view.entries, view.leaderNumber);
 		const deckListId = await deckLists.create(eventId, slotId, sourceText, view);
 
 		// Read after the lookup, so an edit to the side made meanwhile is kept.

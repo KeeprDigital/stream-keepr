@@ -264,3 +264,34 @@ describe('a Feature Match Deck List reference', () => {
 		expect(parse().success).toBe(accepted);
 	});
 });
+
+// A linked side shows its Player's Deck List, which only the OP Deck List write writes (ADR-0074).
+describe('a Player Deck List reference on a Slot side', () => {
+	const gameData = {
+		type: 'op',
+		leader: ZORO,
+		deckList: { id: 4, mainboardCount: 50, leaderNumber: ZORO.number },
+	};
+
+	it('is taken from a Slot setup save, as its form holds the side, and dropped', () => {
+		const result = updateFeatureMatchSchema.safeParse({
+			player1Data: { name: 'Ana', gameData },
+		});
+		expect(result.success && result.data.player1Data?.gameData).toEqual({ type: 'op', leader: ZORO });
+	});
+
+	it.each([
+		[
+			'a Slot create',
+			() => createFeatureMatchSchema.safeParse({
+				player1Data: { name: 'Ana', gameData },
+			}),
+		],
+		[
+			'a Player update',
+			() => updatePlayerSchema.safeParse({ gameData }),
+		],
+	] as const)('is refused by %s', (_label, parse) => {
+		expect(parse().success).toBe(false);
+	});
+});

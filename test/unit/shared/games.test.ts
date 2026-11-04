@@ -56,7 +56,7 @@ describe('the Event pages each Card Game is offered', () => {
 		['sync', false],
 		['metagame', true],
 		['archetypeReview', false],
-		['cards', false],
+		['cards', true],
 		['integrations', false],
 	] as const)('offers %s to a One Piece Event: %s', (page, offered) => {
 		expect(isOfferedToCardGame(EVENT_PAGE_CARD_GAMES[page], 'op')).toBe(offered);
