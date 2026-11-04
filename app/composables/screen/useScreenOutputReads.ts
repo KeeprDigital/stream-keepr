@@ -62,7 +62,7 @@ export function useScreenOutputReads(context: ScreenContext) {
 		topCards: () => repository.topCards(requireScope()),
 		topCut: () => repository.topCut(requireScope()),
 		featureMatchSlot: (slotId: number) => repository.featureMatchSlot(requireScope(), slotId),
-		/** A Feature Match Deck List of the Slot a Deck Screen shows a side of. */
+		/** A Feature Match Deck List of the Slot a Deck List Screen shows a side of. */
 		featureMatchDeckList: (slotId: number, deckListId: number) =>
 			repository.featureMatchDeckList(requireScope(), slotId, deckListId),
 		/** The Slot's Feature Match Session, or `null` while it has none — never started by reading. */

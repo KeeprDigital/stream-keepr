@@ -74,7 +74,7 @@ const deckListMatchId = computed<number | undefined>({
 });
 const playerDeckPlayerId = optionalId(storedPlayerDeckPlayerId);
 
-// Filter screens to only those in card mode
+// Filter Screens to only those in Card Spotlight mode
 const cardScreens = computed(() =>
 	screenStore.screens.filter(s => s.currentMode === 'card'),
 );
@@ -341,7 +341,7 @@ const timeoutProgress = computed(() => {
 					</UButton>
 				</template>
 				<span v-else class="text-sm text-muted">
-					No card screens configured
+					No Card Spotlight Screens configured
 				</span>
 			</div>
 		</template>

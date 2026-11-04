@@ -108,13 +108,13 @@ A Talent's public identity on one Supported Social Network, identified by a norm
 _Avoid_: Commentator handle, social link
 
 **Broadcast Deck List**:
-An Event-scoped card list prepared by an operator solely for display on a Deck Screen. It has no Player, competition, or Metagame identity, and may carry an Archetype Label.
+An Event-scoped card list prepared by an operator solely for display on a Deck List Screen. It has no Player, competition, or Metagame identity, and may carry an Archetype Label.
 
 **Archetype Label**:
-Optional broadcast-only text and mana colours on a Broadcast Deck List, used as its secondary Deck Screen identity. It does not reference an Archetype.
+Optional broadcast-only text and mana colours on a Broadcast Deck List, used as its secondary Deck List Screen identity. It does not reference an Archetype.
 
 **Deck Source**:
-The required data binding of a Deck Screen: either one Event-scoped Player (or no selected Player), one Event-scoped Broadcast Deck List, or one player side of an Event-scoped Feature Match Slot.
+The required data binding of a Deck List Screen: either one Event-scoped Player (or no selected Player), one Event-scoped Broadcast Deck List, or one player side of an Event-scoped Feature Match Slot.
 
 ### Feature Match production
 
@@ -154,7 +154,7 @@ A broadcast or control surface that can show Feature Match Slot output, decks/ca
 
 **Screen Mode**:
 A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, Standings, Top Cut Bracket, Feature Match Controls, Feature Match Overlay, Broadcast Graphics, Metagame, Most Played Cards, Player History, Pairings, Archetype Spotlight, or Head-to-Head. Each is named by what it shows or controls. Its key (`card`, `top-cards`, `top-cut`, …) is not its name: renaming a mode leaves its key alone, and a key renamed after release is migrated in storage and still accepted in its former spelling on a Screen write (ADR-0043).
-_Avoid_: Top Cards for the Most Played Cards mode (one word from Top Cut); Feature Match for the control mode (the on-air one is the Feature Match Overlay).
+_Avoid_: Top Cards for the Most Played Cards mode (one word from Top Cut); Feature Match for the control mode (the on-air one is the Feature Match Overlay); Deck Screen and Card Screen for a Screen in Deck List or Card Spotlight mode (say Deck List Screen, Card Spotlight Screen).
 
 **Screen Mode Definition**:
 The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface), and what it declares it carries, such as its Mode Tokens, its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.

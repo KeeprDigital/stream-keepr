@@ -5,9 +5,10 @@ import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
- * A Deck Screen on a One Piece Card Game Event shows a Feature Match Slot
+ * A Deck List Screen on a One Piece Card Game Event shows a Feature Match Slot
  * side, never a Player (ADR-0057), so one with no Slot side chosen starts on
- * the Event's first Slot, left side. A Magic Deck Screen keeps its Player source.
+ * the Event's first Slot, left side. A Magic Deck List Screen keeps its Player
+ * source.
  */
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string; statusMessage?: string }) =>
@@ -76,7 +77,7 @@ function createScreen(event: keyof typeof events, currentMode: ScreenMode, modeC
 
 const firstSlotLeft = (event: keyof typeof events) => ({ type: 'featureMatchSlot', slotId: events[event].firstSlotId, side: 'player1' });
 
-describe('a new Deck Screen\'s Deck Source', () => {
+describe('a new Deck List Screen\'s Deck Source', () => {
 	it.each([
 		{
 			event: 'op',
@@ -114,8 +115,8 @@ describe('a new Deck Screen\'s Deck Source', () => {
 		expect(deck.currentMode).toBe('deck');
 	});
 
-	// A Deck Screen already on air moves only when the operator moves it.
-	it('leaves an existing Deck Screen\'s source alone on any other save', async () => {
+	// A Deck List Screen already on air moves only when the operator moves it.
+	it('leaves an existing Deck List Screen\'s source alone on any other save', async () => {
 		const [stored] = await db.insert(schema.screens).values({
 			eventId: events.op.id,
 			name: 'Older Deck',
