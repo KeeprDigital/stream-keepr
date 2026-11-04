@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
+import type { MtgPlayerGameData } from '~~/shared/types/game';
 import type { PlayerData } from '~/types';
 
 defineProps<{
@@ -12,7 +12,6 @@ defineProps<{
 
 const formData = defineModel<PlayerData>({ required: true });
 const mtgGameData = defineModel<MtgPlayerGameData>('mtgGameData', { required: true });
-const opGameData = defineModel<OpPlayerGameData>('opGameData', { required: true });
 </script>
 
 <template>
@@ -58,7 +57,6 @@ const opGameData = defineModel<OpPlayerGameData>('opGameData', { required: true 
 		/>
 	</UFormField>
 
-	<!-- Game-specific fields -->
+	<!-- Game-specific fields. A One Piece Player's Leader is their Deck List's, edited with it (ADR-0074). -->
 	<FeatureMatchSetupMtgPlayerFields v-if="game === 'mtg'" v-model="mtgGameData" />
-	<FeatureMatchSetupOpPlayerFields v-if="game === 'op'" v-model="opGameData" />
 </template>

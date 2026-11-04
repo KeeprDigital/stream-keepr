@@ -1,8 +1,9 @@
-import type { FeatureMatchDeckListCard, FeatureMatchDeckListEntry } from '~~/shared/types/featureMatchDeckList';
+import type { OpCatalogueCard } from '~~/shared/types/card/op';
+import type { OpDeckListEntry } from '~~/shared/types/opDeckList';
 import { describe, expect, it } from 'vitest';
-import { featureMatchDeckListView, parseFeatureMatchDeckListText } from '~~/server/modules/feature-match-deck-list/paste';
+import { opDeckListText, opDeckListView, parseOpDeckListText } from '~~/server/modules/op-deck-list-write/paste';
 
-describe('parseFeatureMatchDeckListText', () => {
+describe('parseOpDeckListText', () => {
 	it.each([
 		[
 			'N CARDNUMBER',
@@ -76,7 +77,7 @@ describe('parseFeatureMatchDeckListText', () => {
 			],
 		],
 	])('reads %s', (_label, text, expected) => {
-		expect(parseFeatureMatchDeckListText(text)).toEqual(expected);
+		expect(parseOpDeckListText(text)).toEqual(expected);
 	});
 
 	it.each([
@@ -86,11 +87,11 @@ describe('parseFeatureMatchDeckListText', () => {
 		['a zero quantity', '0x OP01-016'],
 		['a card number with no quantity', 'OP01-016'],
 	])('ignores %s', (_label, text) => {
-		expect(parseFeatureMatchDeckListText(text)).toEqual([]);
+		expect(parseOpDeckListText(text)).toEqual([]);
 	});
 
 	it('keeps paste order and adds a number pasted twice into its first line', () => {
-		expect(parseFeatureMatchDeckListText([
+		expect(parseOpDeckListText([
 			'Leader',
 			'1x OP01-001 Roronoa Zoro',
 			'',
@@ -106,7 +107,7 @@ describe('parseFeatureMatchDeckListText', () => {
 	});
 });
 
-function card(category: FeatureMatchDeckListCard['category'], colors: FeatureMatchDeckListCard['colors']): FeatureMatchDeckListCard {
+function card(category: OpCatalogueCard['category'], colors: OpCatalogueCard['colors']): OpCatalogueCard {
 	return {
 		name: 'Card',
 		category,
@@ -117,24 +118,24 @@ function card(category: FeatureMatchDeckListCard['category'], colors: FeatureMat
 		imageUrl: 'https://cards-img.keepr.digital/X.png',
 	};
 }
-function leader(number: string, colors: FeatureMatchDeckListCard['colors'] = ['Red']): FeatureMatchDeckListEntry {
+function leader(number: string, colors: OpCatalogueCard['colors'] = ['Red']): OpDeckListEntry {
 	return {
 		number,
 		quantity: 1,
 		card: card('leader', colors),
 	};
 }
-function character(number: string, quantity: number, colors: FeatureMatchDeckListCard['colors'] = ['Red']): FeatureMatchDeckListEntry {
+function character(number: string, quantity: number, colors: OpCatalogueCard['colors'] = ['Red']): OpDeckListEntry {
 	return {
 		number,
 		quantity,
 		card: card('character', colors),
 	};
 }
-const unknown = (number: string, quantity: number): FeatureMatchDeckListEntry => ({ number, quantity, card: null });
+const unknown = (number: string, quantity: number): OpDeckListEntry => ({ number, quantity, card: null });
 
 /** A legal Red deck: one Leader and 50 Mainboard cards, four copies at most. */
-function legalDeck(): FeatureMatchDeckListEntry[] {
+function legalDeck(): OpDeckListEntry[] {
 	return [
 		leader('OP01-001'),
 		...Array.from({ length: 12 }, (_, index) => character(`OP01-${String(100 + index)}`, 4)),
@@ -142,9 +143,9 @@ function legalDeck(): FeatureMatchDeckListEntry[] {
 	];
 }
 
-describe('featureMatchDeckListView', () => {
+describe('opDeckListView', () => {
 	it('names the Leader, counts the Mainboard without it, and warns of nothing in a legal deck', () => {
-		expect(featureMatchDeckListView(legalDeck())).toMatchObject({
+		expect(opDeckListView(legalDeck())).toMatchObject({
 			leaderNumber: 'OP01-001',
 			mainboardCount: 50,
 			warnings: [],
@@ -223,7 +224,7 @@ describe('featureMatchDeckListView', () => {
 			},
 		],
 	] as const)('warns of %s', (_label, entries, code, fields) => {
-		const { warnings } = featureMatchDeckListView([...entries]);
+		const { warnings } = opDeckListView([...entries]);
 		expect(warnings.map(warning => warning.code)).toEqual([code]);
 		expect(warnings[0]).toMatchObject(fields);
 	});
@@ -252,7 +253,7 @@ describe('featureMatchDeckListView', () => {
 					},
 				}
 			: entry);
-		expect(featureMatchDeckListView(recoloured).warnings).toEqual([]);
+		expect(opDeckListView(recoloured).warnings).toEqual([]);
 	});
 
 	it('counts a number-only entry in the Mainboard', () => {
@@ -260,7 +261,7 @@ describe('featureMatchDeckListView', () => {
 			...legalDeck().slice(0, -1),
 			unknown('OP99-999', 2),
 		];
-		expect(featureMatchDeckListView(deck)).toMatchObject({ mainboardCount: 50 });
+		expect(opDeckListView(deck)).toMatchObject({ mainboardCount: 50 });
 	});
 
 	it('judges colours against the first Leader when there are two', () => {
@@ -269,8 +270,63 @@ describe('featureMatchDeckListView', () => {
 			leader('OP01-002', ['Blue']),
 			...legalDeck().slice(1),
 		];
-		const { warnings, leaderNumber } = featureMatchDeckListView(deck);
+		const { warnings, leaderNumber } = opDeckListView(deck);
 		expect(leaderNumber).toBe('OP01-001');
 		expect(warnings.map(warning => warning.code)).toEqual(['MULTIPLE_LEADERS']);
+	});
+});
+
+// A TCG+ export or a Leader picker marks the Leader, which may be an Unresolved Deck Card.
+describe('opDeckListView with a marked Leader', () => {
+	it.each([
+		[
+			'a known Leader',
+			legalDeck(),
+			'OP01-001',
+			{ leaderNumber: 'OP01-001', mainboardCount: 50 },
+			[],
+		],
+		[
+			'a number the catalogue lacks, against which no colour is judged',
+			[
+				unknown('OP99-001', 1),
+				...legalDeck().slice(1, -1),
+				character('OP01-201', 2, ['Blue']),
+			],
+			'OP99-001',
+			{ leaderNumber: 'OP99-001', mainboardCount: 50 },
+			['UNKNOWN_CARD'],
+		],
+		[
+			'a Leader beside another leader card, which it wins over',
+			[
+				leader('OP01-002'),
+				...legalDeck(),
+			],
+			'OP01-001',
+			{ leaderNumber: 'OP01-001', mainboardCount: 50 },
+			['MULTIPLE_LEADERS'],
+		],
+	] as const)('takes %s', (_label, entries, marked, view, codes) => {
+		const answer = opDeckListView([...entries], marked);
+		expect(answer).toMatchObject(view);
+		expect(answer.warnings.map(warning => warning.code)).toEqual(codes);
+	});
+});
+
+describe('opDeckListText', () => {
+	it('writes the paste format, Leader first, which reads back as the same entries', () => {
+		const text = opDeckListText([
+			character('OP01-100', 4),
+			unknown('OP99-999', 2),
+			leader('OP01-001'),
+		], 'OP01-001');
+
+		expect(text).toBe('1x OP01-001 Card\n4x OP01-100 Card\n2x OP99-999');
+		expect(parseOpDeckListText(text)).toEqual([
+			{ number: 'OP01-001', quantity: 1 },
+			{ number: 'OP01-100', quantity: 4 },
+			{ number: 'OP99-999', quantity: 2 },
+		]);
 	});
 });

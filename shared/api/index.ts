@@ -557,6 +557,10 @@ export interface ArchetypeResponse {
 	colors: string | null;
 	/** The Pinned Chart Series, 1 to 8; null when unpinned. */
 	chartSeries: number | null;
+	/** A One Piece Card Game Archetype's Leader card number (ADR-0074); null on any other. */
+	leaderCardNumber: string | null;
+	/** Renamed or pinned by an operator, so an emptied derived Archetype is kept. */
+	customised: boolean;
 	createdAt: Date;
 	updatedAt: Date;
 }

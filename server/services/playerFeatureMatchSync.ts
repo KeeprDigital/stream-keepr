@@ -244,26 +244,29 @@ export function playerFeatureMatchSyncService() {
 				// `Object.assign` also mutates its target where the spread did not, so this now
 				// depends on `playerToMatchData` handing back a fresh object per call. No test
 				// held that property, so one now does — see the pin in this module's suite.
-				const rebuiltData = hasDeckIdentity && existingData.deckId != null && !selectedDeck
-					? Object.assign(playerToMatchData(player), {
+				// A One Piece Card Game Player's game data already references their Deck List (ADR-0074).
+				const rebuiltData = player.gameData?.type === 'op'
+					? playerToMatchData(player)
+					: hasDeckIdentity && existingData.deckId != null && !selectedDeck
+						? Object.assign(playerToMatchData(player), {
 						// The exact historical deck is no longer in the current submitted-deck
 						// snapshot. Preserve its embedded identity instead of rebinding this
 						// match to another format/primary deck.
-						deckId: existingData.deckId,
-						archetypeId: existingData.archetypeId,
-						gameData: existingData.gameData,
-					} satisfies Partial<PlayerSlotData>)
-					: applyMatchDeckSnapshot(
-							playerToMatchData(player),
-							selectedDeck,
-							selectedDeck?.archetypeId == null
-								? null
-								: archetypesById.get(selectedDeck.archetypeId),
-							{
-								expectsMtgDeck: playerDeckRows.length > 0
-									|| existingData?.gameData?.type === 'mtg',
-							},
-						);
+							deckId: existingData.deckId,
+							archetypeId: existingData.archetypeId,
+							gameData: existingData.gameData,
+						} satisfies Partial<PlayerSlotData>)
+						: applyMatchDeckSnapshot(
+								playerToMatchData(player),
+								selectedDeck,
+								selectedDeck?.archetypeId == null
+									? null
+									: archetypesById.get(selectedDeck.archetypeId),
+								{
+									expectsMtgDeck: playerDeckRows.length > 0
+										|| existingData?.gameData?.type === 'mtg',
+								},
+							);
 				// A One Piece Card Game side's Leader and Feature Match Deck List are the
 				// side's own, linked Player or not (ADR-0057), so a Player write leaves them.
 				const updatedData = existingData?.gameData?.type === 'op'

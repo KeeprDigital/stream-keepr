@@ -2446,6 +2446,7 @@ Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/i
 **An OP Player's Deck List is imported or entered by hand, and a hand edit survives re-import.**
 
 - **Where it's edited:** on the Players page, or from a Feature Match Slot side the Player is linked to, as a Player write (as ADR-0045 treats a seated Player's identity).
+- **One write.** Every OP Deck List write, a Player's or an unlinked Slot side's, goes through the OP Deck List write (`server/modules/op-deck-list-write`), and each one gives the Deck List a new id, so whatever holds it by reference sees the change. A Player's game data holds only that reference and its Leader's card number; their Archetype and game data are the write's, and a Player write leaves them.
 - **How it's edited:** the paste format and paste rules are ADR-0057's.
 - **Re-import:** the preview flags a hand-edited Deck List the import differs from, and the operator may drop the edit to take the import's.
 - **Deck rule breaches** warn and never refuse.
@@ -2461,7 +2462,8 @@ Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/i
 **An OP Player's Archetype is their Leader card.**
 
 - **Created automatically.** One Archetype per distinct Leader card number, named after the Leader (with the card number when two Leaders share a name) and coloured by it.
-- **Derived, not assigned.** A Player's Archetype follows their Leader. It is never reviewed or reassigned, though an operator may rename an Archetype or pin its chart series.
+- **Derived, not assigned.** A Player's Archetype follows their Leader. It is never reviewed or reassigned, though an operator may rename an Archetype or pin its chart series, which marks it customised for good. The server refuses Archetype Review and creating or deleting an Archetype by hand on OP.
+- **Name clashes.** When a new Leader shares a name with an Archetype already in the Event, it and every clashing Archetype not customised take their card number, and keep it once the clash is gone, so names stay stable.
 - **Removed when empty.** An auto-created Archetype left without Players is deleted, unless an operator renamed it or pinned a series.
 - **Unknown Leader.** A Player whose Leader is unresolved is unclassified.
 

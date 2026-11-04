@@ -4,7 +4,7 @@ import type { FeatureMatchDeckListReference, FeatureMatchDeckListView, SavedFeat
 import { and, asc, eq, lt, not } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { cards, featureMatchDeckListEntries, featureMatchDeckLists } from '~~/server/db/schema';
-import { featureMatchDeckListView } from '~~/server/modules/feature-match-deck-list/paste';
+import { opDeckListView } from '~~/server/modules/op-deck-list-write/paste';
 import { opCatalogueCardColumns, opCatalogueRowFor, toOpCatalogueCard } from '~~/server/services/opCardCatalogue';
 import { chunkRowsWithinParameterBudget, inJsonArray } from '~~/server/utils/db';
 import { runCompensation } from '~~/server/utils/errors';
@@ -75,7 +75,7 @@ export function featureMatchDeckListService() {
 			id: deckList.id,
 			slotId: deckList.slotId,
 			sourceText: deckList.sourceText,
-			...featureMatchDeckListView(rows.map(row => ({
+			...opDeckListView(rows.map(row => ({
 				number: row.number,
 				quantity: row.quantity,
 				card: toOpCatalogueCard(row),

@@ -32,6 +32,7 @@ const emit = defineEmits<{
 	editPlayer: [player: Player];
 	deletePlayer: [player: Player];
 	viewDeckList: [player: Player];
+	editDeckList: [player: Player];
 	sendDeckToScreen: [playerId: number, screenId?: number];
 	sendMatchHistoryToScreen: [playerId: number, screenId?: number];
 }>();
@@ -165,14 +166,24 @@ function getRowMenuItems(player: Player): DropdownMenuItem[][] {
 		onSelect: () => emit('deletePlayer', player),
 	});
 
+	const editItems: DropdownMenuItem[] = [
+		{
+			label: 'Edit Player',
+			icon: 'i-lucide-pencil',
+			onSelect: () => emit('editPlayer', player),
+		},
+	];
+	// A One Piece Player's Deck List is edited by hand here (ADR-0074).
+	if (props.game === 'op') {
+		editItems.push({
+			label: 'Edit Deck List',
+			icon: 'i-lucide-layers',
+			onSelect: () => emit('editDeckList', player),
+		});
+	}
+
 	return [
-		[
-			{
-				label: 'Edit Player',
-				icon: 'i-lucide-pencil',
-				onSelect: () => emit('editPlayer', player),
-			},
-		],
+		editItems,
 		sendItems,
 		destructiveItems,
 	].filter(group => group.length > 0);

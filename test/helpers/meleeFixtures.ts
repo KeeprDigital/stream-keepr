@@ -93,6 +93,8 @@ export function localDeck(id: number, overrides: Partial<DbPlayerDeck> = {}): Db
 		isPrimary: false,
 		archetypeId: null,
 		reviewedAt: null,
+		leaderCardNumber: null,
+		handEdited: false,
 		createdAt: new Date(0),
 		updatedAt: new Date(0),
 		...overrides,

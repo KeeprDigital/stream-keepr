@@ -3,7 +3,7 @@ import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Player } from '~/types';
 import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
 import { playerDisplayName } from '~~/shared/utils/playerName';
-import { LazyPlayerCreateModal, LazyPlayerListCreateModal, LazyPlayerListEditModal, LazyUIConfirmDeleteModal } from '#components';
+import { LazyPlayerCreateModal, LazyPlayerListCreateModal, LazyPlayerListEditModal, LazyPlayerOpDeckListModal, LazyUIConfirmDeleteModal } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
@@ -219,6 +219,11 @@ function handleEditList(listId: number) {
 }
 
 // ── Player Action Handlers ──
+
+function handleEditDeckList(player: Player) {
+	const modal = overlay.create(LazyPlayerOpDeckListModal);
+	void modal.open({ player });
+}
 
 async function handleDeletePlayer(player: Player) {
 	if (!eventId.value)
@@ -481,6 +486,7 @@ async function handleBulkRemoveFromList() {
 				@edit-player="openPlayerEdit"
 				@delete-player="handleDeletePlayer"
 				@view-deck-list="openPlayerDeckList"
+				@edit-deck-list="handleEditDeckList"
 				@send-deck-to-screen="handleSendDeckToScreen"
 				@send-match-history-to-screen="handleSendMatchHistoryToScreen"
 			/>

@@ -13,6 +13,8 @@ export const createArchetypeSchema = createInsertSchema(archetypes)
 		id: true,
 		eventId: true,
 		chartSeries: true,
+		leaderCardNumber: true,
+		customised: true,
 		createdAt: true,
 		updatedAt: true,
 	})
@@ -26,6 +28,8 @@ export const updateArchetypeSchema = createUpdateSchema(archetypes)
 	.omit({
 		id: true,
 		eventId: true,
+		leaderCardNumber: true,
+		customised: true,
 		createdAt: true,
 		updatedAt: true,
 	})

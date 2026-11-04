@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
+import type { MtgPlayerGameData } from '~~/shared/types/game';
 import type { PlayerData } from '~/types';
 import { playerDisplayName } from '~~/shared/utils/playerName';
 import { DEFAULT_PLAYER_DATA, toCreatePlayerInput } from '~/types/player';
@@ -25,7 +25,6 @@ const formId = 'create-player-form';
 
 // Game-specific data
 const mtgGameData = ref<MtgPlayerGameData>({ type: 'mtg', deckName: null, deckColors: null });
-const opGameData = ref<OpPlayerGameData>({ type: 'op', leader: null });
 
 // A One Piece Card Game Player may go by their Nickname alone (ADR-0074).
 const isValid = computed(() => playerDisplayName(props.game === 'op'
@@ -40,9 +39,10 @@ async function handleSubmit() {
 	const input = toCreatePlayerInput({
 		...formData.value,
 		name,
+		// A One Piece Player's game data is their Deck List's, written by the OP Deck List write (ADR-0074).
 		gameData: props.game === 'mtg'
 			? mtgGameData.value
-			: opGameData.value,
+			: undefined,
 	});
 
 	await runRequest(
@@ -82,7 +82,6 @@ function handleCancel() {
 				<PlayerFormFields
 					v-model="formData"
 					v-model:mtg-game-data="mtgGameData"
-					v-model:op-game-data="opGameData"
 					:game="game"
 					:pronouns-enabled="pronounsEnabled"
 					:lgs-enabled="lgsEnabled"

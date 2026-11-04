@@ -68,9 +68,8 @@ const FormFieldsStub = defineComponent({
 	props: {
 		modelValue: { type: Object, required: true },
 		mtgGameData: { type: Object, required: true },
-		opGameData: { type: Object, required: true },
 	},
-	emits: ['update:modelValue', 'update:mtgGameData', 'update:opGameData'],
+	emits: ['update:modelValue', 'update:mtgGameData'],
 	template: '<div />',
 });
 

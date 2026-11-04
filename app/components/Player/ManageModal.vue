@@ -53,9 +53,6 @@ const { formData: gameDataForm, isDirty: isGameDataDirty, reset: resetGameData }
 		mtg: (props.player.gameData as MtgPlayerGameData)?.type === 'mtg'
 			? { ...(props.player.gameData as MtgPlayerGameData) }
 			: { type: 'mtg', deckName: null, deckColors: null } as MtgPlayerGameData,
-		op: (props.player.gameData as OpPlayerGameData)?.type === 'op'
-			? { ...(props.player.gameData as OpPlayerGameData) }
-			: { type: 'op', leader: null } as OpPlayerGameData,
 	},
 });
 
@@ -63,13 +60,6 @@ const mtgGameData = computed({
 	get: () => gameDataForm.value.mtg,
 	set: (value: MtgPlayerGameData) => {
 		gameDataForm.value.mtg = value;
-	},
-});
-
-const opGameData = computed({
-	get: () => gameDataForm.value.op,
-	set: (value: OpPlayerGameData) => {
-		gameDataForm.value.op = value;
 	},
 });
 
@@ -104,7 +94,8 @@ async function handleSave() {
 		name,
 		gameData: props.game === 'mtg'
 			? mtgGameData.value
-			: opGameData.value,
+			// A One Piece Player's game data is their Deck List's, written by the OP Deck List write (ADR-0074).
+			: undefined,
 	});
 
 	await runRequest(
@@ -192,7 +183,6 @@ async function handleCancel() {
 				<PlayerFormFields
 					v-model="formData"
 					v-model:mtg-game-data="mtgGameData"
-					v-model:op-game-data="opGameData"
 					:game="game"
 					:pronouns-enabled="pronounsEnabled"
 					:lgs-enabled="lgsEnabled"

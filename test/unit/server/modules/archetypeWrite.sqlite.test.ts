@@ -124,6 +124,29 @@ describe('deleting an Archetype', () => {
 	});
 });
 
+// A One Piece Archetype is derived from a Leader, never assigned (ADR-0074).
+describe('on a One Piece Card Game Event', () => {
+	it.each([
+		[
+			'creating an Archetype',
+			async (eventId: number) => archetypeWriteModule().createArchetype({
+				eventId,
+				input: { name: 'Zoro Aggro' },
+			}),
+		],
+		[
+			'deleting an Archetype',
+			async (eventId: number) => archetypeWriteModule().deleteArchetype({ eventId, archetypeId: (await createArchetype(eventId)).id }),
+		],
+	])('refuses %s', async (_case, act) => {
+		const eventId = await createEvent('op');
+
+		await expect(act(eventId)).rejects.toMatchObject({ statusCode: 400 });
+		expect(publication.archetypeCreated).not.toHaveBeenCalled();
+		expect(publication.archetypeDeleted).not.toHaveBeenCalled();
+	});
+});
+
 describe('updating an Archetype', () => {
 	it('re-projects the decks reviewed as it and answers with its key cards', async () => {
 		const eventId = await createEvent();
@@ -178,6 +201,55 @@ describe('updating an Archetype', () => {
 			entity: expect.objectContaining({ id: archetype!.id, chartSeries: stored }),
 			originConnectionId: 'origin-1',
 		}));
+	});
+
+	// An emptied derived One Piece Archetype is kept once customised (ADR-0074).
+	it.each([
+		[
+			'a rename',
+			{ name: 'Zoro Aggro' },
+			false,
+			true,
+		],
+		[
+			'a pin',
+			{ chartSeries: 2 },
+			false,
+			true,
+		],
+		[
+			'a save of the name it holds',
+			{ name: 'Roronoa Zoro' },
+			false,
+			false,
+		],
+		[
+			'clearing a pin it never had',
+			{ chartSeries: null },
+			false,
+			false,
+		],
+		[
+			'clearing a pin, once customised',
+			{ chartSeries: null },
+			true,
+			true,
+		],
+	] as const)('marks it customised on %s: %s', async (_case, input, customised, expected) => {
+		const eventId = await createEvent('op');
+		const [archetype] = await db.insert(schema.archetypes)
+			.values({
+				eventId,
+				name: 'Roronoa Zoro',
+				leaderCardNumber: 'OP01-001',
+				customised,
+			})
+			.returning();
+
+		await archetypeWriteModule().updateArchetype({ eventId, archetypeId: archetype!.id, input });
+
+		const [row] = await db.select().from(schema.archetypes).where(eq(schema.archetypes.id, archetype!.id));
+		expect(row?.customised).toBe(expected);
 	});
 
 	it('refuses an Archetype the Event does not hold', async () => {

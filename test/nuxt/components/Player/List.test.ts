@@ -221,4 +221,24 @@ describe('playerList on a One Piece Card Game Event', () => {
 		expect(wrapper.get('[data-column="nickname"]').text()).toBe('linlin_88');
 		expect(wrapper.find('[data-column="record"]').exists()).toBe(false);
 	});
+
+	it('edits a Player\'s Deck List from the row menu', async () => {
+		const player = createMockPlayer({ id: 7, name: '', nickname: 'linlin_88' });
+		const wrapper = mount(PlayerList, {
+			props: {
+				players: [player as never],
+				game: 'op',
+			},
+			global: {
+				stubs: { ...nuxtUiStubs, UTable: UTableStub, MtgManaColorDisplay: true },
+			},
+		});
+
+		await wrapper.get('[aria-label="Player actions"]').trigger('click');
+		await wrapper.findAll('[role="menuitem"]').find(item => item.text() === 'Edit Deck List')!.trigger('click');
+
+		expect(wrapper.emitted('editDeckList')).toEqual([
+			[player],
+		]);
+	});
 });

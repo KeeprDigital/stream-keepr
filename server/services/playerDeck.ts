@@ -358,6 +358,8 @@ export function playerDeckService() {
 					isPrimary: sql`0`,
 					archetypeId: sql`null`,
 					reviewedAt: sql`null`,
+					leaderCardNumber: sql`null`,
+					handEdited: sql`0`,
 					createdAt: sql`${nowMs}`,
 					updatedAt: sql`${nowMs}`,
 				}, sql`from json_each(${payload}) where true`))
@@ -559,6 +561,9 @@ export function playerDeckService() {
 	/** Derive the reviewed state and player-level projection from a primary-deck row. */
 	function computeArchetypeProjection(projection: PrimaryArchetypeProjectionRow) {
 		const reviewed = projection.reviewedAt != null && projection.archetypeName != null;
+		// A One Piece Card Game Player's Archetype is their Leader's, and their game data the OP Deck List write's (ADR-0074).
+		if (projection.gameData?.type === 'op')
+			return { reviewed, gameData: projection.gameData, archetypeId: projection.archetypeId ?? null };
 		const gameData = projection.deckId != null
 			? {
 				...(projection.gameData?.type === 'mtg'

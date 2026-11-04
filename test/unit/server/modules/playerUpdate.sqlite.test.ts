@@ -338,6 +338,77 @@ describe('reviewing a Deck List', () => {
 		const [stored] = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.id, deck.id));
 		expect(stored?.reviewedAt).toBeNull();
 	});
+
+	// Archetype Review is not offered on OP: a Player's Archetype follows their Leader (ADR-0074).
+	it('is refused on a One Piece Card Game Event', async () => {
+		const eventId = await createEvent('op');
+		const archetype = await createArchetype(eventId, 'Roronoa Zoro');
+		const player = await createPlayer(eventId);
+		const deck = await createDeck(eventId, player.id);
+
+		await expect(playerUpdateModule().reviewPlayerDeck({
+			eventId,
+			playerId: player.id,
+			deckId: deck.id,
+			archetypeId: archetype.id,
+		}))
+			.rejects
+			.toMatchObject({ statusCode: 400 });
+
+		const [stored] = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.id, deck.id));
+		expect(stored?.reviewedAt).toBeNull();
+	});
+});
+
+// The OP Deck List write owns a One Piece Player's game data and Archetype (ADR-0074).
+describe('a One Piece Card Game Player\'s Deck List reference and Archetype', () => {
+	const held = {
+		type: 'op' as const,
+		deckList: { id: 7, mainboardCount: 50, leaderNumber: 'OP01-001' },
+	};
+
+	it('are kept over a Player write naming others', async () => {
+		const eventId = await createEvent('op');
+		const archetype = await createArchetype(eventId, 'Roronoa Zoro');
+		const other = await createArchetype(eventId, 'Nami');
+		const [player] = await db.insert(schema.players)
+			.values({
+				eventId,
+				name: '',
+				nickname: 'alice',
+				gameData: held,
+				archetypeId: archetype.id,
+			})
+			.returning();
+
+		await playerUpdateModule().updatePlayer({
+			eventId,
+			playerId: player!.id,
+			input: {
+				name: 'Alice',
+				gameData: { type: 'op', leader: null },
+				archetypeId: other.id,
+			},
+		});
+
+		expect(await readPlayer(player!.id)).toMatchObject({ name: 'Alice', gameData: held, archetypeId: archetype.id });
+	});
+
+	it('are none on a Player created by hand', async () => {
+		const eventId = await createEvent('op');
+		const archetype = await createArchetype(eventId, 'Roronoa Zoro');
+
+		const created = await playerUpdateModule().createPlayer({
+			eventId,
+			input: {
+				name: 'Alice',
+				gameData: { type: 'op', leader: null },
+				archetypeId: archetype.id,
+			},
+		});
+
+		expect(await readPlayer((created as { id: number }).id)).toMatchObject({ gameData: null, archetypeId: null });
+	});
 });
 
 it('re-projects each Player whose reviewed primary Deck List names an edited Archetype', async () => {

@@ -36,6 +36,20 @@ interface UpdateCardsParams {
 	originConnectionId?: string;
 }
 
+/** A One Piece Card Game Archetype is derived from a Leader by the OP Deck List write, never assigned (ADR-0074). */
+async function refuseOnOpEvent(eventId: number, action: string) {
+	const event = await db.query.events.findFirst({
+		where: eq(events.id, eventId),
+		columns: { game: true },
+	});
+	if (event?.game === 'op') {
+		throw createError({
+			statusCode: 400,
+			statusMessage: `A One Piece Card Game Archetype follows its Leader, so it cannot be ${action} by hand`,
+		});
+	}
+}
+
 function ensureUnique<T>(values: T[], label: string) {
 	if (new Set(values).size !== values.length) {
 		throw createError({
@@ -51,6 +65,7 @@ export function archetypeWriteModule() {
 	const archetypeCards = archetypeCardService();
 
 	async function createArchetype({ eventId, input, originConnectionId }: CreateArchetypeParams) {
+		await refuseOnOpEvent(eventId, 'created');
 		const newArchetype = await archetypes.create(eventId, input);
 
 		return await publication.archetypeCreated({
@@ -61,7 +76,12 @@ export function archetypeWriteModule() {
 	}
 
 	async function updateArchetype({ eventId, archetypeId, input, originConnectionId }: UpdateArchetypeParams) {
-		const archetype = await archetypes.update(archetypeId, eventId, input);
+		// A rename or a pin customises it, which a derived Archetype's cleanup spares (ADR-0074).
+		const current = await archetypes.findById(archetypeId, eventId);
+		const customises = (input.name !== undefined && input.name !== current?.name) || input.chartSeries != null;
+		const archetype = await archetypes.update(archetypeId, eventId, customises
+			? { ...input, customised: true }
+			: input);
 
 		if (!archetype) {
 			throw createError({
@@ -98,6 +118,7 @@ export function archetypeWriteModule() {
 	}
 
 	async function deleteArchetype({ eventId, archetypeId, originConnectionId }: DeleteArchetypeParams) {
+		await refuseOnOpEvent(eventId, 'deleted');
 		if (!await archetypes.findById(archetypeId, eventId)) {
 			throw createError({
 				statusCode: 404,

@@ -60,17 +60,32 @@ function withStoredNickname<T extends { nickname?: string | null }>(input: T): T
 		: { ...input, nickname: input.nickname?.trim() || null };
 }
 
+async function eventGame(eventId: number): Promise<Game> {
+	const event = await db.query.events.findFirst({
+		where: eq(events.id, eventId),
+		columns: { game: true },
+	});
+	return event?.game ?? 'mtg';
+}
+
+/**
+ * A One Piece Card Game Player's game data and Archetype are the OP Deck List
+ * write's: their Deck List reference, and the Archetype their Leader derives
+ * (ADR-0074). A Player write leaves them as they are.
+ */
+function withoutDeckListOwnedFields<T extends { gameData?: unknown; archetypeId?: unknown }>(game: Game, input: T): T {
+	if (game !== 'op')
+		return input;
+	const { gameData: _gameData, archetypeId: _archetypeId, ...written } = input;
+	return written as T;
+}
+
 /**
  * A Player must always show by something (ADR-0074). A One Piece Card Game
  * Player shows by their name, else their Nickname; a Magic: The Gathering
  * Player has no Nickname, so needs a name.
  */
-async function requireShownPlayer(eventId: number, player: PlayerNameFacts) {
-	const event = await db.query.events.findFirst({
-		where: eq(events.id, eventId),
-		columns: { game: true },
-	});
-	const game: Game = event?.game ?? 'mtg';
+function requireShownPlayer(game: Game, player: PlayerNameFacts) {
 	if (game !== 'op' && player.nickname)
 		throw createError({ statusCode: 400, message: 'Only a One Piece Card Game Player has a Nickname' });
 	if (!playerDisplayName(player)) {
@@ -143,12 +158,13 @@ export function playerUpdateModule() {
 		input,
 		originConnectionId,
 	}: UpdatePlayerInputParams): Promise<PlayerResponse> {
-		await requireArchetypeInEvent(eventId, input.archetypeId);
-		const written = withStoredNickname(input);
+		const game = await eventGame(eventId);
+		const written = withoutDeckListOwnedFields(game, withStoredNickname(input));
+		await requireArchetypeInEvent(eventId, written.archetypeId);
 		if (written.name !== undefined || written.nickname !== undefined) {
 			const current = await players.findById(playerId, eventId);
 			if (current) {
-				await requireShownPlayer(eventId, {
+				requireShownPlayer(game, {
 					name: written.name ?? current.name,
 					nickname: written.nickname !== undefined
 						? written.nickname
@@ -191,9 +207,10 @@ export function playerUpdateModule() {
 		input,
 		originConnectionId,
 	}: CreatePlayerInputParams): Promise<PlayerResponse> {
-		await requireArchetypeInEvent(eventId, input.archetypeId);
-		const written = withStoredNickname(input);
-		await requireShownPlayer(eventId, written);
+		const game = await eventGame(eventId);
+		const written = withoutDeckListOwnedFields(game, withStoredNickname(input));
+		await requireArchetypeInEvent(eventId, written.archetypeId);
+		requireShownPlayer(game, written);
 
 		const newPlayer = await players.create(eventId, written);
 
@@ -239,6 +256,8 @@ export function playerUpdateModule() {
 		archetypeId,
 		originConnectionId,
 	}: ReviewPlayerDeckParams): Promise<ReviewPlayerDeckResult> {
+		if (await eventGame(eventId) === 'op')
+			throw createError({ statusCode: 400, statusMessage: 'A One Piece Card Game Player\'s Archetype follows their Leader, so is not reviewed' });
 		const archetype = await archetypeService().findById(archetypeId, eventId);
 		if (!archetype) {
 			throw createError({ statusCode: 404, statusMessage: 'Archetype not found' });

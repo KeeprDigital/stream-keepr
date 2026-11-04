@@ -73,7 +73,7 @@ Analysis of Players, Deck Lists, cards, archetypes, and standings within an Even
 Which Players a Metagame read counts: every Player, the top N by placement, those with at least a minimum match-point total, or one Player List's members. A One Piece Card Game Event, having no standings, offers only every Player and a Player List (ADR-0074). The Metagame page and every Screen Mode reading the Metagame carry the same scope, so a scope asks each read the same question; an Archetype's pilots, meta share and Conversion Rate are read within it.
 
 **Archetype**:
-A strategic Deck classification assigned to Players and used for Metagame analysis. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand (ADR-0074).
+A strategic Deck classification assigned to Players and used for Metagame analysis. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand. An operator renaming one or pinning its series customises it, and a customised Archetype stays when its last Player leaves (ADR-0074).
 
 **Pinned Chart Series**:
 One of the Theme's eight chart series, `chart-series-1` to `chart-series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme, or a Screen Theme Override, decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).

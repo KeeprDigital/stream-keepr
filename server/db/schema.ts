@@ -737,11 +737,20 @@ export const archetypes = sqliteTable('archetypes', {
 	 * An operator's alone; Melee Sync never writes it.
 	 */
 	chartSeries: integer('chart_series'),
+	/**
+	 * The Leader card number a One Piece Card Game Archetype is derived from
+	 * (ADR-0074): set on the Archetypes the OP Deck List write creates, one per
+	 * Leader per Event; null on every other Archetype.
+	 */
+	leaderCardNumber: text('leader_card_number'),
+	/** Set once an operator renames the Archetype or pins its series; an emptied derived Archetype is kept while set. */
+	customised: integer('customised', { mode: 'boolean' }).notNull().default(false),
 
 	...timestamps,
 }, table => [
 	index('archetypes_event_id_idx').on(table.eventId),
 	uniqueIndex('archetypes_event_name_idx').on(table.eventId, table.name),
+	uniqueIndex('archetypes_event_leader_idx').on(table.eventId, table.leaderCardNumber).where(sql`${table.leaderCardNumber} is not null`),
 ]);
 
 /**
@@ -798,6 +807,10 @@ export const playerDecks = sqliteTable('player_decks', {
 	archetypeId: integer('archetype_id').references(() => archetypes.id, { onDelete: 'set null' }),
 	/** Non-null once this specific submitted deck has been reviewed. */
 	reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }),
+	/** A One Piece Card Game Deck List's Leader, by card number, catalogued or not (ADR-0074). */
+	leaderCardNumber: text('leader_card_number'),
+	/** A One Piece Card Game Deck List last written by hand, which a TCG+ Import keeps (ADR-0074). */
+	handEdited: integer('hand_edited', { mode: 'boolean' }).notNull().default(false),
 	...timestamps,
 }, table => [
 	index('player_decks_event_id_idx').on(table.eventId),
