@@ -230,6 +230,12 @@ watch(
 					/>
 				</div>
 				<MetagameStatStrip :stats="stats" />
+				<!-- An OP operator renames a Leader Archetype here, customising it (ADR-0074). -->
+				<MetagameArchetypeNameField
+					v-if="!isMtg"
+					:event-id="eventStore.eventId!"
+					:archetype-id="detail.id"
+				/>
 				<MetagameArchetypeChartSeriesField
 					:event-id="eventStore.eventId!"
 					:archetype-id="detail.id"
