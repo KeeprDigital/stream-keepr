@@ -41,9 +41,10 @@ export interface MtgPlayerGameData {
 }
 
 /**
- * A Feature Match Slot side's Leader: an inline snapshot of one Leader card,
- * taken from bandai-keepr when the operator picks it (ADR-0057). Its image is
- * the card's standard Printing.
+ * A Feature Match Slot side's Leader: one Leader card from the card catalogue,
+ * imaged by its standard Printing. The side stores only its number and every
+ * read fills in the rest from the catalogue (ADR-0074); a save is trusted for
+ * the number alone.
  */
 export interface OpLeader {
 	number: string;

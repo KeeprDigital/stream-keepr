@@ -6,6 +6,7 @@ import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSes
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
+import { toStoredSlotLeaders, withCatalogueLeaders } from '~~/server/services/featureMatchSlotLeader';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
 import { buildClearDeckSourceSlotsQuery } from '~~/server/services/screen';
 import { chunkRowsWithinParameterBudget, inJsonArray, observedValue } from '~~/server/utils/db';
@@ -160,20 +161,21 @@ export function featureMatchService() {
 				eq(featureMatches.eventId, eventId),
 			),
 		});
-		return slot
-			? await withActiveSession(slot)
-			: undefined;
+		if (!slot)
+			return undefined;
+		const [read] = await withCatalogueLeaders([slot]);
+		return await withActiveSession(read!);
 	};
 
 	const findByEventId = async (eventId: number) => {
 		// Relational loading emits one joined query instead of one Session query
 		// per Slot. At the supported 50-Slot maximum this keeps the request well
 		// below D1 query-count limits.
-		return await db.query.featureMatches.findMany({
+		return await withCatalogueLeaders(await db.query.featureMatches.findMany({
 			where: eq(featureMatches.eventId, eventId),
 			with: { activeSession: true },
 			orderBy: [featureMatches.sortOrder, featureMatches.id],
-		});
+		}));
 	};
 
 	const create = async (
@@ -194,7 +196,7 @@ export function featureMatchService() {
 		const [newMatch] = await db
 			.insert(featureMatches)
 			.values({
-				...pickManualWritable('featureMatchSlots', data),
+				...toStoredSlotLeaders(pickManualWritable('featureMatchSlots', data)),
 				...provenance,
 				bestOf,
 				// Calculate order inside the write statement so concurrent creators
@@ -302,7 +304,7 @@ export function featureMatchService() {
 		if (!current)
 			return undefined;
 
-		const manualData = pickManualWritable('featureMatchSlots', data);
+		const manualData = toStoredSlotLeaders(pickManualWritable('featureMatchSlots', data));
 		const provenance = manualData.matchId !== undefined
 			? await resolveMatchProvenance(eventId, manualData.matchId)
 			: {};

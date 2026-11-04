@@ -1,3 +1,4 @@
+import type { DbCardInsert } from '~~/server/db/schema';
 import type { OpCardCategory, OpCardSummary } from '~~/shared/types/card/op';
 import type { FeatureMatchDeckListEntry } from '~~/shared/types/featureMatchDeckList';
 import type { OpLeader } from '~~/shared/types/game';
@@ -38,6 +39,18 @@ export const ZORO = opLeader('OP01-001', 'Roronoa Zoro', ['Red']);
 export const LUFFY = opLeader('OP01-003', 'Monkey.D.Luffy', ['Red', 'Green']);
 export const NAMI = opLeader('OP01-016', 'Nami', ['Blue']);
 export const LAW = opLeader('OP01-002', 'Trafalgar Law', ['Red', 'Green']);
+
+/** The card catalogue's row for a Leader, so a Slot side referencing its number reads it (ADR-0074). */
+export function opLeaderCatalogueRow(leader: OpLeader): DbCardInsert {
+	return {
+		name: leader.name,
+		game: 'op',
+		cardNumber: leader.number,
+		category: 'leader',
+		colors: JSON.stringify(leader.colors),
+		imageUrl: leader.imageUrl,
+	};
+}
 
 /** A Feature Match Deck List entry snapshotting a known card; `category: null` makes it number-only. */
 export function opDeckListEntry(number: string, quantity: number, category: OpCardCategory | null, cost: number | null = null): FeatureMatchDeckListEntry {

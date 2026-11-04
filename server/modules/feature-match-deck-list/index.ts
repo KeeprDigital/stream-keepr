@@ -15,6 +15,7 @@ import { featureMatchDeckListService } from '~~/server/services/featureMatchDeck
 import { bandaiKeeprConfig } from '~~/server/utils/bandaiKeepr';
 import { runCompensation } from '~~/server/utils/errors';
 import { requireOpEvent } from '~~/server/utils/routeGuards';
+import { catalogueOpLeader } from '~~/shared/utils/card/op';
 import { getOpGameData } from '~~/shared/utils/gameData';
 import { featureMatchDeckListView, parseFeatureMatchDeckListText } from './paste';
 
@@ -35,7 +36,7 @@ const SIDE_DATA_KEY = { player1: 'player1Data', player2: 'player2Data' } as cons
 /** A paste's cards, through the card catalogue: one bulk lookup for the numbers it lacks (ADR-0074). */
 async function resolvePaste(config: BandaiKeeprConfig, text: string): Promise<FeatureMatchDeckListView> {
 	const lines = parseFeatureMatchDeckListText(text);
-	const cards = await opCardCatalogueModule().resolve(config, lines.map(line => line.number));
+	const cards = await opCardCatalogueModule().resolve(() => config, lines.map(line => line.number));
 	return featureMatchDeckListView(lines.map(line => ({
 		number: line.number,
 		quantity: line.quantity,
@@ -46,12 +47,7 @@ async function resolvePaste(config: BandaiKeeprConfig, text: string): Promise<Fe
 function leaderOf(view: FeatureMatchDeckListView): OpLeader | null {
 	const entry = view.entries.find(candidate => candidate.number === view.leaderNumber);
 	return entry?.card
-		? {
-				number: entry.number,
-				name: entry.card.name,
-				colors: entry.card.colors,
-				imageUrl: entry.card.imageUrl,
-			}
+		? catalogueOpLeader(entry.number, entry.card)
 		: null;
 }
 

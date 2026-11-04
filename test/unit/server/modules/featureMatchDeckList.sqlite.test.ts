@@ -287,7 +287,16 @@ describe('a Feature Match Deck List on a Slot side', () => {
 			},
 			featureMatchDeckList: { id: answer.deckList.id, mainboardCount: 8 },
 		};
-		expect((await slotRow(slotId)).player1Data).toEqual({ name: 'Ana', pronouns: 'she/her', gameData: expectedGameData });
+		// The side references the Leader by number; reads show the catalogue's card (ADR-0074).
+		expect((await slotRow(slotId)).player1Data).toEqual({
+			name: 'Ana',
+			pronouns: 'she/her',
+			gameData: {
+				...expectedGameData,
+				leader: { number: 'OP01-001' },
+			},
+		});
+		expect(answer.featureMatch.player1Data).toEqual({ name: 'Ana', pronouns: 'she/her', gameData: expectedGameData });
 		const active = await sessionSnapshot(slotId);
 		expect(active.id).toBe(session.id);
 		expect(active.sourceSnapshot.player1.data).toMatchObject({ name: 'Ana', gameData: expectedGameData });

@@ -49,6 +49,7 @@ function card(number, name, category, colors) {
 
 const cards = new Map([
 	card('OP01-001', 'Roronoa Zoro', 'leader', ['Red']),
+	card('OP01-002', 'Trafalgar Law', 'leader', ['Red', 'Green']),
 	card('OP01-016', 'Nami', 'leader', ['Blue']),
 	card('OP01-025', 'Roronoa Zoro', 'character', ['Red']),
 	card('OP01-040', 'Usopp', 'character', ['Blue']),

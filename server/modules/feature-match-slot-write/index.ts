@@ -2,10 +2,13 @@ import type { DbFeatureMatch } from '~~/server/db/schema';
 import type { CreateFeatureMatchInput, FeatureMatchResponse, ManualPlayerSlotData, UpdateFeatureMatchInput, UpdatePlayerInput } from '~~/shared/api';
 import type { FeatureMatchDeckListReference } from '~~/shared/types/featureMatchDeckList';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
+import { opCardCatalogueModule } from '~~/server/modules/op-card-catalogue';
 import { playerUpdateModule } from '~~/server/modules/player-update';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { deckListReferenceOf, featureMatchDeckListService } from '~~/server/services/featureMatchDeckList';
+import { slotLeaderNumbers } from '~~/server/services/featureMatchSlotLeader';
 import { playerService } from '~~/server/services/player';
+import { bandaiKeeprConfig } from '~~/server/utils/bandaiKeepr';
 import { validateFeatureMatchReferences } from '~~/server/utils/routeGuards';
 
 const SIDE_DATA_KEYS = ['player1Data', 'player2Data'] as const;
@@ -52,8 +55,25 @@ export function featureMatchSlotWriteModule() {
 	const playerUpdate = playerUpdateModule();
 	const deckLists = featureMatchDeckListService();
 
+	/**
+	 * A picked Leader is saved to the card catalogue before a side references it
+	 * by number (ADR-0074): only its number is taken from the save, the card is
+	 * bandai-keepr's, and a number that names no Leader card is refused.
+	 */
+	async function catalogueLeaders(input: UpdateFeatureMatchInput) {
+		const numbers = slotLeaderNumbers(input);
+		if (numbers.length === 0)
+			return;
+		const cards = await opCardCatalogueModule().resolve(bandaiKeeprConfig, numbers);
+		for (const number of numbers) {
+			if (cards.get(number)?.category !== 'leader')
+				throw createError({ statusCode: 400, message: `${number} is not a Leader card` });
+		}
+	}
+
 	async function create({ eventId, input, originConnectionId }: CreateSlotParams): Promise<FeatureMatchResponse> {
 		await validateFeatureMatchReferences(eventId, input);
+		await catalogueLeaders(input);
 
 		const slot = await slots.create(eventId, input);
 
@@ -187,6 +207,7 @@ export function featureMatchSlotWriteModule() {
 
 	async function updateSetup({ eventId, slotId, input, originConnectionId }: UpdateSlotSetupParams): Promise<FeatureMatchResponse> {
 		await validateFeatureMatchReferences(eventId, input);
+		await catalogueLeaders(input);
 		// Only a save that edits a side writes a Player or moves a Deck List.
 		const current = SIDE_DATA_KEYS.some(key => Object.hasOwn(input, key))
 			? await slots.findById(slotId, eventId)

@@ -22,6 +22,13 @@
       "when": 1793791950013,
       "tag": "0002_op_card_catalogue",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793793231360,
+      "tag": "0003_slot_leader_catalogue",
+      "breakpoints": true
     }
   ]
 }

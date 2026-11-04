@@ -4,7 +4,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
 import { featureMatchTokenValues } from '~~/shared/featureMatchOverlayValues';
-import { LAW, ZORO } from '~~/test/helpers/opCards';
+import { LAW, opLeaderCatalogueRow, ZORO } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
@@ -82,6 +82,7 @@ async function stageOp() {
 		.values({ name: 'One Piece Regional', game: 'op', featureMatchOrientation: 'horizontal' })
 		.returning({ id: schema.events.id });
 	const eventId = event!.id;
+	await db.insert(schema.cards).values([ZORO, LAW].map(opLeaderCatalogueRow)).onConflictDoNothing();
 	const [slot] = await db.insert(schema.featureMatches)
 		.values({
 			eventId,

@@ -18,6 +18,7 @@ import { events, featureMatches, featureMatchSessions, players } from '~~/server
 import { mapFeatureMatchSessionToResponse, mapFeatureMatchSessionToStarted } from '~~/server/mappers/featureMatch';
 import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
 import { createSequencedLiveEpochs, createSequencedLiveState } from '~~/server/modules/live-state';
+import { withCatalogueLeaders } from '~~/server/services/featureMatchSlotLeader';
 import { publishMessage } from '~~/server/utils/ably';
 import { chunkJsonRows, inJsonArray, selectForInsert } from '~~/server/utils/db';
 import {
@@ -197,6 +198,11 @@ export function featureMatchStateService() {
 			game: 'mtg',
 		};
 
+		// A side's Leader is a catalogue reference; the snapshot holds the card it names.
+		const [sides] = await withCatalogueLeaders([
+			{ player1Data: slot.player1Data, player2Data: slot.player2Data },
+		]);
+
 		return {
 			eventId: slot.eventId,
 			slotId: slot.id,
@@ -210,8 +216,8 @@ export function featureMatchStateService() {
 			playerDisplayMode: slot.playerDisplayMode,
 			game: eventDefaults.game,
 			defaults: eventDefaults,
-			player1: await resolveSnapshotPlayer(slot.eventId, slot.player1Id, slot.player1Data, preloadedPlayers),
-			player2: await resolveSnapshotPlayer(slot.eventId, slot.player2Id, slot.player2Data, preloadedPlayers),
+			player1: await resolveSnapshotPlayer(slot.eventId, slot.player1Id, sides!.player1Data ?? null, preloadedPlayers),
+			player2: await resolveSnapshotPlayer(slot.eventId, slot.player2Id, sides!.player2Data ?? null, preloadedPlayers),
 			// The build time, which is the right answer only for the builds that open a
 			// Session. A rebuild for a `SnapshotCorrected` has this discarded in favour
 			// of the stamp the Session is already holding — the field means first taken,

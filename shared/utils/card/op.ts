@@ -1,5 +1,5 @@
 import type { ScreenCard } from '../../types/card/mtg';
-import type { OpCardColor, OpCardSummary, OpScreenCard } from '../../types/card/op';
+import type { OpCardColor, OpCardSummary, OpCatalogueCard, OpScreenCard } from '../../types/card/op';
 import type { OpLeader } from '../../types/game';
 import { OP_CARD_COLORS } from '../../types/card/op';
 
@@ -47,6 +47,16 @@ export function opLeaderOf(card: OpCardSummary): OpLeader {
 		number: card.number,
 		name: card.name,
 		colors: card.colors.filter(isOpCardColor),
+		imageUrl: card.imageUrl,
+	};
+}
+
+/** The catalogue's card numbered `number` as a Leader, imaged by its standard Printing (ADR-0074). */
+export function catalogueOpLeader(number: string, card: OpCatalogueCard): OpLeader {
+	return {
+		number,
+		name: card.name,
+		colors: card.colors,
 		imageUrl: card.imageUrl,
 	};
 }
