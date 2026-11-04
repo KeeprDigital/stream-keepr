@@ -461,7 +461,7 @@ Screen Deck-source triggers — because drizzle-kit cannot generate either;
 drops them. The `screen_deck_source_slot_side` section of `0001_since_v1_5_0`
 replaced those triggers; a re-squash takes its version.
 
-The squash was a one-time transition. A D1 whose `_hub_migrations` still lists
+The baseline squash was a one-time transition. A D1 whose `_hub_migrations` still lists
 the old `0000`–`0031` names reads `0000_baseline` as unapplied and fails on its
 existing tables, so such a database is dropped and recreated once (ADR-0019
 required this of production before the squash deployed). A D1 that has applied

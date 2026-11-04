@@ -449,7 +449,7 @@ Accepted · 2026-10-13, amended under #621
 
 ### Why
 
-Nothing is live and no database holds data worth keeping, so the history's backfills and data rewrites (0007, 0024, 0025, 0028, 0030) protect nothing, and their per-migration tests only exercised them. Production's `_hub_migrations` records the old names; squashing after ship would mean hand-editing that table, so the window closes at first ship.
+Nothing is live and no database holds data worth keeping, so the history's backfills and data rewrites (0007, 0024, 0025, 0028, 0030) protect nothing, and their per-migration tests only exercised them. Production's `_hub_migrations` records the old names; squashing after ship would mean hand-editing that table, so the window closes at first ship for every migration a deployed database has applied (amended by ADR-0071: migrations none has applied may still be squashed).
 
 ### Consequences
 
@@ -2275,13 +2275,13 @@ Productions want a plain "on the desk" Screen without authoring a Broadcast Grap
 - **One list for both choices, showing its first Talent in `one`.** Switching between one Talent and the lineup would lose the one Talent picked, and picking one would reorder the lineup.
 - **Re-anchor the rotation when it is turned on.** It would need a stored anchor and the Page Rotation's write rules; with every Talent stepping together from epoch zero there is no visible restart to protect.
 
-## ADR-0071: Unreleased migrations are squashed into one before release, and numbers are never reserved
+## ADR-0071: The migrations unreleased at v1.5.0 are squashed into one, and journal numbers are never reserved
 
-Accepted · 2026-11-04 · [#953](https://github.com/KeeprDigital/stream-keepr/issues/953). Extends ADR-0019.
+Accepted · 2026-11-04 · [#953](https://github.com/KeeprDigital/stream-keepr/issues/953). Amends ADR-0019.
 
 ### Decision
 
-**The 21 migrations merged after v1.5.0 become one, `0001_since_v1_5_0.sql`.** v1.5.0, the production release, had applied only `0000_baseline`. The originals are concatenated verbatim in their order, each under a `-- Section: <name>` comment, so every backfill, rewrite and trigger runs as it did. Their numbers had run 0001–0016 and then 0020–0024. The squash makes file numbers match journal positions again.
+**The 21 migrations merged after v1.5.0 become one, `0001_since_v1_5_0.sql`.** v1.5.0, the production release, had applied only `0000_baseline`. The originals are concatenated verbatim in their order, each under a `-- Section: <name>` comment, so every backfill, rewrite and trigger runs as it did. Their numbers had run 0001–0016 and then 0020–0024. The squash makes file numbers match journal positions again. It is a one-time repair, not a release step: later releases ship their migrations as they are.
 
 **The next migration takes the next journal number** (README § Database). A branch never reserves a number ahead, and it does not rename a file to claim one. `migrationJournal.test.ts` fails on a gap.
 
