@@ -278,7 +278,7 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		expect(mockPublishScreenUpdated).toHaveBeenCalledOnce();
 		// Without an origin: the configuring client holds the Screen at its old version too.
 		expect(mockPublishScreenUpdated).toHaveBeenCalledWith({ eventId: 1, entity: cleared });
-		// A Deck Screen that re-read on the reset first would ask for the deleted Player.
+		// A Deck List Screen that re-read on the reset first would ask for the deleted Player.
 		expect(mockPublishScreenUpdated.mock.invocationCallOrder[0])
 			.toBeLessThan(mockPublishMeleeDataReset.mock.invocationCallOrder[0]!);
 	});

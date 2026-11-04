@@ -34,9 +34,9 @@ defineExpose({ resetConfig, saving });
 const fields = screenModeConfigContract('deck').fields;
 const boardFields = DECK_SIDEBOARD_LAYOUT_FIELDS;
 
-// A badge in the centre of a Deck Screen card would cover its art, so the badge
-// position pickers offer every point but this one — which is why what they emit
-// is always a `QuantityPosition`, and why the casts below are safe.
+// A badge in the centre of a Deck List Screen card would cover its art, so the
+// badge position pickers offer every point but this one — which is why what
+// they emit is always a `QuantityPosition`, and why the casts below are safe.
 const BADGE_DISABLED_POINTS: readonly NinePoint[] = ['center'];
 
 /** A One Piece Card Game Event shows a Feature Match Slot side's Deck List, set up in its own settings (ADR-0057). */

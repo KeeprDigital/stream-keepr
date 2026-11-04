@@ -21,8 +21,8 @@ export class ScreenDeckSourceConflictError extends Error {
  * Rethrows the `screens` Deck-source triggers' refusal as its stable conflict.
  *
  * Every write that can change a Deck configuration needs it, whichever path
- * carries the write: a Deck Screen's own Background Layers send its mode writes
- * through the Graphic Asset Reference write too (#580).
+ * carries the write: a Deck List Screen's own Background Layers send its mode
+ * writes through the Graphic Asset Reference write too (#580).
  */
 export function mapDeckSourceConflict(error: unknown): never {
 	let failure: unknown = error;

@@ -33,7 +33,7 @@ interface ActiveCardRuntimeState {
 }
 
 /**
- * Active Card Screen runtime Module.
+ * Active Card Spotlight Screen runtime Module.
  *
  * Owns active Screen Card persistence, hiding it here when its Card Timeout
  * runs out, and realtime application for the currently selected Screen.

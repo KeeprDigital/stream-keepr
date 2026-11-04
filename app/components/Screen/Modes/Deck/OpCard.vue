@@ -2,7 +2,7 @@
 import type { OpDeckCard } from '~~/shared/utils/opDeckLayout';
 import { modeTokenVar } from '~/modules/screen-mode';
 
-/** One One Piece Card Game card of a Deck Screen, as printed, with its quantity badge. */
+/** One One Piece Card Game card of a Deck List Screen, as printed, with its quantity badge. */
 const props = defineProps<{
 	card: OpDeckCard;
 	/** Its width while its sizing is fixed. */

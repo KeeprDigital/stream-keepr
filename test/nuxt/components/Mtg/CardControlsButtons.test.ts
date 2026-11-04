@@ -92,15 +92,15 @@ describe('mtgCardControlsButtons', () => {
 		store.cardsMatch = false;
 	});
 
-	it('disables Show and explains why when no card screen is configured', async () => {
+	it('disables Show and explains why when no Card Spotlight Screen is configured', async () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.get('button').attributes('disabled')).toBeDefined();
-		expect(wrapper.text()).toContain('No card image screen configured');
-		expect(wrapper.text()).toContain('Add a screen in card mode to show cards.');
+		expect(wrapper.text()).toContain('No Card Spotlight Screen configured');
+		expect(wrapper.text()).toContain('Add a Screen in Card Spotlight mode to show cards.');
 	});
 
-	it('keeps Show enabled when a card screen is active', async () => {
+	it('keeps Show enabled when a Card Spotlight Screen is active', async () => {
 		useMockCardStore().activeScreenId = 7;
 		const wrapper = await mountComponent();
 

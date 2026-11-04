@@ -287,7 +287,7 @@ describe('screenTopCardsDisplay', () => {
 		expect(wrapper.get('[data-testid="top-cards-item"]').attributes('data-width')).toBe('200px');
 	});
 
-	// Each badge takes its own place and text size, as a Deck Screen's badges do.
+	// Each badge takes its own place and text size, as a Deck List Screen's badges do.
 	it.each([
 		{
 			rankBadgePosition: 'top-left',

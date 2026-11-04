@@ -546,7 +546,7 @@ describe('screenTopCardsSettings', () => {
 		});
 	});
 
-	// Each badge is placed and sized on its own, as a Deck Screen's are.
+	// Each badge is placed and sized on its own, as a Deck List Screen's are.
 	describe('card badges', () => {
 		it.each([
 			{
