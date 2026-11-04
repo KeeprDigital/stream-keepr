@@ -407,7 +407,11 @@ describe('a TCG+ Import', () => {
 		]);
 	});
 
-	it('names an Unresolved Deck Card once bandai-keepr knows it', async () => {
+	// A hand-edited Deck List keeps its own cards and its flag; only the card is named.
+	it.each([
+		['the import brought', null, 'OP99-999', 1],
+		['a hand edit holds', '1x OP01-001\n3x OP99-998', 'OP99-998', 3],
+	] as const)('names an Unresolved Deck Card %s once bandai-keepr knows it, as previewed', async (_holder, handEdit, late, copies) => {
 		const eventId = await stageEvent();
 		const csv = tcgPlusExport([
 			zoroPlayer('1', 'ana', {
@@ -417,19 +421,31 @@ describe('a TCG+ Import', () => {
 			}),
 		]);
 		await commit(eventId, csv);
+		const [ana] = await eventPlayers(eventId);
+		if (handEdit)
+			await writeByHand(eventId, ana!.id, handEdit);
 		upstream.know(knownOpCard({
-			number: 'OP99-999',
+			number: late,
 			name: 'Late Card',
 			category: 'character',
 			colors: ['Red'],
 		}));
 
+		const previewed = await preview(eventId, csv);
 		const answer = await commit(eventId, csv);
 
+		expect(previewed.deckListChanged).toEqual([
+			{ playerId: ana!.id, shownAs: 'ana', memberNumber: '1' },
+		]);
 		expect(answer.results.deckListsWritten).toBe(1);
-		const [ana] = await eventPlayers(eventId);
 		const [deck] = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.playerId, ana!.id));
+		expect(deck!.handEdited).toBe(handEdit !== null);
 		expect(await db.select().from(schema.playerDeckUnresolvedCards).where(eq(schema.playerDeckUnresolvedCards.deckId, deck!.id))).toEqual([]);
+		const held = await db.select({ number: schema.cards.cardNumber, quantity: schema.playerDeckCards.quantity })
+			.from(schema.playerDeckCards)
+			.innerJoin(schema.cards, eq(schema.cards.id, schema.playerDeckCards.cardId))
+			.where(eq(schema.playerDeckCards.deckId, deck!.id));
+		expect(held).toContainEqual({ number: late, quantity: copies });
 	});
 
 	it('keeps a hand-edited Deck List the export differs from, flagged in the preview', async () => {

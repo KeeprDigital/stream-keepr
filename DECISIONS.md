@@ -2447,7 +2447,7 @@ Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/i
 - **Where it's edited:** on the Players page, or from a Feature Match Slot side the Player is linked to, as a Player write (as ADR-0045 treats a seated Player's identity).
 - **One write.** Every OP Deck List write, a Player's or an unlinked Slot side's, goes through the OP Deck List write (`server/modules/op-deck-list-write`), and each one gives the Deck List a new id, so whatever holds it by reference sees the change. A Player's game data holds only that reference and its Leader's card number; their Archetype and game data are the write's, and a Player write leaves them.
 - **How it's edited:** the paste format and paste rules are ADR-0057's.
-- **Re-import:** the preview flags a hand-edited Deck List the import differs from, and the operator may drop the edit to take the import's.
+- **Re-import:** the preview flags a hand-edited Deck List the import differs from, and the operator may drop the edit to take the import's. The import still retries a hand-edited Deck List's Unresolved Deck Cards in its one lookup, and names any now known by rewriting the hand edit as a resolution, which keeps it hand-edited. The preview lists every Deck List the import rewrites.
 - **Deck rule breaches** warn and never refuse.
 
 **OP cards live in the shared card catalogue, keyed by card number; MTG cards stay keyed by name.**

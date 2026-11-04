@@ -22,7 +22,8 @@ import { parseTcgPlusExport, TcgPlusExportError } from './parse';
  * List, though its card lookup fills the card catalogue. An import upserts
  * Players by Bandai member number, refreshing each Nickname and leaving the
  * operator's name; replaces each Deck List whose cards changed through the OP
- * Deck List write, keeping a hand-edited one; and marks imported Players the
+ * Deck List write, keeping a hand-edited one, though an Unresolved Deck Card
+ * it holds that the catalogue now knows is named; and marks imported Players the
  * export misses inactive. Players added by hand are never touched. The card
  * lookup runs before any write, so a failed one saves nothing.
  */
@@ -38,6 +39,8 @@ interface PlannedEntry {
 	deckList: OpDeckListView;
 	held: DbPlayer | null;
 	heldDeckList: OpPlayerDeckListContents | null;
+	/** A hand-edited saved Deck List holding an Unresolved Deck Card, resolved again; `null` for any other. */
+	handEditResolved: OpDeckListView | null;
 }
 
 interface ImportPlan {
@@ -70,10 +73,28 @@ function deckListDiffers({ deckList, heldDeckList }: PlannedEntry): boolean {
 		|| contentKey(deckList.leaderNumber, deckList.entries) !== contentKey(heldDeckList.leaderNumber, heldDeckList.entries);
 }
 
-/** Whether the saved Deck List holds an Unresolved Deck Card the catalogue now knows, so rewriting it names the card. */
-function namesUnresolvedCard({ deckList, heldDeckList }: PlannedEntry): boolean {
-	const known = new Set(deckList.entries.filter(entry => entry.card !== null).map(entry => entry.number));
+/** Whether the saved Deck List holds an Unresolved Deck Card `resolved` names, so rewriting it names the card. */
+function namesUnresolvedCard(heldDeckList: OpPlayerDeckListContents | null, resolved: OpDeckListView): boolean {
+	const known = new Set(resolved.entries.filter(entry => entry.card !== null).map(entry => entry.number));
 	return heldDeckList?.entries.some(entry => !entry.resolved && known.has(entry.number)) ?? false;
+}
+
+/**
+ * The Deck List the import writes for an entry, if any: the export's, when
+ * its cards changed or it names a card the saved one left unresolved; for a
+ * hand-edited one, only the hand edit itself, when the catalogue now names a
+ * card it left unresolved, which keeps it hand-edited.
+ */
+function plannedWrite(entry: PlannedEntry): { deckList: OpDeckListView; source: 'import' | 'resolution' } | null {
+	const { deckList, heldDeckList, handEditResolved } = entry;
+	if (!heldDeckList?.handEdited) {
+		return deckListDiffers(entry) || namesUnresolvedCard(heldDeckList, deckList)
+			? { deckList, source: 'import' }
+			: null;
+	}
+	return handEditResolved && namesUnresolvedCard(heldDeckList, handEditResolved)
+		? { deckList: handEditResolved, source: 'resolution' }
+		: null;
 }
 
 function heldPlayer(player: DbPlayer): TcgPlusImportHeldPlayer {
@@ -97,32 +118,52 @@ function plural(count: number, word: string): string {
 export function tcgPlusImportModule() {
 	const deckListWrite = opDeckListWriteModule();
 
-	/** The export read against the Event: every Deck List resolved in one bulk lookup, and who it names. */
+	/**
+	 * The export read against the Event: who it names, and every Deck List
+	 * resolved in one bulk lookup, with the hand-edited ones it names that
+	 * hold an Unresolved Deck Card, so the lookup retries their numbers too.
+	 */
 	async function plan(eventId: number, csv: string): Promise<ImportPlan> {
 		await requireOpEvent(eventId);
 		const exported = readExport(csv);
-		const deckLists = await deckListWrite.previewMany({
-			eventId,
-			inputs: exported.map(entry => ({ entries: entry.entries, leaderNumber: entry.leaderNumber })),
-		});
 		const [eventPlayers, heldDeckLists] = await Promise.all([
 			playerService().findAll({ eventId, includeInactive: true }),
 			opPlayerDeckListService().findContentsByEvent(eventId),
 		]);
 		const imported = new Map(eventPlayers.filter(player => player.externalSource === 'tcgplus').map(player => [player.externalId, player]));
+		const named = exported.map((entry) => {
+			const held = imported.get(entry.memberNumber) ?? null;
+			return {
+				entry,
+				held,
+				heldDeckList: held
+					? heldDeckLists.get(held.id) ?? null
+					: null,
+			};
+		});
+		const unresolvedHandEdits = named.flatMap(({ heldDeckList }) =>
+			heldDeckList?.handEdited && heldDeckList.entries.some(entry => !entry.resolved)
+				? [heldDeckList]
+				: []);
+		const views = await deckListWrite.previewMany({
+			eventId,
+			inputs: [
+				...exported,
+				...unresolvedHandEdits,
+			],
+		});
+		const handEditViews = new Map(unresolvedHandEdits.map((deckList, index) => [deckList, views[exported.length + index]!]));
 		return {
 			eventPlayers,
-			entries: exported.map((entry, index) => {
-				const held = imported.get(entry.memberNumber) ?? null;
-				return {
-					exported: entry,
-					deckList: deckLists[index]!,
-					held,
-					heldDeckList: held
-						? heldDeckLists.get(held.id) ?? null
-						: null,
-				};
-			}),
+			entries: named.map(({ entry, held, heldDeckList }, index) => ({
+				exported: entry,
+				deckList: views[index]!,
+				held,
+				heldDeckList,
+				handEditResolved: heldDeckList
+					? handEditViews.get(heldDeckList) ?? null
+					: null,
+			})),
 		};
 	}
 
@@ -134,7 +175,7 @@ export function tcgPlusImportModule() {
 			nickname: entry.exported.nickname,
 			leaderNumber: entry.deckList.leaderNumber,
 		});
-		const changed = entries.filter(entry => entry.held && deckListDiffers(entry));
+		const handEditConflicts = entries.filter(entry => entry.held && entry.heldDeckList?.handEdited && deckListDiffers(entry));
 		const named = new Set(entries.map(entry => entry.exported.memberNumber));
 
 		const leaders = new Map<string, TcgPlusImportLeader>();
@@ -168,7 +209,7 @@ export function tcgPlusImportModule() {
 		return {
 			playerCount: entries.length,
 			added: entries.filter(entry => !entry.held).map(incoming),
-			deckListChanged: changed.filter(entry => !entry.heldDeckList?.handEdited).map(entry => heldPlayer(entry.held!)),
+			deckListChanged: entries.filter(entry => entry.held && plannedWrite(entry)).map(entry => heldPlayer(entry.held!)),
 			deactivated: eventPlayers
 				.filter(player => player.externalSource === 'tcgplus' && player.isActive && !named.has(player.externalId ?? ''))
 				.map(heldPlayer),
@@ -188,7 +229,7 @@ export function tcgPlusImportModule() {
 						: [];
 				}),
 				unknownCards: [...unknown].map(([number, playerCount]) => ({ number, playerCount })),
-				handEditConflicts: changed.filter(entry => entry.heldDeckList?.handEdited).map(entry => heldPlayer(entry.held!)),
+				handEditConflicts: handEditConflicts.map(entry => heldPlayer(entry.held!)),
 				possibleDuplicates,
 			},
 		};
@@ -206,11 +247,16 @@ export function tcgPlusImportModule() {
 		const byMember = new Map(reconciled.players.map(player => [player.externalId, player]));
 
 		const kept = entries.filter(entry => entry.heldDeckList?.handEdited && deckListDiffers(entry));
-		const writes = entries
-			.filter(entry => !entry.heldDeckList?.handEdited && (deckListDiffers(entry) || namesUnresolvedCard(entry)))
-			.map(entry => ({ playerId: byMember.get(entry.exported.memberNumber)!.id, deckList: entry.deckList }));
+		const writes = entries.flatMap((entry) => {
+			const write = plannedWrite(entry);
+			return write
+				? [
+						{ playerId: byMember.get(entry.exported.memberNumber)!.id, ...write },
+					]
+				: [];
+		});
 		// After the Players: every Player written stands even if this write fails, and a re-import finishes it.
-		const written = await deckListWrite.writeMany({ eventId, writes, source: 'import' });
+		const written = await deckListWrite.writeMany({ eventId, writes });
 
 		const writtenIds = new Set(written.map(player => player.id));
 		// A Player whose Nickname changed or who came back, with no Deck List written: their Slots follow them too.

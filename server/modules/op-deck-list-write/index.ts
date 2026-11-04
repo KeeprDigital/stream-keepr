@@ -154,14 +154,23 @@ export function opDeckListWriteModule() {
 		return player;
 	}
 
-	async function isHandEdited(eventId: number, playerId: number, source: OpDeckListWriteSource): Promise<boolean> {
-		if (source !== 'resolution')
-			return source === 'hand';
-		const deck = await db.query.playerDecks.findFirst({
-			where: and(eq(playerDecks.eventId, eventId), eq(playerDecks.playerId, playerId), eq(playerDecks.isPrimary, true)),
-			columns: { handEdited: true },
-		});
-		return deck?.handEdited ?? false;
+	/** Whether each write's Deck List is hand-edited once written: a resolution keeps the flag the Deck List holds. */
+	async function handEditedFlags(eventId: number, writes: ReadonlyArray<{ playerId: number; source: OpDeckListWriteSource }>): Promise<boolean[]> {
+		const resolved = writes.filter(({ source }) => source === 'resolution').map(({ playerId }) => playerId);
+		const held = resolved.length === 0
+			? []
+			: await db.select({ playerId: playerDecks.playerId })
+					.from(playerDecks)
+					.where(and(
+						eq(playerDecks.eventId, eventId),
+						eq(playerDecks.isPrimary, true),
+						eq(playerDecks.handEdited, true),
+						inJsonArray(playerDecks.playerId, resolved),
+					));
+		const handEdited = new Set(held.map(({ playerId }) => playerId));
+		return writes.map(({ playerId, source }) => source === 'resolution'
+			? handEdited.has(playerId)
+			: source === 'hand');
 	}
 
 	// Announced with no origin: the writing client applied none of it, so it follows the messages too.
@@ -184,7 +193,9 @@ export function opDeckListWriteModule() {
 			playerId,
 			view,
 			archetypeId: derived?.archetype.id ?? null,
-			handEdited: await isHandEdited(eventId, playerId, source),
+			handEdited: (await handEditedFlags(eventId, [
+				{ playerId, source },
+			]))[0]!,
 		});
 		if (!written) {
 			await removeEmptiedLeaderArchetypes(eventId, derived?.created
@@ -305,18 +316,16 @@ export function opDeckListWriteModule() {
 	}
 
 	/**
-	 * Writes many Players' Deck Lists at once, as previewed by `previewMany`:
-	 * one batch for them all, each Leader's Archetype derived once, every
-	 * Session showing them corrected, and emptied Archetypes removed. The
-	 * Archetypes it creates or renames are announced; the Players are not, one
-	 * by one, so the caller announces them as a count. Answers the Players as
-	 * written.
+	 * Writes many Players' Deck Lists at once, as previewed by `previewMany`,
+	 * each from its own source: one batch for them all, each Leader's
+	 * Archetype derived once, every Session showing them corrected, and
+	 * emptied Archetypes removed. The Archetypes it creates or renames are
+	 * announced; the Players are not, one by one, so the caller announces them
+	 * as a count. Answers the Players as written.
 	 */
-	async function writeMany({ eventId, writes, source }: {
+	async function writeMany({ eventId, writes }: {
 		eventId: number;
-		writes: ReadonlyArray<{ playerId: number; deckList: OpDeckListView }>;
-		/** A resolution rewrites one Deck List at a time, keeping its flag, so it is not offered here. */
-		source: Exclude<OpDeckListWriteSource, 'resolution'>;
+		writes: ReadonlyArray<{ playerId: number; deckList: OpDeckListView; source: OpDeckListWriteSource }>;
 	}): Promise<DbPlayer[]> {
 		if (writes.length === 0)
 			return [];
@@ -335,16 +344,17 @@ export function opDeckListWriteModule() {
 			.from(players)
 			.where(and(eq(players.eventId, eventId), inJsonArray(players.id, playerIds)));
 
+		const handEdited = await handEditedFlags(eventId, writes);
 		let written: DbPlayer[];
 		try {
-			written = await playerDeckLists.replaceMany(eventId, writes.map(({ playerId, deckList }) => ({
+			written = await playerDeckLists.replaceMany(eventId, writes.map(({ playerId, deckList }, index) => ({
 				eventId,
 				playerId,
 				view: deckList,
 				archetypeId: deckList.leaderNumber === null
 					? null
 					: derived.get(deckList.leaderNumber)?.archetype.id ?? null,
-				handEdited: source === 'hand',
+				handEdited: handEdited[index]!,
 			})));
 		}
 		catch (error) {
