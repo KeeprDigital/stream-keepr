@@ -67,7 +67,7 @@ describe('deckModeConfigSchema', () => {
 		},
 	};
 
-	it('accepts valid deck mode config', () => {
+	it('accepts valid Deck List mode config', () => {
 		const result = deckModeConfigSchema.safeParse(validConfig);
 		expect(result.success).toBe(true);
 	});

@@ -36,7 +36,7 @@ export function buildCardSearchFormatQuery(format: MtgFormat): string {
 }
 
 /**
- * Card Screen search and preview Module.
+ * Card Spotlight Screen search and preview Module.
  *
  * Owns Scryfall search, print selection, preview controls, preview history,
  * and remote preview application for the selected Screen.

@@ -527,7 +527,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 				</UButton>
 
 				<div v-if="canSendToScreen" class="flex justify-end gap-2">
-					<!-- Single deck screen - direct button -->
+					<!-- Single Deck List Screen - direct button -->
 					<UButton
 						v-if="deckScreens.length === 1"
 						icon="i-lucide-send"
@@ -536,7 +536,7 @@ function tokenImageUrl(scryfallId: string | null): string | null {
 					>
 						Send to Screen
 					</UButton>
-					<!-- Multiple deck screens - dropdown -->
+					<!-- Multiple Deck List Screens - dropdown -->
 					<UDropdownMenu
 						v-else
 						:items="[[

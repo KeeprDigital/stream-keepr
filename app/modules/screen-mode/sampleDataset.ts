@@ -877,7 +877,7 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		card: answer(ANSWERS.card),
 		liveSession: answer(ANSWERS.liveSession),
 		featureMatchSlot: none('Feature Match Slot'),
-		// A Magic Deck Screen's sample is a Player's deck.
+		// A Magic Deck List Screen's sample is a Player's deck.
 		featureMatchDeckList: none('Feature Match Deck List'),
 		playerHistory: answer(ANSWERS.playerHistory),
 		standings: answer(ANSWERS.standings),

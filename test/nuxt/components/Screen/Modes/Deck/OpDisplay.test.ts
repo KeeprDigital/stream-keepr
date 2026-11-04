@@ -10,8 +10,9 @@ import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import OpDisplay from '~/components/Screen/Modes/Deck/OpDisplay.vue';
 
-// A Deck Screen showing a Feature Match Slot side follows whichever player sits
-// there now (ADR-0058): a re-paste, Swap Players and a clear all reach program.
+// A Deck List Screen showing a Feature Match Slot side follows whichever player
+// sits there now (ADR-0058): a re-paste, Swap Players and a clear all reach
+// program.
 
 const SLOT_ID = 11;
 
@@ -159,7 +160,7 @@ beforeEach(() => {
 	});
 });
 
-describe('a Deck Screen showing a Feature Match Slot side', () => {
+describe('a Deck List Screen showing a Feature Match Slot side', () => {
 	it('shows the side\'s Leader, the Mainboard grouped Character, Event, Stage by cost, and its cost curve', async () => {
 		const wrapper = mountDisplay();
 		await flushPromises();

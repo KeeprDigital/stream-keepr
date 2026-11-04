@@ -182,9 +182,9 @@ export async function updateMeleeConfiguration({ eventId, input, originConnectio
 			entity: eventData,
 			originConnectionId,
 		});
-		// Ahead of the reset, so a Deck Screen that showed a deleted Player is
-		// already reloading its Screen when the reset arrives. No origin, because
-		// the configuring client never received these Screens back.
+		// Ahead of the reset, so a Deck List Screen that showed a deleted Player
+		// is already reloading its Screen when the reset arrives. No origin,
+		// because the configuring client never received these Screens back.
 		for (const screen of updated.clearedScreens)
 			await publication.screenUpdated({ eventId, entity: screen });
 		if (resetReason) {

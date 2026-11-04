@@ -25,7 +25,7 @@ const TOP_CARDS_MAX_LIMIT = 60;
 
 /**
  * The Most Played Cards Screen Mode's config contract: a ranked grid of the most played
- * cards in the event's metagame, rendered as card images the way the Deck Screen
+ * cards in the event's metagame, rendered as card images the way the Deck List Screen
  * renders a deck. It is scoped by the whole Metagame Scope, Minimum Points
  * included since #904; `excludedCardTypes` and `pointedOnly` are applied
  * server-side before `limit`, so a filtered top N still fills N slots. While
