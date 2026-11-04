@@ -1,6 +1,5 @@
 import type { H3Event } from 'h3';
 import {
-	createGraphicsAssetDelivery,
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
@@ -12,6 +11,7 @@ import { ServiceConfigurationError } from '~~/server/utils/errors';
 import { createScreenOutputAssetDelivery } from '.';
 import { createD1ScreenOutputAssetAuthorizer } from './authorizer';
 import { assertScreenOutputCapabilitySigningKey } from './capability';
+import { createScreenOutputGraphicsDelivery } from './graphics-delivery';
 import { createScreenOutputAssetCapabilityManager } from './manager';
 
 /**
@@ -59,10 +59,11 @@ export function screenOutputAssetCapabilityManagerForEvent(event: H3Event) {
 export async function screenOutputAssetDeliveryForEvent(event: H3Event) {
 	const bindings = event.context.cloudflare?.env;
 	const canonical = bindings?.GRAPHICS_ASSET_CANONICAL;
-	// Delivery alone: an output reads bytes and never ingests. With no reporter,
-	// a contradiction it observes waits for the scheduled reconciliation pass,
-	// as it did when this built the whole library over no staging store (ADR-0073).
-	const graphicsAssets = createGraphicsAssetDelivery({
+	const executionContext = event.context.cloudflare?.context;
+	const defer = executionContext
+		? (promise: Promise<unknown>) => executionContext.waitUntil(promise)
+		: undefined;
+	const graphicsAssets = createScreenOutputGraphicsDelivery({
 		catalogue: createD1GraphicsAssetCatalogue(graphicsCatalogueClient()),
 		canonical: canonical
 			? createR2CanonicalGraphicsObjectStore(canonical)
@@ -77,11 +78,11 @@ export async function screenOutputAssetDeliveryForEvent(event: H3Event) {
 						};
 					},
 				},
+		defer,
 	});
 	const cache = typeof caches === 'undefined'
 		? undefined
 		: await caches.open('screen-output-assets').catch(() => undefined);
-	const executionContext = event.context.cloudflare?.context;
 	return createScreenOutputAssetDelivery({
 		signingKey: signingKey(event),
 		authorize: createD1ScreenOutputAssetAuthorizer(graphicsCatalogueClient()).authorize,
@@ -95,8 +96,6 @@ export async function screenOutputAssetDeliveryForEvent(event: H3Event) {
 			range,
 		}),
 		cache,
-		defer: executionContext
-			? promise => executionContext.waitUntil(promise)
-			: undefined,
+		defer,
 	});
 }
