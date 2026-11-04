@@ -119,10 +119,24 @@ describe('round edit modals', () => {
 		expect(mockRoundStore.updateRound).toHaveBeenCalledWith(1, 10, { name: 'Round 1', roundNumber: 1, ...sent });
 	});
 
-	it('refuses a duration past its bound', async () => {
+	// An unreadable start is refused rather than saved as a cleared one.
+	it.each([
+		[
+			'a duration past its bound',
+			'input[type="number"]',
+			1,
+			'601',
+		],
+		[
+			'a start that names no instant',
+			'input[type="datetime-local"]',
+			0,
+			'soon',
+		],
+	] as const)('refuses %s', async (_, selector, index, value) => {
 		const wrapper = mountModal(RoundEditModal, { roundId: 10 });
 
-		await wrapper.findAll('input[type="number"]')[1]!.setValue('601');
+		await wrapper.findAll(selector)[index]!.setValue(value);
 
 		expect(saveButton(wrapper).attributes('disabled')).toBeDefined();
 	});

@@ -14,7 +14,7 @@ const roundNameStyle = {
 
 const clockColors: Record<Exclude<RoundClockState, 'untimed'>, string> = {
 	pending: modeTokenVar('round-clock', 'pending-clock-text'),
-	running: modeTokenVar('round-clock', 'clock-text'),
+	running: modeTokenVar('round-clock', 'running-clock-text'),
 	ended: modeTokenVar('round-clock', 'ended-clock-text'),
 };
 

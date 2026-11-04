@@ -86,12 +86,22 @@ describe('updateRoundSchema timing (ADR-0066)', () => {
 });
 
 describe('createRoundSchema', () => {
-	it('takes no timing: a new Round starts untimed', () => {
+	// A new Round starts untimed; its timing is an edit.
+	it.each([
+		[
+			'a duration',
+			{ durationMinutes: 50 },
+		],
+		[
+			'a start',
+			{ startedAt: '2026-11-04T10:00:00.000Z' },
+		],
+	] as const)('refuses %s', (_case, timing) => {
 		expect(createRoundSchema.safeParse({
 			name: 'Round 1',
 			roundNumber: 1,
 			phaseId: 1,
-			durationMinutes: 50,
+			...timing,
 		}).success).toBe(false);
 	});
 });

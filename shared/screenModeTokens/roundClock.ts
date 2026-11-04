@@ -22,7 +22,7 @@ export const roundClockModeTokens = {
 		label: 'Clock type',
 		default: { token: 'heading' },
 	},
-	'clock-text': {
+	'running-clock-text': {
 		type: 'color',
 		label: 'Running clock text',
 		default: { token: 'text-primary' },

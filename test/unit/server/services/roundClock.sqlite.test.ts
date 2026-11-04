@@ -103,11 +103,21 @@ describe('findRoundClockRound', () => {
 		});
 	});
 
-	it('shows no Round for another Event\'s, or before any Round is paired', async () => {
-		const records = await seed();
-		const unpaired = (await db.insert(schema.events).values({ name: 'Fresh', game: 'mtg', featureMatchOrientation: 'horizontal' }).returning({ id: schema.events.id }))[0]!.id;
+	it.each([
+		[
+			'another Event\'s Round',
+			async (records: Awaited<ReturnType<typeof seed>>) => [records.eventId, records.foreign] as const,
+		],
+		[
+			'no Round picked, before any Round is paired',
+			async () => {
+				const [fresh] = await db.insert(schema.events).values({ name: 'Fresh', game: 'mtg', featureMatchOrientation: 'horizontal' }).returning({ id: schema.events.id });
+				return [fresh!.id, undefined] as const;
+			},
+		],
+	] as const)('shows no Round for %s', async (_case, pick) => {
+		const [eventId, roundId] = await pick(await seed());
 
-		expect(await findRoundClockRound(records.eventId, records.foreign)).toEqual({ round: null });
-		expect(await findRoundClockRound(unpaired, undefined)).toEqual({ round: null });
+		expect(await findRoundClockRound(eventId, roundId)).toEqual({ round: null });
 	});
 });

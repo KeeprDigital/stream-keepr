@@ -99,6 +99,25 @@ describe('useRoundClockModeData', () => {
 		expect(clock.value.display).toBe('35:00');
 	});
 
+	// Further off than one timer can wait (2^31 - 1 ms), it waits in steps rather than spinning.
+	it('waits for a start weeks ahead, then counts from it', async () => {
+		const day = 24 * 60 * MINUTE;
+		mockFetch.mockResolvedValue(answer({
+			startedAt: new Date(Date.now() + 30 * day).toISOString(),
+		}));
+		const getServerTimeCalls = vi.spyOn(Date, 'now');
+		const { clock } = makeRoundClockModeData();
+		await flushPromises();
+
+		getServerTimeCalls.mockClear();
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(getServerTimeCalls.mock.calls.length).toBeLessThan(5);
+		expect(clock.value.state).toBe('pending');
+
+		await vi.advanceTimersByTimeAsync(30 * day);
+		expect(clock.value).toMatchObject({ state: 'running', display: '49:59' });
+	});
+
 	it('starts counting without a reload when "Start now" announces the Round', async () => {
 		config.roundId = 31;
 		mockFetch.mockResolvedValue(answer({ startedAt: null }));
@@ -160,7 +179,22 @@ describe('useRoundClockModeData', () => {
 			{ roundId: 32 },
 			false,
 		],
-	] as const)('%s: re-reads %s', async (_case, roundId, type, data, rereads) => {
+		// Deleting a Round's only Melee Match can move the Current Round back.
+		[
+			'the Current Round, a deleted Match',
+			undefined,
+			'match:deleted',
+			{ matchId: 5 },
+			true,
+		],
+		[
+			'a picked Round, a deleted Match',
+			31,
+			'match:deleted',
+			{ matchId: 5 },
+			false,
+		],
+	] as const)('%s: re-reads or not', async (_case, roundId, type, data, rereads) => {
 		config.roundId = roundId;
 		mockFetch.mockResolvedValue(answer({}));
 		makeRoundClockModeData();

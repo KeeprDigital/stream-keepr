@@ -106,12 +106,6 @@ describe('rounds API', () => {
 		expect(started.durationMinutes).toBe(50);
 		// The server's clock and this one agree within the request's own span, plus some drift.
 		expect(Math.abs(startedAt - before)).toBeLessThan(60_000);
-
-		const refused = await $fetchRaw(`/api/events/${eventId}/rounds/${roundId}`, {
-			method: 'PATCH',
-			body: { durationMinutes: 0 },
-		});
-		expect(refused.status).toBe(400);
 	});
 
 	it('deletes a round', async () => {

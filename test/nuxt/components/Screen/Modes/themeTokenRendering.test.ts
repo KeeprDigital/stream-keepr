@@ -110,7 +110,7 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'round-name-typography': { selector: '.round-clock-name' },
 		'round-name-text': { selector: '.round-clock-name', property: 'color' },
 		'clock-typography': { selector: '.round-clock-time' },
-		'clock-text': { selector: '[data-clock-state="running"] .round-clock-time', property: 'color' },
+		'running-clock-text': { selector: '[data-clock-state="running"] .round-clock-time', property: 'color' },
 		'pending-clock-text': {
 			selector: '[data-clock-state="pending"] .round-clock-time',
 			property: 'color',

@@ -23,16 +23,16 @@ const roundNumber = ref(round.value?.roundNumber ?? 1);
 const savedStart = toDateTimeLocalValue(round.value?.startedAt ?? null);
 const savedDuration = round.value?.durationMinutes ?? null;
 const startedAt = ref(savedStart);
-const durationMinutes = ref<number | null>(savedDuration);
+const enteredDuration = ref<number | null>(savedDuration);
 const formState = reactive({
 	name,
 	roundNumber,
 	startedAt,
-	durationMinutes,
+	enteredDuration,
 });
 /** A cleared number input may hold `undefined` or `NaN`; either is no duration. */
-const duration = computed(() => Number.isFinite(durationMinutes.value)
-	? durationMinutes.value
+const duration = computed(() => Number.isFinite(enteredDuration.value)
+	? enteredDuration.value
 	: null);
 const startChanged = computed(() => startedAt.value !== savedStart);
 const durationChanged = computed(() => duration.value !== savedDuration);
@@ -46,7 +46,9 @@ const durationValid = computed(() => duration.value == null
 	|| (Number.isInteger(duration.value)
 		&& duration.value >= ROUND_DURATION_MINUTES_MIN
 		&& duration.value <= ROUND_DURATION_MINUTES_MAX));
-const isValid = computed(() => name.value.trim().length > 0 && roundNumber.value > 0 && durationValid.value);
+// An entered start must name an instant; only an emptied one clears it.
+const startValid = computed(() => !startedAt.value || fromDateTimeLocalValue(startedAt.value) != null);
+const isValid = computed(() => name.value.trim().length > 0 && roundNumber.value > 0 && durationValid.value && startValid.value);
 const saving = ref(false);
 const formId = `edit-round-${props.roundId}-form`;
 
@@ -121,7 +123,7 @@ function handleClose() {
 						description="How long the Round runs. A Round Clock counts it down from the start."
 					>
 						<UInputNumber
-							v-model="durationMinutes"
+							v-model="enteredDuration"
 							:min="ROUND_DURATION_MINUTES_MIN"
 							:max="ROUND_DURATION_MINUTES_MAX"
 							placeholder="Untimed"

@@ -65,10 +65,34 @@ describe('projectRoundClock', () => {
 		expect(projectRoundClock(timing, now)).toMatchObject(expected);
 	});
 
-	it('names when it next changes: each whole second while running, the start while pending', () => {
-		expect(projectRoundClock({ startedAt: START, durationMinutes: 50 }, START + 1500).nextChangeInMs).toBe(500);
-		expect(projectRoundClock({ startedAt: START + MINUTE, durationMinutes: 50 }, START).nextChangeInMs).toBe(MINUTE);
-		expect(projectRoundClock({ startedAt: null, durationMinutes: 50 }, START).nextChangeInMs).toBeNull();
-		expect(projectRoundClock({ startedAt: START, durationMinutes: 50 }, START + 50 * MINUTE).nextChangeInMs).toBeNull();
+	// A rendering re-evaluates exactly then: each whole second while running, the start while pending.
+	it.each([
+		[
+			'running, part-way through a second',
+			START,
+			START + 1500,
+			500,
+		],
+		[
+			'running, on a whole second',
+			START,
+			START + 2000,
+			1000,
+		],
+		[
+			'pending a start',
+			START + MINUTE,
+			START,
+			MINUTE,
+		],
+		['never started', null, START, null],
+		[
+			'ended',
+			START,
+			START + 50 * MINUTE,
+			null,
+		],
+	] as const)('names when it next changes: %s', (_case, startedAt, now, nextChangeInMs) => {
+		expect(projectRoundClock({ startedAt, durationMinutes: 50 }, now).nextChangeInMs).toBe(nextChangeInMs);
 	});
 });

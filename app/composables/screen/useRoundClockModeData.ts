@@ -6,10 +6,13 @@ import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 const NO_ROUND: ScreenOutputRoundClockResponse = { round: null };
 
+/** The longest one timer waits; a start further off is waited for in steps of it. */
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
+
 /**
  * The Event Data a Round Clock is read from. A picked Round re-reads on its own
- * update. The Current Round can move with any Round, Phase or Melee pairing, so
- * following it re-reads on each. Melee's wholesale syncs re-read either way.
+ * update. The Current Round can move with any Round, Phase, Match or Melee
+ * pairing, so following it re-reads on each. Melee's wholesale syncs re-read either way.
  */
 function roundClockDependencies(roundId: () => number | undefined): ScreenModeDependencies<ScreenOutputRoundClockResponse> {
 	const follows = (id: number, held: ScreenOutputRoundClockResponse) => roundId() == null || id === roundId() || id === held.round?.id;
@@ -20,6 +23,8 @@ function roundClockDependencies(roundId: () => number | undefined): ScreenModeDe
 		'round:updated': ({ round }, held) => follows(round.id, held),
 		'round:deleted': ({ roundId: id }, held) => follows(id, held),
 		'round:matchesRefreshed': followsCurrent,
+		'match:created': followsCurrent,
+		'match:deleted': followsCurrent,
 		'phase:updated': followsCurrent,
 		'phase:deleted': followsCurrent,
 		'melee:pairingsSynced': followsCurrent,
@@ -71,7 +76,7 @@ export function useRoundClockModeData(context: ScreenContext) {
 	watch(clock, ({ nextChangeInMs: delay }, _previous, onCleanup) => {
 		if (delay == null)
 			return;
-		const timer = setTimeout(() => tick.value++, delay);
+		const timer = setTimeout(() => tick.value++, Math.min(delay, MAX_TIMER_DELAY_MS));
 		onCleanup(() => clearTimeout(timer));
 	}, { immediate: true });
 
