@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3';
 import {
-	createGraphicsAssetLibrary,
+	createGraphicsAssetDelivery,
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
@@ -59,13 +59,11 @@ export function screenOutputAssetCapabilityManagerForEvent(event: H3Event) {
 export async function screenOutputAssetDeliveryForEvent(event: H3Event) {
 	const bindings = event.context.cloudflare?.env;
 	const canonical = bindings?.GRAPHICS_ASSET_CANONICAL;
-	const library = createGraphicsAssetLibrary({
+	// Delivery alone: an output reads bytes and never ingests. With no reporter,
+	// a contradiction it observes waits for the scheduled reconciliation pass,
+	// as it did when this built the whole library over no staging store (ADR-0073).
+	const graphicsAssets = createGraphicsAssetDelivery({
 		catalogue: createD1GraphicsAssetCatalogue(graphicsCatalogueClient()),
-		staging: {
-			async checkHealth() {
-				return { outcome: 'healthy' as const };
-			},
-		},
 		canonical: canonical
 			? createR2CanonicalGraphicsObjectStore(canonical)
 			: {
@@ -87,11 +85,11 @@ export async function screenOutputAssetDeliveryForEvent(event: H3Event) {
 	return createScreenOutputAssetDelivery({
 		signingKey: signingKey(event),
 		authorize: createD1ScreenOutputAssetAuthorizer(graphicsCatalogueClient()).authorize,
-		inspect: async ({ assetId, revisionId }) => await library.inspectGraphicAssetRevisionContent({
+		inspect: async ({ assetId, revisionId }) => await graphicsAssets.inspectGraphicAssetRevisionContent({
 			assetId: graphicAssetId(assetId),
 			revisionId: graphicAssetRevisionId(revisionId),
 		}),
-		resolve: async ({ assetId, revisionId, range }) => await library.resolveGraphicAssetRevision({
+		resolve: async ({ assetId, revisionId, range }) => await graphicsAssets.resolveGraphicAssetRevision({
 			assetId: graphicAssetId(assetId),
 			revisionId: graphicAssetRevisionId(revisionId),
 			range,
