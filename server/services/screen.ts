@@ -7,7 +7,7 @@ import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { archetypes, eventTalents, phases, rounds, screens } from '~~/server/db/schema';
+import { archetypes, eventTalents, phases, players, rounds, screens } from '~~/server/db/schema';
 import {
 	graphicsAuthoringLeaseConflict,
 	graphicsAuthoringLeaseFenceCondition,
@@ -60,6 +60,33 @@ export function buildClearDeckSourceSlotsQuery(eventId: number, slotIds: number[
 			eq(screens.eventId, eventId),
 			sql`json_extract(${screens.modeConfigs}, '$.deck.deckSource.type') = 'featureMatchSlot'`,
 			inArray(sql`json_extract(${screens.modeConfigs}, '$.deck.deckSource.slotId')`, slotIds),
+		))
+		.returning();
+}
+
+/**
+ * Empties every Manual Bracket Seed in the Event naming a Player the Event no
+ * longer holds, as a new Screen version, keeping every other Seed where it is
+ * and every result (ADR-0075). Batch it after the Player delete, as the Event
+ * References a delete releases are (ADR-0060), so a Screen left naming a
+ * deleted Player can still be written.
+ */
+export function buildReleaseManualBracketPlayersQuery(eventId: number) {
+	const path = '$."top-cut".manualBracket.entrants';
+	const held = sql`(select ${players.id} from ${players} where ${players.eventId} = ${eventId})`;
+	const released = sql`(item.value is not null and json_extract(item.value, '$.playerId') is not null and json_extract(item.value, '$.playerId') not in ${held})`;
+	const kept = sql`(select json_group_array(case when ${released} then json('null') else json(item.value) end) from (
+		select item.key, item.value from json_each(${screens.modeConfigs}, ${path}) as item order by item.key
+	) as item)`;
+	return db
+		.update(screens)
+		.set({
+			modeConfigs: sql`json_set(${screens.modeConfigs}, ${path}, json(${kept}))`,
+			stateVersion: sql`${screens.stateVersion} + 1`,
+		})
+		.where(and(
+			eq(screens.eventId, eventId),
+			sql`exists (select 1 from json_each(${screens.modeConfigs}, ${path}) as item where ${released})`,
 		))
 		.returning();
 }

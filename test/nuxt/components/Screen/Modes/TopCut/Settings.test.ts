@@ -2,7 +2,7 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, h, ref } from 'vue';
+import { computed, defineComponent, h, reactive, ref } from 'vue';
 import { TOP_CUT_BRACKET_SIZES } from '~~/shared/screenModeConfigs/topCut';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { UFormFieldStub, USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
@@ -60,6 +60,16 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	resetConfig: vi.fn(),
 }));
 mockNuxtImport('usePhaseStore', () => () => phaseStore);
+const eventStore = reactive({
+	event: { id: 1, game: 'mtg' } as { id: number; game: 'mtg' | 'op' },
+});
+mockNuxtImport('useEventStore', () => () => eventStore);
+const playerStore = {
+	isLoaded: true,
+	players: [],
+	loadPlayersByEventId: vi.fn(),
+};
+mockNuxtImport('usePlayerStore', () => () => playerStore);
 
 const ScreenSettingsToggleStub = defineComponent({
 	props: {
@@ -104,6 +114,7 @@ describe('screenModesTopCutSettings', () => {
 		};
 		writes.length = 0;
 		phaseStore.loadPhasesByEventId.mockClear();
+		eventStore.event.game = 'mtg';
 	});
 
 	it('offers the Event\'s Phases in their order, loading them when the store holds none', async () => {
@@ -115,6 +126,61 @@ describe('screenModesTopCutSettings', () => {
 			['Swiss', '3'],
 			['Top 8', '4'],
 		]);
+	});
+
+	/** Which of the Data card's controls show: the source picker, the Phase picker, the Manual Bracket editor. */
+	function dataControls(wrapper: Awaited<ReturnType<typeof mountEditor>>) {
+		return {
+			source: wrapper.find('[data-config-field="bracketSource"]').exists(),
+			phase: wrapper.find('[data-field="phaseId"]').exists(),
+			manual: wrapper.find('[data-testid="manual-bracket-editor"]').exists(),
+		};
+	}
+
+	it.each([
+		[
+			'a Phase on a Magic Event',
+			'mtg',
+			'phase',
+			{ source: true, phase: true, manual: false },
+		],
+		[
+			'entered by hand on a Magic Event',
+			'mtg',
+			'manual',
+			{ source: true, phase: false, manual: true },
+		],
+		// A One Piece Card Game Event holds no Phases (ADR-0075).
+		[
+			'whatever it holds on a One Piece Event',
+			'op',
+			'phase',
+			{ source: false, phase: false, manual: true },
+		],
+	] as const)('edits a bracket from %s', async (_, game, bracketSource, shown) => {
+		eventStore.event.game = game;
+		config.value = { ...config.value, bracketSource };
+		const wrapper = await mountEditor();
+
+		expect(dataControls(wrapper)).toEqual(shown);
+	});
+
+	it('writes the picked source as the Screen\'s bracketSource', async () => {
+		const wrapper = await mountEditor();
+		await wrapper.find('[data-config-field="bracketSource"] select').setValue('manual');
+
+		expect(writes.at(-1)).toEqual({ bracketSource: 'manual' });
+		expect(dataControls(wrapper).manual).toBe(true);
+	});
+
+	it('writes a Manual Bracket edit as the Screen\'s whole manualBracket', async () => {
+		config.value = { ...config.value, bracketSource: 'manual' };
+		const wrapper = await mountEditor();
+		await wrapper.find('[data-field="manualBracket.size"] select').setValue('4');
+
+		expect(writes.at(-1)).toEqual({
+			manualBracket: { size: 4, entrants: [], results: [] },
+		});
 	});
 
 	it('writes the picked Phase as the Screen\'s phaseId', async () => {

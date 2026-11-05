@@ -66,12 +66,13 @@ describe('the Event pages each Card Game is offered', () => {
 
 describe('the Screen Modes each Card Game is offered', () => {
 	// A One Piece Card Game Event's Metagame reads participation only (ADR-0074); what needs results stays Magic's.
+	// Top Cut Bracket's Manual Bracket needs neither (ADR-0075).
 	it.each([
 		['background', true],
 		['card', true],
 		['deck', true],
 		['standings', false],
-		['top-cut', false],
+		['top-cut', true],
 		['feature-match', true],
 		['feature-match-overlay', true],
 		['broadcast-graphics', true],

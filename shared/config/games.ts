@@ -109,14 +109,16 @@ export const EVENT_PAGE_CARD_GAMES = {
 /**
  * The Card Games each Screen Mode is offered to, read by its Screen Mode
  * Definition. A One Piece Card Game Event's Metagame reads participation only
- * (ADR-0074), so the modes needing results or standings stay Magic's.
+ * (ADR-0074), so the modes needing results or standings stay Magic's. Top
+ * Cut Bracket is offered to both, since its Manual Bracket needs neither
+ * (ADR-0075).
  */
 export const SCREEN_MODE_CARD_GAMES = {
 	'background': EVERY_CARD_GAME,
 	'card': EVERY_CARD_GAME,
 	'deck': EVERY_CARD_GAME,
 	'standings': MTG_ONLY,
-	'top-cut': MTG_ONLY,
+	'top-cut': EVERY_CARD_GAME,
 	'feature-match': EVERY_CARD_GAME,
 	'feature-match-overlay': EVERY_CARD_GAME,
 	'broadcast-graphics': EVERY_CARD_GAME,

@@ -169,6 +169,18 @@ async function requireDeckSourceInEvent(eventId: number, value: unknown): Promis
 	}
 }
 
+/** A Manual Bracket's entrants naming a Player must name the Event's (ADR-0075); a typed name names nothing. */
+async function requireManualBracketInEvent(eventId: number, value: unknown): Promise<void> {
+	if (!value || typeof value !== 'object')
+		return;
+	const entrants = (value as Record<string, unknown>).entrants;
+	if (!Array.isArray(entrants))
+		return;
+	await requirePlayersInEvent(eventId, entrants.map(entrant => entrant && typeof entrant === 'object'
+		? referencedId((entrant as Record<string, unknown>).playerId)
+		: undefined));
+}
+
 /** How each kind of Event Reference is proved to belong to the Event. */
 const EVENT_REFERENCE_CHECKS: { readonly [K in EventReferenceKind]: (eventId: number, value: unknown) => Promise<void> } = {
 	phase: (eventId, value) => requirePhaseInEvent(eventId, referencedId(value)),
@@ -186,6 +198,7 @@ const EVENT_REFERENCE_CHECKS: { readonly [K in EventReferenceKind]: (eventId: nu
 		await Promise.all(uniqueNumbers(value.map(referencedId)).map(talentId => requireTalentInEvent(eventId, talentId)));
 	},
 	deckSource: requireDeckSourceInEvent,
+	manualBracket: requireManualBracketInEvent,
 };
 
 /**

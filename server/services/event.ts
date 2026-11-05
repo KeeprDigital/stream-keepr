@@ -8,7 +8,7 @@ import { eventCardNameOverrides, events, eventTalents, matches, players, screens
 import { buildClearImportedMatchDataQueries } from '~~/server/services/featureMatch';
 import { buildRemoveImportedStructureQueries } from '~~/server/services/importedStructure';
 import { protectMeleeClientSecret } from '~~/server/services/meleeCredentials';
-import { buildClearDeckSourcePlayersQuery } from '~~/server/services/screen';
+import { buildClearDeckSourcePlayersQuery, buildReleaseManualBracketPlayersQuery } from '~~/server/services/screen';
 import { BroadcastDeckListsInUseError } from '~~/server/utils/errors';
 import { getGameDefaults } from '~~/shared/config/games';
 import { fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
@@ -268,7 +268,12 @@ export function eventService() {
 
 		if (shouldResetImportedData) {
 			const reset = await buildResetMeleeImportedDataQueries(id);
-			const batch = [reset.clearDeckSourcesQuery, ...reset.queries, updateEventQuery] as const;
+			const batch = [
+				reset.clearDeckSourcesQuery,
+				...reset.queries,
+				updateEventQuery,
+				buildReleaseManualBracketPlayersQuery(id),
+			] as const;
 			const results = await db.batch(batch);
 			// Announces the cleared Slots' new Sessions, now that they exist.
 			await reset.settle();
@@ -279,6 +284,7 @@ export function eventService() {
 					...new Map([
 						...results[0],
 						...clearedScreens,
+						...results.at(-1) as DbScreen[],
 					].map(screen => [screen.id, screen])).values(),
 				],
 				keptStructure: { keptPhases, keptRounds },

@@ -452,7 +452,7 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'background': [],
 	'card': ['featureMatchId'],
 	'deck': ['deckSource'],
-	'top-cut': ['phaseId'],
+	'top-cut': ['bracketSource', 'phaseId', 'manualBracket'],
 	'feature-match': ['featureMatchId'],
 	'feature-match-overlay': ['featureMatchId'],
 	'broadcast-graphics': [],

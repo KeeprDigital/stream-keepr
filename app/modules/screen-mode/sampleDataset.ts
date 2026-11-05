@@ -16,7 +16,7 @@ import type { ScreenOutputReadScope, useScreenOutputReadRepository } from '~/com
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { OP_FEATURE_MATCH_SAMPLE_ROUND, OP_FEATURE_MATCH_SAMPLE_SIDES } from '~~/shared/featureMatchSampleDataset';
 import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, getGraphicItemDefinition } from '~~/shared/modules/graphics';
-import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
+import { deriveManualTopCutBracket, deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import { socialProfileValues } from '~~/shared/socialProfiles';
 import { formatOpColors, opPrintingImageUrl } from '~~/shared/utils/card/op';
 import { scryfallNameKey } from '~/composables/data/useScryfallBatch';
@@ -35,7 +35,8 @@ import { scryfallNameKey } from '~/composables/data/useScryfallBatch';
  * A Magic Event's sample has Players, Rounds, results and a Metagame. A One
  * Piece Card Game Event models none of them (ADR-0057), so its sample is one
  * Feature Match Slot whose sides hold Leaders and a Feature Match Deck List,
- * and a Printing on Card Spotlight: what its Screen Modes show.
+ * a Printing on Card Spotlight, a participation Metagame and a Manual Bracket
+ * (ADR-0074, ADR-0075): what its Screen Modes show.
  *
  * It reaches a rendering only through a Theme preview's Screen context
  * (`createScreenModeSampleContext`), which no Screen Output builds. Putting
@@ -906,6 +907,36 @@ const OP_SAMPLE_TOP_CARDS: CardBreakdownEntry[] = [
 	opCardEntry(5, 'OP05-066', 2),
 ];
 
+/**
+ * The One Piece sample's Top Cut: a Manual Bracket of four, filled in by hand
+ * as a TCG+ top cut is (ADR-0075), its Semifinals played and its Final still
+ * out. Each entrant's deck is their Leader.
+ */
+const OP_TOP_CUT_ENTRANTS = [
+	{ name: OP_ARCHETYPES[0].pilots[0], archetype: OP_ARCHETYPES[0] },
+	{ name: OP_ARCHETYPES[1].pilots[0], archetype: OP_ARCHETYPES[1] },
+	{ name: OP_ARCHETYPES[2].pilots[0], archetype: OP_ARCHETYPES[2] },
+	{ name: OP_ARCHETYPES[3].pilots[0], archetype: OP_ARCHETYPES[3] },
+];
+const OP_SAMPLE_BRACKET = deriveManualTopCutBracket({
+	size: 4,
+	entrants: OP_TOP_CUT_ENTRANTS.map(({ name }) => ({ name })),
+	results: [
+		[
+			{ winner: 0 },
+			{ winner: 1 },
+		],
+	],
+}, (entrant, seed) => {
+	const { name, archetype } = OP_TOP_CUT_ENTRANTS[seed - 1]!;
+	return {
+		playerId: seed,
+		name,
+		seed,
+		deck: { name: archetype.name, colors: archetype.colors },
+	};
+});
+
 /** What the One Piece dataset answers for each read a One Piece Event's Screen Modes make. */
 const OP_ANSWERS = {
 	card: { card: OP_SAMPLE_SCREEN_CARD, revision: 1 },
@@ -943,6 +974,7 @@ const OP_ANSWERS = {
 		},
 	},
 	topCards: { entries: OP_SAMPLE_TOP_CARDS, totalDecks: OP_PLAYER_COUNT, scope: 'all' as const },
+	topCut: { phase: null, bracket: OP_SAMPLE_BRACKET },
 	archetypeSpotlight: {
 		archetype: { id: OP_SPOTLIT.id, name: OP_SPOTLIT.name, colors: OP_SPOTLIT.colors },
 		playerCount: OP_SPOTLIT.pilots.length,
@@ -1008,6 +1040,7 @@ const SCREEN_MODE_SAMPLE_CONFIGS: Record<Game, ModeConfigsMap> = {
 			deckSource: { type: 'featureMatchSlot', slotId: OP_SAMPLE_SLOT_ID, side: 'player1' },
 		},
 		'archetype-spotlight': { archetypeId: OP_SPOTLIT.id },
+		'top-cut': { bracketSource: 'manual', showSeeds: true, showArchetypes: true },
 		'talent': SAMPLE_TALENT_CONFIG,
 	},
 };
@@ -1050,7 +1083,8 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		playerDecks: answer(ANSWERS.playerDecks),
 		opPlayerDeckList: none('One Piece Player'),
 	},
-	// A One Piece Event models no Rounds or results (ADR-0057); its Metagame reads participation only (ADR-0074).
+	// A One Piece Event models no Rounds or results (ADR-0057); its Metagame reads participation only (ADR-0074),
+	// and its Top Cut is a Manual Bracket (ADR-0075).
 	op: {
 		event: none('Event context'),
 		card: answer(OP_ANSWERS.card),
@@ -1065,7 +1099,7 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		talent: answer(SAMPLE_TALENTS),
 		metagame: answer(OP_ANSWERS.metagame),
 		topCards: answer(OP_ANSWERS.topCards),
-		topCut: none('Top Cut'),
+		topCut: answer(OP_ANSWERS.topCut),
 		roundClock: none('Round'),
 		playerDecks: none('Player'),
 		// A One Piece Deck List Screen's sample is a Feature Match Slot side's.

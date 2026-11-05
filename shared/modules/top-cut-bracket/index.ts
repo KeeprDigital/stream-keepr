@@ -13,6 +13,7 @@
  */
 
 import type { PlayerDeckIdentity } from '../../utils/gameData';
+import { bracketColumnName, standardSeedOrder } from './seeding';
 
 /** One side of a Match: its Player, or the Match's own record of a side no Player holds. */
 export interface BracketEntrant {
@@ -122,17 +123,6 @@ function nextPowerOfTwo(value: number): number {
 	return power;
 }
 
-/** A column the Phase does not hold yet, named by how many Matches it seats. */
-function pendingColumnName(positionCount: number): string {
-	if (positionCount === 1)
-		return 'Final';
-	if (positionCount === 2)
-		return 'Semifinals';
-	if (positionCount === 4)
-		return 'Quarterfinals';
-	return `Round of ${positionCount * 2}`;
-}
-
 function sameEntrant(a: BracketEntrant, b: BracketEntrant): boolean {
 	return a.playerId != null && b.playerId != null
 		? a.playerId === b.playerId
@@ -147,20 +137,6 @@ function seats(match: BracketMatchInput, entrant: BracketEntrant): boolean {
 function inTableOrder(matches: readonly BracketMatchInput[]): BracketMatchInput[] {
 	return [...matches].sort((a, b) =>
 		(a.tableNumber ?? Number.POSITIVE_INFINITY) - (b.tableNumber ?? Number.POSITIVE_INFINITY));
-}
-
-/**
- * The Seeds in the order a bracket of `size` seats them, top to bottom: each
- * pair of neighbours meets in the first Round (1v8, 4v5, 2v7, 3v6 for 8), and
- * the best Seeds meet as late as they can.
- */
-function standardSeedOrder(size: number): number[] {
-	let order = [1];
-	while (order.length < size) {
-		const count = order.length * 2;
-		order = order.flatMap(seed => [seed, count + 1 - seed]);
-	}
-	return order;
 }
 
 /** Which side won: a bye's seated side, or the side with more game wins. */
@@ -445,7 +421,7 @@ export function deriveTopCutBracket(rounds: readonly BracketRoundInput[], option
 			}
 			return awaitingPosition(entrants);
 		});
-		columns.push({ roundId: round?.roundId ?? null, name: round?.name ?? pendingColumnName(positions.length), positions });
+		columns.push({ roundId: round?.roundId ?? null, name: round?.name ?? bracketColumnName(positions.length), positions });
 	}
 
 	const final = columns.at(-1)!.positions;
@@ -457,3 +433,8 @@ export function deriveTopCutBracket(rounds: readonly BracketRoundInput[], option
 			: null,
 	};
 }
+
+export type { ManualBracket, ManualBracketEntrant, ManualBracketResult, ManualEntrantResolver } from './manual';
+export { deriveManualTopCutBracket, manualBracketPositionCounts, manualBracketSeedsAt, resizeManualBracket, withManualBracketEntrant, withManualBracketResult } from './manual';
+export type { TopCutBracketSize } from './seeding';
+export { TOP_CUT_BRACKET_SIZES } from './seeding';
