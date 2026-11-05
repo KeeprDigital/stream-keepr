@@ -1,15 +1,19 @@
 import type { EffectScope } from 'vue';
-import type { TopCutBracket } from '~~/shared/modules/top-cut-bracket';
+import type { ManualBracket, TopCutBracket } from '~~/shared/modules/top-cut-bracket';
+import type { TopCutBracketSource } from '~~/shared/screenModeConfigs/topCut';
+import type { Game } from '~~/shared/types/enums';
 import type { ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
+import { deriveManualTopCutBracket, deriveTopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const defaultConfig = {
+	bracketSource: 'phase' as TopCutBracketSource,
 	phaseId: undefined as number | undefined,
+	manualBracket: { size: 8, entrants: [], results: [] } as ManualBracket,
 	showHeader: true,
 	headerText: undefined as string | undefined,
 	showSeeds: false,
@@ -19,6 +23,7 @@ const defaultConfig = {
 
 const mutableConfig = reactive({ ...defaultConfig });
 const mockEventId = ref<number | null>(1);
+const mockGame = ref<Game | undefined>('mtg');
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
@@ -32,6 +37,7 @@ const screenContext = screenContextOf({
 	eventId: mockEventId,
 });
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
+mockNuxtImport('useScreenCardGame', () => () => computed(() => mockGame.value));
 
 const phase = {
 	id: 3,
@@ -89,6 +95,7 @@ describe('useTopCutModeData', () => {
 	beforeEach(() => {
 		Object.assign(mutableConfig, defaultConfig);
 		mockEventId.value = 1;
+		mockGame.value = 'mtg';
 		realtime.reset();
 		mockFetch.mockReset();
 		vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -405,6 +412,151 @@ describe('useTopCutModeData', () => {
 		it.each(archetypeChanges)('does not re-read on %s while Archetypes are hidden', async (_, type, payload) => {
 			await following();
 			deliver(type, payload);
+			await flushPromises();
+
+			expect(mockFetch).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('a Manual Bracket (ADR-0075)', () => {
+		/** A Top 4 whose Seed 1 is Player 7 and Seed 4 a typed name. */
+		const manual: ManualBracket = {
+			size: 4,
+			entrants: [
+				{ playerId: 7 },
+				null,
+				null,
+				{ name: 'Walk-in' },
+			],
+			results: [],
+		};
+		const manualAnswer = (): ScreenOutputTopCutResponse => ({
+			phase: null,
+			bracket: deriveManualTopCutBracket(manual, (entrant, seed) => ({
+				playerId: 'playerId' in entrant
+					? entrant.playerId
+					: null,
+				name: 'name' in entrant
+					? entrant.name
+					: 'Nadia',
+				seed,
+			})),
+		});
+
+		async function readingManual() {
+			mutableConfig.bracketSource = 'manual';
+			mutableConfig.manualBracket = manual;
+			mockFetch.mockResolvedValue(manualAnswer());
+			const data = makeTopCutModeData();
+			await flushPromises();
+			return data;
+		}
+
+		it('reads it through the Screen with no Phase selected, headed "Top Cut" unless configured', async () => {
+			const { bracket: held, isEmpty, headerText } = await readingManual();
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/top-cut', expect.anything());
+			expect(held.value.columns.map(column => column.name)).toEqual(['Semifinals', 'Final']);
+			expect(isEmpty.value).toBe(false);
+			expect(headerText.value).toBe('Top Cut');
+		});
+
+		it('reads it on a One Piece Event whatever source the Screen holds', async () => {
+			mockGame.value = 'op';
+			mockFetch.mockResolvedValue(manualAnswer());
+			const { isEmpty } = makeTopCutModeData();
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			expect(isEmpty.value).toBe(false);
+		});
+
+		it('re-reads when its entrants or results are edited', async () => {
+			await readingManual();
+			mockFetch.mockClear();
+
+			mutableConfig.manualBracket = {
+				...manual,
+				results: [
+					[
+						{ winner: 0 },
+					],
+				],
+			};
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it.each([
+			[
+				'an entrant renamed',
+				1,
+				'player:updated',
+				{
+					player: { id: 7 },
+				},
+			],
+			[
+				'an entrant deleted',
+				1,
+				'player:deleted',
+				{ playerId: 7 },
+			],
+			[
+				'a TCG+ Import',
+				1,
+				'tcgplus:imported',
+				{ playerCount: 4, deckCount: 4 },
+			],
+			[
+				'a Player it does not seat renamed',
+				0,
+				'player:updated',
+				{
+					player: { id: 50 },
+				},
+			],
+			[
+				'a Round renamed',
+				0,
+				'round:updated',
+				{
+					round: { id: 31, phaseId: 3 },
+				},
+			],
+			[
+				'a result reported',
+				0,
+				'match:updated',
+				{
+					match: { id: 101, roundId: 31 },
+				},
+			],
+		] as const)('on %s, re-reads %i times', async (_, reads, type, payload) => {
+			await readingManual();
+			mockFetch.mockClear();
+
+			deliver(type, payload);
+			await flushPromises();
+
+			expect(mockFetch).toHaveBeenCalledTimes(reads);
+		});
+
+		it('follows the source it reads now, once the operator switches to it', async () => {
+			mutableConfig.phaseId = 3;
+			mockFetch.mockResolvedValue(answer());
+			makeTopCutModeData();
+			await flushPromises();
+
+			mutableConfig.bracketSource = 'manual';
+			mutableConfig.manualBracket = manual;
+			await flushPromises();
+			mockFetch.mockClear();
+
+			deliver('round:updated', {
+				round: { id: 31, phaseId: 3 },
+			});
 			await flushPromises();
 
 			expect(mockFetch).not.toHaveBeenCalled();

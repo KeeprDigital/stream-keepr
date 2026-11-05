@@ -28,6 +28,7 @@ describe('screen Mode Definition module', () => {
 				'background',
 				'card',
 				'deck',
+				'top-cut',
 				'feature-match',
 				'feature-match-overlay',
 				'broadcast-graphics',

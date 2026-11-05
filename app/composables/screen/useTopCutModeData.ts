@@ -1,7 +1,10 @@
+import type { TopCutBracketSource } from '~~/shared/screenModeConfigs/topCut';
+import type { MessageType } from '~~/shared/types/messages';
 import type { ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import { EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
+import { topCutBracketSource } from '~~/shared/screenModeConfigs/topCut';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
 const NO_BRACKET: ScreenOutputTopCutResponse = { phase: null, bracket: EMPTY_TOP_CUT_BRACKET };
@@ -64,24 +67,78 @@ function topCutDependencies(
 }
 
 /**
+ * The Event Data a Manual Bracket is read from (ADR-0075): the Players its
+ * Seeds name, and while Archetypes show, the Archetypes and Deck Lists naming
+ * them. Its Seeds and results are the Screen's own config, so an edit to them
+ * re-reads through the read's source.
+ */
+function manualBracketDependencies(showsArchetypes: () => boolean): ScreenModeDependencies<ScreenOutputTopCutResponse> {
+	return {
+		'player:updated': ({ player }, held) => holdsPlayer(held, player.id),
+		'player:deleted': ({ playerId }, held) => holdsPlayer(held, playerId),
+		'archetype:updated': showsArchetypes,
+		'archetype:deleted': showsArchetypes,
+		'tcgplus:imported': true,
+		'melee:decklistsSynced': showsArchetypes,
+		'melee:dataReset': true,
+		'melee:playersSynced': true,
+	};
+}
+
+/** One dependency map answering as the source the bracket reads now does, since an operator may switch it live. */
+function followingSource(
+	source: () => TopCutBracketSource,
+	bySource: Record<TopCutBracketSource, ScreenModeDependencies<ScreenOutputTopCutResponse>>,
+): ScreenModeDependencies<ScreenOutputTopCutResponse> {
+	const types = new Set([
+		...Object.keys(bySource.phase),
+		...Object.keys(bySource.manual),
+	]) as Set<MessageType>;
+	return Object.fromEntries([...types].map(type => [
+		type,
+		(message: unknown, held: ScreenOutputTopCutResponse) => {
+			const dependency = bySource[source()][type] as true | ((message: unknown, held: ScreenOutputTopCutResponse) => boolean) | undefined;
+			return dependency === true || (dependency?.(message, held) ?? false);
+		},
+	]));
+}
+
+/**
  * What a Top Cut Bracket Screen renders: the bracket of the Phase its configuration
- * names, read through the Screen and kept current by Screen Mode Data
- * Freshness.
+ * names, or its Manual Bracket (ADR-0075), read through the Screen and kept
+ * current by Screen Mode Data Freshness.
  */
 export function useTopCutModeData(context: ScreenContext) {
 	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'top-cut');
+	const game = useScreenCardGame(context);
 	const outputReads = useScreenOutputReads(context);
+	const source = computed(() => topCutBracketSource(game.value, config.value));
+
+	// The server reads the source itself; this only says when what it reads may have changed.
+	const readKey = () => {
+		const scope = outputReads.scopeKey.value;
+		if (!scope)
+			return null;
+		const shown = `${config.value.showSeeds}:${config.value.showArchetypes}`;
+		if (source.value === 'manual')
+			return `${scope}:manual:${JSON.stringify(config.value.manualBracket)}:${shown}`;
+		return config.value.phaseId
+			? `${scope}:${config.value.phaseId}:${config.value.bracketSizeOverride ?? 'auto'}:${shown}`
+			: null;
+	};
+	const dependsOn = followingSource(() => source.value, {
+		phase: topCutDependencies(() => config.value.phaseId, () => config.value.showArchetypes),
+		manual: manualBracketDependencies(() => config.value.showArchetypes),
+	});
 
 	const freshness = useScreenModeFreshness<ScreenOutputTopCutResponse>({
 		eventId,
-		source: () => outputReads.scopeKey.value && config.value.phaseId
-			? `${outputReads.scopeKey.value}:${config.value.phaseId}:${config.value.bracketSizeOverride ?? 'auto'}:${config.value.showSeeds}:${config.value.showArchetypes}`
-			: null,
+		source: readKey,
 		read: () => outputReads.topCut(),
 		initialData: NO_BRACKET,
 		errorMessage: 'Failed to load the bracket',
-		dependsOn: topCutDependencies(() => config.value.phaseId, () => config.value.showArchetypes),
+		dependsOn,
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;
@@ -89,7 +146,9 @@ export function useTopCutModeData(context: ScreenContext) {
 	const bracket = computed(() => freshness.data.value.bracket);
 
 	const headerText = computed(() => config.value.headerText || phase.value?.name || 'Top Cut');
-	const isEmpty = computed(() => freshness.answered.value && (!config.value.phaseId || bracket.value.columns.length === 0));
+	const isEmpty = computed(() => freshness.answered.value && (
+		(source.value === 'phase' && !config.value.phaseId)
+		|| bracket.value.columns.length === 0));
 
 	return {
 		/** Rendering Readiness: its first read has answered or failed. */

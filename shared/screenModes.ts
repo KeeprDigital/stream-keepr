@@ -1,6 +1,7 @@
 import type { PageRotationDeclaration } from './modules/page-rotation';
 import type { ThemeTokenType } from './modules/theme/tokens';
 import type { AnyDeclaredModeTokenDefinition } from './modules/theme/vocabulary';
+import type { ManualBracket } from './modules/top-cut-bracket/manual';
 import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeConfigs/contract';
 import type { DeckSource } from './screenModeConfigs/deck';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
@@ -41,8 +42,8 @@ import { SCREEN_MODE_VALUES } from './types/enums';
  * What a field declared as each kind of Event Reference holds. A kind is what
  * the field names: a Phase, a Round, a Player, a Player List, a Feature Match
  * Slot, an Archetype or a Talent by id, a Talent lineup as an ordered list of
- * Talent ids, or a whole Deck Source, which names a Player or a Broadcast Deck
- * List.
+ * Talent ids, a whole Deck Source, which names a Player or a Broadcast Deck
+ * List, or a whole Manual Bracket, whose entrants may each name a Player.
  */
 interface EventReferenceValues {
 	phase: EntityIdField;
@@ -54,6 +55,7 @@ interface EventReferenceValues {
 	talent: EntityIdField;
 	talentLineup: readonly number[] | undefined;
 	deckSource: DeckSource | undefined;
+	manualBracket: ManualBracket | undefined;
 }
 
 /** A field naming one entity by id, or none. */
@@ -210,7 +212,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES['top-cut'],
 		backgroundLayers: true,
 		config: topCutModeConfigContract,
-		eventReferences: { phaseId: 'phase' },
+		eventReferences: { phaseId: 'phase', manualBracket: 'manualBracket' },
 		modeTokens: topCutModeTokens,
 	},
 	'feature-match': {

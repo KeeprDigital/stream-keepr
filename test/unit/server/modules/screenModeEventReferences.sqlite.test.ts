@@ -178,6 +178,21 @@ const SAMPLES: Record<EventReferenceKind, Sample[]> = {
 			refusal: { statusCode: 404, message: 'Feature match slot not found' },
 		},
 	],
+	manualBracket: [
+		{
+			name: 'Manual Bracket',
+			naming: e => ({
+				size: 4,
+				entrants: [
+					{ name: 'Typed Entrant' },
+					null,
+					{ playerId: e.playerId },
+				],
+				results: [],
+			}),
+			refusal: { statusCode: 404, message: 'Player not found' },
+		},
+	],
 };
 
 beforeAll(async () => {
@@ -242,6 +257,7 @@ describe('screen Mode Event References', () => {
 			'standings.roundId: round',
 			'standings.playerListId: playerList',
 			'top-cut.phaseId: phase',
+			'top-cut.manualBracket: manualBracket',
 			'feature-match.featureMatchId: featureMatchSlot',
 			'feature-match-overlay.featureMatchId: featureMatchSlot',
 			'metagame.playerListId: playerList',

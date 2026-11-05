@@ -6,7 +6,7 @@ import type { PlayerManuallyEditedField } from '~~/shared/types/enums';
 import { and, asc, eq, getTableColumns, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { playerListMembers, playerLists, players } from '~~/server/db/schema';
-import { buildClearDeckSourcePlayersQuery } from '~~/server/services/screen';
+import { buildClearDeckSourcePlayersQuery, buildReleaseManualBracketPlayersQuery } from '~~/server/services/screen';
 import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';
 import { PLAYER_MANUALLY_EDITED_FIELD_VALUES } from '~~/shared/types/enums';
@@ -292,17 +292,26 @@ export function playerService() {
 
 	/**
 	 * Deletes the Player, and in the same write releases every Deck Source
-	 * selecting them. Answers the Archetype they held, if any.
+	 * selecting them and every Manual Bracket Seed naming them. Answers the
+	 * Archetype they held, if any.
 	 */
 	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; archetypeId: number | null; clearedScreens: DbScreen[] }> => {
-		const [clearedScreens, deleted] = await db.batch([
+		const [deckSourceScreens, deleted, bracketScreens] = await db.batch([
 			buildClearDeckSourcePlayersQuery(eventId, [id]),
 			db
 				.delete(players)
 				.where(and(eq(players.id, id), eq(players.eventId, eventId)))
 				.returning({ id: players.id, archetypeId: players.archetypeId }),
+			buildReleaseManualBracketPlayersQuery(eventId),
 		]);
 
+		// A Screen both releases rewrote answers once, at the later version.
+		const clearedScreens = [
+			...new Map([
+				...deckSourceScreens,
+				...bracketScreens,
+			].map(screen => [screen.id, screen])).values(),
+		];
 		return { deleted: deleted.length > 0, archetypeId: deleted[0]?.archetypeId ?? null, clearedScreens };
 	};
 

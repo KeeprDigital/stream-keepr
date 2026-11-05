@@ -219,15 +219,19 @@ The deterministic projection of a paginated Screen Mode's current page from its 
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Top Cut Bracket**:
-The single-elimination bracket a Top Cut Bracket Screen shows, derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size, unless the operator sets a larger one; a set size smaller than the first Round needs is ignored. The first Round is placed by Seed in standard order (1v8, 4v5, 2v7, 3v6 for a bracket of 8), the best Seeds taking any byes it leaves out, and each later Match at the Bracket Position its Players advance from, so no Bracket Position moves as later Rounds are paired; a first Round with no Seeds is placed by the next Round's pairings, else table order. A Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
+The single-elimination bracket a Top Cut Bracket Screen shows: its **Manual Bracket**, on a One Piece Card Game Event or when its operator chooses one (ADR-0075), else derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size, unless the operator sets a larger one; a set size smaller than the first Round needs is ignored. The first Round is placed by Seed in standard order (1v8, 4v5, 2v7, 3v6 for a bracket of 8), the best Seeds taking any byes it leaves out, and each later Match at the Bracket Position its Players advance from, so no Bracket Position moves as later Rounds are paired; a first Round with no Seeds is placed by the next Round's pairings, else table order. A Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
 _Avoid_: bracket slot (a Slot is a Feature Match Slot)
 
+**Manual Bracket**:
+A Top Cut Bracket its operator fills in by hand on a Top Cut Bracket Screen, for a top cut Stream Keepr holds no Rounds of: its size, its entrants in Seed order, each a Player of the Event or a typed name, paired in standard order with an empty Seed a bye, and who advanced from each Bracket Position, with an optional game score. Its results are not Match Results: only its Screen reads them (ADR-0075).
+_Avoid_: manual Top Cut, custom bracket
+
 **Entrant**:
-A Player as a Top Cut Bracket shows them at a Bracket Position: their name, and, as its operator chooses, their Seed and archetype. A side naming no Player of the Event is no Entrant.
+A Player as a Top Cut Bracket shows them at a Bracket Position: their name, and, as its operator chooses, their Seed and archetype. A side naming no Player of the Event, such as a Manual Bracket's typed name, is no Entrant, though the bracket shows its name.
 _Avoid_: competitor, participant
 
 **Seed**:
-A Player's final position before a Top Cut Bracket's Phase began: their position in the Round Standings of the last Round holding Round Standings before that Phase's first Round, in the Event's Round order. A Player absent from that Round, or a Phase no such Round precedes, has none. Derived from stored Round Standings, never imported.
+On a Manual Bracket, an entrant's place in its operator's list. Otherwise, a Player's final position before a Top Cut Bracket's Phase began: their position in the Round Standings of the last Round holding Round Standings before that Phase's first Round, in the Event's Round order. A Player absent from that Round, or a Phase no such Round precedes, has none. Derived from stored Round Standings, never imported.
 _Avoid_: rank, bracket position (a Bracket Position is where a Match sits)
 
 **Rotation Anchor**:
@@ -792,7 +796,7 @@ _Avoid_: worst-case data, overflow data
 - A **Phase** contains ordered **Rounds**; a **Round** contains zero or more **Matches** and **Feature Match Assignments**, and may have **Round Standings**
 - **Melee Sync** never removes a manual **Round** or **Match**: an imported **Phase** or **Round** that leaves Melee.gg, or that a Melee data reset would remove, while holding one is kept as a manual one, its **Provenance** cleared, and the operator is told which (ADR-0040)
 - **Live Results** polls only the **Current Round**, or probes the next **Round** once it is complete; a **Round**'s **Round Standings** are stored only once it is complete, on every **Melee Sync** path (ADR-0052)
-- A **Match Result** comes only from **Melee Sync**; a manual **Match**, including one kept under ADR-0040, has none, and no Player's record, history, Head-to-Head or **Top Cut Bracket** reads one an operator entered (ADR-0047)
+- A **Match Result** comes only from **Melee Sync**; a manual **Match**, including one kept under ADR-0040, has none, and no Player's record, history, Head-to-Head or **Top Cut Bracket** reads one an operator entered (ADR-0047); a **Manual Bracket**'s results are not Match Results, and only its Screen reads them (ADR-0075)
 - A **Feature Match Slot** belongs to exactly one **Event** and may reference at most one current **Match**
 - A **Feature Match Assignment** connects exactly one **Match** to exactly one **Feature Match Slot** for exactly one **Round**, and may have one **Feature Match Note**
 - Within one **Round**, a **Match** and a **Feature Match Slot** each have at most one **Feature Match Assignment**

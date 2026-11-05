@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import type { ManualBracket } from '~~/shared/modules/top-cut-bracket';
+import type { TopCutBracketSource } from '~~/shared/screenModeConfigs/topCut';
 import type { Screen } from '~/types';
-import { TOP_CUT_BRACKET_SIZES } from '~~/shared/screenModeConfigs/topCut';
+import { TOP_CUT_BRACKET_SIZES, topCutBracketSource } from '~~/shared/screenModeConfigs/topCut';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { FOLLOWS_THE_THEME, headerSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -22,14 +24,38 @@ defineExpose({ resetConfig, saving });
 const fields = screenModeConfigContract('top-cut').fields;
 
 const phaseStore = usePhaseStore();
+const playerStore = usePlayerStore();
+const eventStore = useEventStore();
 
-// What the picker below loads, re-read on Reconnect Resync (#610).
-useConsumedEventData(['phases']);
+// A One Piece Card Game Event holds no Phases, so it offers only the Manual Bracket (ADR-0075).
+const game = computed(() => eventStore.event?.game);
+const offersPhases = computed(() => game.value !== 'op');
+const source = computed(() => topCutBracketSource(game.value, config.value));
+
+const sourceOptions: { label: string; value: TopCutBracketSource }[] = [
+	{ label: 'A Phase', value: 'phase' },
+	{ label: 'Entered by hand', value: 'manual' },
+];
+
+// What the pickers below load, re-read on Reconnect Resync (#610).
+useConsumedEventData(['phases', 'players']);
 
 onMounted(async () => {
-	if (props.eventId && !phaseStore.isLoaded)
-		await phaseStore.loadPhasesByEventId(props.eventId);
+	if (!props.eventId)
+		return;
+	await Promise.all([
+		phaseStore.isLoaded || !offersPhases.value
+			? undefined
+			: phaseStore.loadPhasesByEventId(props.eventId),
+		playerStore.isLoaded
+			? undefined
+			: playerStore.loadPlayersByEventId(props.eventId),
+	]);
 });
+
+function updateManualBracket(manualBracket: ManualBracket) {
+	updateConfig({ manualBracket });
+}
 
 // Nothing marks a Phase as a top cut, so every Phase of the Event is offered (#752).
 const phaseOptions = computed(() => [
@@ -67,38 +93,57 @@ const headerCardSummary = computed(() => settingsSummary([
 <template>
 	<div class="flex flex-col gap-6">
 		<ScreenSettingsCard id="top-cut:data" title="Data" :collapsible="false">
-			<ScreenSettingsField
-				label="Phase"
-				name="phaseId"
-				description="The bracket shows this Phase's Rounds in order, its first Round placed by each Player's Seed."
-			>
-				<USelect
-					:model-value="config.phaseId ?? null"
-					:items="phaseOptions"
-					class="w-64"
-					@update:model-value="updateConfig({ phaseId: $event ?? null })"
-				/>
-			</ScreenSettingsField>
+			<ScreenConfigField
+				v-if="offersPhases"
+				:field="fields.bracketSource"
+				:model-value="config.bracketSource"
+				:items="sourceOptions"
+				description="Derive the bracket from a Phase's Rounds and Match Results, or enter its entrants and results by hand."
+				@update:model-value="updateConfig({ bracketSource: $event as TopCutBracketSource })"
+			/>
 
-			<ScreenSettingsField
-				label="Bracket size"
-				name="bracketSizeOverride"
-				description="Set it to show the byes the best Seeds take before the next Round is paired; a size smaller than the first Round needs is ignored."
-			>
-				<USelect
-					:model-value="config.bracketSizeOverride ?? null"
-					:items="sizeOptions"
-					class="w-64"
-					@update:model-value="updateConfig({ bracketSizeOverride: $event ?? null })"
-				/>
-			</ScreenSettingsField>
+			<ScreenModesTopCutManualBracketEditor
+				v-if="source === 'manual'"
+				:manual="config.manualBracket"
+				@update="updateManualBracket"
+			/>
+
+			<template v-else>
+				<ScreenSettingsField
+					label="Phase"
+					name="phaseId"
+					description="The bracket shows this Phase's Rounds in order, its first Round placed by each Player's Seed."
+				>
+					<USelect
+						:model-value="config.phaseId ?? null"
+						:items="phaseOptions"
+						class="w-64"
+						@update:model-value="updateConfig({ phaseId: $event ?? null })"
+					/>
+				</ScreenSettingsField>
+
+				<ScreenSettingsField
+					label="Bracket size"
+					name="bracketSizeOverride"
+					description="Set it to show the byes the best Seeds take before the next Round is paired; a size smaller than the first Round needs is ignored."
+				>
+					<USelect
+						:model-value="config.bracketSizeOverride ?? null"
+						:items="sizeOptions"
+						class="w-64"
+						@update:model-value="updateConfig({ bracketSizeOverride: $event ?? null })"
+					/>
+				</ScreenSettingsField>
+			</template>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard id="top-cut:entrants" title="Entrants" :summary="entrantsSummary">
 			<ScreenConfigField
 				:field="fields.showSeeds"
 				:model-value="config.showSeeds"
-				description="Show each Player's final position in the last Round Standings before this Phase."
+				:description="source === 'manual'
+					? 'Show each entrant\'s Seed, their place in the list above.'
+					: 'Show each Player\'s final position in the last Round Standings before this Phase.'"
 				@update:model-value="updateConfig({ showSeeds: $event === true })"
 			/>
 			<ScreenConfigField

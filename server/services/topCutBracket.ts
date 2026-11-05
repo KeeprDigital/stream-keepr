@@ -1,5 +1,6 @@
-import type { BracketEntrant, BracketRoundInput, NamedPlayerDeckIdentity, SeededPlayer } from '~~/shared/modules/top-cut-bracket';
+import type { BracketEntrant, BracketRoundInput, ManualBracket, NamedPlayerDeckIdentity, SeededPlayer } from '~~/shared/modules/top-cut-bracket';
 import type { TopCutModeConfig } from '~~/shared/screenModeConfigs/topCut';
+import type { Game } from '~~/shared/types/enums';
 import type { ScreenOutputMatchSide, ScreenOutputRoundMatch, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '~~/server/db';
@@ -9,9 +10,10 @@ import { phaseService } from '~~/server/services/phase';
 import { playerRoundStandingsService } from '~~/server/services/playerRoundStandings';
 import { roundService } from '~~/server/services/round';
 import { findMatchesByRound } from '~~/server/services/roundMatches';
-import { deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
-import { TOP_CUT_BRACKET_SIZES } from '~~/shared/screenModeConfigs/topCut';
+import { deriveManualTopCutBracket, deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
+import { TOP_CUT_BRACKET_SIZES, topCutBracketSource } from '~~/shared/screenModeConfigs/topCut';
 import { resolvePlayerDeckIdentity } from '~~/shared/utils/gameData';
+import { playerDisplayName } from '~~/shared/utils/playerName';
 
 /**
  * What a Top Cut Bracket Screen shows beside each Player's name (#759), and
@@ -139,4 +141,77 @@ export async function findPhaseBracket(
 			})),
 		}),
 	};
+}
+
+/**
+ * A Manual Bracket as its Screen shows it (ADR-0075): each Seed naming a
+ * Player by that Player's current name, and one typed by its name. A Seed is
+ * shown as its place in the operator's list, and a Player's deck as Top Cut
+ * Bracket names one, each only when `options` asks for it. A Seed naming a
+ * Player the Event no longer holds is empty.
+ */
+export async function findManualBracket(
+	eventId: number,
+	manual: ManualBracket,
+	options: TopCutBracketReadOptions = {},
+): Promise<ScreenOutputTopCutResponse> {
+	const playerIds = [
+		...new Set(manual.entrants.flatMap(entrant => entrant && 'playerId' in entrant
+			? [entrant.playerId]
+			: [])),
+	];
+	const rows = playerIds.length === 0
+		? []
+		: await db
+				.select({ id: players.id, name: players.name, nickname: players.nickname })
+				.from(players)
+				.where(and(eq(players.eventId, eventId), inArray(players.id, playerIds)));
+	const names = new Map(rows.map(row => [
+		row.id,
+		playerDisplayName(row),
+	]));
+	const decks = options.showArchetypes
+		? await findDecks(eventId, [
+				...names.keys(),
+			])
+		: null;
+
+	return {
+		phase: null,
+		bracket: deriveManualTopCutBracket(manual, (entrant, seed) => {
+			const playerId = 'playerId' in entrant
+				? entrant.playerId
+				: null;
+			const name = playerId == null
+				? 'name' in entrant
+					? entrant.name
+					: null
+				: names.get(playerId);
+			if (name == null)
+				return null;
+			const shown: BracketEntrant = { playerId, name };
+			if (options.showSeeds)
+				shown.seed = seed;
+			if (decks) {
+				shown.deck = playerId == null
+					? null
+					: decks.get(playerId) ?? null;
+			}
+			return shown;
+		}),
+	};
+}
+
+/**
+ * A Top Cut Bracket Screen's bracket, from the source it reads on an Event of
+ * `game` (`topCutBracketSource`): its Phase's, or its Manual Bracket.
+ */
+export async function findTopCutBracket(
+	eventId: number,
+	game: Game | null | undefined,
+	config: TopCutModeConfig,
+): Promise<ScreenOutputTopCutResponse> {
+	return topCutBracketSource(game, config) === 'manual'
+		? await findManualBracket(eventId, config.manualBracket, config)
+		: await findPhaseBracket(eventId, config.phaseId, config);
 }
