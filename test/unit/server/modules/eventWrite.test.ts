@@ -10,6 +10,7 @@ const mockEventService = {
 };
 const mockFeatureMatchService = {
 	syncFeatureMatches: vi.fn(),
+	applyEventBestOf: vi.fn(),
 };
 const mockScreenService = {
 	findIdsByEventId: vi.fn(),
@@ -20,6 +21,7 @@ const mockCardService = {
 const mockPublication = {
 	eventUpdated: vi.fn(),
 	eventDeleted: vi.fn(),
+	featureMatchSlotsUpdated: vi.fn(),
 };
 
 vi.mock('~~/server/utils/routeGuards', () => ({
@@ -130,6 +132,32 @@ describe('eventWriteModule', () => {
 			});
 
 			expect(mockFeatureMatchService.syncFeatureMatches).not.toHaveBeenCalled();
+		});
+
+		it.each([
+			{
+				input: { featureMatchDefaultBestOf: 3 },
+				applied: [
+					[1, 3],
+				],
+				announced: [
+					[
+						{
+							eventId: 1,
+							slotIds: [5, 6],
+						},
+					],
+				],
+			},
+			{ input: {}, applied: [], announced: [] },
+		])('gives the Slots the Event\'s best of only when the write names one: $input', async ({ input, applied, announced }) => {
+			mockEventService.update.mockResolvedValue(createMockEvent({ id: 1, featureMatchDefaultBestOf: 3 }));
+			mockFeatureMatchService.applyEventBestOf.mockResolvedValue([5, 6]);
+
+			await eventWriteModule().updateEvent({ eventId: 1, input: input as never, originConnectionId: 'origin-1' });
+
+			expect(mockFeatureMatchService.applyEventBestOf.mock.calls).toEqual(applied);
+			expect(mockPublication.featureMatchSlotsUpdated.mock.calls).toEqual(announced);
 		});
 
 		it('publishes the mapped event response', async () => {

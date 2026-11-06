@@ -3,7 +3,7 @@ import type { DbFeatureMatch, DbFeatureMatchSession, DbScreen } from '~~/server/
 import type { CreateFeatureMatchInput, UpdateFeatureMatchInput } from '~~/shared/api';
 import type { ExternalSource } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { toStoredSlotLeaders, withCatalogueLeaders } from '~~/server/services/featureMatchSlotLeader';
@@ -360,6 +360,38 @@ export function featureMatchService() {
 		return await findById(updatedMatch.id, eventId);
 	};
 
+	/**
+	 * Gives every Slot of the Event the Event's best of, and corrects each changed
+	 * Slot's active Session to it, so its game win controls follow the Event. Slots
+	 * are written first: a Session opened meanwhile snapshots the new best of.
+	 * Returns the ids of the Slots it changed.
+	 */
+	const applyEventBestOf = async (eventId: number, bestOf: number): Promise<number[]> => {
+		const changed = await db
+			.update(featureMatches)
+			.set({ bestOf })
+			.where(and(eq(featureMatches.eventId, eventId), ne(featureMatches.bestOf, bestOf)))
+			.returning();
+		if (changed.length === 0)
+			return [];
+
+		const stateSvc = featureMatchStateService();
+		const defaults = await stateSvc.loadEventDefaults(eventId);
+		for (const slot of changed) {
+			if (slot.activeSessionId === null)
+				continue;
+			const snapshot = await stateSvc.buildSourceSnapshot(slot, defaults);
+			await stateSvc.applyCommandToActiveSession(slot.id, eventId, session => ({
+				commandId: randomCommandId('SnapshotCorrected'),
+				type: 'SnapshotCorrected',
+				payload: { sourceSnapshot: snapshot },
+				baseSequence: session.sequence,
+			}));
+		}
+
+		return changed.map(slot => slot.id);
+	};
+
 	/** Deletes the Slot, and in the same write releases every Deck Source showing a side of it. */
 	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
 		const [clearedScreens, deleted] = await db.batch([
@@ -553,6 +585,7 @@ export function featureMatchService() {
 		findByEventId,
 		create,
 		update,
+		applyEventBestOf,
 		remove,
 		exists,
 		countByEventId,
