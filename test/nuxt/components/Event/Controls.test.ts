@@ -18,6 +18,7 @@ function loadedEvent(overrides?: Partial<ReturnType<typeof createMockEvent>>) {
 	return {
 		...createMockEvent({
 			id: 1,
+			holdingText: 'Coverage resumes shortly.',
 			commentator1TalentId: ALICE.id,
 			commentator2TalentId: BRIONY.id,
 			...overrides,
@@ -67,12 +68,16 @@ async function mountUnderGuard() {
 	return mountUnderPageGuard<Wrapper>(Controls, mountOptions);
 }
 
-/** The form is found by the field it carries. */
+/** The two forms are found by the field they carry, not by their order. */
 function formFor(wrapper: Wrapper, field: string) {
 	const form = wrapper.findAll('form').find(entry => entry.find(`[data-field="${field}"]`).exists());
 	if (!form)
 		throw new Error(`No form carrying the field "${field}"`);
 	return form;
+}
+
+function holdingTextField(wrapper: Wrapper) {
+	return wrapper.getComponent({ name: 'UTextarea' });
 }
 
 function commentatorField(wrapper: Wrapper, position: 1 | 2) {
@@ -85,6 +90,24 @@ function formButton(wrapper: Wrapper, field: string, label: string) {
 
 const saveButton = (wrapper: Wrapper, field: string) => formButton(wrapper, field, 'Save');
 const resetButton = (wrapper: Wrapper, field: string) => formButton(wrapper, field, 'Reset');
+
+/** Each form's own edit, for the cases both forms share. */
+const FORMS = [
+	{
+		form: 'holding text',
+		field: 'holdingText',
+		other: 'commentator1TalentId',
+		edit: (wrapper: Wrapper) => holdingTextField(wrapper).setValue('Back after this break.'),
+		initial: (wrapper: Wrapper) => expect(holdingTextField(wrapper).props('modelValue')).toBe('Coverage resumes shortly.'),
+	},
+	{
+		form: 'commentator',
+		field: 'commentator1TalentId',
+		other: 'holdingText',
+		edit: (wrapper: Wrapper) => commentatorField(wrapper, 1).setValue(CASPAR.id),
+		initial: (wrapper: Wrapper) => expect(commentatorField(wrapper, 1).props('modelValue')).toBe(ALICE.id),
+	},
+];
 
 describe('event controls', () => {
 	let consoleError: ReturnType<typeof vi.spyOn>;
@@ -102,19 +125,21 @@ describe('event controls', () => {
 		consoleError.mockRestore();
 	});
 
-	it('shows the commentators already saved on the event', async () => {
+	it('shows the holding text and commentators already saved on the event', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
+		expect(holdingTextField(wrapper).props('modelValue')).toBe('Coverage resumes shortly.');
 		expect(commentatorField(wrapper, 1).props('modelValue')).toBe(ALICE.id);
 		expect(commentatorField(wrapper, 2).props('modelValue')).toBe(BRIONY.id);
 	});
 
 	it('leaves a commentator position empty when the event has nobody assigned to it', async () => {
-		mockEventStore.event = loadedEvent({ commentator2TalentId: null });
+		mockEventStore.event = loadedEvent({ holdingText: null, commentator2TalentId: null });
 		const wrapper = await mountComponent();
 		await flushPromises();
 
+		expect(holdingTextField(wrapper).props('modelValue')).toBe('');
 		expect(commentatorField(wrapper, 2).props('modelValue')).toBeUndefined();
 	});
 
@@ -172,7 +197,7 @@ describe('event controls', () => {
 		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ commentator1TalentId: SAM_TWO.id });
 	});
 
-	it('offers no controls until the event loads, then fills the form from it', async () => {
+	it('offers no controls until the event loads, then fills both forms from it', async () => {
 		mockEventStore.event = null;
 		const wrapper = await mountComponent();
 		await flushPromises();
@@ -182,9 +207,49 @@ describe('event controls', () => {
 		mockEventStore.event = loadedEvent();
 		await flushPromises();
 
-		expect(wrapper.findAll('form')).toHaveLength(1);
+		expect(wrapper.findAll('form')).toHaveLength(2);
+		expect(holdingTextField(wrapper).props('modelValue')).toBe('Coverage resumes shortly.');
 		expect(commentatorField(wrapper, 1).props('modelValue')).toBe(ALICE.id);
 		expect(commentatorField(wrapper, 2).props('modelValue')).toBe(BRIONY.id);
+	});
+
+	it('saves an edited holding text, trimmed', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await holdingTextField(wrapper).setValue('  Back after this break.  ');
+		await formFor(wrapper, 'holdingText').trigger('submit');
+		await flushPromises();
+
+		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ holdingText: 'Back after this break.' });
+		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({
+			description: 'Holding text updated',
+			color: 'success',
+		}));
+	});
+
+	it('submits only the form whose Save was pressed, with both offering one', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await holdingTextField(wrapper).setValue('Back after this break.');
+		await commentatorField(wrapper, 1).setValue(CASPAR.id);
+		await saveButton(wrapper, 'commentator1TalentId').trigger('click');
+		await flushPromises();
+
+		expect(mockEventStore.updateEvent).toHaveBeenCalledTimes(1);
+		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ commentator1TalentId: CASPAR.id });
+	});
+
+	it('clears the holding text when the operator empties the message', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await holdingTextField(wrapper).setValue('   ');
+		await formFor(wrapper, 'holdingText').trigger('submit');
+		await flushPromises();
+
+		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ holdingText: null });
 	});
 
 	// A dirty form still follows a colleague's change to a field it left alone (#612).
@@ -234,11 +299,11 @@ describe('event controls', () => {
 		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({ commentator2TalentId: null });
 	});
 
-	it('sends an empty patch when the untouched form is saved', async () => {
+	it.each(FORMS)('sends an empty patch when the untouched $form form is saved', async ({ field }) => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		await formFor(wrapper, 'commentator1TalentId').trigger('submit');
+		await formFor(wrapper, field).trigger('submit');
 		await flushPromises();
 
 		expect(mockEventStore.updateEvent).toHaveBeenCalledWith({});
@@ -373,6 +438,23 @@ describe('event controls', () => {
 		expect(commentatorField(wrapper, 1).props('modelValue')).toBe(ALICE.id);
 	});
 
+	it('reports a failed holding text save and keeps the operator edit on screen', async () => {
+		mockEventStore.updateEvent.mockResolvedValue(null);
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await holdingTextField(wrapper).setValue('Back after this break.');
+		await formFor(wrapper, 'holdingText').trigger('submit');
+		await flushPromises();
+
+		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({
+			description: 'Failed to save holding text',
+			color: 'error',
+		}));
+		expect(mockToast.add).not.toHaveBeenCalledWith(expect.objectContaining({ color: 'success' }));
+		expect(holdingTextField(wrapper).props('modelValue')).toBe('Back after this break.');
+	});
+
 	it('reports a commentator save that throws', async () => {
 		mockEventStore.updateEvent.mockRejectedValue(new Error('network down'));
 		const wrapper = await mountComponent();
@@ -389,49 +471,76 @@ describe('event controls', () => {
 		expect(commentatorField(wrapper, 1).props('modelValue')).toBe(CASPAR.id);
 	});
 
-	it('marks the form busy while its request is in flight', async () => {
+	it.each(FORMS)('marks the $form form busy, and only it, while its request is in flight', async ({ field, other, edit }) => {
 		const save = deferred<unknown>();
 		mockEventStore.updateEvent.mockReturnValue(save.promise);
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		await commentatorField(wrapper, 1).setValue(CASPAR.id);
-		await formFor(wrapper, 'commentator1TalentId').trigger('submit');
+		await edit(wrapper);
+		await formFor(wrapper, field).trigger('submit');
 		await flushPromises();
 
-		expect(saveButton(wrapper, 'commentator1TalentId').attributes('aria-busy')).toBe('true');
+		expect(saveButton(wrapper, field).attributes('aria-busy')).toBe('true');
+		expect(saveButton(wrapper, other).attributes('aria-busy')).toBeUndefined();
 
 		save.resolve(loadedEvent());
 		await flushPromises();
 
-		expect(saveButton(wrapper, 'commentator1TalentId').attributes('aria-busy')).toBeUndefined();
+		expect(saveButton(wrapper, field).attributes('aria-busy')).toBeUndefined();
 	});
 
-	it('offers a save only once the form has changed, and takes it back on reset', async () => {
-		const field = 'commentator1TalentId';
+	it.each(FORMS)('offers a $form save only once that form has changed, and takes it back on reset', async ({ field, edit, initial }) => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 		expect(saveButton(wrapper, field).attributes('disabled')).toBeDefined();
 
-		await commentatorField(wrapper, 1).setValue(CASPAR.id);
+		await edit(wrapper);
 		expect(saveButton(wrapper, field).attributes('disabled')).toBeUndefined();
 
 		await resetButton(wrapper, field).trigger('click');
-		expect(commentatorField(wrapper, 1).props('modelValue')).toBe(ALICE.id);
+		initial(wrapper);
 		expect(saveButton(wrapper, field).attributes('disabled')).toBeDefined();
 		expect(mockEventStore.updateEvent).not.toHaveBeenCalled();
 	});
 
-	it('tells the page it has unsaved changes while the form is edited', async () => {
+	it('tells the page it has unsaved changes while either form is edited', async () => {
 		const { wrapper, pageIsDirty } = await mountUnderGuard();
 		await flushPromises();
 
+		expect(pageIsDirty()).toBe(false);
+
+		await holdingTextField(wrapper).setValue('Back after this break.');
+		expect(pageIsDirty()).toBe(true);
+
+		await resetButton(wrapper, 'holdingText').trigger('click');
 		expect(pageIsDirty()).toBe(false);
 
 		await commentatorField(wrapper, 1).setValue(CASPAR.id);
 		expect(pageIsDirty()).toBe(true);
 
 		await resetButton(wrapper, 'commentator1TalentId').trigger('click');
+		expect(pageIsDirty()).toBe(false);
+	});
+
+	it('reads clean once a holding text the save trimmed lands', async () => {
+		mockEventStore.updateEvent.mockImplementation(async (updates: object) => {
+			mockEventStore.event = {
+				...mockEventStore.event!,
+				...updates,
+			};
+			return mockEventStore.event;
+		});
+		const { wrapper, pageIsDirty } = await mountUnderGuard();
+		await flushPromises();
+
+		await holdingTextField(wrapper).setValue('Back after this break.  ');
+		await saveButton(wrapper, 'holdingText').trigger('click');
+		await flushPromises();
+
+		expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({ color: 'success' }));
+		expect(holdingTextField(wrapper).props('modelValue')).toBe('Back after this break.');
+		expect(saveButton(wrapper, 'holdingText').attributes('disabled')).toBeDefined();
 		expect(pageIsDirty()).toBe(false);
 	});
 });
