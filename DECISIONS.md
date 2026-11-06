@@ -2115,7 +2115,7 @@ Accepted · 2026-11-04 · [#920](https://github.com/KeeprDigital/stream-keepr/is
 
 ## ADR-0066: A Round's start and duration are the operator's, and a Round Clock projects from them
 
-Accepted · 2026-11-04 · [#916](https://github.com/KeeprDigital/stream-keepr/issues/916). Records N1 b from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783). Extends ADR-0040 and ADR-0046; follows ADR-0009 and ADR-0022.
+Accepted · 2026-11-04 · [#916](https://github.com/KeeprDigital/stream-keepr/issues/916). Records N1 b from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783). Extends ADR-0040 and ADR-0046; follows ADR-0009 and ADR-0022 · Amended 2026-11-06 (ADR-0076): a Round Clock's Screen may count up after the end, to an optional limit
 
 ### Decision
 
@@ -2125,7 +2125,7 @@ Accepted · 2026-11-04 · [#916](https://github.com/KeeprDigital/stream-keepr/is
 
 **Melee Sync never writes either field, whether the Round is imported or manual.** Melee imports no timing, and neither its Round upsert (`upsertByExternalId`) nor its removal of imported structure (ADR-0040) names them, so an imported Round keeps its operator's timing through every sync, and through being kept as manual structure. Unlike ADR-0046, no edited-field list is needed: there is no Melee value to keep apart.
 
-**The Round Clock Screen Mode shows a Round's time remaining as a clock projection.** `projectRoundClock` (`shared/utils/roundClock.ts`) is a pure function of the Round's start, its duration and server time: before the start, or with none, it shows the full duration, not running; after the end, `0:00`; with no duration, no clock. Every rendering evaluates it on the shared clock (`useServerTime`) and re-evaluates exactly when it next changes (a start further off than one timer can wait is waited for in steps), so renderings of the same Round agree, and nothing writes as it runs or when it runs out, as with Page Rotation (ADR-0009) and Card Timeout (ADR-0022). The display uses `formatClockTime`.
+**The Round Clock Screen Mode shows a Round's time remaining as a clock projection.** `projectRoundClock` (`shared/utils/roundClock.ts`) is a pure function of the Round's start, its duration and server time: before the start, or with none, it shows the full duration, not running; after the end, `0:00`, or the time since the end where its Screen counts up (ADR-0076); with no duration, no clock. Every rendering evaluates it on the shared clock (`useServerTime`) and re-evaluates exactly when it next changes (a start further off than one timer can wait is waited for in steps), so renderings of the same Round agree, and nothing writes as it runs or when it runs out, as with Page Rotation (ADR-0009) and Card Timeout (ADR-0022). The display uses `formatClockTime`.
 
 **It shows the Current Round unless it picks a Round.** Its `roundId` is an Event Reference of kind `round` (ADR-0038), released when that Round is deleted (ADR-0060). Unset, its Screen Output read (`round-clock`) answers the Current Round (ADR-0052), so a Melee Event's clock follows the Event from Round to Round. Its data re-reads on its Round's `round:updated`, so "Start now" starts every output counting without a reload, and while following the Current Round, on any Round, Phase, Match or Melee pairing change that may move it.
 
@@ -2146,7 +2146,7 @@ Productions want an on-air clock of the time left in the Round, and Rounds store
 
 - **Melee-imported Round timing.** Melee Sync imports none today, and #783 chose operator entry (N1 b).
 - **The browser's clock stamps "Start now".** Two operators' browsers can disagree by seconds; the server's clock is the one every rendering already syncs to.
-- **A Round Clock that counts up past the end, or a timer state an operator pauses.** The ticket asks for `0:00` after the end; a pause is a Feature Match Session clock's concern, not a Round's.
+- **A timer state an operator pauses.** A pause is a Feature Match Session clock's concern, not a Round's. Counting up past the end was rejected here too, as the ticket asked for `0:00`; ADR-0076 reopened it as a Screen setting, off by default.
 
 ## ADR-0067: A Talent's photo is a Graphic Asset Reference that holds Retire back
 
@@ -2567,3 +2567,33 @@ ADR-0047 removed operator-entered Match Results because they reached Player hist
 - **Manual Rounds and Matches for One Piece Card Game Events, with operator-entered results.** It reopens ADR-0047 and ADR-0057 for a whole structure nobody keeps up during a stream, to feed one graphic.
 - **A Manual Bracket held by the Event, shared by its Screens.** It needs a table, a write module and its own announcements for something only a Screen shows. Revisit if operators run two Screens of one cut.
 - **Results held by entrant, so a correction moves them.** A typo fix would lose the result, and a swapped Seed would carry wins to a position the entrant never played.
+
+## ADR-0076: A clock that counts up after running out may hold at an operator-set limit, and a Round Clock may count up too
+
+Accepted · 2026-11-06 · Amends ADR-0066
+
+Productions want to show how far past time a Match or Round has run, but only for a set stretch (the end-of-round window, say), after which a clock still climbing on air is noise. A Feature Match Session clock could already count up after its countdown, with no limit; a Round Clock held `0:00`.
+
+### Decision
+
+**Both clocks share one rule: counting up after running out is opt-in, and may hold at a limit in whole minutes (1 to 600), or count up without one.** `countUpOvertimeMs` (`shared/utils/clock.ts`) is the rule, with the bounds `COUNT_UP_LIMIT_MINUTES_MIN` and `COUNT_UP_LIMIT_MINUTES_MAX`. Both clocks stay clock projections: a held clock is a display, and nothing writes when it reaches its limit.
+
+**A Feature Match Session clock takes its limit from its Event.** `events.feature_match_default_count_up_limit` (minutes, `null` for no limit, migration `0007_count_up_limit`) sits beside the count-up toggle in the Event's Format Settings. As with the toggle, a Session's clock takes it when its state is created (`countUpLimitMs` on `ClockState`), so an edit applies to the next Match or a Match reset, not to a running one. A state persisted before the limit existed carries none and counts up without limit. `formatClockDisplay` applies it, so the operator clock, both Feature Match Screen Modes and the public Feature Match read all hold at the same value.
+
+**A Round Clock counts up when its Screen says so.** `countUpAfterEnd` (off by default) and `countUpLimitMinutes` (unset for no limit) are Round Clock Screen config, set in the Clock card. `projectRoundClock` takes them, and after the end shows the time since the end, re-evaluating each second until it holds. The state stays `ended`, so its colour is the clock's colour after the end.
+
+### Why
+
+The limit is how long the production wants the overrun on air, which is a broadcast choice. A Round's timing is the floor's fact (ADR-0066), so the Round Clock's count-up belongs to the Screen that shows it, not to the Round. The Feature Match clock already took its count-up from the Event's defaults, and its limit follows it there.
+
+### Consequences
+
+- Two Round Clock Screens of one Round may differ: one holding `0:00`, one counting up.
+- Changing an Event's limit leaves running Sessions on the limit they started with until a Match reset.
+- Tests: `test/unit/shared/clock.test.ts` and `test/unit/shared/roundClock.test.ts` hold the rule on each clock; `test/unit/shared/featureMatchSessionReducer.test.ts` the limit a Match takes from its Event; `test/unit/server/schemas/event.test.ts` the Event column's bounds; `test/nuxt/components/Event/ConfigCards.test.ts` and `test/nuxt/components/Screen/Modes/RoundClock/Settings.test.ts` each setting; `test/nuxt/composables/screen/useRoundClockModeData.test.ts` the Screen setting reaching the projection.
+
+### Rejected alternatives
+
+- **The Round's own count-up setting, beside its start and duration.** It needs a migration and a Round write for what only a Screen shows, and would force every Screen of the Round to agree.
+- **A per-Session limit an operator edits mid-Match.** The toggle has no such control today; an Event default covers the ask without a new Session command.
+- **Hiding the clock at the limit.** Holding keeps the final overrun on air; a production that wants it gone switches the Screen.

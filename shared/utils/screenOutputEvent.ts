@@ -24,6 +24,7 @@ export const SCREEN_OUTPUT_EVENT_FIELDS = [
 	'featureMatchDefaultClockType',
 	'featureMatchDefaultClockDuration',
 	'featureMatchDefaultCountUpAfterCountdown',
+	'featureMatchDefaultCountUpLimit',
 	'featureMatchDefaultTurnTrackingEnabled',
 	'featureMatchDefaultActivePlayerTrackingEnabled',
 	'featureMatchDefaultExtraTurnsEnabled',

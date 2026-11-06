@@ -13,6 +13,8 @@ export interface FeatureMatchDefaults {
 	clockType: ClockType;
 	clockDuration: number; // minutes
 	countUpAfterCountdown: boolean;
+	/** Minutes a countdown counts up after it expires before holding; `null` counts up without limit. */
+	countUpLimit: number | null;
 	turnTrackingEnabled: boolean;
 	activePlayerTrackingEnabled: boolean;
 	extraTurnsEnabled: boolean;
@@ -30,6 +32,7 @@ export const DEFAULT_FEATURE_MATCH_DEFAULTS: FeatureMatchDefaults = {
 	clockType: 'countdown',
 	clockDuration: 50,
 	countUpAfterCountdown: false,
+	countUpLimit: null,
 	turnTrackingEnabled: false,
 	activePlayerTrackingEnabled: false,
 	extraTurnsEnabled: false,
@@ -47,6 +50,7 @@ const FIELD_MAP = {
 	clockType: 'featureMatchDefaultClockType',
 	clockDuration: 'featureMatchDefaultClockDuration',
 	countUpAfterCountdown: 'featureMatchDefaultCountUpAfterCountdown',
+	countUpLimit: 'featureMatchDefaultCountUpLimit',
 	turnTrackingEnabled: 'featureMatchDefaultTurnTrackingEnabled',
 	activePlayerTrackingEnabled: 'featureMatchDefaultActivePlayerTrackingEnabled',
 	extraTurnsEnabled: 'featureMatchDefaultExtraTurnsEnabled',

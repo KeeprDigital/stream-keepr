@@ -1,5 +1,6 @@
 import type { ScreenModeConfigOf } from './contract';
 import { z } from 'zod';
+import { COUNT_UP_LIMIT_MINUTES_MAX, COUNT_UP_LIMIT_MINUTES_MIN } from '../utils/clock';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
 
@@ -13,9 +14,17 @@ export const roundClockModeConfigContract = defineScreenModeConfigContract({
 	/** The Round whose clock is shown; an Event Reference (ADR-0038). Unset shows the Current Round. */
 	roundId: z.number().int().positive().optional(),
 	showRoundName: editorField(z.boolean(), { label: 'Show Round name' }),
+	countUpAfterEnd: editorField(z.boolean(), { label: 'Count up after the end' }),
+	/** Minutes the clock counts up to after the end, then holds; unset counts up without limit. */
+	countUpLimitMinutes: editorField(
+		z.number().int().min(COUNT_UP_LIMIT_MINUTES_MIN).max(COUNT_UP_LIMIT_MINUTES_MAX).optional(),
+		{ label: 'Count-up limit (minutes)' },
+	),
 }, {
 	roundId: undefined,
 	showRoundName: true,
+	countUpAfterEnd: false,
+	countUpLimitMinutes: undefined,
 });
 
 export type RoundClockModeConfig = ScreenModeConfigOf<typeof roundClockModeConfigContract>;

@@ -17,6 +17,14 @@ defineExpose({ resetConfig, saving });
 
 // Each control's label, read from the mode's config contract (#498).
 const fields = screenModeConfigContract('round-clock').fields;
+
+const clockSummary = computed(() => {
+	if (!config.value.countUpAfterEnd)
+		return 'Holds 0:00 after the Round';
+	return config.value.countUpLimitMinutes == null
+		? 'Counts up after the Round, without limit'
+		: `Counts up after the Round, up to ${config.value.countUpLimitMinutes} min`;
+});
 </script>
 
 <template>
@@ -49,8 +57,24 @@ const fields = screenModeConfigContract('round-clock').fields;
 		<ScreenSettingsCard
 			id="round-clock:clock"
 			title="Clock"
-			summary="Surface, type and text before, during and after the Round"
+			:summary="clockSummary"
 		>
+			<ScreenConfigField
+				:field="fields.countUpAfterEnd"
+				:model-value="config.countUpAfterEnd"
+				description="When the Round ends, count up the time since the end instead of holding 0:00."
+				@update:model-value="updateConfig({ countUpAfterEnd: $event === true })"
+			/>
+			<!-- Empty counts up without limit; a limit holds the clock there. -->
+			<ScreenConfigField
+				v-if="config.countUpAfterEnd"
+				:field="fields.countUpLimitMinutes"
+				:model-value="config.countUpLimitMinutes"
+				description="Stop counting up after this many minutes and hold. Leave empty for no limit."
+				placeholder="No limit"
+				nullable
+				@update:model-value="updateConfig({ countUpLimitMinutes: $event ?? null })"
+			/>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="clock" />
 		</ScreenSettingsCard>
 	</div>

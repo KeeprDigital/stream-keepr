@@ -67,6 +67,24 @@ describe('formatClockDisplay', () => {
 			expected: '1:40',
 		},
 		{
+			name: 'an expired countdown short of its count-up limit',
+			state: clock({ elapsedMs: 700_000, countUpAfterCountdown: true, countUpLimitMs: 120_000 }),
+			label: '',
+			expected: '1:40',
+		},
+		{
+			name: 'an expired countdown past its count-up limit, held there',
+			state: clock({ elapsedMs: 900_000, countUpAfterCountdown: true, countUpLimitMs: 120_000 }),
+			label: '',
+			expected: '2:00',
+		},
+		{
+			name: 'an expired countdown with no count-up limit',
+			state: clock({ elapsedMs: 900_000, countUpAfterCountdown: true, countUpLimitMs: null }),
+			label: '',
+			expected: '5:00',
+		},
+		{
 			name: 'a count-up clock',
 			state: clock({ type: 'countup', elapsedMs: 90_000 }),
 			label: '',

@@ -1,4 +1,4 @@
-import { formatClockTime } from './clock';
+import { countUpOvertimeMs, formatClockTime } from './clock';
 
 /** The bounds of a Round's duration, in minutes, as an operator enters it. */
 export const ROUND_DURATION_MINUTES_MIN = 1;
@@ -9,6 +9,17 @@ export interface RoundTiming {
 	startedAt: number | null;
 	durationMinutes: number | null;
 }
+
+/**
+ * Whether a Round Clock counts up after its Round ends, as its Screen sets it,
+ * and the minutes it counts up to before holding (`null`: no limit).
+ */
+export interface RoundClockCountUp {
+	enabled: boolean;
+	limitMinutes: number | null;
+}
+
+const NO_COUNT_UP: RoundClockCountUp = { enabled: false, limitMinutes: null };
 
 /**
  * Where a Round Clock stands: `untimed` with no duration to count, `pending`
@@ -28,9 +39,10 @@ export interface RoundClockProjection {
  * The Round Clock at `now` (server time): a pure projection of the Round's
  * timing, so every rendering of the same Round shows the same remaining time,
  * and nothing writes when it runs out (ADR-0066). Before the start it shows the
- * full duration, not running; after the end it shows `0:00`.
+ * full duration, not running; after the end it shows `0:00`, or, counting up,
+ * the time since the end up to its limit.
  */
-export function projectRoundClock(timing: RoundTiming, now: number): RoundClockProjection {
+export function projectRoundClock(timing: RoundTiming, now: number, countUp: RoundClockCountUp = NO_COUNT_UP): RoundClockProjection {
 	if (timing.durationMinutes == null)
 		return { state: 'untimed', display: null, nextChangeInMs: null };
 
@@ -46,6 +58,20 @@ export function projectRoundClock(timing: RoundTiming, now: number): RoundClockP
 	}
 
 	const remainingMs = timing.startedAt + durationMs - now;
+	if (remainingMs <= 0 && countUp.enabled) {
+		const overMs = -remainingMs;
+		const limitMs = countUp.limitMinutes == null
+			? null
+			: countUp.limitMinutes * 60_000;
+		return {
+			state: 'ended',
+			display: formatClockTime(countUpOvertimeMs(overMs, limitMs)),
+			nextChangeInMs: limitMs != null && overMs >= limitMs
+				? null
+				: 1000 - (overMs % 1000),
+		};
+	}
+
 	if (remainingMs <= 0) {
 		return {
 			state: 'ended',
