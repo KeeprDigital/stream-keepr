@@ -208,6 +208,25 @@ describe('searching cards', () => {
 
 	it.each([
 		[
+			{ name: ' luf ' },
+			{ name: 'luf', q: null },
+		],
+		[
+			{ q: 'draw' },
+			{ name: null, q: 'draw' },
+		],
+	])('forwards %o to bandai-keepr as its name or text search', async (query, forwarded) => {
+		await search(query);
+
+		const url = new URL(requests[0]!.url);
+		expect({
+			name: url.searchParams.get('name'),
+			q: url.searchParams.get('q'),
+		}).toEqual(forwarded);
+	});
+
+	it.each([
+		[
 			'a known number',
 			{ number: 'op01-001' },
 			['OP01-001'],

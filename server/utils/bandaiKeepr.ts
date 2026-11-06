@@ -62,6 +62,8 @@ export async function searchOpCards(config: BandaiKeeprConfig, query: OpCardSear
 	const url = new URL(`${config.apiUrl}/cards`);
 	if (query.q)
 		url.searchParams.set('q', query.q);
+	if (query.name)
+		url.searchParams.set('name', query.name);
 	for (const color of query.color ?? [])
 		url.searchParams.append('color', color);
 	if (query.category)

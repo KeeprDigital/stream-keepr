@@ -2,7 +2,11 @@
 import type { OpCardCategory, OpCardColor } from '~~/shared/types/card/op';
 import { OP_CARD_COLORS } from '~~/shared/types/card/op';
 
-/** One Piece card search: name or text, or a card number, narrowed by colour and category. */
+/**
+ * One Piece card search, as Magic: The Gathering's: part of a name or card
+ * number, listed as it is typed from three characters,
+ * found by bandai-keepr's `name` search, narrowed by colour and category.
+ */
 const cardStore = useCardStore();
 
 const ANY = 'any';
@@ -38,13 +42,8 @@ const search = useDebounceFn(searchNow, 300);
 
 function clear() {
 	text.value = '';
-	color.value = ANY;
-	category.value = ANY;
 	searchNow();
 }
-
-// An empty search lists cards, and says at once whether card data is available.
-onMounted(searchNow);
 </script>
 
 <template>
@@ -53,12 +52,21 @@ onMounted(searchNow);
 			v-model="text"
 			size="xl"
 			class="flex-1"
-			placeholder="Search name, text or card number"
+			placeholder="Search card name or number"
 			:loading="cardStore.opSearching"
 			aria-label="Search cards"
 			@update:model-value="search"
 			@keydown.enter="searchNow"
 		/>
+		<UButton
+			size="xl"
+			:disabled="!text.length"
+			variant="outline"
+			color="neutral"
+			@click="clear"
+		>
+			Clear
+		</UButton>
 		<USelect
 			v-model="color"
 			size="xl"
@@ -75,13 +83,5 @@ onMounted(searchNow);
 			aria-label="Card category"
 			@update:model-value="searchNow"
 		/>
-		<UButton
-			size="xl"
-			variant="outline"
-			color="neutral"
-			@click="clear"
-		>
-			Clear
-		</UButton>
 	</div>
 </template>

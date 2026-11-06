@@ -21,7 +21,7 @@ const cardStore = useCardStore();
 			:title="cardStore.opSearchError"
 		/>
 		<p
-			v-else-if="cardStore.opCardDataAvailable && !cardStore.opSearching && !cardStore.opSearchResults.length"
+			v-else-if="cardStore.opSearched && !cardStore.opSearching && !cardStore.opSearchResults.length"
 			class="text-sm text-muted"
 		>
 			No cards match this search.

@@ -11,9 +11,11 @@ export const opCardNumberSchema = z.string().transform((value, context) => {
 	return number;
 });
 
-/** A One Piece card search: by name or text, or by card number, narrowed by colour and category. */
+/** A One Piece card search: by text, by part of a name or card number, or by card number, narrowed by colour and category. */
 export const opCardSearchQuerySchema = z.object({
 	q: z.string().trim().min(1).max(200).optional(),
+	/** Part of a card's name or card number, as an operator types it. */
+	name: z.string().trim().min(1).max(200).optional(),
 	number: opCardNumberSchema.optional(),
 	color: z.union([
 		z.enum(OP_CARD_COLORS),

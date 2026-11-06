@@ -2,12 +2,11 @@ import type { MaybeRefOrGetter, Ref } from 'vue';
 import type { OpCardCategory, OpCardColor, OpCardDetail, OpCardSummary, OpPrinting, OpScreenCard } from '~~/shared/types/card/op';
 import type { OpCardSearchParams } from '~/composables/repositories/useOpCardRepository';
 import { computed, toRaw, toValue } from 'vue';
-import { parseOpCardNumber } from '~~/shared/utils/card/op';
 import { cardTimeoutStartingAt } from '~~/shared/utils/card/timeout';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 
 export interface OpCardSearch {
-	/** Name or card text, or a card number such as `OP01-001`. */
+	/** Part of a card's name or card number, such as `luf` or `OP01-0`. */
 	text: string;
 	color?: OpCardColor | null;
 	category?: OpCardCategory | null;
@@ -24,6 +23,7 @@ interface OpSpotlightRuntimeState {
 	/** `null` until bandai-keepr has answered; `false` while this installation has none configured. */
 	available: Ref<boolean | null>;
 	searchError: Ref<string | null>;
+	searched: Ref<boolean>;
 	previewCard: Ref<OpScreenCard | null>;
 	previewDetail: Ref<OpCardDetail | null>;
 	selectionHistory: Ref<OpScreenCard[]>;
@@ -31,16 +31,17 @@ interface OpSpotlightRuntimeState {
 }
 
 const SEARCH_FAILED = 'Card search failed. Try again.';
+/** The text a search needs before it lists anything, as on Magic: The Gathering. */
+export const OP_SEARCH_MIN_LENGTH = 3;
+/** Every card a search names, on one page: `luf` names 123. */
+const SEARCH_PAGE_SIZE = 250;
 
-/** The `op-cards` query an OP card search asks: a card number when the text is one, else a name or text search. */
+/** The `op-cards` query a search asks: cards by part of a name or card number, of the colour and category chosen. */
 export function opCardSearchParams(search: OpCardSearch): OpCardSearchParams {
-	const params: OpCardSearchParams = {};
-	const text = search.text.trim();
-	const number = parseOpCardNumber(text);
-	if (number)
-		params.number = number;
-	else if (text)
-		params.q = text;
+	const params: OpCardSearchParams = {
+		name: search.text.trim(),
+		limit: SEARCH_PAGE_SIZE,
+	};
 	if (search.color)
 		params.color = search.color;
 	if (search.category)
@@ -56,11 +57,14 @@ export interface OpCardSearchState {
 	/** `null` until bandai-keepr has answered; `false` while this installation has none configured. */
 	available: Ref<boolean | null>;
 	searchError: Ref<string | null>;
+	/** Whether the results answer text long enough to search, so an empty list means no match. */
+	searched: Ref<boolean>;
 }
 
 /**
- * Search the Event's One Piece cards into `state`. The newest search wins: an
- * older one still in flight is aborted, and its answer discarded.
+ * Search the Event's One Piece cards into `state`, as Magic: The Gathering's
+ * search does: text shorter than `OP_SEARCH_MIN_LENGTH` lists nothing. The
+ * newest search wins: an older one still in flight is aborted, and its answer discarded.
  */
 export function useOpCardSearch(state: OpCardSearchState) {
 	const { searchCards } = useOpCardRepository();
@@ -73,6 +77,14 @@ export function useOpCardSearch(state: OpCardSearchState) {
 			return;
 		const flight = searches.begin();
 		searchController?.abort();
+		searchController = null;
+		if (search.text.trim().length < OP_SEARCH_MIN_LENGTH) {
+			state.results.value = [];
+			state.searched.value = false;
+			state.searchError.value = null;
+			state.searching.value = false;
+			return;
+		}
 		const controller = new AbortController();
 		searchController = controller;
 		state.searching.value = true;
@@ -84,12 +96,14 @@ export function useOpCardSearch(state: OpCardSearchState) {
 			state.results.value = answer.available
 				? answer.items
 				: [];
+			state.searched.value = true;
 			state.searchError.value = null;
 		}
 		catch {
 			if (!flight.current)
 				return;
 			state.results.value = [];
+			state.searched.value = false;
 			state.searchError.value = SEARCH_FAILED;
 		}
 		finally {
@@ -239,6 +253,7 @@ export function useOpSpotlightRuntime(state: OpSpotlightRuntimeState) {
 		searches.supersede();
 		lookups.supersede();
 		state.results.value = [];
+		state.searched.value = false;
 		state.available.value = null;
 		state.searchError.value = null;
 		state.previewCard.value = null;

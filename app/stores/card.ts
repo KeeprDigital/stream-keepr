@@ -91,6 +91,7 @@ export const useCardStore = defineStore('card', () => {
 	const opSearchResults = ref<OpCardSummary[]>([]);
 	const opCardDataAvailable = ref<boolean | null>(null);
 	const opSearchError = ref<string | null>(null);
+	const opSearched = ref(false);
 	const opPreviewCard = ref<OpScreenCard | null>(null);
 	const opPreviewDetail = ref<OpCardDetail | null>(null);
 	const opSelectionHistory = useStorage<OpScreenCard[]>('opCard-history', []);
@@ -105,6 +106,7 @@ export const useCardStore = defineStore('card', () => {
 		results: opSearchResults,
 		available: opCardDataAvailable,
 		searchError: opSearchError,
+		searched: opSearched,
 		previewCard: opPreviewCard,
 		previewDetail: opPreviewDetail,
 		selectionHistory: opSelectionHistory,
@@ -254,6 +256,7 @@ export const useCardStore = defineStore('card', () => {
 		opSearchResults,
 		opCardDataAvailable,
 		opSearchError,
+		opSearched,
 		opPreviewCard,
 		opPreviewPrintings: opSpotlightRuntime.previewPrintings,
 		opSelectionHistory,
