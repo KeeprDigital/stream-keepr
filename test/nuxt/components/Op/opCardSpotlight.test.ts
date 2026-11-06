@@ -5,8 +5,8 @@ import { createPinia, defineStore, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import OpCardControls from '~/components/Op/CardControls.vue';
 import OpCardList from '~/components/Op/CardList.vue';
+import OpCardPrinting from '~/components/Op/CardPrinting.vue';
 
 const printings: OpPrinting[] = [
 	{
@@ -30,6 +30,7 @@ const mockSelectOpPrinting = vi.fn();
 const useMockCardStore = defineStore('mock-op-card', () => {
 	const opCardDataAvailable = ref<boolean | null>(null);
 	const opSearchError = ref<string | null>(null);
+	const opSearched = ref(false);
 	const opSearching = ref(false);
 	const opSearchResults = ref([]);
 	const opPreviewCard = ref<OpScreenCard | null>(null);
@@ -41,6 +42,7 @@ const useMockCardStore = defineStore('mock-op-card', () => {
 	return {
 		opCardDataAvailable,
 		opSearchError,
+		opSearched,
 		opSearching,
 		opSearchResults,
 		opPreviewCard,
@@ -72,18 +74,41 @@ describe('one Piece Card Spotlight', () => {
 	});
 
 	it.each([
-		[false, null, 'Card data unavailable'],
-		[true, null, 'No cards match this search.'],
-		[true, 'Card search failed. Try again.', 'Card search failed. Try again.'],
-	])('with card data available %s and error %s, the list says %s', (available, error, text) => {
+		[
+			false,
+			false,
+			null,
+			'Card data unavailable',
+		],
+		[
+			true,
+			true,
+			null,
+			'No cards match this search.',
+		],
+		[
+			true,
+			false,
+			'Card search failed. Try again.',
+			'Card search failed. Try again.',
+		],
+	])('with card data available %s, searched %s and error %s, the list says %j', (available, searched, error, text) => {
 		const store = useMockCardStore();
 		store.opCardDataAvailable = available;
+		store.opSearched = searched;
 		store.opSearchError = error;
 
 		expect(mount(OpCardList, mountOptions).text()).toContain(text);
 	});
 
-	it('marks the Printing previewed, and asks for the alt-art chosen', async () => {
+	it('says nothing before text long enough to search', () => {
+		const store = useMockCardStore();
+		store.opCardDataAvailable = true;
+
+		expect(mount(OpCardList, mountOptions).text()).toBe('');
+	});
+
+	it('switch Printing marks the Printing previewed, asks for the alt-art chosen and closes', async () => {
 		const store = useMockCardStore();
 		store.opPreviewPrintings = printings;
 		store.opPreviewCard = {
@@ -95,16 +120,18 @@ describe('one Piece Card Spotlight', () => {
 			printingKind: 'standard',
 			imageUrl: printings[0]!.imageUrl,
 		};
-		const wrapper = mount(OpCardControls, mountOptions);
+		const wrapper = mount(OpCardPrinting, {
+			...mountOptions,
+			attrs: { open: true },
+		});
 		const choice = (kind: string) => wrapper.get(`[aria-label="Select card Roronoa Zoro ${kind} OP-01"]`);
 
 		expect(choice('Standard').attributes('aria-pressed')).toBe('true');
 		expect(choice('Alt art').attributes('aria-pressed')).toBe('false');
 
-		expect(wrapper.get('img[alt="Roronoa Zoro"]').attributes('src')).toBe('https://cards-img.keepr.digital/OP01-001.png');
-
 		await choice('Alt art').trigger('click');
 
 		expect(mockSelectOpPrinting).toHaveBeenCalledWith('OP01-001_p1');
+		expect(wrapper.emitted('close')).toHaveLength(1);
 	});
 });

@@ -3,6 +3,8 @@ import { buildEventDataPath } from '~/modules/event-data/client';
 
 export interface OpCardSearchParams {
 	q?: string;
+	/** Part of a card's name or card number, as typed: `luf`, `monkey d luf`, `op01-0`. */
+	name?: string;
 	number?: string;
 	color?: OpCardColor;
 	category?: OpCardCategory;

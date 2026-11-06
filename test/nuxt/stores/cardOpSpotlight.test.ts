@@ -125,24 +125,24 @@ describe('card store on a One Piece Event', () => {
 	describe('searching', () => {
 		it.each([
 			[
-				'name or text',
-				{ text: 'zoro' },
-				{ q: 'zoro' },
+				'part of a name',
+				{ text: ' luf ' },
+				{ name: 'luf', limit: 250 },
 			],
 			[
-				'a card number, as a number lookup',
-				{ text: ' op01-001 ' },
-				{ number: 'OP01-001' },
+				'part of a card number',
+				{ text: 'op01-0' },
+				{ name: 'op01-0', limit: 250 },
 			],
 			[
-				'colour and category alone',
-				{ text: '', color: 'Red', category: 'leader' },
-				{ color: 'Red', category: 'leader' },
-			],
-			[
-				'text with colour',
-				{ text: 'zoro', color: 'Red' },
-				{ q: 'zoro', color: 'Red' },
+				'text with colour and category',
+				{ text: 'zoro', color: 'Red', category: 'leader' },
+				{
+					name: 'zoro',
+					color: 'Red',
+					category: 'leader',
+					limit: 250,
+				},
 			],
 		] as const)('asks the server by %s and lists what it answers', async (_case, search, query) => {
 			await store.searchOpCards(search);
@@ -150,6 +150,19 @@ describe('card store on a One Piece Event', () => {
 			expect(mockFetch).toHaveBeenCalledWith('/api/events/1/op-cards', expect.objectContaining({ query }));
 			expect(store.opSearchResults.map(card => card.number)).toEqual(['OP01-001', 'OP01-024']);
 			expect(store.opCardDataAvailable).toBe(true);
+			expect(store.opSearched).toBe(true);
+		});
+
+		// As on Magic: The Gathering, nothing is listed until three characters are typed.
+		it.each(['', 'lu', ' zo '])('lists nothing and asks nothing for %j, clearing what was listed', async (text) => {
+			await store.searchOpCards({ text: 'zoro' });
+			mockFetch.mockClear();
+
+			await store.searchOpCards({ text, color: 'Red' });
+
+			expect(mockFetch).not.toHaveBeenCalled();
+			expect(store.opSearchResults).toEqual([]);
+			expect(store.opSearched).toBe(false);
 		});
 
 		it('says card data is unavailable when the server has no bandai-keepr', async () => {
@@ -164,7 +177,7 @@ describe('card store on a One Piece Event', () => {
 		it('lists only the latest search when an earlier one answers last', async () => {
 			const first = deferred<unknown>();
 			mockFetch.mockImplementationOnce(async () => await first.promise);
-			const slow = store.searchOpCards({ text: 'zor' });
+			const slow = store.searchOpCards({ text: 'zoro' });
 			mockFetch.mockResolvedValueOnce({
 				available: true,
 				items: [luffy],
