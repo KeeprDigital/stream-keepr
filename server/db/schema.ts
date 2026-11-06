@@ -160,6 +160,7 @@ export const events = sqliteTable('events', {
 	featureMatchDefaultClockType: text('feature_match_default_clock_type', { enum: CLOCK_TYPE_VALUES }).notNull().default('countdown'),
 	featureMatchDefaultClockDuration: integer('feature_match_default_clock_duration').notNull().default(50), // minutes
 	featureMatchDefaultCountUpAfterCountdown: integer('feature_match_default_count_up_after_countdown', { mode: 'boolean' }).notNull().default(false),
+	featureMatchDefaultCountUpLimit: integer('feature_match_default_count_up_limit'), // minutes; null counts up without limit
 	featureMatchDefaultTurnTrackingEnabled: integer('feature_match_default_turn_tracking_enabled', { mode: 'boolean' }).notNull().default(false),
 	featureMatchDefaultActivePlayerTrackingEnabled: integer('feature_match_default_active_player_tracking_enabled', { mode: 'boolean' }).notNull().default(false),
 	featureMatchDefaultExtraTurnsEnabled: integer('feature_match_default_extra_turns_enabled', { mode: 'boolean' }).notNull().default(false),

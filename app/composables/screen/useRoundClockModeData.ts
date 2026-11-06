@@ -69,7 +69,10 @@ export function useRoundClockModeData(context: ScreenContext) {
 				? Date.parse(held.startedAt)
 				: null,
 			durationMinutes: held?.durationMinutes ?? null,
-		}, getServerTime());
+		}, getServerTime(), {
+			enabled: config.value.countUpAfterEnd,
+			limitMinutes: config.value.countUpLimitMinutes ?? null,
+		});
 	});
 
 	// Each projection is a new value, so every tick schedules the next.

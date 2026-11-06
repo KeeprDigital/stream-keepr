@@ -169,6 +169,7 @@ export interface EventListResponse {
 	featureMatchDefaultClockType: ClockType;
 	featureMatchDefaultClockDuration: number;
 	featureMatchDefaultCountUpAfterCountdown: boolean;
+	featureMatchDefaultCountUpLimit: number | null;
 	featureMatchDefaultTurnTrackingEnabled: boolean;
 	featureMatchDefaultActivePlayerTrackingEnabled: boolean;
 	featureMatchDefaultExtraTurnsEnabled: boolean;
@@ -219,6 +220,7 @@ export interface CreateEventInput {
 	featureMatchDefaultClockType?: ClockType;
 	featureMatchDefaultClockDuration?: number;
 	featureMatchDefaultCountUpAfterCountdown?: boolean;
+	featureMatchDefaultCountUpLimit?: number | null;
 	featureMatchDefaultTurnTrackingEnabled?: boolean;
 	featureMatchDefaultActivePlayerTrackingEnabled?: boolean;
 	featureMatchDefaultExtraTurnsEnabled?: boolean;

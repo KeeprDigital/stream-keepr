@@ -460,6 +460,31 @@ describe('format settings card', () => {
 		expect(submitted()).toEqual({ featureMatchDefaultClockType: 'untimed' });
 	});
 
+	// An emptied limit is no limit: the `null` that clears the column.
+	it.each([
+		[
+			'sets a limit',
+			{},
+			'10',
+			{ featureMatchDefaultCountUpAfterCountdown: true, featureMatchDefaultCountUpLimit: 10 },
+		],
+		[
+			'clears a held limit',
+			{ featureMatchDefaultCountUpLimit: 5 },
+			'',
+			{ featureMatchDefaultCountUpAfterCountdown: true, featureMatchDefaultCountUpLimit: null },
+		],
+	])('offers the count-up limit once counting up is on, and %s', async (_, held, typed, saved) => {
+		const wrapper = mountCard(ConfigFormatSettings, configEvent(held));
+		expect(wrapper.find('[data-field="countUpLimit"]').exists()).toBe(false);
+
+		await toggle(wrapper, 'countUpAfterCountdown').trigger('click');
+		await input(wrapper, 'countUpLimit').setValue(typed);
+		await save(wrapper);
+
+		expect(submitted()).toEqual(saved);
+	});
+
 	it('offers the points system only to an MTG event, saving it beside the mapped defaults', async () => {
 		expect(mountCard(ConfigFormatSettings, configEvent({ game: 'op' })).find('[data-field="pointsSystem"]').exists()).toBe(false);
 

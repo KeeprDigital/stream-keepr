@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Event, UpdateEventInput } from '~/types';
 import { fromFeatureMatchDefaults, toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
+import { COUNT_UP_LIMIT_MINUTES_MAX, COUNT_UP_LIMIT_MINUTES_MIN } from '~~/shared/utils/clock';
 import { getPointsSystemLabel } from '~~/shared/utils/highlander';
 
 const props = defineProps<{
@@ -18,6 +19,7 @@ const initialData = computed(() => {
 		clockType: defaults.clockType,
 		clockDuration: defaults.clockDuration,
 		countUpAfterCountdown: defaults.countUpAfterCountdown,
+		countUpLimit: defaults.countUpLimit,
 		extraTurnsEnabled: defaults.extraTurnsEnabled,
 		extraTurns: defaults.extraTurns,
 		pointsSystem: props.event.pointsSystem,
@@ -29,6 +31,16 @@ const { formData, isDirty, reset, save, saving } = useEventConfigForm({
 	clearOnReset: errors,
 	validate,
 	toUpdate,
+});
+
+/** An emptied limit input is no limit: `null`, never `undefined` or `NaN`, so it saves and reads clean. */
+const countUpLimitInput = computed({
+	get: () => formData.value.countUpLimit ?? undefined,
+	set: (value: number | null | undefined) => {
+		formData.value.countUpLimit = typeof value === 'number' && Number.isFinite(value)
+			? value
+			: null;
+	},
 });
 
 const clockTypeOptions = [
@@ -64,6 +76,10 @@ function validate(): boolean {
 	}
 	if (formData.value.clockDuration !== undefined && formData.value.clockDuration < 0) {
 		errors.value.clockDuration = 'Duration must be 0 or greater';
+	}
+	const limit = formData.value.countUpLimit;
+	if (formData.value.countUpAfterCountdown && limit != null && (limit < COUNT_UP_LIMIT_MINUTES_MIN || limit > COUNT_UP_LIMIT_MINUTES_MAX)) {
+		errors.value.countUpLimit = `Limit must be ${COUNT_UP_LIMIT_MINUTES_MIN} to ${COUNT_UP_LIMIT_MINUTES_MAX} minutes, or empty for no limit`;
 	}
 	if (formData.value.clockType !== 'untimed' && formData.value.extraTurnsEnabled && formData.value.extraTurns !== undefined && formData.value.extraTurns < 1) {
 		errors.value.extraTurns = 'Must have at least 1 extra turn';
@@ -164,6 +180,23 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 						class="flex max-sm:flex-col justify-between gap-4 items-center"
 					>
 						<USwitch v-model="formData.countUpAfterCountdown" />
+					</UFormField>
+
+					<UFormField
+						v-if="formData.countUpAfterCountdown"
+						name="countUpLimit"
+						label="Count-Up Limit (minutes)"
+						description="Stop counting up after this many minutes and hold. Leave empty for no limit."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+						:error="errors.countUpLimit"
+					>
+						<UInputNumber
+							v-model="countUpLimitInput"
+							:min="COUNT_UP_LIMIT_MINUTES_MIN"
+							:max="COUNT_UP_LIMIT_MINUTES_MAX"
+							placeholder="No limit"
+							class="w-64"
+						/>
 					</UFormField>
 
 					<USeparator />

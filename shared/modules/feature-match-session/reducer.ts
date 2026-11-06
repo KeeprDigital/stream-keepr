@@ -31,6 +31,9 @@ export function createInitialFeatureMatchSessionStateFromSnapshot(snapshot: Feat
 		durationMs,
 		snapshot.defaults.countUpAfterCountdown ?? false,
 		getStartingTurnNumber(snapshot.game),
+		snapshot.defaults.countUpLimit != null
+			? snapshot.defaults.countUpLimit * 60 * 1000
+			: null,
 	);
 }
 

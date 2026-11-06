@@ -87,6 +87,7 @@ export function createMockEvent(overrides?: Partial<DbEvent>): DbEvent {
 		featureMatchDefaultClockType: 'countdown',
 		featureMatchDefaultClockDuration: 50,
 		featureMatchDefaultCountUpAfterCountdown: false,
+		featureMatchDefaultCountUpLimit: null,
 		featureMatchDefaultTurnTrackingEnabled: false,
 		featureMatchDefaultActivePlayerTrackingEnabled: false,
 		featureMatchDefaultExtraTurnsEnabled: false,

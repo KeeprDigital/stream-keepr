@@ -114,4 +114,38 @@ describe('screenRoundClockSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ showRoundName: written });
 		expect(settingsCardSummary(wrapper, 'Round Name')).toBe(summary);
 	});
+
+	// The limit is offered only while counting up; emptied, it counts up without one.
+	it.each([
+		[false, undefined, 'Holds 0:00 after the Round'],
+		[true, undefined, 'Counts up after the Round, without limit'],
+		[true, 10, 'Counts up after the Round, up to 10 min'],
+	])('counting up %s with a limit of %s, summarises the clock as "%s"', async (countUpAfterEnd, countUpLimitMinutes, summary) => {
+		mockConfig.value = { ...mockConfig.value, countUpAfterEnd, countUpLimitMinutes };
+		const wrapper = await mountSettings();
+
+		expect(settingsCardSummary(wrapper, 'Clock')).toBe(summary);
+		expect(wrapper.find('[data-config-field="countUpLimitMinutes"]').exists()).toBe(countUpAfterEnd);
+	});
+
+	it.each([
+		['', null],
+		['15', 15],
+	])('writes a typed count-up limit "%s" as %s', async (typed, written) => {
+		mockConfig.value = { ...mockConfig.value, countUpAfterEnd: true, countUpLimitMinutes: 5 };
+		const wrapper = await mountSettings();
+
+		await wrapper.get('[data-config-field="countUpLimitMinutes"] input').setValue(typed);
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ countUpLimitMinutes: written });
+	});
+
+	it('switches counting up on', async () => {
+		const wrapper = await mountSettings();
+
+		await wrapper.get('[data-config-field="countUpAfterEnd"] [role="switch"]').trigger('click');
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ countUpAfterEnd: true });
+		expect(wrapper.find('[data-config-field="countUpLimitMinutes"]').exists()).toBe(true);
+	});
 });

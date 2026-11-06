@@ -211,7 +211,7 @@ A named, autonomously animating background renderer that ships with Stream Keepr
 _Avoid_: Vanta effect, frame animation, shader background, background effect
 
 **Round Clock**:
-A Screen Mode showing a Round's name and the time left in it, projected from the Round's operator-entered start and duration and server time, so every rendering of the same Round shows the same time. Before the start it shows the full duration, not running; after the end, `0:00`. Like Card Timeout and Page Rotation, nothing writes as it runs or when it runs out. It shows the Current Round unless its operator picks a Round. Magic: The Gathering only (ADR-0066).
+A Screen Mode showing a Round's name and the time left in it, projected from the Round's operator-entered start and duration and server time, so every rendering of the same Round shows the same time. Before the start it shows the full duration, not running; after the end, `0:00`, or, where its Screen counts up, the time since the end, holding at the Screen's limit if it sets one (ADR-0076). Like Card Timeout and Page Rotation, nothing writes as it runs or when it runs out. It shows the Current Round unless its operator picks a Round. Magic: The Gathering only (ADR-0066).
 _Avoid_: round timer (the Feature Match Session clock is a Match's, not a Round's).
 
 **Page Rotation**:

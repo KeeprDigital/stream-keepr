@@ -6,7 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
-const config = reactive({ roundId: undefined as number | undefined, showRoundName: true });
+const config = reactive({
+	roundId: undefined as number | undefined,
+	showRoundName: true,
+	countUpAfterEnd: false,
+	countUpLimitMinutes: undefined as number | undefined,
+});
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
@@ -60,6 +65,8 @@ describe('useRoundClockModeData', () => {
 		});
 		vi.setSystemTime(START + 10 * MINUTE);
 		config.roundId = undefined;
+		config.countUpAfterEnd = false;
+		config.countUpLimitMinutes = undefined;
 		serverTimeOffset.value = 0;
 		realtime.reset();
 		mockFetch.mockReset();
@@ -86,6 +93,21 @@ describe('useRoundClockModeData', () => {
 		await vi.advanceTimersByTimeAsync(40 * MINUTE);
 		expect(clock.value).toMatchObject({ state: 'ended', display: '0:00' });
 		expect(mockFetch).toHaveBeenCalledTimes(1);
+	});
+
+	// The Screen's count-up setting reaches the projection; its rule is projectRoundClock's own test.
+	it('counts up past the end to the Screen\'s limit, then holds', async () => {
+		config.countUpAfterEnd = true;
+		config.countUpLimitMinutes = 2;
+		mockFetch.mockResolvedValue(answer({}));
+		const { clock } = makeRoundClockModeData();
+		await flushPromises();
+
+		await vi.advanceTimersByTimeAsync(41 * MINUTE);
+		expect(clock.value).toMatchObject({ state: 'ended', display: '1:00' });
+
+		await vi.advanceTimersByTimeAsync(5 * MINUTE);
+		expect(clock.value).toMatchObject({ state: 'ended', display: '2:00' });
 	});
 
 	it('follows a server time sync', async () => {

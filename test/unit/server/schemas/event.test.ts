@@ -14,6 +14,7 @@ describe.each([
 		['featureMatchDefaultStartingLife', 0, 99_999],
 		['featureMatchDefaultClockDuration', 0, 999],
 		['featureMatchDefaultExtraTurns', 0, 20],
+		['featureMatchDefaultCountUpLimit', 1, 600],
 	])('bounds %s to %i..%i', (field, min, max) => {
 		expect(schema.safeParse({ ...base, [field]: min }).success).toBe(true);
 		expect(schema.safeParse({ ...base, [field]: max }).success).toBe(true);
@@ -34,6 +35,11 @@ describe.each([
 		],
 	])('bounds the Untimed Label %#, allowing it blank', (label, accepted) => {
 		expect(schema.safeParse({ ...base, featureMatchDefaultUntimedLabel: label }).success).toBe(accepted);
+	});
+
+	// No count-up limit is a value of its own: the clock counts up without one.
+	it('accepts a null count-up limit', () => {
+		expect(schema.safeParse({ ...base, featureMatchDefaultCountUpLimit: null }).success).toBe(true);
 	});
 
 	it.each([

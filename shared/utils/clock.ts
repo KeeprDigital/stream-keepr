@@ -3,6 +3,23 @@ import type { ClockState } from '../types/featureMatchState';
 const DIGITS_ONLY_RE = /^\d+$/;
 const NON_DIGIT_RE = /\D/g;
 
+// ──────────────── Count-up limit ────────────────
+
+/** The bounds of a count-up limit, in minutes, as an operator enters it; none counts up without limit. */
+export const COUNT_UP_LIMIT_MINUTES_MIN = 1;
+export const COUNT_UP_LIMIT_MINUTES_MAX = 600;
+
+/**
+ * The overtime a clock that counts up after running out shows, `overMs` past
+ * its end: it counts up to its limit, then holds there. A `null` limit never holds.
+ */
+export function countUpOvertimeMs(overMs: number, limitMs: number | null | undefined): number {
+	const overtimeMs = Math.max(0, overMs);
+	return limitMs == null
+		? overtimeMs
+		: Math.min(overtimeMs, limitMs);
+}
+
 // ──────────────── Time Formatting ────────────────
 
 /** Format milliseconds as mm:ss or h:mm:ss */
@@ -130,7 +147,8 @@ export function getEffectiveElapsedMs(clock: ClockState, now: number): number {
 
 /**
  * What a Feature Match Session clock shows at `now`: the remaining time of a
- * countdown, its overtime once expired if it counts up after, the elapsed time
+ * countdown, its overtime once expired if it counts up after (holding at its
+ * count-up limit, if it has one), the elapsed time
  * otherwise, and the Event's Untimed Label for an untimed clock. No clock reads
  * `0:00`. Whether a blank Untimed Label hides the clock is the caller's to decide.
  */
@@ -143,7 +161,7 @@ export function formatClockDisplay(clock: ClockState | null, now: number, untime
 	const elapsedMs = getEffectiveElapsedMs(clock, now);
 	if (clock.type === 'countdown') {
 		if (clock.countUpAfterCountdown && elapsedMs >= clock.durationMs)
-			return formatClockTime(elapsedMs - clock.durationMs);
+			return formatClockTime(countUpOvertimeMs(elapsedMs - clock.durationMs, clock.countUpLimitMs));
 		return formatClockTime(Math.max(0, clock.durationMs - elapsedMs));
 	}
 	return formatClockTime(elapsedMs);

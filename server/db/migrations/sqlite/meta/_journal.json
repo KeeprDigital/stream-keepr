@@ -50,6 +50,13 @@
       "when": 1793797822243,
       "tag": "0006_tcgplus_imported_deck_lists",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793951025924,
+      "tag": "0007_count_up_limit",
+      "breakpoints": true
     }
   ]
 }

@@ -29,6 +29,12 @@ export interface ClockState {
 	isRunning: boolean;
 	lastStartedAt: number | null; // Server timestamp when clock was last started
 	countUpAfterCountdown: boolean; // When countdown expires, continue counting up to show overtime elapsed
+	/**
+	 * How far a countdown counts up after it expires before holding; `null`
+	 * counts up without limit. Optional because states persisted before the
+	 * limit existed carry none, which every reader treats as no limit.
+	 */
+	countUpLimitMs?: number | null;
 }
 
 // Overtime state (e.g., MTG extra turns)
@@ -71,6 +77,7 @@ export function createInitialClockState(
 	type: ClockType = DEFAULT_CLOCK_TYPE,
 	durationMs: number = DEFAULT_CLOCK_DURATION_MS,
 	countUpAfterCountdown: boolean = false,
+	countUpLimitMs: number | null = null,
 ): ClockState {
 	return {
 		type,
@@ -79,6 +86,7 @@ export function createInitialClockState(
 		isRunning: false,
 		lastStartedAt: null,
 		countUpAfterCountdown,
+		countUpLimitMs,
 	};
 }
 
@@ -89,11 +97,12 @@ export function createInitialFeatureMatchState(
 	clockDurationMs: number = DEFAULT_CLOCK_DURATION_MS,
 	countUpAfterCountdown: boolean = false,
 	startingTurnNumber: number = 0,
+	countUpLimitMs: number | null = null,
 ): FeatureMatchState {
 	return {
 		player1: createInitialPlayerFeatureMatchState(startingLife),
 		player2: createInitialPlayerFeatureMatchState(startingLife),
-		clock: createInitialClockState(clockType, clockDurationMs, countUpAfterCountdown),
+		clock: createInitialClockState(clockType, clockDurationMs, countUpAfterCountdown, countUpLimitMs),
 		currentGame: 1,
 		turnNumber: startingTurnNumber,
 		isComplete: false,

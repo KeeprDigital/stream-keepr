@@ -62,6 +62,20 @@ describe('feature match session reducer', () => {
 		expect(result.currentState.player1.lifeTotal).toBe(25);
 	});
 
+	// A Match's clock takes the Event's count-up limit, in minutes, as it was when the Session started.
+	it.each([
+		[10, 600_000],
+		[null, null],
+	])('resets a match to a clock counting up to the Event\'s limit of %s minutes', (countUpLimit, countUpLimitMs) => {
+		const snapshot = createSnapshot({
+			defaults: { ...DEFAULT_FEATURE_MATCH_DEFAULTS, countUpAfterCountdown: true, countUpLimit },
+		});
+
+		const result = reduce(createInitialFeatureMatchState(), snapshot, 'ResetState', { type: 'match' });
+
+		expect(result.currentState.clock).toMatchObject({ countUpAfterCountdown: true, countUpLimitMs });
+	});
+
 	it('corrects the frozen source snapshot without mutating live state', () => {
 		const snapshot = createSnapshot();
 		const corrected = createSnapshot({ tableNumber: 20 });

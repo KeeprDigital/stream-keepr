@@ -4,6 +4,7 @@ import { events } from '~~/server/db/schema';
 import { conversionTargetShape, isConversionTargetInBounds } from '~~/shared/conversionTarget';
 import { EVENT_CANVAS_SIDE_BOUNDS } from '~~/shared/eventCanvas';
 import { FEATURE_MATCH_ORIENTATION_VALUES, GAME_VALUES } from '~~/shared/types/enums';
+import { COUNT_UP_LIMIT_MINUTES_MAX, COUNT_UP_LIMIT_MINUTES_MIN } from '~~/shared/utils/clock';
 
 const eventCanvasSideSchema = z.number().int().min(EVENT_CANVAS_SIDE_BOUNDS.min).max(EVENT_CANVAS_SIDE_BOUNDS.max);
 
@@ -20,6 +21,7 @@ const eventFieldConstraints = {
 	featureMatchDefaultBestOf: z.number().int().min(1).max(9).optional(),
 	featureMatchDefaultStartingLife: z.number().int().nonnegative().max(99999).optional(),
 	featureMatchDefaultClockDuration: z.number().int().nonnegative().max(999).optional(),
+	featureMatchDefaultCountUpLimit: z.number().int().min(COUNT_UP_LIMIT_MINUTES_MIN).max(COUNT_UP_LIMIT_MINUTES_MAX).nullable().optional(),
 	featureMatchDefaultExtraTurns: z.number().int().nonnegative().max(20).optional(),
 	canvasWidth: eventCanvasSideSchema.optional(),
 	canvasHeight: eventCanvasSideSchema.optional(),
