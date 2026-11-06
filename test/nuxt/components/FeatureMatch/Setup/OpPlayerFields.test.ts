@@ -2,7 +2,7 @@ import type { OpPlayerGameData } from '~~/shared/types/game';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { opCardSummary, ZORO } from '~~/test/helpers/opCards';
+import { LUFFY, opCardSummary, ZORO } from '~~/test/helpers/opCards';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import OpPlayerFields from '~/components/FeatureMatch/Setup/OpPlayerFields.vue';
 
@@ -30,11 +30,22 @@ function mountFields(gameData: OpPlayerGameData = { type: 'op', leader: null }) 
 }
 
 async function search(wrapper: ReturnType<typeof mountFields>['wrapper'], text: string) {
-	const input = wrapper.get('input[aria-label="Search Leaders"]');
-	await input.setValue(text);
-	await input.trigger('keydown', { key: 'Enter' });
 	await flushPromises();
+	await wrapper.get('input[aria-label="Search Leaders"]').setValue(text);
 }
+
+function offeredNames(wrapper: ReturnType<typeof mountFields>['wrapper']) {
+	return wrapper.findAll('ul[aria-label="Leaders"] button').map(button => button.attributes('aria-label'));
+}
+
+const zoroCard = opCardSummary();
+const luffyCard = opCardSummary({
+	number: LUFFY.number,
+	name: LUFFY.name,
+	colors: LUFFY.colors,
+	printingId: LUFFY.number,
+	imageUrl: LUFFY.imageUrl,
+});
 
 describe('a Slot side\'s Leader picker', () => {
 	beforeEach(() => {
@@ -48,14 +59,81 @@ describe('a Slot side\'s Leader picker', () => {
 		});
 	});
 
-	it('searches only Leaders', async () => {
+	it('loads every Leader once, a page at a time', async () => {
+		mockFetch
+			.mockResolvedValueOnce({
+				available: true,
+				items: [zoroCard],
+				total: 2,
+			})
+			.mockResolvedValueOnce({
+				available: true,
+				items: [luffyCard],
+				total: 2,
+			});
 		const { wrapper } = mountFields();
 
-		await search(wrapper, 'zoro');
+		await search(wrapper, 'luf');
+		await search(wrapper, 'zor');
 
-		expect(mockFetch).toHaveBeenLastCalledWith('/api/events/7/op-cards', expect.objectContaining({
-			query: { q: 'zoro', category: 'leader' },
-		}));
+		expect(mockFetch.mock.calls.map(([path, options]) => [path, options.query])).toEqual([
+			[
+				'/api/events/7/op-cards',
+				{ category: 'leader', limit: 250, offset: 0 },
+			],
+			[
+				'/api/events/7/op-cards',
+				{ category: 'leader', limit: 250, offset: 1 },
+			],
+		]);
+		expect(offeredNames(wrapper)).toEqual(['Pick Leader Roronoa Zoro (OP01-001)']);
+	});
+
+	it.each([
+		[
+			'part of a name',
+			'luf',
+			['Pick Leader Monkey.D.Luffy (OP01-003)'],
+		],
+		[
+			'part of a card number',
+			'op01-00',
+			['Pick Leader Roronoa Zoro (OP01-001)', 'Pick Leader Monkey.D.Luffy (OP01-003)'],
+		],
+		['nothing typed', '', []],
+	])('offers the Leaders matching %s', async (_case, text, offered) => {
+		mockFetch.mockResolvedValue({
+			available: true,
+			items: [zoroCard, luffyCard],
+			total: 2,
+		});
+		const { wrapper } = mountFields();
+
+		await search(wrapper, text);
+
+		expect(offeredNames(wrapper)).toEqual(offered);
+	});
+
+	it('says when no Leader matches', async () => {
+		const { wrapper } = mountFields();
+
+		await search(wrapper, 'nami');
+
+		expect(offeredNames(wrapper)).toEqual([]);
+		expect(wrapper.get('[data-no-leaders]').text()).toContain('nami');
+	});
+
+	it('offers a retry when the Leaders fail to load', async () => {
+		mockFetch.mockRejectedValueOnce(new Error('upstream'));
+		const { wrapper } = mountFields();
+		await flushPromises();
+
+		expect(wrapper.text()).toContain('Leaders could not be loaded');
+		const retry = wrapper.findAll('button').find(button => button.text() === 'Retry');
+		await retry!.trigger('click');
+		await search(wrapper, 'zor');
+
+		expect(offeredNames(wrapper)).toEqual(['Pick Leader Roronoa Zoro (OP01-001)']);
 	});
 
 	it('holds the picked Leader as a snapshot of its card', async () => {

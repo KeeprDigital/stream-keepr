@@ -32,6 +32,25 @@ export function parseOpCardNumber(input: string): string | null {
 		: null;
 }
 
+/** Lower-cased words, punctuation as breaks: `Monkey.D.Luffy` is `monkey`, `d`, `luffy`. */
+function textWords(text: string): string[] {
+	return text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+/**
+ * Whether a card answers text typed to find it: part of its card number, or
+ * every word typed starting a word of its name, number or colours.
+ */
+export function opCardMatchesText(card: Pick<OpCardSummary, 'number' | 'name' | 'colors'>, text: string): boolean {
+	const typed = text.trim();
+	if (!typed)
+		return false;
+	if (card.number.toUpperCase().includes(typed.toUpperCase()))
+		return true;
+	const words = textWords([card.name, card.number, ...card.colors].join(' '));
+	return textWords(typed).every(part => words.some(word => word.startsWith(part)));
+}
+
 /** Whether a Screen Card is the One Piece variant; an MTG card carries no `game`. */
 export function isOpScreenCard(card: ScreenCard | null | undefined): card is OpScreenCard {
 	return card != null && 'game' in card && card.game === 'op';

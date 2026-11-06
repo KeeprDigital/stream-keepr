@@ -1,51 +1,67 @@
 <script setup lang="ts">
 import type { OpCardSummary } from '~~/shared/types/card/op';
 import type { OpPlayerGameData } from '~~/shared/types/game';
-import { opLeaderOf } from '~~/shared/utils/card/op';
-import { useOpCardSearch } from '~/modules/card-screen/opSpotlight';
+import { opCardMatchesText, opLeaderOf } from '~~/shared/utils/card/op';
 
 /**
- * A side's Leader, picked from the Event's One Piece card search narrowed to
- * Leaders. The side references the card in the card catalogue by its number
- * (ADR-0074), so the Leader shown is the catalogue's.
+ * A side's Leader, picked from every Leader the Event's One Piece card search
+ * lists, loaded once and filtered as the operator types, so part of a name or
+ * card number finds it. The side references the card in the card catalogue by
+ * its number (ADR-0074), so the Leader shown is the catalogue's.
  */
 const modelValue = defineModel<OpPlayerGameData>({
 	required: true,
 });
 
+/** The largest page the `op-cards` route serves. */
+const PAGE_SIZE = 250;
+
 const eventStore = useEventStore();
+const { searchCards } = useOpCardRepository();
 const text = ref('');
-const results = ref<OpCardSummary[]>([]);
-const searching = ref(false);
+const leaders = ref<OpCardSummary[]>([]);
+const loading = ref(false);
 /** `null` until bandai-keepr has answered; `false` while this installation has none configured. */
 const available = ref<boolean | null>(null);
-const searchError = ref<string | null>(null);
-const searches = useOpCardSearch({
-	eventId: () => eventStore.eventId,
-	searching,
-	results,
-	available,
-	searchError,
-});
+const loadError = ref<string | null>(null);
 
 const leader = computed(() => modelValue.value.leader ?? null);
-/** Results answer the text typed; with none, nothing is offered. */
-const offered = computed(() => text.value.trim()
-	? results.value
-	: []);
+/** Leaders answer the text typed; with none, nothing is offered. */
+const offered = computed(() => leaders.value.filter(card => opCardMatchesText(card, text.value)));
 
-function searchNow() {
-	void searches.search({ text: text.value, category: 'leader' });
+/** Every Leader, a page at a time; whether card data is available is known from the first page. */
+async function loadLeaders() {
+	const eventId = eventStore.eventId;
+	if (!eventId)
+		return;
+	loading.value = true;
+	loadError.value = null;
+	try {
+		const loaded: OpCardSummary[] = [];
+		while (true) {
+			const answer = await searchCards(eventId, { category: 'leader', limit: PAGE_SIZE, offset: loaded.length });
+			available.value = answer.available;
+			if (!answer.available)
+				break;
+			loaded.push(...answer.items);
+			if (answer.items.length === 0 || loaded.length >= answer.total)
+				break;
+		}
+		leaders.value = loaded;
+	}
+	catch {
+		loadError.value = 'Leaders could not be loaded. Try again.';
+	}
+	finally {
+		loading.value = false;
+	}
 }
-
-const search = useDebounceFn(searchNow, 300);
 
 function pick(card: OpCardSummary) {
 	modelValue.value = {
 		...modelValue.value,
 		leader: opLeaderOf(card),
 	};
-	searches.supersede();
 	text.value = '';
 }
 
@@ -53,8 +69,7 @@ function clear() {
 	modelValue.value = { ...modelValue.value, leader: null };
 }
 
-// An empty search says at once whether card data is available.
-onMounted(searchNow);
+onMounted(loadLeaders);
 </script>
 
 <template>
@@ -100,18 +115,27 @@ onMounted(searchNow);
 				class="w-full"
 				icon="i-lucide-search"
 				:placeholder="leader ? 'Change Leader' : 'Search Leaders'"
-				:loading="searching"
+				:loading="loading"
 				:disabled="available === false"
 				aria-label="Search Leaders"
-				@update:model-value="search"
-				@keydown.enter.prevent="searchNow"
+				@keydown.enter.prevent
 			/>
 
 			<p v-if="available === false" class="text-sm text-muted">
 				Card data unavailable: no bandai-keepr is configured for this installation.
 			</p>
-			<p v-else-if="searchError" class="text-sm text-error">
-				{{ searchError }}
+			<p v-else-if="loadError" class="flex items-center gap-2 text-sm text-error">
+				{{ loadError }}
+				<UButton
+					label="Retry"
+					size="xs"
+					color="neutral"
+					variant="outline"
+					@click="loadLeaders"
+				/>
+			</p>
+			<p v-else-if="text.trim() && !loading && offered.length === 0" class="text-sm text-muted" data-no-leaders>
+				No Leaders match “{{ text.trim() }}”.
 			</p>
 
 			<ul v-if="offered.length > 0" class="flex max-h-72 flex-col gap-1 overflow-y-auto" aria-label="Leaders">

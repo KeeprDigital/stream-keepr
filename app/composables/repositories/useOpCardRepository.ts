@@ -6,6 +6,9 @@ export interface OpCardSearchParams {
 	number?: string;
 	color?: OpCardColor;
 	category?: OpCardCategory;
+	/** At most 250 cards a page; bandai-keepr's default page is 60. */
+	limit?: number;
+	offset?: number;
 }
 
 /** One Piece card data, through the Event's bandai-keepr proxy (ADR-0057). */
