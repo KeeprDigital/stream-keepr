@@ -164,6 +164,26 @@ describe('update', () => {
 	});
 });
 
+describe('applyEventBestOf', () => {
+	it.each([
+		{ from: 1, to: 3 },
+		{ from: 3, to: 1 },
+	])('moves every Slot and its active Session from best of $from to best of $to, once', async ({ from, to }) => {
+		const eventId = await stageEvent(from);
+		await featureMatchService().syncFeatureMatches(eventId, 2);
+		await db.update(schema.events).set({ featureMatchDefaultBestOf: to }).where(eq(schema.events.id, eventId));
+
+		const changed = await featureMatchService().applyEventBestOf(eventId, to);
+
+		const slots = await slotsOf(eventId);
+		expect(changed).toEqual(slots.map(slot => slot.id));
+		expect(slots.map(slot => slot.bestOf)).toEqual([to, to]);
+		const sessions = await db.select().from(schema.featureMatchSessions).where(eq(schema.featureMatchSessions.eventId, eventId));
+		expect(sessions.map(session => session.sourceSnapshot.bestOf)).toEqual([to, to]);
+		expect(await featureMatchService().applyEventBestOf(eventId, to)).toEqual([]);
+	});
+});
+
 describe('syncFeatureMatches', () => {
 	it('adds Slots with open Sessions, then removes from the end, then leaves an equal count alone', async () => {
 		const eventId = await stageEvent();

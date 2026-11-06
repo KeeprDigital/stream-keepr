@@ -102,6 +102,12 @@ export function eventWriteModule() {
 			}
 		}
 
+		if (input.featureMatchDefaultBestOf !== undefined) {
+			const slotIds = await featureMatchService().applyEventBestOf(eventId, updatedEvent.featureMatchDefaultBestOf);
+			// With no origin: the saving client's response carries the Event, not its Slots.
+			await publication.featureMatchSlotsUpdated({ eventId, slotIds });
+		}
+
 		return await publication.eventUpdated({
 			eventId,
 			entity: updatedEvent,

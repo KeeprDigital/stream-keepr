@@ -44,8 +44,9 @@ export type FeatureMatchCommandType = Exclude<FeatureMatchSessionEventType, 'Ses
  * The relative intents qualify because they compose with whatever landed first.
  * `SnapshotCorrected` qualifies for the other reason a command can: it is
  * absolute but scoped to its own field. It replaces the frozen source snapshot
- * and returns `currentState` untouched, so it cannot lose an operator's life
- * tick — and an operator's command cannot lose the correction, because the
+ * and leaves `currentState` alone but for re-deciding the match under a changed
+ * best of, so it cannot lose an operator's life tick or game win — and an
+ * operator's command cannot lose the correction, because the
  * retry reduces onto the state that command produced. It is server-only, minted
  * by the reverse sync from the database rather than accepted from a client, so
  * nothing here widens what an operator may send unsequenced.

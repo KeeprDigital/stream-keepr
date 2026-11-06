@@ -73,6 +73,46 @@ describe('feature match session reducer', () => {
 		expect(result.currentState).toEqual(state);
 	});
 
+	// A correction that changes the best of re-asks whether the wins already held decide the match.
+	it.each([
+		{
+			wins: 1,
+			from: 1,
+			to: 3,
+			decided: false,
+		},
+		{
+			wins: 1,
+			from: 3,
+			to: 1,
+			decided: true,
+		},
+		{
+			wins: 2,
+			from: 3,
+			to: 5,
+			decided: false,
+		},
+		{
+			wins: 0,
+			from: 1,
+			to: 3,
+			decided: false,
+		},
+	])('a match holding $wins win(s) moved from best of $from to $to is decided: $decided', ({ wins, from, to, decided }) => {
+		const snapshot = createSnapshot({ bestOf: from });
+		let state = createInitialFeatureMatchState();
+		for (let game = 0; game < wins; game++)
+			state = reduce(state, snapshot, 'RecordGameWin', { player: 'player1' }).currentState;
+
+		const result = reduce(state, snapshot, 'SnapshotCorrected', {
+			sourceSnapshot: createSnapshot({ bestOf: to }),
+		});
+
+		expect(result.sourceSnapshot.bestOf).toBe(to);
+		expect(result.currentState).toEqual({ ...state, isComplete: decided });
+	});
+
 	it('applies player life, counters, and mulligan events', () => {
 		const snapshot = createSnapshot();
 		let state = createInitialFeatureMatchState();

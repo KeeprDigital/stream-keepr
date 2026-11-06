@@ -170,6 +170,15 @@ function correctedSourceSnapshot(
 	return { ...oriented, createdAt: held.createdAt };
 }
 
+/** Whether the match is decided, re-asked of the game wins it holds under a new best of. */
+function withMatchDecidedFor(currentState: FeatureMatchState, bestOf: number): FeatureMatchState {
+	const winsNeeded = Math.ceil(bestOf / 2);
+	const isComplete = Math.max(currentState.player1.gameWins, currentState.player2.gameWins) >= winsNeeded;
+	return isComplete === currentState.isComplete
+		? currentState
+		: { ...currentState, isComplete };
+}
+
 const UNTIMED_REFUSED_COMMANDS = new Set<string>([
 	'AdjustClock',
 	'SetClock',
@@ -207,12 +216,15 @@ function reduceFeatureMatchSessionEvent(
 	}
 
 	if (type === 'SnapshotCorrected') {
+		const corrected = correctedSourceSnapshot(
+			payload.sourceSnapshot as FeatureMatchSourceSnapshot,
+			sourceSnapshot,
+		);
 		return {
-			currentState,
-			sourceSnapshot: correctedSourceSnapshot(
-				payload.sourceSnapshot as FeatureMatchSourceSnapshot,
-				sourceSnapshot,
-			),
+			currentState: corrected.bestOf === sourceSnapshot.bestOf
+				? currentState
+				: withMatchDecidedFor(currentState, corrected.bestOf),
+			sourceSnapshot: corrected,
 		};
 	}
 
