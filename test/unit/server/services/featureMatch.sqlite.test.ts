@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
@@ -49,6 +49,7 @@ vi.doMock('~~/server/services/featureMatchState', async (importOriginal) => {
 });
 
 const { featureMatchService } = await import('~~/server/services/featureMatch');
+const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
 
 beforeEach(() => {
 	failNextOpen = undefined;
@@ -181,6 +182,49 @@ describe('applyEventBestOf', () => {
 		const sessions = await db.select().from(schema.featureMatchSessions).where(eq(schema.featureMatchSessions.eventId, eventId));
 		expect(sessions.map(session => session.sourceSnapshot.bestOf)).toEqual([to, to]);
 		expect(await featureMatchService().applyEventBestOf(eventId, to)).toEqual([]);
+	});
+});
+
+describe('applyEventDefaults', () => {
+	async function activeSessions(eventId: number) {
+		return await db.select().from(schema.featureMatchSessions).where(and(eq(schema.featureMatchSessions.eventId, eventId), eq(schema.featureMatchSessions.status, 'active'))).orderBy(asc(schema.featureMatchSessions.slotId));
+	}
+
+	it.each([
+		{ from: null, to: 10 },
+		{ from: 10, to: null },
+	])('leaves a running clock at its count-up limit of $from, and a Match reset takes $to', async ({ from, to }) => {
+		const eventId = await stageEvent();
+		await db.update(schema.events)
+			.set({ featureMatchDefaultCountUpAfterCountdown: true, featureMatchDefaultCountUpLimit: from })
+			.where(eq(schema.events.id, eventId));
+		await featureMatchService().syncFeatureMatches(eventId, 2);
+		await db.update(schema.events).set({ featureMatchDefaultCountUpLimit: to }).where(eq(schema.events.id, eventId));
+
+		const corrected = await featureMatchService().applyEventDefaults(eventId);
+
+		expect(corrected).toEqual((await slotsOf(eventId)).map(slot => slot.id));
+		const sessions = await activeSessions(eventId);
+		const toMs = to == null
+			? null
+			: to * 60_000;
+		const fromMs = from == null
+			? null
+			: from * 60_000;
+		expect(sessions.map(session => session.currentState.clock.countUpLimitMs)).toEqual([fromMs, fromMs]);
+
+		const reset = await featureMatchStateService().applyCommand(sessions[0]!.id, eventId, {
+			commandId: 'reset-match',
+			type: 'ResetState',
+			payload: { type: 'match' },
+			baseSequence: sessions[0]!.sequence,
+		});
+
+		expect(reset.session.currentState.clock.countUpLimitMs).toBe(toMs);
+	});
+
+	it('corrects nothing for an Event without Slots', async () => {
+		expect(await featureMatchService().applyEventDefaults(await stageEvent())).toEqual([]);
 	});
 });
 

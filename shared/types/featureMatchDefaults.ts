@@ -75,6 +75,14 @@ export type FeatureMatchDefaultColumns = {
 	[K in keyof typeof FIELD_MAP as typeof FIELD_MAP[K]]: FeatureMatchDefaults[K];
 };
 
+/**
+ * A column selection reading every `featureMatchDefault*` column, so a reader of
+ * the defaults cannot leave out one added later.
+ */
+export const FEATURE_MATCH_DEFAULT_COLUMN_SELECTION = Object.fromEntries(
+	Object.values(FIELD_MAP).map(flat => [flat, true]),
+) as Record<FeatureMatchDefaultColumnKey, true>;
+
 // ── Conversion helpers ──
 
 /**

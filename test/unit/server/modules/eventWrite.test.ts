@@ -11,6 +11,7 @@ const mockEventService = {
 const mockFeatureMatchService = {
 	syncFeatureMatches: vi.fn(),
 	applyEventBestOf: vi.fn(),
+	applyEventDefaults: vi.fn(),
 };
 const mockScreenService = {
 	findIdsByEventId: vi.fn(),
@@ -157,6 +158,59 @@ describe('eventWriteModule', () => {
 			await eventWriteModule().updateEvent({ eventId: 1, input: input as never, originConnectionId: 'origin-1' });
 
 			expect(mockFeatureMatchService.applyEventBestOf.mock.calls).toEqual(applied);
+			expect(mockPublication.featureMatchSlotsUpdated.mock.calls).toEqual(announced);
+		});
+
+		it.each([
+			{
+				input: { featureMatchDefaultCountUpLimit: 10 },
+				applied: [
+					[1],
+				],
+				announced: [
+					[
+						{
+							eventId: 1,
+							slotIds: [7],
+						},
+					],
+				],
+			},
+			{
+				input: { featureMatchDefaultCountUpLimit: null },
+				applied: [
+					[1],
+				],
+				announced: [
+					[
+						{
+							eventId: 1,
+							slotIds: [7],
+						},
+					],
+				],
+			},
+			{
+				input: { featureMatchDefaultBestOf: 3 },
+				applied: [],
+				announced: [
+					[
+						{ eventId: 1, slotIds: [] },
+					],
+				],
+			},
+			{
+				input: { name: 'Renamed' },
+				applied: [],
+				announced: [],
+			},
+		])('corrects the active Sessions to the Event\'s defaults only when the write names one besides best of: $input', async ({ input, applied, announced }) => {
+			mockFeatureMatchService.applyEventBestOf.mockResolvedValue([]);
+			mockFeatureMatchService.applyEventDefaults.mockResolvedValue([7]);
+
+			await eventWriteModule().updateEvent({ eventId: 1, input: input as never, originConnectionId: 'origin-1' });
+
+			expect(mockFeatureMatchService.applyEventDefaults.mock.calls).toEqual(applied);
 			expect(mockPublication.featureMatchSlotsUpdated.mock.calls).toEqual(announced);
 		});
 
