@@ -9,6 +9,7 @@ import { themeService } from '~~/server/services/theme';
 import { BroadcastDeckListsInUseError, runCompensation } from '~~/server/utils/errors';
 import { requireTalentInEvent } from '~~/server/utils/routeGuards';
 import { BROADCAST_DECK_LISTS_IN_USE } from '~~/shared/types/broadcastDeckList';
+import { FEATURE_MATCH_DEFAULT_COLUMN_SELECTION } from '~~/shared/types/featureMatchDefaults';
 
 interface UpdateEventParams {
 	eventId: number;
@@ -19,6 +20,12 @@ interface UpdateEventParams {
 interface DeleteEventParams {
 	eventId: number;
 	originConnectionId?: string;
+}
+
+/** Whether the write names a Feature Match default other than best of, which reaches the Slots on its own. */
+function namesFeatureMatchDefaultBesidesBestOf(input: UpdateEventInput): boolean {
+	return Object.keys(FEATURE_MATCH_DEFAULT_COLUMN_SELECTION).some(column =>
+		column !== 'featureMatchDefaultBestOf' && input[column as keyof UpdateEventInput] !== undefined);
 }
 
 /** A Theme an Event Presentation Settings write picks must exist; none picks the Default Theme. */
@@ -105,6 +112,12 @@ export function eventWriteModule() {
 		if (input.featureMatchDefaultBestOf !== undefined) {
 			const slotIds = await featureMatchService().applyEventBestOf(eventId, updatedEvent.featureMatchDefaultBestOf);
 			// With no origin: the saving client's response carries the Event, not its Slots.
+			await publication.featureMatchSlotsUpdated({ eventId, slotIds });
+		}
+
+		// Every other Feature Match default reaches each active Session's snapshot, for its next Match reset.
+		if (namesFeatureMatchDefaultBesidesBestOf(input)) {
+			const slotIds = await featureMatchService().applyEventDefaults(eventId);
 			await publication.featureMatchSlotsUpdated({ eventId, slotIds });
 		}
 

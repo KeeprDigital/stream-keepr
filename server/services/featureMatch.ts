@@ -3,7 +3,7 @@ import type { DbFeatureMatch, DbFeatureMatchSession, DbScreen } from '~~/server/
 import type { CreateFeatureMatchInput, UpdateFeatureMatchInput } from '~~/shared/api';
 import type { ExternalSource } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { toStoredSlotLeaders, withCatalogueLeaders } from '~~/server/services/featureMatchSlotLeader';
@@ -392,6 +392,34 @@ export function featureMatchService() {
 		return changed.map(slot => slot.id);
 	};
 
+	/**
+	 * Corrects every active Session of the Event to the Event's Feature Match
+	 * defaults, so a Match reset takes them (ADR-0076). A correction leaves the
+	 * Session's state alone, so a running clock keeps the limit it started with.
+	 * Returns the ids of the Slots whose Session it corrected.
+	 */
+	const applyEventDefaults = async (eventId: number): Promise<number[]> => {
+		const slots = await db.query.featureMatches.findMany({
+			where: and(eq(featureMatches.eventId, eventId), isNotNull(featureMatches.activeSessionId)),
+		});
+		if (slots.length === 0)
+			return [];
+
+		const stateSvc = featureMatchStateService();
+		const defaults = await stateSvc.loadEventDefaults(eventId);
+		for (const slot of slots) {
+			const snapshot = await stateSvc.buildSourceSnapshot(slot, defaults);
+			await stateSvc.applyCommandToActiveSession(slot.id, eventId, session => ({
+				commandId: randomCommandId('SnapshotCorrected'),
+				type: 'SnapshotCorrected',
+				payload: { sourceSnapshot: snapshot },
+				baseSequence: session.sequence,
+			}));
+		}
+
+		return slots.map(slot => slot.id);
+	};
+
 	/** Deletes the Slot, and in the same write releases every Deck Source showing a side of it. */
 	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
 		const [clearedScreens, deleted] = await db.batch([
@@ -586,6 +614,7 @@ export function featureMatchService() {
 		create,
 		update,
 		applyEventBestOf,
+		applyEventDefaults,
 		remove,
 		exists,
 		countByEventId,
