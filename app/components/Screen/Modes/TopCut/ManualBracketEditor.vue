@@ -8,7 +8,7 @@ import {
 	withManualBracketResult,
 } from '~~/shared/modules/top-cut-bracket';
 import { MANUAL_BRACKET_ENTRANT_NAME_MAX, MANUAL_BRACKET_GAME_WINS_MAX, TOP_CUT_BRACKET_SIZES } from '~~/shared/screenModeConfigs/topCut';
-import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
+import { playerLabel, playerMatchesSearch } from '~~/shared/utils/playerName';
 
 /**
  * A Manual Bracket's editor (ADR-0075): its size, its entrants in Seed order,
@@ -33,7 +33,7 @@ const seeds = computed(() => Array.from({ length: props.manual.size }, (_, index
 function playerName(playerId: number): string | null {
 	const player = playerStore.players.find(candidate => candidate.id === playerId);
 	return player
-		? playerDisplayName(player)
+		? playerLabel(player)
 		: null;
 }
 
@@ -72,7 +72,7 @@ function seedItems(seed: number): Array<{ label: string; id: string }> {
 	const items: Array<{ label: string; id: string }> = playerStore.players
 		.filter(player => playerMatchesSearch(player, search))
 		.map(player => ({
-			label: playerDisplayName(player),
+			label: playerLabel(player),
 			id: `player:${player.id}`,
 		}));
 	const held = props.manual.entrants[seed - 1];

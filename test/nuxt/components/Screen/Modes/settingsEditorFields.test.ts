@@ -142,9 +142,11 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 			{ selection: 'lineup', rotateSocialProfiles: true, showHeader: true },
 		],
 	},
+	// A One Piece Card Game Event also offers showing Players by Nickname (ADR-0077).
 	'top-cut': {
 		editor: 'TopCut',
 		variants: [{}],
+		opVariants: [{}],
 	},
 	// Its Round picker is an Event Reference; counting up after the end shows its limit.
 	'round-clock': {

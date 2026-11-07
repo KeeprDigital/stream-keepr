@@ -8,7 +8,7 @@ import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
-import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
+import { playerLabel, playerMatchesSearch } from '~~/shared/utils/playerName';
 import { FOLLOWS_THE_THEME, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSession';
@@ -78,7 +78,7 @@ const playerSearch = ref('');
 const playerItems = computed<(InputMenuItem & { id: number })[]>(() => playerStore.players
 	.filter(player => playerMatchesSearch(player, playerSearch.value))
 	.map(player => ({
-		label: playerDisplayName(player),
+		label: playerLabel(player),
 		id: player.id,
 	})));
 

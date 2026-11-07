@@ -2,7 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Player } from '~/types';
 import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
-import { playerDisplayName } from '~~/shared/utils/playerName';
+import { playerLabel } from '~~/shared/utils/playerName';
 import { LazyPlayerCreateModal, LazyPlayerListCreateModal, LazyPlayerListEditModal, LazyPlayerOpDeckListModal, LazyUIConfirmDeleteModal } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
@@ -232,7 +232,7 @@ async function handleDeletePlayer(player: Player) {
 	const deleteModal = overlay.create(LazyUIConfirmDeleteModal);
 	const confirmed = await deleteModal.open({
 		title: 'Delete Player',
-		itemName: playerDisplayName(player),
+		itemName: playerLabel(player),
 	}).result;
 
 	if (!confirmed)

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Player } from '~/types';
 import { VueDraggable } from 'vue-draggable-plus';
-import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
+import { playerLabel, playerMatchesSearch } from '~~/shared/utils/playerName';
 
 const props = defineProps<{
 	listId: number;
@@ -89,9 +89,9 @@ function applySortMode(mode: SortOption) {
 	sorted.sort((a, b) => {
 		switch (mode) {
 			case 'name-asc':
-				return playerDisplayName(a).localeCompare(playerDisplayName(b));
+				return playerLabel(a).localeCompare(playerLabel(b));
 			case 'name-desc':
-				return playerDisplayName(b).localeCompare(playerDisplayName(a));
+				return playerLabel(b).localeCompare(playerLabel(a));
 			case 'position-asc': {
 				const posA = a.position ?? Number.MAX_SAFE_INTEGER;
 				const posB = b.position ?? Number.MAX_SAFE_INTEGER;
@@ -311,18 +311,18 @@ defineExpose({ hasChanges, save, reset, saving });
 						<UCheckbox
 							:model-value="selectedAvailable.has(player.id)"
 							size="xs"
-							:aria-label="`Select ${playerDisplayName(player)}`"
+							:aria-label="`Select ${playerLabel(player)}`"
 							@click.stop
 							@update:model-value="toggleAvailableSelection(player.id)"
 						/>
-						<span class="text-sm flex-1 truncate">{{ playerDisplayName(player) }}</span>
+						<span class="text-sm flex-1 truncate">{{ playerLabel(player) }}</span>
 						<UButton
 							variant="ghost"
 							color="neutral"
 							size="xs"
 							icon="i-lucide-plus"
 							class="shrink-0"
-							:aria-label="`Add ${playerDisplayName(player)} to list`"
+							:aria-label="`Add ${playerLabel(player)} to list`"
 							@click.stop="addPlayer(player.id)"
 						/>
 					</div>
@@ -406,11 +406,11 @@ defineExpose({ hasChanges, save, reset, saving });
 						<UCheckbox
 							:model-value="selectedMembers.has(player.id)"
 							size="xs"
-							:aria-label="`Select ${playerDisplayName(player)}`"
+							:aria-label="`Select ${playerLabel(player)}`"
 							@update:model-value="toggleMemberSelection(player.id)"
 						/>
 						<button type="button" class="flex-1 truncate text-left text-sm" @click="toggleMemberSelection(player.id)">
-							{{ playerDisplayName(player) }}
+							{{ playerLabel(player) }}
 						</button>
 						<span v-if="player.position" class="text-xs text-muted font-mono">#{{ player.position }}</span>
 						<UButton
@@ -419,7 +419,7 @@ defineExpose({ hasChanges, save, reset, saving });
 							size="xs"
 							icon="i-lucide-x"
 							class="shrink-0"
-							:aria-label="`Remove ${playerDisplayName(player)} from list`"
+							:aria-label="`Remove ${playerLabel(player)} from list`"
 							@click="removePlayer(player.id)"
 						/>
 					</div>

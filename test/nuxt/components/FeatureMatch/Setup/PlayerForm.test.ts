@@ -115,19 +115,19 @@ describe('linking a One Piece Card Game Player into a side', () => {
 	const options = (wrapper: ReturnType<typeof mountOpSide>['wrapper']) =>
 		wrapper.findAll('[role="option"]').map(option => option.text());
 
-	// Pickers show and find Players by the shared name-or-Nickname rule (ADR-0074).
+	// Pickers show a Player by Nickname, else name, and find them by either (ADR-0077).
 	it.each([
 		[
 			'',
-			['linlin_88', 'Ava Reed'],
+			['linlin_88', 'avareed'],
 		],
 		[
 			'LINLIN',
 			['linlin_88'],
 		],
 		[
-			'avareed',
-			['Ava Reed'],
+			'ava reed',
+			['avareed'],
 		],
 		[
 			'0012345',

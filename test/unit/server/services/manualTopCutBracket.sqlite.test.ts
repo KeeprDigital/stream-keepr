@@ -37,6 +37,7 @@ let mtgEventId: number;
 let opEventId: number;
 const mtg: Record<'kim' | 'lee' | 'foreign', number> = { kim: 0, lee: 0, foreign: 0 };
 let opPlayerId: number;
+let opNamedPlayerId: number;
 
 function capability(suffix: string) {
 	return {
@@ -57,12 +58,14 @@ beforeAll(async () => {
 	const [archetype] = await db.insert(schema.archetypes)
 		.values({ eventId: mtgEventId, name: 'Izzet Prowess', colors: 'UR' })
 		.returning({ id: schema.archetypes.id });
-	const [kim, lee, foreign, opPlayer] = await db.insert(schema.players).values([
+	const [kim, lee, foreign, opPlayer, opNamed] = await db.insert(schema.players).values([
 		{ eventId: mtgEventId, name: 'Kim', archetypeId: archetype!.id },
 		{ eventId: mtgEventId, name: 'Lee' },
 		{ eventId: opEventId, name: 'Foreign' },
 		{ eventId: opEventId, name: '', nickname: 'luffy_fan' },
+		{ eventId: opEventId, name: 'Nami Reyes', nickname: 'navigator' },
 	]).returning({ id: schema.players.id });
+	opNamedPlayerId = opNamed!.id;
 	mtg.kim = kim!.id;
 	mtg.lee = lee!.id;
 	mtg.foreign = foreign!.id;
@@ -183,6 +186,37 @@ describe('a Manual Bracket as its Screen shows it', () => {
 
 		expect(phase).toBeNull();
 		expect(firstColumn(bracket) ?? null).toEqual(column);
+	});
+});
+
+describe('a One Piece Card Game bracket\'s Players by name or Nickname', () => {
+	// The one the Screen picks shows, the other standing in when blank; a saved Screen shows the name (ADR-0077).
+	it.each([
+		[
+			{},
+			['Nami Reyes v luffy_fan', '- v -'],
+		],
+		[
+			{ playerNameShown: 'name' },
+			['Nami Reyes v luffy_fan', '- v -'],
+		],
+		[
+			{ playerNameShown: 'nickname' },
+			['navigator v luffy_fan', '- v -'],
+		],
+	])('with %j shows %j', async (shown, column) => {
+		const { bracket } = await findTopCutBracket(opEventId, 'op', topCutConfig({
+			size: 4,
+			entrants: [
+				{ playerId: opNamedPlayerId },
+				null,
+				null,
+				{ playerId: opPlayerId },
+			],
+			results: [],
+		}, shown));
+
+		expect(firstColumn(bracket)).toEqual(column);
 	});
 });
 

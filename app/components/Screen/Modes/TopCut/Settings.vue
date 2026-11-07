@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ManualBracket } from '~~/shared/modules/top-cut-bracket';
 import type { TopCutBracketSource } from '~~/shared/screenModeConfigs/topCut';
+import type { PlayerNameShown } from '~~/shared/utils/playerName';
 import type { Screen } from '~/types';
 import { TOP_CUT_BRACKET_SIZES, topCutBracketSource } from '~~/shared/screenModeConfigs/topCut';
 import { screenModeConfigContract } from '~~/shared/screenModes';
@@ -31,6 +32,12 @@ const eventStore = useEventStore();
 const game = computed(() => eventStore.event?.game);
 const offersPhases = computed(() => game.value !== 'op');
 const source = computed(() => topCutBracketSource(game.value, config.value));
+
+// Only a One Piece Card Game Player has a Nickname to show instead (ADR-0077).
+const playerNameShownOptions: { label: string; value: PlayerNameShown }[] = [
+	{ label: 'Name', value: 'name' },
+	{ label: 'Nickname', value: 'nickname' },
+];
 
 const sourceOptions: { label: string; value: TopCutBracketSource }[] = [
 	{ label: 'A Phase', value: 'phase' },
@@ -76,6 +83,11 @@ const lookOf = (...groups: string[]) => lookSummary('top-cut', props.screen.them
 const entrantsSummary = computed(() => settingsSummary([
 	config.value.showSeeds ? 'Seeds shown' : 'Seeds hidden',
 	config.value.showArchetypes ? 'Archetypes shown' : 'Archetypes hidden',
+	game.value === 'op'
+		? config.value.playerNameShown === 'nickname'
+			? 'By Nickname'
+			: 'By name'
+		: null,
 	lookOf('entrants'),
 ]));
 const bracketSummary = computed(() => settingsSummary([
@@ -138,6 +150,14 @@ const headerCardSummary = computed(() => settingsSummary([
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard id="top-cut:entrants" title="Entrants" :summary="entrantsSummary">
+			<ScreenConfigField
+				v-if="game === 'op'"
+				:field="fields.playerNameShown"
+				:model-value="config.playerNameShown"
+				:items="playerNameShownOptions"
+				description="Show each Player by their name or their Nickname; a Player without the one chosen shows the other."
+				@update:model-value="updateConfig({ playerNameShown: $event as PlayerNameShown })"
+			/>
 			<ScreenConfigField
 				:field="fields.showSeeds"
 				:model-value="config.showSeeds"

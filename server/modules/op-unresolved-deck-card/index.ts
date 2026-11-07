@@ -12,7 +12,7 @@ import { opPlayerDeckListService } from '~~/server/services/opPlayerDeckList';
 import { bandaiKeeprConfig } from '~~/server/utils/bandaiKeepr';
 import { requireOpEvent } from '~~/server/utils/routeGuards';
 import { SLOT_SIDE_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
-import { playerDisplayName } from '~~/shared/utils/playerName';
+import { playerDisplayName, playerLabel } from '~~/shared/utils/playerName';
 
 /**
  * One Piece Card Game Unresolved Deck Cards (ADR-0074): the card numbers
@@ -85,7 +85,7 @@ async function heldEntries(eventId: number, number?: string): Promise<HeldEntry[
 			holder: {
 				kind: 'player' as const,
 				playerId: row.playerId,
-				name: playerDisplayName(row),
+				name: playerLabel(row),
 			},
 		}))
 		.toSorted((left, right) => left.holder.name.localeCompare(right.holder.name) || left.holder.playerId - right.holder.playerId);

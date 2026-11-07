@@ -13,6 +13,7 @@ describe('getDisplayDefaultsForMode', () => {
 		expect(getDisplayDefaultsForMode('top-cut')).toEqual({
 			showSeeds: false,
 			showArchetypes: false,
+			playerNameShown: 'name',
 			showHeader: true,
 			headerText: undefined,
 		});

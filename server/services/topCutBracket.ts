@@ -13,13 +13,13 @@ import { findMatchesByRound } from '~~/server/services/roundMatches';
 import { deriveManualTopCutBracket, deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
 import { TOP_CUT_BRACKET_SIZES, topCutBracketSource } from '~~/shared/screenModeConfigs/topCut';
 import { resolvePlayerDeckIdentity } from '~~/shared/utils/gameData';
-import { playerDisplayName } from '~~/shared/utils/playerName';
+import { playerShownName } from '~~/shared/utils/playerName';
 
 /**
  * What a Top Cut Bracket Screen shows beside each Player's name (#759), and
  * the bracket size its operator sets (#906).
  */
-export type TopCutBracketReadOptions = Partial<Pick<TopCutModeConfig, 'showSeeds' | 'showArchetypes' | 'bracketSizeOverride'>>;
+export type TopCutBracketReadOptions = Partial<Pick<TopCutModeConfig, 'showSeeds' | 'showArchetypes' | 'bracketSizeOverride' | 'playerNameShown'>>;
 
 /** The most Players a bracket the operator sizes seats, so the most Seeds that can take a bye. */
 const MOST_SEEDS_ON_BYES = Math.max(...TOP_CUT_BRACKET_SIZES);
@@ -145,7 +145,8 @@ export async function findPhaseBracket(
 
 /**
  * A Manual Bracket as its Screen shows it (ADR-0075): each Seed naming a
- * Player by that Player's current name, and one typed by its name. A Seed is
+ * Player by that Player's current name or Nickname, as `options` picks
+ * (ADR-0077), and one typed by its name. A Seed is
  * shown as its place in the operator's list, and a Player's deck as Top Cut
  * Bracket names one, each only when `options` asks for it. A Seed naming a
  * Player the Event no longer holds is empty.
@@ -168,7 +169,7 @@ export async function findManualBracket(
 				.where(and(eq(players.eventId, eventId), inArray(players.id, playerIds)));
 	const names = new Map(rows.map(row => [
 		row.id,
-		playerDisplayName(row),
+		playerShownName(row, options.playerNameShown ?? 'name'),
 	]));
 	const decks = options.showArchetypes
 		? await findDecks(eventId, [

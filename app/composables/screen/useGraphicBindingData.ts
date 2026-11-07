@@ -4,7 +4,7 @@ import type {
 	GraphicBindingFeatureMatchSlot,
 } from '~~/shared/modules/graphics';
 import type { GraphicSourceSelectionKind } from '~~/shared/types/graphics';
-import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
+import { playerDisplayName, playerLabel, playerMatchesSearch } from '~~/shared/utils/playerName';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 /**
@@ -119,7 +119,7 @@ export function useGraphicBindingData() {
 		switch (kind) {
 			case 'player':
 				return Object.entries(data.players).filter(([, player]) => playerMatchesSearch(player, search)).map(([id, player]) => ({
-					label: playerDisplayName(player) || `Player ${id}`,
+					label: playerLabel(player) || `Player ${id}`,
 					value: Number(id),
 				}));
 			case 'talent':
