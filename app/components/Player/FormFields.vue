@@ -18,7 +18,7 @@ const mtgGameData = defineModel<MtgPlayerGameData>('mtgGameData', { required: tr
 	<UFormField
 		label="Name"
 		:required="game !== 'op'"
-		:hint="game === 'op' ? 'Shown instead of the Nickname' : undefined"
+		:hint="game === 'op' ? 'Fills the name fields: Feature Match, graphics, Screens' : undefined"
 	>
 		<UInput
 			v-model="formData.name"

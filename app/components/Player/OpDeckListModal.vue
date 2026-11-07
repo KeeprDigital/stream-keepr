@@ -3,7 +3,7 @@ import type { OpLeader, OpPlayerGameData } from '~~/shared/types/game';
 import type { SavedOpPlayerDeckList } from '~~/shared/types/opDeckList';
 import type { Player } from '~/types';
 import { catalogueOpLeader } from '~~/shared/utils/card/op';
-import { playerDisplayName } from '~~/shared/utils/playerName';
+import { playerLabel } from '~~/shared/utils/playerName';
 
 /**
  * A One Piece Card Game Player's Deck List, edited by hand (ADR-0074): a paste
@@ -111,7 +111,7 @@ async function takeImported() {
 <template>
 	<UModal
 		open
-		:title="`Deck List: ${playerDisplayName(player)}`"
+		:title="`Deck List: ${playerLabel(player)}`"
 		:description="readonly ? 'Their Leader and cards, as saved.' : 'One card per line: N[x] CARDNUMBER [name]. A Leader line sets the Leader.'"
 		@update:open="(open: boolean) => { if (!open) emit('close') }"
 	>

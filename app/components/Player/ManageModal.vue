@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
 import type { Player, PlayerData } from '~/types';
-import { playerDisplayName, unshownPlayerReason } from '~~/shared/utils/playerName';
+import { playerLabel, unshownPlayerReason } from '~~/shared/utils/playerName';
 import { LazyUIConfirmDeleteModal } from '#components';
 import { toCreatePlayerInput, toPlayerData } from '~/types/player';
 
@@ -122,7 +122,7 @@ async function handleDelete() {
 	const deleteModal = overlay.create(LazyUIConfirmDeleteModal);
 	const confirmed = await deleteModal.open({
 		title: 'Delete Player',
-		itemName: playerDisplayName(props.player),
+		itemName: playerLabel(props.player),
 	}).result;
 
 	if (!confirmed)

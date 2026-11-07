@@ -120,7 +120,7 @@ export function useTopCutModeData(context: ScreenContext) {
 		const scope = outputReads.scopeKey.value;
 		if (!scope)
 			return null;
-		const shown = `${config.value.showSeeds}:${config.value.showArchetypes}`;
+		const shown = `${config.value.showSeeds}:${config.value.showArchetypes}:${config.value.playerNameShown}`;
 		if (source.value === 'manual')
 			return `${scope}:manual:${JSON.stringify(config.value.manualBracket)}:${shown}`;
 		return config.value.phaseId

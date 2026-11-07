@@ -4,7 +4,7 @@ import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
 import type { InputMenuItem } from '#ui/types';
 import type { Player, PlayerData } from '~/types';
 import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
-import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
+import { playerLabel, playerMatchesSearch } from '~~/shared/utils/playerName';
 
 const props = defineProps<{
 	displayMode: PlayerDisplayMode;
@@ -44,7 +44,7 @@ const playerItems = computed<(InputMenuItem & { id: number })[]>(() => {
 	return props.players
 		.filter(p => playerMatchesSearch(p, searchTerm.value))
 		.map(p => ({
-			label: playerDisplayName(p),
+			label: playerLabel(p),
 			id: p.id,
 		}));
 });

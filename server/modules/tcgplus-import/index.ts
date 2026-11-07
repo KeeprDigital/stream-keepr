@@ -11,7 +11,7 @@ import { opPlayerDeckListService } from '~~/server/services/opPlayerDeckList';
 import { playerService } from '~~/server/services/player';
 import { tcgPlusImportService } from '~~/server/services/tcgPlusImport';
 import { requireOpEvent } from '~~/server/utils/routeGuards';
-import { playerDisplayName, playerMemberNumber } from '~~/shared/utils/playerName';
+import { playerLabel, playerMemberNumber } from '~~/shared/utils/playerName';
 import { parseTcgPlusExport, TcgPlusExportError } from './parse';
 
 /**
@@ -100,7 +100,7 @@ function plannedWrite(entry: PlannedEntry): { deckList: OpDeckListView; source: 
 function heldPlayer(player: DbPlayer): TcgPlusImportHeldPlayer {
 	return {
 		playerId: player.id,
-		shownAs: playerDisplayName(player),
+		shownAs: playerLabel(player),
 		memberNumber: playerMemberNumber(player),
 	};
 }

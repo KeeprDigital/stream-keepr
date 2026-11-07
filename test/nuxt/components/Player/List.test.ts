@@ -193,11 +193,11 @@ describe('playerList rows', () => {
 });
 
 describe('playerList on a One Piece Card Game Event', () => {
-	// Shown by the shared name-or-Nickname rule, with no Rounds behind a record or match history (ADR-0074).
+	// The name and Nickname each in its own column, the name blank until given (ADR-0077), and no record or match history.
 	it.each([
 		[
 			{ name: '', nickname: 'linlin_88' },
-			'linlin_88',
+			'-',
 		],
 		[
 			{ name: 'Big Mom', nickname: 'linlin_88' },

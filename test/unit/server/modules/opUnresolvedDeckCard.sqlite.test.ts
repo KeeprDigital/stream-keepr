@@ -140,7 +140,7 @@ describe('an OP Event\'s Unresolved Deck Cards', () => {
 						asLeader: false,
 					},
 					{
-						holder: { kind: 'player', playerId: ben.id, name: 'Benjamin' },
+						holder: { kind: 'player', playerId: ben.id, name: 'ben' },
 						quantity: 2,
 						asLeader: false,
 					},
@@ -161,7 +161,7 @@ describe('an OP Event\'s Unresolved Deck Cards', () => {
 				copies: 3,
 				deckLists: [
 					{
-						holder: { kind: 'player', playerId: ben.id, name: 'Benjamin' },
+						holder: { kind: 'player', playerId: ben.id, name: 'ben' },
 						quantity: 3,
 						asLeader: false,
 					},

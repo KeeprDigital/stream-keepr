@@ -5,7 +5,7 @@ import type { Game } from '~~/shared/types/enums';
 import type { Player, PlayerListSummary } from '~/types';
 import { getFilteredRowModel } from '@tanstack/vue-table';
 import { getMtgGameData } from '~~/shared/utils/gameData';
-import { playerDisplayName, playerMatchesSearch } from '~~/shared/utils/playerName';
+import { playerMatchesSearch } from '~~/shared/utils/playerName';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 
 interface Props {
@@ -234,7 +234,7 @@ const columns = computed<TableColumn<Player>[]>(() => {
 		cols.push(
 			{
 				id: 'name',
-				accessorFn: row => playerDisplayName(row),
+				accessorFn: row => row.name ?? '',
 				header: createSortableHeader('Name'),
 				enableSorting: true,
 			},
@@ -335,7 +335,7 @@ const columns = computed<TableColumn<Player>[]>(() => {
 			</template>
 
 			<template #name-cell="{ row }">
-				<span v-if="game === 'op'">{{ playerDisplayName(row.original) }}</span>
+				<span v-if="game === 'op'" :class="row.original.name ? undefined : 'text-muted'">{{ row.original.name || '-' }}</span>
 				<PlayerMatchHistoryButton v-else :player="row.original" />
 			</template>
 

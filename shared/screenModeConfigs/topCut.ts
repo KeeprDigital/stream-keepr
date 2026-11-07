@@ -3,6 +3,7 @@ import type { ScreenModeConfigOf } from './contract';
 import { z } from 'zod';
 import { manualBracketPositionCounts } from '../modules/top-cut-bracket/manual';
 import { TOP_CUT_BRACKET_SIZES } from '../modules/top-cut-bracket/seeding';
+import { PLAYER_NAME_SHOWN_VALUES } from '../utils/playerName';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
 import { DEFAULT_HEADER_CONFIG, headerConfigShape } from './subShapes';
@@ -86,6 +87,8 @@ export const manualBracketSchema = z.object({
  *
  * Each Player's seed and Archetype are shown beside their name only when
  * turned on (#759), so a Screen saved before either existed renders as it did.
+ * `playerNameShown` picks a One Piece Card Game Player's name or Nickname, the
+ * other standing in when blank (ADR-0077); a saved Screen shows the name.
  *
  * `bracketSource` chooses the Phase or the Screen's own `manualBracket`, which
  * the operator fills in by hand (ADR-0075). The choice not taken is kept, so
@@ -99,6 +102,7 @@ export const topCutModeConfigContract = defineScreenModeConfigContract({
 	bracketSizeOverride: z.literal(TOP_CUT_BRACKET_SIZES).optional(),
 	showSeeds: editorField(z.boolean(), { label: 'Show Seeds' }),
 	showArchetypes: editorField(z.boolean(), { label: 'Show Archetypes' }),
+	playerNameShown: editorField(z.enum(PLAYER_NAME_SHOWN_VALUES), { label: 'Show Players by' }),
 	...headerConfigShape,
 }, {
 	bracketSource: 'phase',
@@ -107,6 +111,7 @@ export const topCutModeConfigContract = defineScreenModeConfigContract({
 	bracketSizeOverride: undefined,
 	showSeeds: false,
 	showArchetypes: false,
+	playerNameShown: 'name',
 	...DEFAULT_HEADER_CONFIG,
 }, {
 	formerFields: ['bracketSize'],

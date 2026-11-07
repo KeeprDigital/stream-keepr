@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { playerDisplayName, playerMatchesSearch, unshownPlayerReason } from '~~/shared/utils/playerName';
+import { playerDisplayName, playerLabel, playerMatchesSearch, playerShownName, unshownPlayerReason } from '~~/shared/utils/playerName';
 
-describe('a Player\'s display name', () => {
-	// The operator's name wins; the TCG+ Nickname stands in only while there is none (ADR-0074).
+describe('the name that fills a Player\'s name fields', () => {
+	// The operator's name wins; the TCG+ Nickname stands in only while there is none (ADR-0077).
 	it.each([
 		[
 			{ name: 'Big Mom', nickname: 'linlin_88' },
@@ -31,6 +31,55 @@ describe('a Player\'s display name', () => {
 		[null, ''],
 	])('shows %j as %j', (player, shown) => {
 		expect(playerDisplayName(player)).toBe(shown);
+	});
+});
+
+describe('how an operator screen labels a Player', () => {
+	// Giving a name never hides the Nickname; a Player without one shows by name (ADR-0077).
+	it.each([
+		[
+			{ name: 'Big Mom', nickname: 'linlin_88' },
+			'linlin_88',
+		],
+		[
+			{ name: 'Big Mom', nickname: '  ' },
+			'Big Mom',
+		],
+		[
+			{ name: 'Ava Reed' },
+			'Ava Reed',
+		],
+		[null, ''],
+	])('labels %j as %j', (player, shown) => {
+		expect(playerLabel(player)).toBe(shown);
+	});
+});
+
+describe('a Player shown by the name a Screen picks', () => {
+	// The one picked shows, and the other stands in when it is blank (ADR-0077).
+	it.each([
+		[
+			'name',
+			{ name: 'Big Mom', nickname: 'linlin_88' },
+			'Big Mom',
+		],
+		[
+			'name',
+			{ name: '', nickname: 'linlin_88' },
+			'linlin_88',
+		],
+		[
+			'nickname',
+			{ name: 'Big Mom', nickname: 'linlin_88' },
+			'linlin_88',
+		],
+		[
+			'nickname',
+			{ name: 'Big Mom', nickname: null },
+			'Big Mom',
+		],
+	] as const)('by %s, shows %j as %j', (shown, player, name) => {
+		expect(playerShownName(player, shown)).toBe(name);
 	});
 });
 
