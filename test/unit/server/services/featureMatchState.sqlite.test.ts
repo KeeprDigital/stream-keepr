@@ -1,9 +1,11 @@
 import type { DbFeatureMatch, DbPlayer } from '~~/server/db/schema';
+import type { FeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '~~/shared/types/featureMatchDefaults';
+import { DEFAULT_FEATURE_MATCH_DEFAULTS, fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
+import { formatClockDisplay } from '~~/shared/utils/clock';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 // The Feature Match Session service over real SQL: source snapshots, command
@@ -187,6 +189,51 @@ describe('buildSourceSnapshot', () => {
 			archetypeId: null,
 			gameData: noDeck.gameData,
 		}));
+	});
+});
+
+describe('opening a Session from its Event', () => {
+	// A Session takes every Feature Match default the Event stores, none at its fallback.
+	const stored = {
+		bestOf: 5,
+		startingLife: 30,
+		clockType: 'countdown',
+		clockDuration: 40,
+		countUpAfterCountdown: true,
+		countUpLimit: 10,
+		turnTrackingEnabled: true,
+		activePlayerTrackingEnabled: true,
+		extraTurnsEnabled: true,
+		extraTurns: 3,
+		extraTurnsLabel: 'Turns',
+		untimedLabel: 'Untimed',
+		mulliganTrackingEnabled: true,
+	} satisfies FeatureMatchDefaults;
+
+	it('carries every stored default into its snapshot', async () => {
+		const slot = await stageSlot();
+		await db.update(schema.events)
+			.set(fromFeatureMatchDefaults(stored))
+			.where(eq(schema.events.id, slot.eventId));
+
+		const session = (await featureMatchStateService().createSessionForSlot(slot.id, slot.eventId))!;
+
+		expect(session.sourceSnapshot.defaults).toEqual({ ...stored, game: 'mtg' });
+	});
+
+	it.each([
+		['holds at the Event\'s count-up limit', 10, '10:00'],
+		['counts up without limit when the Event sets none', null, '15:00'],
+	])('%s', async (_case, countUpLimit, shown) => {
+		const slot = await stageSlot();
+		await db.update(schema.events)
+			.set(fromFeatureMatchDefaults({ clockDuration: 40, countUpAfterCountdown: true, countUpLimit }))
+			.where(eq(schema.events.id, slot.eventId));
+
+		const session = (await featureMatchStateService().createSessionForSlot(slot.id, slot.eventId))!;
+		const clock = { ...session.currentState.clock, elapsedMs: 55 * 60_000 };
+
+		expect(formatClockDisplay(clock, 0, '')).toBe(shown);
 	});
 });
 

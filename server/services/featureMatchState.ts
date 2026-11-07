@@ -26,7 +26,7 @@ import {
 	createInitialFeatureMatchSessionStateFromSnapshot,
 	normalizeFeatureMatchSessionCommandPayload,
 } from '~~/shared/modules/feature-match-session';
-import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
+import { FEATURE_MATCH_DEFAULT_COLUMN_SELECTION, toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { isMergeableFeatureMatchCommand } from '~~/shared/types/featureMatchSession';
 
 export { applyFeatureMatchSessionEvent } from '~~/shared/modules/feature-match-session';
@@ -71,18 +71,7 @@ export function featureMatchStateService() {
 			where: eq(events.id, eventId),
 			columns: {
 				game: true,
-				featureMatchDefaultBestOf: true,
-				featureMatchDefaultStartingLife: true,
-				featureMatchDefaultClockType: true,
-				featureMatchDefaultClockDuration: true,
-				featureMatchDefaultCountUpAfterCountdown: true,
-				featureMatchDefaultTurnTrackingEnabled: true,
-				featureMatchDefaultActivePlayerTrackingEnabled: true,
-				featureMatchDefaultExtraTurnsEnabled: true,
-				featureMatchDefaultExtraTurns: true,
-				featureMatchDefaultExtraTurnsLabel: true,
-				featureMatchDefaultUntimedLabel: true,
-				featureMatchDefaultMulliganTrackingEnabled: true,
+				...FEATURE_MATCH_DEFAULT_COLUMN_SELECTION,
 			},
 		});
 		if (!row)
