@@ -1,5 +1,6 @@
+import type { OpLeader } from '~~/shared/types/game';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
-import { getMtgGameData } from '~~/shared/utils/gameData';
+import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
 import { playerDisplayName } from '~~/shared/utils/playerName';
 
 export interface FeatureMatchMenuItem {
@@ -8,22 +9,33 @@ export interface FeatureMatchMenuItem {
 	player1Name: string | null;
 	player1DeckName: string | null;
 	player1Colors: string | null;
+	/** A One Piece side's Leader, which names its deck. */
+	player1Leader: OpLeader | null;
 	player2Name: string | null;
 	player2DeckName: string | null;
 	player2Colors: string | null;
+	player2Leader: OpLeader | null;
 }
 
 function getPlayerLabel(
 	playerData: { name?: string | null; nickname?: string | null; gameData?: unknown } | null | undefined,
-): { name: string | null; deckName: string | null; colors: string | null } {
+): { name: string | null; deckName: string | null; colors: string | null; leader: OpLeader | null } {
 	const name = playerDisplayName(playerData);
-	if (!playerData || !name)
-		return { name: null, deckName: null, colors: null };
-	const mtg = getMtgGameData(playerData.gameData as Parameters<typeof getMtgGameData>[0]);
+	if (!playerData || !name) {
+		return {
+			name: null,
+			deckName: null,
+			colors: null,
+			leader: null,
+		};
+	}
+	const gameData = playerData.gameData as Parameters<typeof getMtgGameData>[0];
+	const mtg = getMtgGameData(gameData);
 	return {
 		name,
 		deckName: mtg.deckName ?? null,
 		colors: mtg.deckColors ?? null,
+		leader: getOpGameData(gameData).leader ?? null,
 	};
 }
 
@@ -54,9 +66,11 @@ export function useFeatureMatchMenuItems() {
 				player1Name: p1.name,
 				player1DeckName: p1.deckName,
 				player1Colors: p1.colors,
+				player1Leader: p1.leader,
 				player2Name: p2.name,
 				player2DeckName: p2.deckName,
 				player2Colors: p2.colors,
+				player2Leader: p2.leader,
 			};
 		});
 	});

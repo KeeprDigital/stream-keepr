@@ -2,8 +2,14 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
+import { NAMI, opDeckListEntry, opSlotSide, ZORO } from '~~/test/helpers/opCards';
 import { createFollowedFeatureMatchSessions } from '~~/test/nuxt/helpers/followedFeatureMatchSession';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
+mockNuxtImport('$fetch', () => mockFetch);
 
 vi.mock('~/modules/event-data/resync', async importOriginal => ({
 	...await importOriginal<typeof import('~/modules/event-data/resync')>(),
@@ -173,6 +179,7 @@ async function openCardsPage(query: Record<string, string> = {}) {
 				MtgCardPlayerDeckHeader: true,
 				MtgCardList: true,
 				MtgCardDeckList: true,
+				OpCardDeckList: true,
 				MtgCardPlayerDeck: true,
 				MtgCardControls: true,
 				OpCardSearch: true,
@@ -260,21 +267,75 @@ describe('cards page matchup Deck Lists', () => {
 });
 
 describe('cards page by Card Game', () => {
-	afterEach(() => {
-		eventStore.event.game = 'mtg';
+	const mtgSlots = featureMatchStore.featureMatches;
+	const mtgRounds = roundStore.rounds;
+
+	beforeEach(() => {
+		useCardStore().$reset();
 	});
 
-	// An OP Event's Cards page lists its Unresolved Deck Cards (ADR-0074); Magic's Card Spotlight modes stay Magic's.
+	afterEach(() => {
+		eventStore.event.game = 'mtg';
+		featureMatchStore.featureMatches = mtgSlots;
+		roundStore.rounds = mtgRounds;
+	});
+
+	// An OP Event's Cards page lists its Unresolved Deck Cards (ADR-0074) and has no Player Deck List mode.
 	it.each([
 		['op', true, false],
 		['mtg', false, true],
-	])('on a %s Event, lists Unresolved Deck Cards: %s, offers the Deck List modes: %s', async (game, listsUnresolved, offersModes) => {
+	])('on a %s Event, lists Unresolved Deck Cards: %s, offers the Player Deck List mode: %s', async (game, listsUnresolved, offersPlayerDecks) => {
 		eventStore.event.game = game;
 
 		const wrapper = await openCardsPage();
 
 		expect(wrapper.findComponent({ name: 'OpUnresolvedDeckCards' }).exists()).toBe(listsUnresolved);
-		expect(wrapper.findComponent({ name: 'MtgCardModeToggle' }).exists()).toBe(offersModes);
+		expect(wrapper.findComponent({ name: 'MtgCardModeToggle' }).props('offersPlayerDecklist')).toBe(offersPlayerDecks);
+		wrapper.unmount();
+	});
+
+	// An OP Event has no Rounds, so its matchup is a Feature Match Slot (ADR-0057).
+	it('opens a One Piece Event on the Deck Lists of its Card Spotlight Screen\'s Slot', async () => {
+		eventStore.event.game = 'op';
+		roundStore.rounds = [];
+		featureMatchStore.featureMatches = [
+			{
+				id: SHARED_ID,
+				player1Id: null,
+				player1Data: opSlotSide('Alice', ZORO, 301),
+				player2Id: null,
+				player2Data: opSlotSide('Bob', NAMI, 302),
+				activeSession: null,
+			},
+		] as never;
+		mockFetch.mockImplementation(async (path: string) => {
+			const deckListId = Number(path.split('/').at(-1));
+			const leader = deckListId === 301
+				? ZORO
+				: NAMI;
+			return {
+				id: deckListId,
+				slotId: SHARED_ID,
+				sourceText: '',
+				entries: [
+					opDeckListEntry(leader.number, 1, 'leader'),
+				],
+				leaderNumber: leader.number,
+				mainboardCount: 0,
+				warnings: [],
+			};
+		});
+
+		const wrapper = await openCardsPage();
+
+		const cardStore = useCardStore();
+		expect(cardStore.cardPageMode).toBe('match-decklist');
+		expect([cardStore.opDeckListPlayer1, cardStore.opDeckListPlayer2].map(side => side?.deckList?.leaderNumber)).toEqual([ZORO.number, NAMI.number]);
+		expect(wrapper.findComponent({ name: 'MtgCardDeckListHeader' }).props('matchOptions')).toBeUndefined();
+		await vi.waitFor(() => expect(useRoute().query).toEqual({
+			mode: 'match-decklist',
+			slotId: String(SHARED_ID),
+		}));
 		wrapper.unmount();
 	});
 });

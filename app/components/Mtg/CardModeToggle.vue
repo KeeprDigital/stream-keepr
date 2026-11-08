@@ -4,9 +4,12 @@ import type { CardPageMode } from '~/types/card/page';
 const props = withDefaults(defineProps<{
 	matchDecklistDisabled?: boolean;
 	playerDecklistDisabled?: boolean;
+	/** A One Piece Event offers no Player Deck List mode. */
+	offersPlayerDecklist?: boolean;
 }>(), {
 	matchDecklistDisabled: false,
 	playerDecklistDisabled: false,
+	offersPlayerDecklist: true,
 });
 const mode = defineModel<CardPageMode>({ required: true });
 </script>
@@ -29,6 +32,7 @@ const mode = defineModel<CardPageMode>({ required: true });
 			@click="() => { mode = 'match-decklist' }"
 		/>
 		<UButton
+			v-if="props.offersPlayerDecklist"
 			icon="i-lucide-user"
 			:color="mode === 'player-decklist' ? 'primary' : 'neutral'"
 			:variant="mode === 'player-decklist' ? 'subtle' : 'outline'"
