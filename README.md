@@ -427,10 +427,13 @@ Gotchas:
   line carries the method, the path without its query, timings and Node's error
   code; never a header or a body. The failure report also says when the test
   worker's own event loop stalled.
-- **Nuxt-suite failures under load are often timing.** A 30s `setupNuxt`
-  timeout shows skipped tests; 5s per-test timeouts show bimodal durations.
-  Re-run the single file, then the suite with `--no-file-parallelism`, before
-  believing a broad failure.
+- **A loaded machine slows the unit and Nuxt suites; it must not fail them.**
+  Their timeouts are hang detectors (`vitest.shared.ts`: 60s a test, 120s a
+  hook), and `vi.waitFor`/`vi.waitUntil` default to 20s
+  (`test/helpers/loadTolerantWaits.ts`). A test that passes alone and fails
+  under load is a defect in the test: it is racing a real timer or sharing
+  state. Reproduce it by oversubscribing (`--maxWorkers=30` beside another
+  suite), not by re-running until green.
 - **The Nuxt suite is selected by config**, not project:
   `vitest --config vitest.nuxt.config.ts`.
 - **Local acceptance harnesses target `http://127.0.0.1:8787`**, whichever

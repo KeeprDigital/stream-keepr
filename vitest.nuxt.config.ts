@@ -1,6 +1,6 @@
 import { defineVitestConfig } from '@nuxt/test-utils/config';
 import { defineConfig } from 'vitest/config';
-import { nuxtCoverageConfig } from './vitest.shared.ts';
+import { LOAD_TOLERANT_HOOK_TIMEOUT_MS, LOAD_TOLERANT_TEST_TIMEOUT_MS, nuxtCoverageConfig } from './vitest.shared.ts';
 
 const nuxtVitestConfig = defineVitestConfig({
 	test: {
@@ -15,7 +15,8 @@ const nuxtVitestConfig = defineVitestConfig({
 		// entry without resolving its relative imports, so every file fails
 		// (README § Testing, "Tried and rejected").
 		fsModuleCache: false,
-		hookTimeout: 30000,
+		testTimeout: LOAD_TOLERANT_TEST_TIMEOUT_MS,
+		hookTimeout: LOAD_TOLERANT_HOOK_TIMEOUT_MS,
 		restoreMocks: true,
 		clearMocks: true,
 		silent: 'passed-only',
@@ -42,6 +43,7 @@ export default defineConfig(async (env) => {
 	// The icon guard also ahead of the entry, so its mock precedes `@nuxt/icon`.
 	config.test!.setupFiles = [
 		'./test/helpers/blockCloudflareCredentials.ts',
+		'./test/helpers/loadTolerantWaits.ts',
 		'./test/nuxt/quietSuspenseNotice.ts',
 		'./test/nuxt/failOnUnbundledIcon.ts',
 		...[config.test!.setupFiles ?? []].flat(),

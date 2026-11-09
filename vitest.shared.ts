@@ -16,6 +16,15 @@ const requireFromNuxt = createRequire(createRequire(import.meta.url).resolve('nu
 const requireFromNitroServer = createRequire(requireFromNuxt.resolve('@nuxt/nitro-server/package.json'));
 export const nitroH3Directory = dirname(requireFromNitroServer.resolve('h3/package.json'));
 
+/**
+ * Timeouts detect a hang; they are not a speed budget. A test that takes two
+ * seconds on an idle machine takes many times that beside a build or on fewer
+ * cores, and a test cut off mid-flight keeps running into the next one. So the
+ * bounds sit far above any honest slowdown.
+ */
+export const LOAD_TOLERANT_TEST_TIMEOUT_MS = 60_000;
+export const LOAD_TOLERANT_HOOK_TIMEOUT_MS = 120_000;
+
 export const rootAliases = {
 	'~~': rootDir,
 	'~~/': `${rootDir}/`,
