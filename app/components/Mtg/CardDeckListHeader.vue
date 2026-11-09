@@ -109,6 +109,19 @@ watch([
 								<span>{{ item.player2DeckName }}</span>
 							</template>
 						</div>
+						<div v-if="item.player1Leader || item.player2Leader" class="flex items-center gap-1 text-xs text-muted">
+							<template v-if="item.player1Leader">
+								<OpColorDisplay :colors="item.player1Leader.colors" size="xs" />
+								<span>{{ item.player1Leader.name }}</span>
+							</template>
+							<template v-if="item.player1Leader && item.player2Leader">
+								<span class="text-dimmed">vs</span>
+							</template>
+							<template v-if="item.player2Leader">
+								<OpColorDisplay :colors="item.player2Leader.colors" size="xs" />
+								<span>{{ item.player2Leader.name }}</span>
+							</template>
+						</div>
 					</div>
 				</template>
 			</USelect>

@@ -194,8 +194,11 @@ export function useOpSpotlightRuntime(state: OpSpotlightRuntimeState) {
 			await showPreviewCard();
 	}
 
-	/** Preview a searched Card at its own Printing, and offer every Printing it has. */
-	async function selectCard(card: OpCardSummary) {
+	/**
+	 * Preview a Card at the Printing named, or its first, and offer every
+	 * Printing it has. A Deck List entry names only its card number.
+	 */
+	async function selectCard(card: Pick<OpCardSummary, 'number'> & Partial<Pick<OpCardSummary, 'printingId'>>) {
 		state.showCardControls.value = !state.autoShowSelectedCard.value || state.activeScreenId.value === null;
 		const detail = await loadDetail(card.number);
 		const printing = detail?.printings.find(entry => entry.id === card.printingId) ?? detail?.printings[0];

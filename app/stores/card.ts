@@ -1,12 +1,13 @@
 import type { ScreenCard } from '~~/shared/types/card/mtg';
 import type { OpCardDetail, OpCardSummary, OpScreenCard } from '~~/shared/types/card/op';
-import type { MatchPlayerDeckData } from '~/types/card/deckList';
+import type { MatchPlayerDeckData, OpMatchPlayerDeckData } from '~/types/card/deckList';
 import type { MtgActiveCardAction, MtgCard, MtgFormat } from '~/types/card/mtg';
 import type { CardMatchup, CardPageMode } from '~/types/card/page';
 import { useCountdown, useStorage } from '@vueuse/core';
 import { isOpScreenCard } from '~~/shared/utils/card/op';
 import { useActiveCardScreenRuntime } from '~/modules/card-screen/activeCard';
 import { useCardDeckSourceRuntime } from '~/modules/card-screen/deckSources';
+import { useOpCardDeckSourceRuntime } from '~/modules/card-screen/opDeckSources';
 import { useOpSpotlightRuntime } from '~/modules/card-screen/opSpotlight';
 import { useCardSearchRuntime } from '~/modules/card-screen/search';
 
@@ -38,7 +39,11 @@ export const useCardStore = defineStore('card', () => {
 	const loadingDeckList = ref(false);
 	const deckListPlayer1 = ref<MatchPlayerDeckData | null>(null);
 	const deckListPlayer2 = ref<MatchPlayerDeckData | null>(null);
-	const deckListHasData = computed(() => deckListPlayer1.value !== null || deckListPlayer2.value !== null);
+	/** A One Piece Event's Slot sides, which hold One Piece Deck Lists (ADR-0057). */
+	const opDeckListPlayer1 = ref<OpMatchPlayerDeckData | null>(null);
+	const opDeckListPlayer2 = ref<OpMatchPlayerDeckData | null>(null);
+	const deckListHasData = computed(() => deckListPlayer1.value !== null || deckListPlayer2.value !== null
+		|| opDeckListPlayer1.value !== null || opDeckListPlayer2.value !== null);
 	const deckListRoundId = ref<number | null>(null);
 	const deckListMatchup = ref<CardMatchup | null>(null);
 	const deckListFilter = ref('');
@@ -126,7 +131,18 @@ export const useCardStore = defineStore('card', () => {
 		playerDeckData,
 		loadingPlayerDeck,
 	});
-	const canUseDeckListMode = deckSourceRuntime.canUseDeckListMode;
+	const opDeckSourceRuntime = useOpCardDeckSourceRuntime({
+		eventId: () => eventStore.eventId,
+		featureMatches: () => featureMatchStore.featureMatches,
+		loadingDeckList,
+		deckListPlayer1: opDeckListPlayer1,
+		deckListPlayer2: opDeckListPlayer2,
+	});
+	/** A One Piece Event's matchups are its Feature Match Slots, read as One Piece Deck Lists. */
+	const isOpEvent = computed(() => eventStore.event?.game === 'op');
+	const canUseDeckListMode = computed(() => isOpEvent.value
+		? opDeckSourceRuntime.canUseDeckListMode.value
+		: deckSourceRuntime.canUseDeckListMode.value);
 	const canUsePlayerDeckMode = deckSourceRuntime.canUsePlayerDeckMode;
 	const cardDataDegraded = deckSourceRuntime.cardDataDegraded;
 
@@ -190,9 +206,17 @@ export const useCardStore = defineStore('card', () => {
 
 	// ──────────────── Deck List Loading ────────────────
 
-	const loadMatchDeckLists = deckSourceRuntime.loadMatchDeckLists;
+	async function loadMatchDeckLists(slotId: number) {
+		await (isOpEvent.value
+			? opDeckSourceRuntime.loadMatchDeckLists(slotId)
+			: deckSourceRuntime.loadMatchDeckLists(slotId));
+	}
 	const loadMatchupDeckLists = deckSourceRuntime.loadMatchupDeckLists;
-	const clearMatchDeckLists = deckSourceRuntime.clearMatchDeckLists;
+	function clearMatchDeckLists() {
+		deckSourceRuntime.clearMatchDeckLists();
+		opDeckSourceRuntime.clearMatchDeckLists();
+	}
+	const opSlotHoldsDeckLists = opDeckSourceRuntime.slotHoldsDeckLists;
 	const loadPlayerDeck = deckSourceRuntime.loadPlayerDeck;
 	const clearPlayerDeck = deckSourceRuntime.clearPlayerDeck;
 
@@ -216,6 +240,7 @@ export const useCardStore = defineStore('card', () => {
 		// and a save or Clear still out touches nothing (ADR-0024).
 		activeCardRuntime.endLifetime();
 		deckSourceRuntime.resetDeckSources();
+		opDeckSourceRuntime.resetDeckSources();
 		opSpotlightRuntime.reset();
 	}
 
@@ -239,6 +264,8 @@ export const useCardStore = defineStore('card', () => {
 		loadingDeckList,
 		deckListPlayer1,
 		deckListPlayer2,
+		opDeckListPlayer1,
+		opDeckListPlayer2,
 		deckListHasData,
 		deckListRoundId,
 		deckListMatchup,
@@ -282,6 +309,7 @@ export const useCardStore = defineStore('card', () => {
 		loadMatchDeckLists,
 		loadMatchupDeckLists,
 		clearMatchDeckLists,
+		opSlotHoldsDeckLists,
 		loadPlayerDeck,
 		clearPlayerDeck,
 		searchOpCards: opSpotlightRuntime.search,

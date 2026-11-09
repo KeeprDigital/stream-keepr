@@ -21,7 +21,11 @@ const playerStore = usePlayerStore();
 const roundStore = useRoundStore();
 const screenStore = useScreenStore();
 
-/** A One Piece Event's Card Spotlight searches bandai-keepr, and has no Deck List modes (ADR-0057). */
+/**
+ * A One Piece Event's Card Spotlight searches bandai-keepr, and its Feature
+ * Match Deck List mode picks a Slot, as it has no Rounds (ADR-0057). It has no
+ * Player Deck List mode.
+ */
 const isOpEvent = computed(() => eventStore.event?.game === 'op');
 
 const historyModal = useOverlay().create(LazyMtgCardHistory);
@@ -156,7 +160,13 @@ watch(selectedScreenId, async (screenId, previousScreenId) => {
 	if (screenId && !keepsLinkedView) {
 		// Check if the screen is tied to a Feature Match Slot with decklists
 		const slotId = selectedScreenSlotId.value;
-		if (slotId) {
+		if (slotId && isOpEvent.value) {
+			if (cardStore.opSlotHoldsDeckLists(slotId)) {
+				activeMode.value = 'match-decklist';
+				deckListMatchup.value = { kind: 'slot', id: slotId };
+			}
+		}
+		else if (slotId) {
 			const slot = featureMatchStore.featureMatches.find(m => m.id === slotId);
 			if (slot) {
 				// Check if this Slot has decklist data
@@ -222,9 +232,11 @@ const matchOptions = computed(() => {
 				player1Name: match.player1Data?.name ?? null,
 				player1DeckName: p1.deckName ?? null,
 				player1Colors: p1.deckColors ?? null,
+				player1Leader: null,
 				player2Name: match.player2Data?.name ?? null,
 				player2DeckName: p2.deckName ?? null,
 				player2Colors: p2.deckColors ?? null,
+				player2Leader: null,
 			};
 		});
 });
@@ -247,12 +259,31 @@ async function saveSelectedAssignmentNote(note: string) {
 	await assignmentStore.updateAssignment(eventStore.eventId, selectedDeckListAssignment.value.id, { note: note.trim() || null });
 }
 
+/** The Slot a One Piece Event's Deck Lists open on: the first holding a Deck List, else the first. */
+function firstOpSlotId(): number | undefined {
+	const slots = featureMatchStore.featureMatches;
+	return (slots.find(slot => cardStore.opSlotHoldsDeckLists(slot.id)) ?? slots[0])?.id;
+}
+
 // Auto-select the first matchup when entering match-decklist mode.
 watch(activeMode, (mode) => {
-	if (mode === 'match-decklist' && !deckListMatchup.value && matchOptions.value.length) {
+	if (mode !== 'match-decklist' || deckListMatchup.value)
+		return;
+	if (isOpEvent.value) {
+		const slotId = firstOpSlotId();
+		if (slotId !== undefined)
+			deckListMatchup.value = { kind: 'slot', id: slotId };
+	}
+	else if (matchOptions.value.length) {
 		deckListMatchId.value = matchOptions.value[0]!.value;
 	}
 });
+
+// A One Piece Event has no Player Deck List mode, so a link naming it opens on search.
+watch([isOpEvent, activeMode], ([op, mode]) => {
+	if (op && mode === 'player-decklist')
+		activeMode.value = 'search';
+}, { immediate: true });
 
 watch(roundOptions, (options) => {
 	if (!deckListRoundId.value && options[0])
@@ -354,35 +385,36 @@ const timeoutProgress = computed(() => {
 			<!-- Header Bar with Mode Toggle -->
 			<div class="sticky top-0 z-10 m-4">
 				<div class="flex items-center gap-3">
-					<!-- One Piece: search alone -->
-					<OpCardSearch v-if="isOpEvent" class="flex-1" />
-					<template v-else>
-						<!-- Mode Toggle -->
-						<MtgCardModeToggle
-							v-model="activeMode"
-							:match-decklist-disabled="!cardStore.canUseDeckListMode && matchOptions.length === 0"
-							:player-decklist-disabled="!cardStore.canUsePlayerDeckMode"
-						/>
-					</template>
+					<!-- Mode Toggle -->
+					<MtgCardModeToggle
+						v-model="activeMode"
+						:match-decklist-disabled="isOpEvent
+							? !cardStore.canUseDeckListMode
+							: !cardStore.canUseDeckListMode && matchOptions.length === 0"
+						:player-decklist-disabled="!cardStore.canUsePlayerDeckMode"
+						:offers-player-decklist="!isOpEvent"
+					/>
 
 					<!-- Mode-specific header controls -->
-					<div v-if="!isOpEvent" class="flex-1">
+					<div class="flex-1">
 						<div v-show="activeMode === 'search'">
-							<MtgCardSearch />
+							<OpCardSearch v-if="isOpEvent" />
+							<MtgCardSearch v-else />
 						</div>
 						<div v-show="activeMode === 'match-decklist'">
+							<!-- One Piece has no Rounds: the picker lists the Feature Match Slots. -->
 							<MtgCardDeckListHeader
 								v-model:deck-list-matchup="deckListMatchup"
 								v-model:deck-list-round-id="deckListRoundId"
-								:round-options="roundOptions"
-								:match-options="matchOptions"
+								:round-options="isOpEvent ? undefined : roundOptions"
+								:match-options="isOpEvent ? undefined : matchOptions"
 								:selected-match="selectedDeckListMatch"
 								:selected-assignment="selectedDeckListAssignment"
 								:save-assignment-note="eventStore.event?.featureMatchNotesEnabled ? saveSelectedAssignmentNote : undefined"
 								:assignment-note-remote-changed="selectedDeckListAssignment ? assignmentStore.isRemoteChanged(selectedDeckListAssignment.id) : false"
 							/>
 						</div>
-						<div v-show="activeMode === 'player-decklist'">
+						<div v-if="!isOpEvent" v-show="activeMode === 'player-decklist'">
 							<MtgCardPlayerDeckHeader
 								v-model:player-id="playerDeckPlayerId"
 							/>
@@ -411,11 +443,18 @@ const timeoutProgress = computed(() => {
 				</div>
 			</div>
 
-			<!-- One Piece: the Event's Unresolved Deck Cards, then search results -->
-			<div v-if="isOpEvent" class="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
-				<OpUnresolvedDeckCards />
-				<OpCardList />
-			</div>
+			<template v-if="isOpEvent">
+				<!-- One Piece: the Event's Unresolved Deck Cards, then search results -->
+				<div v-show="activeMode === 'search'" class="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+					<OpUnresolvedDeckCards />
+					<OpCardList />
+				</div>
+
+				<!-- Feature Match Deck List Content -->
+				<div v-show="activeMode === 'match-decklist'" class="flex-1 overflow-y-auto p-4">
+					<OpCardDeckList />
+				</div>
+			</template>
 
 			<template v-else>
 				<!-- Search Results -->
