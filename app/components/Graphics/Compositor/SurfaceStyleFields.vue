@@ -54,8 +54,6 @@ function testId(suffix: string): string {
 }
 
 function editBorderGlow(edit: BorderGlowEdit) {
-	if (edit.kind === 'border-side')
-		return;
 	if (edit.kind === 'border')
 		emit('edit', { kind: 'outline', patch: edit.patch as Partial<GraphicOutline> | null });
 	else

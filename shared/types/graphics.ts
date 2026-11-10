@@ -872,8 +872,8 @@ interface GraphicItemConfigBase extends GraphicRect {
 	label: string;
 	visible: boolean;
 	/**
-	 * A Layer Lock (ADR-0063): the canvas leaves the item alone. Only a Feature
-	 * Match Layout holds one, and absent reads as unlocked.
+	 * A Layer Lock (ADR-0063): the canvas leaves the item alone. A Feature
+	 * Match Layout and a Broadcast Graphic both hold one; absent reads as unlocked.
 	 */
 	locked?: boolean;
 	/** Determines the item's displayed position; stored geometry stays a top-left rectangle. */

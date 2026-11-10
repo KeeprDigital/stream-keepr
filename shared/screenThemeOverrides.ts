@@ -60,32 +60,22 @@ function screenThemeListedTokens(mode: ScreenMode): string[] {
 
 /** Where a Screen's settings page renders each Theme Token it lists (ADR-0072). */
 export interface ScreenThemeTokenPlacement {
-	/** Each settings group the mode's Mode Tokens declare, with its Mode Tokens in declaration order. */
+	/** Each Screen Settings Group the mode's Mode Tokens name, with its Mode Tokens in declaration order. */
 	groups: Readonly<Record<string, readonly string[]>>;
 	/** Background & Placement: the Foundation Tokens the Screen's host consumes itself, a plain mode's `inset` and `alignment`. */
 	placement: readonly string[];
-	/**
-	 * The residual Screen-wide look: each Mode Token whose group is not mounted
-	 * on the page, then every other listed Foundation Token.
-	 */
-	screenWide: {
-		modeTokens: readonly string[];
-		foundationTokens: readonly string[];
-	};
+	/** The Screen-wide look: every other listed Foundation Token. */
+	foundationTokens: readonly string[];
 }
 
 /**
- * Where each Theme Token a Screen in `mode` lists renders, given the settings
- * groups mounted on its page. Each lands in exactly one place: a Mode Token in
- * its mounted group, else the Screen-wide look, so it never disappears or
- * doubles while its group is not yet mounted.
+ * Where each Theme Token a Screen in `mode` lists renders. Each lands in
+ * exactly one place, a Mode Token always in the group it names.
  */
-export function placeScreenThemeTokens(mode: ScreenMode, mountedGroups: Iterable<string>): ScreenThemeTokenPlacement {
-	const mounted = new Set(mountedGroups);
+export function placeScreenThemeTokens(mode: ScreenMode): ScreenThemeTokenPlacement {
 	const modeTokens = screenModeTokens(mode);
 	const hostTokens = screenModeHostTokens(mode);
 	const groups: Record<string, string[]> = {};
-	const unplacedModeTokens: string[] = [];
 	const foundationTokens: string[] = [];
 	const placement: string[] = [];
 	for (const name of screenThemeListedTokens(mode)) {
@@ -97,14 +87,8 @@ export function placeScreenThemeTokens(mode: ScreenMode, mountedGroups: Iterable
 		}
 		const group = modeTokens[name as keyof typeof modeTokens]!.settingsGroup;
 		(groups[group] ??= []).push(name);
-		if (!mounted.has(group))
-			unplacedModeTokens.push(name);
 	}
-	return {
-		groups,
-		placement,
-		screenWide: { modeTokens: unplacedModeTokens, foundationTokens },
-	};
+	return { groups, placement, foundationTokens };
 }
 
 /**

@@ -80,8 +80,10 @@ const ScreenSettingsToggleStub = defineComponent({
 const ControlSectionStub = defineComponent({
 	props: {
 		title: { type: String, required: false },
+		summary: { type: String, required: false },
+		defaultOpen: { type: Boolean, default: false },
 	},
-	template: '<section data-testid="control-section" :data-section="title"><h3>{{ title }}</h3><slot /></section>',
+	template: '<section data-testid="control-section" :data-section="title" :data-summary="summary" :data-default-open="String(defaultOpen)"><h3>{{ title }}</h3><slot /></section>',
 });
 
 const USwitchStub = defineComponent({
@@ -142,6 +144,20 @@ describe('featureMatchOverlayFrameStyleCard', () => {
 		expect(outsideRows('[data-testid="color-picker"]')).toHaveLength(0);
 		expect(outsideRows('[data-testid="u-input"]')).toHaveLength(0);
 		expect(outsideRows('[role="switch"]')).toHaveLength(0);
+	});
+
+	// The Frame has no position or content of its own, so every section starts closed behind a summary.
+	it.each([
+		['Background', 'opacity 1'],
+		['Video', 'Off'],
+		['Animation', 'Off'],
+		['Surface', 'Fill, border and glow'],
+	])('starts %s closed, summarised as "%s"', async (section, summary) => {
+		const wrapper = await mountComponent();
+		const found = wrapper.get(`[data-section="${section}"]`);
+
+		expect(found.attributes('data-default-open')).toBe('false');
+		expect(found.attributes('data-summary')).toBe(summary);
 	});
 
 	// Each Frame Mode Token's override sits in the section for what it styles (#982).

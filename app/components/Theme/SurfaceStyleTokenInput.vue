@@ -41,8 +41,6 @@ function editFill(change: GraphicFillEdit) {
 }
 
 function editBorderGlow(edit: BorderGlowEdit) {
-	if (edit.kind === 'border-side')
-		return;
 	const { color, ...fields } = edit.patch ?? {};
 	const colored = color === undefined
 		? {}
