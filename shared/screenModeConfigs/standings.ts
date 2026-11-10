@@ -65,7 +65,12 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 }, {
 	// The table's width and its rows' motion are the mode's Mode Tokens (#851).
 	// Reveal's trigger and interval were never read (#1064): the operator's `revealedCount` advances it.
-	formerFields: ['maxTableWidth', 'animateEntries', 'revealTrigger', 'revealIntervalMs'],
+	formerFields: [
+		'maxTableWidth',
+		'animateEntries',
+		'revealTrigger',
+		'revealIntervalMs',
+	],
 });
 
 export type StandingsModeConfig = ScreenModeConfigOf<typeof standingsModeConfigContract>;

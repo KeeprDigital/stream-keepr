@@ -122,7 +122,9 @@ describe.each([
 	});
 
 	it('is still refused as a field of any other mode', () => {
-		const otherMode = mode === 'standings' ? 'top-cut' : 'standings';
+		const otherMode = mode === 'standings'
+			? 'top-cut'
+			: 'standings';
 		expect(modeConfigPatchSchemaMap[otherMode].safeParse(former).success).toBe(false);
 	});
 });
