@@ -156,6 +156,10 @@ describe('syncMatchesFromMelee', () => {
 			formatExternalId: 'standard',
 		};
 		const archetype = { id: 5, name: 'Control', colors: 'WU' };
+		const listed = [
+			meleeMatch('reported'),
+		];
+		mockFetchMatchesByRound.mockResolvedValue(listed);
 		mockFindAll.mockResolvedValue([player]);
 		mockListDecksByEvent.mockResolvedValue([manualDeck, deck]);
 		mockFindArchetypesByIds.mockResolvedValue([archetype]);
@@ -163,7 +167,7 @@ describe('syncMatchesFromMelee', () => {
 		await syncMatchesFromMelee(1, eventData, round as any, phase as any);
 
 		expect(mockFindArchetypesByIds).toHaveBeenCalledWith(1, [5]);
-		expect(mockMapMeleeMatchesToDbRows).toHaveBeenCalledWith([], 10, 1, expect.objectContaining({
+		expect(mockMapMeleeMatchesToDbRows).toHaveBeenCalledWith(listed, 10, 1, expect.objectContaining({
 			playerDecksByPlayerId: new Map([
 				[
 					7,
@@ -178,7 +182,8 @@ describe('syncMatchesFromMelee', () => {
 		}));
 	});
 
-	it('allows an empty authoritative refresh for a previously synced Round', async () => {
+	// A synced Round held Matches: Melee listing none is refused, never taken as its snapshot.
+	it('refuses an empty answer for a previously synced Round instead of wiping it', async () => {
 		const round = {
 			...testRounds[0],
 			externalId: '100',
@@ -186,17 +191,9 @@ describe('syncMatchesFromMelee', () => {
 			lastSyncedAt: new Date(),
 		};
 
-		const result = await syncMatchesFromMelee(1, eventData, round as any, null);
+		await expect(syncMatchesFromMelee(1, eventData, round as any, null)).rejects.toMatchObject({ code: 'INVALID_MELEE_ROUND_SNAPSHOT' });
 
-		expect(result.success).toBe(true);
-		expect(result.round.id).toBe(10);
-		expect(result.matchCount).toBe(0);
-		expect(mockReplaceRoundSnapshot).toHaveBeenCalledWith({
-			eventId: 1,
-			roundId: 10,
-			matches: [],
-			standings: null,
-		});
+		expect(mockReplaceRoundSnapshot).not.toHaveBeenCalled();
 	});
 
 	it('maps standings through the Melee source identity when another source has the same ID', async () => {
@@ -377,6 +374,9 @@ describe('syncMatchesFromMelee', () => {
 			createdAt: new Date(),
 			updatedAt: new Date(),
 		};
+		mockFetchMatchesByRound.mockResolvedValue([
+			meleeMatch('reported'),
+		]);
 
 		const result = await syncMatchesFromMelee(1, eventData, round as any, phase as any);
 
@@ -390,6 +390,9 @@ describe('syncMatchesFromMelee', () => {
 			externalSource: 'melee' as const,
 			lastSyncedAt: new Date(),
 		};
+		mockFetchMatchesByRound.mockResolvedValue([
+			meleeMatch('reported'),
+		]);
 		mockReplaceRoundSnapshot.mockRejectedValue(new Error('batch rolled back'));
 
 		await expect(syncMatchesFromMelee(1, eventData, round as any, null)).rejects.toThrow('batch rolled back');

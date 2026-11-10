@@ -32,6 +32,7 @@ vi.stubGlobal('createError', (input: { statusCode: number; message?: string; sta
 	Object.assign(new Error(input.message ?? input.statusMessage), { statusCode: input.statusCode }));
 
 const { playerUpdateModule } = await import('~~/server/modules/player-update');
+const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
 
 afterAll(async () => await harness.close());
 
@@ -459,6 +460,64 @@ describe('deleting a Player', () => {
 
 		expect(await readPlayer(player.id)).toBeUndefined();
 		expect(publication.playerDeleted).toHaveBeenCalledWith({ eventId, id: player.id, originConnectionId: 'origin-1' });
+	});
+
+	// A deleted Player leaves each side they sat on unlinked, on the Slot and in
+	// its Session: no Player and none of their Deck List, announced to everyone.
+	it.each([
+		{
+			game: 'mtg' as const,
+			side: 'player1' as const,
+			stored: {
+				name: 'Alice',
+				gameData: { type: 'mtg' as const, deckName: 'Izzet Prowess' },
+			},
+			left: {
+				name: 'Alice',
+				gameData: { type: 'mtg', deckName: 'Izzet Prowess' },
+			},
+		},
+		{
+			game: 'op' as const,
+			side: 'player2' as const,
+			stored: {
+				name: 'Alice',
+				gameData: {
+					type: 'op' as const,
+					leader: null,
+					deckList: { id: 7, mainboardCount: 50, leaderNumber: 'OP01-001' },
+				},
+			},
+			left: {
+				name: 'Alice',
+				gameData: { type: 'op', leader: null },
+			},
+		},
+	])('unseats them from the $side side of a $game Slot and its Session, and announces the Slot', async ({ game, side, stored, left }) => {
+		const eventId = await createEvent(game);
+		const player = await createPlayer(eventId);
+		const [slot] = await db.insert(schema.featureMatches)
+			.values({
+				eventId,
+				tableNumber: 1,
+				[`${side}Id`]: player.id,
+				[`${side}Data`]: stored,
+			})
+			.returning();
+		await featureMatchStateService().createSessionForSlot(slot!.id, eventId);
+
+		await playerUpdateModule().deletePlayer({ eventId, playerId: player.id, originConnectionId: 'origin-1' });
+
+		const [after] = await db.select().from(schema.featureMatches).where(eq(schema.featureMatches.id, slot!.id));
+		expect(after).toMatchObject({ [`${side}Id`]: null });
+		expect(after![`${side}Data`]).toEqual(left);
+		const [session] = await db.select().from(schema.featureMatchSessions).where(eq(schema.featureMatchSessions.id, after!.activeSessionId!));
+		expect(session!.sourceSnapshot[side].playerId).toBeNull();
+		expect(session!.sourceSnapshot[side].data).toEqual(left);
+		expect(publication.featureMatchSlotsUpdated).toHaveBeenCalledWith({
+			eventId,
+			slotIds: [slot!.id],
+		});
 	});
 
 	it('refuses a Player another Event holds', async () => {

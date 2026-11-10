@@ -118,6 +118,31 @@ describe('broadcastGraphicsInputs', () => {
 		expect(broadcastGraphicInputsState(state, GRAPHIC).acceptedRevision).toBe(0);
 	});
 
+	// A Graphic Input key may be a name every object inherits: only a value
+	// stored under that key counts as stored.
+	it.each(['constructor', 'toString', 'valueOf'])('reads a Graphic Input keyed %s as any other', (key) => {
+		const declaration: GraphicInputDeclaration = { ...REQUIRED_TITLE, key, default: 'Unnamed' };
+		const initial = createInitialBroadcastGraphicsLiveState();
+
+		expect(workingGraphicInputValues(initial, GRAPHIC, [declaration])).toEqual({ [key]: 'Unnamed' });
+		expect(acceptedGraphicInputValues(initial, GRAPHIC, [declaration])).toEqual({});
+		expect(graphicInputTraces(initial, GRAPHIC, {
+			inputs: [declaration],
+			bindings: [
+				{ inputKey: key, sourceKey: 'player', fieldId: 'name' },
+			],
+		})[0]).toMatchObject({
+			bound: undefined,
+			override: undefined,
+			effective: { value: null, source: 'none' },
+			blocksTake: true,
+		});
+
+		const taken = take(setInput(initial, key, 'Ava Reed', [declaration]), [declaration]);
+
+		expect(acceptedGraphicInputValues(taken, GRAPHIC, [declaration])).toEqual({ [key]: 'Ava Reed' });
+	});
+
 	it('changes the working value without touching what is on air', () => {
 		const edited = setInput(createInitialBroadcastGraphicsLiveState(), 'name', 'Ava Reed');
 

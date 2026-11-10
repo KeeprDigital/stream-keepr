@@ -9,7 +9,7 @@ import { events, featureMatches, featureMatchSessions, matches } from '~~/server
 import { toStoredSlotLeaders, withCatalogueLeaders } from '~~/server/services/featureMatchSlotLeader';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
 import { buildClearDeckSourceSlotsQuery } from '~~/server/services/screen';
-import { chunkRowsWithinParameterBudget, inJsonArray, observedValue } from '~~/server/utils/db';
+import { inJsonArray, observedValue, selectForInsert } from '~~/server/utils/db';
 import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
 import { randomCommandId } from '~~/shared/utils/uuid';
@@ -480,29 +480,40 @@ export function featureMatchService() {
 		let clearedScreens: DbScreen[] = [];
 
 		if (currentCount < targetCount) {
-			// Create new matches with sequential sortOrder after current max
-			const matchesToCreate = targetCount - currentCount;
-			const maxSort = currentMatches.length > 0
-				? Math.max(...currentMatches.map(m => m.sortOrder))
-				: -1;
-
 			const stateService = featureMatchStateService();
 			const eventDefaults = await stateService.loadEventDefaults(eventId);
 			const bestOf = eventDefaults?.bestOf ?? 3;
 
-			const newMatches = Array.from({ length: matchesToCreate }, (_, i) => ({
-				eventId,
-				bestOf,
-				sortOrder: maxSort + i + 1,
-			}));
-
-			// One D1 batch, so the new Slots are inserted all together or not at
-			// all, in statements each within D1's bound-parameter limit (#702).
-			const insertSlots = (rows: typeof newMatches) => db.insert(featureMatches).values(rows).returning();
-			const [firstInsert, ...restInserts] = chunkRowsWithinParameterBudget(newMatches, insertSlots).map(insertSlots);
-			const createdMatches = firstInsert
-				? (await db.batch([firstInsert, ...restInserts])).flat()
-				: [];
+			// One statement, so the new Slots are inserted all together or not at
+			// all (#702), whatever their number within D1's bound-parameter limit,
+			// as the Slot writes' one batch. It counts the Slots
+			// the Event holds as it runs, not as read above: a raise overlapping
+			// another adds only what is still missing, after the last Slot in order.
+			const liveCount = sql`(select count(*) from ${featureMatches} where ${featureMatches.eventId} = ${eventId})`;
+			const lastSortOrder = sql`(select coalesce(max(${featureMatches.sortOrder}), -1) from ${featureMatches} where ${featureMatches.eventId} = ${eventId})`;
+			const now = Date.now();
+			const [createdMatches] = await db.batch([
+				db.insert(featureMatches).select(selectForInsert(featureMatches, {
+					id: sql`null`,
+					eventId: sql`${eventId}`,
+					matchId: sql`null`,
+					externalId: sql`null`,
+					externalSource: sql`null`,
+					tableNumber: sql`null`,
+					roundName: sql`null`,
+					formatName: sql`null`,
+					player1Id: sql`null`,
+					player2Id: sql`null`,
+					player1Data: sql`null`,
+					player2Data: sql`null`,
+					bestOf: sql`${bestOf}`,
+					sortOrder: sql`${lastSortOrder} + value + 1`,
+					playerDisplayMode: sql`'score'`,
+					activeSessionId: sql`null`,
+					createdAt: sql`${now}`,
+					updatedAt: sql`${now}`,
+				}, sql`from json_each(${JSON.stringify(Array.from({ length: targetCount - currentCount }, (_, index) => index))}) where ${liveCount} + value < ${targetCount}`)).returning(),
+			]);
 			created.push(...createdMatches);
 
 			// Initialize state for created matches in one commit, reusing event defaults

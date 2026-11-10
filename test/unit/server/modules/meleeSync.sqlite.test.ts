@@ -142,6 +142,25 @@ describe('syncing Players', () => {
 		expect(event.meleeSyncLeaseToken).toBeNull();
 	});
 
+	// An empty Player list for an Event that holds Melee Players is Melee at
+	// fault, not a tournament everyone left: taking it would deactivate them all.
+	it('keeps the Event\'s Players and refuses the answer when Melee lists none', async () => {
+		const eventId = await createEvent();
+		await db.insert(schema.players).values({
+			eventId,
+			name: 'Alice',
+			externalId: 'player-1',
+			externalSource: 'melee',
+		});
+		melee.fetchMergedPlayers.mockResolvedValue([]);
+
+		await expect(meleeSyncModule().syncPlayers(requestEvent, eventId)).rejects.toMatchObject({ code: 'INVALID_MELEE_PLAYER_SNAPSHOT' });
+
+		expect((await playersOf(eventId)).map(player => [player.name, player.isActive])).toEqual([
+			['Alice', true],
+		]);
+	});
+
 	it('announces no Players change when the sync changed no Player', async () => {
 		const eventId = await createEvent();
 		melee.fetchMergedPlayers.mockResolvedValue([
@@ -535,6 +554,8 @@ describe('syncing a Round\'s Matches', () => {
 			created: 1,
 			updated: 1,
 			staleDeleted: 0,
+			unlinkedSlotIds: [],
+			droppedAssignmentIds: [],
 			warnings: ['A player deck could not be selected'],
 			complete: false,
 			resultChangedMatchIds: [],

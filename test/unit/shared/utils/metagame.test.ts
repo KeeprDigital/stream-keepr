@@ -6,9 +6,20 @@ describe('metagame card type display helpers', () => {
 		expect(getCardTypeBucket('Legendary Creature — Dog')).toBe('Creature');
 		expect(getCardTypeBucket('Land — Forest Island')).toBe('Land');
 		expect(getCardTypeBucket('Legendary Planeswalker — Ashiok')).toBe('Planeswalker');
-		expect(getCardTypeBucket('Enchantment Land — Urza\'s Saga')).toBe('Enchantment');
 		expect(getCardTypeBucket('Legendary Land')).toBe('Land');
 		expect(getCardTypeBucket('Creature // Land')).toBe('Creature');
+	});
+
+	// A land of a second type is a Land, as `isLandCardType` reads it; only a
+	// creature land (Dryad Arbor) is counted with the creatures.
+	it.each([
+		{ cardType: 'Enchantment Land — Urza\'s Saga', bucket: 'Land' },
+		{ cardType: 'Artifact Land', bucket: 'Land' },
+		{ cardType: 'Land Creature — Forest Dryad', bucket: 'Creature' },
+		{ cardType: 'Artifact // Land', bucket: 'Artifact' },
+		{ cardType: 'Enchantment Artifact', bucket: 'Artifact' },
+	])('buckets $cardType as $bucket', ({ cardType, bucket }) => {
+		expect(getCardTypeBucket(cardType)).toBe(bucket);
 	});
 
 	it('supports metagame-specific land labeling without changing the bucket', () => {

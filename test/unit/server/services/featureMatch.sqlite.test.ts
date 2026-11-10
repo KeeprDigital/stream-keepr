@@ -250,6 +250,24 @@ describe('syncFeatureMatches', () => {
 		expect(await featureMatchService().syncFeatureMatches(eventId, 1)).toEqual({ created: [], deleted: [], clearedScreens: [] });
 	});
 
+	// Two saves raising the count at once add up to the count, not past it,
+	// each new Slot in its own place with a Session open.
+	it('adds no Slot past the count when two raises of it overlap', async () => {
+		const eventId = await stageEvent();
+		await featureMatchService().syncFeatureMatches(eventId, 1);
+
+		const raises = await Promise.all([
+			featureMatchService().syncFeatureMatches(eventId, 5),
+			featureMatchService().syncFeatureMatches(eventId, 5),
+		]);
+
+		const slots = await slotsOf(eventId);
+		expect(slots.map(slot => slot.sortOrder)).toEqual([0, 1, 2, 3, 4]);
+		expect(slots.every(slot => slot.activeSessionId != null)).toBe(true);
+		expect(raises.flatMap(raise => raise.created.map(slot => slot.id)).toSorted((a, b) => a - b))
+			.toEqual(slots.slice(1).map(slot => slot.id));
+	});
+
 	it('answers the Session failure, carrying the failed removal with it', async () => {
 		const eventId = await stageEvent();
 		const sessionFailure = new Error('session failed');

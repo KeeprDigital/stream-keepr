@@ -1,4 +1,5 @@
 import type { FeatureMatchAssignmentResponse } from '~~/shared/api';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
@@ -27,6 +28,7 @@ vi.doMock('~~/server/utils/ably', () => ({
 
 const { featureMatchAssignmentModule } = await import('~~/server/modules/feature-match-assignment');
 const { featureMatchService } = await import('~~/server/services/featureMatch');
+const { matchWriteModule } = await import('~~/server/modules/match-write');
 
 afterAll(async () => await harness.close());
 
@@ -189,6 +191,40 @@ describe('a Feature Match Assignment', () => {
 
 		expect(publishMessage.mock.calls).toEqual([
 			announcedDeleted(stage.eventId, held[0]!.id),
+		]);
+	});
+
+	// Deleting a Match drops its Assignment and unlinks the Slot showing it:
+	// every client is told of both, the deleting one included.
+	it('announces the Assignment and the Slot a deleted Match takes with it', async () => {
+		const { stage, held } = await stageRoundHolding([
+			['slot1', 'matchM'],
+		]);
+		await db.update(schema.featureMatches).set({ matchId: stage.matchM }).where(eq(schema.featureMatches.id, stage.slot1));
+
+		await matchWriteModule().remove({ eventId: stage.eventId, matchId: stage.matchM, originConnectionId: ORIGIN });
+
+		expect(publishMessage.mock.calls).toEqual([
+			[
+				stage.eventId,
+				'match:deleted',
+				{ matchId: stage.matchM },
+				ORIGIN,
+			],
+			[
+				stage.eventId,
+				'featureMatch:updated',
+				{
+					featureMatch: expect.objectContaining({ id: stage.slot1, matchId: null }),
+				},
+				undefined,
+			],
+			[
+				stage.eventId,
+				'featureMatchAssignment:deleted',
+				{ featureMatchAssignmentId: held[0]!.id },
+				undefined,
+			],
 		]);
 	});
 

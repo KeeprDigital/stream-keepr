@@ -10,6 +10,7 @@ import { phaseService } from '~~/server/services/phase';
 import { playerRoundStandingsService } from '~~/server/services/playerRoundStandings';
 import { roundService } from '~~/server/services/round';
 import { findMatchesByRound } from '~~/server/services/roundMatches';
+import { inJsonArray } from '~~/server/utils/db';
 import { deriveManualTopCutBracket, deriveTopCutBracket, EMPTY_TOP_CUT_BRACKET } from '~~/shared/modules/top-cut-bracket';
 import { TOP_CUT_BRACKET_SIZES, topCutBracketSource } from '~~/shared/screenModeConfigs/topCut';
 import { resolvePlayerDeckIdentity } from '~~/shared/utils/gameData';
@@ -37,7 +38,8 @@ async function findDecks(eventId: number, playerIds: readonly number[]): Promise
 		})
 		.from(players)
 		.leftJoin(archetypes, eq(players.archetypeId, archetypes.id))
-		.where(and(eq(players.eventId, eventId), inArray(players.id, [...playerIds])));
+		// One bound parameter however many Players the Phase seats: D1 binds at most 100.
+		.where(and(eq(players.eventId, eventId), inJsonArray(players.id, playerIds)));
 
 	const byPlayer = new Map<number, NamedPlayerDeckIdentity>();
 	for (const row of rows) {

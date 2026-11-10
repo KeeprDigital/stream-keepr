@@ -266,6 +266,48 @@ describe('deriveTopCutBracket', () => {
 		]);
 	});
 
+	// A Match seating a Player the previous Round knocked out is no bracket
+	// Match: the Final keeps its position whatever shares its Round.
+	it.each([
+		{
+			placement: 'table order',
+			options: {},
+			thirdPlaceTable: 1,
+			finalTable: 2,
+		},
+		{
+			placement: 'table order, untabled',
+			options: {},
+			thirdPlaceTable: null,
+			finalTable: null,
+		},
+		{
+			placement: 'Seed',
+			options: {
+				seeds: seeded(4),
+			},
+			thirdPlaceTable: 1,
+			finalTable: 2,
+		},
+	])('crowns the Final\'s winner when a third-place Match shares its Round, placed by $placement', ({ options, thirdPlaceTable, finalTable }) => {
+		const bracket = deriveTopCutBracket([
+			round(1, 'Semifinals', [
+				match(1, player(1), player(4), [2, 0]),
+				match(2, player(2), player(3), [2, 0]),
+			]),
+			round(2, 'Final', [
+				match(thirdPlaceTable, player(4), player(3), [2, 0]),
+				match(finalTable, player(1), player(2), [2, 1]),
+			]),
+		], options);
+
+		expect(seats(bracket)).toEqual([
+			['P1 v P4', 'P2 v P3'],
+			['P1 v P2'],
+		]);
+		expect(bracket.champion).toEqual(player(1));
+	});
+
 	it('follows a side the Match records by name alone', () => {
 		const bracket = deriveTopCutBracket([
 			round(1, 'Semifinals', [
@@ -604,6 +646,48 @@ describe('deriveTopCutBracket', () => {
 				],
 				['P5 v P1', 'P2 v P3'],
 				['- v -'],
+			]);
+		});
+
+		// A bye no Seed names is the next Round's Player no first-Round Match
+		// seats, whichever side of that Match they sit on.
+		it.each([
+			{
+				semifinal: [4, 1] as const,
+				expected: 'P4 v P1',
+			},
+			{
+				semifinal: [1, 4] as const,
+				expected: 'P1 v P4',
+			},
+		])('names an unseeded bye from the next Round\'s $expected', ({ semifinal, expected }) => {
+			const bracket = deriveTopCutBracket([
+				round(1, 'Quarterfinals', [
+					match(1, player(3), player(6), [2, 0]),
+					match(2, player(4), player(5), [2, 0]),
+				]),
+				round(2, 'Semifinals', [
+					match(1, player(semifinal[0]), player(semifinal[1])),
+				]),
+			], {
+				seeds: seeded(6).slice(2),
+			});
+
+			expect(seats(bracket)).toEqual([
+				[
+					'P1 v -',
+					'P4 v P5',
+					'- v -',
+					'P3 v P6',
+				],
+				[expected, '- v P3'],
+				['- v -'],
+			]);
+			expect(bracket.columns[0]!.positions.map(position => position.status)).toEqual([
+				'bye',
+				'reported',
+				'awaiting',
+				'reported',
 			]);
 		});
 

@@ -66,6 +66,27 @@ describe('calculateDeckStats', () => {
 		expect(stats.other).toBe(0);
 	});
 
+	// A land of a second type counts as a land; a creature land, or a card whose
+	// back face alone is a land, counts as its other type.
+	it.each([
+		{ cardType: 'Enchantment Land — Urza\'s Saga', counted: 'lands' },
+		{ cardType: 'Artifact Land', counted: 'lands' },
+		{ cardType: 'Land Creature — Forest Dryad', counted: 'creatures' },
+		{ cardType: 'Artifact // Land', counted: 'artifacts' },
+		{ cardType: 'Sorcery // Land', counted: 'sorceries' },
+	] as const)('counts $cardType among the $counted', ({ cardType, counted }) => {
+		const stats = calculateDeckStats([
+			card({ cardType, quantity: 4 }),
+		]);
+
+		expect(stats).toMatchObject({
+			lands: 0,
+			artifacts: 0,
+			enchantments: 0,
+			[counted]: 4,
+		});
+	});
+
 	it('skips sideboard cards', () => {
 		const stats = calculateDeckStats([
 			card({ cardType: 'Creature', quantity: 4 }),

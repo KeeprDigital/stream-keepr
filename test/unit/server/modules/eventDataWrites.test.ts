@@ -19,7 +19,7 @@ const services = {
 	phase: serviceMock('create', 'update', 'remove'),
 	round: serviceMock('create', 'update', 'remove'),
 	talent: serviceMock('create', 'update', 'remove'),
-	match: serviceMock('create', 'update', 'remove'),
+	match: serviceMock('create', 'update', 'remove', 'findFeatured'),
 	slot: serviceMock('create', 'update', 'remove', 'swapMatchOrder'),
 	playerList: serviceMock('create', 'update', 'remove', 'addMembers', 'removeMember', 'batchRemoveMembers', 'reorderMembers', 'getMemberCount'),
 	featureMatchState: serviceMock('createSessionForSlot', 'applyCommand'),
@@ -82,6 +82,7 @@ beforeEach(() => {
 		}
 	}
 	services.playerList.getMemberCount!.mockResolvedValue(5);
+	services.match.findFeatured!.mockResolvedValue({ slots: [], assignments: [] });
 	for (const service of ['slot', 'phase', 'round', 'talent'] as const)
 		services[service].remove!.mockResolvedValue({ deleted: true, clearedScreens: [] });
 	for (const guard of Object.values(guards)) {

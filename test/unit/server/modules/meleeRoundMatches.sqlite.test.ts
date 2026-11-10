@@ -25,6 +25,8 @@ const QUARTERFINALS = 4001;
 const meleeMatchesByRound = new Map<number, MeleeMatchParsed[] | Error>();
 const meleeStandingsByRound = new Map<number, MeleeStandingParsed[]>();
 const publishMessageStrict = vi.fn();
+/** The best-effort channel: Slot and Assignment changes a sync announces beside its own messages. */
+const publishMessage = vi.fn((..._message: unknown[]) => {});
 const melee = {
 	fetchMatchesByRound: vi.fn(async (roundId: number) => {
 		const matches = meleeMatchesByRound.get(roundId) ?? [];
@@ -69,7 +71,7 @@ vi.doMock('~~/server/services/meleeIntegration', () => ({
 }));
 vi.doMock('~~/server/utils/ably', () => ({
 	getOriginConnectionId: () => 'origin-1',
-	publishMessage: vi.fn(),
+	publishMessage,
 	publishMessageStrict,
 }));
 vi.doMock('~~/server/modules/broadcast-graphics-live-session', () => ({
@@ -305,6 +307,24 @@ describe('syncing a Round from Melee', () => {
 		expect((await db.query.rounds.findFirst({
 			where: eq(schema.rounds.id, roundId(ROUND_4)),
 		}))!.lastSyncedAt).toBeNull();
+	});
+});
+
+describe('a synced Round Melee then lists no Matches for', () => {
+	// An empty answer for a Round that held Matches is Melee mid re-pair or at
+	// fault, not a Round with none: taking it would delete them and what hangs off them.
+	it('keeps the Round\'s stored Matches and refuses the answer', async () => {
+		const { eventId, roundId } = await seedEvent();
+		meleeMatchesByRound.set(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4]),
+		]);
+		await syncRound(eventId, roundId(ROUND_3));
+		meleeMatchesByRound.set(ROUND_3, []);
+
+		await expect(syncRound(eventId, roundId(ROUND_3))).rejects.toMatchObject({ code: 'INVALID_MELEE_ROUND_SNAPSHOT' });
+
+		expect(await matchesOf(eventId, roundId(ROUND_3))).toHaveLength(2);
 	});
 });
 
@@ -689,6 +709,56 @@ describe('a Round sync announces only what it changed', () => {
 		const messages = await expected(seeded);
 		expect(result.published).toEqual(published);
 		expect(announced()).toEqual(messages);
+	});
+
+	// A Match Melee no longer lists goes, and takes its Assignment and its Slot's
+	// link with it: peers are told of both, where the pairings message names neither.
+	it('a featured Match re-paired away: announces its Slot and its dropped Assignment', async () => {
+		const seeded = await seedEvent();
+		const roundId = seeded.roundId(ROUND_3);
+		meleeMatchesByRound.set(ROUND_3, [
+			pairing('a', [1, 2]),
+			pairing('b', [3, 4]),
+		]);
+		await syncRound(seeded.eventId, roundId);
+		const featured = await matchId(seeded, ROUND_3, 'b');
+		const [slot, otherSlot] = await db.insert(schema.featureMatches).values([
+			{ eventId: seeded.eventId, matchId: featured },
+			{ eventId: seeded.eventId, sortOrder: 1, matchId: await matchId(seeded, ROUND_3, 'a') },
+		]).returning();
+		const [assignment] = await db.insert(schema.featureMatchAssignments).values([
+			{
+				eventId: seeded.eventId,
+				roundId,
+				slotId: slot!.id,
+				matchId: featured,
+			},
+			{
+				eventId: seeded.eventId,
+				roundId,
+				slotId: otherSlot!.id,
+				matchId: await matchId(seeded, ROUND_3, 'a'),
+			},
+		]).returning();
+		meleeMatchesByRound.set(ROUND_3, [
+			pairing('a', [1, 2]),
+			pairing('c', [4, 3]),
+		]);
+
+		await createMeleeSyncWorkflows().syncRoundMatches({}, seeded.eventId, eventData, roundId);
+
+		expect(publishMessage.mock.calls.map(([, type, payload]) => [type, payload])).toEqual([
+			[
+				'featureMatch:updated',
+				{
+					featureMatch: expect.objectContaining({ id: slot!.id, matchId: null }),
+				},
+			],
+			[
+				'featureMatchAssignment:deleted',
+				{ featureMatchAssignmentId: assignment!.id },
+			],
+		]);
 	});
 
 	// Pairing Round 4 stores Round 3's standings, which re-syncs Round 3's Matches:
