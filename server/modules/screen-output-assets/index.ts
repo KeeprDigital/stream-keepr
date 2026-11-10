@@ -3,10 +3,24 @@ import {
 	rangePermitted,
 	requestedByteRange,
 } from '~~/server/utils/byteRangeContentDelivery';
+import { MAX_STILL_IMAGE_INGESTION_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import {
 	screenOutputAssetCapabilityDigest,
 	screenOutputAssetRepresentationTag,
 } from './capability';
+
+/**
+ * The longest full body whose delivery also fills the cache.
+ *
+ * Filling the cache from the response being delivered clones it, and a clone
+ * holds every byte its slower reader has not yet taken: the cache reads at
+ * its own pace, so a slow Screen Output can leave nearly the whole body held
+ * in an isolate with 128 MB to its name. The bound is the largest still image
+ * the library accepts, so every image and font is cached and only a silent
+ * video read whole — one a `<video>` never makes, since it reads by range —
+ * is delivered without being cached.
+ */
+export const SCREEN_OUTPUT_ASSET_CACHE_MAXIMUM_BYTES = MAX_STILL_IMAGE_INGESTION_BYTES;
 
 interface ScreenOutputAssetAuthorizationInput {
 	screenId: number;
@@ -269,7 +283,11 @@ export function createScreenOutputAssetDelivery(
 			return { outcome: 'unavailable', retryable: true };
 		}
 		const immutableResponse = new Response(resolution.body, { headers });
-		if (dependencies.cache && dependencies.defer) {
+		if (
+			dependencies.cache
+			&& dependencies.defer
+			&& inspection.byteLength <= SCREEN_OUTPUT_ASSET_CACHE_MAXIMUM_BYTES
+		) {
 			dependencies.defer(
 				dependencies.cache
 					.put(internalCacheRequest(representationTag, new Headers()), immutableResponse.clone())

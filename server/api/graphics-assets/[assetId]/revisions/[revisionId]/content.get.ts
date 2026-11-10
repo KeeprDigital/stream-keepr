@@ -14,11 +14,11 @@ import { TemporarilyUnavailableError } from '~~/server/utils/errors';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
- * The one refusal both reads answer when the byte store is out of reach.
+ * The one refusal every read answers when the byte store is out of reach.
  *
- * Shared between the whole-body read and the ranged one because they are the same
- * failure seen twice — a range is served by a second resolve against the same store,
- * so the twin used to be the site most likely to drift. The cause is what carries the
+ * Shared between the metadata lookup and the byte read, whole or ranged, because
+ * they are the same failure seen at different reads of the same store, and a twin
+ * is the site most likely to drift. The cause is what carries the
  * sentence past the 5xx sanitizer; without it both answered 'Internal Server Error'
  * beside a retry-after header, which tells an operator to retry and not what for
  * (#321).
@@ -31,6 +31,14 @@ function contentTemporarilyUnavailable(event: H3Event) {
 		statusMessage: 'Service Unavailable',
 		message: cause.message,
 		cause,
+	});
+}
+
+function revisionNotFound() {
+	return createError({
+		statusCode: 404,
+		statusMessage: 'Not Found',
+		message: 'Graphic Asset Revision not found',
 	});
 }
 
@@ -47,58 +55,60 @@ export default defineEventHandler(async (event) => {
 		'etag': etag,
 		'vary': 'cookie',
 	} as const;
-	if (ifNoneMatchMatches(getRequestHeader(event, 'if-none-match'), etag))
-		return new Response(null, { status: 304, headers: baseHeaders });
 	try {
 		const library = graphicsAssetLibraryForEvent(event);
-		const complete = await library.resolveGraphicAssetRevision({ assetId, revisionId });
-		if (complete.outcome === 'missing') {
-			throw createError({
-				statusCode: 404,
-				statusMessage: 'Not Found',
-				message: 'Graphic Asset Revision not found',
-			});
-		}
-		if (complete.outcome === 'unavailable')
+		// The validator names the route, so it cannot vouch for a revision that
+		// is gone: the revision is looked up before any conditional is answered.
+		// The same lookup states the length a range is judged against, so a
+		// ranged read opens only the bytes it serves.
+		const inspection = await library.inspectGraphicAssetRevisionContent({ assetId, revisionId });
+		if (inspection.outcome === 'missing')
+			throw revisionNotFound();
+		if (inspection.outcome === 'unavailable')
 			throw contentTemporarilyUnavailable(event);
+		if (ifNoneMatchMatches(getRequestHeader(event, 'if-none-match'), etag))
+			return new Response(null, { status: 304, headers: baseHeaders });
 		const range = rangePermitted(getRequestHeader(event, 'if-range'), etag)
-			? requestedByteRange(getRequestHeader(event, 'range'), complete.byteLength)
+			? requestedByteRange(getRequestHeader(event, 'range'), inspection.byteLength)
 			: undefined;
 		if (range === 'unsatisfiable') {
-			await complete.body.cancel();
 			return new Response(null, {
 				status: 416,
 				headers: {
 					...baseHeaders,
-					'content-range': `bytes */${complete.byteLength}`,
+					'content-range': `bytes */${inspection.byteLength}`,
 				},
 			});
 		}
+		const rangeLength = range
+			? range.end - range.start + 1
+			: undefined;
+		const content = await library.resolveGraphicAssetRevision({
+			assetId,
+			revisionId,
+			range: range && { offset: range.start, length: rangeLength! },
+		});
+		// The revision can leave between the lookup and the byte read.
+		if (content.outcome === 'missing')
+			throw revisionNotFound();
+		if (content.outcome === 'unavailable')
+			throw contentTemporarilyUnavailable(event);
 		if (range) {
-			await complete.body.cancel();
-			const rangeLength = range.end - range.start + 1;
-			const partial = await library.resolveGraphicAssetRevision({
-				assetId,
-				revisionId,
-				range: { offset: range.start, length: rangeLength },
-			});
-			if (partial.outcome !== 'available')
-				throw contentTemporarilyUnavailable(event);
-			return new Response(partial.body, {
+			return new Response(content.body, {
 				status: 206,
 				headers: {
 					...baseHeaders,
-					'content-type': partial.contentType,
+					'content-type': content.contentType,
 					'content-length': String(rangeLength),
-					'content-range': `bytes ${range.start}-${range.end}/${complete.byteLength}`,
+					'content-range': `bytes ${range.start}-${range.end}/${inspection.byteLength}`,
 				},
 			});
 		}
-		return new Response(complete.body, {
+		return new Response(content.body, {
 			headers: {
 				...baseHeaders,
-				'content-type': complete.contentType,
-				'content-length': String(complete.byteLength),
+				'content-type': content.contentType,
+				'content-length': String(content.byteLength),
 			},
 		});
 	}

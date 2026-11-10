@@ -93,6 +93,7 @@ const remoteCopyPending = ref(false);
 const remoteCopyError = ref<string | null>(null);
 const uploadPending = ref(false);
 const uploadError = ref<string | null>(null);
+const cancelPending = ref(false);
 const currentOperation = ref<GraphicsIngestionOperation | null>(null);
 const usageByAssetId = reactive<Record<string, GraphicAssetUsage[] | undefined>>({});
 const usagePendingAssetId = ref<string | null>(null);
@@ -207,11 +208,20 @@ const selectionError = computed(() => {
 	return null;
 });
 
+/**
+ * Upload, approved remote copy and file replacement share the one operation on
+ * show and the one persisted operation identity, so they run one at a time:
+ * while any of them is in flight the others cannot start.
+ */
+const ingestionInFlight = computed(() =>
+	uploadPending.value || remoteCopyPending.value || replacementPending.value,
+);
+
 const canUpload = computed(() =>
 	selectedFile.value !== null
 	&& proposedName.value.trim().length > 0
 	&& selectionError.value === null
-	&& !uploadPending.value,
+	&& !ingestionInFlight.value,
 );
 
 /**
@@ -252,7 +262,7 @@ const canCopyRemoteSource = computed(() =>
 	remoteSourcePath.value !== null
 	&& remoteSelectionError.value === null
 	&& remoteProposedName.value.trim().length > 0
-	&& !remoteCopyPending.value,
+	&& !ingestionInFlight.value,
 );
 
 const awaitingStagedConfirmation = computed(() =>
@@ -285,6 +295,27 @@ function isRetryableOperation(
 }
 
 const canRetryOperation = computed(() => isRetryableOperation(currentOperation.value));
+
+/**
+ * A local transfer that staged nothing left no bytes a retry could continue
+ * from, so the library takes the source again instead (the same rule its
+ * single-request transfer applies). Only the author's file can supply it.
+ */
+function needsSourceAgain(operation: GraphicsIngestionOperation) {
+	return (operation.source === 'local-upload' || operation.source === 'replacement')
+		&& !operation.transfer
+		&& operation.transferredByteLength === 0
+		&& (operation.stage === 'failed' || operation.stage === 'transferring');
+}
+
+const retryLabel = computed(() => {
+	const operation = currentOperation.value;
+	if (operation?.stage !== 'failed')
+		return 'Resume if interrupted';
+	return needsSourceAgain(operation)
+		? 'Send the source again'
+		: 'Retry from staged bytes';
+});
 
 function readPendingInitiation(): PendingInitiation | null {
 	const stored = localStorage.getItem(initiationStorageKey);
@@ -511,11 +542,35 @@ function beginReplacement(asset: GraphicAsset) {
 	replacementError.value = null;
 }
 
+/**
+ * The transfer whose bytes are being sent, so that a cancellation the library
+ * accepted can abandon them. Cancelling is the library's decision, asked for
+ * through the operation; aborting only stops this browser sending what the
+ * library no longer wants.
+ */
+let transferInFlight: {
+	operationId: GraphicsIngestionOperation['id'];
+	abort: AbortController;
+} | null = null;
+
+function transferSignal(operation: GraphicsIngestionOperation) {
+	const abort = new AbortController();
+	transferInFlight = { operationId: operation.id, abort };
+	return abort.signal;
+}
+
+/** Whether a flow's transfer stopped because its operation was cancelled, which is not a failure to report. */
+function transferWasCancelled() {
+	return transferInFlight?.abort.signal.aborted === true;
+}
+
 async function transferGraphicAsset(
 	operation: GraphicsIngestionOperation,
 	file: File,
 ) {
-	let completed = await ingestionTransfer.transfer(operation, file);
+	let completed = await ingestionTransfer.transfer(operation, file, {
+		signal: transferSignal(operation),
+	});
 	if (
 		completed.stage === 'awaiting-confirmation'
 		&& completed.report?.outcome === 'accepted'
@@ -559,7 +614,7 @@ async function initiateAndTransferGraphicAsset(
 
 async function replaceAsset(asset: GraphicAsset) {
 	const file = replacementFile.value;
-	if (!file || replacementPending.value)
+	if (!file || ingestionInFlight.value)
 		return;
 	replacementPending.value = true;
 	replacementError.value = null;
@@ -592,12 +647,15 @@ async function replaceAsset(asset: GraphicAsset) {
 		}
 	}
 	catch (caught) {
-		replacementError.value = authorship.describeFailure(
-			caught,
-			'Graphic Asset replacement failed.',
-		);
+		if (!transferWasCancelled()) {
+			replacementError.value = authorship.describeFailure(
+				caught,
+				'Graphic Asset replacement failed.',
+			);
+		}
 	}
 	finally {
+		transferInFlight = null;
 		replacementPending.value = false;
 	}
 }
@@ -618,22 +676,38 @@ function operationMatchesSelectedFile(
  * arrive from concurrent part uploads and the transfer's poller, so they may
  * arrive out of order; `transferredByteLength` only grows, which makes it the
  * freshness the presentation judges by.
+ *
+ * Two things outrank freshness. A snapshot of another operation says nothing
+ * about the one on show, and `completed` and `cancelled` are final, so a
+ * snapshot taken before either was reached is by definition the older one.
  */
 function observeNewerOperation(operation: GraphicsIngestionOperation) {
+	const shown = currentOperation.value;
+	if (!shown) {
+		currentOperation.value = operation;
+		return;
+	}
 	if (
-		!currentOperation.value
-		|| operation.transferredByteLength >= currentOperation.value.transferredByteLength
+		operation.id === shown.id
+		&& shown.stage !== 'completed'
+		&& shown.stage !== 'cancelled'
+		&& operation.transferredByteLength >= shown.transferredByteLength
 	) {
 		currentOperation.value = operation;
 	}
 }
 
 async function refreshAfterTerminalOperation() {
-	if (currentOperation.value?.stage !== 'completed')
+	const completed = currentOperation.value;
+	if (completed?.stage !== 'completed')
 		return;
 	clearPersistedOperation();
-	selectedFile.value = null;
-	proposedName.value = '';
+	// Only a completed upload has used up the upload form. A remote copy or a
+	// replacement finishing leaves a source prepared there as the author left it.
+	if (completed.source === 'local-upload') {
+		selectedFile.value = null;
+		proposedName.value = '';
+	}
 	await refresh();
 	await refreshCapacity();
 }
@@ -673,9 +747,11 @@ async function uploadGraphicAsset() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		uploadError.value = authorship.describeFailure(caught, 'Graphic Asset upload failed.');
+		if (!transferWasCancelled())
+			uploadError.value = authorship.describeFailure(caught, 'Graphic Asset upload failed.');
 	}
 	finally {
+		transferInFlight = null;
 		uploadPending.value = false;
 	}
 }
@@ -781,7 +857,7 @@ async function copyRemoteGraphicAssetSource() {
 
 async function confirmStagedSource() {
 	const operation = currentOperation.value;
-	if (!operation || !awaitingStagedConfirmation.value)
+	if (!operation || !awaitingStagedConfirmation.value || ingestionInFlight.value)
 		return;
 	remoteCopyPending.value = true;
 	remoteCopyError.value = null;
@@ -802,7 +878,7 @@ async function confirmStagedSource() {
 
 async function retryOperation() {
 	const operation = currentOperation.value;
-	if (!isRetryableOperation(operation)) {
+	if (!isRetryableOperation(operation) || ingestionInFlight.value) {
 		return;
 	}
 	uploadPending.value = true;
@@ -827,7 +903,22 @@ async function retryOperation() {
 					'Reselect the same source file to resume from the verified multipart checkpoint.',
 				);
 			}
-			currentOperation.value = await ingestionTransfer.transfer(operation, file);
+			currentOperation.value = await ingestionTransfer.transfer(operation, file, {
+				signal: transferSignal(operation),
+			});
+			await refreshAfterTerminalOperation();
+			return;
+		}
+		if (needsSourceAgain(operation)) {
+			const file = operation.source === 'replacement'
+				? replacementFile.value
+				: selectedFile.value;
+			if (!file || !operationMatchesSelectedFile(operation, file, operation.name)) {
+				throw new Error(
+					'Reselect the same source file to send it again. Nothing was staged to retry from.',
+				);
+			}
+			currentOperation.value = await transferGraphicAsset(operation, file);
 			await refreshAfterTerminalOperation();
 			return;
 		}
@@ -841,30 +932,43 @@ async function retryOperation() {
 		await refreshAfterTerminalOperation();
 	}
 	catch (caught) {
-		uploadError.value = authorship.describeFailure(caught, 'Graphic Asset retry failed.');
+		if (!transferWasCancelled())
+			uploadError.value = authorship.describeFailure(caught, 'Graphic Asset retry failed.');
 	}
 	finally {
+		transferInFlight = null;
 		uploadPending.value = false;
 	}
 }
 
+/**
+ * Cancels the operation on show, whether or not its bytes are still being
+ * sent — which is why it has its own pending state rather than the upload's.
+ * The library is asked first: only once it answers `cancelled` is the transfer
+ * abandoned, so a cancellation that failed, or lost to a publication, leaves
+ * the upload running to its own answer.
+ */
 async function cancelOperation() {
 	const operation = currentOperation.value;
 	if (
 		!operation
+		|| cancelPending.value
 		|| operation.stage === 'completed'
 		|| (operation.stage === 'cancelled' && !operation.transfer?.cleanupPending)
 	) {
 		return;
 	}
-	uploadPending.value = true;
+	cancelPending.value = true;
 	uploadError.value = null;
 	try {
-		currentOperation.value = await $fetch<GraphicsIngestionOperation>(
+		const cancelled = await $fetch<GraphicsIngestionOperation>(
 			`/api/graphics-assets/ingestion-operations/${operation.id}`,
 			{ method: 'DELETE' },
 		);
-		if (!currentOperation.value.transfer?.cleanupPending)
+		currentOperation.value = cancelled;
+		if (cancelled.stage === 'cancelled' && transferInFlight?.operationId === cancelled.id)
+			transferInFlight.abort.abort();
+		if (!cancelled.transfer?.cleanupPending)
 			clearPersistedOperation();
 		await refreshCapacity();
 	}
@@ -872,7 +976,7 @@ async function cancelOperation() {
 		uploadError.value = authorship.describeFailure(caught, 'Cancellation failed.');
 	}
 	finally {
-		uploadPending.value = false;
+		cancelPending.value = false;
 	}
 }
 
@@ -1149,6 +1253,15 @@ onMounted(async () => {
 					</p>
 				</UAlert>
 
+				<p
+					v-if="ingestionInFlight"
+					class="mt-4 text-sm text-muted"
+					role="status"
+					data-testid="ingestion-in-flight"
+				>
+					A Graphics Ingestion Operation is in flight. Upload, approved remote copy and file replacement run one at a time, and are available again when it finishes.
+				</p>
+
 				<div class="mt-6 border-t border-default pt-4">
 					<h3 class="font-semibold text-highlighted">
 						Copy an approved HTTPS source
@@ -1223,7 +1336,12 @@ onMounted(async () => {
 					</UAlert>
 				</div>
 
-				<div v-if="currentOperation" class="mt-4 rounded-lg border border-default bg-elevated/25 p-4">
+				<div
+					v-if="currentOperation"
+					class="mt-4 rounded-lg border border-default bg-elevated/25 p-4"
+					data-testid="ingestion-operation"
+					:data-operation-id="currentOperation.id"
+				>
 					<div class="flex flex-wrap items-center gap-2">
 						<UBadge
 							:color="operationColor(currentOperation.stage)"
@@ -1287,13 +1405,15 @@ onMounted(async () => {
 							icon="i-lucide-badge-check"
 							label="Confirm staged source"
 							:loading="remoteCopyPending"
+							:disabled="ingestionInFlight"
 							@click="confirmStagedSource"
 						/>
 						<UButton
 							v-if="canRetryOperation"
 							icon="i-lucide-refresh-cw"
-							:label="currentOperation.stage === 'failed' ? 'Retry from staged bytes' : 'Resume if interrupted'"
+							:label="retryLabel"
 							:loading="uploadPending"
+							:disabled="ingestionInFlight"
 							@click="retryOperation"
 						/>
 						<UButton
@@ -1305,7 +1425,7 @@ onMounted(async () => {
 							variant="soft"
 							icon="i-lucide-x"
 							:label="currentOperation.stage === 'cancelled' ? 'Retry staged-byte cleanup' : 'Cancel ingestion'"
-							:loading="uploadPending"
+							:loading="cancelPending"
 							@click="cancelOperation"
 						/>
 					</div>
@@ -1679,7 +1799,7 @@ onMounted(async () => {
 						<div class="flex gap-2">
 							<UButton
 								label="Replace with new Graphic Asset Revision"
-								:disabled="!replacementFile"
+								:disabled="!replacementFile || ingestionInFlight"
 								:loading="replacementPending"
 								@click="replaceAsset(asset)"
 							/>

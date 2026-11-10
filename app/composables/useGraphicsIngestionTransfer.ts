@@ -97,19 +97,24 @@ export function useGraphicsIngestionTransfer(options: {
 	 * multipart completion — produces no checkpoints of its own, so while the
 	 * library works the only progress to report is what a read returns. The
 	 * in-flight request stays authoritative: a poll that fails says nothing,
-	 * and the poller stops the moment the request settles.
+	 * and the poller stops the moment the request settles. A poll already asked
+	 * by then is stale when it answers — the request's own response is the newer
+	 * word — so it is not reported either.
 	 */
 	const observeOperationRequest = async <T>(
 		operationId: GraphicsIngestionOperation['id'],
 		request: Promise<T>,
 	): Promise<T> => {
 		let pollPending = false;
+		let settled = false;
 		const interval = setInterval(async () => {
 			if (pollPending)
 				return;
 			pollPending = true;
 			try {
-				observe(await $fetch<GraphicsIngestionOperation>(`${ingestion}/${operationId}`));
+				const polled = await $fetch<GraphicsIngestionOperation>(`${ingestion}/${operationId}`);
+				if (!settled)
+					observe(polled);
 			}
 			catch {
 				// The in-flight request remains authoritative; its response handles errors.
@@ -122,6 +127,7 @@ export function useGraphicsIngestionTransfer(options: {
 			return await request;
 		}
 		finally {
+			settled = true;
 			clearInterval(interval);
 		}
 	};
@@ -129,6 +135,7 @@ export function useGraphicsIngestionTransfer(options: {
 	const transferInOneRequest = async (
 		operation: GraphicsIngestionOperation,
 		source: Blob,
+		signal?: AbortSignal,
 	): Promise<GraphicsIngestionOperation> => {
 		return await observeOperationRequest(operation.id, $fetch<GraphicsIngestionOperation>(
 			`${ingestion}/${operation.id}/content`,
@@ -136,6 +143,7 @@ export function useGraphicsIngestionTransfer(options: {
 				method: 'PUT',
 				headers: apiHeaders.getHeaders(),
 				body: source,
+				signal,
 			},
 		));
 	};
@@ -143,12 +151,14 @@ export function useGraphicsIngestionTransfer(options: {
 	const transferInParts = async (
 		operation: GraphicsIngestionOperation,
 		source: Blob,
+		signal?: AbortSignal,
 	): Promise<GraphicsIngestionOperation> => {
 		const started = await $fetch<GraphicsIngestionOperation>(
 			`${ingestion}/${operation.id}/multipart`,
 			{
 				method: 'POST',
 				headers: apiHeaders.getHeaders(),
+				signal,
 			},
 		);
 		observe(started);
@@ -179,6 +189,7 @@ export function useGraphicsIngestionTransfer(options: {
 								method: 'PUT',
 								headers: apiHeaders.getHeaders(),
 								body: part,
+								signal,
 							},
 						));
 						break;
@@ -188,9 +199,11 @@ export function useGraphicsIngestionTransfer(options: {
 						// re-sent part is the same part rather than a second one. A
 						// refusal a retry cannot change — an ended session or any other
 						// non-retryable 4xx — stops here: every remaining attempt would
-						// be refused identically.
+						// be refused identically. So does an abort, which is the caller
+						// saying the bytes are no longer wanted.
 						if (
-							graphicsAuthorSignedOut(caught)
+							signal?.aborted
+							|| graphicsAuthorSignedOut(caught)
 							|| !retryCanChangeTheAnswer(caught)
 							|| attempt === transfer.maximumPartAttempts
 						) {
@@ -214,18 +227,25 @@ export function useGraphicsIngestionTransfer(options: {
 			{
 				method: 'POST',
 				headers: apiHeaders.getHeaders(),
+				signal,
 			},
 		));
 	};
 
+	/**
+	 * `signal` abandons the transfer: every request in flight is aborted, no
+	 * further part is sent, and the transfer rejects. It does not cancel the
+	 * operation, which is the caller's to ask of the library.
+	 */
 	const transfer = async (
 		operation: GraphicsIngestionOperation,
 		source: Blob,
+		{ signal }: { signal?: AbortSignal } = {},
 	): Promise<GraphicsIngestionOperation> => {
 		try {
 			return source.size > GRAPHICS_MULTIPART_PART_BYTES
-				? await transferInParts(operation, source)
-				: await transferInOneRequest(operation, source);
+				? await transferInParts(operation, source, signal)
+				: await transferInOneRequest(operation, source, signal);
 		}
 		catch (caught) {
 			refuseWithoutSession(caught);

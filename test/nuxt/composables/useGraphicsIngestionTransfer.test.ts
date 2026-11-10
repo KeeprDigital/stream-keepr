@@ -2,6 +2,7 @@ import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { deferred } from '~~/test/helpers/deferred';
 import { requestsMadeTo, sourceOfByteLength } from '~~/test/helpers/ingestionTransferRequests';
 
 const { mockFetch, realtime } = vi.hoisted(() => ({
@@ -470,6 +471,88 @@ describe('useGraphicsIngestionTransfer', () => {
 			await pending;
 
 			expect(observed).toContain(42);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	// A poll already asked when the request settles is stale by the time it
+	// answers: the request's own response is the newer word on the operation.
+	it('reports nothing from a poll that answers after the request it was observing settled', async () => {
+		vi.useFakeTimers();
+		try {
+			const poll = deferred<GraphicsIngestionOperation>();
+			const request = deferred<GraphicsIngestionOperation>();
+			mockFetch.mockImplementation((_path: string, sent?: { method?: string }) =>
+				sent?.method ? request.promise : poll.promise);
+			const observed: string[] = [];
+
+			const pending = useGraphicsIngestionTransfer({
+				onOperation: snapshot => observed.push(snapshot.stage),
+			}).transfer(operation(), sourceOfByteLength(1));
+			await vi.advanceTimersByTimeAsync(300);
+			request.resolve(operation({ stage: 'completed' }));
+			await pending;
+			poll.resolve(operation({ stage: 'validating' }));
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(requests()).toContain(`GET ${ingestion}/operation-1`);
+			expect(observed).toEqual([]);
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	// Aborting stops the bytes: every request in flight is abandoned, and an
+	// abandoned part is neither re-sent nor followed by the parts after it.
+	it.each([
+		{
+			transfer: 'a single-request transfer',
+			byteLength: 1,
+			sent: [`PUT ${ingestion}/operation-1/content`],
+		},
+		{
+			transfer: 'a multipart transfer',
+			byteLength: GRAPHICS_MULTIPART_PART_BYTES * 3 + 1,
+			sent: [
+				`POST ${ingestion}/operation-1/multipart`,
+				`PUT ${ingestion}/operation-1/multipart/parts/1`,
+				`PUT ${ingestion}/operation-1/multipart/parts/2`,
+				`PUT ${ingestion}/operation-1/multipart/parts/3`,
+			],
+		},
+	])('abandons $transfer when its signal aborts', async ({ byteLength, sent }) => {
+		vi.useFakeTimers();
+		try {
+			mockFetch.mockImplementation((path: string, request?: { method?: string; signal?: AbortSignal }) => {
+				if (path.endsWith('/multipart')) {
+					return Promise.resolve(operation({
+						transfer: transferFacts(4),
+					}));
+				}
+				if (!request?.method)
+					return Promise.resolve(operation());
+				// The network boundary: a request holding an aborted signal rejects.
+				return new Promise((_resolve, reject) => {
+					if (request.signal?.aborted)
+						reject(request.signal.reason);
+					request.signal?.addEventListener('abort', () => reject(request.signal!.reason));
+				});
+			});
+			const abort = new AbortController();
+			let outcome = 'pending';
+
+			void useGraphicsIngestionTransfer()
+				.transfer(operation(), sourceOfByteLength(byteLength), { signal: abort.signal })
+				.then(() => outcome = 'resolved', () => outcome = 'rejected');
+			await vi.advanceTimersByTimeAsync(100);
+			abort.abort();
+			await vi.advanceTimersByTimeAsync(120_000);
+
+			expect(outcome).toBe('rejected');
+			expect(requests().filter(request => !request.startsWith('GET '))).toEqual(sent);
 		}
 		finally {
 			vi.useRealTimers();
