@@ -45,6 +45,7 @@ import {
 	clearMediaGraphicItemAsset,
 	DEFAULT_GRAPHIC_FONT_ID,
 	deleteGraphicInput,
+	GRAPHIC_ANIMATION_PHASE_LABELS,
 	graphicItemIcon,
 	graphicItemKindLabel,
 	graphicItemSummary,
@@ -85,6 +86,7 @@ import {
 	DECK_LIST_VIEW_VALUES,
 	GAME_WINS_BOX_ORIENTATION_VALUES,
 	GAME_WINS_DISPLAY_MODE_VALUES,
+	GRAPHIC_ANIMATION_PHASE_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
@@ -102,7 +104,6 @@ import {
 	PLAYER_LIFE_ANIMATION_VALUES,
 	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
 } from '~~/shared/types/graphics';
-import { useInspectorSections } from '~/composables/ui/useInspectorSections';
 import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
 import { graphicsSelectionKey, resolveGraphicsSelection } from '~/modules/graphics/selection';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
@@ -513,16 +514,19 @@ const surfaceSummary = computed(() => {
 		: fill;
 });
 
-const INSPECTOR_SECTION_IDS = [
-	'layout',
-	'group',
-	'content',
-	'typography',
-	'shape',
-	'surface',
-	'animation',
-] as const;
-const inspectorSections = useInspectorSections();
+/** The lifecycle phases the selection animates, in lifecycle order. */
+const animationSummary = computed(() => {
+	const current = selection.value;
+	const animation = current.kind === 'graphic'
+		? current.graphic.animation
+		: current.kind === 'item'
+			? current.item.animation
+			: undefined;
+	const phases = GRAPHIC_ANIMATION_PHASE_VALUES.filter(phase => animation?.[phase]);
+	return phases.length > 0
+		? phases.map(phase => GRAPHIC_ANIMATION_PHASE_LABELS[phase]).join(' · ')
+		: 'None';
+});
 
 /** A Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
 const geometryContainer = computed(() => parentGroup.value
@@ -979,28 +983,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						{{ header.summary }}
 					</p>
 				</div>
-				<div v-if="selectedItem" class="flex shrink-0">
-					<UButton
-						size="xs"
-						variant="ghost"
-						color="neutral"
-						icon="i-lucide-chevrons-down-up"
-						aria-label="Collapse all sections"
-						title="Collapse all sections"
-						data-testid="inspector-collapse-all"
-						@click="inspectorSections.setAll(INSPECTOR_SECTION_IDS, false)"
-					/>
-					<UButton
-						size="xs"
-						variant="ghost"
-						color="neutral"
-						icon="i-lucide-chevrons-up-down"
-						aria-label="Expand all sections"
-						title="Expand all sections"
-						data-testid="inspector-expand-all"
-						@click="inspectorSections.setAll(INSPECTOR_SECTION_IDS, true)"
-					/>
-				</div>
 			</div>
 		</div>
 
@@ -1260,6 +1242,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			id="layout"
 			title="Position and size"
 			icon="i-lucide-move"
+			default-open
 			:summary="layoutSummary"
 		>
 			<GraphicsGeometryFields
@@ -1430,6 +1413,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			id="content"
 			:title="contentTitle"
 			icon="i-lucide-file-text"
+			default-open
 		>
 			<!--
 				The Player an item reads, wherever its Definition declares one. Its own
@@ -2098,7 +2082,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			id="animation"
 			title="Animation"
 			icon="i-lucide-wand-sparkles"
-			:default-open="false"
+			:summary="animationSummary"
 		>
 			<GraphicsCompositorAnimation
 				headless
