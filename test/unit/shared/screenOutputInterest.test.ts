@@ -430,8 +430,9 @@ describe('outputChangeOf', () => {
 		expect(outputChangeOf(type, SAMPLES[type])).toEqual(kinds.map(kind => ({ kind })));
 	});
 
-	// Operator-only data, and Screen commands, which are no change to what an
-	// output shows. One starting to reach outputs must be a decision made here.
+	// Operator-only data, and what travels on a Screen's own channel (its commands, and
+	// the notices of these changes), which are no change to what an output shows.
+	// One starting to reach outputs must be a decision made here.
 	it('says nothing an output shows changed for exactly the operator-only messages', () => {
 		expect(MESSAGE_TYPES.filter(type => outputChangeOf(type, SAMPLES[type]).length === 0)).toEqual([
 			'featureMatchAssignment:created',
@@ -441,6 +442,8 @@ describe('outputChangeOf', () => {
 			'screen:command:refresh',
 			'screen:command:identify',
 			'screen:command:debug',
+			'output:eventContextChanged',
+			'output:modeDataChanged',
 		]);
 	});
 });
