@@ -84,6 +84,10 @@ describe('useEventRealtimeSession', () => {
 		for (const [name, store] of Object.entries(stores))
 			vi.stubGlobal(name, () => store);
 		vi.stubGlobal('useMeleeDataRefresh', () => ({ refreshMeleeStructureData, refreshAfterMeleeReset }));
+		vi.stubGlobal('useTournamentStructureRefresh', () => ({
+			refreshAfterPhaseDelete: vi.fn(),
+			refreshAfterRoundDelete: vi.fn(),
+		}));
 		vi.stubGlobal('useReconnectResync', useReconnectResync);
 		vi.stubGlobal('navigateTo', mockNavigateTo);
 		vi.stubGlobal('watch', (source: () => unknown, callback: (value: never, previous: never) => void, options?: { immediate?: boolean }) => {

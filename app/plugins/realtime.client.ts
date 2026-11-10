@@ -853,7 +853,10 @@ export default defineNuxtPlugin({
 				}
 			};
 
-			const disposals = (['enter', 'leave', 'update'] as const).map(action => holdSubscription({
+			// `present` is how Ably reports the members already on a channel each time
+			// it attaches and syncs; without it a watch whose read below failed, or
+			// whose channel re-attached, would wait on the next enter, leave or update.
+			const disposals = (['enter', 'present', 'leave', 'update'] as const).map(action => holdSubscription({
 				label: `presence ${action} on ${channelName}`,
 				channelName,
 				subscribe: channel => channel.presence.subscribe(action, handlePresenceChange),

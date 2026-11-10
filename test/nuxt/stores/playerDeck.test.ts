@@ -77,6 +77,52 @@ describe('usePlayerDeckStore', () => {
 		expect(store.isLoaded).toBe(true);
 	});
 
+	// A load answered after its Event Lifetime ended, or after a newer load began,
+	// is superseded: it writes nothing and answers null (ADR-0024).
+	it.each([
+		[
+			'the operator left for an Event not loaded yet',
+			{ reset: true, newerLoad: false },
+		],
+		[
+			'the operator left and the next Event\'s Decks loaded',
+			{ reset: true, newerLoad: true },
+		],
+		[
+			'a newer load of the same Event answered',
+			{ reset: false, newerLoad: true },
+		],
+	])('a load answered after %s changes nothing', async (_, { reset, newerLoad }) => {
+		const store = usePlayerDeckStore();
+		const late = deferred<unknown>();
+		mockFetch.mockReturnValueOnce(late.promise);
+
+		const loading = store.loadByEventId(1);
+		if (reset)
+			store.$reset();
+		const shown = newerLoad
+			? [
+					deck({ id: 20, name: 'Loaded since' }),
+				]
+			: [];
+		if (newerLoad) {
+			mockFetch.mockResolvedValueOnce({
+				decks: structuredClone(shown),
+			});
+			await store.loadByEventId(2);
+		}
+		late.resolve({
+			decks: [
+				deck({ name: 'Answered late' }),
+			],
+		});
+
+		expect(await loading).toBeNull();
+		expect(store.decks).toEqual(shown);
+		expect(store.isLoaded).toBe(newerLoad);
+		expect(store.loading).toBe(false);
+	});
+
 	it('stores deck review state and updates the primary player projection', async () => {
 		const reviewedDeck = deck({
 			archetypeId: 5,

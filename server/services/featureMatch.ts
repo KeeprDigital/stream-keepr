@@ -572,7 +572,14 @@ export function featureMatchService() {
 			index > 0 && match.sortOrder === allMatches[index - 1]!.sortOrder,
 		);
 
+		// A normalise moves Slots besides the two swapped; the answer names them too,
+		// because clients order Slots by the answer and its announcement alone.
+		const renumbered: { matchId: number; sortOrder: number }[] = [];
 		if (needsNormalize) {
+			allMatches.forEach((match, index) => {
+				if (match.sortOrder !== index && match.id !== matchId)
+					renumbered.push({ matchId: match.id, sortOrder: index });
+			});
 			const normalizeQueries = allMatches.map((m, i) =>
 				db.update(featureMatches).set({ sortOrder: i }).where(eq(featureMatches.id, m.id)),
 			);
@@ -605,6 +612,7 @@ export function featureMatchService() {
 		return [
 			{ matchId: current.id, sortOrder: neighbor.sortOrder },
 			{ matchId: neighbor.id, sortOrder: current.sortOrder },
+			...renumbered.filter(slot => slot.matchId !== neighbor.id),
 		];
 	};
 

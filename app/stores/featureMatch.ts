@@ -97,7 +97,11 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 		const flight = lifecycle.currentLifetime();
 		return executeReporting(
 			async () => {
-				await matchRepo.reorder(eventId, slotId, direction);
+				// This client never hears its own `featureMatch:reordered`: the answer is
+				// where it learns the orders a later message sorts the Slots by.
+				const { slots } = await matchRepo.reorder(eventId, slotId, direction);
+				if (flight.current)
+					applySortOrders(slots.map(slot => ({ featureMatchId: slot.matchId, sortOrder: slot.sortOrder })));
 			},
 			{
 				errorRef: error,
@@ -143,8 +147,12 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	}
 
 	function applyRemoteReordered(data: MessageData<'featureMatch:reordered'>) {
-		// Apply new sortOrder values, re-sort array
-		for (const { featureMatchId, sortOrder } of data.featureMatches) {
+		applySortOrders(data.featureMatches);
+	}
+
+	/** Hold each named Slot's new order, and put the Slots in that order. */
+	function applySortOrders(orders: MessageData<'featureMatch:reordered'>['featureMatches']) {
+		for (const { featureMatchId, sortOrder } of orders) {
 			const match = featureMatches.value.find(m => m.id === featureMatchId);
 			if (match)
 				match.sortOrder = sortOrder;

@@ -1294,7 +1294,36 @@ describe('realtime plugin', () => {
 			{ clientId: 'b' },
 		]);
 		expect(channel.presence.leave).toHaveBeenCalledOnce();
-		expect(channel.presence.unsubscribe).toHaveBeenCalledTimes(3);
+		expect(channel.presence.unsubscribe).toHaveBeenCalledTimes(4);
+	});
+
+	// Ably delivers the members already on a channel as `present` when it attaches
+	// and syncs, never as `enter` (ably@2.30), so a watch whose read at call time
+	// failed, as on an Event not covered yet, learns of them only from that.
+	it('reports the members a presence sync delivers after the read at watch time failed', async () => {
+		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const realtime = await createTransport();
+		const channel = new MockChannel();
+		channels.set('screen:1:2', channel);
+		channel.presence.get.mockRejectedValueOnce(new Error('channel not attached'));
+		const callback = vi.fn();
+
+		realtime.watchPresence('screen:1:2', callback);
+		await settle();
+		channel.setPresenceMembers([
+			{ clientId: 'a' },
+		]);
+		channel.emitPresence('present');
+		await settle();
+
+		expect(callback.mock.calls).toEqual([
+			[
+				[
+					{ clientId: 'a' },
+				],
+			],
+		]);
+		consoleSpy.mockRestore();
 	});
 
 	it('updates presence only on a channel this client already holds', async () => {
@@ -1328,6 +1357,7 @@ describe('realtime plugin', () => {
 		expect(channel.presence.unsubscribe).not.toHaveBeenCalled();
 		unsubscribe();
 		expect(channel.presence.unsubscribe).toHaveBeenCalledWith('enter', expect.any(Function));
+		expect(channel.presence.unsubscribe).toHaveBeenCalledWith('present', expect.any(Function));
 		expect(channel.presence.unsubscribe).toHaveBeenCalledWith('leave', expect.any(Function));
 		expect(channel.presence.unsubscribe).toHaveBeenCalledWith('update', expect.any(Function));
 		expect(consoleSpy).toHaveBeenCalledWith(

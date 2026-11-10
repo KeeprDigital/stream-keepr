@@ -18,9 +18,10 @@ const db = drizzle(harness.database, { schema });
 let failNextOpen: Error | undefined;
 
 vi.doMock('~~/server/db', () => ({ db }));
+const publishMessage = vi.fn(async (..._args: unknown[]) => {});
 vi.doMock('~~/server/utils/ably', () => ({
-	publishMessage: async () => {},
-	publishMessageStrict: async () => {},
+	publishMessage,
+	publishMessageStrict: publishMessage,
 }));
 vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
 	...await importOriginal<object>(),
@@ -50,9 +51,11 @@ vi.doMock('~~/server/services/featureMatchState', async (importOriginal) => {
 
 const { featureMatchService } = await import('~~/server/services/featureMatch');
 const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
+const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-match-slot-write');
 
 beforeEach(() => {
 	failNextOpen = undefined;
+	publishMessage.mockClear();
 });
 
 afterAll(async () => await harness.close());
@@ -282,5 +285,35 @@ describe('swapMatchOrder', () => {
 			[two!.id, 2],
 			[three!.id, 1],
 		]);
+	});
+
+	// A reorder that first gave duplicate orders distinct places moved Slots other
+	// than the two swapped; clients sort by what is announced, so all are named.
+	it('answers and announces every Slot whose order it changed', async () => {
+		const eventId = await stageEvent();
+		const [one, two, three, four] = await db.insert(schema.featureMatches)
+			.values([
+				{ eventId, sortOrder: 0 },
+				{ eventId, sortOrder: 0 },
+				{ eventId, sortOrder: 0 },
+				{ eventId, sortOrder: 0 },
+			])
+			.returning();
+
+		const answer = await featureMatchSlotWriteModule().reorder({ eventId, slotId: two!.id, direction: 'up' });
+
+		const stored = (await slotsOf(eventId)).map(slot => ({ matchId: slot.id, sortOrder: slot.sortOrder }));
+		expect(stored).toEqual([
+			{ matchId: one!.id, sortOrder: 1 },
+			{ matchId: two!.id, sortOrder: 0 },
+			{ matchId: three!.id, sortOrder: 2 },
+			{ matchId: four!.id, sortOrder: 3 },
+		]);
+		expect(answer.slots.toSorted((a, b) => a.matchId - b.matchId)).toEqual(stored);
+		const announced = publishMessage.mock.calls.find(call => call[1] === 'featureMatch:reordered')![2] as {
+			featureMatches: { featureMatchId: number; sortOrder: number }[];
+		};
+		expect(announced.featureMatches.toSorted((a, b) => a.featureMatchId - b.featureMatchId))
+			.toEqual(stored.map(slot => ({ featureMatchId: slot.matchId, sortOrder: slot.sortOrder })));
 	});
 });

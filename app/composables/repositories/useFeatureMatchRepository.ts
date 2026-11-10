@@ -7,6 +7,10 @@ import type {
 } from '~/types';
 import { useEventDataFetch, useEventDataResource } from '~/modules/event-data/client';
 
+export interface FeatureMatchSlotReorderAnswer {
+	slots: { matchId: number; sortOrder: number }[];
+}
+
 export function useFeatureMatchRepository() {
 	const base = useEventDataResource<FeatureMatch, CreateFeatureMatchInput, UpdateFeatureMatchInput>({
 		resourcePath: 'feature-match-slots',
@@ -28,8 +32,9 @@ export function useFeatureMatchRepository() {
 		);
 	};
 
-	const reorder = async (eventId: number, slotId: number, direction: 'up' | 'down'): Promise<void> => {
-		await eventData.command<void, { slotId: number; direction: 'up' | 'down' }>(
+	/** Answers every Slot whose order the reorder changed, with its new order. */
+	const reorder = async (eventId: number, slotId: number, direction: 'up' | 'down'): Promise<FeatureMatchSlotReorderAnswer> => {
+		return await eventData.command<FeatureMatchSlotReorderAnswer, { slotId: number; direction: 'up' | 'down' }>(
 			{ eventId, resourcePath: 'feature-match-slots', suffix: 'reorder' },
 			{
 				method: 'PATCH',
