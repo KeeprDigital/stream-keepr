@@ -63,6 +63,69 @@ describe('createShaderPlaneEffect', () => {
 		expect(material.uniforms.iTime!.value).toBe(7);
 	});
 
+	// iTime is a float32: it restarts from zero at the bound, so its step never
+	// reaches a frame however long the output runs or the tab slept.
+	it.each([
+		{
+			name: 'passes time below the bound through unchanged',
+			speed: 1,
+			frames: [86_399.5],
+			expected: 86_399.5,
+		},
+		{
+			name: 'restarts from zero at the bound',
+			speed: 1,
+			frames: [86_400],
+			expected: 0,
+		},
+		{
+			name: 'keeps advancing after a restart',
+			speed: 1,
+			frames: [86_399, 86_401, 86_410],
+			expected: 10,
+		},
+		{
+			name: 'lands in range after a tab slept for days',
+			speed: 1,
+			frames: [60, 3 * 86_400 + 72.5],
+			expected: 72.5,
+		},
+		{
+			name: 'bounds the scaled time, not the host clock',
+			speed: 4,
+			frames: [21_599, 21_601],
+			expected: 4,
+		},
+		{
+			name: 'leaves a slow effect alone past a day of host time',
+			speed: 0.5,
+			frames: [100_000],
+			expected: 50_000,
+		},
+		{
+			name: 'holds at zero when the host clock runs backwards',
+			speed: 1,
+			frames: [-5],
+			expected: 0,
+		},
+		{
+			name: 'ignores a frame with no usable time',
+			speed: 1,
+			frames: [
+				10,
+				Number.NaN,
+				Number.POSITIVE_INFINITY,
+				12,
+			],
+			expected: 12,
+		},
+	])('$name', ({ speed, frames, expected }) => {
+		const { instance, material } = mountEffect({ tint: '#ff0000', strength: 2, speed });
+		for (const elapsedSeconds of frames)
+			instance.render(elapsedSeconds);
+		expect(material.uniforms.iTime!.value).toBe(expected);
+	});
+
 	it('sizes the drawing buffer and the resolution uniform together', () => {
 		const { instance, material, renderer } = mountEffect();
 		renderer.pixelRatio = 2;

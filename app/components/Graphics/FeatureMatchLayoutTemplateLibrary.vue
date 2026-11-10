@@ -19,7 +19,10 @@ import ScreenSettingsCard from '~/components/Screen/SettingsCard.vue';
  * the template and writes it through the Screen's own configuration path, so the
  * placed layout is validated, indexed, and published exactly as a hand-authored one
  * — and the Screen is then reloaded authoritatively rather than patched from a
- * guess.
+ * guess. Both read the Screen as stored, so the editor's unsaved edits are landed
+ * first (`flushEdits`), and the editor holds authoring while a placement is in
+ * flight (the `placing` model): an edit sent after it carries the whole layout
+ * from before it, and would write the placed one away.
  *
  * Browsing, revising, deleting, and receiving a Template Package are the same in this
  * library and in the Broadcast Graphic Template library, because a Template Package
@@ -36,13 +39,22 @@ const props = defineProps<{
 	writable?: boolean;
 	/** Render without its own collapsible card, inside a host's panel. */
 	bare?: boolean;
+	/**
+	 * Lands the editor's unsaved edits, answering whether none is left unsaved.
+	 * A host with no unsaved edits passes nothing.
+	 */
+	flushEdits?: () => Promise<boolean>;
 }>();
 
 /**
- * `placing` fires just before a placement writes the Screen, so a host can
- * remember the layout it is about to lose; `placed` once the placed one is loaded.
+ * `placing` fires just before a placement writes the Screen, once the editor's
+ * edits have landed, so a host can remember the layout it is about to lose;
+ * `placed` once the placed one is loaded.
  */
 const emit = defineEmits<{ placing: []; placed: [] }>();
+
+/** Whether a placement is in flight, from its first step until the placed Screen is held. */
+const placing = defineModel<boolean>('placing', { default: false });
 
 const repository = useFeatureMatchLayoutTemplateRepository();
 const screenStore = useScreenStore();
@@ -78,12 +90,19 @@ const saving = ref(false);
 /** The template whose placement is awaiting confirmation, if any. */
 const pendingPlaceId = ref<string | null>(null);
 
+/** Land the editor's unsaved edits, or refuse to go on reading a Screen that lacks them. */
+async function landEdits() {
+	if (props.flushEdits && !await props.flushEdits())
+		throw new Error('An edit to this Screen could not be saved. Retry the save, then try again.');
+}
+
 /** Save this Screen's Feature Match Layout as a new template at revision 1. */
 async function save() {
 	if (!canAuthor.value || saving.value)
 		return;
 	saving.value = true;
 	try {
+		await landEdits();
 		await repository.save({ eventId: props.eventId, screenId: props.screenId });
 		error.value = null;
 		await refresh();
@@ -114,18 +133,26 @@ function cancelPlace() {
 
 async function place(templateId: string) {
 	await attempt(templateId, async () => {
-		emit('placing');
-		await repository.place({
-			eventId: props.eventId,
-			screenId: props.screenId,
-			templateId,
-			stateVersion: placementVersion.value,
-		});
-		pendingPlaceId.value = null;
-		// The Screen was written on the server, and this client's own realtime echo is
-		// suppressed, so the authoritative Screen is reloaded here.
-		await screenStore.getScreenById(props.eventId, props.screenId);
-		emit('placed');
+		placing.value = true;
+		try {
+			await landEdits();
+			emit('placing');
+			await repository.place({
+				eventId: props.eventId,
+				screenId: props.screenId,
+				templateId,
+				// Read once the edits have landed: each of them moved the Screen on.
+				stateVersion: placementVersion.value,
+			});
+			pendingPlaceId.value = null;
+			// The Screen was written on the server, and this client's own realtime echo is
+			// suppressed, so the authoritative Screen is reloaded here.
+			await screenStore.getScreenById(props.eventId, props.screenId);
+			emit('placed');
+		}
+		finally {
+			placing.value = false;
+		}
 	});
 }
 </script>

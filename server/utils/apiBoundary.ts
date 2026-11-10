@@ -70,7 +70,9 @@ export const SESSION_EXEMPT_API_PATHS: readonly string[] = [
  *   holds in its URL hash, and refuses **404** rather than 401/403 so a caller
  *   without one cannot use it to enumerate assets. A session requirement here
  *   would put a 401 in front of that posture and hand back the distinction the
- *   404 exists to withhold.
+ *   404 exists to withhold. The one route with no bearer is
+ *   `/api/screen-output/link`, which exchanges the Screen Output Link in its
+ *   body for that token and refuses with the same 404.
  * - `/api/admin/` — the Graphics Administrator surface. `x-graphics-admin-token`
  *   alone satisfies the boundary here, which is exactly today's posture:
  *   ADR-0010 leaves the shared token untouched until a roles-and-permissions

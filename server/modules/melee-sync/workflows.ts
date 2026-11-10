@@ -12,6 +12,7 @@ import {
 	syncMatchesFromMelee,
 	syncPreviousRoundStandingsFromMelee,
 } from '~~/server/modules/melee-sync/roundMatches';
+import { asOneOutputChange } from '~~/server/modules/screen-output-publication';
 import { importedMtgCardResolverService } from '~~/server/services/importedMtgCardResolver';
 import { describeKeptStructure, removeImportedStructure } from '~~/server/services/importedStructure';
 import { requireMeleeService } from '~~/server/services/meleeIntegration';
@@ -348,22 +349,25 @@ export function createMeleeSyncWorkflows() {
 		// follow-on: a lost Session race must not fail a bulk write that landed.
 		const updatedMatchIds = await playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(eventId, playerIds);
 
-		if (updatedMatchIds.length > 0) {
-			await publishAfterCommit(warnings, async () => await publication.meleeFeatureMatchesSynced({
-				eventId,
-				originConnectionId,
-				slotIds: updatedMatchIds,
-			}));
-		}
-		// A sync that changed no Player has nothing to announce: every follower
-		// would re-read or reload only to find what it holds (#798).
-		if (created + updated + deactivated > 0) {
-			await publishAfterCommit(warnings, async () => await publication.meleePlayersSynced({
-				eventId,
-				originConnectionId,
-				playerCount: upsertedPlayers.length,
-			}));
-		}
+		// One sync is one change to a Screen: its channel is told once for these.
+		await asOneOutputChange(async () => {
+			if (updatedMatchIds.length > 0) {
+				await publishAfterCommit(warnings, async () => await publication.meleeFeatureMatchesSynced({
+					eventId,
+					originConnectionId,
+					slotIds: updatedMatchIds,
+				}));
+			}
+			// A sync that changed no Player has nothing to announce: every follower
+			// would re-read or reload only to find what it holds (#798).
+			if (created + updated + deactivated > 0) {
+				await publishAfterCommit(warnings, async () => await publication.meleePlayersSynced({
+					eventId,
+					originConnectionId,
+					playerCount: upsertedPlayers.length,
+				}));
+			}
+		});
 
 		return {
 			success: true,
@@ -468,22 +472,25 @@ export function createMeleeSyncWorkflows() {
 				}),
 			},
 		];
-		for (const changed of changedRounds) {
-			for (const announcement of announcements) {
-				if (announcement.changed(changed))
-					await publishAfterCommit(afterCommitWarnings, async () => await announcement.publish(changed));
+		// One sync is one change to a Screen: its channel is told once, with every kind that changed.
+		await asOneOutputChange(async () => {
+			for (const changed of changedRounds) {
+				for (const announcement of announcements) {
+					if (announcement.changed(changed))
+						await publishAfterCommit(afterCommitWarnings, async () => await announcement.publish(changed));
+				}
+				// A stale Match's delete unlinked these Slots and dropped these
+				// Assignments, which no message above names. With no origin: the
+				// syncing client's response carries neither.
+				if (changed.unlinkedSlotIds.length > 0) {
+					await publishAfterCommit(afterCommitWarnings, async () => {
+						await publication.featureMatchSlotsUpdated({ eventId, slotIds: changed.unlinkedSlotIds });
+					});
+				}
+				for (const id of changed.droppedAssignmentIds)
+					await publishAfterCommit(afterCommitWarnings, async () => await publication.featureMatchAssignmentDeleted({ eventId, id }));
 			}
-			// A stale Match's delete unlinked these Slots and dropped these
-			// Assignments, which no message above names. With no origin: the
-			// syncing client's response carries neither.
-			if (changed.unlinkedSlotIds.length > 0) {
-				await publishAfterCommit(afterCommitWarnings, async () => {
-					await publication.featureMatchSlotsUpdated({ eventId, slotIds: changed.unlinkedSlotIds });
-				});
-			}
-			for (const id of changed.droppedAssignmentIds)
-				await publishAfterCommit(afterCommitWarnings, async () => await publication.featureMatchAssignmentDeleted({ eventId, id }));
-		}
+		});
 		const published = announcements
 			.filter(announcement => changedRounds.some(announcement.changed))
 			.map(announcement => announcement.kind);
@@ -751,20 +758,23 @@ export function createMeleeSyncWorkflows() {
 		// The Player and deck writes above have committed, so the reverse sync is a
 		// follow-on: a lost Session race must not fail a bulk write that landed.
 		const updatedMatchIds = await playerFeatureMatchSyncService().syncMatchesFromPlayersAfterCommit(eventId, playerIds);
-		if (updatedMatchIds.length > 0) {
-			await publishAfterCommit(warnings, async () => await publication.meleeFeatureMatchesSynced({
+		// One sync is one change to a Screen: its channel is told once for these.
+		await asOneOutputChange(async () => {
+			if (updatedMatchIds.length > 0) {
+				await publishAfterCommit(warnings, async () => await publication.meleeFeatureMatchesSynced({
+					eventId,
+					originConnectionId,
+					slotIds: updatedMatchIds,
+				}));
+			}
+
+			await publishAfterCommit(warnings, async () => await publication.meleeDeckListsSynced({
 				eventId,
 				originConnectionId,
-				slotIds: updatedMatchIds,
+				playerCount: playersWithDeckLists.length,
+				deckCount: totalDeckLists,
 			}));
-		}
-
-		await publishAfterCommit(warnings, async () => await publication.meleeDeckListsSynced({
-			eventId,
-			originConnectionId,
-			playerCount: playersWithDeckLists.length,
-			deckCount: totalDeckLists,
-		}));
+		});
 
 		const success = skippedPlayers === 0;
 

@@ -53,7 +53,9 @@ export default defineEventHandler(async (event) => {
 	// request naming no origin at all is admitted, is `requestIsCrossSiteMutation`.
 	// The exempt surfaces need none of it: each carries a credential a
 	// cross-site page cannot attach (a header token, a bearer, a
-	// `SameSite=Strict` cookie), and Better Auth checks its own router's origin.
+	// `SameSite=Strict` cookie, or a Screen Output Link in the body, which a
+	// page can send only if it already holds it), and Better Auth checks its own
+	// router's origin.
 	const crossSite = requestIsCrossSiteMutation({
 		method: event.method,
 		secFetchSite: event.headers.get('sec-fetch-site'),

@@ -31,11 +31,15 @@ function base64Url(bytes: Uint8Array): string {
 		.replace(/=+$/, '');
 }
 
-async function deriveToken(input: {
+/**
+ * HMAC-SHA256 under the signing key over `context\0value`. The context separates
+ * each thing derived from the one key, so none can stand in for another.
+ */
+export async function screenOutputSigningMac(input: {
 	signingKey: string;
 	context: string;
 	value: string;
-}): Promise<string> {
+}): Promise<Uint8Array> {
 	const key = await crypto.subtle.importKey(
 		'raw',
 		decodeSigningKey(input.signingKey),
@@ -46,8 +50,15 @@ async function deriveToken(input: {
 	const message = new TextEncoder().encode(
 		`${input.context}\0${input.value}`,
 	);
-	const signature = await crypto.subtle.sign('HMAC', key, message);
-	return base64Url(new Uint8Array(signature));
+	return new Uint8Array(await crypto.subtle.sign('HMAC', key, message));
+}
+
+async function deriveToken(input: {
+	signingKey: string;
+	context: string;
+	value: string;
+}): Promise<string> {
+	return base64Url(await screenOutputSigningMac(input));
 }
 
 export async function createScreenOutputAssetCapability(input: {

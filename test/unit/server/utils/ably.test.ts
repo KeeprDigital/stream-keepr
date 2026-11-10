@@ -47,6 +47,12 @@ vi.mock('ably', () => ({
 	default: { Rest: MockAblyRest },
 }));
 
+// These cases are the Event channel's. What a publish then tells the Screens
+// is pinned over real SQL in `screenOutputPublication.sqlite.test.ts`.
+vi.mock('~~/server/modules/screen-output-publication', () => ({
+	publishToScreenOutputs: async () => {},
+}));
+
 vi.stubGlobal('useRuntimeConfig', vi.fn(() => ({ ablyApiKey: 'test-key' })));
 vi.stubGlobal('getHeader', vi.fn());
 

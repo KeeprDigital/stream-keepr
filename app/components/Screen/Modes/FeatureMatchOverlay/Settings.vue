@@ -50,7 +50,7 @@ const featureMatchStore = useFeatureMatchStore();
 const screenStore = useScreenStore();
 const eventStore = useEventStore();
 
-const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: retrySave, discard } = useModeConfigUpdate(
+const { config, saving, saveState, saveError, updateConfig, resetConfig, retry: retrySave, discard, flush } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'feature-match-overlay',
@@ -76,9 +76,19 @@ watch(writable, (isWritable) => {
 		discard(['layout', 'presetId']);
 });
 
+/**
+ * A Feature Match Layout Template placement is in flight. The server is rewriting
+ * the layout and the Screen is then reloaded, so an edit made meanwhile would be
+ * built on the layout from before the placement and would write the placed one away.
+ */
+const placing = ref(false);
+
+/** Whether this session may edit now: it holds the lease, and no placement is in flight. */
+const canAuthor = computed(() => writable.value && !placing.value);
+
 /** A display reset replaces the layout, so it is an authoring write like any other. */
 function resetLayout() {
-	if (writable.value)
+	if (canAuthor.value)
 		resetConfig();
 }
 
@@ -91,7 +101,7 @@ const {
 
 defineExpose({
 	resetConfig: resetLayout,
-	resetBlocked: computed(() => !writable.value),
+	resetBlocked: computed(() => !canAuthor.value),
 	saving,
 });
 
@@ -126,6 +136,7 @@ const editor = useFeatureMatchLayoutEditor({
 	canvasWidth,
 	canvasHeight,
 	writable,
+	held: placing,
 });
 const { selection, layers } = editor;
 /** Several layers selected: the panel edits what they share, and the preview marks none alone (#740). */
@@ -156,7 +167,7 @@ function selectCompositorTarget(target: GraphicsSelectionTarget, toggle = false)
  * Where the canvas handles go, with the lines they snap to; none while this
  * session may not move anything, so neither handles nor snap guides show.
  */
-const selectionFrame = computed(() => writable.value
+const selectionFrame = computed(() => canAuthor.value
 	? editor.selectionFrame.value
 	: null);
 const selectionLabel = computed(() => severalSelected.value
@@ -228,7 +239,7 @@ const showPresetConfirm = computed({
 });
 
 function askToApplyPreset(id: FeatureMatchOverlayPresetId) {
-	if (!writable.value)
+	if (!canAuthor.value)
 		return;
 	pendingPreset.value = { id, reset: id === config.value.presetId };
 }
@@ -418,7 +429,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 	// The editor writes nothing without the lease anyway. This keeps an observer's
 	// keys from being swallowed, so ⌘Z or ⌘D reach the browser; Escape still selects.
-	if (!writable.value && event.key !== 'Escape')
+	if (!canAuthor.value && event.key !== 'Escape')
 		return;
 
 	if (mod && key === 'z' && !event.shiftKey) {
@@ -511,7 +522,7 @@ useEventListener(import.meta.client
 							:items="presetOptions"
 							value-key="value"
 							class="min-w-0 flex-1"
-							:disabled="!writable"
+							:disabled="!canAuthor"
 							@update:model-value="askToApplyPreset($event)"
 						/>
 						<UButton
@@ -519,7 +530,7 @@ useEventListener(import.meta.client
 							variant="soft"
 							color="neutral"
 							icon="i-lucide-rotate-ccw"
-							:disabled="!writable"
+							:disabled="!canAuthor"
 							data-testid="reset-preset"
 							title="Reset the layout to this preset"
 							@click="askToApplyPreset(config.presetId)"
@@ -712,7 +723,7 @@ useEventListener(import.meta.client
 					v-if="severalSelected"
 					:layout="config.layout"
 					:layers="layers"
-					:writable="writable"
+					:writable="canAuthor"
 					:group-refusal="editor.groupRefusal.value"
 					@update="editor.setLayersGeometry"
 					@group="editor.group()"
@@ -725,7 +736,7 @@ useEventListener(import.meta.client
 					:canvas-height="canvasHeight"
 					:event-id="eventId"
 					:theme-tokens="previewTheme.themeTokens.value"
-					:writable="writable"
+					:writable="canAuthor"
 					@update:composition="composition => updateFields({ layout: { ...config.layout, composition } })"
 				/>
 				<FeatureMatchOverlayLayerInspector
@@ -737,7 +748,7 @@ useEventListener(import.meta.client
 					:screen-height="canvasHeight"
 					:screen="screen"
 					:event-id="eventId"
-					:writable="writable"
+					:writable="canAuthor"
 					@remove="itemId => editor.remove({ type: 'source', itemId })"
 					@duplicate="itemId => editor.duplicate({ type: 'source', itemId })"
 				/>
@@ -750,14 +761,17 @@ useEventListener(import.meta.client
 			they open from the toolbar beside the preset rather than from the layer list.
 
 			Writable while this session holds the Graphics Authoring Lease; an observer
-			still browses the library.
+			still browses the library. Its place and save land this editor's unsaved
+			edits first, and authoring is held while a placement is in flight.
 		-->
 		<USlideover v-model:open="templatesOpen" title="Layout templates">
 			<template #body>
 				<GraphicsFeatureMatchLayoutTemplateLibrary
+					v-model:placing="placing"
 					:event-id="eventId"
 					:screen-id="screen.id"
 					:writable="writable"
+					:flush-edits="flush"
 					bare
 					@placing="editor.checkpoint()"
 					@placed="templatePlaced"

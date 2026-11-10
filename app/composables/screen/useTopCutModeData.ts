@@ -36,7 +36,7 @@ function holdsPlayer(held: ScreenOutputTopCutResponse, playerId: number): boolea
  * naming them. A Player's assigned Archetype is a `player:updated`, which
  * already re-reads.
  */
-function topCutDependencies(
+export function topCutDependencies(
 	phaseId: () => number | undefined,
 	showsArchetypes: () => boolean,
 ): ScreenModeDependencies<ScreenOutputTopCutResponse> {
@@ -72,7 +72,7 @@ function topCutDependencies(
  * them. Its Seeds and results are the Screen's own config, so an edit to them
  * re-reads through the read's source.
  */
-function manualBracketDependencies(showsArchetypes: () => boolean): ScreenModeDependencies<ScreenOutputTopCutResponse> {
+export function manualBracketDependencies(showsArchetypes: () => boolean): ScreenModeDependencies<ScreenOutputTopCutResponse> {
 	return {
 		'player:updated': ({ player }, held) => holdsPlayer(held, player.id),
 		'player:deleted': ({ playerId }, held) => holdsPlayer(held, playerId),

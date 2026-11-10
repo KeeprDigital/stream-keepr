@@ -65,6 +65,7 @@ const mockSaveState = ref<'idle' | 'saving' | 'committed' | 'failed'>('idle');
 const mockRetry = vi.fn();
 const mockResetConfig = vi.fn();
 const mockDiscard = vi.fn();
+const mockFlush = vi.fn(async () => true);
 const mockToastAdd = vi.fn();
 
 const mockLeaseWritable = ref(true);
@@ -103,6 +104,7 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	resetConfig: mockResetConfig,
 	retry: mockRetry,
 	discard: mockDiscard,
+	flush: mockFlush,
 }));
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 mockNuxtImport('$fetch', () => mockApiFetch);
@@ -151,8 +153,9 @@ const MultiLayerInspectorStub = defineComponent({
 const TemplateLibraryStub = defineComponent({
 	props: {
 		writable: { type: Boolean, required: false },
+		flushEdits: { type: Function, default: undefined },
 	},
-	emits: ['placing', 'placed'],
+	emits: ['placing', 'placed', 'update:placing'],
 	template: '<div data-testid="template-library" :data-writable="String(writable)" />',
 });
 
@@ -613,6 +616,77 @@ describe('featureMatchOverlaySettings', () => {
 			await wrapper.get('[data-testid="layout-undo"]').trigger('click');
 
 			expect(sourceIds()).toEqual([]);
+		});
+	});
+
+	// A placement rewrites the stored layout and the Screen is then reloaded, so an
+	// edit sent across it would write the layout from before it over the placed one.
+	describe('a Feature Match Layout Template placement', () => {
+		async function mountWithLibrary() {
+			const wrapper = await mountComponent();
+			await flushPromises();
+			preview(wrapper).vm.$emit('selectTarget', { type: 'source', itemId: 'main-source' });
+			await nextTick();
+			return {
+				wrapper,
+				library: wrapper.getComponent(TemplateLibraryStub),
+			};
+		}
+
+		it('hands the library the flush of the layout\'s unsaved edits', async () => {
+			const { library } = await mountWithLibrary();
+
+			await expect(library.props('flushEdits')!()).resolves.toBe(true);
+			expect(mockFlush).toHaveBeenCalledOnce();
+		});
+
+		it('holds authoring while it is in flight, leaving the library, the lease notice and the unsaved layout as they were', async () => {
+			const { wrapper, library } = await mountWithLibrary();
+			const authoring = () => wrapper.get('[data-testid="layer-inspector"]').attributes('data-writable');
+			const exposed = wrapper.vm as unknown as { resetConfig: () => void; resetBlocked: boolean };
+			expect(authoring()).toBe('true');
+
+			library.vm.$emit('update:placing', true);
+			await nextTick();
+			expect(authoring()).toBe('false');
+			expect(preview(wrapper).props('selectionFrame')).toBeNull();
+			expect(wrapper.get('[data-testid="reset-preset"]').attributes('disabled')).toBeDefined();
+			expect(exposed.resetBlocked).toBe(true);
+			preview(wrapper).vm.$emit('manipulate', { x: 1, y: 2, width: 3, height: 4 }, 1);
+			exposed.resetConfig();
+			expect(mockUpdateConfig).not.toHaveBeenCalled();
+			expect(mockResetConfig).not.toHaveBeenCalled();
+			expect(library.attributes('data-writable')).toBe('true');
+			expect(wrapper.find('[data-testid="edit-lease-notice"]').exists()).toBe(false);
+			expect(mockDiscard).not.toHaveBeenCalled();
+
+			library.vm.$emit('update:placing', false);
+			await nextTick();
+			expect(authoring()).toBe('true');
+			expect(preview(wrapper).props('selectionFrame')).not.toBeNull();
+		});
+
+		it('offers no undo while it is in flight, then undoes it as one step with the history before it kept', async () => {
+			const { wrapper, library } = await mountWithLibrary();
+			const undo = () => wrapper.get('[data-testid="layout-undo"]');
+			await press('Delete');
+			const replaced = sourceIds();
+
+			library.vm.$emit('update:placing', true);
+			await nextTick();
+			expect(undo().attributes('disabled')).toBeDefined();
+			library.vm.$emit('placing');
+			mockConfig.value = {
+				...mockConfig.value,
+				layout: { ...mockConfig.value.layout, sources: [] },
+			};
+			library.vm.$emit('update:placing', false);
+			library.vm.$emit('placed');
+			await nextTick();
+
+			await undo().trigger('click');
+			expect(sourceIds()).toEqual(replaced);
+			expect(undo().attributes('disabled')).toBeUndefined();
 		});
 	});
 

@@ -1,9 +1,11 @@
 import type { H3Event } from 'h3';
+import type { EventMessage, ScreenChannelDelivery, ScreenChannelFailure } from '~~/server/modules/screen-output-publication';
 import type {
 	MessagePayload,
 	MessageType,
 } from '../types/messages';
 import Ably from 'ably';
+import { publishToScreenOutputs } from '~~/server/modules/screen-output-publication';
 import { eventRealtimeChannel, screenRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { createMessage, MAX_REALTIME_MESSAGE_BYTES, realtimeMessageBytes, screenCommandMessageTypes } from '../types/messages';
 import { ServiceConfigurationError } from './errors';
@@ -96,6 +98,69 @@ function reportOversizedMessage<T extends MessageType>(
 	}));
 }
 
+/** Ably publishes one batch request to at most this many channels. */
+const MAX_BATCH_PUBLISH_CHANNELS = 100;
+
+/**
+ * Publish each Screen's messages to its own channel, in one request for every
+ * Screen where they fit one, and answer the Screens whose channel refused.
+ *
+ * `batchPublish` sends its messages as given, where a channel's own `publish`
+ * encodes them first, so each is encoded here as that would: its data as JSON
+ * text, marked `json`. A subscriber receives the same object either way.
+ */
+async function publishToScreenChannels(
+	eventId: number,
+	deliveries: readonly ScreenChannelDelivery[],
+): Promise<ScreenChannelFailure[]> {
+	const client = getAblyClient();
+	const failures: ScreenChannelFailure[] = [];
+	for (let start = 0; start < deliveries.length; start += MAX_BATCH_PUBLISH_CHANNELS) {
+		const batch = deliveries.slice(start, start + MAX_BATCH_PUBLISH_CHANNELS);
+		try {
+			const answers = await client.batchPublish(batch.map(({ screenId, messages }) => ({
+				channels: [
+					screenRealtimeChannel(eventId, screenId),
+				],
+				messages: messages.map(({ type, payload, originConnectionId }) => ({
+					name: type,
+					data: JSON.stringify(createMessage(eventId, type, payload, originConnectionId)),
+					encoding: 'json',
+				})),
+			})));
+			batch.forEach(({ screenId }, index) => {
+				// One channel a spec, so one result an answer: a refusal carries `error`.
+				const result = answers[index]?.results[0];
+				if (!result || 'error' in result)
+					failures.push({ screenId, error: result?.error ?? new Error('No batch publish result') });
+			});
+		}
+		catch (error) {
+			failures.push(...batch.map(({ screenId }) => ({ screenId, error })));
+		}
+	}
+	return failures;
+}
+
+/**
+ * Tell the Screens of a message just published on their Event's channel. Every
+ * Event publish in this file ends here, so no publish site can leave its
+ * Screens untold; it never throws, whatever became of the Event publish.
+ */
+async function tellScreenOutputs<T extends MessageType>(
+	eventId: number,
+	messageType: T,
+	payload: MessagePayload<T> | undefined,
+	originConnectionId?: string,
+): Promise<void> {
+	await publishToScreenOutputs(
+		eventId,
+		{ type: messageType, payload } as EventMessage,
+		originConnectionId,
+		publishToScreenChannels,
+	);
+}
+
 // Overload for messages with payload
 export async function publishMessage<T extends MessageType>(
 	eventId: number,
@@ -138,6 +203,7 @@ export async function publishMessage<T extends MessageType>(
 			...publishFailureFields(error),
 		}));
 	}
+	await tellScreenOutputs(eventId, messageType, payload, originConnectionId);
 }
 
 /**
@@ -145,6 +211,9 @@ export async function publishMessage<T extends MessageType>(
  * need to distinguish committed persistence from realtime notification state.
  * The default publishMessage API intentionally retains its legacy log-and-
  * swallow behavior for unrelated callers.
+ *
+ * Only the Event channel's failure is preserved. The Screens are told after it
+ * either way, and a Screen channel's refusal is never this function's.
  */
 export async function publishMessageStrict<T extends MessageType>(
 	eventId: number,
@@ -152,12 +221,17 @@ export async function publishMessageStrict<T extends MessageType>(
 	payload: MessagePayload<T>,
 	originConnectionId?: string,
 ): Promise<void> {
-	const client = getAblyClient();
-	const channel = client.channels.get(eventRealtimeChannel(eventId));
-	const messageData = createMessage(eventId, messageType, payload, originConnectionId);
-	reportOversizedMessage(eventId, messageType, payload, originConnectionId);
+	try {
+		const client = getAblyClient();
+		const channel = client.channels.get(eventRealtimeChannel(eventId));
+		const messageData = createMessage(eventId, messageType, payload, originConnectionId);
+		reportOversizedMessage(eventId, messageType, payload, originConnectionId);
 
-	await channel.publish(messageType, messageData);
+		await channel.publish(messageType, messageData);
+	}
+	finally {
+		await tellScreenOutputs(eventId, messageType, payload, originConnectionId);
+	}
 }
 
 /**

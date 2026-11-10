@@ -15,6 +15,7 @@ import { mapRoundToResponse } from '~~/server/mappers/round';
 import { mapScreenToResponse } from '~~/server/mappers/screen';
 import { mapTalentToResponse } from '~~/server/mappers/talent';
 import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
+import { asOneOutputChange } from '~~/server/modules/screen-output-publication';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { publishMessage, publishMessageStrict } from '~~/server/utils/ably';
 import { publishFailureFields } from '~~/server/utils/realtimePublishFailure';
@@ -176,6 +177,9 @@ async function publishEventDataChange<T extends MessageType>(
  * several in one operation catches its Broadcast Graphics up once at the end instead
  * of once per message — the same work, done once. Every caller that publishes exactly
  * one change uses `publishEventDataChange` and never sees this.
+ *
+ * The Event channel receives each message as it is published; a Screen's own channel
+ * is told once for the run.
  */
 async function publishEventDataMessages(
 	eventId: number,
@@ -184,11 +188,14 @@ async function publishEventDataMessages(
 ): Promise<void> {
 	if (messages.length === 0)
 		return;
-	for (const message of messages) {
-		// The pairing of type and payload is what `EventDataMessage` guarantees; a
-		// union cannot carry it through `publishMessage`'s per-type overloads.
-		await publishMessage(eventId, message.type, message.payload as never, originConnectionId);
-	}
+	// One change to the Screens too: each is told once, however many messages it shows.
+	await asOneOutputChange(async () => {
+		for (const message of messages) {
+			// The pairing of type and payload is what `EventDataMessage` guarantees; a
+			// union cannot carry it through `publishMessage`'s per-type overloads.
+			await publishMessage(eventId, message.type, message.payload as never, originConnectionId);
+		}
+	});
 	await refreshBroadcastGraphicsBindings(eventId);
 }
 

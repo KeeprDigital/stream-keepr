@@ -169,11 +169,15 @@ A rendering mode for a Screen, such as Background, Card Spotlight, Deck List, St
 _Avoid_: Top Cards for the Most Played Cards mode (one word from Top Cut); Feature Match for the control mode (the on-air one is the Feature Match Overlay); Deck Screen and Card Screen for a Screen in Deck List or Card Spotlight mode (say Deck List Screen, Card Spotlight Screen).
 
 **Screen Mode Definition**:
-The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface), and what it declares it carries, such as its Mode Tokens, its own Background Layer stack, its Event References, or its Page Rotation. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
+The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface), and what it declares it carries, such as its Mode Tokens, its own Background Layer stack, its Event References, its Page Rotation, or the Output Changes its Screen Output follows. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
 
 **Event Reference**:
 A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, an Archetype, a Talent, a Talent lineup, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038). Deleting the Phase, Round, Archetype or Talent one names unsets it, and deleting a Talent drops it from a lineup (ADR-0060, ADR-0070).
 _Avoid_: data binding (a Graphic Input Binding is a Broadcast Graphics concept), Graphic Asset Reference (an installation-wide library link, not Event data)
+
+**Output Change**:
+A kind of change a Screen Output can show: to its Screen, that Screen's Screen Card or Broadcast Graphics Live Session, its Event or the Event's Theme, or the Event's Players, Player Decks, Phases, Rounds, Matches, Round Standings, Feature Match Slots, Feature Match Sessions, Archetypes, Player Lists, Talents or Broadcast Deck Lists. Every Screen Mode Definition declares the Output Changes its Screen Output follows, declaring none if it follows none, each narrowed to the ids its configuration names; every Screen follows its own Screen, its Event and its Theme. One rule answers from the declaration whether a Screen shows a change. It may answer yes needlessly, which costs a re-read, and never no wrongly, which would leave stale data on air.
+_Avoid_: invalidation, dependency (what one rendering's read depends on is Screen Mode Data Freshness's)
 
 **Head-to-Head**:
 A Screen Mode showing two Players of an Event side by side before their Match: each one's record and points (the Player's own, or their latest Round Standings while they hold none of their own), their Archetype, and the earlier Matches between them at the Event, oldest first, or that this is their first meeting. Its Players come from a Feature Match Slot, following the Slot's current Feature Match Assignment, or are picked directly.
@@ -276,6 +280,10 @@ _Avoid_: Preview — which composes the authored state its embedder pushes in an
 
 **Screen Output Asset Capability**:
 An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, its resolved Theme Tokens' included (ADR-0050) and, on a Talent Screen showing photos, its Talents' photos (ADR-0070), never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
+
+**Screen Output Link**:
+A short text, about 16 characters, that names one Screen and proves the right to its Screen Output Asset Capability. It is not presented on reads: it is exchanged once for the capability, which then does everything a capability does. It is derived from what the capability is derived from, never stored, so regenerating the capability regenerates the link and the former link stops exchanging. No Session stands in for it.
+_Avoid_: short link, output token, output code, share link.
 
 ### Client and live-state infrastructure
 

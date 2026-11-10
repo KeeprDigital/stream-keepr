@@ -5,6 +5,7 @@ import type {
 } from '~~/shared/types/graphicsAsset';
 import type { BoundedByteStream } from './object-store';
 import {
+	MAX_FULLY_DECODED_STILL_IMAGE_PIXELS,
 	MAX_STILL_IMAGE_AXIS,
 	MAX_STILL_IMAGE_PIXELS,
 	STILL_IMAGE_COMPATIBILITY_PROFILE,
@@ -37,6 +38,16 @@ const JPEG_START_OF_FRAME_MARKERS = new Set([
 ]);
 
 export type StillImageDeclarations = GraphicAssetSourceDeclarations;
+
+/**
+ * Which pixel bound a JPEG or WebP is held to.
+ *
+ * `ingestion` is every path that brings new bytes in, and applies the
+ * full-decode cap. `stored` re-reads a revision the catalogue already holds:
+ * one accepted before the cap existed stays verifiable and keeps its preview,
+ * so it is held only to the bound it was accepted under.
+ */
+export type StillImageBounds = 'ingestion' | 'stored';
 
 export interface ProcessedStillImage {
 	report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
@@ -129,6 +140,7 @@ function assertDimensions(
 	height: number,
 	formatLabel: string,
 	malformedCode: 'malformed-jpeg' | 'malformed-webp',
+	bounds: StillImageBounds,
 ) {
 	if (width <= 0 || height <= 0)
 		validationError(malformedCode, `${formatLabel} dimensions must both be positive.`);
@@ -144,9 +156,18 @@ function assertDimensions(
 			`${formatLabel} decoded pixels must not exceed ${MAX_STILL_IMAGE_PIXELS}.`,
 		);
 	}
+	// Decided from the header, before the decoder is handed anything.
+	if (bounds === 'ingestion' && width * height > MAX_FULLY_DECODED_STILL_IMAGE_PIXELS) {
+		validationError(
+			'image-pixels-exceeded',
+			`${formatLabel} images must not exceed ${MAX_FULLY_DECODED_STILL_IMAGE_PIXELS.toLocaleString('en-US')} pixels `
+			+ `(3840 × 2160 or the same area in another shape); this one is ${width} × ${height}. `
+			+ 'A PNG may be larger.',
+		);
+	}
 }
 
-function parseJpeg(bytes: Uint8Array) {
+function parseJpeg(bytes: Uint8Array, bounds: StillImageBounds) {
 	if (!bytesStartWith(bytes, Uint8Array.of(0xFF, 0xD8)))
 		validationError('invalid-jpeg-signature', 'Source bytes do not have the canonical JPEG signature.');
 
@@ -232,7 +253,7 @@ function parseJpeg(bytes: Uint8Array) {
 			colorModel = components === 1
 				? 'grayscale'
 				: 'rgb';
-			assertDimensions(width, height, 'JPEG', 'malformed-jpeg');
+			assertDimensions(width, height, 'JPEG', 'malformed-jpeg', bounds);
 		}
 
 		offset += segmentLength;
@@ -268,7 +289,7 @@ function parseJpeg(bytes: Uint8Array) {
 	};
 }
 
-function parseWebp(bytes: Uint8Array) {
+function parseWebp(bytes: Uint8Array, bounds: StillImageBounds) {
 	if (
 		bytes.byteLength < 20
 		|| ascii(bytes, 0, 4) !== 'RIFF'
@@ -440,7 +461,7 @@ function parseWebp(bytes: Uint8Array) {
 	}
 	if (imagePayloadType === 'lossy')
 		hasAlpha = foundAlphaChunk;
-	assertDimensions(width, height, 'WebP', 'malformed-webp');
+	assertDimensions(width, height, 'WebP', 'malformed-webp', bounds);
 	return {
 		width,
 		height,
@@ -507,6 +528,7 @@ const encodedStillImageFormats = {
 export async function processStillImage(
 	bytes: Uint8Array,
 	declarations: StillImageDeclarations = {},
+	{ bounds = 'ingestion' }: { bounds?: StillImageBounds } = {},
 ): Promise<ProcessedStillImage> {
 	if (bytesStartWith(bytes, PNG_SIGNATURE)) {
 		validateDeclarations('png', 'image/png', declarations);
@@ -524,7 +546,7 @@ export async function processStillImage(
 		? encodedStillImageFormats.jpeg
 		: encodedStillImageFormats.webp;
 	validateDeclarations(format.format, format.canonicalMime, declarations);
-	const parsed = format.parse(bytes);
+	const parsed = format.parse(bytes, bounds);
 	let decoded: ImageData;
 	try {
 		const input = Uint8Array.from(bytes).buffer;
