@@ -246,12 +246,22 @@ function overlayFollowed(field: 'matchIds' | 'roundIds' | 'phaseIds') {
 		};
 }
 
-/** The Players the Overlay's Slot seats, whose sideboards a Deck List Graphic Item shows. */
-function overlaySeatedPlayers(config: FeatureMatchOverlayModeConfig): OutputFollowNarrowing | false {
-	return config.featureMatchId != null && {
-		playerIds: { seatedIn: config.featureMatchId },
+/** The Players a named Feature Match Slot seats, or nothing while none is named. */
+function seatedPlayers(slotId: number | null | undefined): OutputFollowNarrowing | false {
+	return slotId != null && {
+		playerIds: { seatedIn: slotId },
 	};
 }
+
+/** The Players the Overlay's Slot seats, whose sideboards a Deck List Graphic Item shows. */
+const overlaySeatedPlayers = (config: FeatureMatchOverlayModeConfig) => seatedPlayers(config.featureMatchId);
+
+/**
+ * The Players a control Screen's Slot seats, whose decks say which deck
+ * counters it offers. Reverse Sync announces the Slot only when its snapshot
+ * changes, and the snapshot holds no deck cards.
+ */
+const controlsSeatedPlayers = (config: FeatureMatchModeConfig) => seatedPlayers(config.featureMatchId);
 
 /**
  * Single source of truth for all screen modes and their display characteristics.
@@ -380,6 +390,8 @@ const SCREEN_MODE_DEFINITIONS = {
 		outputFollows: {
 			featureMatchSlot: (config: FeatureMatchModeConfig) => namedSlot(config.featureMatchId),
 			featureMatchSession: (config: FeatureMatchModeConfig) => namedSlot(config.featureMatchId),
+			player: controlsSeatedPlayers,
+			playerDeck: controlsSeatedPlayers,
 		},
 	},
 	'feature-match-overlay': {
@@ -515,9 +527,7 @@ const SCREEN_MODE_DEFINITIONS = {
 			featureMatchSession: headToHeadSlot,
 			// The two Players it picks, or the two its Slot seats.
 			player: (config: HeadToHeadModeConfig) => config.playerSource === 'featureMatchSlot'
-				? config.featureMatchId != null && {
-					playerIds: { seatedIn: config.featureMatchId },
-				}
+				? seatedPlayers(config.featureMatchId)
 				: {
 						playerIds: [config.player1Id, config.player2Id].filter(id => id != null),
 					},

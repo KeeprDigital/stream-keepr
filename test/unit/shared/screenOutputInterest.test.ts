@@ -602,7 +602,12 @@ describe('screenHears', () => {
 		[
 			'Feature Match Controls',
 			screenIn('feature-match', { featureMatchId: SLOT }),
-			['featureMatchSlot', 'featureMatchSession'],
+			[
+				'player',
+				'playerDeck',
+				'featureMatchSlot',
+				'featureMatchSession',
+			],
 		],
 		[
 			'Feature Match Overlay of no Slot',
@@ -1199,6 +1204,10 @@ describe('screenHears', () => {
 	// nothing, or of another Slot, it hears every Player rather than miss one.
 	describe.each([
 		[
+			'Feature Match Controls',
+			screenIn('feature-match', { featureMatchId: SLOT }),
+		],
+		[
 			'Feature Match Overlay',
 			screenIn('feature-match-overlay', { featureMatchId: SLOT }),
 		],
@@ -1504,14 +1513,26 @@ describe('screenHears', () => {
 		expect(slotNarrowingOf(screen, change)).toBe(slotId);
 	});
 
-	it.each<[string, number, boolean]>([
-		['hears a seated Player\'s deck', PLAYER, true],
-		['ignores an unseated Player\'s deck', OTHER_PLAYER, false],
-	])('a Feature Match Overlay %s', (_case, playerId, hears) => {
-		const screen = screenIn('feature-match-overlay', { featureMatchId: SLOT });
-		expect(screenHears(screen, {
-			kind: 'playerDeck',
-			playerIds: [playerId],
-		}, seats(SLOT))).toBe(hears);
+	// The deck counters a control Screen offers, and an Overlay's sideboards,
+	// are read from the decks of the Players their Slot seats.
+	describe.each([
+		[
+			'a Feature Match Controls',
+			screenIn('feature-match', { featureMatchId: SLOT }),
+		],
+		[
+			'a Feature Match Overlay',
+			screenIn('feature-match-overlay', { featureMatchId: SLOT }),
+		],
+	])('%s', (_name, screen) => {
+		it.each<[string, number, boolean]>([
+			['hears a seated Player\'s deck', PLAYER, true],
+			['ignores an unseated Player\'s deck', OTHER_PLAYER, false],
+		])('%s', (_case, playerId, hears) => {
+			expect(screenHears(screen, {
+				kind: 'playerDeck',
+				playerIds: [playerId],
+			}, seats(SLOT))).toBe(hears);
+		});
 	});
 });

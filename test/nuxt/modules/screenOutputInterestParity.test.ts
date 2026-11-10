@@ -145,6 +145,16 @@ const OVERLAY: Dependencies = {
 	'playerDeck:cardsResolved': ({ playerIds }) => playerIds.some(id => seatedIds.includes(id)),
 };
 
+/**
+ * Feature Match Controls' inline dependencies: its Slot, and the seated
+ * Players whose decks say which deck counters it offers, re-read when a held
+ * Player's `updatedAt` moves (`usePlayerDeckCounters.ts:60-70`).
+ */
+const CONTROLS: Dependencies = {
+	...SLOT_STORES,
+	'player:updated': ({ player }) => seatedIds.includes(player.id),
+};
+
 /** A One Piece Deck List's Player source, inline at `useOpDeckModeData.ts:218-223`. */
 const OP_DECK_PLAYER: Dependencies = {
 	'player:updated': ({ player }) => player.id === SHOWN.playerId,
@@ -452,8 +462,10 @@ const CASES: ParityCase[] = [
 		declaration: 'inline',
 		name: 'Feature Match Controls',
 		screen: screenIn('feature-match', { featureMatchId: SHOWN.slotId }),
-		dependsOn: SLOT_STORES,
+		context: seated,
+		dependsOn: CONTROLS,
 		held: null,
+		exactly: ['player:updated'],
 	},
 	{
 		declaration: 'inline',
