@@ -84,10 +84,10 @@ describe('capability-only Screen Output reads', () => {
 	}
 
 	/** A further Screen in its own mode, read through its own capability. */
-	async function outputScreen(mode: string) {
+	async function outputScreen(mode: string, label = mode) {
 		const created = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
 			method: 'POST',
-			body: { name: `Output ${mode}`, slug: `output-reads-${mode.toLowerCase()}-${eventId}`, currentMode: mode },
+			body: { name: `Output ${label}`, slug: `output-reads-${label.toLowerCase()}-${eventId}`, currentMode: mode },
 		});
 		const ownCapability = (await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${created.id}/asset-capability`,
@@ -283,6 +283,119 @@ describe('capability-only Screen Output reads', () => {
 
 			expect((await rotating.read('event', before)).status).toBe(404);
 			expect((await rotating.read('event', after)).status).toBe(200);
+		});
+	});
+
+	// An output holding only its Screen Output Link exchanges it, anonymously and
+	// naming no origin, for the capability every read above presents.
+	describe('exchanging a Screen Output Link', () => {
+		interface IssuedOutputAccess { assetCapability: string; outputLink: string }
+		interface ExchangedOutputAccess { eventId: number; screenId: number; assetCapability: string }
+
+		async function issue(screenId: number, method: 'GET' | 'POST' = 'GET') {
+			return await $fetch<IssuedOutputAccess>(
+				`/api/events/${eventId}/screens/${screenId}/asset-capability`,
+				{ method },
+			);
+		}
+
+		async function exchange(body: string | undefined, contentType = 'application/json') {
+			const response = await anonymousFetch('/api/screen-output/link', {
+				method: 'POST',
+				headers: body === undefined
+					? undefined
+					: { 'content-type': contentType },
+				body,
+			});
+			return {
+				cacheControl: response.headers.get('cache-control'),
+				retryAfter: response.headers.get('retry-after'),
+				...await readJson<ExchangedOutputAccess & { statusCode?: number; message?: string }>(response),
+			};
+		}
+
+		it('answers the capability the operator was handed, which then reads through the Screen', async () => {
+			const output = await outputScreen('background', 'link-exchange');
+			const issued = await issue(output.screen.id);
+			expect(issued.assetCapability).toBe(output.capability);
+			expect(issued.outputLink).toMatch(/^[1-9A-HJ-NP-Za-km-z]{14,23}$/);
+
+			const exchanged = await exchange(JSON.stringify({ link: issued.outputLink }));
+
+			expect(exchanged.status).toBe(200);
+			expect(exchanged.cacheControl).toBe('private, no-store');
+			expect(exchanged.data).toEqual({
+				eventId,
+				screenId: output.screen.id,
+				assetCapability: output.capability,
+			});
+			expect((await output.read('event', exchanged.data.assetCapability)).status).toBe(200);
+			expect((await asOutput('event', exchanged.data.assetCapability)).status).toBe(404);
+		});
+
+		it('stops exchanging a link once its capability is regenerated, and exchanges the new one', async () => {
+			const output = await outputScreen('card', 'link-regenerated');
+			const before = await issue(output.screen.id);
+			const after = await issue(output.screen.id, 'POST');
+
+			expect(after.outputLink).not.toBe(before.outputLink);
+			expect((await exchange(JSON.stringify({ link: before.outputLink }))).status).toBe(404);
+			const exchanged = await exchange(JSON.stringify({ link: after.outputLink }));
+			expect(exchanged.data.assetCapability).toBe(after.assetCapability);
+			expect((await output.read('event', exchanged.data.assetCapability)).status).toBe(200);
+		});
+
+		it('refuses everything that is not a current link as a Screen Output read refuses', async () => {
+			const { outputLink, assetCapability } = await issue(screen.id);
+			const reference = await asOutput<{ statusCode: number; message: string }>('event', null);
+			expect(reference.status).toBe(404);
+
+			const presented: Array<[body: string | undefined, contentType?: string]> = [
+				[undefined],
+				['not json'],
+				['not json', 'text/plain'],
+				['null'],
+				['{}'],
+				[
+					JSON.stringify(outputLink),
+				],
+				[
+					JSON.stringify({ link: 17 }),
+				],
+				[
+					JSON.stringify({ link: outputLink, screenId: screen.id }),
+				],
+				[
+					JSON.stringify({ link: `1${outputLink}` }),
+				],
+				[
+					JSON.stringify({ link: `${outputLink.slice(0, -1)}0` }),
+				],
+				[
+					JSON.stringify({ link: assetCapability }),
+				],
+				[
+					JSON.stringify({
+						link: outputLink.split('').reverse().join(''),
+					}),
+				],
+			];
+			for (const [body, contentType] of presented) {
+				const refused = await exchange(body, contentType);
+				expect(refused.status, String(body)).toBe(404);
+				expect(refused.data.statusCode, String(body)).toBe(reference.data.statusCode);
+				expect(refused.data.message, String(body)).toBe(reference.data.message);
+				expect(refused.retryAfter, String(body)).toBeNull();
+			}
+		});
+
+		it('is not a read: the link in a query, or as a bearer, opens nothing', async () => {
+			const { outputLink, assetCapability } = await issue(screen.id);
+
+			// A GET has no handler here and is answered by the app shell: it hands nothing over.
+			const asked = await anonymousFetch(`/api/screen-output/link?link=${outputLink}`);
+			expect(await asked.text()).not.toContain(assetCapability);
+			expect((await asOutput('event', outputLink)).status).toBe(404);
 		});
 	});
 

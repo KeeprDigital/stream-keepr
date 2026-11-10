@@ -165,6 +165,39 @@ describe('a dev server with the Local Developer Session enabled', () => {
 		expect((await response.json() as ScreenResponse).id).toBe(screenId);
 	});
 
+	// The Local Developer Session rides every request; a Screen Output Link exchange never reads it.
+	it('refuses a wrong Screen Output Link, and exchanges the right one, whatever Session is carried', async () => {
+		const issued = await request(`/api/events/${eventId}/screens/${screenId}/asset-capability`, {
+			cookie: browserA.cookie,
+		});
+		expect(issued.status).toBe(200);
+		const { assetCapability, outputLink } = await issued.json() as { assetCapability: string; outputLink: string };
+		const wrongLink = `${outputLink.slice(0, -1)}${outputLink.endsWith('2')
+			? '3'
+			: '2'}`;
+
+		for (const body of [
+			{ link: wrongLink },
+			{},
+			{ link: assetCapability },
+		]) {
+			const refused = await request('/api/screen-output/link', {
+				cookie: browserA.cookie,
+				method: 'POST',
+				body,
+			});
+			expect(refused.status, JSON.stringify(body)).toBe(404);
+		}
+
+		const exchanged = await request('/api/screen-output/link', {
+			cookie: browserA.cookie,
+			method: 'POST',
+			body: { link: outputLink },
+		});
+		expect(exchanged.status).toBe(200);
+		expect(await exchanged.json()).toEqual({ eventId, screenId, assetCapability });
+	});
+
 	it('keeps Graphics Authoring Leases scoped to the two browser Sessions', async () => {
 		const leasePath = `/api/events/${eventId}/screens/${screenId}/graphics-authoring-lease`;
 		const acquired = await request(leasePath, { cookie: browserA.cookie, method: 'POST', body: {} });
