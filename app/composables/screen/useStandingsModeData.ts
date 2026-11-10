@@ -40,7 +40,7 @@ type StandingsRead = ScreenOutputStandingsResponse & { readPositionChange: boole
  * shows, each one re-reads. A new Round holds no Round Standings until a Melee
  * sync stores them, which re-reads already.
  */
-function standingsDependencies(
+export function standingsDependencies(
 	watchlistId: () => number | null,
 	showsPositionChange: () => boolean,
 ): ScreenModeDependencies<StandingsRead> {

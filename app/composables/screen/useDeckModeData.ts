@@ -87,7 +87,7 @@ function readRevision(read: DeckSourceRead | null): number | null | undefined {
  * sync, a TCG+ Import, a deck review or a resolved deck card changes what a
  * Player's deck shows without one.
  */
-function deckDependencies(selected: () => LoadedDeckSource | null): ScreenModeDependencies<DeckSourceRead | null> {
+export function deckDependencies(selected: () => LoadedDeckSource | null): ScreenModeDependencies<DeckSourceRead | null> {
 	const selectedPlayerId = () => {
 		const source = selected();
 		return source?.type === 'player'
