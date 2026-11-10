@@ -14,7 +14,7 @@ import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
 } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
-import { createBoundedByteStream } from '~~/server/modules/graphics-asset-library/object-store';
+import { createBoundedByteStream, graphicsObjectIdentity } from '~~/server/modules/graphics-asset-library/object-store';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { digestOf, pixelPng, sixteenPixelPng, vp9Webm } from '~~/test/helpers/graphicsFixtures';
 import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
@@ -46,6 +46,35 @@ export function acceptEverySilentVideo(): SilentVideoPlaybackValidator {
 	};
 }
 
+/**
+ * Accepts as the deployed validator does: it proves only the object staged at
+ * `ingestion/<operationId>/source`, and only at the declared length and digest.
+ */
+export function acceptStagedSilentVideo(
+	staging: ReturnType<typeof createInMemoryStagingGraphicsObjectStore>,
+): SilentVideoPlaybackValidator {
+	const accepting = acceptEverySilentVideo();
+	return {
+		validate: async (input) => {
+			const staged = await staging.read(graphicsObjectIdentity(`ingestion/${input.operationId}/source`));
+			if (staged.outcome !== 'available')
+				return { outcome: 'unavailable' as const, retryable: true as const };
+			const bytes = await collectStream(staged.body);
+			if (bytes.byteLength !== input.sourceByteLength || digestOf(bytes) !== input.sourceDigest) {
+				return {
+					outcome: 'rejected' as const,
+					stage: 'metadata' as const,
+					operationId: input.operationId,
+					idempotencyKey: input.idempotencyKey,
+					sourceDigest: input.sourceDigest,
+					factsDigest: input.factsDigest,
+				};
+			}
+			return await accepting.validate(input);
+		},
+	};
+}
+
 type LibraryDependencies = Parameters<typeof createGraphicsAssetLibrary>[0];
 
 /** An in-memory library minting `<label>-identity-N`, at a fixed instant. */
@@ -57,7 +86,7 @@ export function createPackageLibrary(label: string, dependencies: Partial<Librar
 		catalogue: createInMemoryGraphicsAssetCatalogue(),
 		staging,
 		canonical,
-		silentVideoPlaybackValidator: acceptEverySilentVideo(),
+		silentVideoPlaybackValidator: acceptStagedSilentVideo(staging),
 		templatePayloads: acceptEveryTemplateDocument(),
 		now: () => new Date('2026-07-30T09:00:00.000Z'),
 		generateIdentity: () => `${label}-identity-${++nextIdentity}`,

@@ -132,7 +132,7 @@ import {
 	GraphicsObjectInputError,
 	readableBytes,
 } from './object-store';
-import { isTerminalIngestionOperation } from './operation';
+import { isTerminalIngestionOperation, templatePackageVideoWorkingCopyOperationId } from './operation';
 import { createGraphicsOperationalQueues } from './operational-queues';
 import { readGraphicsOperationsCockpit } from './operations-cockpit';
 import {
@@ -2504,6 +2504,65 @@ export function createGraphicsAssetLibrary(
 	}
 
 	/**
+	 * Proves one packaged silent video in the pinned validation runtime.
+	 *
+	 * That runtime reads the complete staged source of the operation it is given,
+	 * which for a package is the archive. So the entry's exact bytes are staged as
+	 * the operation's working copy and validated under its name; the copy is
+	 * removed once the runtime has answered, and belongs to the staged objects the
+	 * operation's release reclaims otherwise.
+	 */
+	async function validatePackagedSilentVideo(input: {
+		operation: GraphicsIngestionOperation;
+		entry: TemplatePackageArchiveEntry;
+		readRange: (offset: number, length: number) => Promise<Uint8Array>;
+		report: Extract<GraphicAssetValidationReport, {
+			outcome: 'accepted';
+			compatibilityProfile: 'silent-video-v1';
+		}>;
+	}) {
+		const staging = requireStaging();
+		const workingCopyOperationId = templatePackageVideoWorkingCopyOperationId(input.operation.id);
+		const workingCopy = graphicsObjectIdentity(`ingestion/${workingCopyOperationId}/source`);
+		// Create-if-absent, and a copy already there is this entry's: one video is
+		// validated at a time, a settled one's copy is removed below, and a retry
+		// re-derives the same archive in the same order. The runtime checks the
+		// bytes against the digest it is given either way.
+		const staged = await staging.createImmutable({
+			identity: workingCopy,
+			bytes: {
+				body: archiveEntryStream(input.entry, input.readRange),
+				byteLength: input.entry.byteLength,
+				maximumByteLength: input.entry.byteLength,
+			},
+			metadata: { contentType: input.report.facts.canonicalMime },
+		});
+		if (staged.outcome !== 'created' && staged.outcome !== 'already-exists')
+			throw new TemplatePackageArchiveSourceError('Packaged silent-video bytes could not be staged for validation');
+		// A runtime that has not answered may still be reading the copy: its poll
+		// gives up long before a long video is proven, and a validation that then
+		// finds no source settles as failed and waits on an operator. So the copy
+		// outlives that answer, and the operation's release reclaims it.
+		let answered = true;
+		try {
+			return await reportWithTrustedSilentVideoValidation(
+				input.report,
+				{ id: workingCopyOperationId } as GraphicsIngestionOperation,
+			);
+		}
+		catch (failure) {
+			answered = !(failure instanceof SilentVideoValidationRuntimeError);
+			throw failure;
+		}
+		finally {
+			if (answered) {
+				// eslint-disable-next-line drizzle/enforce-delete-with-where -- Object-store deletion is scoped by immutable identity.
+				await staging.delete(workingCopy);
+			}
+		}
+	}
+
+	/**
 	 * Inspects one staged Template Package completely and returns the immutable
 	 * report it produced. Every check runs even after an earlier one failed, so an
 	 * author sees the complete reason a package cannot install rather than
@@ -2838,13 +2897,15 @@ export function createGraphicsAssetLibrary(
 					}, { declaredMime: content.canonicalMime });
 					// A packaged video is proven by the same pinned native validation an
 					// uploaded one is; there is no interactive client here to attest for it.
-					const trusted = await reportWithTrustedSilentVideoValidation(
-						processed.report as Extract<GraphicAssetValidationReport, {
+					const trusted = await validatePackagedSilentVideo({
+						operation,
+						entry,
+						readRange,
+						report: processed.report as Extract<GraphicAssetValidationReport, {
 							outcome: 'accepted';
 							compatibilityProfile: 'silent-video-v1';
 						}>,
-						operation,
-					);
+					});
 					accepted = trusted.report;
 					thumbnail = trusted.derivative;
 				}
