@@ -61,6 +61,7 @@ vi.mock('~~/server/services/meleeIntegration', () => ({
 }));
 
 vi.mock('~~/server/modules/melee-sync/roundMatches', () => ({
+	MeleeRoundNotReadyError: class extends Error {},
 	syncMatchesFromMelee: mockSyncMatchesFromMelee,
 	syncPreviousRoundStandingsFromMelee: async () => null,
 }));

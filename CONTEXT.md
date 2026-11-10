@@ -156,7 +156,7 @@ _Avoid_: unclocked match, timeless match
 The workflow that promotes a Match into a Feature Match Slot for production controls and saves the Round-scoped Feature Match Assignment.
 
 **Reverse Sync**:
-The follow-on that copies Players' current data into every Feature Match Slot seating them, and into each such Slot's active Feature Match Session source snapshot. It runs after the Player write, Melee Sync or Feature Match Slot Promotion that caused it has committed, and announces nothing itself: its caller's own messages carry the result. A lost Session race is absorbed, and the next pass finds the same difference. A Slot setup edit to a seated Player's name, pronouns or LGS is a Player write, so Reverse Sync carries it rather than undoing it (ADR-0045).
+The follow-on that copies Players' current data into every Feature Match Slot seating them, and into each such Slot's active Feature Match Session source snapshot. It runs after the Player write, Melee Sync or Feature Match Slot Promotion that caused it has committed, and announces nothing itself: its caller's own messages carry the result. A lost Session race is absorbed, and the next pass finds the same difference; a Slot whose pairing or active Session moved after the pass read it is left as it now stands. A Slot setup edit to a seated Player's name, pronouns or LGS is a Player write, so Reverse Sync carries it rather than undoing it (ADR-0045).
 _Avoid_: player sync, match snapshot refresh.
 
 ### Screens

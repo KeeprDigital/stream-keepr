@@ -589,19 +589,24 @@ export function featureMatchStateService() {
 	 * Reverse-sync writes onto whichever Session the Slot currently owns. These
 	 * accompany a Slot change that publishes its own notification, so they do not
 	 * announce themselves. A Session this has to open first is announced like any
-	 * other new epoch.
+	 * other new epoch. `createCommand` answers `null` to leave the Session it is
+	 * shown alone, which answers `null` here.
 	 */
 	const applyCommandToActiveSession = async (
 		slotId: number,
 		eventId: number,
-		createCommand: (session: DbFeatureMatchSession) => FeatureMatchSessionCommand,
+		createCommand: (session: DbFeatureMatchSession) =>
+			FeatureMatchSessionCommand | null | Promise<FeatureMatchSessionCommand | null>,
 		originConnectionId?: string,
 	): Promise<FeatureMatchSessionCommandResult | null> => {
 		const session = await getActiveSession(slotId, eventId) ?? await createSessionForSlot(slotId, eventId);
 		if (!session)
 			return null;
 
-		return await applyCommand(session.id, eventId, createCommand(session), originConnectionId);
+		const command = await createCommand(session);
+		if (!command)
+			return null;
+		return await applyCommand(session.id, eventId, command, originConnectionId);
 	};
 
 	return {

@@ -344,6 +344,105 @@ describe('a Live Results tick', () => {
 		});
 	});
 
+	// A results poll refreshes no Players, so one who entered after pairing is
+	// unknown to it: the tick refreshes Players once and stores the Round after all.
+	it.each([
+		{
+			case: 'the completed Round\'s standings',
+			matches: [
+				pairing('a', [1, 2], [2, 0]),
+				pairing('b', [3, 4], [2, 1]),
+			],
+			standings: [
+				...round3Standings,
+				meleeStanding(5, { Rank: 5 }),
+			],
+			stored: { standings: 5, tableB: '4' },
+		},
+		{
+			case: 'a re-paired Match',
+			matches: [
+				pairing('a', [1, 2], [2, 0]),
+				pairing('b', [3, 5]),
+			],
+			standings: [],
+			stored: { standings: 0, tableB: '5' },
+		},
+	])('takes in a Player Melee added after pairing, named by $case', async ({ matches, standings, stored }) => {
+		const { eventId, roundId, stage, tournament } = await seedEvent();
+		await stage(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4]),
+		]);
+		tournament.teamIds = [1, 2, 3, 4, 5];
+		tournament.matches.set(ROUND_3, matches);
+		tournament.standings.set(ROUND_3, standings);
+
+		const { outcome } = await runLiveResultsTick(eventId, now);
+
+		const tableB = (await matchesOf(eventId, roundId(ROUND_3))).find(match => match.externalId === 'b')!;
+		const seated = await db.query.players.findFirst({
+			where: eq(schema.players.id, tableB.player2Id!),
+		});
+		expect(outcome).toBe('changed');
+		expect(seated?.externalId).toBe(stored.tableB);
+		expect(await standingsCount(eventId, roundId(ROUND_3))).toBe(stored.standings);
+		expect(announced()).toEqual(expect.arrayContaining([
+			[eventId, 'melee:playersSynced'],
+		]));
+		expect(await pollState(eventId)).toMatchObject({ error: null, lastChangeAt: now });
+	});
+
+	it('refreshes Players once only, then fails, when Melee names a participant its Players lack', async () => {
+		const { eventId, roundId, stage, tournament } = await seedEvent();
+		await stage(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4]),
+		]);
+		const before = await matchesOf(eventId, roundId(ROUND_3));
+		tournament.matches.set(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 5]),
+		]);
+
+		const { outcome } = await runLiveResultsTick(eventId, now);
+
+		expect(outcome).toBe('failed');
+		expect(meleeCalls.mock.calls.map(call => call[1])).toEqual([
+			'matches',
+			'event',
+			'players',
+			'matches',
+		]);
+		expect(await matchesOf(eventId, roundId(ROUND_3))).toEqual(before);
+		expect(await pollState(eventId)).toMatchObject({ error: GENERIC_FAILURE, backoffStep: 1 });
+	});
+
+	it('abandons that Player refresh when an operator command takes the Event mid-tick', async () => {
+		const { eventId, roundId, stage, tournament } = await seedEvent();
+		await stage(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4]),
+		]);
+		const before = await matchesOf(eventId, roundId(ROUND_3));
+		tournament.teamIds = [1, 2, 3, 4, 5];
+		tournament.matches.set(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 5]),
+		]);
+		tournament.onFetchMatches = async () => {
+			await acquireMeleeSyncLease(eventId, 'update');
+		};
+
+		const { outcome } = await runLiveResultsTick(eventId, now);
+
+		expect(outcome).toBe('skipped');
+		expect(await db.query.players.findFirst({
+			where: and(eq(schema.players.eventId, eventId), eq(schema.players.externalId, '5')),
+		})).toBeUndefined();
+		expect(await matchesOf(eventId, roundId(ROUND_3))).toEqual(before);
+	});
+
 	it.each([
 		{
 			case: 'answers 404',

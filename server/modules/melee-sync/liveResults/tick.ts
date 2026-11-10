@@ -1,6 +1,7 @@
 import type { DbEvent } from '~~/server/db/schema';
 import type { LiveResultsTarget } from './currentRound';
 import type { LiveResultsOutcome } from './schedule';
+import { UnknownMeleeParticipantError } from '~~/server/mappers/melee';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { eventService } from '~~/server/services/event';
 import { requireMeleeService } from '~~/server/services/meleeIntegration';
@@ -142,8 +143,10 @@ export async function runLiveResultsTick(eventId: number, now: Date): Promise<{ 
 /**
  * Polls what the Current Round calls for. A Round Melee has paired since the
  * last tick becomes current: Players are refreshed once so its new Players
- * resolve, then its Matches are stored. `checkpoint` runs just before each
- * write and throws to abandon it. Throws Melee and storage failures.
+ * resolve, then its Matches are stored. A results poll refreshes Players only
+ * when Melee names a participant the Event holds no Player for, once, and then
+ * stores the Round. `checkpoint` runs just before each write and throws to
+ * abandon it. Throws Melee and storage failures.
  */
 async function checkCurrentRound(
 	event: DbEvent,
@@ -154,17 +157,34 @@ async function checkCurrentRound(
 		return { target: target.kind, changed: false };
 
 	const workflows = createMeleeSyncWorkflows();
+	const refreshPlayers = async () => {
+		await workflows.syncPlayers({}, event.id, event, undefined, { beforeWrite: checkpoint });
+	};
 	if (target.kind === 'probe') {
 		const paired = await probeForPairings(event, Number(target.round.externalId));
 		if (!paired)
 			return { target: target.kind, changed: false };
-		await workflows.syncPlayers({}, event.id, event, undefined, { beforeWrite: checkpoint });
+		await refreshPlayers();
 	}
 
-	const { published } = await workflows.syncRoundMatches({}, event.id, event, target.round.id, {
+	const syncRound = async () => await workflows.syncRoundMatches({}, event.id, event, target.round.id, {
 		beforeWrite: checkpoint,
 		previousRoundStandings: 'onFirstPairing',
 	});
+
+	let published: Awaited<ReturnType<typeof syncRound>>['published'];
+	try {
+		({ published } = await syncRound());
+	}
+	catch (error) {
+		// A Player Melee added after pairing would otherwise fail every tick: the
+		// Round never completes locally, so no probe ever refreshes Players. A
+		// probe has just refreshed them, so only a results poll retries, once.
+		if (target.kind !== 'results' || !(error instanceof UnknownMeleeParticipantError))
+			throw error;
+		await refreshPlayers();
+		({ published } = await syncRound());
+	}
 	// A probe that found pairings has moved the Current Round on: a change.
 	return {
 		target: target.kind,
