@@ -60,6 +60,7 @@ import {
 	GRAPHIC_SOURCE_RELATION_VALUES,
 	GRAPHIC_SOURCE_SELECTION_KIND_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
+	MAX_BROADCAST_GRAPHIC_NAME_LENGTH,
 	MAX_GRAPHIC_ANIMATION_DELAY_MS,
 	MAX_GRAPHIC_ANIMATION_DURATION_MS,
 	MAX_GRAPHIC_ANIMATION_PAUSE_MS,
@@ -73,6 +74,7 @@ import {
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_KEY_LENGTH,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
+	MAX_GRAPHIC_ITEM_LABEL_LENGTH,
 	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHIC,
 	MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN,
 	MAX_GRAPHIC_ITEMS_PER_FEATURE_MATCH_LAYOUT,
@@ -821,7 +823,7 @@ const graphicContainerThemeBindingsSchema = z.object({
 
 const graphicItemBaseShape = {
 	id: z.string().min(1).max(MAX_GRAPHIC_ITEM_ID_LENGTH),
-	label: z.string().min(1).max(100),
+	label: z.string().min(1).max(MAX_GRAPHIC_ITEM_LABEL_LENGTH),
 	visible: z.boolean(),
 	// A Layer Lock (ADR-0063). Shared because the item is, but only a Feature
 	// Match Layout holds one: a Broadcast Graphic refuses it (`hasLayerLock`).
@@ -1234,7 +1236,7 @@ function socialProfileProjectionConsumersResolve(graphic: BroadcastGraphicConfig
 
 export const broadcastGraphicConfigSchema = z.object({
 	id: z.string().min(1).max(100),
-	name: z.string().min(1).max(100),
+	name: z.string().min(1).max(MAX_BROADCAST_GRAPHIC_NAME_LENGTH),
 	// The one Graphic Channel this Broadcast Graphic runs in. Deliberately not checked
 	// against the Screen's declared channels: that is a cross-field rule, and an
 	// object-level refinement never reaches the patch path the editors write through,

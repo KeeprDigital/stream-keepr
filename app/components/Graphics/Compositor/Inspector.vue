@@ -90,9 +90,11 @@ import {
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
 	GRAPHIC_INPUT_TYPE_VALUES,
 	GRAPHIC_TEXT_ALIGN_VALUES,
+	MAX_BROADCAST_GRAPHIC_NAME_LENGTH,
 	MAX_GRAPHIC_FONT_SIZE,
 	MAX_GRAPHIC_INPUT_CHOICE_OPTIONS,
 	MAX_GRAPHIC_INPUT_LABEL_LENGTH,
+	MAX_GRAPHIC_ITEM_LABEL_LENGTH,
 	MAX_GRAPHIC_TEXT_LENGTH,
 	MAX_PLAYER_LIFE_ANIMATION_DURATION_MS,
 	MIN_GRAPHIC_FONT_SIZE,
@@ -102,7 +104,7 @@ import {
 } from '~~/shared/types/graphics';
 import { useInspectorSections } from '~/composables/ui/useInspectorSections';
 import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
-import { resolveGraphicsSelection } from '~/modules/graphics/selection';
+import { graphicsSelectionKey, resolveGraphicsSelection } from '~/modules/graphics/selection';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 import { OPACITY_INPUT } from '~/utils/opacityInput';
 import GraphicsGeometryFields from '../GeometryFields.vue';
@@ -234,6 +236,8 @@ const SIZING_MODE_OPTIONS = [
  */
 const previewedGraphics = computed(() => paintGraphicsThemeBindings(props.graphics, props.themeTokens));
 const selection = computed(() => resolveGraphicsSelection(previewedGraphics.value, props.selectedTarget));
+/** What is selected, as opposed to `selection`, which is a new object on every stack change. */
+const selectionKey = computed(() => graphicsSelectionKey(props.selectedTarget));
 
 const header = computed(() => {
 	const current = selection.value;
@@ -545,7 +549,7 @@ const selectedFont = computed(() => selectedTypography.value?.font);
 const fontSource = computed<GraphicFontSource>(() =>
 	fontSourceOverride.value ?? selectedFont.value?.kind ?? 'application');
 
-watch(selection, () => {
+watch(selectionKey, () => {
 	fontSourceOverride.value = undefined;
 });
 
@@ -748,6 +752,30 @@ function appendHostToken(key: string) {
 }
 
 /**
+ * Rename the selected Broadcast Graphic or relabel the selected Graphic Item,
+ * ignoring a blank and keeping to the longest the write path accepts.
+ *
+ * The whole stack is one write, so a name the write path refuses would fail that
+ * save and every later one, whatever it edited. A cleared field therefore writes
+ * nothing and the previous name stands until another is typed.
+ */
+function renameGraphic(name: string) {
+	if (name.trim() !== '') {
+		editGraphic(patchBroadcastGraphic, {
+			name: name.slice(0, MAX_BROADCAST_GRAPHIC_NAME_LENGTH),
+		});
+	}
+}
+
+function relabelItem(label: string) {
+	if (label.trim() !== '') {
+		editItem(patchGraphicItem, {
+			label: label.slice(0, MAX_GRAPHIC_ITEM_LABEL_LENGTH),
+		});
+	}
+}
+
+/**
  * Merge into one Graphic Input declaration, ignoring a blank label.
  *
  * The write path requires a label of at least one character, so clearing the field
@@ -879,7 +907,7 @@ function placeholderStyleFor(inputKey: string): GraphicPlaceholderStyle {
  */
 const placeholderFontSourceOverrides = ref<Record<string, GraphicFontSource>>({});
 
-watch(selection, () => {
+watch(selectionKey, () => {
 	placeholderFontSourceOverrides.value = {};
 });
 
@@ -980,8 +1008,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			<UInput
 				:model-value="selection.graphic.name"
 				class="w-full"
+				:maxlength="MAX_BROADCAST_GRAPHIC_NAME_LENGTH"
 				data-testid="broadcast-graphic-name"
-				@update:model-value="editGraphic(patchBroadcastGraphic, { name: String($event) })"
+				@update:model-value="renameGraphic(String($event))"
 			/>
 		</UFormField>
 
@@ -1212,8 +1241,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				<UInput
 					:model-value="selectedItem.label"
 					class="w-full"
+					:maxlength="MAX_GRAPHIC_ITEM_LABEL_LENGTH"
 					data-testid="graphic-item-label"
-					@update:model-value="editItem(patchGraphicItem, { label: String($event) })"
+					@update:model-value="relabelItem(String($event))"
 				/>
 			</UFormField>
 			<UFormField label="Visible" size="sm">

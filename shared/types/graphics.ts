@@ -550,6 +550,10 @@ export const DEFAULT_ON_AIR_UPDATE_POLICY: OnAirUpdatePolicy = 'staged';
  */
 export const GRAPHIC_INPUT_KEY_PATTERN = /^[a-z][\w-]*$/i;
 
+/** The longest name a Broadcast Graphic and label a Graphic Item may be stored with. */
+export const MAX_BROADCAST_GRAPHIC_NAME_LENGTH = 100;
+export const MAX_GRAPHIC_ITEM_LABEL_LENGTH = 100;
+
 export const MAX_GRAPHIC_INPUT_KEY_LENGTH = 40;
 export const MAX_GRAPHIC_INPUT_LABEL_LENGTH = 60;
 

@@ -2,7 +2,12 @@ import type {
 	GraphicsAuthoringLeaseOutcome,
 	GraphicsAuthoringLeaseReading,
 } from '~~/shared/modules/graphics-authoring-lease';
-import { GRAPHICS_AUTHORING_LEASE_DEFAULT_HEARTBEAT_MS } from '~~/shared/modules/graphics-authoring-lease';
+import type { Flight } from '~/utils/guardedSequence';
+import {
+	GRAPHICS_AUTHORING_LEASE_DEFAULT_HEARTBEAT_MS,
+	graphicsAuthoringLeaseTtlMs,
+} from '~~/shared/modules/graphics-authoring-lease';
+import { createGuardedSequence } from '~/utils/guardedSequence';
 
 /**
  * One editor session's Graphics Authoring Lease on the artifact it has open.
@@ -16,7 +21,16 @@ import { GRAPHICS_AUTHORING_LEASE_DEFAULT_HEARTBEAT_MS } from '~~/shared/modules
  * heartbeat and an observer's chance of promotion. That single loop is why an
  * abandoned artifact needs no notification to be recovered: the observer's next
  * ask lands after the vanished holder's deadline and is granted.
+ *
+ * An ask that gets no answer is not a lost lease. The server keeps a holder's
+ * lease until its deadline, so the holder stays writable until then, asking
+ * again sooner than the cadence, and fails closed only once the deadline passes.
  */
+
+/** How soon a holder asks again after an ask that got no answer. */
+const UNANSWERED_RETRY_MS = 5_000;
+/** How long the server keeps a lease granted to this composable's asks. */
+const LEASE_TTL_MS = graphicsAuthoringLeaseTtlMs(GRAPHICS_AUTHORING_LEASE_DEFAULT_HEARTBEAT_MS);
 
 export interface UseGraphicsAuthoringLeaseOptions {
 	/** The lease endpoint of one graphics authoring artifact. */
@@ -50,10 +64,42 @@ export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOpti
 	 */
 	const holderName = computed(() => lease.value?.holderName ?? null);
 
+	/** Orders the asks: an answer applies only while its ask is the newest. */
+	const asks = createGuardedSequence();
+	/** The takeover awaiting its answer, which no plain ask may supersede. */
+	let takeoverInFlight: Flight | null = null;
+	let disposed = false;
+	/**
+	 * Until when the server holds this session's lease, on this browser's clock:
+	 * the deadline counted from when the granted ask was sent. The reading's own
+	 * `expiresAt` is on the server's clock, and the server stamps it after the ask
+	 * was sent, so this is never later than the real deadline whatever the skew.
+	 */
+	let heldUntil = 0;
+	let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+	function cancelRetry() {
+		clearTimeout(retryTimer);
+		retryTimer = undefined;
+	}
+
+	/** Whether an answer for `asked` still has an editor waiting for it. */
+	function wanted(asked: string): boolean {
+		return !disposed && enabled.value && asked === endpoint.value;
+	}
+
 	async function ask(body: { takeover?: boolean } = {}): Promise<void> {
-		if (!enabled.value)
+		if (disposed || !enabled.value)
+			return;
+		// Sent behind a takeover, a plain ask could be answered "observer" first and
+		// then be the newest answer; the takeover's own answer says more.
+		if (!body.takeover && takeoverInFlight?.current)
 			return;
 		const asked = endpoint.value;
+		const askedAt = Date.now();
+		const flight = asks.begin();
+		if (body.takeover)
+			takeoverInFlight = flight;
 		if (status.value === 'idle')
 			status.value = 'pending';
 		try {
@@ -61,18 +107,41 @@ export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOpti
 				method: 'POST',
 				body: { ...body, heartbeatIntervalMs: GRAPHICS_AUTHORING_LEASE_DEFAULT_HEARTBEAT_MS },
 			});
-			// A different artifact was opened while this was in flight; its own ask owns
-			// the answer.
-			if (asked !== endpoint.value)
+			// The editor closed, stopped authoring, or opened a different artifact
+			// while this was in flight. Nobody will heartbeat or release a lease
+			// granted now, so hand it straight back.
+			if (!wanted(asked)) {
+				if (response.lease.role === 'holder')
+					void $fetch(asked, { method: 'DELETE' }).catch(() => {});
 				return;
+			}
+			// A newer ask owns the answer.
+			if (flight.stale)
+				return;
+			cancelRetry();
 			lease.value = response.lease;
+			heldUntil = response.lease.role === 'holder'
+				? askedAt + LEASE_TTL_MS
+				: 0;
 			status.value = 'ready';
 		}
 		catch {
-			if (asked !== endpoint.value)
+			if (!wanted(asked) || flight.stale)
 				return;
+			const remainingMs = lease.value?.role === 'holder'
+				? heldUntil - Date.now()
+				: 0;
+			if (remainingMs > 0) {
+				cancelRetry();
+				retryTimer = setTimeout(() => void ask(), Math.min(UNANSWERED_RETRY_MS, remainingMs));
+				return;
+			}
 			lease.value = null;
 			status.value = 'error';
+		}
+		finally {
+			if (takeoverInFlight === flight)
+				takeoverInFlight = null;
 		}
 	}
 
@@ -101,6 +170,10 @@ export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOpti
 	);
 
 	watch([enabled, endpoint], ([isEnabled], previous) => {
+		// Whatever is in flight was asked for the artifact or the authoring state
+		// this change just left.
+		asks.supersede();
+		cancelRetry();
 		const previousEndpoint = previous?.[1];
 		if (previousEndpoint && previousEndpoint !== endpoint.value)
 			void release(previousEndpoint);
@@ -137,6 +210,9 @@ export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOpti
 	}
 
 	onScopeDispose(() => {
+		disposed = true;
+		asks.supersede();
+		cancelRetry();
 		pause();
 		void release();
 	});

@@ -24,7 +24,11 @@ import {
 	resolveGraphicThemeTokens,
 	squareShapeGeometry,
 } from '~~/shared/modules/graphics';
-import { MAX_GRAPHIC_TEXT_LENGTH } from '~~/shared/types/graphics';
+import {
+	MAX_BROADCAST_GRAPHIC_NAME_LENGTH,
+	MAX_GRAPHIC_ITEM_LABEL_LENGTH,
+	MAX_GRAPHIC_TEXT_LENGTH,
+} from '~~/shared/types/graphics';
 import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import Inspector from '~/components/Graphics/Compositor/Inspector.vue';
 
@@ -998,6 +1002,59 @@ describe('graphicsCompositorInspector', () => {
 		expect(wrapper.emitted('update:graphics')).toBeUndefined();
 	});
 
+	// The write path refuses a blank or over-long name, and the whole stack is one
+	// write, so a refused name would fail every later save of anything in it.
+	describe.each([
+		{
+			field: 'a Broadcast Graphic\'s name',
+			testId: 'broadcast-graphic-name',
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' } as GraphicsSelectionTarget,
+			maxLength: MAX_BROADCAST_GRAPHIC_NAME_LENGTH,
+			written: (graphics: BroadcastGraphicConfig[]) => graphics[0]?.name,
+		},
+		{
+			field: 'a Graphic Item\'s label',
+			testId: 'graphic-item-label',
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' } as GraphicsSelectionTarget,
+			maxLength: MAX_GRAPHIC_ITEM_LABEL_LENGTH,
+			written: (graphics: BroadcastGraphicConfig[]) => itemOf(graphics)?.label,
+		},
+	])('$field', ({ testId, selectedTarget, maxLength, written }) => {
+		it.each([
+			{ typed: 'an empty field', value: '' },
+			{ typed: 'only spaces', value: '   ' },
+		])('keeps the stored one while the author has typed $typed', async ({ value }) => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget,
+			});
+
+			control(wrapper, 'UInput', 'data-testid', testId).vm.$emit('update:modelValue', value);
+			await nextTick();
+
+			expect(wrapper.emitted('update:graphics')).toBeUndefined();
+		});
+
+		it('writes what the author typed, and takes no more than the write path accepts', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget,
+			});
+			const field = control(wrapper, 'UInput', 'data-testid', testId);
+
+			field.vm.$emit('update:modelValue', 'Renamed');
+			await nextTick();
+
+			expect(written(emittedGraphics(wrapper, 0))).toBe('Renamed');
+			expect(field.attributes('maxlength')).toBe(String(maxLength));
+
+			field.vm.$emit('update:modelValue', 'n'.repeat(maxLength + 1));
+			await nextTick();
+
+			expect(written(emittedGraphics(wrapper, 1))).toBe('n'.repeat(maxLength));
+		});
+	});
+
 	describe('context-gated Graphic Items', () => {
 		function contextItem(kind: 'clock' | 'player-life' | 'game-wins' | 'deck-list'): GraphicItemConfig {
 			return getGraphicItemDefinition(kind).createDefault({
@@ -1901,6 +1958,24 @@ describe('graphicsCompositorInspector', () => {
 			expect(typographyFontPicker(wrapper)?.exists()).toBe(true);
 		});
 
+		// The unstored arm belongs to the selection, not to the stack: an edit that
+		// lands anywhere in the stack leaves the picker the author just opened.
+		it('keeps an unstored library arm through a change to the stack', async () => {
+			const wrapper = await mountComponent({
+				graphics: stack([textItem]),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			selectField(wrapper, 'typography-font-source').vm.$emit('update:modelValue', 'asset');
+			await nextTick();
+			await wrapper.setProps({
+				graphics: stack([textItem, shapeItem]),
+			});
+
+			expect(selectField(wrapper, 'typography-font-source').props('modelValue')).toBe('asset');
+			expect(typographyFontPicker(wrapper)?.exists()).toBe(true);
+		});
+
 		// The application arm writes what the author picked.
 		it('chooses an application font for the item', async () => {
 			const wrapper = await mountComponent({
@@ -2193,6 +2268,33 @@ describe('graphicsCompositorInspector', () => {
 			});
 			expect(selectField(wrapper, 'graphic-placeholder-style-font-source').props('modelValue'))
 				.toBe('asset');
+		});
+
+		// Unpinning writes the stack, and the stack it wrote comes back as the new
+		// prop; the library arm has to outlive that for another font to be pinned.
+		it('keeps the library arm once the unpinned stack is stored', async () => {
+			const wrapper = await mountComponent({
+				graphics: placeholderTextGraphic({
+					name: {
+						fontWeight: 300,
+						font: {
+							kind: 'asset',
+							reference: { assetId: 'font-1', revisionId: 'font-revision-2' },
+						},
+					},
+				}),
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
+			});
+
+			placeholderFontPicker(wrapper)!.vm.$emit('update:modelValue', undefined);
+			await nextTick();
+			await wrapper.setProps({
+				graphics: emittedGraphics(wrapper, 0),
+			});
+
+			expect(selectField(wrapper, 'graphic-placeholder-style-font-source').props('modelValue'))
+				.toBe('asset');
+			expect(placeholderFontPicker(wrapper)?.exists()).toBe(true);
 		});
 
 		// The arm an author has chosen but not yet stored belongs to the placeholder they chose it
