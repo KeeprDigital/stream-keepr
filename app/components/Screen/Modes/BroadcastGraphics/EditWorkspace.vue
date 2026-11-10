@@ -68,6 +68,12 @@ const props = defineProps<{
 	 * the slot to repair — shown verbatim in place of generic wording.
 	 */
 	saveError?: string | null;
+	/**
+	 * Lands every unsaved edit of this workspace and answers whether none is left,
+	 * for the Template library: a placement rewrites the stored stack and a save
+	 * reads it, so neither may run ahead of an edit still on its way.
+	 */
+	flushEdits?: () => Promise<boolean>;
 }>();
 
 const emit = defineEmits<{
@@ -145,7 +151,17 @@ function selectPlacedGraphic(graphicId: string) {
  * Fail closed: until a caller says this session holds the lease, the workspace is
  * an observer's. An unstated permission must never read as one that was granted.
  */
-const canAuthor = computed(() => props.writable === true);
+const holdsLease = computed(() => props.writable === true);
+
+/**
+ * A Template placement is in flight. The server is rewriting the stack and the
+ * Screen is then reloaded, so an edit made meanwhile would be built on the stack
+ * from before the placement and would write the placed Broadcast Graphic away.
+ */
+const placing = ref(false);
+
+/** Whether this session may edit now: it holds the lease, and no placement is in flight. */
+const canAuthor = computed(() => holdsLease.value && !placing.value);
 
 /**
  * Only the session whose write it is may be told about it. An observer's
@@ -153,7 +169,7 @@ const canAuthor = computed(() => props.writable === true);
  * retrying a colleague's write.
  */
 const visibleSaveState = computed(() => {
-	if (!canAuthor.value || !props.saveState || props.saveState === 'idle')
+	if (!holdsLease.value || !props.saveState || props.saveState === 'idle')
 		return null;
 	return props.saveState;
 });
@@ -244,7 +260,7 @@ useEventListener(import.meta.client
 	<div>
 		<GraphicsAuthoringLeaseNotice
 			class="mb-4"
-			:writable="canAuthor"
+			:writable="holdsLease"
 			:lease-status="leaseStatus"
 			:can-take-over="canTakeOver"
 			:holder-name="holderName"
@@ -341,11 +357,13 @@ useEventListener(import.meta.client
 					workspace deliberately has no route to either.
 				-->
 				<GraphicsBroadcastGraphicTemplateLibrary
+					v-model:placing="placing"
 					class="mt-4 block"
 					:event-id="eventId"
 					:screen-id="screen.id"
 					:selected-graphic="selectedGraphic"
-					:writable="canAuthor"
+					:writable="holdsLease"
+					:flush-edits="flushEdits"
 					@placed="selectPlacedGraphic"
 				/>
 

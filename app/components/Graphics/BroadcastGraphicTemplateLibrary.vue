@@ -19,7 +19,10 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
  * builds the copy and writes it through the Screen's own configuration path, so the
  * placed Broadcast Graphic is validated, capped, indexed, and published exactly as a
  * hand-authored one — and the Screen is then reloaded authoritatively rather than
- * patched from a guess.
+ * patched from a guess. Both read the Screen as stored, so the workspace's unsaved
+ * edits are landed first (`flushEdits`), and the workspace holds authoring while a
+ * placement is in flight (`placing`): an edit sent after it carries the whole stack
+ * from before it, and would write the placed Broadcast Graphic away.
  *
  * Browsing, revising, deleting, and receiving a Template Package are the same in this
  * library and in the Feature Match Layout Template library, because a Template Package
@@ -36,9 +39,17 @@ const props = defineProps<{
 	 * through the available designs corrupts nothing.
 	 */
 	writable?: boolean;
+	/**
+	 * Lands the workspace's unsaved edits, answering whether none is left unsaved.
+	 * A host with no unsaved edits passes nothing.
+	 */
+	flushEdits?: () => Promise<boolean>;
 }>();
 
 const emit = defineEmits<{ placed: [graphicId: string] }>();
+
+/** Whether a placement is in flight, from its first step until the placed Screen is held. */
+const placing = defineModel<boolean>('placing', { default: false });
 
 const repository = useBroadcastGraphicTemplateRepository();
 const screenStore = useScreenStore();
@@ -71,6 +82,12 @@ const {
 } = library;
 
 const saving = ref(false);
+
+/** Land the workspace's unsaved edits, or refuse to go on reading a Screen that lacks them. */
+async function landEdits() {
+	if (props.flushEdits && !await props.flushEdits())
+		throw new Error('An edit to this Screen could not be saved. Retry the save, then try again.');
+}
 const canSave = computed(() => canAuthor.value && !!props.selectedGraphic && !saving.value);
 
 /** Save the selected Broadcast Graphic as a new template at revision 1. */
@@ -79,6 +96,7 @@ async function save() {
 		return;
 	saving.value = true;
 	try {
+		await landEdits();
 		await repository.save({
 			eventId: props.eventId,
 			screenId: props.screenId,
@@ -103,16 +121,24 @@ async function save() {
  */
 async function place(templateId: string) {
 	await attempt(templateId, async () => {
-		const placed = await repository.place({
-			eventId: props.eventId,
-			screenId: props.screenId,
-			templateId,
-			stateVersion: placementVersion.value,
-		});
-		// The Screen was written on the server, and this client's own realtime echo is
-		// suppressed, so the authoritative Screen is reloaded here.
-		await screenStore.getScreenById(props.eventId, props.screenId);
-		emit('placed', placed.graphic.id);
+		placing.value = true;
+		try {
+			await landEdits();
+			const placed = await repository.place({
+				eventId: props.eventId,
+				screenId: props.screenId,
+				templateId,
+				// Read once the edits have landed: each of them moved the Screen on.
+				stateVersion: placementVersion.value,
+			});
+			// The Screen was written on the server, and this client's own realtime echo is
+			// suppressed, so the authoritative Screen is reloaded here.
+			await screenStore.getScreenById(props.eventId, props.screenId);
+			emit('placed', placed.graphic.id);
+		}
+		finally {
+			placing.value = false;
+		}
 	});
 }
 </script>

@@ -5,6 +5,7 @@ import { effectScope } from 'vue';
 import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
 
 const mockLoadSession = vi.fn(async () => null);
+const mockReloadSession = vi.fn(async () => null);
 let continuity = createContinuitySignal();
 let attachment = createAttachSignal();
 const mockRealtime = reactive({
@@ -14,7 +15,7 @@ const mockRealtime = reactive({
 });
 
 mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
-mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({ loadSession: mockLoadSession }));
+mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({ loadSession: mockLoadSession, reloadSession: mockReloadSession }));
 
 /**
  * The Live Session's own reasons to read its snapshot again: the Screen or
@@ -33,6 +34,7 @@ describe('useBroadcastGraphicsLiveSessionSync', () => {
 
 	beforeEach(() => {
 		mockLoadSession.mockClear();
+		mockReloadSession.mockClear();
 		continuity = createContinuitySignal();
 		attachment = createAttachSignal();
 	});
@@ -46,6 +48,7 @@ describe('useBroadcastGraphicsLiveSessionSync', () => {
 		await flushPromises();
 
 		expect(mockLoadSession).toHaveBeenCalledExactlyOnceWith(7, 3);
+		expect(mockReloadSession).not.toHaveBeenCalled();
 	});
 
 	it('reloads once its Event channel first attaches, because a command applied before then was heard by nothing (#733)', async () => {
@@ -57,8 +60,8 @@ describe('useBroadcastGraphicsLiveSessionSync', () => {
 		attachment.attach('event:7');
 		await flushPromises();
 
-		expect(mockLoadSession).toHaveBeenCalledTimes(2);
-		expect(mockLoadSession).toHaveBeenLastCalledWith(7, 3);
+		expect(mockLoadSession).toHaveBeenCalledTimes(1);
+		expect(mockReloadSession).toHaveBeenCalledExactlyOnceWith(7, 3);
 	});
 
 	it('does not reload when its Event channel was already attached before it loaded', async () => {
@@ -70,8 +73,10 @@ describe('useBroadcastGraphicsLiveSessionSync', () => {
 		await flushPromises();
 
 		expect(mockLoadSession).toHaveBeenCalledTimes(1);
+		expect(mockReloadSession).not.toHaveBeenCalled();
 	});
 
+	// A reconnect is not the operator's action, so it reads through the reload that keeps what they are being told.
 	it('reloads once its Event channel is attached again having lost continuity', async () => {
 		follow();
 		await flushPromises();
@@ -79,7 +84,8 @@ describe('useBroadcastGraphicsLiveSessionSync', () => {
 		continuity.reattach('event:7');
 		await flushPromises();
 
-		expect(mockLoadSession).toHaveBeenCalledTimes(2);
+		expect(mockLoadSession).toHaveBeenCalledTimes(1);
+		expect(mockReloadSession).toHaveBeenCalledExactlyOnceWith(7, 3);
 	});
 
 	it('stops waiting on the first attach once disposed', async () => {
@@ -90,6 +96,6 @@ describe('useBroadcastGraphicsLiveSessionSync', () => {
 		attachment.attach('event:7');
 		await flushPromises();
 
-		expect(mockLoadSession).toHaveBeenCalledTimes(1);
+		expect(mockReloadSession).not.toHaveBeenCalled();
 	});
 });

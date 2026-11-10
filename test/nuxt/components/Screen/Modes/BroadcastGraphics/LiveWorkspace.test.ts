@@ -66,6 +66,7 @@ mockNuxtImport('useOverlay', () => () => ({
 
 mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	loadSession: mockLoadSession,
+	reloadSession: mockLoadSession,
 	take: mockTake,
 	out: mockOut,
 	get error() {

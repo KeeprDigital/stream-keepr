@@ -76,8 +76,9 @@ const TemplateLibraryStub = defineComponent({
 		screenId: { type: Number, required: true },
 		selectedGraphic: { type: Object, default: null },
 		writable: { type: Boolean, default: false },
+		flushEdits: { type: Function, default: undefined },
 	},
-	emits: ['placed'],
+	emits: ['placed', 'update:placing'],
 	setup(props, { emit }) {
 		return () => h('div', {
 			'data-testid': 'template-library',
@@ -198,6 +199,30 @@ describe('broadcastGraphicsEditWorkspace', () => {
 				{ type: 'graphic', graphicId: 'placed-copy' },
 			],
 		]);
+	});
+
+	// An edit made while a placement is out is built on the stack from before it.
+	it('holds authoring while a placement is in flight, leaving the library and the lease notice as they were', async () => {
+		const wrapper = await mountWorkspace({ graphics: [] });
+		const authoring = () => wrapper.get('[data-testid="graphic-channels-panel"]').attributes('data-writable');
+		const library = wrapper.getComponent(TemplateLibraryStub);
+
+		library.vm.$emit('update:placing', true);
+		await nextTick();
+		expect(authoring()).toBe('false');
+		expect(library.attributes('data-writable')).toBe('true');
+		expect(wrapper.find('[data-testid="edit-lease-notice"]').exists()).toBe(false);
+
+		library.vm.$emit('update:placing', false);
+		await nextTick();
+		expect(authoring()).toBe('true');
+	});
+
+	it('hands the library the flush of this workspace\'s unsaved edits', async () => {
+		const flushEdits = vi.fn(async () => true);
+		const wrapper = await mountWorkspace({ flushEdits });
+
+		expect(wrapper.getComponent(TemplateLibraryStub).props('flushEdits')).toBe(flushEdits);
 	});
 
 	it('leaves an observing session browsing the library read-only', async () => {

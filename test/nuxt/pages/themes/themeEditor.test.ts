@@ -391,9 +391,10 @@ describe('the Theme editor', () => {
 		],
 	])('writes %s the picker pins', async (_case, token, pick, value) => {
 		const wrapper = await mountEditor();
+		fakeDraftClock();
 
 		await pick(wrapper);
-		await flushPromises();
+		await pauseEdits();
 
 		expect(writes()).toEqual([
 			[
@@ -420,5 +421,81 @@ describe('the Theme editor', () => {
 				},
 			],
 		]);
+	});
+
+	// Each field writes the token whole, so a later edit carries the earlier
+	// one and waits for its answer; edits made meanwhile are sent as one.
+	it('builds a second edit on the first while its write is out, and sends it once that answers', async () => {
+		const first = deferred<ThemeResponse>();
+		const answers: Answer[] = [
+			() => first.promise,
+			body => theme(3, { heading: body?.value }),
+		];
+		answerWrite = body => answers.shift()!(body);
+		const wrapper = await mountEditor();
+		fakeDraftClock();
+
+		await part(wrapper, 'heading', 'weight').setValue('400');
+		await pauseEdits();
+		await part(wrapper, 'heading', 'case').setValue('lowercase');
+		await pauseEdits();
+		await part(wrapper, 'heading', 'case').setValue('capitalize');
+		await pauseEdits();
+
+		expect(writes().map(([, , body]) => body.value)).toEqual([
+			expect.objectContaining({ weight: 400, case: 'uppercase' }),
+		]);
+		expect((part(wrapper, 'heading', 'weight').element as unknown as HTMLSelectElement).value).toBe('400');
+
+		first.resolve(theme(2, { heading: writes()[0]![2].value }));
+		await flushPromises();
+
+		expect(writes().map(([, , body]) => body.value)).toEqual([
+			expect.objectContaining({ weight: 400, case: 'uppercase' }),
+			expect.objectContaining({ weight: 400, case: 'capitalize' }),
+		]);
+		expect(field(wrapper, 'heading').attributes('data-token-state')).toBe('set');
+	});
+
+	it('writes a composite token once for edits made in steps', async () => {
+		const wrapper = await mountEditor();
+		fakeDraftClock();
+
+		await part(wrapper, 'heading', 'case').setValue('lowercase');
+		await part(wrapper, 'heading', 'weight').setValue('400');
+		await pauseEdits();
+
+		expect(writes().map(([, , body]) => body.value)).toEqual([
+			expect.objectContaining({ weight: 400, case: 'lowercase' }),
+		]);
+	});
+
+	it('leaves a token reset when an edit to it was still waiting', async () => {
+		storedTokens = {
+			'animation-effect': { effect: 'caustics' },
+		};
+		answerWrite = () => theme(2);
+		const wrapper = await mountEditor();
+		fakeDraftClock();
+
+		await part(wrapper, 'animation-effect', 'animation-effect').get('select').setValue('fog');
+		await field(wrapper, 'animation-effect').findAll('button').find(button => button.text() === 'Reset')!.trigger('click');
+		await pauseEdits();
+
+		expect(writes()).toEqual([
+			['DELETE', 'animation-effect', undefined],
+		]);
+	});
+
+	it('shows the stored value again once a write is refused', async () => {
+		answerWrite = () => Promise.reject(Object.assign(new Error('Refused'), { statusCode: 422 }));
+		const wrapper = await mountEditor();
+		const horizontal = () => (part(wrapper, 'alignment', 'horizontal').element as unknown as HTMLSelectElement).value;
+
+		await part(wrapper, 'alignment', 'horizontal').setValue('left');
+		await flushPromises();
+
+		expect(writes()).toHaveLength(1);
+		expect(horizontal()).toBe('center');
 	});
 });

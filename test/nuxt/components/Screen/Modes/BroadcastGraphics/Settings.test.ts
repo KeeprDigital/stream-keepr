@@ -57,6 +57,7 @@ mockNuxtImport('useEventStore', () => () => mockEventStore);
 const mockSaveState = ref<'idle' | 'saving' | 'committed' | 'failed'>('idle');
 const mockSaveError = ref<string | null>(null);
 const mockRetry = vi.fn();
+const mockFlush = vi.fn(async () => true);
 mockNuxtImport('useModeConfigUpdate', () => () => ({
 	config: mockConfig,
 	saving: ref(false),
@@ -66,6 +67,7 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	resetConfig: vi.fn(),
 	retry: mockRetry,
 	discard: mockDiscard,
+	flush: mockFlush,
 }));
 const mockLeaseWritable = ref(true);
 /** Set to tell "not writable" apart from "held by another Session"; `null` follows `writable`. */
@@ -114,6 +116,7 @@ const EditWorkspaceStub = defineComponent({
 		playoutDisconnected: { type: Boolean, default: false },
 		saveState: { type: String, default: 'idle' },
 		saveError: { type: String, default: null },
+		flushEdits: { type: Function, default: undefined },
 	},
 	emits: [
 		'update:graphics',
@@ -401,6 +404,15 @@ describe('broadcastGraphicsSettings', () => {
 		expect(workspace.attributes('data-save-state')).toBe('failed');
 		expect(workspace.attributes('data-save-error'))
 			.toBe('Graphic Asset Reference at graphics.slate.items.logo.asset is not selectable');
+	});
+
+	it('hands the Edit workspace the flush of the authored save', async () => {
+		mockRoute.query = { workspace: 'edit' };
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await expect(wrapper.getComponent(EditWorkspaceStub).props('flushEdits')!()).resolves.toBe(true);
+		expect(mockFlush).toHaveBeenCalledOnce();
 	});
 
 	it('re-sends the failed save on the workspace\'s retry', async () => {

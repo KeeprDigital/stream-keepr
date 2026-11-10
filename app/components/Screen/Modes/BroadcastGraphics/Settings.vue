@@ -26,7 +26,7 @@ const route = useRoute();
 const router = useRouter();
 const eventStore = useEventStore();
 
-const { config, saving, saveState, saveError, updateConfig, resetConfig, retry, discard } = useModeConfigUpdate(
+const { config, saving, saveState, saveError, updateConfig, resetConfig, retry, discard, flush } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'broadcast-graphics',
@@ -227,6 +227,7 @@ function updateBackground(next: BroadcastGraphicsBackgroundConfig) {
 				:playout-disconnected="playoutDisconnected"
 				:save-state="saveState"
 				:save-error="saveError"
+				:flush-edits="flush"
 				@update:graphics="updateGraphics"
 				@update:channels="updateChannels"
 				@update:background="updateBackground"

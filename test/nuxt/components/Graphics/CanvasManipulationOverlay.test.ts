@@ -321,6 +321,49 @@ describe('graphicsCanvasManipulationOverlay', () => {
 		expect(gestures[2]).not.toBe(gestures[0]);
 	});
 
+	// A host makes one undo step of a drag, so every drag that starts must be said to end.
+	it.each<[string, (wrapper: Wrapper) => Promise<void> | void]>([
+		[
+			'the pointer lets go',
+			wrapper => wrapper.get('[data-testid="canvas-manipulation-box"]').trigger('pointerup', { pointerId: 1 }),
+		],
+		[
+			'the pointer is cancelled',
+			wrapper => wrapper.get('[data-testid="canvas-manipulation-box"]').trigger('pointercancel', { pointerId: 1 }),
+		],
+		[
+			'it goes away mid-drag',
+			wrapper => wrapper.unmount(),
+		],
+	])('says when a drag starts, and that it ended once %s', async (_case, finish) => {
+		const wrapper = mountOverlay();
+		const box = wrapper.get('[data-testid="canvas-manipulation-box"]');
+
+		await box.trigger('pointerdown', {
+			button: 0,
+			pointerId: 1,
+			clientX: 0,
+			clientY: 0,
+		});
+		await box.trigger('pointermove', { pointerId: 1, clientX: 10, clientY: 0 });
+		expect(wrapper.emitted('gestureStart')).toHaveLength(1);
+		expect(wrapper.emitted('gestureEnd')).toBeUndefined();
+
+		await finish(wrapper);
+
+		expect(wrapper.emitted('gestureEnd')).toHaveLength(1);
+	});
+
+	it('ends no drag when it goes away at rest', async () => {
+		const ended = vi.fn();
+		const wrapper = mountOverlay({ onGestureEnd: ended } as never);
+		await drag(wrapper, '[data-testid="canvas-manipulation-box"]', { x: 10, y: 0 });
+
+		wrapper.unmount();
+
+		expect(ended).toHaveBeenCalledOnce();
+	});
+
 	// #740: several layers move together by the box they cover, and are not resized together.
 	it('outlines each of several layers, moves the box they cover, and offers no resize handle', async () => {
 		const wrapper = mountOverlay({

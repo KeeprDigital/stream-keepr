@@ -4,12 +4,14 @@ import type { FoundationTokenName, ThemeTokenType, ThemeTokenValue } from '~~/sh
 import type { ThemeTokenDefinitionOf } from '~~/shared/themeTokens';
 import { FOUNDATION_TOKENS, isThemeCompositeTokenType } from '~~/shared/modules/theme';
 import { themeTokenDefinition } from '~~/shared/themeTokens';
-import { THEME_TOKEN_INPUTS, themeTokenValueText } from '~/modules/theme-editor/tokenInputs';
+import { useThemeTokenDraft } from '~/modules/theme-editor/draft';
+import { THEME_TOKEN_COMMITS_IN_STEPS, THEME_TOKEN_INPUTS, themeTokenValueText } from '~/modules/theme-editor/tokenInputs';
 
 // One Theme Token in the Theme editor, or in a Screen's token section: its
 // control, what it inherits when left unset, and a reset that clears it. A Mode
 // Token may also follow any Foundation Token of its type instead of holding its
-// own value.
+// own value. Its input edits a draft, so each edit builds on the last one made
+// here, whether or not its write has answered.
 
 const props = defineProps<{
 	name: string;
@@ -18,7 +20,8 @@ const props = defineProps<{
 	stored: unknown;
 	/** The token's value as it resolves under this Theme now. */
 	resolved: ThemeTokenValue;
-	disabled?: boolean;
+	/** A write of this token is out: its controls wait, and its draft holds until the write settles. */
+	writing?: boolean;
 	/**
 	 * Where it is set: in a Theme, inheriting its default (the default), or as
 	 * a Screen Theme Override, inheriting `inherited` from the Event's Theme.
@@ -118,9 +121,29 @@ const editable = computed(() => {
 		: inheritedValue.value as ThemeTokenValue;
 });
 
+const { draft, edit, commitNow, cancel } = useThemeTokenDraft(
+	() => editable.value,
+	value => emit('set', value),
+	() => props.writing === true,
+);
+
+function take(value: ThemeTokenValue) {
+	if (THEME_TOKEN_COMMITS_IN_STEPS[definition.value.type])
+		edit(value);
+	else
+		commitNow(value);
+}
+
+/** A Reset, or a new source, replaces an edit still waiting to be written. */
+function clear() {
+	cancel();
+	emit('clear');
+}
+
 function chooseSource(value: string) {
 	if (value === source.value)
 		return;
+	cancel();
 	emit('set', value === OWN_VALUE
 		? props.resolved
 		: { token: value });
@@ -157,9 +180,9 @@ function chooseSource(value: string) {
 					color="neutral"
 					variant="ghost"
 					icon="i-lucide-rotate-ccw"
-					:disabled="disabled"
+					:disabled="writing"
 					:aria-label="text.resetLabel(definition.label)"
-					@click="emit('clear')"
+					@click="clear"
 				>
 					{{ text.reset }}
 				</UButton>
@@ -172,20 +195,20 @@ function chooseSource(value: string) {
 				:items="sourceItems"
 				size="sm"
 				:class="compact ? 'w-48' : 'w-64'"
-				:disabled="disabled"
+				:disabled="writing"
 				:aria-label="`${definition.label} source`"
 				data-token-part="source"
 				@update:model-value="chooseSource"
 			/>
 			<component
 				:is="input"
-				:model-value="editable"
+				:model-value="draft"
 				:label="definition.label"
 				:bounds="definition.type === 'dimension' ? definition.bounds : undefined"
 				:asset-kinds="definition.type === 'asset' ? definition.assetKinds : undefined"
 				:event-id="eventId"
-				:class="{ 'pointer-events-none opacity-50': disabled }"
-				@commit="(value: unknown) => emit('set', value)"
+				:class="{ 'pointer-events-none opacity-50': writing }"
+				@commit="take"
 			/>
 		</div>
 	</div>

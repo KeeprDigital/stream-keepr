@@ -1,4 +1,4 @@
-import { tryOnScopeDispose } from '@vueuse/core';
+import { tryOnScopeDispose, until } from '@vueuse/core';
 import { createCancelableDebounce } from '~/utils/cancelableDebounce';
 import { registerPendingEditFlush } from '~/utils/eventStores';
 
@@ -290,6 +290,27 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 
 	const unregisterPendingEditFlush = registerPendingEditFlush(handOffPendingEdits);
 
+	/**
+	 * Send what is pending now and wait until every save has settled: the edit
+	 * still inside its debounce, the save in flight, and any edit queued behind
+	 * it. For a caller about to have the server read or rewrite what these edits
+	 * are stored in, such as a Template placement: an edit sent afterwards was
+	 * built on the value from before that write, and would put it back.
+	 *
+	 * Answers whether nothing is left unsaved. `false` means an edit was refused
+	 * and is still held here for retry, so what is stored is not what is shown.
+	 */
+	async function flush(): Promise<boolean> {
+		saveDebounce.cancel();
+		while (inFlight.value > 0 || Object.keys(pendingUpdates.value).length > 0) {
+			if (inFlight.value > 0)
+				await until(inFlight).toBe(0);
+			else
+				await flushPendingUpdates();
+		}
+		return saveError.value === null;
+	}
+
 	tryOnScopeDispose(() => {
 		unregisterPendingEditFlush();
 		handOffPendingEdits();
@@ -303,5 +324,6 @@ export function useConfigUpdate<T extends Record<string, any>, U extends Record<
 		updateConfig,
 		retry,
 		discard,
+		flush,
 	};
 }

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { ThemeBackgroundLayer } from '~~/shared/modules/theme';
-import { useThemeTokenDraft } from '~/modules/theme-editor/draft';
 import { decodeThemeBackground, encodeThemeBackground } from '~/modules/theme-editor/themeColor';
 
 // A Background Layer stack token, edited with the Screen's own stack editor.
@@ -20,15 +19,15 @@ const emit = defineEmits<{
 	commit: [value: ThemeBackgroundLayer[]];
 }>();
 
-const { draft, edit } = useThemeTokenDraft(() => encodeThemeBackground(props.modelValue), value => emit('commit', decodeThemeBackground(value)));
+const layers = computed(() => encodeThemeBackground(props.modelValue));
 </script>
 
 <template>
 	<div data-token-part="background-layers" :aria-label="`${label} layers`" role="group">
 		<ScreenBackgroundLayersEditor
-			:layers="draft"
+			:layers="layers"
 			:event-id="eventId"
-			@update:layers="edit"
+			@update:layers="value => emit('commit', decodeThemeBackground(value))"
 		>
 			<template #color="{ value, update }">
 				<ThemeColorSourceField

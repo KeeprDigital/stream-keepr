@@ -119,6 +119,7 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 		]);
 	},
 	loadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),
+	reloadSession: (eventId: number, screenId: number) => mockLoadSession.value(eventId, screenId),
 	readSessionAsScreenOutput: (screenId: number, read: () => Promise<unknown>) => {
 		mockSessionReaders.set(screenId, read);
 	},

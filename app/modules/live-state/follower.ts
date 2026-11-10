@@ -19,7 +19,8 @@ import { createKeyedGuardedSequence } from '~/utils/guardedSequence';
  * - loads are Flights from a keyed Guarded Sequence: a later load, and any newer
  *   write, supersedes an earlier load, so the load issued first and answered last
  *   cannot win by arriving late (#308); a load answering something behind what is
- *   held leaves it;
+ *   held leaves it; an epoch ending supersedes a load too, since it may answer
+ *   with the epoch that ended;
  * - a snapshot read elsewhere (carried by another resource) is held only when it
  *   is not behind, and supersedes nothing: it was read at some moment, not
  *   produced after everything in flight;
@@ -96,6 +97,8 @@ export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extend
 	 * superseding across them would drop a load nothing had overtaken.
 	 */
 	const loads = createKeyedGuardedSequence<K>();
+	/** How many reads each key has out, superseded or not. */
+	const reading = new Map<K, number>();
 
 	/**
 	 * Hold a snapshot known to be the newest thing this client has: the server
@@ -115,7 +118,18 @@ export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extend
 	 */
 	async function load(key: K, read: () => Promise<S | null>): Promise<S | null> {
 		const flight = loads.begin(key);
-		const snapshot = await read();
+		reading.set(key, (reading.get(key) ?? 0) + 1);
+		let snapshot: S | null;
+		try {
+			snapshot = await read();
+		}
+		finally {
+			const remaining = reading.get(key)! - 1;
+			if (remaining > 0)
+				reading.set(key, remaining);
+			else
+				reading.delete(key);
+		}
 		const known = options.held(key);
 		if (flight.stale || !snapshot || (known && isBehind(snapshot, known)))
 			return known ?? null;
@@ -185,13 +199,18 @@ export function createLiveStateFollower<K, S extends LiveStateSnapshot, N extend
 	/**
 	 * One key's epoch has ended. Everything held for it belongs to the ended
 	 * epoch, so it is forgotten before the reload rather than after: if the reload
-	 * fails, nothing from a show that is over stays held. A key holding nothing
-	 * has nothing to correct, and does not open an epoch to hear about one ending.
+	 * fails, nothing from a show that is over stays held. A load in flight may
+	 * answer with the ended epoch, so it is superseded and the key reloads even
+	 * when nothing is held yet. A key holding nothing and loading nothing has
+	 * nothing to correct, and does not open an epoch to hear about one ending.
 	 */
 	function end(key: K): Exclude<LiveStateNotificationOutcome, 'applied'> {
-		if (!options.held(key))
+		const known = options.held(key);
+		if (!known && !reading.has(key))
 			return 'ignored';
-		options.forget(key);
+		loads.supersede(key);
+		if (known)
+			options.forget(key);
 		return 'reload';
 	}
 

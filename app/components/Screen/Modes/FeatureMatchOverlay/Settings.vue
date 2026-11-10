@@ -163,6 +163,8 @@ const selectionLabel = computed(() => severalSelected.value
 	? `${layers.value.length} layers`
 	: editorSelectionLabel(config.value.layout, selection.value));
 
+// A canvas drag is bracketed as one gesture below, so it undoes as one step
+// however long it pauses; the key coalesces frames arriving outside one.
 function manipulate(rect: GraphicRect, gesture: number) {
 	editor.setSelectionRect(rect, { coalesce: `canvas:${gesture}` });
 }
@@ -695,6 +697,8 @@ useEventListener(import.meta.client
 					@select-compositor-target="selectCompositorTarget"
 					@manipulate="manipulate"
 					@rotate="rotate"
+					@gesture-start="editor.beginGesture"
+					@gesture-end="editor.endGesture"
 				/>
 			</section>
 
