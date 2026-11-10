@@ -114,3 +114,33 @@ export function tableRowLayoutStyle(prefix: string, layout: TableRowLayout): Rec
 
 	return style;
 }
+
+/**
+ * Holds the rows leaving a paginated table where they stood. A leaving row is
+ * taken out of flow so the incoming page can lay out; with no place of its own
+ * it belongs at the top of the table, and every outgoing row would slide there
+ * over the page coming in.
+ *
+ * Places are remembered before the table updates, because by the time a row is
+ * told it is leaving the table has already been laid out without it.
+ */
+export function createLeavingRowHold() {
+	const places = new WeakMap<Element, { top: number; height: number }>();
+	return {
+		/** Call before the table updates, while every row is still in flow. */
+		remember(rows: Element | null | undefined) {
+			for (const row of rows?.children ?? []) {
+				if (row instanceof HTMLElement)
+					places.set(row, { top: row.offsetTop, height: row.offsetHeight });
+			}
+		},
+		/** The row `TransitionGroup`'s `before-leave`. */
+		hold(row: Element) {
+			const place = places.get(row);
+			if (!place || !(row instanceof HTMLElement))
+				return;
+			row.style.top = `${place.top}px`;
+			row.style.height = `${place.height}px`;
+		},
+	};
+}

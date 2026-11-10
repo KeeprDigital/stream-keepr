@@ -93,6 +93,11 @@ const layoutRowCount = computed(() => {
 	return pageRows;
 });
 
+const rowsRef = useTemplateRef<{ $el?: Element }>('rowsRef');
+const leavingRows = createLeavingRowHold();
+// Before the page's rows change, while the outgoing ones are still laid out.
+watch(pageData, () => leavingRows.remember(rowsRef.value?.$el), { flush: 'pre' });
+
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef'), {
 	density: 'compact',
 	prefix: 'standings',
@@ -151,10 +156,12 @@ const displayStyle = {
 				<!-- Table -->
 				<div ref="tableRef" class="standings-table broadcast-table-surface" :style="surfaceStyle">
 					<TransitionGroup
+						ref="rowsRef"
 						name="standings-row"
 						tag="div"
 						class="standings-rows"
 						:style="rowLayoutStyle"
+						@before-leave="leavingRows.hold"
 					>
 						<div
 							v-for="(player, index) in pageData"
