@@ -20,6 +20,7 @@ import { useRoute } from '#app';
 import { useRealtime } from '~/composables/core/useRealtime';
 import { useReconnectResync } from '~/composables/core/useReconnectResync';
 import { useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
+import { ScreenLookupUnavailable } from '~/composables/repositories/useScreenRepository';
 import { useScreenRealtimeSession } from '~/composables/screen/useScreenRealtimeSession';
 import { getScreenModeDisplayType, isControlScreenMode } from '~/modules/screen-mode';
 import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
@@ -57,13 +58,13 @@ const defaultExportAdapter: ScreenDisplaySessionExportAdapter = {
 };
 
 /**
- * How long a load whose Event context read failed waits before trying again:
+ * How long a load whose Screen lookup or Event context read failed waits before trying again:
  * the slow cadence Screen Mode Data Freshness retries a failed read on.
  */
 export const SCREEN_OUTPUT_LOAD_RETRY_MS = SCREEN_MODE_REREAD_MS;
 
 /** Why a load stopped short, which decides what the rendering says about it. */
-type LoadFailure = 'event-missing' | 'screen-missing' | 'event-context-unavailable';
+type LoadFailure = 'event-missing' | 'screen-missing' | 'screen-unavailable' | 'event-context-unavailable';
 
 const loadFailureMessages: Record<LoadFailure, { title: string; detail: (screenSlug: string) => string }> = {
 	'event-missing': {
@@ -73,6 +74,10 @@ const loadFailureMessages: Record<LoadFailure, { title: string; detail: (screenS
 	'screen-missing': {
 		title: 'Screen not found',
 		detail: screenSlug => `The screen "${screenSlug}" could not be found for this event.`,
+	},
+	'screen-unavailable': {
+		title: 'Screen unavailable',
+		detail: screenSlug => `The screen "${screenSlug}" could not be loaded. Retrying automatically.`,
 	},
 	'event-context-unavailable': {
 		title: 'Event details unavailable',
@@ -85,6 +90,14 @@ class EventContextUnavailable extends Error {
 	constructor(cause: unknown) {
 		super('Event context unavailable', { cause });
 	}
+}
+
+function loadFailureOf(err: unknown): LoadFailure {
+	if (err instanceof EventContextUnavailable)
+		return 'event-context-unavailable';
+	return err instanceof ScreenLookupUnavailable
+		? 'screen-unavailable'
+		: 'screen-missing';
 }
 
 function firstRouteParam(value: string | string[]): string {
@@ -416,7 +429,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		loadAskedRecovery = null;
 	}
 
-	/** The slow retry of a load whose Event context read failed. */
+	/** The slow retry of a load whose Screen lookup or Event context read failed. */
 	let loadRetry: ReturnType<typeof setTimeout> | null = null;
 
 	function cancelLoadRetry() {
@@ -466,9 +479,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			await finishLoad(readScope(evtId, loadedScreen.id), flight);
 		}
 		catch (err) {
-			failLoad(err instanceof EventContextUnavailable
-				? 'event-context-unavailable'
-				: 'screen-missing', err, flight);
+			failLoad(loadFailureOf(err), err, flight);
 		}
 	}
 
@@ -514,9 +525,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	}
 
 	/**
-	 * A load that stopped short says why. A failed Event context read is not a
-	 * missing Screen, and nothing else retries it while the connection stays up, so
-	 * it retries itself on a slow cadence until the load finishes (#727).
+	 * A load that stopped short says why. A Screen lookup or Event context read that
+	 * failed is not a missing Screen, and nothing else retries it while the
+	 * connection stays up, so it retries itself on a slow cadence until the load
+	 * finishes (#727).
 	 */
 	function failLoad(failure: LoadFailure, err: unknown, flight: Flight) {
 		if (flight.stale)
@@ -525,7 +537,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		stopListeningDuringLoad();
 		loading.value = false;
 		loadFailure.value = failure;
-		if (failure === 'event-context-unavailable') {
+		if (failure === 'event-context-unavailable' || failure === 'screen-unavailable') {
 			loadRetry = setTimeout(() => {
 				loadRetry = null;
 				resyncActiveScreen();

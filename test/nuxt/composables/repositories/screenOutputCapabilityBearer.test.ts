@@ -1,6 +1,7 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
+import { ScreenLookupUnavailable } from '~/composables/repositories/useScreenRepository';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
@@ -48,5 +49,22 @@ describe('screen Output capability reads', () => {
 		mockFetch.mockRejectedValue(Object.assign(new Error('Not Found'), { statusCode: 404 }));
 
 		await expect(useScreenRepository().getBySlug(1, 'main', 'a-capability-for-another-screen')).resolves.toBeNull();
+	});
+
+	// A lookup that could not be answered is not a missing Screen: its caller
+	// retries the one and gives up on the other.
+	it.each([
+		{
+			failure: 'a 503',
+			error: Object.assign(new Error('Service Unavailable'), { statusCode: 503 }),
+		},
+		{
+			failure: 'no answer at all',
+			error: new TypeError('Failed to fetch'),
+		},
+	])('says the Screen lookup is unavailable on $failure', async ({ error }) => {
+		mockFetch.mockRejectedValue(error);
+
+		await expect(useScreenRepository().getBySlug(1, 'main', 'a-capability')).rejects.toBeInstanceOf(ScreenLookupUnavailable);
 	});
 });
