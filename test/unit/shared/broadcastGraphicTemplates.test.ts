@@ -88,12 +88,22 @@ describe('a Layer Lock on a Broadcast Graphic', () => {
 	}
 
 	it.each<[string, () => BroadcastGraphicConfig]>([
-		['a saved Broadcast Graphic Template', () => broadcastGraphicTemplateDocument(locked())],
+		[
+			'a saved Broadcast Graphic Template',
+			() => broadcastGraphicTemplateDocument(locked()),
+		],
 		[
 			'a placed copy of one',
 			() => placeBroadcastGraphicTemplate(
-				{ id: 'template-1', name: 'Lower third', document: locked() },
-				{ generateId: sequentialIds(), existing: [] },
+				{
+					id: 'template-1',
+					name: 'Lower third',
+					document: locked(),
+				},
+				{
+					generateId: sequentialIds(),
+					existing: [],
+				},
 			),
 		],
 	])('stays on %s', (_, travelled) => {
