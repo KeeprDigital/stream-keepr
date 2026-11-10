@@ -201,6 +201,11 @@ const gridStyle = computed(() => ({
 	gridTemplateColumns: gridTemplateColumns.value,
 }));
 
+const leavingRowsRef = useTemplateRef<{ $el?: Element }>('rowsRef');
+const leavingRows = createLeavingRowHold();
+// Before the page's rows change, while the outgoing ones are still laid out.
+watch(pageData, () => leavingRows.remember(leavingRowsRef.value?.$el), { flush: 'pre' });
+
 // Measures the rows themselves, below the header row, so no page inset applies.
 const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('rowsRef'), {
 	density: 'compact',
@@ -356,6 +361,7 @@ function formatCardCell(entry: CardBreakdownEntry, key: MetagameCardColumnKey): 
 						tag="div"
 						class="metagame-rows"
 						:style="rowLayoutStyle"
+						@before-leave="leavingRows.hold"
 					>
 						<div
 							v-for="(entry, index) in pageData"
