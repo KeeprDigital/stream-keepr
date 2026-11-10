@@ -246,3 +246,17 @@ describe('feature Match Overlay Source Item sections', () => {
 			expect(found.attributes('data-summary')).toContain(summary);
 	});
 });
+
+describe('feature Match Overlay Source Item: actions', () => {
+	// Each action is offered once (#1069): the layer row duplicates, removes and hides.
+	it.each([
+		'Duplicate Source Item',
+		'Remove Source Item',
+		'Visible',
+	])('offers no %s control', async (label) => {
+		const { wrapper } = await mountBounds('top-left');
+
+		expect(wrapper.find(`[aria-label="${label}"]`).exists()).toBe(false);
+		expect(wrapper.findAll('[label]').map(field => field.attributes('label'))).not.toContain(label);
+	});
+});

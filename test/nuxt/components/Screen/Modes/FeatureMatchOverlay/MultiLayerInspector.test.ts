@@ -19,14 +19,22 @@ const SELECTED: FeatureMatchLayoutEditorLayer[] = [
 	{ type: 'item', itemId: 'player1-game-wins' },
 ];
 
-function mountPanel({ writable = true, groupRefusal = null as LayerGroupRefusal | null } = {}) {
+function mountPanel({
+	writable = true,
+	groupRefusal = null as LayerGroupRefusal | null,
+	layers = SELECTED,
+	canAlign = true,
+	canDistribute = true,
+} = {}) {
 	const layout: FeatureMatchLayoutConfig = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
 	return mount(MultiLayerInspector, {
 		props: {
 			layout,
-			layers: SELECTED,
+			layers,
 			writable,
 			groupRefusal,
+			canAlign,
+			canDistribute,
 		},
 		global: { stubs: nuxtUiStubs },
 	});
@@ -147,5 +155,44 @@ describe('featureMatchOverlayMultiLayerInspector', () => {
 			? refusal.text()
 			: '').toBe(reason);
 		expect(wrapper.emitted('group')).toEqual(emitted);
+	});
+
+	// Each action once (#1069): the geometry section is the one place that aligns and distributes.
+	it.each([
+		['Align top', 'align', 'top'],
+		['Align centre', 'align', 'center'],
+		['Distribute vertically', 'distribute', 'y'],
+	])('%s asks for the selection to move', async (label, event, argument) => {
+		const wrapper = mountPanel();
+
+		await wrapper.get(`button[aria-label="${label}"]`).trigger('click');
+
+		expect(wrapper.emitted(event)).toEqual([[argument]]);
+	});
+
+	// Distributing needs three, so two selected layers are offered alignment alone.
+	it.each([
+		[2, 6, 0],
+		[3, 6, 2],
+	])('offers %i selected layers %i align and %i distribute controls', (count, aligns, distributes) => {
+		const wrapper = mountPanel({ layers: SELECTED.slice(0, count) });
+
+		expect(wrapper.findAll('button[aria-label^="Align "]')).toHaveLength(aligns);
+		expect(wrapper.findAll('button[aria-label^="Distribute "]')).toHaveLength(distributes);
+	});
+
+	it.each([
+		['layers that do not align', { canAlign: false, canDistribute: false }],
+		['a session without the lease', { writable: false }],
+	])('aligns and distributes nothing for %s', async (_case, options) => {
+		const wrapper = mountPanel(options);
+
+		for (const button of wrapper.findAll('button[aria-label^="Align "], button[aria-label^="Distribute "]')) {
+			expect(button.attributes('disabled')).toBeDefined();
+			await button.trigger('click');
+		}
+
+		expect(wrapper.emitted('align')).toBeUndefined();
+		expect(wrapper.emitted('distribute')).toBeUndefined();
 	});
 });

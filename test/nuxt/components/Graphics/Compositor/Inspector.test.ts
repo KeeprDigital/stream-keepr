@@ -619,6 +619,20 @@ describe('graphicsCompositorInspector', () => {
 		expect(emittedGraphics(wrapper)[0]?.items[0]?.visible).toBe(false);
 	});
 
+	// Each action once (#1069): the Feature Match Overlay hides a layer from its layer row; Broadcast Graphics has no layer row yet (#1100).
+	it.each([
+		['Broadcast Graphics', BROADCAST_GRAPHICS_HOST_CONTRACT, true],
+		['the Feature Match Overlay', FEATURE_MATCH_OVERLAY_HOST_CONTRACT, false],
+	])('offers the Visible switch in %s: %s', async (_host, contract, offered) => {
+		const wrapper = await mountComponent({
+			graphics: stack([shapeItem]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+			contract,
+		});
+
+		expect(wrapper.find('[data-testid="graphic-item-visible"]').exists()).toBe(offered);
+	});
+
 	it('explains a selection the Screen stack no longer carries', async () => {
 		const wrapper = await mountComponent({
 			graphics: stack([shapeItem]),
