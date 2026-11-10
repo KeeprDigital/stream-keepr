@@ -680,6 +680,34 @@ describe('re-resolving Broadcast Graphic bindings', () => {
 		]);
 	});
 
+	// A bulk write's Players are one change: each is announced, and bindings re-resolve once.
+	it('catches them up once for many Players, each announced in order', async () => {
+		const answered = await eventDataPublicationModule().playersUpdated({
+			eventId: 1,
+			entities: [
+				player,
+				{ ...player, id: 7 },
+				{ ...player, id: 8 },
+			],
+			originConnectionId: origin,
+		});
+
+		expect(mockPublishMessage.mock.calls.map(([eventId, type, payload, originConnectionId]) => [
+			eventId,
+			type,
+			payload.player.id,
+			originConnectionId,
+		])).toEqual([
+			[1, 'player:updated', 6, origin],
+			[1, 'player:updated', 7, origin],
+			[1, 'player:updated', 8, origin],
+		]);
+		expect(answered.map(answer => answer.id)).toEqual([6, 7, 8]);
+		expect(mockRefreshBindings.mock.calls).toEqual([
+			[1],
+		]);
+	});
+
 	it.each([
 		[
 			'a Screen',

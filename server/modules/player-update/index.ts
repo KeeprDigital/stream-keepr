@@ -121,27 +121,22 @@ export function playerUpdateModule() {
 		playerIds,
 		originConnectionId,
 	}: ReconcileDeckProjectionsParams) {
-		const updatedPlayerIds: number[] = [];
-		const responses: PlayerResponse[] = [];
-		const deckService = playerDeckService();
+		// One bulk write for every affected Player, all or none, then one run of
+		// `player:updated` messages in the order of the requested Player IDs, after
+		// which Graphic Input Bindings re-resolve once.
+		const updatedPlayers = await playerDeckService().reconcilePrimaryArchetypesForPlayers(eventId, playerIds);
+		const responses = await publication.playersUpdated({
+			eventId,
+			entities: updatedPlayers,
+			originConnectionId,
+		});
 
-		// Bulk-reads the affected Players' deck/projection data (chunked, instead
-		// of one query per Player) before writing the per-Player projection and
-		// publishing its update — publication messages stay per-player and in
-		// the same order as the requested Player IDs.
-		const updatedPlayers = await deckService.reconcilePrimaryArchetypesForPlayers(eventId, playerIds);
-
-		for (const player of updatedPlayers) {
-			responses.push(await publication.playerUpdated({
+		if (updatedPlayers.length > 0) {
+			await publishPlayerSnapshotUpdates({
 				eventId,
-				entity: player,
+				playerIds: updatedPlayers.map(player => player.id),
 				originConnectionId,
-			}));
-			updatedPlayerIds.push(player.id);
-		}
-
-		if (updatedPlayerIds.length > 0) {
-			await publishPlayerSnapshotUpdates({ eventId, playerIds: updatedPlayerIds, originConnectionId });
+			});
 		}
 		return responses;
 	}

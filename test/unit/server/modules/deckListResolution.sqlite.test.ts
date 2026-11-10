@@ -23,7 +23,11 @@ vi.stubGlobal('createError', (input: { statusCode: number; message?: string; sta
 	Object.assign(new Error(input.message ?? input.statusMessage), input));
 vi.stubGlobal('setResponseHeader', setResponseHeader);
 
+vi.stubGlobal('defineEventHandler', (handler: unknown) => handler);
+vi.stubGlobal('getValidatedRouterParams', async (event: { params: unknown }, parse: (value: unknown) => unknown) => parse(event.params));
+
 const { deckListResolutionModule } = await import('~~/server/modules/deck-list-resolution');
+const listRoute = (await import('~~/server/api/events/[id]/melee/unresolved-deck-cards.get')).default as unknown as (event: H3Event) => Promise<unknown>;
 
 afterAll(async () => await harness.close());
 
@@ -48,9 +52,9 @@ const bolt = {
 	],
 };
 
-async function createEvent() {
+async function createEvent(game: 'mtg' | 'op' = 'mtg') {
 	const [event] = await db.insert(schema.events)
-		.values({ name: 'Resolution Open', game: 'mtg', featureMatchOrientation: 'horizontal' })
+		.values({ name: 'Resolution Open', game, featureMatchOrientation: 'horizontal' })
 		.returning({ id: schema.events.id });
 	return event!.id;
 }
@@ -339,4 +343,35 @@ it('refuses an entry another Event owns with a 404', async () => {
 it('refuses an Event that does not exist with a 404', async () => {
 	await expect(resolve(999_999, 1)).rejects.toMatchObject({ statusCode: 404, message: 'Event not found' });
 	expect(fetchScryfallCardById).not.toHaveBeenCalled();
+});
+
+// A One Piece Deck List takes cards only through the OP Deck List write (ADR-0074).
+describe('on a One Piece Card Game Event', () => {
+	it.each([
+		[
+			'resolving an entry',
+			(eventId: number, entryId: number) => resolve(eventId, entryId),
+		],
+		[
+			'listing the entries',
+			(eventId: number) => listRoute({
+				params: {
+					id: String(eventId),
+				},
+			} as unknown as H3Event),
+		],
+	])('refuses %s, writing nothing', async (_case, act) => {
+		const eventId = await createEvent('op');
+		const deckId = await createDeck(eventId, await createPlayer(eventId));
+		const entryId = await unresolved(deckId, { originalName: 'OP99-999', normalizedOriginalName: 'OP99-999' });
+
+		await expect(act(eventId, entryId)).rejects.toMatchObject({
+			statusCode: 422,
+			data: { code: 'MELEE_SYNC_CARD_GAME_UNSUPPORTED' },
+		});
+
+		expect(fetchScryfallCardById).not.toHaveBeenCalled();
+		expect(await deckCards(deckId)).toEqual([]);
+		expect(await remainingUnresolved(deckId)).toHaveLength(1);
+	});
 });

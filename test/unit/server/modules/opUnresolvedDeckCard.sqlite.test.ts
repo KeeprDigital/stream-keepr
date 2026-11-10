@@ -256,6 +256,72 @@ describe('retrying an Unresolved Deck Card', () => {
 	});
 });
 
+/** Makes the database refuse `playerId`'s next Deck List, until the answered function is called. */
+async function refuseDeckListOf(playerId: number) {
+	await harness.client.execute(`create trigger refuse_deck_list before insert on player_decks
+		when new.player_id = ${playerId} begin select raise(abort, 'deck list refused'); end`);
+	return async () => {
+		await harness.client.execute('drop trigger refuse_deck_list');
+	};
+}
+
+describe('a card many Player Deck Lists hold', () => {
+	async function stageHolders(count: number) {
+		const eventId = await stageEvent();
+		const holders = [];
+		for (let index = 0; index < count; index++) {
+			const player = await stagePlayer(eventId, `holder ${index}`);
+			await writePlayer(eventId, player.id, '1x OP01-001\n2x OP01-025\n3x OP91-025');
+			holders.push(player);
+		}
+		return { eventId, holders };
+	}
+
+	async function resolveCost(count: number) {
+		const { eventId } = await stageHolders(count);
+		const before = harness.roundTrips();
+		await unresolved.resolve({ eventId, number: 'OP91-025', cardNumber: 'OP01-025' });
+		return harness.roundTrips() - before;
+	}
+
+	// One bulk write: a card 150 Deck Lists hold must not cost 150 writes' queries.
+	it('is resolved in as many database round trips as a card one holds', async () => {
+		const one = await resolveCost(1);
+
+		expect(await resolveCost(6)).toBe(one);
+	});
+
+	it('announces every Player whose Deck List it rewrote', async () => {
+		const { eventId, holders } = await stageHolders(3);
+		published.length = 0;
+
+		const answer = await unresolved.resolve({ eventId, number: 'OP91-025', cardNumber: 'OP01-025' });
+
+		expect(answer.rewritten).toBe(3);
+		const announced = published
+			.filter(message => message.type === 'player:updated')
+			.map(message => (message.payload as { player: { id: number; gameData: { deckList: { id: number } } } }).player);
+		expect(announced.map(player => player.id).toSorted()).toEqual(holders.map(player => player.id).toSorted());
+		for (const player of announced)
+			expect(player.gameData.deckList.id).toBe((await deckOf(eventId, player.id)).id);
+	});
+
+	// All or nothing: a failure partway leaves no Player's Deck List rewritten.
+	it('is rewritten in none of them when one cannot be written', async () => {
+		const { eventId, holders } = await stageHolders(3);
+		const before = await Promise.all(holders.map(player => deckOf(eventId, player.id)));
+		const allow = await refuseDeckListOf(holders[2]!.id);
+		published.length = 0;
+
+		await expect(unresolved.resolve({ eventId, number: 'OP91-025', cardNumber: 'OP01-025' })).rejects.toThrow();
+		await allow();
+
+		expect(await Promise.all(holders.map(async player => (await deckOf(eventId, player.id)).id)))
+			.toEqual(before.map(deckList => deckList.id));
+		expect(published.filter(message => message.type === 'player:updated')).toEqual([]);
+	});
+});
+
 describe('resolving an Unresolved Deck Card to a picked card', () => {
 	it('rewrites the number in every Player and Slot side Deck List in the Event holding it, adding into the picked card\'s entry', async () => {
 		const eventId = await stageEvent();

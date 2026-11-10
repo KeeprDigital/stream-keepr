@@ -234,6 +234,100 @@ describe('reviewing and projecting', () => {
 	});
 });
 
+describe('re-projecting the Players an Archetype edit reaches', () => {
+	let renames = 0;
+	/** Players holding a primary deck reviewed as a new Archetype, which is then renamed to `renamed`. */
+	async function stageRenamed(count: number) {
+		const renamed = `Renamed ${++renames}`;
+		const [archetype] = await db.insert(schema.archetypes).values({ eventId, name: `Tempo ${renames}`, colors: 'UR' }).returning();
+		const playerIds: number[] = [];
+		for (let index = 0; index < count; index++) {
+			const playerId = await stagePlayer();
+			await playerDeckService().replaceMeleeDecksForEvent(eventId, [
+				{
+					playerId,
+					snapshots: [
+						snapshot(playerId),
+					],
+				},
+			]);
+			const [deck] = await playerDeckService().listByPlayer(eventId, playerId);
+			await playerDeckService().reviewDeck(eventId, playerId, deck!.id, archetype!.id);
+			playerIds.push(playerId);
+		}
+		await db.update(schema.archetypes).set({ name: renamed, colors: 'BG' }).where(eq(schema.archetypes.id, archetype!.id));
+		return { playerIds, renamed };
+	}
+
+	it('projects each primary deck as reviewed or as imported, leaves a Player with no deck alone, and answers them in the order asked', async () => {
+		const { playerIds: [reviewed], renamed } = await stageRenamed(1);
+		const unreviewed = await stagePlayer();
+		await playerDeckService().replaceMeleeDecksForEvent(eventId, [
+			{
+				playerId: unreviewed,
+				snapshots: [
+					snapshot(unreviewed),
+				],
+			},
+		]);
+		const deckless = await stagePlayer({ type: 'mtg', deckName: 'Manual', deckColors: 'G' });
+
+		const answered = await playerDeckService().reconcilePrimaryArchetypesForPlayers(eventId, [
+			deckless,
+			reviewed!,
+			unreviewed,
+			reviewed!,
+		]);
+
+		expect(answered.map(player => player.id)).toEqual([deckless, reviewed, unreviewed]);
+		const projected = await Promise.all([reviewed!, unreviewed, deckless].map(async (playerId) => {
+			const { archetypeId, gameData } = await storedPlayer(playerId);
+			return { archetypeId: archetypeId !== null, gameData };
+		}));
+		expect(projected).toEqual([
+			{
+				archetypeId: true,
+				gameData: { type: 'mtg', deckName: renamed, deckColors: 'BG' },
+			},
+			{
+				archetypeId: false,
+				gameData: { type: 'mtg', deckName: 'Imported Control', deckColors: 'WU' },
+			},
+			{
+				archetypeId: false,
+				gameData: { type: 'mtg', deckName: 'Manual', deckColors: 'G' },
+			},
+		]);
+		expect(answered.map(player => player.gameData)).toEqual([projected[2]!.gameData, projected[0]!.gameData, projected[1]!.gameData]);
+	});
+
+	// One bulk write: an Archetype 400 Players hold must not cost 400 updates.
+	it('costs as many database round trips for many Players as for one', async () => {
+		const cost = async (count: number) => {
+			const { playerIds } = await stageRenamed(count);
+			const before = harness.roundTrips();
+			await playerDeckService().reconcilePrimaryArchetypesForPlayers(eventId, playerIds);
+			return harness.roundTrips() - before;
+		};
+		const one = await cost(1);
+
+		expect(await cost(6)).toBe(one);
+	});
+
+	// All or nothing: a failure partway leaves no Player on the new projection.
+	it('re-projects none of them when one cannot be written', async () => {
+		const { playerIds } = await stageRenamed(3);
+		await harness.client.execute(`create trigger refuse_player before update on players
+			when new.id = ${playerIds[2]} begin select raise(abort, 'player refused'); end`);
+
+		await expect(playerDeckService().reconcilePrimaryArchetypesForPlayers(eventId, playerIds)).rejects.toThrow();
+		await harness.client.execute('drop trigger refuse_player');
+
+		const names = await Promise.all(playerIds.map(async playerId => (await storedPlayer(playerId)).gameData));
+		expect(names.map(gameData => (gameData as { deckName: string }).deckName).every(name => name.startsWith('Tempo'))).toBe(true);
+	});
+});
+
 describe('selectFromDecks', () => {
 	it('takes an explicit deck only when it is the Player\'s, else the deck in the Phase\'s or Round\'s format, else the primary', async () => {
 		const playerId = await stagePlayer();

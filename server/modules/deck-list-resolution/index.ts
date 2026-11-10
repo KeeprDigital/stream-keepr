@@ -11,7 +11,7 @@ import {
 	playerDeckUnresolvedCards,
 } from '~~/server/db/schema';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
-import { requireMeleeSyncEventData } from '~~/server/modules/melee-sync/eventData';
+import { requireMeleeSyncOffered } from '~~/server/modules/melee-sync/eventData';
 import { MTG_CARD_IDENTITY } from '~~/server/services/mtgCard';
 import { playerDeckService } from '~~/server/services/playerDeck';
 import { DeckCompanionValidationError, playerDeckCompanionService } from '~~/server/services/playerDeckCompanion';
@@ -121,7 +121,7 @@ export function deckListResolutionModule() {
 		requestEvent,
 		originConnectionId,
 	}: ResolveUnresolvedDeckCardInput): Promise<ResolveUnresolvedDeckCardResult> {
-		await requireMeleeSyncEventData(eventId);
+		await requireMeleeSyncOffered(eventId);
 
 		const unresolvedCard = await unresolvedCards.findById(unresolvedCardId, eventId);
 		if (!unresolvedCard) {

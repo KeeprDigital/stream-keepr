@@ -1,3 +1,4 @@
+import type { OpPlayerDeckListContents } from '~~/server/services/opPlayerDeckList';
 import type { PlayerSide } from '~~/shared/types/enums';
 import type { OpDeckListLine } from '~~/shared/types/opDeckList';
 import type { OpUnresolvedDeckCard, OpUnresolvedDeckCardAnswer, OpUnresolvedDeckCardDeckList } from '~~/shared/types/opUnresolvedDeckCard';
@@ -144,9 +145,11 @@ export function opUnresolvedDeckCardModule() {
 	}
 
 	/**
-	 * Rewrites `from` as `to` in every Deck List holding it, each through the OP
-	 * Deck List write, which keeps whether it was hand-edited. A Deck List already
-	 * holding `to` takes the copies into that entry; a Leader moves with its number.
+	 * Rewrites `from` as `to` in every Deck List holding it, through the OP Deck
+	 * List write, which keeps whether each was hand-edited. The Players' Deck
+	 * Lists are one bulk write, all or none, however many hold it; a Slot side's
+	 * is its own. A Deck List already holding `to` takes the copies into that
+	 * entry; a Leader moves with its number.
 	 */
 	async function rewrite(eventId: number, held: readonly HeldEntry[], from: string, to: string): Promise<number> {
 		const rename = (number: string) => number === from
@@ -156,44 +159,59 @@ export function opUnresolvedDeckCardModule() {
 			number: rename(number),
 			quantity,
 		}));
-		let rewritten = 0;
-		const playerIds = new Set<number>();
-		for (const { holder, deckListId } of held) {
-			if (holder.kind === 'player') {
-				if (playerIds.has(holder.playerId))
-					continue;
-				playerIds.add(holder.playerId);
-				const deckList = await playerDeckLists.findByPlayer(eventId, holder.playerId);
-				if (!deckList)
-					continue;
-				await deckListWrite.write({
+
+		const playerIds = [
+			...new Set(held.flatMap(({ holder }) => holder.kind === 'player'
+				? [holder.playerId]
+				: [])),
+		];
+		const contents = playerIds.length > 0
+			? await playerDeckLists.findContentsByEvent(eventId)
+			: new Map<number, OpPlayerDeckListContents>();
+		const holders = playerIds.flatMap((playerId) => {
+			const deckList = contents.get(playerId);
+			return deckList
+				? [
+						{ playerId, deckList },
+					]
+				: [];
+		});
+		const views = holders.length > 0
+			? await deckListWrite.previewMany({
 					eventId,
-					owner: { kind: 'player', playerId: holder.playerId },
-					input: {
+					inputs: holders.map(({ deckList }) => ({
 						entries: renamed(deckList.entries),
 						leaderNumber: deckList.leaderNumber === null
 							? null
 							: rename(deckList.leaderNumber),
-					},
-					source: 'resolution',
-				});
-			}
-			else {
-				const deckList = deckListId === undefined
-					? null
-					: await featureMatchDeckLists.findById(deckListId, holder.slotId, eventId);
-				if (!deckList)
-					continue;
-				await deckListWrite.write({
-					eventId,
-					owner: { kind: 'slotSide', slotId: holder.slotId, side: holder.side },
-					input: {
-						entries: renamed(deckList.entries),
-						leaderNumber: null,
-					},
-					source: 'resolution',
-				});
-			}
+					})),
+				})
+			: [];
+		// Announced Player by Player: every reader holds a Deck List by the id its Player carries (ADR-0074).
+		const written = await deckListWrite.writeMany({
+			eventId,
+			writes: holders.map(({ playerId }, index) => ({ playerId, deckList: views[index]!, source: 'resolution' })),
+			announcePlayers: true,
+		});
+
+		let rewritten = written.length;
+		for (const { holder, deckListId } of held) {
+			if (holder.kind !== 'slotSide')
+				continue;
+			const deckList = deckListId === undefined
+				? null
+				: await featureMatchDeckLists.findById(deckListId, holder.slotId, eventId);
+			if (!deckList)
+				continue;
+			await deckListWrite.write({
+				eventId,
+				owner: { kind: 'slotSide', slotId: holder.slotId, side: holder.side },
+				input: {
+					entries: renamed(deckList.entries),
+					leaderNumber: null,
+				},
+				source: 'resolution',
+			});
 			rewritten++;
 		}
 		return rewritten;

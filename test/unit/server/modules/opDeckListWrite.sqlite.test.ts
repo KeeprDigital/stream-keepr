@@ -484,6 +484,20 @@ describe('a Player\'s Archetype', () => {
 
 		expect((await archetypeOf(ben.id))!.name).toBe('Roronoa Zoro');
 	});
+
+	// A derived Archetype exists only while a Player holds it: a write that fails leaves none behind.
+	it('is not left behind when the write that derived it cannot be saved', async () => {
+		const eventId = await stageEvent();
+		const ana = await stagePlayer(eventId);
+		await harness.client.execute(`create trigger refuse_deck_list before insert on player_decks
+			when new.player_id = ${ana.id} begin select raise(abort, 'deck list refused'); end`);
+
+		await expect(write(eventId, ana.id, { text: '1x OP01-001' })).rejects.toThrow();
+		await harness.client.execute('drop trigger refuse_deck_list');
+
+		expect(await eventArchetypes(eventId)).toEqual([]);
+		expect(published).toEqual([]);
+	});
 });
 
 describe('a Player\'s Deck List write announces', () => {

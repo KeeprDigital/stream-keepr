@@ -16,10 +16,25 @@ const COLUMNS = {
 	category: '種類',
 } as const;
 
+/** The longest Nickname a Player write takes (`server/schemas/api/player.ts`). */
+const MAX_NICKNAME_LENGTH = 100;
+
+/** The Nickname cut to the bound a hand-written one keeps, never through a character. */
+function boundedNickname(nickname: string): string {
+	let bounded = '';
+	for (const character of nickname) {
+		if (bounded.length + character.length > MAX_NICKNAME_LENGTH)
+			break;
+		bounded += character;
+	}
+	return bounded;
+}
+
 /** One entry in the export: a Player's member number, Nickname, and Deck List. */
 export interface TcgPlusExportEntry extends OpDeckListLines {
 	/** The Bandai member number, kept as written: leading zeros are part of it. */
 	memberNumber: string;
+	/** Never blank, since it is all an imported Player shows by (ADR-0074), and at most 100 characters. */
 	nickname: string;
 	/** The card number of the entry's first Leader row; `null` for an entry with none. */
 	leaderNumber: string | null;
@@ -111,9 +126,12 @@ export function parseTcgPlusExport(text: string): TcgPlusExportEntry[] {
 
 		let entry = byMember.get(memberNumber);
 		if (!entry) {
+			const nickname = boundedNickname(cell('nickname'));
+			if (!nickname)
+				throw new TcgPlusExportError(`Line ${line} has no Nickname.`);
 			entry = {
 				memberNumber,
-				nickname: cell('nickname'),
+				nickname,
 				leaderNumber: null,
 				entries: [],
 				byNumber: new Map(),

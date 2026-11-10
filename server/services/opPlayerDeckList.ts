@@ -238,12 +238,22 @@ export function opPlayerDeckListService() {
 			db.select({ playerId: playerDecks.playerId, leaderNumber: playerDecks.leaderCardNumber, handEdited: playerDecks.handEdited })
 				.from(playerDecks)
 				.where(primary),
-			db.select({ playerId: playerDecks.playerId, number: cards.cardNumber, quantity: playerDeckCards.quantity })
+			db.select({
+				playerId: playerDecks.playerId,
+				number: cards.cardNumber,
+				quantity: playerDeckCards.quantity,
+				sortOrder: playerDeckCards.sortOrder,
+			})
 				.from(playerDeckCards)
 				.innerJoin(playerDecks, eq(playerDecks.id, playerDeckCards.deckId))
 				.innerJoin(cards, eq(cards.id, playerDeckCards.cardId))
 				.where(primary),
-			db.select({ playerId: playerDecks.playerId, number: playerDeckUnresolvedCards.originalName, quantity: playerDeckUnresolvedCards.quantity })
+			db.select({
+				playerId: playerDecks.playerId,
+				number: playerDeckUnresolvedCards.originalName,
+				quantity: playerDeckUnresolvedCards.quantity,
+				sortOrder: playerDeckUnresolvedCards.sortOrder,
+			})
 				.from(playerDeckUnresolvedCards)
 				.innerJoin(playerDecks, eq(playerDecks.id, playerDeckUnresolvedCards.deckId))
 				.where(primary),
@@ -252,10 +262,13 @@ export function opPlayerDeckListService() {
 			playerId,
 			{ ...deck, entries: [] },
 		]));
-		for (const row of catalogued)
-			contents.get(row.playerId)?.entries.push({ number: row.number ?? '', quantity: row.quantity, resolved: true });
-		for (const row of unresolved)
-			contents.get(row.playerId)?.entries.push({ number: row.number, quantity: row.quantity, resolved: false });
+		// In the Deck List's own order, so a rewrite built from these keeps it.
+		const rows = [
+			...catalogued.map(row => ({ ...row, number: row.number ?? '', resolved: true })),
+			...unresolved.map(row => ({ ...row, resolved: false })),
+		].toSorted((left, right) => left.sortOrder - right.sortOrder);
+		for (const { playerId, number, quantity, resolved } of rows)
+			contents.get(playerId)?.entries.push({ number, quantity, resolved });
 		return contents;
 	};
 

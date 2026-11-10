@@ -321,6 +321,19 @@ export function eventDataPublicationModule() {
 		return player;
 	}
 
+	/**
+	 * Announces many Players a bulk write changed, each by its own `player:updated`
+	 * in the order given, as one change: Graphic Input Bindings re-resolve once.
+	 */
+	async function playersUpdated({ eventId, entities, originConnectionId }: PublicationInput & { entities: readonly DbPlayer[] }) {
+		const updated = entities.map(mapPlayerToResponse);
+		await publishEventDataMessages(eventId, updated.map(player => ({
+			type: 'player:updated',
+			payload: { player },
+		})), originConnectionId);
+		return updated;
+	}
+
 	async function playerDeleted({ eventId, id, originConnectionId }: DeletedPublicationInput) {
 		await publishEventDataChange(eventId, 'player:deleted', { playerId: id }, originConnectionId);
 	}
@@ -571,6 +584,7 @@ export function eventDataPublicationModule() {
 		phaseDeleted,
 		playerCreated,
 		playerUpdated,
+		playersUpdated,
 		playerDeleted,
 		playerListCreated,
 		playerListUpdated,

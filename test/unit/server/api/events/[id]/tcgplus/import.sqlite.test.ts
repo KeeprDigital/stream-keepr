@@ -260,6 +260,14 @@ describe('a TCG+ Import preview', () => {
 			'an export with no players',
 			tcgPlusExport([]),
 		],
+		[
+			// A Player always shows by something, and an imported one has only their Nickname.
+			'an export naming a Player by a blank Nickname',
+			tcgPlusExport([
+				zoroPlayer('1', 'ana'),
+				zoroPlayer('2', '   '),
+			]),
+		],
 	])('refuses %s', async (_label, csv) => {
 		const eventId = await stageEvent();
 
@@ -537,6 +545,55 @@ describe('a TCG+ Import', () => {
 		expect(await eventPlayers(eventId)).toEqual([]);
 		expect(await db.select().from(schema.archetypes).where(eq(schema.archetypes.eventId, eventId))).toEqual([]);
 		expect(published).toEqual([]);
+	});
+
+	// A Nickname is bounded as one written by hand is.
+	it.each([
+		[
+			'of 100 characters whole',
+			'n'.repeat(100),
+			'n'.repeat(100),
+		],
+		[
+			'over 100 characters cut to 100',
+			'n'.repeat(101),
+			'n'.repeat(100),
+		],
+		[
+			'cut short of a character 100 would split',
+			`${'n'.repeat(99)}\u{1F3F4}`,
+			'n'.repeat(99),
+		],
+	])('stores a Nickname %s', async (_label, nickname, stored) => {
+		const eventId = await stageEvent();
+
+		await commit(eventId, tcgPlusExport([
+			zoroPlayer('1', nickname),
+		]));
+
+		expect((await eventPlayers(eventId)).map(player => player.nickname)).toEqual([stored]);
+	});
+
+	// The Players commit before their Deck Lists, so peers hear of them even when the Deck Lists fail.
+	it('announces the Players it wrote when their Deck Lists cannot be written', async () => {
+		const eventId = await stageEvent();
+		await harness.client.execute(`create trigger refuse_deck_list before insert on player_decks
+			when new.event_id = ${eventId} begin select raise(abort, 'deck list refused'); end`);
+
+		await expect(commit(eventId, tcgPlusExport([
+			zoroPlayer('1', 'ana'),
+			zoroPlayer('2', 'ben'),
+		]))).rejects.toThrow('deck list refused');
+		await harness.client.execute('drop trigger refuse_deck_list');
+
+		expect((await eventPlayers(eventId)).map(player => player.nickname)).toEqual(['ana', 'ben']);
+		expect(published).toEqual([
+			{
+				eventId,
+				type: 'tcgplus:imported',
+				payload: { playerCount: 2, deckCount: 0 },
+			},
+		]);
 	});
 });
 
