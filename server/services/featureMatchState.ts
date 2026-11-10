@@ -18,6 +18,7 @@ import { events, featureMatches, featureMatchSessions, players } from '~~/server
 import { mapFeatureMatchSessionToResponse, mapFeatureMatchSessionToStarted } from '~~/server/mappers/featureMatch';
 import { refreshBroadcastGraphicsBindings } from '~~/server/modules/broadcast-graphics-live-session';
 import { createSequencedLiveEpochs, createSequencedLiveState } from '~~/server/modules/live-state';
+import { asOneOutputChange } from '~~/server/modules/screen-output-publication';
 import { linkedOpSideGameData, withCatalogueLeaders } from '~~/server/services/featureMatchSlotLeader';
 import { publishMessage } from '~~/server/utils/ably';
 import { chunkJsonRows, inJsonArray, selectForInsert } from '~~/server/utils/db';
@@ -370,8 +371,10 @@ export function featureMatchStateService() {
 		 * Bindings re-resolve once for the whole change, as for any Event Data write.
 		 */
 		announce: async ({ opened }, { originConnectionId }) => {
-			for (const session of opened)
-				await publishMessage(session.eventId, 'featureMatchSession:eventApplied', mapFeatureMatchSessionToStarted(session), originConnectionId);
+			await asOneOutputChange(async () => {
+				for (const session of opened)
+					await publishMessage(session.eventId, 'featureMatchSession:eventApplied', mapFeatureMatchSessionToStarted(session), originConnectionId);
+			});
 			const eventId = opened[0]?.eventId;
 			if (eventId !== undefined)
 				await refreshBroadcastGraphicsBindings(eventId);
