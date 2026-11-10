@@ -22,7 +22,10 @@ export function countUpOvertimeMs(overMs: number, limitMs: number | null | undef
 
 // ──────────────── Time Formatting ────────────────
 
-/** Format milliseconds as mm:ss or h:mm:ss */
+/**
+ * Format milliseconds as mm:ss or h:mm:ss, rounding down: for a length of time,
+ * and for time counting up. Time remaining takes `formatCountdownTime`.
+ */
 export function formatClockTime(ms: number): string {
 	const totalSeconds = Math.floor(ms / 1000);
 	const hours = Math.floor(totalSeconds / 3600);
@@ -33,6 +36,22 @@ export function formatClockTime(ms: number): string {
 		return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 	}
 	return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+/**
+ * Format the time remaining on a countdown, rounding up (ADR-0078): it reads
+ * its full duration through its first second, and `0:00` only once none remains.
+ */
+export function formatCountdownTime(remainingMs: number): string {
+	return formatClockTime(Math.ceil(Math.max(0, remainingMs) / 1000) * 1000);
+}
+
+/**
+ * How long until what `formatCountdownTime` shows for `remainingMs` (above zero)
+ * next changes: when the time remaining reaches the next whole second down.
+ */
+export function countdownNextChangeInMs(remainingMs: number): number {
+	return remainingMs % 1000 || 1000;
 }
 
 /**
@@ -151,6 +170,7 @@ export function getEffectiveElapsedMs(clock: ClockState, now: number): number {
  * count-up limit, if it has one), the elapsed time
  * otherwise, and the Event's Untimed Label for an untimed clock. No clock reads
  * `0:00`. Whether a blank Untimed Label hides the clock is the caller's to decide.
+ * Time remaining rounds up; elapsed time and overtime round down (ADR-0078).
  */
 export function formatClockDisplay(clock: ClockState | null, now: number, untimedLabel: string): string {
 	if (!clock)
@@ -162,7 +182,7 @@ export function formatClockDisplay(clock: ClockState | null, now: number, untime
 	if (clock.type === 'countdown') {
 		if (clock.countUpAfterCountdown && elapsedMs >= clock.durationMs)
 			return formatClockTime(countUpOvertimeMs(elapsedMs - clock.durationMs, clock.countUpLimitMs));
-		return formatClockTime(Math.max(0, clock.durationMs - elapsedMs));
+		return formatCountdownTime(clock.durationMs - elapsedMs);
 	}
 	return formatClockTime(elapsedMs);
 }
@@ -170,8 +190,9 @@ export function formatClockDisplay(clock: ClockState | null, now: number, untime
 /**
  * How long from `now` until what `formatClockDisplay` shows next changes, or
  * `null` while it will not: no clock, untimed, stopped, run out without counting
- * up, or holding at its count-up limit. The display floors, so a time counting up
- * changes on the whole second and one counting down a millisecond past it.
+ * up, or holding at its count-up limit. Time counting up rounds down and time
+ * remaining rounds up, so each changes on the whole second, and a countdown's
+ * last second ends at its end.
  */
 export function clockDisplayNextChangeInMs(clock: ClockState | null, now: number): number | null {
 	if (!clock || clock.type === 'untimed' || !clock.isRunning || !clock.lastStartedAt)
@@ -182,12 +203,8 @@ export function clockDisplayNextChangeInMs(clock: ClockState | null, now: number
 		return 1000 - (elapsedMs % 1000);
 
 	const remainingMs = clock.durationMs - elapsedMs;
-	if (remainingMs > 0) {
-		// Its last second ends at the end itself when overtime then shows 0:00 too.
-		return remainingMs < 1000 && clock.countUpAfterCountdown
-			? remainingMs + 1000
-			: (remainingMs % 1000) + 1;
-	}
+	if (remainingMs > 0)
+		return countdownNextChangeInMs(remainingMs);
 	if (!clock.countUpAfterCountdown)
 		return null;
 	const overMs = -remainingMs;

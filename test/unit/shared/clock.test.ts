@@ -5,6 +5,7 @@ import {
 	clockDisplayNextChangeInMs,
 	formatClockDisplay,
 	formatClockTime,
+	formatCountdownTime,
 	getEffectiveElapsedMs,
 	normalizeTimeInput,
 	parseTimeInput,
@@ -21,6 +22,26 @@ describe('formatClockTime', () => {
 		[3_661_000, '1:01:01'],
 	])('formats %i ms as %s', (ms, expected) => {
 		expect(formatClockTime(ms)).toBe(expected);
+	});
+});
+
+// A countdown rounds the time remaining up: it reads its full duration through
+// its first second and 0:00 only once nothing remains (ADR-0078).
+describe('formatCountdownTime', () => {
+	it.each([
+		[3_000_000, '50:00'],
+		[2_999_999, '50:00'],
+		[2_999_001, '50:00'],
+		[2_999_000, '49:59'],
+		[3_599_001, '1:00:00'],
+		[59_001, '1:00'],
+		[1_001, '0:02'],
+		[1_000, '0:01'],
+		[1, '0:01'],
+		[0, '0:00'],
+		[-1, '0:00'],
+	])('formats %i ms remaining as %s', (ms, expected) => {
+		expect(formatCountdownTime(ms)).toBe(expected);
 	});
 });
 
@@ -88,6 +109,73 @@ describe('formatClockDisplay', () => {
 		{
 			name: 'a count-up clock',
 			state: clock({ type: 'countup', elapsedMs: 90_000 }),
+			label: '',
+			expected: '1:30',
+		},
+		// Time remaining rounds up; elapsed time and overtime round down (ADR-0078).
+		{
+			name: 'a running countdown the instant it starts',
+			state: clock({ isRunning: true, lastStartedAt: NOW }),
+			label: '',
+			expected: '10:00',
+		},
+		{
+			name: 'a running countdown a millisecond short of its first second',
+			state: clock({ isRunning: true, lastStartedAt: NOW - 999 }),
+			label: '',
+			expected: '10:00',
+		},
+		{
+			name: 'a running countdown one second in',
+			state: clock({ isRunning: true, lastStartedAt: NOW - 1000 }),
+			label: '',
+			expected: '9:59',
+		},
+		{
+			name: 'a paused countdown part-way through a second',
+			state: clock({ elapsedMs: 300_400 }),
+			label: '',
+			expected: '5:00',
+		},
+		{
+			name: 'a countdown with a millisecond left',
+			state: clock({ elapsedMs: 599_999 }),
+			label: '',
+			expected: '0:01',
+		},
+		{
+			name: 'a countdown the instant it runs out',
+			state: clock({ elapsedMs: 600_000 }),
+			label: '',
+			expected: '0:00',
+		},
+		{
+			name: 'a countdown that counts up after, the instant it runs out',
+			state: clock({ elapsedMs: 600_000, countUpAfterCountdown: true }),
+			label: '',
+			expected: '0:00',
+		},
+		{
+			name: 'overtime a millisecond short of its first second',
+			state: clock({ elapsedMs: 600_999, countUpAfterCountdown: true }),
+			label: '',
+			expected: '0:00',
+		},
+		{
+			name: 'overtime one second in',
+			state: clock({ elapsedMs: 601_000, countUpAfterCountdown: true }),
+			label: '',
+			expected: '0:01',
+		},
+		{
+			name: 'overtime a millisecond short of its count-up limit',
+			state: clock({ elapsedMs: 719_999, countUpAfterCountdown: true, countUpLimitMs: 120_000 }),
+			label: '',
+			expected: '1:59',
+		},
+		{
+			name: 'a count-up clock part-way through a second',
+			state: clock({ type: 'countup', elapsedMs: 90_999 }),
 			label: '',
 			expected: '1:30',
 		},
@@ -375,6 +463,14 @@ describe('applyClockAdjustment on a countdown counting up past its end', () => {
 			shows: '2:00',
 			inOvertime: false,
 		},
+		// Overtime rounds down and time remaining up, so the shown time moves by the delta exactly.
+		{
+			name: '+5:00 on 3:00 of overtime, part-way through a second, returns to 2:00',
+			overtimeMs: 3 * MINUTE + 400,
+			deltaMs: 5 * MINUTE,
+			shows: '2:00',
+			inOvertime: false,
+		},
 		{
 			name: '−15:00, more than the clock has run, still lengthens it',
 			overtimeMs: 3 * MINUTE,
@@ -420,6 +516,20 @@ describe('applyClockAdjustment on a countdown counting up past its end', () => {
 			countsDown: true,
 		},
 		{
+			name: 'a + part-way through a second moves the shown time by exactly that',
+			clock: overtimeClock(-90_400, { countUpAfterCountdown: false }),
+			adjustment: { deltaDisplayMs: MINUTE },
+			shows: '2:31',
+			countsDown: true,
+		},
+		{
+			name: 'a set-to on a running clock shows that time through its first second',
+			clock: overtimeClock(-90_400, { isRunning: true, lastStartedAt: now - 999 }),
+			adjustment: { targetDisplayMs: 2 * MINUTE },
+			shows: '2:00',
+			countsDown: true,
+		},
+		{
 			name: 'a − before the end stops at the end',
 			clock: overtimeClock(-30_000),
 			adjustment: { deltaDisplayMs: -MINUTE },
@@ -459,6 +569,10 @@ describe('clockDisplayNextChangeInMs', () => {
 			running({ type: 'countup' }, 13_000),
 		],
 		[
+			'a countdown the instant it starts',
+			running({}, 0),
+		],
+		[
 			'a countdown part-way through a second',
 			running({}, 12_900),
 		],
@@ -467,12 +581,40 @@ describe('clockDisplayNextChangeInMs', () => {
 			running({}, 13_000),
 		],
 		[
+			'a countdown a millisecond past a whole second',
+			running({}, 13_001),
+		],
+		[
+			'a countdown of an odd length',
+			running({ durationMs: 60_400 }, 12_900),
+		],
+		[
+			'a countdown with exactly a second left',
+			running({}, 59_000),
+		],
+		[
 			'a countdown in its last second',
+			running({}, 59_500),
+		],
+		[
+			'a countdown with a millisecond left',
+			running({}, 59_999),
+		],
+		[
+			'a countdown in its last second that counts up after',
 			running({ countUpAfterCountdown: true }, 59_500),
+		],
+		[
+			'a countdown the instant it runs out and counts up',
+			running({ countUpAfterCountdown: true }, 60_000),
 		],
 		[
 			'a countdown in overtime',
 			running({ countUpAfterCountdown: true }, 61_300),
+		],
+		[
+			'overtime in the last second before its limit',
+			running({ countUpAfterCountdown: true, countUpLimitMs: 5_000 }, 64_300),
 		],
 	])('names exactly when the display of %s changes', (_case, clock) => {
 		const next = clockDisplayNextChangeInMs(clock, NOW)!;
@@ -480,6 +622,65 @@ describe('clockDisplayNextChangeInMs', () => {
 
 		expect(formatClockDisplay(clock, NOW + next - 1, '')).toBe(shown);
 		expect(formatClockDisplay(clock, NOW + next, '')).not.toBe(shown);
+	});
+
+	// A countdown changes as each whole second of time remaining is reached, its
+	// last at the end itself; elapsed time and overtime change on the whole second.
+	it.each([
+		[
+			'a countdown the instant it starts',
+			running({}, 0),
+			1000,
+		],
+		[
+			'a countdown part-way through a second',
+			running({}, 12_900),
+			100,
+		],
+		[
+			'a countdown on a whole second',
+			running({}, 13_000),
+			1000,
+		],
+		[
+			'a countdown in its last second',
+			running({}, 59_500),
+			500,
+		],
+		[
+			'a countdown in its last second that counts up after',
+			running({ countUpAfterCountdown: true }, 59_500),
+			500,
+		],
+		[
+			'a countdown the instant it runs out and counts up',
+			running({ countUpAfterCountdown: true }, 60_000),
+			1000,
+		],
+		[
+			'a countdown in overtime',
+			running({ countUpAfterCountdown: true }, 61_300),
+			700,
+		],
+		[
+			'a count-up part-way through a second',
+			running({ type: 'countup' }, 12_900),
+			100,
+		],
+	])('names when the display of %s changes', (_case, clock, expected) => {
+		expect(clockDisplayNextChangeInMs(clock, NOW)).toBe(expected);
+	});
+
+	// Counting up after, 0:00 shows for one second: from the end through the first second of overtime.
+	it.each([
+		[-1, '0:01'],
+		[0, '0:00'],
+		[999, '0:00'],
+		[1000, '0:01'],
+	])('a countdown that counts up after shows, %i ms from its end, %s', (fromEnd, expected) => {
+		const clock = running({ countUpAfterCountdown: true }, 60_000 + fromEnd);
+
+		expect(formatClockDisplay(clock, NOW, '')).toBe(expected);
 	});
 
 	it.each([
@@ -496,8 +697,16 @@ describe('clockDisplayNextChangeInMs', () => {
 			},
 		],
 		[
+			'a countdown the instant it runs out, not counting up',
+			running({}, 60_000),
+		],
+		[
 			'a countdown that ran out and does not count up',
 			running({}, 61_000),
+		],
+		[
+			'overtime the instant it reaches its limit',
+			running({ countUpAfterCountdown: true, countUpLimitMs: 5_000 }, 65_000),
 		],
 		[
 			'overtime holding at its limit',

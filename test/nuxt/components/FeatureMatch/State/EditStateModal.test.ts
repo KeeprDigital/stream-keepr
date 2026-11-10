@@ -106,6 +106,25 @@ describe('feature match edit state modal', () => {
 		expect((wrapper.get('[data-testid="state-clock"]').element as HTMLInputElement).value).toBe('40:00');
 	});
 
+	// The clock field opens on what the clock reads: time remaining rounds up, elapsed time down.
+	it.each([
+		['countdown', '40:00'],
+		['countup', '10:00'],
+	] as const)('prefills a %s part-way through a second as %s', async (type, expected) => {
+		const wrapper = await mountModal({}, {
+			clock: {
+				type,
+				durationMs: 50 * 60 * 1000,
+				elapsedMs: 10 * 60 * 1000 + 400,
+				isRunning: false,
+				lastStartedAt: null,
+				countUpAfterCountdown: false,
+			},
+		});
+
+		expect((wrapper.get('[data-testid="state-clock"]').element as HTMLInputElement).value).toBe(expected);
+	});
+
 	it('emits only the fields that changed, as one save', async () => {
 		const wrapper = await mountModal();
 

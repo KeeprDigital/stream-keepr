@@ -31,11 +31,24 @@ describe('projectRoundClock', () => {
 			START,
 			{ state: 'running', display: '50:00' },
 		],
+		// The time remaining rounds up: the full duration through the first second (ADR-0078).
+		[
+			'a millisecond short of its first second',
+			{ startedAt: START, durationMinutes: 50 },
+			START + 999,
+			{ state: 'running', display: '50:00' },
+		],
+		[
+			'one second in',
+			{ startedAt: START, durationMinutes: 50 },
+			START + 1000,
+			{ state: 'running', display: '49:59' },
+		],
 		[
 			'part-way through a second',
 			{ startedAt: START, durationMinutes: 50 },
 			START + 1500,
-			{ state: 'running', display: '49:58' },
+			{ state: 'running', display: '49:59' },
 		],
 		[
 			'ten minutes in',
@@ -48,6 +61,18 @@ describe('projectRoundClock', () => {
 			{ startedAt: START, durationMinutes: 75 },
 			START + 5 * MINUTE,
 			{ state: 'running', display: '1:10:00' },
+		],
+		[
+			'a second before it ends',
+			{ startedAt: START, durationMinutes: 50 },
+			START + 50 * MINUTE - 1000,
+			{ state: 'running', display: '0:01' },
+		],
+		[
+			'a millisecond before it ends',
+			{ startedAt: START, durationMinutes: 50 },
+			START + 50 * MINUTE - 1,
+			{ state: 'running', display: '0:01' },
 		],
 		[
 			'the instant it ends',
@@ -68,31 +93,83 @@ describe('projectRoundClock', () => {
 	// Waking at the named moment shows a new time, and a millisecond sooner the old one:
 	// a rendering that wakes early holds a second twice and then skips one.
 	it.each([
-		['part-way through a second', 1500],
-		['on a whole second', 2000],
-		['a millisecond past a whole second', 2001],
-	] as const)('next changes exactly when its display does: %s', (_case, sinceStart) => {
+		['the instant it starts', 0, undefined],
+		['part-way through a second', 1500, undefined],
+		['on a whole second', 2000, undefined],
+		['a millisecond past a whole second', 2001, undefined],
+		['with exactly a second left', 50 * MINUTE - 1000, undefined],
+		['in its last second', 50 * MINUTE - 500, undefined],
+		['with a millisecond left', 50 * MINUTE - 1, undefined],
+		[
+			'in its last second, counting up after',
+			50 * MINUTE - 500,
+			{ enabled: true, limitMinutes: null },
+		],
+		[
+			'the instant it ends, counting up after',
+			50 * MINUTE,
+			{ enabled: true, limitMinutes: null },
+		],
+		[
+			'part-way past the end',
+			50 * MINUTE + 1300,
+			{ enabled: true, limitMinutes: null },
+		],
+		[
+			'in the last second before its limit',
+			51 * MINUTE - 700,
+			{ enabled: true, limitMinutes: 1 },
+		],
+	] as const)('next changes exactly when its display does: %s', (_case, sinceStart, countUp) => {
 		const timing = { startedAt: START, durationMinutes: 50 };
 		const now = START + sinceStart;
-		const { display, nextChangeInMs } = projectRoundClock(timing, now);
+		const project = (at: number) => projectRoundClock(timing, at, countUp);
+		const { display, nextChangeInMs } = project(now);
 
-		expect(projectRoundClock(timing, now + nextChangeInMs! - 1).display).toBe(display);
-		expect(projectRoundClock(timing, now + nextChangeInMs!).display).not.toBe(display);
+		expect(project(now + nextChangeInMs! - 1).display).toBe(display);
+		expect(project(now + nextChangeInMs!).display).not.toBe(display);
 	});
 
-	// A rendering re-evaluates exactly then: as each second's display runs out while running, the start while pending.
+	// Counting up after, 0:00 shows for one second: from the end through the first second past it.
 	it.each([
+		[-1, 'running', '0:01'],
+		[0, 'ended', '0:00'],
+		[999, 'ended', '0:00'],
+		[1000, 'ended', '0:01'],
+	] as const)('counting up after, %i ms from its end it is %s at %s', (fromEnd, state, display) => {
+		expect(projectRoundClock(
+			{ startedAt: START, durationMinutes: 50 },
+			START + 50 * MINUTE + fromEnd,
+			{ enabled: true, limitMinutes: null },
+		)).toMatchObject({ state, display });
+	});
+
+	// A rendering re-evaluates exactly then: as each whole second remaining is
+	// reached while running, the last at the end itself; the start while pending.
+	it.each([
+		[
+			'running, the instant it starts',
+			START,
+			START,
+			1000,
+		],
 		[
 			'running, part-way through a second',
 			START,
 			START + 1500,
-			501,
+			500,
 		],
 		[
 			'running, on a whole second',
 			START,
 			START + 2000,
-			1,
+			1000,
+		],
+		[
+			'running, in its last second',
+			START,
+			START + 50 * MINUTE - 400,
+			400,
 		],
 		[
 			'pending a start',

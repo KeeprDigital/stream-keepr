@@ -2,7 +2,7 @@
 import type { PlayerSide } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchPlayerStatePatch, FeatureMatchStateUpdate } from '~/modules/feature-match-session/client';
-import { formatClockTime, getEffectiveElapsedMs, parseTimeInput } from '~~/shared/utils/clock';
+import { formatClockTime, formatCountdownTime, getEffectiveElapsedMs, parseTimeInput } from '~~/shared/utils/clock';
 
 const props = defineProps<{
 	open: boolean;
@@ -65,7 +65,10 @@ function takeSnapshot() {
 	snapshot.firstPlayer = props.state.firstPlayer ?? NONE;
 	snapshot.activePlayer = props.state.activePlayer ?? NONE;
 	snapshot.clockDisplayMs = currentDisplayMs();
-	snapshot.clock = formatClockTime(snapshot.clockDisplayMs);
+	// As the clock itself reads: time remaining rounds up, elapsed time down.
+	snapshot.clock = props.state.clock.type === 'countdown'
+		? formatCountdownTime(snapshot.clockDisplayMs)
+		: formatClockTime(snapshot.clockDisplayMs);
 	turnNumberInput.value = snapshot.turnNumber;
 	firstPlayerChoice.value = snapshot.firstPlayer;
 	activePlayerChoice.value = snapshot.activePlayer;
