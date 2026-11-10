@@ -449,6 +449,7 @@ export const UPopoverStub = defineComponent({
 
 interface DropdownItem {
 	label?: string;
+	description?: string;
 	type?: 'label' | 'separator' | 'checkbox' | 'link';
 	disabled?: boolean;
 	checked?: boolean;
@@ -460,7 +461,8 @@ interface DropdownItem {
 /**
  * Trigger slot, then while open a `role="menu"` of `role="menuitem"` buttons
  * (`menuitemcheckbox` for checkbox items). Choosing calls `onSelect` and closes,
- * unless `onSelect` calls `event.preventDefault()`. An item with `children` is an
+ * unless `onSelect` calls `event.preventDefault()`. An item's `description` is its
+ * `aria-description`. An item with `children` is an
  * `aria-haspopup="menu"` item that toggles its own nested `role="menu"`.
  */
 export const UDropdownMenuStub = defineComponent({
@@ -507,7 +509,7 @@ export const UDropdownMenuStub = defineComponent({
 					<button v-for="(child, childIndex) in childrenOf(item)" :key="childIndex" type="button" role="menuitem" :disabled="child.disabled" @click="choose(child, $event)">{{ child.label }}</button>
 				</div>
 			</div>
-			<button v-else type="button" :role="item.type === 'checkbox' ? 'menuitemcheckbox' : 'menuitem'" :aria-checked="item.type === 'checkbox' ? String(!!item.checked) : undefined" :disabled="item.disabled" @click="choose(item, $event)"><slot name="item-label" :item="item" :index="index">{{ item.label }}</slot></button>
+			<button v-else type="button" :role="item.type === 'checkbox' ? 'menuitemcheckbox' : 'menuitem'" :aria-checked="item.type === 'checkbox' ? String(!!item.checked) : undefined" :aria-description="item.description" :disabled="item.disabled" @click="choose(item, $event)"><slot name="item-label" :item="item" :index="index">{{ item.label }}</slot></button>
 		</template>
 	</div></div>`,
 });

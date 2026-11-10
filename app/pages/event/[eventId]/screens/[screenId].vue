@@ -88,6 +88,8 @@ const isSaving = computed(() =>
 	|| backgroundLayersControlsRef.value?.saving === true,
 );
 
+const resetBlocked = computed(() => modeControlsRef.value?.resetBlocked === true);
+
 function confirmResetAll() {
 	modeControlsRef.value?.resetConfig?.();
 	showResetConfirm.value = false;
@@ -320,6 +322,40 @@ const openOutputItems = computed(() => [
 		: []),
 ]);
 
+/**
+ * The actions an operator rarely needs, and the two that destroy something, kept
+ * away from Refresh. Rotate and Reset only ask here: a menu closes on a choice, so
+ * each confirms in a dialog, and the write is that dialog's button.
+ */
+const moreActionItems = computed(() => [
+	[
+		{ label: 'Identify', icon: 'i-lucide-scan-eye', onSelect: () => void sendCommand('identify') },
+		{ label: 'Debug', icon: 'i-lucide-bug', onSelect: () => void sendCommand('debug') },
+	],
+	[
+		{
+			label: 'Rotate Asset Access',
+			icon: 'i-lucide-key-round',
+			color: 'warning' as const,
+			onSelect: () => {
+				showCapabilityRotationConfirm.value = true;
+			},
+		},
+		{
+			label: 'Reset mode settings',
+			icon: 'i-lucide-rotate-ccw',
+			color: 'error' as const,
+			disabled: resetBlocked.value,
+			description: resetBlocked.value
+				? 'Another session is editing this Screen\'s graphics'
+				: undefined,
+			onSelect: () => {
+				showResetConfirm.value = true;
+			},
+		},
+	],
+]);
+
 async function sendCommand(command: ScreenCommand) {
 	if (!screen.value)
 		return;
@@ -399,21 +435,6 @@ async function sendCommand(command: ScreenCommand) {
 								</div>
 								<div class="flex items-center gap-2 mt-1 text-sm text-muted">
 									<span class="truncate">{{ screenUrl }}</span>
-									<!--
-										Named for what it hands out rather than for the text it sits
-										beside, which is the one thing it does not copy: this control
-										produces the Overlay Output's URL carrying asset access, and
-										the address above resolves no media at all (#231, #266).
-									-->
-									<UTooltip text="Copy this Screen's Overlay Output URL, with the asset access that resolves its media">
-										<UButton
-											variant="ghost"
-											size="xs"
-											icon="i-lucide-copy"
-											aria-label="Copy output URL"
-											@click="copyUrl"
-										/>
-									</UTooltip>
 								</div>
 							</div>
 
@@ -441,107 +462,46 @@ async function sendCommand(command: ScreenCommand) {
 										trailing-icon="i-lucide-chevron-down"
 										label="Open"
 										title="Open a Screen Output in a new tab, with the asset access that resolves its media"
+										data-header-action="open"
 										data-testid="open-output-menu"
 									/>
 								</UDropdownMenu>
+								<!--
+									Named for what it hands out, not for the address printed above,
+									which is the one thing it does not copy: this is the Overlay
+									Output's URL carrying asset access (#231, #266).
+								-->
+								<UTooltip text="Copy this Screen's Overlay Output URL, with the asset access that resolves its media">
+									<UButton
+										variant="soft"
+										color="neutral"
+										icon="i-lucide-copy"
+										label="Copy URL"
+										aria-label="Copy output URL"
+										data-header-action="copy-output-url"
+										@click="copyUrl"
+									/>
+								</UTooltip>
 								<UTooltip text="Refresh all clients">
 									<UButton
 										variant="soft"
 										color="neutral"
 										icon="i-lucide-refresh-cw"
 										label="Refresh"
+										data-header-action="refresh"
 										@click="sendCommand('refresh')"
 									/>
 								</UTooltip>
-								<UTooltip text="Flash screen identifier">
+								<UDropdownMenu :items="moreActionItems">
 									<UButton
 										variant="soft"
 										color="neutral"
-										icon="i-lucide-scan-eye"
-										label="Identify"
-										@click="sendCommand('identify')"
+										icon="i-lucide-ellipsis"
+										aria-label="More Screen actions"
+										data-header-action="more"
+										data-testid="screen-actions-menu"
 									/>
-								</UTooltip>
-								<UTooltip text="Toggle debug overlay">
-									<UButton
-										variant="soft"
-										color="neutral"
-										icon="i-lucide-bug"
-										label="Debug"
-										@click="sendCommand('debug')"
-									/>
-								</UTooltip>
-
-								<UPopover v-model:open="showCapabilityRotationConfirm">
-									<UTooltip text="Revoke previously copied Screen URLs">
-										<UButton
-											variant="soft"
-											color="warning"
-											icon="i-lucide-key-round"
-											label="Rotate Asset Access"
-											:loading="rotatingCapability"
-										/>
-									</UTooltip>
-									<template #content>
-										<div class="p-3 flex flex-col gap-3 w-72">
-											<p class="text-sm">
-												Rotate this Screen Output's asset access? Previously copied URLs will stop resolving Graphic Assets immediately.
-											</p>
-											<div class="flex justify-end gap-2">
-												<UButton
-													size="xs"
-													variant="ghost"
-													color="neutral"
-													label="Cancel"
-													@click="() => { showCapabilityRotationConfirm = false }"
-												/>
-												<UButton
-													size="xs"
-													color="warning"
-													label="Rotate Access"
-													:loading="rotatingCapability"
-													@click="rotateAssetCapability"
-												/>
-											</div>
-										</div>
-									</template>
-								</UPopover>
-
-								<USeparator orientation="vertical" class="h-6" />
-
-								<UPopover v-model:open="showResetConfirm">
-									<UTooltip :text="modeControlsRef?.resetBlocked ? 'Another session is editing this Screen\'s graphics' : 'Reset all display settings'">
-										<UButton
-											variant="soft"
-											color="error"
-											icon="i-lucide-rotate-ccw"
-											label="Reset"
-											:disabled="modeControlsRef?.resetBlocked === true"
-										/>
-									</UTooltip>
-									<template #content>
-										<div class="p-3 flex flex-col gap-3 w-64">
-											<p class="text-sm">
-												Reset this mode's display settings to defaults? Theme overrides and bindings will be preserved.
-											</p>
-											<div class="flex justify-end gap-2">
-												<UButton
-													size="xs"
-													variant="ghost"
-													color="neutral"
-													label="Cancel"
-													@click="() => { showResetConfirm = false }"
-												/>
-												<UButton
-													size="xs"
-													color="error"
-													label="Reset"
-													@click="confirmResetAll"
-												/>
-											</div>
-										</div>
-									</template>
-								</UPopover>
+								</UDropdownMenu>
 							</UFieldGroup>
 
 							<!-- Status Indicators -->
@@ -568,6 +528,50 @@ async function sendCommand(command: ScreenCommand) {
 							</span>
 						</div>
 					</div>
+
+					<UModal
+						v-model:open="showCapabilityRotationConfirm"
+						title="Rotate Asset Access"
+						description="Rotate this Screen Output's asset access? Previously copied URLs will stop resolving Graphic Assets immediately."
+						:ui="{ footer: 'justify-end' }"
+					>
+						<template #footer>
+							<UButton
+								variant="ghost"
+								color="neutral"
+								label="Cancel"
+								:disabled="rotatingCapability"
+								@click="() => { showCapabilityRotationConfirm = false }"
+							/>
+							<UButton
+								color="warning"
+								label="Rotate Access"
+								:loading="rotatingCapability"
+								@click="rotateAssetCapability"
+							/>
+						</template>
+					</UModal>
+
+					<UModal
+						v-model:open="showResetConfirm"
+						title="Reset mode settings"
+						description="Reset this mode's display settings to defaults? Theme overrides and bindings will be preserved."
+						:ui="{ footer: 'justify-end' }"
+					>
+						<template #footer>
+							<UButton
+								variant="ghost"
+								color="neutral"
+								label="Cancel"
+								@click="() => { showResetConfirm = false }"
+							/>
+							<UButton
+								color="error"
+								label="Reset"
+								@click="confirmResetAll"
+							/>
+						</template>
+					</UModal>
 				</UCard>
 
 				<!-- Mode-specific Settings -->
