@@ -1,13 +1,10 @@
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { warmChromium } from '../../scripts/graphics-acceptance/chromium.mjs';
-import {
-	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
-	LOCAL_AUTH_BYPASS_NAME,
-} from '../../shared/utils/localDeveloperAuth';
 import { prepareIntegrationD1 } from '../integration/integrationD1';
 import { freePorts, startIntegrationServer, testContextFor } from '../integration/servers';
-import { INTEGRATION_MODE_ENV, resetIntegrationWranglerState } from '../integration/state';
+import { integrationEventIdBlocks, resetIntegrationWranglerState } from '../integration/state';
+import { localAuthServerEnv } from './serverEnv';
 
 const PERSIST_DIR = '.wrangler/state/local-auth-integration';
 const disableFsWatchImport = fileURLToPath(new URL('../integration/disable-fs-watch.mjs', import.meta.url));
@@ -20,23 +17,16 @@ export async function setup() {
 	if (warmed)
 		process.stdout.write(`local-auth: first launch of ${warmed} took ${Date.now() - warmingStarted} ms\n`);
 	await resetIntegrationWranglerState(PERSIST_DIR);
-	await prepareIntegrationD1(PERSIST_DIR);
+	// Its own Event-id block, as each integration server has (#630): were the
+	// server ever given an Ably key, its Event would still not be `event:1`.
+	const [firstEventId] = integrationEventIdBlocks(1);
+	await prepareIntegrationD1(PERSIST_DIR, { firstEventId });
 
-	// This suite is a launcher, and the only one in the test tree that asks for a
-	// bypassed server. Nothing it inherits can arm this: no file assigns the name,
-	// and it reaches the server child alone, never this process.
 	const [port] = await freePorts(1);
 	const server = await startIntegrationServer({
 		persistDir: PERSIST_DIR,
 		port: port!,
-		env: {
-			[INTEGRATION_MODE_ENV]: 'true',
-			[LOCAL_AUTH_BYPASS_NAME]: LOCAL_AUTH_BYPASS_ENABLED_VALUE,
-			NUXT_BETTER_AUTH_SECRET: '',
-			NUXT_ADMIN_BOOTSTRAP_TOKEN: '',
-			NUXT_SCREEN_OUTPUT_CAPABILITY_SIGNING_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-			NODE_OPTIONS: nodeOptions,
-		},
+		env: localAuthServerEnv({ nodeOptions }),
 	});
 	process.env.NUXT_TEST_CONTEXT = testContextFor(server);
 
