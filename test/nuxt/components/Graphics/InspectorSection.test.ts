@@ -36,20 +36,21 @@ describe('graphicsInspectorSection', () => {
 		localStorage.clear();
 	});
 
-	it('opens by default and collapses to its summary', async () => {
+	it('starts closed, showing its summary, and opens over it', async () => {
 		const wrapper = mountSection({ summary: '30px · 800' });
 		await flushPromises();
-		expect(shown(wrapper)).toBe(true);
-		expect(wrapper.text()).not.toContain('30px · 800');
-
-		await wrapper.get('[data-testid="inspector-section-typography-toggle"]').trigger('click');
-
 		expect(shown(wrapper)).toBe(false);
 		expect(wrapper.text()).toContain('30px · 800');
 		expect(wrapper.get('button').attributes('aria-expanded')).toBe('false');
+
+		await wrapper.get('[data-testid="inspector-section-typography-toggle"]').trigger('click');
+
+		expect(shown(wrapper)).toBe(true);
+		expect(wrapper.text()).not.toContain('30px · 800');
+		expect(wrapper.get('button').attributes('aria-expanded')).toBe('true');
 	});
 
-	it('remembers a collapsed section for the next item that shows it', async () => {
+	it('remembers an opened section for the next item that shows it', async () => {
 		const first = mountSection();
 		await flushPromises();
 		await first.get('[data-testid="inspector-section-typography-toggle"]').trigger('click');
@@ -58,13 +59,23 @@ describe('graphicsInspectorSection', () => {
 		const next = mountSection();
 		await flushPromises();
 
-		expect(shown(next)).toBe(false);
+		expect(shown(next)).toBe(true);
 	});
 
-	it('starts closed where its host asks', async () => {
-		const wrapper = mountSection({ id: 'animation', defaultOpen: false });
+	it('starts open where its host asks', async () => {
+		const wrapper = mountSection({ id: 'layout', defaultOpen: true });
 		await flushPromises();
 
-		expect(shown(wrapper, 'animation')).toBe(false);
+		expect(shown(wrapper, 'layout')).toBe(true);
+	});
+
+	// The defaults changed, so what a browser remembered under them is not carried over.
+	it('ignores open state remembered before sections started closed', async () => {
+		localStorage.setItem('editor-inspectorSections', JSON.stringify({ typography: true }));
+
+		const wrapper = mountSection();
+		await flushPromises();
+
+		expect(shown(wrapper)).toBe(false);
 	});
 });
