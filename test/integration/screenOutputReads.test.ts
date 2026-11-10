@@ -80,10 +80,10 @@ describe('capability-only Screen Output reads', () => {
 	}
 
 	/** A further Screen in its own mode, read through its own capability. */
-	async function outputScreen(mode: string) {
+	async function outputScreen(mode: string, label = mode) {
 		const created = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
 			method: 'POST',
-			body: { name: `Output ${mode}`, slug: `output-reads-${mode.toLowerCase()}-${eventId}`, currentMode: mode },
+			body: { name: `Output ${label}`, slug: `output-reads-${label.toLowerCase()}-${eventId}`, currentMode: mode },
 		});
 		const ownCapability = (await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${created.id}/asset-capability`,
@@ -266,7 +266,7 @@ describe('capability-only Screen Output reads', () => {
 		}
 
 		it('answers the capability the operator was handed, which then reads through the Screen', async () => {
-			const output = await outputScreen('background');
+			const output = await outputScreen('background', 'link-exchange');
 			const issued = await issue(output.screen.id);
 			expect(issued.assetCapability).toBe(output.capability);
 			expect(issued.outputLink).toMatch(/^[1-9A-HJ-NP-Za-km-z]{14,23}$/);
@@ -285,7 +285,7 @@ describe('capability-only Screen Output reads', () => {
 		});
 
 		it('stops exchanging a link once its capability is regenerated, and exchanges the new one', async () => {
-			const output = await outputScreen('card');
+			const output = await outputScreen('card', 'link-regenerated');
 			const before = await issue(output.screen.id);
 			const after = await issue(output.screen.id, 'POST');
 
@@ -341,9 +341,11 @@ describe('capability-only Screen Output reads', () => {
 		});
 
 		it('is not a read: the link in a query, or as a bearer, opens nothing', async () => {
-			const { outputLink } = await issue(screen.id);
+			const { outputLink, assetCapability } = await issue(screen.id);
 
-			expect((await anonymousFetch(`/api/screen-output/link?link=${outputLink}`)).status).not.toBe(200);
+			// A GET has no handler here and is answered by the app shell: it hands nothing over.
+			const asked = await anonymousFetch(`/api/screen-output/link?link=${outputLink}`);
+			expect(await asked.text()).not.toContain(assetCapability);
 			expect((await asOutput('event', outputLink)).status).toBe(404);
 		});
 	});
