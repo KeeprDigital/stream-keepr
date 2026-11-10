@@ -11,6 +11,14 @@ const { mockFetch } = vi.hoisted(() => ({
 }));
 mockNuxtImport('$fetch', () => mockFetch);
 
+// The Event middleware runs on this suite's query navigations, and the route they
+// run on is no Event's, so it would reset every Event store, the Screen the page
+// just selected included, whenever a navigation lands after the page loads.
+vi.mock('~/utils/eventStores', async importOriginal => ({
+	...await importOriginal<typeof import('~/utils/eventStores')>(),
+	resetAllEventStores: () => {},
+}));
+
 vi.mock('~/modules/event-data/resync', async importOriginal => ({
 	...await importOriginal<typeof import('~/modules/event-data/resync')>(),
 	useConsumedEventData: () => {},
