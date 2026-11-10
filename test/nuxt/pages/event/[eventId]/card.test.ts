@@ -328,9 +328,13 @@ describe('cards page by Card Game', () => {
 
 		const wrapper = await openCardsPage();
 
+		// The page picks its view once the Screen's Card has loaded, and then reads the
+		// two Deck Lists: both settle some turns after the page itself has.
 		const cardStore = useCardStore();
-		expect(cardStore.cardPageMode).toBe('match-decklist');
-		expect([cardStore.opDeckListPlayer1, cardStore.opDeckListPlayer2].map(side => side?.deckList?.leaderNumber)).toEqual([ZORO.number, NAMI.number]);
+		await vi.waitFor(() => {
+			expect(cardStore.cardPageMode).toBe('match-decklist');
+			expect([cardStore.opDeckListPlayer1, cardStore.opDeckListPlayer2].map(side => side?.deckList?.leaderNumber)).toEqual([ZORO.number, NAMI.number]);
+		});
 		expect(wrapper.findComponent({ name: 'MtgCardDeckListHeader' }).props('matchOptions')).toBeUndefined();
 		await vi.waitFor(() => expect(useRoute().query).toEqual({
 			mode: 'match-decklist',
