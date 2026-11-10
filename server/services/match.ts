@@ -5,9 +5,9 @@ import type { CreateMatchInput, PlayerSlotData, UpdateMatchInput } from '~~/shar
 import type { ExternalSource } from '~~/shared/types/enums';
 import { and, eq, inArray, ne, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { featureMatches, matches, rounds } from '~~/server/db/schema';
+import { featureMatchAssignments, featureMatches, matches, rounds } from '~~/server/db/schema';
 import { observedSlotPairing } from '~~/server/services/featureMatch';
-import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
+import { chunkJsonRows, inJsonArray, selectForInsert } from '~~/server/utils/db';
 import { pickManualWritable } from '~~/server/utils/provenance';
 
 /** A Match as Melee Sync writes one: with its result, which no manual write carries (ADR-0047). */
@@ -23,6 +23,32 @@ export type MatchUpsertInput = Omit<CreateMatchInput, 'player1Data' | 'player2Da
 	gameDraws?: number | null;
 	isBye?: boolean;
 };
+
+/** What deleting Matches takes with them, by foreign key: the Slots it unlinks and the Assignments it drops. */
+export interface FeaturedByMatches {
+	slots: Array<{ id: number; matchId: number | null }>;
+	assignments: Array<{ id: number; matchId: number }>;
+}
+
+/**
+ * The Slots showing these Matches and the Assignments of them. Read before the
+ * Matches are deleted, so the delete's caller can announce what it changed.
+ */
+export async function findFeaturedByMatches(eventId: number, matchIds: readonly number[]): Promise<FeaturedByMatches> {
+	if (matchIds.length === 0)
+		return { slots: [], assignments: [] };
+	const [slots, assignments] = await Promise.all([
+		db
+			.select({ id: featureMatches.id, matchId: featureMatches.matchId })
+			.from(featureMatches)
+			.where(and(eq(featureMatches.eventId, eventId), inJsonArray(featureMatches.matchId, matchIds))),
+		db
+			.select({ id: featureMatchAssignments.id, matchId: featureMatchAssignments.matchId })
+			.from(featureMatchAssignments)
+			.where(and(eq(featureMatchAssignments.eventId, eventId), inJsonArray(featureMatchAssignments.matchId, matchIds))),
+	]);
+	return { slots, assignments };
+}
 
 /**
  * Build a Match insert/upsert without executing it so authoritative syncs can
@@ -396,5 +422,6 @@ export function matchService() {
 		update,
 		remove,
 		exists,
+		findFeatured: findFeaturedByMatches,
 	};
 }

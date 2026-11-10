@@ -257,7 +257,7 @@ function resolveValues(
 ): GraphicInputValues {
 	return Object.fromEntries(declarations.map(declaration => [
 		declaration.key,
-		declaration.key in stored
+		Object.hasOwn(stored, declaration.key)
 			? stored[declaration.key]!
 			: declaration.default,
 	]));
@@ -330,7 +330,7 @@ export function acceptedGraphicInputValues(
 	const accepted = broadcastGraphicInputsState(state, graphicId).accepted;
 	return Object.fromEntries(
 		declarations
-			.filter(declaration => declaration.key in accepted)
+			.filter(declaration => Object.hasOwn(accepted, declaration.key))
 			.map(declaration => [declaration.key, accepted[declaration.key]!]),
 	);
 }
@@ -355,17 +355,18 @@ export function effectiveGraphicInputValue(
 	bindings: readonly GraphicInputBinding[] | undefined,
 	bound: Readonly<Record<string, GraphicInputValue>> = {},
 ): { value: GraphicInputValue; source: GraphicInputValueSource } {
-	if (declaration.key in inputs.overrides)
+	// Own keys only: a Graphic Input may be keyed by a name every object inherits.
+	if (Object.hasOwn(inputs.overrides, declaration.key))
 		return { value: inputs.overrides[declaration.key]!, source: 'override' };
 
 	if (hasBindingFor(bindings, declaration.key)) {
-		return declaration.key in bound
+		return Object.hasOwn(bound, declaration.key)
 			? { value: bound[declaration.key]!, source: 'bound' }
 			: { value: null, source: 'none' };
 	}
 
 	return {
-		value: declaration.key in inputs.working
+		value: Object.hasOwn(inputs.working, declaration.key)
 			? inputs.working[declaration.key]!
 			: declaration.default,
 		source: 'manual',
@@ -410,7 +411,7 @@ export function acceptGraphicInputValues(
 			continue;
 		}
 
-		if (onAir && declaration.key in inputs.accepted)
+		if (onAir && Object.hasOwn(inputs.accepted, declaration.key))
 			accepted[declaration.key] = inputs.accepted[declaration.key]!;
 	}
 
@@ -504,13 +505,13 @@ export function graphicInputTraces(
 		return {
 			declaration,
 			binding,
-			bound: key in boundValues
+			bound: Object.hasOwn(boundValues, key)
 				? {
 						value: boundValues[key]!,
 						availability: graphicInputAvailability(declaration, boundValues[key]),
 					}
 				: undefined,
-			override: key in stored.overrides
+			override: Object.hasOwn(stored.overrides, key)
 				? {
 						value: stored.overrides[key]!,
 						availability: graphicInputAvailability(declaration, stored.overrides[key]),

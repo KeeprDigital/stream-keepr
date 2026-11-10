@@ -6,7 +6,7 @@ import { archetypes, featureMatches, matches, phases, playerDecks, players, roun
 import { observedSlotPairing } from '~~/server/services/featureMatch';
 import { linkedOpSideGameData } from '~~/server/services/featureMatchSlotLeader';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
-import { chunkJsonRows } from '~~/server/utils/db';
+import { chunkJsonRows, inJsonArray } from '~~/server/utils/db';
 import { isStateConflictFailure } from '~~/server/utils/errors';
 import { applyMatchDeckSnapshot, selectMatchDeck } from '~~/server/utils/matchDeckSelection';
 import { randomCommandId } from '~~/shared/utils/uuid';
@@ -428,8 +428,79 @@ export function playerFeatureMatchSyncService() {
 		}
 	}
 
+	/** The Slots seating the Player on either side: read before a delete, whose foreign key empties those sides. */
+	async function findSlotIdsSeating(eventId: number, playerId: number): Promise<number[]> {
+		const rows = await db
+			.select({ id: featureMatches.id })
+			.from(featureMatches)
+			.where(and(
+				eq(featureMatches.eventId, eventId),
+				or(eq(featureMatches.player1Id, playerId), eq(featureMatches.player2Id, playerId)),
+			));
+		return rows.map(row => row.id);
+	}
+
+	/**
+	 * Corrects the Slots a deleted Player sat on, as a post-commit follow-on. A
+	 * side with no Player keeps the data it shows but no Player Deck List
+	 * reference (ADR-0074), and each Slot's active Session is corrected to the
+	 * Slot, so its snapshot stops seating the Player. Answers the Slots still
+	 * held; one whose pairing or Session moved meanwhile is left as it is now.
+	 */
+	async function releaseDeletedPlayerSides(eventId: number, slotIds: readonly number[]): Promise<number[]> {
+		if (slotIds.length === 0)
+			return [];
+		const slots = await db
+			.select()
+			.from(featureMatches)
+			.where(and(eq(featureMatches.eventId, eventId), inJsonArray(featureMatches.id, slotIds)));
+		const state = featureMatchStateService();
+		const defaults = await state.loadEventDefaults(eventId);
+
+		for (const slot of slots) {
+			const released: Partial<Pick<DbFeatureMatch, 'player1Data' | 'player2Data'>> = {};
+			for (const side of [1, 2] as const) {
+				const data = slot[`player${side}Data`];
+				if (slot[`player${side}Id`] != null || data?.gameData?.type !== 'op' || !Object.hasOwn(data.gameData, 'deckList'))
+					continue;
+				const { deckList: _deckList, ...gameData } = data.gameData;
+				released[`player${side}Data`] = { ...data, gameData };
+			}
+			try {
+				if (Object.keys(released).length > 0) {
+					const [written] = await db
+						.update(featureMatches)
+						.set(released)
+						.where(and(eq(featureMatches.id, slot.id), eq(featureMatches.eventId, eventId), observedSlotPairing(slot)))
+						.returning({ id: featureMatches.id });
+					if (!written)
+						continue;
+				}
+				const sourceSnapshot = await state.buildSourceSnapshot({
+					...slot,
+					...released,
+				}, defaults);
+				await state.applyCommandToActiveSession(slot.id, eventId, session => ({
+					commandId: randomCommandId('SnapshotCorrected'),
+					type: 'SnapshotCorrected',
+					payload: { sourceSnapshot },
+					baseSequence: session.sequence,
+				}));
+			}
+			catch (error) {
+				// The delete committed: a lost Session race is logged, not answered.
+				if (!isStateConflictFailure(error))
+					throw error;
+				console.error(JSON.stringify({ message: 'feature_match_player_delete_conflict', eventId, slotId: slot.id }));
+			}
+		}
+		return slots.map(slot => slot.id);
+	}
+
 	return {
 		syncMatchesFromPlayers,
 		syncMatchesFromPlayersAfterCommit,
+		findSlotIdsSeating,
+		releaseDeletedPlayerSides,
 	};
 }

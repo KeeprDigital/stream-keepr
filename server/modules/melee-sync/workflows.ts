@@ -5,7 +5,7 @@ import type { Game } from '~~/shared/types/enums';
 import type { MeleeSyncContext } from './context';
 import type { PreviousRoundStandingsResult } from './roundMatches';
 import { createError } from 'h3';
-import { mapMeleePlayersToDb } from '~~/server/mappers/melee';
+import { InvalidMeleePlayerSnapshotError, mapMeleePlayersToDb } from '~~/server/mappers/melee';
 import { eventDataPublicationModule, publishSyncAfterCommit } from '~~/server/modules/event-data-publication';
 import {
 	MeleeRoundNotReadyError,
@@ -328,6 +328,14 @@ export function createMeleeSyncWorkflows() {
 			return playerData;
 		});
 
+		// The reconcile deactivates every Melee Player the snapshot leaves out, so an
+		// empty one for an Event that holds some would deactivate them all.
+		if (playerSnapshot.length === 0) {
+			const held = await playerSvc.findAll({ eventId });
+			if (held.some(player => player.externalSource === 'melee'))
+				throw new InvalidMeleePlayerSnapshotError();
+		}
+
 		await options.beforeWrite?.();
 		const {
 			players: upsertedPlayers,
@@ -465,6 +473,16 @@ export function createMeleeSyncWorkflows() {
 				if (announcement.changed(changed))
 					await publishAfterCommit(afterCommitWarnings, async () => await announcement.publish(changed));
 			}
+			// A stale Match's delete unlinked these Slots and dropped these
+			// Assignments, which no message above names. With no origin: the
+			// syncing client's response carries neither.
+			if (changed.unlinkedSlotIds.length > 0) {
+				await publishAfterCommit(afterCommitWarnings, async () => {
+					await publication.featureMatchSlotsUpdated({ eventId, slotIds: changed.unlinkedSlotIds });
+				});
+			}
+			for (const id of changed.droppedAssignmentIds)
+				await publishAfterCommit(afterCommitWarnings, async () => await publication.featureMatchAssignmentDeleted({ eventId, id }));
 		}
 		const published = announcements
 			.filter(announcement => changedRounds.some(announcement.changed))

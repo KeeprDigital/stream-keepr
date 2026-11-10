@@ -31,6 +31,7 @@ const mockPhaseService = {
 const mockPlayerService = {
 	batchUpsertByExternalId: vi.fn(),
 	reconcileMeleeSnapshot: vi.fn(),
+	findAll: vi.fn(async () => []),
 };
 const mockPlayerDeckService = {
 	reconcilePrimaryArchetype: vi.fn(),
@@ -179,6 +180,8 @@ function matchResult(round: typeof round1, matchCount = 4) {
 		created: matchCount,
 		updated: 0,
 		staleDeleted: 0,
+		unlinkedSlotIds: [],
+		droppedAssignmentIds: [],
 		warnings: [],
 		complete: false,
 		resultChangedMatchIds: [],

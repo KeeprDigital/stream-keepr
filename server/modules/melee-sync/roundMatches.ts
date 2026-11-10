@@ -33,6 +33,10 @@ export interface SyncMatchesResult {
 	created: number;
 	updated: number;
 	staleDeleted: number;
+	/** The Slots that showed a stale Match, now showing none. */
+	unlinkedSlotIds: number[];
+	/** The Assignments of a stale Match, deleted with it. */
+	droppedAssignmentIds: number[];
 	warnings: string[];
 	/** Every Match has a result, or the next Round is paired; only then are Round Standings stored. */
 	complete: boolean;
@@ -46,7 +50,7 @@ export interface SyncMatchesResult {
 
 /** What storing the previous Round's Round Standings changed in that Round. */
 export interface PreviousRoundStandingsResult
-	extends Pick<SyncMatchesResult, 'resultChangedMatchIds' | 'pairingsChanged' | 'standingsChanged'> {
+	extends Pick<SyncMatchesResult, 'resultChangedMatchIds' | 'pairingsChanged' | 'standingsChanged' | 'unlinkedSlotIds' | 'droppedAssignmentIds'> {
 	roundId: number;
 }
 
@@ -249,6 +253,13 @@ async function syncRoundSnapshot(
 	if (round.lastSyncedAt == null && meleeMatches.length === 0) {
 		throw new MeleeRoundNotReadyError(round);
 	}
+	// A synced Round held Matches when it synced. Melee listing none for it now
+	// is a re-pair in progress or an upstream fault, as a 404 is above: taken as
+	// the Round's snapshot it would delete every Match, and with them their
+	// Feature Match Assignments and the Slots' bindings.
+	if (meleeMatches.length === 0) {
+		throw new InvalidMeleeRoundSnapshotError(`Melee.gg listed no matches for ${round.name}; its stored matches are kept`);
+	}
 	const complete = isRoundComplete(meleeMatches.map(meleeMatchResultState), nextPaired);
 	const standings = complete
 		? await melee.fetchStandingsByRound(meleeRoundId)
@@ -339,6 +350,8 @@ async function syncRoundSnapshot(
 		created: matchesCreated,
 		updated: matchesUpdated,
 		staleDeleted,
+		unlinkedSlotIds,
+		droppedAssignmentIds,
 		resultChangedMatchIds,
 		pairingsChanged,
 		standingsChanged,
@@ -366,6 +379,8 @@ async function syncRoundSnapshot(
 		created: matchesCreated,
 		updated: matchesUpdated,
 		staleDeleted,
+		unlinkedSlotIds,
+		droppedAssignmentIds,
 		warnings,
 		complete,
 		resultChangedMatchIds,

@@ -4,7 +4,7 @@ import type { RoundStandingInput } from '~~/server/services/playerRoundStandings
 import { and, eq, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { matches, playerRoundStandings } from '~~/server/db/schema';
-import { buildDeleteStaleMatchesByRoundQuery } from '~~/server/services/match';
+import { buildDeleteStaleMatchesByRoundQuery, findFeaturedByMatches } from '~~/server/services/match';
 import { diffRoundMatches, standingsDiffer } from '~~/server/services/meleeRoundDiff';
 import { buildMarkRoundSyncedQuery } from '~~/server/services/round';
 import { chunkJsonRows, selectForInsert } from '~~/server/utils/db';
@@ -25,6 +25,10 @@ export interface MeleeRoundSnapshotResult {
 	/** Stored Matches the snapshot actually changed. */
 	updated: number;
 	staleDeleted: number;
+	/** The Slots that showed a stale Match, now showing none. */
+	unlinkedSlotIds: number[];
+	/** The Assignments of a stale Match, deleted with it. */
+	droppedAssignmentIds: number[];
 	/** Stored Matches whose Match Result changed. */
 	resultChangedMatchIds: number[];
 	/** A Match was added, removed, or re-seated. */
@@ -170,6 +174,12 @@ export function meleeRoundSnapshotService() {
 			input.syncedAt,
 		);
 
+		// Read before the batch: the stale delete unlinks each Slot showing a
+		// Match it removes and drops that Match's Assignments, by foreign key.
+		const featured = await findFeaturedByMatches(input.eventId, storedMatches
+			.filter(match => match.roundId === input.roundId && (match.externalId == null || !matchExternalIds.has(match.externalId)))
+			.map(match => match.id));
+
 		const staleDeleteResultIndex = matchQueries.length + standingsQueries.length;
 		const queries = [
 			...matchQueries,
@@ -186,6 +196,7 @@ export function meleeRoundSnapshotService() {
 		const storedByExternalId = new Map(storedMatches.map(match => [match.externalId, match]));
 		const writtenByExternalId = new Map(writtenMatches.map(match => [match.externalId, match]));
 		const created = writtenMatches.filter(match => !storedByExternalId.has(match.externalId)).length;
+		const staleDeletedIds = new Set(staleDeletedRows?.map(row => row.id));
 
 		return {
 			matches: keepExternalIds.map(externalId =>
@@ -193,6 +204,12 @@ export function meleeRoundSnapshotService() {
 			created,
 			updated: writtenMatches.length - created,
 			staleDeleted: staleDeletedRows?.length ?? 0,
+			unlinkedSlotIds: featured.slots
+				.filter(slot => slot.matchId != null && staleDeletedIds.has(slot.matchId))
+				.map(slot => slot.id),
+			droppedAssignmentIds: featured.assignments
+				.filter(assignment => staleDeletedIds.has(assignment.matchId))
+				.map(assignment => assignment.id),
 			resultChangedMatchIds: diff.resultChangedExternalIds.map(externalId =>
 				storedByExternalId.get(externalId)!.id),
 			pairingsChanged: diff.pairingsChanged,

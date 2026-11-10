@@ -54,6 +54,21 @@ export class InvalidMeleeRoundSnapshotError extends Error {
 }
 
 /**
+ * Melee answered with no Players for an Event that holds Players from it. Taken
+ * as authoritative that would deactivate every one, so it is refused instead.
+ */
+export class InvalidMeleePlayerSnapshotError extends Error {
+	readonly code = 'INVALID_MELEE_PLAYER_SNAPSHOT';
+	readonly statusCode = 422;
+	readonly statusMessage = 'Invalid Melee player snapshot';
+
+	constructor() {
+		super('Melee.gg listed no players for this event; the players already synced are kept');
+		this.name = 'InvalidMeleePlayerSnapshotError';
+	}
+}
+
+/**
  * The snapshot names a Melee participant the Event holds no Player for: one
  * Melee has added since Players were last synced, which a Player sync resolves.
  */

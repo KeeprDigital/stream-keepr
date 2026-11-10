@@ -79,8 +79,11 @@ export function calculateDeckStats(cards: StatCard[]): DeckListStats {
 		const type = card.cardType?.toLowerCase() ?? '';
 		const qty = card.quantity;
 
+		// A land of a second type on its front face is a land, unless a creature.
 		if (type.includes('creature'))
 			stats.creatures += qty;
+		else if (type.split(' // ')[0]!.includes('land'))
+			stats.lands += qty;
 		else if (type.includes('instant'))
 			stats.instants += qty;
 		else if (type.includes('sorcery'))

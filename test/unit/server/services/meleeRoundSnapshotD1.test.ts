@@ -319,6 +319,8 @@ describe('meleeRoundSnapshotService.replace', () => {
 				created: 0,
 				updated: 0,
 				staleDeleted: 1,
+				unlinkedSlotIds: [],
+				droppedAssignmentIds: [],
 				resultChangedMatchIds: [],
 				pairingsChanged: true,
 				standingsChanged: true,

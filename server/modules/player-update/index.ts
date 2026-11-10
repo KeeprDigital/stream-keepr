@@ -215,6 +215,8 @@ export function playerUpdateModule() {
 		playerId,
 		originConnectionId,
 	}: DeletePlayerParams): Promise<{ success: true }> {
+		// Read before the delete, whose foreign key empties each side seating the Player.
+		const seatingSlotIds = await playerFeatureMatchSync.findSlotIdsSeating(eventId, playerId);
 		const { deleted, archetypeId, clearedScreens } = await players.remove(playerId, eventId);
 
 		// Even for a Player already gone: the clear committed either way (ADR-0032).
@@ -234,6 +236,14 @@ export function playerUpdateModule() {
 			id: playerId,
 			originConnectionId,
 		});
+		// The Slots that seated them, corrected, with no origin: the deleting
+		// client's response carries no Slot.
+		if (seatingSlotIds.length > 0) {
+			await publication.featureMatchSlotsUpdated({
+				eventId,
+				slotIds: await playerFeatureMatchSync.releaseDeletedPlayerSides(eventId, seatingSlotIds),
+			});
+		}
 		// A One Piece Card Game Leader Archetype goes with its last Player, unless customised (ADR-0074).
 		if (archetypeId !== null)
 			await releaseEmptiedLeaderArchetypes(eventId, [archetypeId]);

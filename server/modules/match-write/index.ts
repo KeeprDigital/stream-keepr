@@ -56,6 +56,9 @@ export function matchWriteModule() {
 	}
 
 	async function remove({ eventId, matchId, originConnectionId }: RemoveMatchParams): Promise<void> {
+		// Read before the delete, whose foreign keys unlink each Slot showing the
+		// Match and drop its Assignments.
+		const featured = await matches.findFeatured(eventId, [matchId]);
 		const deleted = await matches.remove(matchId, eventId);
 		if (!deleted) {
 			throw createError({ statusCode: 404, message: 'Match not found' });
@@ -66,6 +69,15 @@ export function matchWriteModule() {
 			id: matchId,
 			originConnectionId,
 		});
+		// With no origin: the deleting client's response carries neither.
+		if (featured.slots.length > 0) {
+			await publication.featureMatchSlotsUpdated({
+				eventId,
+				slotIds: featured.slots.map(slot => slot.id),
+			});
+		}
+		for (const assignment of featured.assignments)
+			await publication.featureMatchAssignmentDeleted({ eventId, id: assignment.id });
 	}
 
 	return {

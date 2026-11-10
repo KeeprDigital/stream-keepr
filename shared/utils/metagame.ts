@@ -20,14 +20,21 @@ export const CARD_TYPE_BUCKET_ORDER = [
 
 export type CardTypeBucket = typeof CARD_TYPE_BUCKET_ORDER[number];
 
+/**
+ * Which type names a card of several: a land of a second type (Urza's Saga, an
+ * artifact land) is a Land, as `isLandCardType` reads it, and only a creature
+ * land (Dryad Arbor) is not.
+ */
+const CARD_TYPE_BUCKET_PRECEDENCE = [
+	'Creature',
+	'Land',
+	...CARD_TYPE_BUCKET_ORDER.filter(bucket => bucket !== 'Creature' && bucket !== 'Land' && bucket !== 'Other'),
+] as const;
+
 export function getCardTypeBucket(cardType: string | null | undefined): CardTypeBucket {
 	const frontFaceType = getFrontFaceCardType(cardType);
 
-	for (const bucket of CARD_TYPE_BUCKET_ORDER) {
-		if (bucket === 'Other') {
-			continue;
-		}
-
+	for (const bucket of CARD_TYPE_BUCKET_PRECEDENCE) {
 		if (frontFaceType.includes(bucket)) {
 			return bucket;
 		}

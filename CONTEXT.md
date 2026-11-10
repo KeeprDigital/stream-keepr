@@ -219,7 +219,7 @@ The deterministic projection of a paginated Screen Mode's current page from its 
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Top Cut Bracket**:
-The single-elimination bracket a Top Cut Bracket Screen shows: its **Manual Bracket**, on a One Piece Card Game Event or when its operator chooses one (ADR-0075), else derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size, unless the operator sets a larger one; a set size smaller than the first Round needs is ignored. The first Round is placed by Seed in standard order (1v8, 4v5, 2v7, 3v6 for a bracket of 8), the best Seeds taking any byes it leaves out, and each later Match at the Bracket Position its Players advance from, so no Bracket Position moves as later Rounds are paired; a first Round with no Seeds is placed by the next Round's pairings, else table order. A Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
+The single-elimination bracket a Top Cut Bracket Screen shows: its **Manual Bracket**, on a One Piece Card Game Event or when its operator chooses one (ADR-0075), else derived from the Phase its operator picks, since nothing marks a Phase as a top cut: one column per Round of that Phase, in order, each Match at the Bracket Position its winner advances from into the next column. The first Round, with any byes it leaves out, sets its size, unless the operator sets a larger one; a set size smaller than the first Round needs is ignored. The first Round is placed by Seed in standard order (1v8, 4v5, 2v7, 3v6 for a bracket of 8), the best Seeds taking any byes it leaves out, and each later Match at the Bracket Position its Players advance from, so no Bracket Position moves as later Rounds are paired; a first Round with no Seeds is placed by the next Round's pairings, else table order. A later Match seating a Player the previous Round knocked out, such as a playoff for third place sharing the Final's Round, takes a Bracket Position only after every Match that seats none. A Bracket Position no Match fills yet is pending, showing the winners advancing into it so far.
 _Avoid_: bracket slot (a Slot is a Feature Match Slot)
 
 **Manual Bracket**:
@@ -805,6 +805,8 @@ _Avoid_: worst-case data, overflow data
 - Every One Piece Card Game **Player**'s **Deck List** counts in the **Metagame**; a **Feature Match Deck List** never does (ADR-0074)
 - A **Feature Match Session** belongs to exactly one **Feature Match Slot**; while active, the Slot's identity binding fields resolve from the session's source snapshot and its live binding fields from the session's current state
 - While a **Feature Match Session** is active, it decides which player each side of its **Feature Match Slot** shows; the Slot's own sides keep their pairing order
+- Deleting a **Player** leaves each **Feature Match Slot** side seating them with no Player: the side keeps the data it shows but none of that Player's Deck List reference, the Slot's active **Feature Match Session** is corrected to it, and the Slot is announced
+- Deleting a **Match**, alone or as one Melee no longer lists, unlinks each **Feature Match Slot** showing it and deletes its **Feature Match Assignments**; both are announced
 
 ### Screens and outputs
 
