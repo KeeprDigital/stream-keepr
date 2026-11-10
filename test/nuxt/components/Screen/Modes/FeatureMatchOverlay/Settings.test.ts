@@ -930,16 +930,16 @@ describe('featureMatchOverlaySettings', () => {
 		it('says whether the layout is saved, and offers a retry when it is not', async () => {
 			const wrapper = await mountComponent();
 			await flushPromises();
-			expect(wrapper.find('[data-testid="layout-save-state"]').exists()).toBe(false);
+			expect(wrapper.find('[data-testid="graphics-save-state"]').exists()).toBe(false);
 
 			mockSaveState.value = 'committed';
 			await nextTick();
-			expect(wrapper.get('[data-testid="layout-save-state"]').text()).toContain('Saved');
+			expect(wrapper.get('[data-testid="graphics-save-state"]').text()).toContain('Saved');
 
 			mockSaveState.value = 'failed';
 			await nextTick();
-			expect(wrapper.get('[data-testid="layout-save-state"]').attributes('title')).toBe('Screen refused the layout');
-			await wrapper.get('[data-testid="layout-save-retry"]').trigger('click');
+			expect(wrapper.get('[data-testid="graphics-save-state"]').text()).toContain('Screen refused the layout');
+			await wrapper.get('[data-testid="graphics-save-retry"]').trigger('click');
 			expect(mockRetry).toHaveBeenCalledTimes(1);
 		});
 	});

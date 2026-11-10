@@ -541,38 +541,13 @@ useEventListener(import.meta.client
 				</UFormField>
 
 				<div class="ml-auto flex items-center gap-1">
-					<div
-						v-if="writable && saveState !== 'idle'"
-						class="mr-1 flex items-center gap-1.5 text-xs"
-						:class="saveState === 'failed' ? 'text-error' : 'text-muted'"
-						:title="saveState === 'failed' ? (saveError ?? undefined) : undefined"
-						role="status"
-						data-testid="layout-save-state"
-						:data-save-state="saveState"
-					>
-						<template v-if="saveState === 'saving'">
-							<UIcon name="i-lucide-loader-circle" class="size-3.5 animate-spin" />
-							Saving…
-						</template>
-						<template v-else-if="saveState === 'committed'">
-							<UIcon name="i-lucide-check" class="size-3.5 text-success" />
-							Saved
-						</template>
-						<template v-else>
-							<UIcon name="i-lucide-triangle-alert" class="size-3.5" />
-							Not saved
-							<UButton
-								size="xs"
-								color="error"
-								variant="soft"
-								icon="i-lucide-rotate-cw"
-								data-testid="layout-save-retry"
-								@click="retrySave()"
-							>
-								Retry
-							</UButton>
-						</template>
-					</div>
+					<GraphicsSaveState
+						class="mr-1"
+						:save-state="saveState"
+						:save-error="saveError"
+						:writable="writable"
+						@retry="retrySave()"
+					/>
 					<UFieldGroup size="sm">
 						<UButton
 							variant="soft"

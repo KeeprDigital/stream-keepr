@@ -362,6 +362,25 @@ describe('feature Match Overlay preview aside — graphic animation preview', ()
 		});
 	});
 
+	// Wiring: the controls live behind the preview panel's one animation control,
+	// which is told when their run is playing.
+	it('keeps the animation controls behind one control that says a run is playing', async () => {
+		const wrapper = mountAside({ compositorTarget: item('wins') });
+		previewFrame(wrapper, { postMessage: vi.fn() });
+		const toggle = wrapper.get('[data-testid="preview-animation-toggle"]');
+
+		expect(toggle.attributes('aria-expanded')).toBe('false');
+		expect(wrapper.get(`[id="${toggle.attributes('aria-controls')}"]`)
+			.find('[data-testid="animation-preview-controls"]')
+			.exists()).toBe(true);
+		expect(toggle.attributes('data-playing')).toBe('false');
+
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+
+		expect(toggle.attributes('data-playing')).toBe('true');
+	});
+
 	it('offers no item run until a Graphic Item is selected', async () => {
 		const { wrapper, postMessage } = await mountPlaying({ type: 'canvas' }, 'item');
 

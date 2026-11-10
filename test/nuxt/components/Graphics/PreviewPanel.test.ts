@@ -353,6 +353,52 @@ describe('graphicsPreviewPanel', () => {
 		expect(viewport(wrapper).querySelector('iframe')).not.toBeNull();
 	});
 
+	// The Graphic Animation Preview controls sit behind one toolbar control. They stay
+	// mounted while hidden: they hold the run, so a loop outlives closing them.
+	describe('animation controls', () => {
+		const toggle = '[data-testid="preview-animation-toggle"]';
+
+		function mountWithAnimation(props: Record<string, unknown> = {}) {
+			return mount(PreviewPanel, {
+				props: { canvasWidth: 1920, canvasHeight: 1080, ...props },
+				slots: { animation: () => h('p', { 'data-testid': 'host-animation' }) },
+				global,
+				attachTo: document.body,
+			});
+		}
+
+		it('keeps them hidden until the one control opens them, and hides them again', async () => {
+			const wrapper = mountWithAnimation();
+			const controls = wrapper.get('[data-testid="host-animation"]');
+
+			expect(wrapper.get(toggle).attributes('aria-expanded')).toBe('false');
+			expect(controls.isVisible()).toBe(false);
+
+			await wrapper.get(toggle).trigger('click');
+			expect(wrapper.get(toggle).attributes('aria-expanded')).toBe('true');
+			expect(controls.isVisible()).toBe(true);
+			expect(wrapper.get(`[id="${wrapper.get(toggle).attributes('aria-controls')}"]`).element.contains(controls.element)).toBe(true);
+
+			await wrapper.get(toggle).trigger('click');
+			expect(wrapper.get(toggle).attributes('aria-expanded')).toBe('false');
+			expect(wrapper.get('[data-testid="host-animation"]').isVisible()).toBe(false);
+		});
+
+		it.each([
+			{ animationPlaying: true, playing: 'true', label: 'Animation, playing' },
+			{ animationPlaying: false, playing: 'false', label: 'Animation' },
+		])('marks the closed control when a run is playing: $animationPlaying', ({ animationPlaying, playing, label }) => {
+			const wrapper = mountWithAnimation({ animationPlaying });
+
+			expect(wrapper.get(toggle).attributes('data-playing')).toBe(playing);
+			expect(wrapper.get(toggle).attributes('aria-label')).toBe(label);
+		});
+
+		it('offers no control to a host with no animation controls', () => {
+			expect(mountPanel().find(toggle).exists()).toBe(false);
+		});
+	});
+
 	it('collapses by default, and stays open when the host says it cannot', () => {
 		expect(mountPanel().findComponent(ScreenSettingsCardStub).props('collapsible')).toBe(true);
 		expect(mountPanel({ collapsible: false }).findComponent(ScreenSettingsCardStub).props('collapsible')).toBe(false);
