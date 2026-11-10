@@ -350,7 +350,7 @@ export interface TemplatePackagePreflightMapping {
 	basis: TemplatePackageMappingBasis;
 	/** The exact local revision to reuse, present only for an exact-origin match. */
 	reference?: GraphicAssetReference;
-	/** Whether the canonical byte store already holds this content. */
+	/** Whether this library already holds this content, reachable from a revision or derivative. */
 	contentAlreadyStored: boolean;
 	/** Canonical bytes this mapping would add. Zero when content is shared. */
 	canonicalGrowthBytes: number;

@@ -14,6 +14,7 @@ import {
 } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
 import {
 	createBoundedByteStream,
+	GraphicsObjectInputError,
 	unavailableObjectStoreOutcome,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import {
@@ -254,6 +255,63 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 			transfer: {
 				completedParts: [
 					{ partNumber: 1 },
+				],
+			},
+		});
+	});
+
+	// A part whose transfer fails gives its claim back even though a sibling
+	// part moved the checkpoint meanwhile, so the client's retry is accepted.
+	it.each([
+		{
+			failure: 'the store answers unavailable',
+			fail: (): ReturnType<typeof unavailableObjectStoreOutcome> => unavailableObjectStoreOutcome(),
+			refusal: { code: 'graphics-asset-library-unavailable' },
+		},
+		{
+			failure: 'the byte stream of the part throws',
+			fail: (): never => {
+				throw new GraphicsObjectInputError('Byte stream length mismatch');
+			},
+			refusal: { message: 'Byte stream length mismatch' },
+		},
+	])('accepts a part again after $failure while a sibling part completed', async ({ fail, refusal }) => {
+		const delegate = createInMemoryStagingGraphicsObjectStore();
+		const tail = Uint8Array.of(0);
+		const firstPart = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES);
+		let failFirstPart = true;
+		const staging: InMemoryGraphicsStagingObjectStore = {
+			...delegate,
+			async uploadPart(input) {
+				if (input.partNumber !== 1 || !failFirstPart)
+					return await delegate.uploadPart(input);
+				failFirstPart = false;
+				await uploadPart(2, tail);
+				return fail();
+			},
+		};
+		const library = createLibrary(staging);
+		const operation = await initiateLargeTransfer(library, 'failed-part-beside-a-sibling');
+		function uploadPart(partNumber: number, bytes: Uint8Array) {
+			return library.uploadGraphicAssetMultipartPart({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+				partNumber,
+				bytes: createBoundedByteStream(bytes, {
+					byteLength: bytes.byteLength,
+					maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+				}),
+			});
+		}
+
+		await expect(uploadPart(1, firstPart)).rejects.toMatchObject(refusal);
+
+		await expect(uploadPart(1, firstPart)).resolves.toMatchObject({
+			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES + 1,
+			transfer: {
+				completedParts: [
+					{ partNumber: 1 },
+					{ partNumber: 2 },
 				],
 			},
 		});

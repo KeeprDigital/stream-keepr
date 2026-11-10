@@ -903,21 +903,7 @@ export function createD1GraphicsAssetCatalogue(
 				[...proposed].map(async ([digest, byteLength]) => ({
 					digest,
 					byteLength,
-					exists: Boolean(await database.prepare(`
-							SELECT 1
-							FROM graphic_asset_contents contents
-							WHERE contents.digest = ?
-								AND (
-									EXISTS (
-										SELECT 1 FROM graphic_asset_revisions revisions
-										WHERE revisions.content_digest = contents.digest
-									)
-									OR EXISTS (
-										SELECT 1 FROM graphics_derivatives derivatives
-										WHERE derivatives.content_digest = contents.digest
-									)
-								)
-						`).bind(digest).first()),
+					exists: await this.isGraphicAssetContentReachable(digest),
 				})),
 			);
 			const growthBytes = existing
@@ -1293,10 +1279,14 @@ export function createD1GraphicsAssetCatalogue(
 					// this installation created. It is never rewritten: a package
 					// claiming an origin already recorded with different content was
 					// rejected at preflight rather than allowed to update one here.
-					// The ignore is the backstop, and the expected count is what
-					// proves it never had to fire.
+					// Preflight cannot see an origin another operation publishes
+					// after it, so the insert does not ignore a conflict: the source
+					// revision's unique index fails it, which aborts the whole batch
+					// before anything commits. Ignoring it would commit a Graphic
+					// Asset without its origin, and the count below would notice only
+					// after the transaction had already completed the operation.
 					statement: database.prepare(`
-						INSERT OR IGNORE INTO graphic_asset_origins (
+						INSERT INTO graphic_asset_origins (
 							revision_id, asset_id, source_asset_id, source_revision_id,
 							source_revision_number, digest, created_at
 						)
@@ -1854,6 +1844,23 @@ export function createD1GraphicsAssetCatalogue(
 						name: row.name,
 					}
 				: undefined;
+		},
+		async isGraphicAssetContentReachable(digest) {
+			return Boolean(await database.prepare(`
+				SELECT 1
+				FROM graphic_asset_contents contents
+				WHERE contents.digest = ?
+					AND (
+						EXISTS (
+							SELECT 1 FROM graphic_asset_revisions revisions
+							WHERE revisions.content_digest = contents.digest
+						)
+						OR EXISTS (
+							SELECT 1 FROM graphics_derivatives derivatives
+							WHERE derivatives.content_digest = contents.digest
+						)
+					)
+			`).bind(digest).first());
 		},
 		async recordGraphicAssetMultipartCleanupComplete(operationId, initiatedBy) {
 			const result = await database.prepare(`

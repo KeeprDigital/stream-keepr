@@ -2,16 +2,17 @@ import type { GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-li
 import type {
 	GraphicAsset,
 } from '~~/shared/types/graphicsAsset';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import {
 	createInMemoryGraphicsAssetCatalogue,
 } from '~~/server/modules/graphics-asset-library';
-
+import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { digestOf, sixteenPixelPng, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
 import { webpPixel } from '~~/test/helpers/graphicsImageFixtures';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import {
 	createPackageLibrary,
 	exportPackage,
@@ -33,11 +34,18 @@ import {
 /** Overrides catalogue methods so a failure the catalogue can genuinely produce is observable at the seam. */
 type CatalogueFault = Partial<GraphicsAssetCatalogue>;
 
+const harness = await createSqliteD1Harness();
+afterAll(async () => await harness.close());
+
 function createLibrary(
 	label: string,
-	options: { canonicalLimitBytes?: number; fault?: () => CatalogueFault } = {},
+	options: {
+		canonicalLimitBytes?: number;
+		fault?: () => CatalogueFault;
+		catalogue?: GraphicsAssetCatalogue;
+	} = {},
 ) {
-	const catalogue = createInMemoryGraphicsAssetCatalogue(options);
+	const catalogue = options.catalogue ?? createInMemoryGraphicsAssetCatalogue(options);
 	return {
 		...createPackageLibrary(label, {
 			catalogue: new Proxy(catalogue, {
@@ -508,9 +516,14 @@ describe('the Template Package installation contract', () => {
 	});
 
 	describe('atomicity', () => {
-		it('resumes an interrupted installation without publishing twice', async () => {
+		// Bytes an interrupted installation already wrote are not yet content the
+		// catalogue holds, so the retry reaches the proposal the author confirmed.
+		it.each([
+			{ proposal: 'a clean proposal', ingest: ingestImage },
+			{ proposal: 'a proposal its author confirmed', ingest: ingestStaticFont },
+		])('resumes an interrupted installation of $proposal without publishing twice', async ({ ingest }) => {
 			const { library: sender } = createLibrary('sender');
-			const backdrop = await ingestImage(sender, 'Backdrop');
+			const backdrop = await ingest(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
 					{ slot: 'backdrop', reference: backdrop },
@@ -518,7 +531,14 @@ describe('the Template Package installation contract', () => {
 			});
 
 			const { library: receiver, canonical } = createLibrary('receiver');
-			const resting = await preflight(receiver, archive);
+			let resting = await preflight(receiver, archive);
+			if (resting.stage === 'awaiting-confirmation') {
+				resting = await receiver.confirmTemplatePackagePreflight({
+					operationId: resting.id,
+					initiatedBy: resting.initiatedBy,
+					fingerprint: resting.templatePackagePreflight!.fingerprint,
+				});
+			}
 			// The canonical store fails while the installation is writing bytes,
 			// which is a transient condition rather than anything wrong with the
 			// package.
@@ -694,6 +714,79 @@ describe('the Template Package installation contract', () => {
 			expect(await activeAssets(receiver)).toHaveLength(1);
 			const template = await receiver.listGraphicAssets({});
 			expect(template).toHaveLength(1);
+		});
+
+		// One source revision has one Graphic Asset Origin. An installation that
+		// loses that race publishes nothing, and its retry reuses the winner's asset.
+		it.each([
+			{
+				adapter: 'the D1 catalogue',
+				catalogue: () => createD1GraphicsAssetCatalogue(harness.database),
+			},
+			{
+				adapter: 'the in-memory catalogue',
+				catalogue: () => createInMemoryGraphicsAssetCatalogue(),
+			},
+		])('lets only one of two operations publishing one package create its asset, over $adapter', async ({ catalogue }) => {
+			const { library: sender } = createLibrary('sender');
+			const backdrop = await ingestImage(sender, 'Backdrop');
+			const archive = await exportPackage(sender, {
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
+			});
+
+			// The first operation publishes after the second has derived its own
+			// proposal and just before the second's publication commits.
+			let publishFirst: (() => Promise<unknown>) | undefined;
+			const { library: receiver, catalogue: base } = createLibrary('receiver', {
+				catalogue: catalogue(),
+				fault: () => publishFirst
+					? {
+							installTemplatePackage: async (input) => {
+								const publish = publishFirst;
+								publishFirst = undefined;
+								await publish?.();
+								return await base.installTemplatePackage(input);
+							},
+						}
+					: {},
+			});
+			const first = await preflight(receiver, archive);
+			const second = await preflight(receiver, archive);
+			let winner: Awaited<ReturnType<Library['installTemplatePackage']>> | undefined;
+			publishFirst = async () => {
+				winner = await receiver.installTemplatePackage({
+					operationId: first.id,
+					initiatedBy: first.initiatedBy,
+				});
+			};
+
+			const lost = await receiver.installTemplatePackage({
+				operationId: second.id,
+				initiatedBy: second.initiatedBy,
+			});
+
+			expect(winner?.stage).toBe('completed');
+			expect(lost).toMatchObject({
+				stage: 'failed',
+				failure: { retryable: true },
+			});
+			expect(lost.templatePackageInstallation).toBeUndefined();
+			expect(await activeAssets(receiver)).toHaveLength(1);
+
+			const retried = await receiver.installTemplatePackage({
+				operationId: second.id,
+				initiatedBy: second.initiatedBy,
+			});
+			expect(retried.stage).toBe('completed');
+			expect(installationOf(retried).assets).toEqual([
+				expect.objectContaining({
+					outcome: 'reused',
+					assetId: installationOf(winner!).assets[0]!.assetId,
+				}),
+			]);
+			expect(await activeAssets(receiver)).toHaveLength(1);
 		});
 
 		it('refuses a proposal the author confirmed but that no longer describes the package', async () => {

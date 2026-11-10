@@ -662,6 +662,19 @@ export function createInMemoryGraphicsAssetCatalogue(
 					throw new Error('Template Package installation lost an exact-origin revision it reuses');
 				}
 			}
+			// One source revision has one Graphic Asset Origin, as the D1 unique
+			// index enforces: an origin another operation recorded since this
+			// one's preflight publishes nothing at all.
+			const recordedOrigins = new Set([
+				...origins.values(),
+			].map(origin =>
+				`${origin.sourceAssetId}\n${origin.sourceRevisionId}`));
+			for (const asset of input.created) {
+				const origin = `${asset.origin.sourceAssetId}\n${asset.origin.sourceRevisionId}`;
+				if (recordedOrigins.has(origin))
+					throw new Error('Template Package installation met a Graphic Asset Origin already recorded');
+				recordedOrigins.add(origin);
+			}
 
 			const publishedAt = input.publishedAt;
 			for (const asset of input.created) {
@@ -876,6 +889,9 @@ export function createInMemoryGraphicsAssetCatalogue(
 			return asset
 				? { assetId: asset.id, revisionId: revision![0], name: asset.name }
 				: undefined;
+		},
+		async isGraphicAssetContentReachable(digest) {
+			return canonicalContents.has(digest);
 		},
 		async recordGraphicAssetMultipartCleanupComplete(operationId, initiatedBy) {
 			const operation = operations.get(operationId);

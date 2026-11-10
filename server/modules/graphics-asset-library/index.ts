@@ -568,6 +568,13 @@ export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth, Gr
 		| (ReusableGraphicAsset & { name: string })
 		| undefined
 	>;
+	/**
+	 * Whether a revision or derivative reaches content with this digest, which
+	 * is when its bytes count against the Canonical Graphics Quota. An object
+	 * the canonical store merely holds, such as an unfinished operation's write
+	 * candidate or quarantined content, is not reachable.
+	 */
+	isGraphicAssetContentReachable: (digest: string) => Promise<boolean>;
 	updateIngestionOperation: (
 		operation: GraphicsIngestionOperation,
 		expectedUpdatedAt: string,
@@ -2573,7 +2580,6 @@ export function createGraphicsAssetLibrary(
 		sourceDigest: string;
 		readRange: (offset: number, length: number) => Promise<Uint8Array>;
 		catalogue: GraphicsAssetCatalogue;
-		canonical: GraphicsCanonicalObjectStore;
 	}): Promise<{
 		report: TemplatePackagePreflightReport;
 		derivatives: TemplatePackagePreflightState['derivatives'];
@@ -2589,7 +2595,7 @@ export function createGraphicsAssetLibrary(
 		 */
 		material: StagedTemplatePackageMaterial;
 	}> {
-		const { operation, readRange, catalogue, canonical } = input;
+		const { operation, readRange, catalogue } = input;
 		const checkedAt = timestamp();
 		const archiveByteLength = operation.declaredByteLength;
 		const issues: TemplatePackagePreflightIssue[] = [];
@@ -2974,16 +2980,20 @@ export function createGraphicsAssetLibrary(
 			const content = validated.get(asset.integrity.digest);
 			if (!content)
 				continue;
-			const [originCandidates, contentStored, sharedContent] = await Promise.all([
+			// Growth is judged by what the catalogue reaches, as publication's own
+			// reservation judges it, never by what the canonical store holds: bytes
+			// an interrupted installation of this package already wrote, or that
+			// nothing reaches, are not yet counted against the quota, so calling
+			// them stored would reserve nothing for them and would change the
+			// proposal a retry re-derives.
+			const [originCandidates, contentAlreadyStored, sharedContent] = await Promise.all([
 				catalogue.findTemplatePackageOriginCandidates({
 					sourceAssetId: asset.origin.sourceAssetId,
 					sourceRevisionId: asset.origin.sourceRevisionId,
 				}),
-				canonical.readMetadata(graphicsObjectIdentity(`sha256/${asset.integrity.digest}`)),
+				catalogue.isGraphicAssetContentReachable(asset.integrity.digest),
 				catalogue.findGraphicAssetByContentDigest(asset.integrity.digest),
 			]);
-			const contentAlreadyStored = contentStored.outcome === 'available'
-				&& contentStored.object.byteLength === content.facts.byteLength;
 			const proposal = templatePackageMappingProposal({
 				asset,
 				originMatch: originCandidates.exact,
@@ -3022,10 +3032,7 @@ export function createGraphicsAssetLibrary(
 				&& !countedDerivativeDigests.has(derivativeDigest)
 			) {
 				countedDerivativeDigests.add(derivativeDigest);
-				const stored = await canonical.readMetadata(
-					graphicsObjectIdentity(`sha256/${derivativeDigest}`),
-				);
-				if (stored.outcome !== 'available')
+				if (!await catalogue.isGraphicAssetContentReachable(derivativeDigest))
 					derivativeGrowthBytes += content.thumbnail.byteLength;
 			}
 		}
@@ -3450,7 +3457,6 @@ export function createGraphicsAssetLibrary(
 				sourceDigest,
 				readRange: readStagedRange,
 				catalogue,
-				canonical: requireCanonical(),
 			});
 			const derivativeTerminal = await terminalOperationAtCheckpoint();
 			if (derivativeTerminal)
@@ -4576,85 +4582,123 @@ export function createGraphicsAssetLibrary(
 				identity: graphicsObjectIdentity(`ingestion/${operation.id}/source`),
 				uploadId: claimedState.uploadId,
 			};
-			const uploaded = await staging.uploadPart({
-				upload,
-				partNumber: input.partNumber,
-				bytes: boundedByteStreamWithDeadline(
-					input.bytes,
-					GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS,
-				),
-			});
-			if (uploaded.outcome === 'unavailable') {
-				const failedState: GraphicsAssetMultipartState = {
-					...claimedState,
-					version: claimedState.version + 1,
-					parts: claimedState.parts.map(part =>
-						part.partNumber === input.partNumber
-							? { ...part, status: 'failed' as const }
-							: part),
-				};
-				await catalogueRequest(
-					() => catalogue.updateGraphicAssetMultipartState({
-						operationId: operation!.id,
-						initiatedBy: operation!.initiatedBy,
-						expectedVersion: claimedState!.version,
-						state: failedState,
-						updatedAt: timestampAfter(operation!.updatedAt),
-					}),
-					'Graphics multipart retry checkpoint could not be recorded',
-				);
+			// The claim is given back however the transfer ends short of a recorded
+			// part: a claim left `uploading` refuses every retry until its lease lapses.
+			// Sibling parts move the checkpoint meanwhile, so the write re-reads it and
+			// gives back only this request's own claim, never one that superseded it.
+			const ownClaim = claimedState.parts.find(part => part.partNumber === input.partNumber);
+			const releasePartClaim = async () => {
+				for (let releaseAttempt = 0; releaseAttempt < 8; releaseAttempt++) {
+					const latest = await catalogueRequest(
+						() => catalogue.getGraphicAssetMultipartState(operation!.id, operation!.initiatedBy),
+						'Graphics multipart checkpoint is temporarily unavailable',
+					);
+					const held = latest?.parts.find(part => part.partNumber === input.partNumber);
+					if (
+						!latest
+						|| held?.status !== 'uploading'
+						|| held.claimedAt !== ownClaim?.claimedAt
+						|| held.attempts !== ownClaim?.attempts
+					) {
+						return;
+					}
+					const released = await catalogueRequest(
+						() => catalogue.updateGraphicAssetMultipartState({
+							operationId: operation!.id,
+							initiatedBy: operation!.initiatedBy,
+							expectedVersion: latest.version,
+							state: {
+								...latest,
+								version: latest.version + 1,
+								parts: latest.parts.map(part =>
+									part.partNumber === input.partNumber
+										? { ...part, status: 'failed' as const }
+										: part),
+							},
+							updatedAt: timestampAfter(operation!.updatedAt),
+						}),
+						'Graphics multipart retry checkpoint could not be recorded',
+					);
+					if (released)
+						return;
+				}
+			};
+			let claimHeld = true;
+			try {
+				const uploaded = await staging.uploadPart({
+					upload,
+					partNumber: input.partNumber,
+					bytes: boundedByteStreamWithDeadline(
+						input.bytes,
+						GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS,
+					),
+				});
+				if (uploaded.outcome === 'unavailable') {
+					throw new GraphicsAssetLibraryError(
+						`Multipart part ${input.partNumber} is temporarily unavailable`,
+						'graphics-asset-library-unavailable',
+					);
+				}
+
+				for (let recordAttempt = 0; recordAttempt < 8; recordAttempt++) {
+					const latest = await catalogueRequest(
+						() => catalogue.getGraphicAssetMultipartState(operation!.id, operation!.initiatedBy),
+						'Graphics multipart checkpoint is temporarily unavailable',
+					);
+					if (!latest)
+						break;
+					const existing = latest.parts.find(part => part.partNumber === input.partNumber);
+					if (existing?.status === 'completed') {
+						claimHeld = false;
+						return await this.getIngestionOperation(input);
+					}
+					const completed: GraphicsAssetMultipartState = {
+						...latest,
+						version: latest.version + 1,
+						parts: [
+							...latest.parts.filter(part => part.partNumber !== input.partNumber),
+							{
+								partNumber: input.partNumber,
+								partIdentity: graphicsIngestionPartIdentity(operation.id, input.partNumber),
+								objectStorePartIdentity: uploaded.part.partIdentity,
+								byteLength: uploaded.part.byteLength,
+								status: 'completed',
+								claimedAt: existing?.claimedAt ?? timestamp(),
+								attempts: existing?.attempts ?? 1,
+							},
+						],
+					};
+					const recorded = await catalogueRequest(
+						() => catalogue.updateGraphicAssetMultipartState({
+							operationId: operation!.id,
+							initiatedBy: operation!.initiatedBy,
+							expectedVersion: latest.version,
+							state: completed,
+							updatedAt: timestampAfter(operation!.updatedAt),
+						}),
+						'Graphics multipart completed part could not be recorded',
+					);
+					if (recorded) {
+						claimHeld = false;
+						return await this.getIngestionOperation(input);
+					}
+					operation = await this.getIngestionOperation(input);
+					if (operation.stage === 'completed' || operation.stage === 'cancelled') {
+						claimHeld = false;
+						return operation;
+					}
+				}
 				throw new GraphicsAssetLibraryError(
-					`Multipart part ${input.partNumber} is temporarily unavailable`,
+					'Graphics multipart completed part could not be checkpointed',
 					'graphics-asset-library-unavailable',
 				);
 			}
-
-			for (let recordAttempt = 0; recordAttempt < 8; recordAttempt++) {
-				const latest = await catalogueRequest(
-					() => catalogue.getGraphicAssetMultipartState(operation!.id, operation!.initiatedBy),
-					'Graphics multipart checkpoint is temporarily unavailable',
-				);
-				if (!latest)
-					break;
-				const existing = latest.parts.find(part => part.partNumber === input.partNumber);
-				if (existing?.status === 'completed')
-					return await this.getIngestionOperation(input);
-				const completed: GraphicsAssetMultipartState = {
-					...latest,
-					version: latest.version + 1,
-					parts: [
-						...latest.parts.filter(part => part.partNumber !== input.partNumber),
-						{
-							partNumber: input.partNumber,
-							partIdentity: graphicsIngestionPartIdentity(operation.id, input.partNumber),
-							objectStorePartIdentity: uploaded.part.partIdentity,
-							byteLength: uploaded.part.byteLength,
-							status: 'completed',
-							claimedAt: existing?.claimedAt ?? timestamp(),
-							attempts: existing?.attempts ?? 1,
-						},
-					],
-				};
-				const recorded = await catalogueRequest(
-					() => catalogue.updateGraphicAssetMultipartState({
-						operationId: operation!.id,
-						initiatedBy: operation!.initiatedBy,
-						expectedVersion: latest.version,
-						state: completed,
-						updatedAt: timestampAfter(operation!.updatedAt),
-					}),
-					'Graphics multipart completed part could not be recorded',
-				);
-				if (recorded)
-					return await this.getIngestionOperation(input);
-				operation = await this.getIngestionOperation(input);
-				if (operation.stage === 'completed' || operation.stage === 'cancelled')
-					return operation;
+			finally {
+				// A release the catalogue refuses must not hide why the part failed;
+				// the claim then lapses with its lease, as before.
+				if (claimHeld)
+					await releasePartClaim().catch(() => undefined);
 			}
-			throw new GraphicsAssetLibraryError(
-				'Graphics multipart completed part could not be checkpointed',
-				'graphics-asset-library-unavailable',
-			);
 		},
 		async completeGraphicAssetMultipartUpload(input) {
 			const catalogue = requireCatalogue();
@@ -4741,7 +4785,19 @@ export function createGraphicsAssetLibrary(
 				throw new GraphicsAssetLibraryError('Graphics Ingestion Operation not found', 'ingestion-operation-not-found');
 			if (operation.stage === 'completed' || operation.stage === 'cancelled')
 				return operation;
-			if (operation.stage !== 'created') {
+			// A transfer that staged nothing left no bytes a retry could resume
+			// from, so sending them again is its only way on. Once bytes are held
+			// the operation is continued by a retry, never by a second transfer.
+			const uploadable = operation.stage === 'created'
+				|| (
+					operation.transferredByteLength === 0
+					&& !operation.transfer
+					&& (
+						operation.stage === 'transferring'
+						|| (operation.stage === 'failed' && operation.failure?.retryable !== false)
+					)
+				);
+			if (!uploadable) {
 				throw new GraphicsAssetLibraryError(
 					`Graphics Ingestion Operation cannot upload from stage ${operation.stage}`,
 					'ingestion-operation-not-uploadable',
