@@ -77,6 +77,21 @@ describe('storeReloaders', () => {
 		expect(stores.match.loadMatchesByEventId).not.toHaveBeenCalled();
 	});
 
+	// A Match re-read that did not land leaves Matches behind, in either scope (ADR-0028).
+	it.each([
+		{ scope: 'a Round\'s', loadedRoundId: 3, load: 'loadMatchesByRoundId' },
+		{ scope: 'the Event\'s', loadedRoundId: null, load: 'loadMatchesByEventId' },
+	])('reports a re-read of $scope Matches that did not land', async ({ loadedRoundId, load }) => {
+		stores.match.loadedRoundId = loadedRoundId;
+		const reload = storeReloaders();
+
+		await expect(reload.matches()).resolves.not.toBe(false);
+
+		(stores.match[load] as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+
+		await expect(reload.matches()).resolves.toBe(false);
+	});
+
 	it('re-reads the selected Screen\'s Card without deselecting the Screen', async () => {
 		await storeReloaders().card();
 

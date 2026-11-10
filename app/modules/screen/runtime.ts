@@ -118,7 +118,9 @@ function applyOwnedFields(screen: Screen, fields: OwnedFields): Screen {
  */
 export function useScreenRuntime(state: ScreenRuntimeState) {
 	const screenRepo = useScreenRepository();
-	const presenceUnsubscribers = new Map<number, () => void>();
+	// One watch per Screen, held until the last surface that asked for it lets go:
+	// an incoming page's setup runs before the outgoing page unmounts (#1026).
+	const presenceWatches = new Map<number, { stop: () => void; holders: number }>();
 	interface Deferred<T> {
 		resolve: (value: T) => void;
 		reject: (reason?: unknown) => void;
@@ -702,8 +704,13 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 
 	function subscribeToScreenPresence(screenId: number) {
-		if (!state.currentEventId.value || presenceUnsubscribers.has(screenId))
+		if (!state.currentEventId.value)
 			return;
+		const held = presenceWatches.get(screenId);
+		if (held) {
+			held.holders += 1;
+			return;
+		}
 
 		try {
 			const realtime = useRealtime();
@@ -720,7 +727,7 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 				},
 			);
 
-			presenceUnsubscribers.set(screenId, unsubscribe);
+			presenceWatches.set(screenId, { stop: unsubscribe, holders: 1 });
 		}
 		catch (err) {
 			console.warn(`Failed to subscribe to screen presence for screen ${screenId}:`, err);
@@ -728,21 +735,24 @@ export function useScreenRuntime(state: ScreenRuntimeState) {
 	}
 
 	function unsubscribeFromScreenPresence(screenId: number) {
-		const unsubscribe = presenceUnsubscribers.get(screenId);
-		if (unsubscribe) {
-			unsubscribe();
-			presenceUnsubscribers.delete(screenId);
-			const newMap = new Map(state.screenPresence.value);
-			newMap.delete(screenId);
-			state.screenPresence.value = newMap;
-		}
+		const held = presenceWatches.get(screenId);
+		if (!held)
+			return;
+		held.holders -= 1;
+		if (held.holders > 0)
+			return;
+		held.stop();
+		presenceWatches.delete(screenId);
+		const newMap = new Map(state.screenPresence.value);
+		newMap.delete(screenId);
+		state.screenPresence.value = newMap;
 	}
 
+	// The Event scope is ending, so every watch stops whoever still holds it.
 	function unsubscribeFromAllPresence() {
-		for (const screenId of [
-			...presenceUnsubscribers.keys(),
-		])
-			unsubscribeFromScreenPresence(screenId);
+		for (const held of presenceWatches.values())
+			held.stop();
+		presenceWatches.clear();
 	}
 
 	async function sendScreenCommand(screenId: number, command: ScreenCommand): Promise<void> {

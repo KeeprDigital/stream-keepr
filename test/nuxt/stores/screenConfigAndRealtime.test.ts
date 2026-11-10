@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope } from 'vue';
 import { STATE_CONFLICT_CODE } from '~~/shared/utils/stateConflict';
 import { createMockScreen } from '~~/test/helpers/fixtures';
+import { lastCallTo } from '~~/test/helpers/lastCallTo';
 import { createMockRealtime } from '~~/test/helpers/realtime-mock';
 import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
 
@@ -439,6 +440,30 @@ describe('useScreenStore config and realtime', () => {
 			store.$reset();
 
 			expect(store.getConnectedCount(1)).toBe(0);
+		});
+
+		// An incoming page's setup runs before the outgoing page unmounts, so two
+		// surfaces hold one Screen's watch for a moment: it ends with the last holder.
+		it('keeps a Screen\'s presence watched until every surface that asked for it has let go', () => {
+			const stopWatching = vi.fn();
+			mockAbly.watchPresence.mockReturnValueOnce(stopWatching);
+			store.currentEventId = 1;
+
+			store.subscribeToScreenPresence(10);
+			store.subscribeToScreenPresence(10);
+			const report = lastCallTo(mockAbly.watchPresence, 'screen:1:10')[1] as (members: unknown[]) => void;
+			report([
+				{ clientId: 'output-a' },
+			]);
+			store.unsubscribeFromScreenPresence(10);
+
+			expect(stopWatching).not.toHaveBeenCalled();
+			expect(store.getConnectedCount(10)).toBe(1);
+
+			store.unsubscribeFromScreenPresence(10);
+
+			expect(stopWatching).toHaveBeenCalledOnce();
+			expect(store.getConnectedCount(10)).toBe(0);
 		});
 
 		it('sends a Screen command through the server endpoint', async () => {

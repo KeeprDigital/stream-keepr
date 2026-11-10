@@ -82,6 +82,14 @@ const ThemeTokensSettingsStub = defineComponent({
 	template: '<div data-settings-card="Screen-wide look" />',
 });
 
+/** The empty state's title, so a test can tell "not found" from the Screen's own cards. */
+const EmptyStateStub = defineComponent({
+	props: {
+		title: { type: String, default: '' },
+	},
+	template: '<div data-empty-state>{{ title }}</div>',
+});
+
 const CardStub = defineComponent({
 	template: '<div><slot /></div>',
 });
@@ -244,9 +252,11 @@ describe('screen config page — screenId route changes', () => {
 		expect(mockScreenStore.unsubscribeFromScreenPresence).toHaveBeenCalledWith(1);
 		expect(mockScreenStore.getScreenById).toHaveBeenCalledWith(1, 2);
 
+		// Screen 2 never loaded, so the page holds no watch on it to let go: the
+		// watch is counted, and letting go of another surface's would end it.
 		route.params.screenId = '3';
 		await nextTick();
-		expect(mockScreenStore.unsubscribeFromScreenPresence).toHaveBeenCalledWith(2);
+		expect(mockScreenStore.unsubscribeFromScreenPresence).not.toHaveBeenCalledWith(2);
 		expect(mockScreenStore.getScreenById).toHaveBeenCalledWith(1, 3);
 
 		// The intermediate (screenId=2) load resolves late, after screenId has already
@@ -263,6 +273,25 @@ describe('screen config page — screenId route changes', () => {
 
 		expect(mockScreenStore.subscribeToScreenPresence).toHaveBeenCalledWith(3);
 		expect(wrapper.text()).toContain('Screen 3');
+	});
+
+	// A Screen deleted elsewhere leaves the store's list, and the page stops
+	// offering its settings rather than editing what no longer exists.
+	it('shows the Screen as not found once it is deleted from under the page', async () => {
+		mockScreenStore.screens = [
+			makeScreen(1),
+		];
+		wrapper = await mountPage({ UIEmptyState: EmptyStateStub });
+		await flushPromises();
+		resolveLoad(1, makeScreen(1));
+		await flushPromises();
+		expect(wrapper.text()).toContain('Screen 1');
+
+		mockScreenStore.screens = [];
+		await nextTick();
+
+		expect(wrapper.get('[data-empty-state]').text()).toBe('Screen not found');
+		expect(wrapper.text()).not.toContain('Screen 1');
 	});
 });
 

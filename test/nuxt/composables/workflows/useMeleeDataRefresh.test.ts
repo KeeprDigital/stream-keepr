@@ -93,6 +93,36 @@ describe('useMeleeDataRefresh', () => {
 		});
 	});
 
+	// A reset keeps a manual Round (ADR-0040), and its operator keeps that Round's Matches.
+	it.each([
+		{
+			kept: 'keeps the Matches of a Round the reset kept',
+			roundsLeft: [8],
+			byRound: true,
+		},
+		{
+			kept: 'widens the Match scope to the Event when the reset removed the loaded Round',
+			roundsLeft: [9],
+			byRound: false,
+		},
+	])('$kept', async ({ roundsLeft, byRound }) => {
+		mockMatchStore.loadedRoundId = 8;
+		roundsAfterReload(roundsLeft);
+
+		await useMeleeDataRefresh().refreshAfterMeleeReset(1);
+
+		expect(mockMatchStore.loadMatchesByRoundId.mock.calls).toEqual(byRound
+			? [
+					[1, 8],
+				]
+			: []);
+		expect(mockMatchStore.loadMatchesByEventId.mock.calls).toEqual(byRound
+			? []
+			: [
+					[1],
+				]);
+	});
+
 	it('reloads every Melee projection and invalidates derived caches after a destructive reset', async () => {
 		await useMeleeDataRefresh().refreshAfterMeleeReset(1);
 

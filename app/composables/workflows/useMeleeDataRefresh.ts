@@ -14,20 +14,18 @@ export function useMeleeDataRefresh() {
 	const featureMatchStore = useFeatureMatchStore();
 	const metagameStore = useMetagameStore();
 
+	/**
+	 * Re-read the Matches held, in the scope they are held in. Answers what the
+	 * load answered, `null` when it did not land, and nothing when none are held.
+	 */
 	async function refreshCurrentMatchScope(eventId: number) {
 		if (!matchStore.isLoaded)
 			return;
 
-		if (matchStore.loadedRoundId != null) {
-			if (!roundStore.rounds.some(round => round.id === matchStore.loadedRoundId)) {
-				await matchStore.loadMatchesByEventId(eventId);
-				return;
-			}
-			await matchStore.loadMatchesByRoundId(eventId, matchStore.loadedRoundId);
-			return;
-		}
+		if (matchStore.loadedRoundId != null && roundStore.rounds.some(round => round.id === matchStore.loadedRoundId))
+			return await matchStore.loadMatchesByRoundId(eventId, matchStore.loadedRoundId);
 
-		await matchStore.loadMatchesByEventId(eventId);
+		return await matchStore.loadMatchesByEventId(eventId);
 	}
 
 	async function refreshMeleeStructureData(eventId: number) {
@@ -50,8 +48,9 @@ export function useMeleeDataRefresh() {
 
 		await Promise.all([
 			phaseStore.loadPhasesByEventId(eventId),
-			roundStore.loadRoundsByEventId(eventId),
-			matchStore.loadMatchesByEventId(eventId),
+			// Rounds first: the Match scope to re-read depends on which Rounds the
+			// reset kept, and a kept manual Round keeps its Matches (ADR-0040).
+			roundStore.loadRoundsByEventId(eventId).then(async () => await refreshCurrentMatchScope(eventId)),
 			playerStore.loadPlayersByEventId(eventId),
 			playerDeckStore.loadByEventId(eventId),
 			featureMatchStore.loadFeatureMatchesByEventId(eventId),

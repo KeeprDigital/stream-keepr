@@ -106,7 +106,7 @@ The import-owned identity and lifecycle facts on a synced record: its external i
 _Avoid_: external fields, sync metadata.
 
 **Manually Edited Field**:
-A Melee-imported Player field, name or pronouns, that an operator has changed by hand, on the Players page or in a Feature Match Slot's setup. Melee Sync stops writing that field for that Player, blank or not, and keeps importing the rest. Writing the value a field already holds, as a whole-form save does, is not an edit (ADR-0046).
+A Melee-imported Player field, name or pronouns, that an operator has changed by hand, on the Players page or in a Feature Match Slot's setup. Melee Sync stops writing that field for that Player, blank or not, and keeps importing the rest. Writing the value a field already holds is not an edit (ADR-0046).
 _Avoid_: override, local override.
 
 **Talent**:
