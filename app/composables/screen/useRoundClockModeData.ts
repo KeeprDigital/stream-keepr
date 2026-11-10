@@ -14,7 +14,7 @@ const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
  * update. The Current Round can move with any Round, Phase, Match or Melee
  * pairing, so following it re-reads on each. Melee's wholesale syncs re-read either way.
  */
-function roundClockDependencies(roundId: () => number | undefined): ScreenModeDependencies<ScreenOutputRoundClockResponse> {
+export function roundClockDependencies(roundId: () => number | undefined): ScreenModeDependencies<ScreenOutputRoundClockResponse> {
 	const follows = (id: number, held: ScreenOutputRoundClockResponse) => roundId() == null || id === roundId() || id === held.round?.id;
 	const followsCurrent = () => roundId() == null;
 

@@ -13,7 +13,7 @@ type HeldPairings = ScreenOutputPairingsResponse | null;
  * re-read; a Round's synced Match Results or pairings re-read only for this
  * Round.
  */
-function pairingsDependencies(roundId: () => number | undefined): ScreenModeDependencies<HeldPairings> {
+export function pairingsDependencies(roundId: () => number | undefined): ScreenModeDependencies<HeldPairings> {
 	const isRound = (id: number) => id === roundId();
 	const holdsMatch = (held: HeldPairings, matchId: number) => held?.matches.some(row => row.matchId === matchId) ?? false;
 	const holdsPlayer = (held: HeldPairings, playerId: number) =>

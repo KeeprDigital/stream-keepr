@@ -3,9 +3,19 @@ import type { ThemeTokenType } from './modules/theme/tokens';
 import type { AnyDeclaredModeTokenDefinition } from './modules/theme/vocabulary';
 import type { ManualBracket } from './modules/top-cut-bracket/manual';
 import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeConfigs/contract';
-import type { DeckSource } from './screenModeConfigs/deck';
+import type { DeckModeConfig, DeckSource } from './screenModeConfigs/deck';
+import type { FeatureMatchModeConfig } from './screenModeConfigs/featureMatch';
+import type { FeatureMatchOverlayModeConfig } from './screenModeConfigs/featureMatchOverlay';
+import type { HeadToHeadModeConfig } from './screenModeConfigs/headToHead';
+import type { PairingsModeConfig } from './screenModeConfigs/pairings';
+import type { PlayerHistoryModeConfig } from './screenModeConfigs/playerHistory';
+import type { RoundClockModeConfig } from './screenModeConfigs/roundClock';
+import type { StandingsModeConfig } from './screenModeConfigs/standings';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
-import type { DisplayType, Game, ScreenMode } from './types/enums';
+import type { TalentModeConfig } from './screenModeConfigs/talent';
+import type { TopCutModeConfig } from './screenModeConfigs/topCut';
+import type { OutputFollowNarrowing, ScreenModeOutputFollows } from './screenOutputInterest';
+import type { DisplayType, Game, MetagameScope, ScreenMode } from './types/enums';
 import { SCREEN_MODE_CARD_GAMES } from './config/games';
 import { archetypeSpotlightModeConfigContract } from './screenModeConfigs/archetypeSpotlight';
 import { backgroundModeConfigContract } from './screenModeConfigs/background';
@@ -20,7 +30,8 @@ import { pairingsModeConfigContract } from './screenModeConfigs/pairings';
 import { playerHistoryModeConfigContract } from './screenModeConfigs/playerHistory';
 import { roundClockModeConfigContract } from './screenModeConfigs/roundClock';
 import { standingsModeConfigContract } from './screenModeConfigs/standings';
-import { talentModeConfigContract } from './screenModeConfigs/talent';
+import { isColumnVisible } from './screenModeConfigs/subShapes';
+import { talentModeConfigContract, talentScreenTalentIds } from './screenModeConfigs/talent';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
 import { topCutModeConfigContract } from './screenModeConfigs/topCut';
 import { archetypeSpotlightModeTokens } from './screenModeTokens/archetypeSpotlight';
@@ -125,6 +136,21 @@ export interface ScreenModeDefinition {
 	 */
 	eventReferences: ScreenModeEventReferences;
 	/**
+	 * What the mode's Screen Output follows: each kind of Output Change its
+	 * rendering shows, and how the Screen's config narrows it to the Round,
+	 * Player, Feature Match Slot or other id it names. `{}` declares none.
+	 * Every mode declares it, so a new mode cannot skip the question. Every
+	 * Screen follows its own Screen, its Event and its Theme without declaring
+	 * them.
+	 *
+	 * Declared here and nowhere else. `screenHears` answers which Screens
+	 * re-read on a change from it alone, and each narrowing must read the
+	 * mode's own config, or the definitions fail to compile. It may be broader
+	 * than the rendering needs, never narrower: a change heard needlessly costs
+	 * one re-read, and one missed leaves stale data on air.
+	 */
+	outputFollows: ScreenModeOutputFollows;
+	/**
 	 * The mode is paginated: its pages show in turn as a Page Rotation
 	 * (ADR-0009), and this names the config field holding how many rows a page
 	 * holds. A mode that is not paginated leaves it out.
@@ -152,6 +178,73 @@ export interface ScreenModeDefinition {
 	modeTokens?: Readonly<Record<string, AnyDeclaredModeTokenDefinition>>;
 }
 
+/** A Feature Match Slot a config names, or nothing while it names none. */
+function namedSlot(slotId: number | null | undefined): OutputFollowNarrowing | false {
+	return slotId != null && {
+		slotIds: [slotId],
+	};
+}
+
+/** The Player a Deck Source selects, whose record and decks a Deck List Screen reads. */
+function deckSourcePlayer({ deckSource }: DeckModeConfig): OutputFollowNarrowing | false {
+	return deckSource.type === 'player' && deckSource.playerId !== null && {
+		playerIds: [deckSource.playerId],
+	};
+}
+
+/** The Feature Match Slot whose side a Deck Source shows; its Session decides who sits there (ADR-0058). */
+function deckSourceSlot({ deckSource }: DeckModeConfig): OutputFollowNarrowing | false {
+	return deckSource.type === 'featureMatchSlot' && namedSlot(deckSource.slotId);
+}
+
+/**
+ * What a Metagame read is derived from, for every mode reading one: every
+ * Player in scope, their Deck Lists, the Archetypes, the Round Standings its
+ * numbers count, and the Player List scoping it, only while the scope names
+ * one.
+ */
+const METAGAME_OUTPUT_FOLLOWS = {
+	player: true,
+	playerDeck: true,
+	archetype: true,
+	roundStandings: true,
+	playerList: ({ scope, playerListId }: { scope: MetagameScope; playerListId?: number }) =>
+		scope === 'playerList' && playerListId != null && {
+			playerListIds: [playerListId],
+		},
+} as const satisfies ScreenModeOutputFollows;
+
+const followsTopCutPhase = (config: TopCutModeConfig) => config.bracketSource === 'phase';
+const showsTopCutArchetypes = (config: TopCutModeConfig) => config.showArchetypes;
+
+/** Whether a Player History names its Player; until then it reads nothing. */
+const selectsPlayerHistory = (config: PlayerHistoryModeConfig) => config.playerId != null;
+
+/** Whether a Pairings Screen names its Round; until then it reads nothing. */
+const selectsPairings = (config: PairingsModeConfig) => config.roundId != null;
+
+/** Whether a Head-to-Head names its Slot or a Player; until then it reads nothing. */
+function selectsHeadToHead(config: HeadToHeadModeConfig): boolean {
+	return config.playerSource === 'featureMatchSlot'
+		? config.featureMatchId != null
+		: config.player1Id != null || config.player2Id != null;
+}
+
+const headToHeadSlot = (config: HeadToHeadModeConfig) => config.playerSource === 'featureMatchSlot' && namedSlot(config.featureMatchId);
+
+/** Whether a Round Clock follows the Current Round, which any Round, Phase or Match may move. */
+const followsCurrentRound = (config: RoundClockModeConfig) => config.roundId == null;
+
+/** Whether a Feature Match Overlay names its Slot; until then it reads nothing. */
+const selectsOverlaySlot = (config: FeatureMatchOverlayModeConfig) => config.featureMatchId != null;
+
+/** The Players the Overlay's Slot seats, whose sideboards a Deck List Graphic Item shows. */
+function overlaySeatedPlayers(config: FeatureMatchOverlayModeConfig): OutputFollowNarrowing | false {
+	return config.featureMatchId != null && {
+		playerIds: { seatedIn: config.featureMatchId },
+	};
+}
+
 /**
  * Single source of truth for all screen modes and their display characteristics.
  * Each mode declares its own display type, label, and icon, and what it carries.
@@ -169,6 +262,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES.background,
 		config: backgroundModeConfigContract,
 		eventReferences: {},
+		outputFollows: {},
 	},
 	'card': {
 		label: 'Card Spotlight',
@@ -179,6 +273,8 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: cardModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		// Its Card arrives on the Card's own messages; `featureMatchId` only helps its operator pick one.
+		outputFollows: { screenCard: true },
 		modeTokens: cardModeTokens,
 	},
 	'deck': {
@@ -190,6 +286,18 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: deckModeConfigContract,
 		eventReferences: { deckSource: 'deckSource' },
+		outputFollows: {
+			player: deckSourcePlayer,
+			playerDeck: deckSourcePlayer,
+			// Over-approximation: only the shown deck's own Archetype matters, and only the rendering holds which that is.
+			archetype: (config: DeckModeConfig) => deckSourcePlayer(config) !== false,
+			broadcastDeckList: ({ deckSource }: DeckModeConfig) =>
+				deckSource.type === 'broadcast' && {
+					broadcastDeckListIds: [deckSource.broadcastDeckListId],
+				},
+			featureMatchSlot: deckSourceSlot,
+			featureMatchSession: deckSourceSlot,
+		},
 		modeTokens: deckModeTokens,
 	},
 	'standings': {
@@ -201,6 +309,25 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: standingsModeConfigContract,
 		eventReferences: { roundId: 'round', playerListId: 'playerList' },
+		outputFollows: {
+			player: true,
+			roundStandings: true,
+			// The Round it is fixed at; while Position Change shows, any Round or
+			// Phase, since either may reorder the Event's Rounds. Fixed at no
+			// Round it names none, and still hears a sync of them all, as today.
+			round: (config: StandingsModeConfig) =>
+				isColumnVisible(config.columns, 'positionChange')
+				|| {
+					roundIds: config.roundId == null
+						? []
+						: [config.roundId],
+				},
+			phase: (config: StandingsModeConfig) => isColumnVisible(config.columns, 'positionChange'),
+			playerList: (config: StandingsModeConfig) =>
+				config.viewMode === 'watchlist' && config.playerListId != null && {
+					playerListIds: [config.playerListId],
+				},
+		},
 		pageRotation: { pageSize: 'rowsPerPage' },
 		modeTokens: standingsModeTokens,
 	},
@@ -213,6 +340,25 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: topCutModeConfigContract,
 		eventReferences: { phaseId: 'phase', manualBracket: 'manualBracket' },
+		outputFollows: {
+			// A Manual Bracket names its Players. Over-approximation: a Phase's
+			// bracket seats whoever its Matches do, which only its read knows,
+			// and a One Piece Card Game Event shows its Manual Bracket whatever
+			// `bracketSource` says (ADR-0075), so that source hears every Player.
+			player: (config: TopCutModeConfig) => config.bracketSource !== 'manual' || {
+				playerIds: config.manualBracket.entrants.flatMap(entrant => entrant && 'playerId' in entrant
+					? [entrant.playerId]
+					: []),
+			},
+			playerDeck: showsTopCutArchetypes,
+			archetype: showsTopCutArchetypes,
+			// Over-approximation: which Rounds and Matches are the Phase's, and
+			// which Round Standings seed it, only its read knows.
+			phase: followsTopCutPhase,
+			round: followsTopCutPhase,
+			match: followsTopCutPhase,
+			roundStandings: followsTopCutPhase,
+		},
 		modeTokens: topCutModeTokens,
 	},
 	'feature-match': {
@@ -223,6 +369,10 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES['feature-match'],
 		config: featureMatchModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		outputFollows: {
+			featureMatchSlot: (config: FeatureMatchModeConfig) => namedSlot(config.featureMatchId),
+			featureMatchSession: (config: FeatureMatchModeConfig) => namedSlot(config.featureMatchId),
+		},
 	},
 	'feature-match-overlay': {
 		label: 'Feature Match Overlay',
@@ -233,6 +383,18 @@ const SCREEN_MODE_DEFINITIONS = {
 		graphicsHost: true,
 		config: featureMatchOverlayModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		outputFollows: {
+			featureMatchSlot: (config: FeatureMatchOverlayModeConfig) => namedSlot(config.featureMatchId),
+			featureMatchSession: (config: FeatureMatchOverlayModeConfig) => namedSlot(config.featureMatchId),
+			// Over-approximation: it shows the one Match its Slot follows, and
+			// that Match's Round and Phase, which the Slot names and the config does not.
+			match: selectsOverlaySlot,
+			round: selectsOverlaySlot,
+			phase: selectsOverlaySlot,
+			// Over-approximation: followed whether or not the layout holds a Deck List Graphic Item.
+			player: overlaySeatedPlayers,
+			playerDeck: overlaySeatedPlayers,
+		},
 		modeTokens: featureMatchOverlayModeTokens,
 	},
 	'broadcast-graphics': {
@@ -245,6 +407,8 @@ const SCREEN_MODE_DEFINITIONS = {
 		themePreview: true,
 		config: broadcastGraphicsModeConfigContract,
 		eventReferences: {},
+		// Its Graphic Input Bindings are resolved into its Live Session, which is all it reads.
+		outputFollows: { broadcastGraphicsLiveSession: true },
 	},
 	'metagame': {
 		label: 'Metagame',
@@ -255,6 +419,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: metagameModeConfigContract,
 		eventReferences: { playerListId: 'playerList' },
+		outputFollows: METAGAME_OUTPUT_FOLLOWS,
 		pageRotation: { pageSize: 'pageSize' },
 		modeTokens: metagameModeTokens,
 	},
@@ -267,6 +432,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: topCardsModeConfigContract,
 		eventReferences: { playerListId: 'playerList' },
+		outputFollows: METAGAME_OUTPUT_FOLLOWS,
 		pageRotation: { pageSize: 'cardsPerPage' },
 		modeTokens: topCardsModeTokens,
 	},
@@ -279,6 +445,16 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: playerHistoryModeConfigContract,
 		eventReferences: { playerId: 'player' },
+		// Over-approximation throughout: its rows hold opponents, Matches since
+		// re-seated, their Rounds and the opponents' Archetypes, which only its read knows.
+		outputFollows: {
+			player: selectsPlayerHistory,
+			playerDeck: selectsPlayerHistory,
+			match: selectsPlayerHistory,
+			round: selectsPlayerHistory,
+			phase: selectsPlayerHistory,
+			archetype: selectsPlayerHistory,
+		},
 		pageRotation: { pageSize: 'rowsPerPage' },
 		modeTokens: playerHistoryModeTokens,
 	},
@@ -291,6 +467,15 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: pairingsModeConfigContract,
 		eventReferences: { roundId: 'round' },
+		outputFollows: {
+			round: (config: PairingsModeConfig) => config.roundId != null && {
+				roundIds: [config.roundId],
+			},
+			// Over-approximation: a Match moved out of its Round names only the
+			// Round it joined, and which Players its Matches seat only its read knows.
+			match: selectsPairings,
+			player: selectsPairings,
+		},
 		pageRotation: { pageSize: 'rowsPerPage' },
 		modeTokens: pairingsModeTokens,
 	},
@@ -303,6 +488,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: archetypeSpotlightModeConfigContract,
 		eventReferences: { archetypeId: 'archetype', playerListId: 'playerList' },
+		outputFollows: METAGAME_OUTPUT_FOLLOWS,
 		pageRotation: { pageSize: 'rowsPerPage' },
 		modeTokens: archetypeSpotlightModeTokens,
 	},
@@ -315,6 +501,26 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: headToHeadModeConfigContract,
 		eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' },
+		outputFollows: {
+			featureMatchSlot: headToHeadSlot,
+			featureMatchSession: headToHeadSlot,
+			// The two Players it picks, or the two its Slot seats.
+			player: (config: HeadToHeadModeConfig) => config.playerSource === 'featureMatchSlot'
+				? config.featureMatchId != null && {
+					playerIds: { seatedIn: config.featureMatchId },
+				}
+				: {
+						playerIds: [config.player1Id, config.player2Id].filter(id => id != null),
+					},
+			// Over-approximation: the earlier Matches between its Players, their
+			// Rounds and Phases, and the Players' Archetypes, only its read knows.
+			match: selectsHeadToHead,
+			round: selectsHeadToHead,
+			phase: selectsHeadToHead,
+			archetype: selectsHeadToHead,
+			playerDeck: selectsHeadToHead,
+			roundStandings: selectsHeadToHead,
+		},
 		modeTokens: headToHeadModeTokens,
 	},
 	'round-clock': {
@@ -326,6 +532,13 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: roundClockModeConfigContract,
 		eventReferences: { roundId: 'round' },
+		outputFollows: {
+			round: (config: RoundClockModeConfig) => config.roundId == null || {
+				roundIds: [config.roundId],
+			},
+			match: followsCurrentRound,
+			phase: followsCurrentRound,
+		},
 		modeTokens: roundClockModeTokens,
 	},
 	// Talent needs no results or Deck Lists, so ADR-0057 leaves it to every Card Game.
@@ -338,6 +551,12 @@ const SCREEN_MODE_DEFINITIONS = {
 		backgroundLayers: true,
 		config: talentModeConfigContract,
 		eventReferences: { talentId: 'talent', talentIds: 'talentLineup' },
+		outputFollows: {
+			talent: (config: TalentModeConfig) => {
+				const talentIds = talentScreenTalentIds(config);
+				return talentIds.length > 0 && { talentIds };
+			},
+		},
 		modeTokens: talentModeTokens,
 	},
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
@@ -384,6 +603,18 @@ type MisdeclaredEventReference = {
  * Exported only so the check is not an unused binding.
  */
 export const EVENT_REFERENCES_FIT_THEIR_CONFIG: [MisdeclaredEventReference] extends [never] ? true : MisdeclaredEventReference = true;
+
+/** Each mode whose `outputFollows` reads a config that is not its own. */
+type MisdeclaredOutputFollows = {
+	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M]['outputFollows'] extends ScreenModeOutputFollows<ConfigOfMode<M>> ? never : M;
+}[ScreenMode];
+
+/**
+ * Fails to compile when a mode's `outputFollows` narrows by another mode's
+ * config; the error's `MisdeclaredOutputFollows` resolves to each offending mode.
+ * Exported only so the check is not an unused binding.
+ */
+export const OUTPUT_FOLLOWS_FIT_THEIR_CONFIG: [MisdeclaredOutputFollows] extends [never] ? true : MisdeclaredOutputFollows = true;
 
 /** The Screen Modes whose definition declares a Page Rotation. */
 export type PageRotationMode = {
