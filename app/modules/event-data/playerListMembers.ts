@@ -21,7 +21,7 @@ interface PlayerListMembersState {
  * Player List member Module.
  *
  * Owns member ID cache, optimistic member-count updates, member mutation
- * rollback, and realtime member cache invalidation for Event Data Player Lists.
+ * rollback, and the realtime member cache re-read for Event Data Player Lists.
  */
 export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 	/**
@@ -34,6 +34,8 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 	 */
 	const { executeReporting } = useReportingAction();
 	const membersByListId = ref<Map<number, number[]>>(new Map());
+	/** Per List, only the re-read its latest remote change asked for lands. */
+	const memberReReads = createKeyedGuardedSequence<number>();
 
 	function setMemberCount(listId: number, memberCount: number) {
 		const index = state.lists.value.findIndex(l => l.id === listId);
@@ -237,9 +239,36 @@ export function usePlayerListMembersRuntime(state: PlayerListMembersState) {
 		return membersByListId.value.get(listId);
 	}
 
+	/**
+	 * A peer changed a List's members. Cached members are re-read in place, and
+	 * stay on show until the answer: nothing else re-reads a List already on
+	 * view, so dropping them left its table empty. A failed re-read drops them,
+	 * and the next view reads them.
+	 */
 	function applyRemoteMembersChanged(listId: number, memberCount: number) {
 		setMemberCount(listId, memberCount);
-		membersByListId.value.delete(listId);
+		if (!membersByListId.value.has(listId))
+			return;
+
+		const eventId = state.lists.value.find(l => l.id === listId)?.eventId;
+		if (eventId === undefined) {
+			membersByListId.value.delete(listId);
+			return;
+		}
+
+		const lifetime = state.currentLifetime();
+		const reRead = memberReReads.begin(listId);
+		const lands = () => lifetime.current && reRead.current;
+		void state.repository.getMemberIds(eventId, listId).then(
+			(memberIds) => {
+				if (lands())
+					membersByListId.value.set(listId, memberIds);
+			},
+			() => {
+				if (lands())
+					membersByListId.value.delete(listId);
+			},
+		);
 	}
 
 	function reset() {

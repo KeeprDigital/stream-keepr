@@ -1,4 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '~~/test/helpers/deferred';
 import { createMockPlayerList } from '~~/test/helpers/fixtures';
@@ -242,21 +243,96 @@ describe('usePlayerListStore', () => {
 			expect(store.membersByListId.has(10)).toBe(false);
 		});
 
-		it('take the authoritative member count and drop the cached members', () => {
-			store.lists = [
-				createSummary({ id: 10, memberCount: 2 }),
-			];
-			store.membersByListId.set(10, [1, 2]);
-
+		function membersChanged(memberCount: number) {
 			deliver('playerList:membersChanged', {
 				listId: 10,
 				action: 'added',
 				playerIds: [3],
-				memberCount: 8,
-			} as never);
+				memberCount,
+			});
+		}
 
-			expect(store.lists[0]!.memberCount).toBe(8);
+		// A List on view keeps the members it shows until the re-read answers:
+		// dropping them emptied the Players table for good.
+		it('take the authoritative member count at once, and re-read cached members in place', async () => {
+			store.lists = [
+				createSummary({ id: 10, memberCount: 2 }),
+			];
+			store.membersByListId.set(10, [1, 2]);
+			const read = deferred<number[]>();
+			mockRepo.getMemberIds.mockReturnValueOnce(read.promise);
+
+			membersChanged(3);
+
+			expect(store.lists[0]!.memberCount).toBe(3);
+			expect(store.getCachedMemberIds(10)).toEqual([1, 2]);
+
+			read.resolve([1, 2, 3]);
+			await flushPromises();
+
+			expect(store.getCachedMemberIds(10)).toEqual([1, 2, 3]);
+		});
+
+		it('read nothing for a List whose members are not cached', async () => {
+			store.lists = [
+				createSummary({ id: 10, memberCount: 2 }),
+			];
+			mockRepo.getMemberIds.mockClear();
+
+			membersChanged(3);
+			await flushPromises();
+
+			expect(store.lists[0]!.memberCount).toBe(3);
+			expect(mockRepo.getMemberIds).not.toHaveBeenCalled();
 			expect(store.membersByListId.has(10)).toBe(false);
+		});
+
+		it('drop cached members a failed re-read could not replace, so the next view reads them', async () => {
+			store.lists = [
+				createSummary({ id: 10, memberCount: 2 }),
+			];
+			store.membersByListId.set(10, [1, 2]);
+			mockRepo.getMemberIds.mockRejectedValueOnce(new Error('offline'));
+
+			membersChanged(3);
+			await flushPromises();
+
+			expect(store.membersByListId.has(10)).toBe(false);
+			expect(store.error).toBeNull();
+		});
+
+		it('hold the latest change\'s members when two re-reads answer out of order', async () => {
+			store.lists = [
+				createSummary({ id: 10, memberCount: 2 }),
+			];
+			store.membersByListId.set(10, [1, 2]);
+			const first = deferred<number[]>();
+			const second = deferred<number[]>();
+			mockRepo.getMemberIds.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+			membersChanged(3);
+			membersChanged(4);
+			second.resolve([1, 2, 3, 4]);
+			first.resolve([1, 2, 3]);
+			await flushPromises();
+
+			expect(store.getCachedMemberIds(10)).toEqual([1, 2, 3, 4]);
+		});
+
+		it('cache nothing from a re-read answered after the Event Lifetime ended', async () => {
+			store.lists = [
+				createSummary({ id: 10, memberCount: 2 }),
+			];
+			store.membersByListId.set(10, [1, 2]);
+			const read = deferred<number[]>();
+			mockRepo.getMemberIds.mockReturnValueOnce(read.promise);
+
+			membersChanged(3);
+			store.$reset();
+			read.resolve([1, 2, 3]);
+			await flushPromises();
+
+			expect(store.membersByListId.size).toBe(0);
 		});
 	});
 

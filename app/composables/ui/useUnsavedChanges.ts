@@ -61,13 +61,32 @@ export function useUnsavedChanges(): UseUnsavedChangesReturn {
 	return { isDirty, registerDirtyState, bypassGuard };
 }
 
+const openModalGuards = new Set<() => Promise<boolean>>();
+
+/**
+ * True once navigation may leave every open guarded modal: none holds an
+ * unsaved edit, or the operator chose to discard each.
+ *
+ * The Event route middleware asks this before it resets the Event stores. A
+ * `router.beforeEach` of the modal's own would run after that middleware, so
+ * "Keep editing" would return to a form whose Event is already gone.
+ */
+export async function confirmDiscardInOpenModals(): Promise<boolean> {
+	for (const confirmDiscard of [...openModalGuards]) {
+		if (!(await confirmDiscard()))
+			return false;
+	}
+	return true;
+}
+
 /**
  * Unsaved-changes guard for a form in an overlay modal.
  *
  * An overlay modal renders outside the page that opened it, so it can neither
  * register with the page's guard nor use `onBeforeRouteLeave`. It guards
- * itself instead: navigation while it is open, a browser unload, and — through
- * `confirmDiscard` — its own close.
+ * itself instead: navigation while it is open (asked by the Event route
+ * middleware through `confirmDiscardInOpenModals`), a browser unload, and —
+ * through `confirmDiscard` — its own close.
  *
  * @example
  * const { confirmDiscard } = useModalUnsavedChanges(isDirty);
@@ -87,8 +106,8 @@ export function useModalUnsavedChanges(dirty: Ref<boolean> | ComputedRef<boolean
 		return (await confirmModal.open({}).result) === true;
 	}
 
-	const removeRouteGuard = useRouter().beforeEach(() => confirmDiscard());
-	onUnmounted(removeRouteGuard);
+	openModalGuards.add(confirmDiscard);
+	onUnmounted(() => openModalGuards.delete(confirmDiscard));
 	useBeforeUnloadGuard(computed(() => unref(dirty)));
 
 	return { confirmDiscard };

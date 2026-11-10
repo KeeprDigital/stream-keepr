@@ -43,6 +43,7 @@ mockNuxtImport('$fetch', () => mockFetch);
 // ── Helpers ──
 
 function makeEntry(opts?: {
+	deckId?: number;
 	playerId?: number;
 	deckName?: string;
 	deckColors?: string;
@@ -57,7 +58,7 @@ function makeEntry(opts?: {
 			archetypeId: opts?.archetypeId ?? null,
 		} as any,
 		deck: {
-			id: 1,
+			id: opts?.deckId ?? 1,
 			playerId: opts?.playerId ?? 1,
 			archetypeId: opts?.archetypeId ?? null,
 			reviewedAt: opts?.deckReviewed
@@ -675,6 +676,62 @@ describe('useArchetypeAssignment', () => {
 			expect(nameInput.value).toBe('Mono Red');
 			expect(colorsInput.value).toEqual(['R']);
 			expect(selectedKeyCards.value.has('Goblin Guide')).toBe(true);
+		});
+
+		// The queue rebuilds its entries on every Player or deck message. What the
+		// reviewer typed holds until the deck under review, or its review, changes.
+		it.each([
+			['the same deck rebuilt by an unrelated update', {}, true],
+			[
+				'the same deck, its Player changed',
+				{ playerId: 2 },
+				true,
+			],
+			[
+				'another deck',
+				{ deckId: 2 },
+				false,
+			],
+			[
+				'the same deck reviewed by a colleague',
+				{
+					archetypeId: 5,
+					deckReviewed: true,
+					deckName: 'Mono Red',
+					deckColors: 'R',
+				},
+				false,
+			],
+		] as const)('on %s (%j), keeps the typed input: %s', async (_, change, kept) => {
+			mockArchetypeStore.archetypes = [
+				makeArchetype({
+					id: 5,
+					name: 'Mono Red',
+					colors: 'R',
+					keyCards: [
+						makeKeyCard('Goblin Guide', 1),
+					],
+				}),
+			];
+			const submitted = { deckName: 'Burn', deckColors: 'R' };
+			const entryRef = ref<any>(makeEntry(submitted));
+			const { nameInput, colorsInput, selectedKeyCards, toggleKeyCard } = useArchetypeAssignment({
+				...makeOptions(),
+				currentEntry: computed(() => entryRef.value),
+			});
+
+			nameInput.value = 'Boros Ener';
+			colorsInput.value = ['R', 'W'];
+			toggleKeyCard('Phlage');
+			entryRef.value = makeEntry({
+				...submitted,
+				...change,
+			});
+			await nextTick();
+
+			expect(nameInput.value === 'Boros Ener').toBe(kept);
+			expect(colorsInput.value.join('') === 'RW').toBe(kept);
+			expect(selectedKeyCards.value.has('Phlage')).toBe(kept);
 		});
 	});
 });

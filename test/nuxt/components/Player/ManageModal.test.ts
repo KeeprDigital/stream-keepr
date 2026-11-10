@@ -16,8 +16,6 @@ const mockToast = {
 const confirmOpen = vi.fn(() => ({
 	result: Promise.resolve(false),
 }));
-let routeGuard: (() => Promise<boolean> | boolean) | null = null;
-const removeRouteGuard = vi.fn();
 /** What useOverlay listens on: the modal asking to close. */
 const overlayClose = vi.fn();
 
@@ -125,12 +123,6 @@ function saveButton(wrapper: Wrapper) {
 describe('player manage modal', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		routeGuard = null;
-		// The real router, so Nuxt keeps its own guards; only the modal's is captured.
-		vi.spyOn(useRouter(), 'beforeEach').mockImplementation((guard) => {
-			routeGuard = guard as () => Promise<boolean>;
-			return removeRouteGuard;
-		});
 		confirmOpen.mockReturnValue({
 			result: Promise.resolve(false),
 		});
@@ -200,16 +192,16 @@ describe('player manage modal', () => {
 
 	it('holds navigation on an unsaved edit until the operator discards it', async () => {
 		const wrapper = await mountModal();
-		expect(await routeGuard!()).toBe(true);
+		expect(await confirmDiscardInOpenModals()).toBe(true);
 
 		editName(wrapper, 'Alicia');
 		await flushPromises();
-		expect(await routeGuard!()).toBe(false);
+		expect(await confirmDiscardInOpenModals()).toBe(false);
 
 		confirmOpen.mockReturnValue({
 			result: Promise.resolve(true),
 		});
-		expect(await routeGuard!()).toBe(true);
+		expect(await confirmDiscardInOpenModals()).toBe(true);
 	});
 
 	it('stops guarding once the save lands', async () => {
@@ -221,16 +213,19 @@ describe('player manage modal', () => {
 		await flushPromises();
 
 		expect(wrapper.emitted('close')).toHaveLength(1);
-		expect(await routeGuard!()).toBe(true);
+		expect(await confirmDiscardInOpenModals()).toBe(true);
 		expect(confirmOpen).not.toHaveBeenCalled();
 	});
 
-	it('removes its navigation guard when it closes', async () => {
+	it('stops guarding navigation when it closes', async () => {
 		const wrapper = await mountModal();
+		editName(wrapper, 'Alicia');
+		await flushPromises();
 
 		wrapper.unmount();
 
-		expect(removeRouteGuard).toHaveBeenCalled();
+		expect(await confirmDiscardInOpenModals()).toBe(true);
+		expect(confirmOpen).not.toHaveBeenCalled();
 	});
 
 	// A cleared name falls back to the Nickname, so only a One Piece Player with one may save it (ADR-0074).

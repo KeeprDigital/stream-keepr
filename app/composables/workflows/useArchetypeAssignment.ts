@@ -126,7 +126,20 @@ export function useArchetypeAssignment({
 
 	// ── Watchers ──
 
-	watch(currentEntry, (entry) => {
+	// The queue rebuilds its entries on every Player or deck message, so the form
+	// follows the deck under review and its review, not the entry's identity:
+	// anything else would revert what the reviewer is typing.
+	const reviewSubject = computed(() => {
+		const deck = currentEntry.value?.deck;
+		return deck
+			? `${deck.id}:${isReviewedPlayerDeck(deck)
+				? deck.archetypeId
+				: ''}`
+			: null;
+	});
+
+	watch(reviewSubject, () => {
+		const entry = currentEntry.value;
 		if (entry) {
 			nameInput.value = entry.displayName;
 			colorsInput.value = entry.displayColors

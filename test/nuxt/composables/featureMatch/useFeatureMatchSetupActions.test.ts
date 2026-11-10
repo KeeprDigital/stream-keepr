@@ -1,5 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockMatch } from '~~/test/helpers/fixtures';
 import { DEFAULT_PLAYER_DATA } from '~/types';
 
@@ -45,21 +46,28 @@ function seats(formData: ReturnType<typeof createSetup>['formData']) {
 
 describe('useFeatureMatchSetupActions', () => {
 	beforeEach(() => {
+		mockToast.add.mockClear();
 		mockFeatureMatchStateStore.swapPlayers.mockResolvedValue(undefined);
 		mockFeatureMatchStateStore.resetMatch.mockResolvedValue(undefined);
 	});
 
 	describe('swapping players', () => {
 		// The Session owns side order and the form holds the Slot's (ADR-0058), so a
-		// swap never edits the form, whether the Session takes it or not.
+		// swap never edits the form, whether the Session takes it or not. The store
+		// answers a failed command with null, having reported why.
 		it.each([
 			{
 				outcome: 'takes',
-				answer: () => Promise.resolve(),
+				answer: () => Promise.resolve({}),
 				toast: { title: 'Players swapped', color: 'success' },
 			},
 			{
 				outcome: 'refuses',
+				answer: () => Promise.resolve(null),
+				toast: { title: 'Failed to swap players', color: 'error' },
+			},
+			{
+				outcome: 'throws on',
 				answer: () => Promise.reject(new Error('refused')),
 				toast: { title: 'Failed to swap players', color: 'error' },
 			},
@@ -71,7 +79,11 @@ describe('useFeatureMatchSetupActions', () => {
 
 			expect(seats(formData)).toEqual([10, 'Alice', 20, 'Bob']);
 			expect(mockFeatureMatchStateStore.swapPlayers).toHaveBeenCalledWith(1, 1);
-			expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining(toast));
+			expect(mockToast.add.mock.calls).toEqual([
+				[
+					expect.objectContaining(toast),
+				],
+			]);
 		});
 	});
 
@@ -87,14 +99,33 @@ describe('useFeatureMatchSetupActions', () => {
 			expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({ title: 'Match cleared', color: 'success' }));
 		});
 
-		it('restores the seats when the reset is refused', async () => {
-			mockFeatureMatchStateStore.resetMatch.mockRejectedValue(new Error('refused'));
+		it.each([
+			[
+				'answers null',
+				(reset: ReturnType<typeof deferred<null>>) => reset.resolve(null),
+			],
+			[
+				'throws',
+				(reset: ReturnType<typeof deferred<null>>) => reset.reject(new Error('refused')),
+			],
+		])('empties the seats while the reset is pending, and restores them when it %s', async (_, fail) => {
+			const reset = deferred<null>();
+			mockFeatureMatchStateStore.resetMatch.mockReturnValue(reset.promise);
 			const { clearMatch, formData } = createSetup();
 
-			await clearMatch();
+			const clearing = clearMatch();
+			expect(seats(formData)).toEqual([null, '', null, '']);
+
+			fail(reset);
+			await clearing;
 
 			expect(seats(formData)).toEqual([10, 'Alice', 20, 'Bob']);
 			expect(formData.value.externalId).toBe('ext-000');
+			expect(mockToast.add.mock.calls).toEqual([
+				[
+					expect.objectContaining({ title: 'Failed to clear match', color: 'error' }),
+				],
+			]);
 		});
 	});
 
@@ -136,6 +167,19 @@ describe('useFeatureMatchSetupActions', () => {
 			expect(mockFeatureMatchStateStore.resetMatch).toHaveBeenCalledWith(1, 1, { type: 'match' });
 			expect(meleeModalOpen.value).toBe(false);
 			expect(mockToast.add).toHaveBeenCalledWith(expect.objectContaining({ description: 'Populated from Table 7', color: 'success' }));
+		});
+
+		it('reports a Session reset the store answered with null as failed', async () => {
+			mockFeatureMatchStateStore.resetMatch.mockResolvedValue(null);
+			const { populateFromMelee } = createSetup();
+
+			await populateFromMelee(meleeMatch() as any);
+
+			expect(mockToast.add.mock.calls).toEqual([
+				[
+					expect.objectContaining({ title: 'Failed to reset match state', color: 'error' }),
+				],
+			]);
 		});
 
 		it('seats TBD for a Player the Match does not name', async () => {

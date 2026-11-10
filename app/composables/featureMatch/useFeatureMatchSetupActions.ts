@@ -26,6 +26,16 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 	const meleeModalOpen = ref(false);
 
 	/**
+	 * Whether a Session command landed. The store resolves `null` for a command
+	 * that failed, having reported why, so awaiting it is no proof it landed. It
+	 * returns `null` outright when it sent nothing: no Session is held, or the
+	 * same command is already in flight and answers for itself.
+	 */
+	async function landed(command: Promise<unknown> | null): Promise<boolean> {
+		return command === null || (await command) !== null;
+	}
+
+	/**
 	 * Swaps the sides in the Feature Match Session only. The Session owns which
 	 * side each player sits on and the form holds the Slot's pairing order
 	 * (ADR-0058), so the form is left alone: the panel shows it oriented by the
@@ -33,10 +43,8 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 	 */
 	async function swapPlayers() {
 		await runRequest(async () => {
-			if (eventStore.eventId) {
-				await featureMatchStateStore.swapPlayers(eventStore.eventId, formData.value.id);
-			}
-			return true;
+			return !eventStore.eventId
+				|| landed(featureMatchStateStore.swapPlayers(eventStore.eventId, formData.value.id));
 		}, {
 			success: { title: 'Players swapped', color: 'success' },
 			error: { title: 'Failed to swap players', color: 'error' },
@@ -56,10 +64,8 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 		formData.value.formatName = null;
 
 		await runRequest(async () => {
-			if (eventStore.eventId) {
-				await featureMatchStateStore.resetMatch(eventStore.eventId, formData.value.id, { type: 'match' });
-			}
-			return true;
+			return !eventStore.eventId
+				|| landed(featureMatchStateStore.resetMatch(eventStore.eventId, formData.value.id, { type: 'match' }));
 		}, {
 			success: { title: 'Match cleared', color: 'success' },
 			error: { title: 'Failed to clear match', color: 'error' },
@@ -141,10 +147,8 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 		meleeModalOpen.value = false;
 
 		await runRequest(async () => {
-			if (eventStore.eventId) {
-				await featureMatchStateStore.resetMatch(eventStore.eventId, formData.value.id, { type: 'match' });
-			}
-			return true;
+			return !eventStore.eventId
+				|| landed(featureMatchStateStore.resetMatch(eventStore.eventId, formData.value.id, { type: 'match' }));
 		}, {
 			success: {
 				title: 'Match populated',

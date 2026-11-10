@@ -1364,7 +1364,7 @@ Accepted · 2026-10-26 · [#794](https://github.com/KeeprDigital/stream-keepr/pu
 
 **`useForm` compares values regardless of object key order.** The #612 merge appends keys a new baseline adds, so the same values can arrive in another order.
 
-**A form in an overlay modal guards itself through `useModalUnsavedChanges`.** The modal renders outside the page, so it can neither register with the page's guard nor use `onBeforeRouteLeave`. It guards navigation through the router, a browser unload, and its own close through `confirmDiscard`.
+**A form in an overlay modal guards itself through `useModalUnsavedChanges`.** The modal renders outside the page, so it can neither register with the page's guard nor use `onBeforeRouteLeave`. It guards navigation, a browser unload, and its own close through `confirmDiscard`. The Event route middleware asks every open guarded modal (`confirmDiscardInOpenModals`) before it resets the Event stores: a `router.beforeEach` of the modal's own runs after that middleware, so "Keep editing" returned to a form whose Event was gone (#1026).
 
 ### Why
 

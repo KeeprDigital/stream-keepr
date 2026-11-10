@@ -1,6 +1,8 @@
 import type { Game } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defineComponent } from 'vue';
 
 const {
 	mockEventStore,
@@ -15,6 +17,10 @@ const {
 	mockNavigateTo: vi.fn(),
 	mockResetAllEventStores: vi.fn(),
 }));
+/** The operator's answer to the unsaved-changes confirmation: true discards. */
+const confirmOpen = vi.fn(() => ({
+	result: Promise.resolve(false),
+}));
 
 vi.mock('~/utils/eventStores', () => ({
 	resetAllEventStores: mockResetAllEventStores,
@@ -22,6 +28,9 @@ vi.mock('~/utils/eventStores', () => ({
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 mockNuxtImport('navigateTo', () => mockNavigateTo);
+mockNuxtImport('useOverlay', () => () => ({
+	create: () => ({ open: confirmOpen }),
+}));
 mockNuxtImport('defineNuxtRouteMiddleware', () => (fn: any) => fn);
 
 const { default: middleware } = await import('~/middleware/event.global');
@@ -35,6 +44,18 @@ const fromRoute = createRoute('/');
 function runMiddleware(to: ReturnType<typeof createRoute>) {
 	return middleware(to, fromRoute);
 }
+
+/** An overlay modal holding a form, open over the page being left. */
+function openGuardedModal(dirty: boolean) {
+	return mount(defineComponent({
+		setup() {
+			useModalUnsavedChanges(ref(dirty));
+			return () => null;
+		},
+	}));
+}
+
+enableAutoUnmount(afterEach);
 
 describe('event.global middleware', () => {
 	beforeEach(() => {
@@ -78,6 +99,61 @@ describe('event.global middleware', () => {
 		await runMiddleware(createRoute('/event/999/matches', { eventId: '999' }));
 
 		expect(mockNavigateTo).toHaveBeenCalledWith('/');
+	});
+
+	// An open modal's unsaved edit is asked about before any Event store is
+	// reset: "Keep editing" must leave the Event the edit saves against.
+	describe('leaving the Event with an unsaved edit in an open modal', () => {
+		const DESTINATIONS = [
+			['/', {}],
+			[
+				'/event/2/matches',
+				{ eventId: '2' },
+			],
+		] as const;
+
+		beforeEach(() => {
+			mockEventStore.event = { id: 1 };
+			mockEventStore.loadEvent.mockImplementation(async (id: number) => {
+				mockEventStore.event = { id };
+			});
+		});
+
+		it.each(DESTINATIONS)('refuses %s and resets nothing when the operator keeps editing', async (path, params) => {
+			confirmOpen.mockReturnValue({
+				result: Promise.resolve(false),
+			});
+			openGuardedModal(true);
+
+			const result = await runMiddleware(createRoute(path, params));
+
+			expect(mockResetAllEventStores).not.toHaveBeenCalled();
+			expect(mockEventStore.loadEvent).not.toHaveBeenCalled();
+			expect(result).toBe(false);
+		});
+
+		it.each(DESTINATIONS)('goes on to %s once the operator discards the edit', async (path, params) => {
+			confirmOpen.mockReturnValue({
+				result: Promise.resolve(true),
+			});
+			openGuardedModal(true);
+
+			const result = await runMiddleware(createRoute(path, params));
+
+			expect(confirmOpen).toHaveBeenCalledOnce();
+			expect(mockResetAllEventStores).toHaveBeenCalledOnce();
+			expect(result).toBeUndefined();
+		});
+
+		it('does not ask for a modal with nothing unsaved, or one already closed', async () => {
+			openGuardedModal(false);
+			openGuardedModal(true).unmount();
+
+			await runMiddleware(createRoute('/'));
+
+			expect(confirmOpen).not.toHaveBeenCalled();
+			expect(mockResetAllEventStores).toHaveBeenCalledOnce();
+		});
 	});
 
 	// ── The Screen Output page (#604) ──
