@@ -17,7 +17,7 @@ import {
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { digestOf, sixteenPixelPng as sixteenPixelPosterPng, pixelPng as transparentPixelPng, vp9Webm } from '~~/test/helpers/graphicsFixtures';
-import { jpegPixel, webpPixel } from '~~/test/helpers/graphicsImageFixtures';
+import { jpegDeclaring, jpegPixel, webpDeclaring, webpPixel } from '~~/test/helpers/graphicsImageFixtures';
 import { callsTo } from '~~/test/helpers/lastCallTo';
 
 // Only an accepted validation report carries facts, so a reading of them has
@@ -302,6 +302,20 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			fileName: 'animated.webp',
 			mime: 'image/webp',
 			code: 'unsupported-webp-animation',
+		},
+		{
+			label: 'a JPEG over the full-decode pixel cap',
+			bytes: jpegDeclaring(3840, 2161),
+			fileName: 'too-large.jpg',
+			mime: 'image/jpeg',
+			code: 'image-pixels-exceeded',
+		},
+		{
+			label: 'a WebP over the full-decode pixel cap',
+			bytes: webpDeclaring(3840, 2161),
+			fileName: 'too-large.webp',
+			mime: 'image/webp',
+			code: 'image-pixels-exceeded',
 		},
 	] as const)('reports a stable public validation result for $label', async ({
 		bytes,

@@ -86,6 +86,7 @@ import type {
 	TerminalStagedInputReleaseOutcome,
 } from './retention';
 import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
+import type { StillImageBounds } from './still-image';
 import type { ResolvedPackagedRevision } from './template-package';
 import type { TemplatePackageArchiveEntry } from './template-package-archive';
 import type { TemplatePackagePreflightState } from './template-package-preflight';
@@ -240,6 +241,7 @@ async function processGraphicAssetSource(
 	kind: GraphicAssetSourceKind,
 	bytes: Uint8Array,
 	declarations: Pick<GraphicAssetSourceDeclarations, 'sourceFileName' | 'declaredMime'>,
+	stillImageBounds: StillImageBounds = 'ingestion',
 ) {
 	switch (kind) {
 		case 'font':
@@ -247,7 +249,7 @@ async function processGraphicAssetSource(
 		case 'silent-video':
 			return await processSilentVideo(bytes, declarations);
 		case 'image':
-			return await processStillImage(bytes, declarations);
+			return await processStillImage(bytes, declarations, { bounds: stillImageBounds });
 	}
 }
 
@@ -1284,7 +1286,9 @@ export function createGraphicsAssetLibrary(
 			byteLength: complete.object.byteLength,
 			maximumByteLength: GRAPHIC_ASSET_SOURCE_POLICIES[sourceKind].maximumByteLength,
 		});
-		return await processGraphicAssetSource(sourceKind, bytes, {});
+		// A stored revision is re-read under the bound it was accepted under: the
+		// JPEG/WebP full-decode cap refuses new ingestion, never existing content.
+		return await processGraphicAssetSource(sourceKind, bytes, {}, 'stored');
 	}
 
 	/**
@@ -1453,7 +1457,8 @@ export function createGraphicsAssetLibrary(
 					byteLength: input.sourceByteLength,
 					maximumByteLength: GRAPHIC_ASSET_SOURCE_POLICIES[input.sourceKind].maximumByteLength,
 				});
-				const processed = await processGraphicAssetSource(input.sourceKind, bytes, {});
+				// As `inspectContentBytes`: a revision from before the cap keeps its preview.
+				const processed = await processGraphicAssetSource(input.sourceKind, bytes, {}, 'stored');
 				if (!('thumbnail' in processed))
 					throw new Error('The validated source did not produce its deterministic derivative');
 				return { outcome: 'generated', bytes: processed.thumbnail };

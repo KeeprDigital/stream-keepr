@@ -6,6 +6,18 @@ export const GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS = 3;
 export const GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS = 2 * 60 * 1000;
 export const MAX_STILL_IMAGE_AXIS = 8192;
 export const MAX_STILL_IMAGE_PIXELS = 16_777_216;
+/**
+ * The most pixels a JPEG or WebP may declare at ingestion: 3840 × 2160.
+ *
+ * Unlike PNG, which is read a scanline at a time, these two are decoded whole in
+ * Wasm, as RGBA in the codec's heap and again as `ImageData`, inside a Worker's
+ * 128 MB isolate. PNG keeps `MAX_STILL_IMAGE_PIXELS`.
+ *
+ * It narrows `still-image-v1` at ingestion only. A revision accepted before it
+ * keeps its recorded profile and is re-read, for repair and for its preview,
+ * under `MAX_STILL_IMAGE_PIXELS`: the cap makes nothing already stored invalid.
+ */
+export const MAX_FULLY_DECODED_STILL_IMAGE_PIXELS = 3840 * 2160;
 export const STILL_IMAGE_THUMBNAIL_MAX_WIDTH = 640;
 export const STILL_IMAGE_THUMBNAIL_MAX_HEIGHT = 360;
 export const STATIC_FONT_COMPATIBILITY_PROFILE = 'static-font-v1' as const;

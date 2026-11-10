@@ -15,7 +15,7 @@ import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
 import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
 import { testGraphicAssetRevisionId } from '~~/test/helpers/graphicsAssetIdentities';
 import { digestOf, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
-import { webpPixel } from '~~/test/helpers/graphicsImageFixtures';
+import { jpegDeclaring, webpPixel } from '~~/test/helpers/graphicsImageFixtures';
 import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
 import {
 	issueCodes as codes,
@@ -98,7 +98,24 @@ describe('the Template Package preflight contract', () => {
 		)).toBe(true);
 	});
 
-	it('rejects packaged content that fails the receiver\'s compatibility profile', async () => {
+	it.each([
+		{
+			label: 'no image at all',
+			replacement: new TextEncoder().encode('this is not an image at all, truly'),
+			canonicalMime: 'image/png',
+			validationCode: 'unsupported-image-format',
+		},
+		{
+			label: 'a JPEG over the full-decode pixel cap',
+			replacement: jpegDeclaring(3840, 2161),
+			canonicalMime: 'image/jpeg',
+			validationCode: 'image-pixels-exceeded',
+		},
+	] as const)('rejects packaged content that is $label under the receiver\'s compatibility profile', async ({
+		replacement: notAnImage,
+		canonicalMime,
+		validationCode,
+	}) => {
 		const { library: sender } = createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const parts = readTemplatePackageParts(
@@ -110,7 +127,6 @@ describe('the Template Package preflight contract', () => {
 		);
 		// The bytes are replaced and the manifest is told the truth about their
 		// digest, so the only thing left to reject them is local validation.
-		const notAnImage = new TextEncoder().encode('this is not an image at all, truly');
 		const replacedDigest = digestOf(notAnImage);
 		const original = parts.contents[0]!;
 		parts.contents = [
@@ -121,6 +137,7 @@ describe('the Template Package preflight contract', () => {
 				...parts.manifest.contents[0]!,
 				digest: replacedDigest,
 				byteLength: notAnImage.byteLength,
+				canonicalMime,
 				entry: `content/sha256-${replacedDigest}.bin`,
 			},
 		];
@@ -132,6 +149,7 @@ describe('the Template Package preflight contract', () => {
 					...parts.manifest.packagedAssets[0]!.integrity,
 					digest: replacedDigest,
 					byteLength: notAnImage.byteLength,
+					canonicalMime,
 				},
 				content: { entry: `content/sha256-${replacedDigest}.bin` },
 			},
@@ -143,7 +161,10 @@ describe('the Template Package preflight contract', () => {
 		const report = reportOf(operation);
 
 		expect(report.outcome).toBe('rejected');
-		expect(codes(report)).toContain('incompatible-graphic-asset-content');
+		expect(report.issues).toContainEqual(expect.objectContaining({
+			code: 'incompatible-graphic-asset-content',
+			message: expect.stringContaining(`${validationCode}: `),
+		}));
 		expect(operation.stage).toBe('failed');
 		expect(operation.failure).toMatchObject({ retryable: false });
 	});
