@@ -43,6 +43,27 @@ describe('useClockDisplay', () => {
 		expect(display.displayTime.value).toBe('0:14');
 	});
 
+	// Time remaining rounds up, so a countdown holds its full time through its
+	// first second, and reads 0:00 and expired together as it runs out.
+	it('counts a countdown down a second at a time from its full time to its end', async () => {
+		vi.useFakeTimers({ now: 1_000_000 });
+		const display = useClockDisplay(clock({ durationMs: 2000, isRunning: true, lastStartedAt: 1_000_000 }));
+		const shown = () => [display.displayTime.value, display.isExpired.value];
+		expect(shown()).toEqual(['0:02', false]);
+
+		await vi.advanceTimersByTimeAsync(999);
+		expect(shown()).toEqual(['0:02', false]);
+
+		await vi.advanceTimersByTimeAsync(1);
+		expect(shown()).toEqual(['0:01', false]);
+
+		await vi.advanceTimersByTimeAsync(999);
+		expect(shown()).toEqual(['0:01', false]);
+
+		await vi.advanceTimersByTimeAsync(1);
+		expect(shown()).toEqual(['0:00', true]);
+	});
+
 	it.each([
 		['no clock', null, '0:00'],
 		[

@@ -87,10 +87,15 @@ describe('useRoundClockModeData', () => {
 		expect(round.value?.name).toBe('Round 4');
 		expect(clock.value).toMatchObject({ state: 'running', display: '40:00' });
 
-		await vi.advanceTimersByTimeAsync(1000);
+		// It holds each time through its second, and re-evaluates as the next is reached.
+		await vi.advanceTimersByTimeAsync(999);
+		expect(clock.value.display).toBe('40:00');
+		await vi.advanceTimersByTimeAsync(1);
 		expect(clock.value.display).toBe('39:59');
 
-		await vi.advanceTimersByTimeAsync(40 * MINUTE);
+		await vi.advanceTimersByTimeAsync(40 * MINUTE - 1001);
+		expect(clock.value).toMatchObject({ state: 'running', display: '0:01' });
+		await vi.advanceTimersByTimeAsync(1);
 		expect(clock.value).toMatchObject({ state: 'ended', display: '0:00' });
 		expect(mockFetch).toHaveBeenCalledTimes(1);
 	});

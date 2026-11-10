@@ -1,4 +1,4 @@
-import { countUpOvertimeMs, formatClockTime } from './clock';
+import { countdownNextChangeInMs, countUpOvertimeMs, formatClockTime, formatCountdownTime } from './clock';
 
 /** The bounds of a Round's duration, in minutes, as an operator enters it. */
 export const ROUND_DURATION_MINUTES_MIN = 1;
@@ -29,7 +29,7 @@ export type RoundClockState = 'untimed' | 'pending' | 'running' | 'ended';
 
 export interface RoundClockProjection {
 	state: RoundClockState;
-	/** The time remaining, as the clock shows it; `null` while untimed. */
+	/** The time remaining, or since the end, as the clock shows it; `null` while untimed. */
 	display: string | null;
 	/** How long until the projection next changes, or `null` if it never will on its own. */
 	nextChangeInMs: number | null;
@@ -40,7 +40,8 @@ export interface RoundClockProjection {
  * timing, so every rendering of the same Round shows the same remaining time,
  * and nothing writes when it runs out (ADR-0066). Before the start it shows the
  * full duration, not running; after the end it shows `0:00`, or, counting up,
- * the time since the end up to its limit.
+ * the time since the end up to its limit. Time remaining rounds up and time
+ * since the end rounds down (ADR-0078).
  */
 export function projectRoundClock(timing: RoundTiming, now: number, countUp: RoundClockCountUp = NO_COUNT_UP): RoundClockProjection {
 	if (timing.durationMinutes == null)
@@ -82,9 +83,7 @@ export function projectRoundClock(timing: RoundTiming, now: number, countUp: Rou
 
 	return {
 		state: 'running',
-		display: formatClockTime(remainingMs),
-		// The display floors the time remaining, so it holds through the whole
-		// second and changes one millisecond past it.
-		nextChangeInMs: (remainingMs % 1000) + 1,
+		display: formatCountdownTime(remainingMs),
+		nextChangeInMs: countdownNextChangeInMs(remainingMs),
 	};
 }
