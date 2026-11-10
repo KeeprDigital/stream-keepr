@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import TemplateLibrary from '~/components/Graphics/FeatureMatchLayoutTemplateLibrary.vue';
 
 enableAutoUnmount(afterEach);
@@ -224,6 +225,92 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		// suppressed, so the authoritative Screen is reloaded.
 		expect(mockGetScreenById).toHaveBeenCalledWith(7, 3);
 		expect(wrapper.emitted('placed')).toHaveLength(1);
+	});
+
+	// A placement rewrites the stored layout and a save reads it, so an edit still
+	// unsaved would overwrite the placed layout, or be missing from the template.
+	describe('with unsaved edits in the editor', () => {
+		const WRITES = [
+			[
+				'places',
+				['layout-template-place', 'layout-template-place-confirmed'],
+				mockPlace,
+			],
+			[
+				'saves',
+				['layout-template-save'],
+				mockSave,
+			],
+		] as const;
+
+		async function click(wrapper: Awaited<ReturnType<typeof mountLibrary>>, buttons: readonly string[]) {
+			for (const button of buttons)
+				await wrapper.get(`[data-testid="${button}"]`).trigger('click');
+			await flushPromises();
+		}
+
+		it.each(WRITES)('%s only once they have landed', async (_case, buttons, write) => {
+			const landing = deferred<boolean>();
+			const flushEdits = vi.fn(() => landing.promise);
+			const wrapper = await mountLibrary({ flushEdits });
+
+			await click(wrapper, buttons);
+			expect(flushEdits).toHaveBeenCalledOnce();
+			expect(write).not.toHaveBeenCalled();
+			expect(wrapper.emitted('placing')).toBeUndefined();
+
+			landing.resolve(true);
+			await flushPromises();
+			expect(write).toHaveBeenCalledOnce();
+		});
+
+		it.each(WRITES)('%s nothing when one of them was refused, and says so', async (_case, buttons, write) => {
+			const wrapper = await mountLibrary({
+				flushEdits: () => Promise.resolve(false),
+			});
+
+			await click(wrapper, buttons);
+
+			expect(write).not.toHaveBeenCalled();
+			expect(wrapper.emitted('placing')).toBeUndefined();
+			expect(wrapper.get('[data-testid="layout-template-error"]').text()).toContain('could not be saved');
+		});
+
+		it('places at the version the landed edits left the Screen at', async () => {
+			const wrapper = await mountLibrary({
+				flushEdits: async () => {
+					mockScreens.value = [
+						{ id: 3, stateVersion: 13 },
+					];
+					return true;
+				},
+			});
+
+			await click(wrapper, WRITES[0][1]);
+
+			expect(mockPlace).toHaveBeenCalledWith(expect.objectContaining({ stateVersion: 13 }));
+		});
+	});
+
+	// An edit made during a placement is built on the layout from before it.
+	it('says a placement is in flight until the placed Screen is held, however it ends', async () => {
+		const reloading = deferred();
+		mockGetScreenById.mockReturnValueOnce(reloading.promise);
+		const wrapper = await mountLibrary();
+
+		await wrapper.get('[data-testid="layout-template-place"]').trigger('click');
+		await wrapper.get('[data-testid="layout-template-place-confirmed"]').trigger('click');
+		await flushPromises();
+		expect(wrapper.emitted('update:placing')).toEqual([
+			[true],
+		]);
+
+		reloading.reject(new Error('Failed to fetch'));
+		await flushPromises();
+		expect(wrapper.emitted('update:placing')).toEqual([
+			[true],
+			[false],
+		]);
 	});
 
 	// An imported layout is the Graphics Asset Library's own record: never renamed here, but removable (ADR-0068).

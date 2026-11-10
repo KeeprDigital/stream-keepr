@@ -22,6 +22,7 @@ function editorFor(writable: boolean) {
 	const config = ref(structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG));
 	const writes: unknown[] = [];
 	const leased = ref(writable);
+	const held = ref(false);
 	const editor = useFeatureMatchLayoutEditor({
 		config,
 		updateConfig: (patch) => {
@@ -34,9 +35,10 @@ function editorFor(writable: boolean) {
 		canvasWidth: 1920,
 		canvasHeight: 1080,
 		writable: leased,
+		held,
 	});
 	editor.select(SOURCE);
-	return { editor, writes, leased, config };
+	return { editor, writes, leased, held, config };
 }
 
 describe('useFeatureMatchLayoutEditor without the lease', () => {
@@ -160,6 +162,60 @@ describe('useFeatureMatchLayoutEditor without the lease', () => {
 
 		expect(writes).toHaveLength(1);
 		expect(config.value.layout.sources.find(item => item.id === 'main-source')?.visible).toBe(false);
+	});
+});
+
+// A Template placement rewrites the stored layout: an edit, undo or redo made
+// meanwhile would write a whole layout from before it over the placed one.
+describe('useFeatureMatchLayoutEditor while a Template placement is in flight', () => {
+	function heldEditor() {
+		const context = editorFor(true);
+		context.editor.toggleVisible();
+		context.editor.toggleVisible();
+		context.editor.undo();
+		context.writes.length = 0;
+		context.held.value = true;
+		return context;
+	}
+
+	it.each<[string, (editor: FeatureMatchLayoutEditor) => void]>([
+		[
+			'an edit',
+			editor => editor.toggleVisible(),
+		],
+		[
+			'undo',
+			editor => editor.undo(),
+		],
+		[
+			'redo',
+			editor => editor.redo(),
+		],
+	])('writes nothing on %s, and offers none', (_, verb) => {
+		const { editor, writes } = heldEditor();
+
+		verb(editor);
+
+		expect(writes).toEqual([]);
+		expect([editor.writable.value, editor.canUndo.value, editor.canRedo.value]).toEqual([false, false, false]);
+	});
+
+	it('keeps its undo history, and records the layout the placement replaces as one more step', async () => {
+		const { editor, held, config } = heldEditor();
+		const replaced = JSON.parse(JSON.stringify(config.value.layout));
+
+		editor.checkpoint();
+		config.value = {
+			...config.value,
+			layout: { ...config.value.layout, sources: [] },
+		};
+		held.value = false;
+		await nextTick();
+		expect(editor.writable.value).toBe(true);
+
+		editor.undo();
+		expect(config.value.layout).toEqual(replaced);
+		expect(editor.canUndo.value).toBe(true);
 	});
 });
 
