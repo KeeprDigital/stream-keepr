@@ -72,6 +72,9 @@ const emit = defineEmits<{
 	manipulate: [rect: GraphicRect, gesture: number];
 	/** Each frame of a canvas rotate drag, as the selected Graphic Item's new Graphic Rotation. */
 	rotate: [rotation: number, gesture: number];
+	/** A canvas drag began, and ended: the frames between are one edit. */
+	gestureStart: [];
+	gestureEnd: [];
 }>();
 
 const toast = useToast();
@@ -483,6 +486,8 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 					:locked="lockedBoxes"
 					@change="(rect, gesture) => emit('manipulate', rect, gesture)"
 					@rotate="(rotation, gesture) => emit('rotate', rotation, gesture)"
+					@gesture-start="emit('gestureStart')"
+					@gesture-end="emit('gestureEnd')"
 				/>
 			</template>
 		</GraphicsPreviewPanel>

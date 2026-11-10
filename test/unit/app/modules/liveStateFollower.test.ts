@@ -611,6 +611,39 @@ describe('an ended epoch', () => {
 
 		expect(follower.end('screen')).toBe('ignored');
 	});
+
+	// A first load in flight may answer with the epoch that just ended.
+	it('heard while the first load is in flight supersedes that load and asks for a reload', async () => {
+		const { held, follower } = harness();
+		const first = deferred<Snapshot>();
+		const loading = follower.load('screen', () => first.promise);
+
+		expect(follower.end('screen')).toBe('reload');
+		first.resolve(snapshot({
+			words: ['on air'],
+		}));
+
+		await expect(loading).resolves.toBeNull();
+		expect(held.has('screen')).toBe(false);
+	});
+
+	it.each([
+		['held nothing', null],
+		[
+			'was superseded',
+			snapshot(),
+		],
+	])('is ignored once the only load has answered and %s', async (_case, answer) => {
+		const { follower } = harness();
+		const first = deferred<Snapshot | null>();
+		const loading = follower.load('screen', () => first.promise);
+		if (answer)
+			follower.end('screen');
+		first.resolve(answer);
+		await loading;
+
+		expect(follower.end('screen')).toBe('ignored');
+	});
 });
 
 describe('a reconnect', () => {

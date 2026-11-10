@@ -36,7 +36,7 @@ const entries = computed(() => props.names.map(name => overrides.entry(name)));
 			:inherited="entry.inherited"
 			:resolved="entry.resolved"
 			:event-id="eventId"
-			:disabled="overrides.writing.value.has(entry.name)"
+			:writing="overrides.writing.value.has(entry.name)"
 			@set="value => overrides.set(entry.name, value)"
 			@clear="overrides.clear(entry.name)"
 		/>

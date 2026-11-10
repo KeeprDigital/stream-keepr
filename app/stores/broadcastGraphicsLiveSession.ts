@@ -144,8 +144,17 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * is written, so a surface reading both can never pair the title of one failure
 	 * with the sentence of another. Every action that reports through `error` clears
 	 * this first; nothing else writes it.
+	 *
+	 * Both are the operator's to act on, so only an operator's action clears them:
+	 * a command, a reset, or opening a Screen (`loadSession`). A reload this client
+	 * makes for itself (`reloadSession`) leaves them on show.
 	 */
 	const refusal = ref<BroadcastGraphicsCommandRefusal | null>(null);
+	/**
+	 * Whether `error` is reporting a reload that failed. The next reload to
+	 * succeed answers that, and nothing else an operator is being told.
+	 */
+	let reportingReloadFailure = false;
 	/** Number of playout actions awaiting an authoritative answer, keyed per Broadcast Graphic. */
 	const pending = ref<Map<string, number>>(new Map());
 	/**
@@ -263,6 +272,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 * failure — so nothing downstream of it loses a status it was reading.
 	 */
 	function executeReporting<T>(action: () => Promise<T>): Promise<T | null> {
+		reportingReloadFailure = false;
 		return reportingAction(action, { errorRef: error });
 	}
 
@@ -560,16 +570,41 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	}
 
 	/**
-	 * Load one Screen's authoritative snapshot.
+	 * Read one Screen's authoritative snapshot again, for a reason the operator
+	 * did not give: a notification this client could not follow, an ended epoch, a
+	 * refused edit's refresh, or Reconnect Resync.
+	 *
+	 * It leaves whatever `error` and `refusal` report, because the operator has not
+	 * acted on it. Its own failure is reported in their place, and a later reload
+	 * that succeeds clears only that.
 	 *
 	 * A load superseded while in flight answers what is held, not what it fetched.
 	 */
-	async function loadSession(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse | null> {
-		refusal.value = null;
+	async function reloadSession(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse | null> {
 		// Begun here rather than inside the reporting wrapper, so the Flight is taken
 		// in this call's order however that wrapper schedules its action.
 		const loading = follower.load(screenId, () => fetchSession(eventId, screenId));
-		return await executeReporting(() => loading);
+		const failure = ref<string | null>(null);
+		const loaded = await reportingAction(() => loading, { errorRef: failure });
+		if (failure.value !== null) {
+			refusal.value = null;
+			error.value = failure.value;
+			reportingReloadFailure = true;
+		}
+		else if (reportingReloadFailure) {
+			reportingReloadFailure = false;
+			if (!refusal.value)
+				error.value = null;
+		}
+		return loaded;
+	}
+
+	/** Load the snapshot of a Screen the operator has opened, reporting afresh. */
+	function loadSession(eventId: number, screenId: number): Promise<BroadcastGraphicsLiveSessionResponse | null> {
+		error.value = null;
+		refusal.value = null;
+		reportingReloadFailure = false;
+		return reloadSession(eventId, screenId);
 	}
 
 	/**
@@ -626,9 +661,9 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 
 			await onRejection?.(refused.code);
 
-			// Recorded after the handler, because a handler may reload the session and a
-			// reload clears this — the record has to outlive the recovery it triggers, or
-			// the operator is told a Take failed and never why.
+			// Recorded after the handler, because a handler may reload the session and
+			// that reload failing reports itself — the record has to outlive the recovery
+			// it triggers, or the operator is told a Take failed and never why.
 			refusal.value = refused;
 
 			// Raised as the refusal it is rather than as the transport failure that
@@ -882,7 +917,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 			return;
 
 		forgetRefusedInputs(data.screenId);
-		await loadSession(data.eventId, data.screenId);
+		await reloadSession(data.eventId, data.screenId);
 	}
 
 	/**
@@ -954,7 +989,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 				// and the field is marked so the refresh does not read as their own edit
 				// being accepted.
 				supersededInputs.value.add(inputKeyOf(screenId, graphicId, inputKey));
-				await loadSession(eventId, screenId);
+				await reloadSession(eventId, screenId);
 			},
 		);
 	}
@@ -1009,7 +1044,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 				// actually landed, and the field is marked so the refresh does not read as
 				// their own override having been accepted.
 				supersededInputs.value.add(inputKeyOf(screenId, graphicId, inputKey));
-				await loadSession(eventId, screenId);
+				await reloadSession(eventId, screenId);
 			},
 		);
 	}
@@ -1124,7 +1159,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 	 */
 	async function applyRemoteCommand(data: MessageData<'broadcastGraphicsLiveSession:commandApplied'>) {
 		if (follower.notify(data.screenId, data) === 'reload')
-			await loadSession(data.eventId, data.screenId);
+			await reloadSession(data.eventId, data.screenId);
 	}
 
 	function $reset() {
@@ -1135,6 +1170,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		refusedInputs.value.clear();
 		error.value = null;
 		refusal.value = null;
+		reportingReloadFailure = false;
 	}
 
 	return {
@@ -1164,6 +1200,7 @@ export const useBroadcastGraphicsLiveSessionStore = defineStore('broadcastGraphi
 		acceptedInputValues,
 		recoveryFault,
 		loadSession,
+		reloadSession,
 		take,
 		out,
 		setInput,

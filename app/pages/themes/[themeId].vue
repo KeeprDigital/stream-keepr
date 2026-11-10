@@ -18,8 +18,10 @@ const loading = ref(false);
 const loadError = ref<string | null>(null);
 const name = ref('');
 const renaming = ref(false);
-/** Tokens with a write in flight, so a control does not take a second edit over it. */
+/** Tokens with a write in flight, or waiting behind one. */
 const writing = ref(new Set<string>());
+/** The newest write waiting behind each token's write in flight; a newer one replaces it. */
+const waiting = new Map<string, () => Promise<ThemeResponse>>();
 
 /**
  * Hold a Theme a read or write answered. Each token write answers the whole
@@ -65,14 +67,27 @@ async function rename() {
 	});
 }
 
+/**
+ * Write one token, one request at a time. Each request carries the token's
+ * whole value, or clears it, so a request made while one is out waits for its
+ * answer and only the newest waiting one is sent: the Theme ends at the last
+ * edit, whichever order the network would have delivered them in.
+ */
 async function write(token: string, request: () => Promise<ThemeResponse>) {
+	if (writing.value.has(token)) {
+		waiting.set(token, request);
+		return;
+	}
 	writing.value = new Set([...writing.value, token]);
 	try {
-		await runRequest(request, {
-			success: false,
-			error: failure => ({ title: 'Could not save the token', description: failure.message, color: 'error' }),
-			onSuccess: hold,
-		});
+		for (let next: typeof request | undefined = request; next; next = waiting.get(token)) {
+			waiting.delete(token);
+			await runRequest(next, {
+				success: false,
+				error: failure => ({ title: 'Could not save the token', description: failure.message, color: 'error' }),
+				onSuccess: hold,
+			});
+		}
 	}
 	finally {
 		const remaining = new Set(writing.value);
@@ -187,7 +202,7 @@ watch(themeId, load);
 						:token="entry.token"
 						:stored="stored[entry.name]"
 						:resolved="entry.resolved"
-						:disabled="writing.has(entry.name)"
+						:writing="writing.has(entry.name)"
 						@set="value => setToken(entry.name, value)"
 						@clear="clearToken(entry.name)"
 					/>
@@ -209,7 +224,7 @@ watch(themeId, load);
 						:token="entry.token"
 						:stored="stored[entry.name]"
 						:resolved="entry.resolved"
-						:disabled="writing.has(entry.name)"
+						:writing="writing.has(entry.name)"
 						@set="value => setToken(entry.name, value)"
 						@clear="clearToken(entry.name)"
 					/>

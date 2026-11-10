@@ -121,6 +121,7 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionStore', () => () => ({
 	socialProfilePresentations: () => ({}),
 	playoutState: () => 'on-air',
 	loadSession: () => {},
+	reloadSession: () => {},
 	readSessionAsScreenOutput: () => {},
 }));
 

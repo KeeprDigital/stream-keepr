@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 import TemplateLibrary from '~/components/Graphics/BroadcastGraphicTemplateLibrary.vue';
 
@@ -349,6 +350,78 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 		expect(wrapper.get('[data-testid="template-library-error"]').text())
 			.toContain('Another session holds the Graphics Authoring Lease');
 		expect(wrapper.emitted('placed')).toBeUndefined();
+	});
+
+	// A placement rewrites the stored stack and a save reads it, so an edit still
+	// unsaved would overwrite the placed copy, or be missing from the template.
+	describe('with unsaved edits in the workspace', () => {
+		const WRITES = [
+			['places', 'template-place', mockPlace],
+			['saves', 'template-library-save', mockSave],
+		] as const;
+
+		it.each(WRITES)('%s only once they have landed', async (_case, button, write) => {
+			const landing = deferred<boolean>();
+			const flushEdits = vi.fn(() => landing.promise);
+			const wrapper = await mountLibrary({ flushEdits });
+
+			await wrapper.get(`[data-testid="${button}"]`).trigger('click');
+			await flushPromises();
+			expect(flushEdits).toHaveBeenCalledOnce();
+			expect(write).not.toHaveBeenCalled();
+
+			landing.resolve(true);
+			await flushPromises();
+			expect(write).toHaveBeenCalledOnce();
+		});
+
+		it.each(WRITES)('%s nothing when one of them was refused, and says so', async (_case, button, write) => {
+			const wrapper = await mountLibrary({
+				flushEdits: () => Promise.resolve(false),
+			});
+
+			await wrapper.get(`[data-testid="${button}"]`).trigger('click');
+			await flushPromises();
+
+			expect(write).not.toHaveBeenCalled();
+			expect(wrapper.get('[data-testid="template-library-error"]').text()).toContain('could not be saved');
+		});
+
+		it('places at the version the landed edits left the Screen at', async () => {
+			const wrapper = await mountLibrary({
+				flushEdits: async () => {
+					mockScreens.value = [
+						{ id: 3, stateVersion: 13 },
+					];
+					return true;
+				},
+			});
+
+			await wrapper.get('[data-testid="template-place"]').trigger('click');
+			await flushPromises();
+
+			expect(mockPlace).toHaveBeenCalledWith(expect.objectContaining({ stateVersion: 13 }));
+		});
+	});
+
+	// An edit made during a placement is built on the stack from before it.
+	it('says a placement is in flight until the placed Screen is held, however it ends', async () => {
+		const reloading = deferred();
+		mockGetScreenById.mockReturnValueOnce(reloading.promise);
+		const wrapper = await mountLibrary();
+
+		await wrapper.get('[data-testid="template-place"]').trigger('click');
+		await flushPromises();
+		expect(wrapper.emitted('update:placing')).toEqual([
+			[true],
+		]);
+
+		reloading.reject(new Error('Failed to fetch'));
+		await flushPromises();
+		expect(wrapper.emitted('update:placing')).toEqual([
+			[true],
+			[false],
+		]);
 	});
 
 	it('shows an empty library as empty rather than as an error', async () => {

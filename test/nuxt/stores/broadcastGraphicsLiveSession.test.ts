@@ -4,6 +4,7 @@ import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { callsTo } from '~~/test/helpers/lastCallTo';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
@@ -1451,6 +1452,58 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 				expect(store.refusal).toBeNull();
 			});
 		});
+
+		// A refusal is the operator's to act on: only their next action answers it,
+		// never a reload a colleague, an ended epoch or a reconnect triggered.
+		describe('a reload the operator did not ask for', () => {
+			const ended = {
+				eventId: EVENT_ID,
+				timestamp: 1_000,
+				screenId: SCREEN_ID,
+				sessionId: 55,
+			} as never;
+
+			it.each([
+				[
+					'a colleague\'s notification it fell behind on',
+					() => store.applyRemoteCommand(notification({ sequence: 9 })),
+				],
+				[
+					'an ended epoch',
+					() => store.applyEpochEnded(ended),
+				],
+				[
+					'a Reconnect Resync',
+					() => store.reloadSession(EVENT_ID, SCREEN_ID),
+				],
+			])('keeps the refusal on show through %s', async (_case, reload) => {
+				await store.loadSession(EVENT_ID, SCREEN_ID);
+				mockRepository.sendCommand.mockRejectedValueOnce(
+					refusedCommandFailure('missing-asset-reference', MISSING_MESSAGE),
+				);
+				await store.take(EVENT_ID, SCREEN_ID, 'slate');
+				vi.clearAllMocks();
+				mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 9 }));
+
+				await reload();
+
+				expect(mockRepository.getSession).toHaveBeenCalledOnce();
+				expect(store.sessions.get(SCREEN_ID)?.id).toBe(56);
+				expect(store.refusal?.code).toBe('missing-asset-reference');
+				expect(store.error).toBe(MISSING_MESSAGE);
+			});
+
+			it('reports its own failure, and stops once a later reload succeeds', async () => {
+				await store.loadSession(EVENT_ID, SCREEN_ID);
+				mockRepository.getSession.mockRejectedValueOnce(new Error('Failed to fetch'));
+
+				await store.reloadSession(EVENT_ID, SCREEN_ID);
+				expect(store.error).toBe('Failed to fetch');
+
+				await store.reloadSession(EVENT_ID, SCREEN_ID);
+				expect(store.error).toBeNull();
+			});
+		});
 	});
 
 	describe('durable live state that could not be recovered', () => {
@@ -1582,6 +1635,34 @@ describe('broadcastGraphicsLiveSessionStore', () => {
 			} as never);
 
 			expect(mockRepository.getSession).not.toHaveBeenCalled();
+		});
+
+		// The first load may have read the epoch that ended, with graphics on air.
+		it('reads again when it ends while the first load is in flight, and holds only the new epoch', async () => {
+			const first = deferred<BroadcastGraphicsLiveSessionResponse>();
+			mockRepository.getSession.mockReturnValueOnce(first.promise);
+			mockRepository.getSession.mockResolvedValue(session({ id: 56, sequence: 1 }));
+			const loading = store.loadSession(EVENT_ID, SCREEN_ID);
+
+			await store.applyEpochEnded({
+				eventId: EVENT_ID,
+				timestamp: 1_000,
+				screenId: SCREEN_ID,
+				sessionId: 55,
+			} as never);
+			first.resolve(session({
+				currentState: {
+					playout: {
+						slate: { onAir: true, effectiveStartedAt: 0, cut: false },
+					},
+					inputs: {},
+				},
+			}));
+			await loading;
+
+			expect(mockRepository.getSession).toHaveBeenCalledTimes(2);
+			expect(store.sessions.get(SCREEN_ID)?.id).toBe(56);
+			expect(store.playoutState(SCREEN_ID, 'slate')).toBe('off');
 		});
 	});
 

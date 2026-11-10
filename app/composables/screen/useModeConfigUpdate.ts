@@ -34,7 +34,7 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 	const screenStore = useScreenStore();
 	const { getServerTime } = useServerTime();
 
-	const { config, saving, saveState, saveError, updateConfig, retry, discard } = useConfigUpdate<ConfigType, ScreenModeConfigPatch<M>>({
+	const { config, saving, saveState, saveError, updateConfig, retry, discard, flush } = useConfigUpdate<ConfigType, ScreenModeConfigPatch<M>>({
 		getStoreConfig: () => {
 			const screen = screenStore.screens.find(s => s.id === toValue(screenId));
 			const modeConfigs = (screen?.modeConfigs ?? {}) as ModeConfigsMap;
@@ -65,5 +65,6 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 		resetConfig,
 		retry,
 		discard,
+		flush,
 	};
 }

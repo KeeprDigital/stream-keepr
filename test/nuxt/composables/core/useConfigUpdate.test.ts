@@ -553,4 +553,79 @@ describe('useConfigUpdate', () => {
 		expect(saving.value).toBe(false);
 		scope.stop();
 	});
+
+	// A server-side write of the same Screen reads what is stored, so its caller
+	// lands every unsaved edit first: the one still debounced, and any behind a save.
+	describe('flush', () => {
+		function createFlushSetup(saveToStore: (updates: Partial<TestConfig>) => Promise<unknown>) {
+			return useConfigUpdate<TestConfig>({
+				getStoreConfig: () => ({}),
+				saveToStore,
+				defaults: { color: 'red', size: 10 },
+				debounceMs: 100,
+			});
+		}
+
+		it('sends an edit still inside its debounce at once, and answers only once it has landed', async () => {
+			const save = deferred<{ ok: boolean }>();
+			const saveToStore = vi.fn(() => save.promise);
+			const { updateConfig, flush } = createFlushSetup(saveToStore);
+			const settled = vi.fn();
+
+			updateConfig({ color: 'green' });
+			void flush().then(settled);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(saveToStore).toHaveBeenCalledExactlyOnceWith({ color: 'green' });
+			expect(settled).not.toHaveBeenCalled();
+
+			save.resolve({ ok: true });
+			await vi.advanceTimersByTimeAsync(200);
+
+			expect(settled).toHaveBeenCalledExactlyOnceWith(true);
+			expect(saveToStore).toHaveBeenCalledOnce();
+		});
+
+		it('waits for a save in flight and the edit queued behind it', async () => {
+			const first = deferred<{ ok: boolean }>();
+			const second = deferred<{ ok: boolean }>();
+			const saveToStore = vi.fn()
+				.mockReturnValueOnce(first.promise)
+				.mockReturnValueOnce(second.promise);
+			const { updateConfig, flush } = createFlushSetup(saveToStore);
+			const settled = vi.fn();
+
+			updateConfig({ color: 'green' });
+			await vi.advanceTimersByTimeAsync(100);
+			updateConfig({ size: 20 });
+			void flush().then(settled);
+
+			first.resolve({ ok: true });
+			await vi.advanceTimersByTimeAsync(0);
+			expect(saveToStore).toHaveBeenLastCalledWith({ size: 20 });
+			expect(settled).not.toHaveBeenCalled();
+
+			second.resolve({ ok: true });
+			await vi.advanceTimersByTimeAsync(0);
+			expect(settled).toHaveBeenCalledExactlyOnceWith(true);
+		});
+
+		it.each([
+			['true with nothing unsaved', undefined, true],
+			[
+				'false when an edit was refused, which stays unsaved',
+				new Error('Refused'),
+				false,
+			],
+		])('answers %s', async (_case, failure, answer) => {
+			const saveToStore = failure
+				? vi.fn().mockRejectedValue(failure)
+				: vi.fn().mockResolvedValue({ ok: true });
+			const { updateConfig, flush } = createFlushSetup(saveToStore);
+			if (failure)
+				updateConfig({ color: 'green' });
+
+			await expect(flush()).resolves.toBe(answer);
+		});
+	});
 });

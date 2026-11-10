@@ -23,8 +23,8 @@ import { themeColorText } from '~/modules/theme-editor/themeColor';
  * An input takes `modelValue` (the token's value as it resolves now), `label`,
  * for a dimension its `bounds`, for an asset its `assetKinds`, and the
  * `eventId` whose library assets a picker offers first, if any. It emits
- * `commit` with a whole new value once an edit is finished. The editor writes
- * that value as the token.
+ * `commit` with a whole new value built on `modelValue`. The editor holds that
+ * value as the token's draft and writes it as the token.
  */
 export const THEME_TOKEN_INPUTS = {
 	'color': ColorTokenInput,
@@ -41,6 +41,25 @@ export const THEME_TOKEN_INPUTS = {
 	// Where a plain overlay host places its mode's content.
 	'alignment': AlignmentTokenInput,
 } as const satisfies Record<ThemeTokenType, Component>;
+
+/**
+ * Whether a type's input emits `commit` on every keystroke or step, so the
+ * editor writes once its edits pause, or only for a finished edit, which is
+ * written at once.
+ */
+export const THEME_TOKEN_COMMITS_IN_STEPS = {
+	'color': false,
+	'dimension': false,
+	'typography': true,
+	'backgroundLayers': true,
+	'animationEffect': true,
+	'asset': false,
+	'fill': true,
+	'surface-style': true,
+	'shape-geometry': true,
+	'animation-recipe': true,
+	'alignment': false,
+} as const satisfies Record<ThemeTokenType, boolean>;
 
 const ASSET_KIND_TEXT = {
 	'image': 'Library image',

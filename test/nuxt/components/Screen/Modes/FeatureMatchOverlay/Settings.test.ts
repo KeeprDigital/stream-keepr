@@ -428,6 +428,29 @@ describe('featureMatchOverlaySettings', () => {
 			expect(rotation()).toBe(item.rotation ?? 0);
 		});
 
+		it('undoes a whole canvas drag as one step, however long it pauses', async () => {
+			let now = 1_000;
+			vi.spyOn(Date, 'now').mockImplementation(() => now);
+			const wrapper = await mountComponent();
+			await flushPromises();
+			const item = mockConfig.value.layout.composition.items[0]!;
+			const rotation = () => mockConfig.value.layout.composition.items.find(candidate => candidate.id === item.id)!.rotation ?? 0;
+			preview(wrapper).vm.$emit('selectCompositorTarget', { type: 'item', graphicId: 'feature-match-layout', itemId: item.id });
+			await nextTick();
+
+			preview(wrapper).vm.$emit('gestureStart');
+			for (const turned of [30, 45, 60]) {
+				now += 1_000;
+				preview(wrapper).vm.$emit('rotate', turned, 1);
+			}
+			preview(wrapper).vm.$emit('gestureEnd');
+			await nextTick();
+			expect(rotation()).toBe(60);
+
+			await press('z', { metaKey: true });
+			expect(rotation()).toBe(item.rotation ?? 0);
+		});
+
 		it('returns to the canvas when the selected layer leaves the layout', async () => {
 			const wrapper = await mountComponent();
 			await flushPromises();

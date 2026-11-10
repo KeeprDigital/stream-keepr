@@ -23,13 +23,21 @@ export function useBroadcastGraphicsLiveSessionSync(
 ) {
 	const sessionStore = useBroadcastGraphicsLiveSessionStore();
 
-	function reload() {
+	function read(how: 'loadSession' | 'reloadSession') {
 		const event = toValue(eventId);
 		const screen = toValue(screenId);
 		if (!event || !screen)
 			return;
 
-		void sessionStore.loadSession(event, screen);
+		void sessionStore[how](event, screen);
+	}
+
+	/**
+	 * Read again without the operator asking. What the store is reporting to them,
+	 * a refused Take included, stays on show: only opening a Screen reports afresh.
+	 */
+	function reload() {
+		read('reloadSession');
 	}
 
 	watch(
@@ -37,7 +45,7 @@ export function useBroadcastGraphicsLiveSessionSync(
 			toValue(eventId),
 			toValue(screenId),
 		] as const,
-		() => reload(),
+		() => read('loadSession'),
 		{ immediate: true },
 	);
 

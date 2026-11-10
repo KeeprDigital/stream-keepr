@@ -64,6 +64,10 @@ const emit = defineEmits<{
 	change: [rect: GraphicRect, gesture: number];
 	/** Each frame of a rotate drag, as the Graphic Rotation it turns the layer to. */
 	rotate: [rotation: number, gesture: number];
+	/** A drag began; every frame until `gestureEnd` belongs to it, however long it pauses. */
+	gestureStart: [];
+	/** The drag ended: the pointer let go or was cancelled, or the overlay went away under it. */
+	gestureEnd: [];
 }>();
 
 /** The angle a rotate drag steps by while Shift is held. */
@@ -241,6 +245,7 @@ function start(event: PointerEvent, handle: ManipulationHandle | 'rotate') {
 		startRotation: props.rotation ?? 0,
 		gesture: gestureCount,
 	};
+	emit('gestureStart');
 }
 
 function turnTo(current: Drag, delta: { x: number; y: number }, event: PointerEvent) {
@@ -295,7 +300,13 @@ function end(event: PointerEvent) {
 		return;
 	drag.value = null;
 	live.value = null;
+	emit('gestureEnd');
 }
+
+onBeforeUnmount(() => {
+	if (drag.value)
+		emit('gestureEnd');
+});
 
 /** The guides and gaps a drag draws, in drawn pixels. */
 const guides = computed(() => {
