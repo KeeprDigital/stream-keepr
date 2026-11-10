@@ -6,7 +6,7 @@ import { animationEffectSelectionSchema } from '../../animationEffects';
 import { MEDIA_FIT_VALUES } from '../../types/graphicItem';
 import { MAX_GRAPHIC_MEDIA_PLAYBACK_RATE, MIN_GRAPHIC_MEDIA_PLAYBACK_RATE } from '../../types/graphics';
 import { remoteMediaUrlRefusal } from '../../utils/remoteMediaUrl';
-import { literalColorSchema, themeColorSchema } from './composites';
+import { linearGradientFillSchema, literalColorSchema, themeColorSchema } from './composites';
 
 /**
  * The one Background Layer stack schema: a Screen's own stack (ADR-0016) and
@@ -17,7 +17,8 @@ import { literalColorSchema, themeColorSchema } from './composites';
  *
  * The token's colour layer may name a colour Foundation Token, as a fill's
  * colour may (#831), so a Theme's backdrop follows its palette. Once resolved
- * every colour is a literal, and the stack is a Screen's.
+ * every colour is a literal, and the stack is a Screen's. A gradient layer's
+ * stops hold literal colours in both.
  */
 export type ThemeBackgroundLayer<C = ThemeColor>
 	= | Exclude<BackgroundLayer, ColorBackgroundLayer>
@@ -98,6 +99,17 @@ export const screenMediaPlaybackRateSchema = z.preprocess(
 	z.number().finite().min(MIN_GRAPHIC_MEDIA_PLAYBACK_RATE).max(MAX_GRAPHIC_MEDIA_PLAYBACK_RATE),
 );
 
+/**
+ * A gradient layer's Graphic Fill gradient (#1073). A CSS gradient string stored
+ * before it is still accepted: stored stacks are read without a schema and an
+ * editor re-sends the whole stack, so refusing the string would refuse every
+ * later edit to a stack holding one. The editor replaces it; it never writes one.
+ */
+const layerGradientSchema = z.union([
+	linearGradientFillSchema(literalColorSchema),
+	z.string().min(1).max(1000),
+]);
+
 /** What every Background Layer owns regardless of type — see `BackgroundLayerBase`. */
 const layerShape = {
 	id: z.string().min(1).max(100),
@@ -115,7 +127,7 @@ function layerSchema<C extends z.ZodType>(colorSchema: C) {
 		z.object({
 			...layerShape,
 			type: z.literal('gradient'),
-			gradient: z.string().min(1).max(1000),
+			gradient: layerGradientSchema,
 		}).strict(),
 		z.object({
 			...layerShape,
