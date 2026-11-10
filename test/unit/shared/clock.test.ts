@@ -326,6 +326,114 @@ describe('applyClockAdjustment', () => {
 	});
 });
 
+// A delta moves a countdown's end: + gives time back, − takes it away. Past the
+// end that is overtime shrinking or growing, never a reset to 0:00 (#1025).
+describe('applyClockAdjustment on a countdown counting up past its end', () => {
+	const now = 1_000_000;
+	const MINUTE = 60_000;
+	function overtimeClock(overtimeMs: number, overrides: Partial<ClockState> = {}): ClockState {
+		return {
+			type: 'countdown',
+			durationMs: 10 * MINUTE,
+			elapsedMs: 10 * MINUTE + overtimeMs,
+			isRunning: false,
+			lastStartedAt: null,
+			countUpAfterCountdown: true,
+			...overrides,
+		};
+	}
+	function expired(clock: ClockState) {
+		return getEffectiveElapsedMs(clock, now) >= clock.durationMs;
+	}
+
+	it.each([
+		{
+			name: '−1:00 on 3:00 of overtime lengthens it',
+			overtimeMs: 3 * MINUTE,
+			deltaMs: -MINUTE,
+			shows: '4:00',
+			inOvertime: true,
+		},
+		{
+			name: '+1:00 on 3:00 of overtime shortens it',
+			overtimeMs: 3 * MINUTE,
+			deltaMs: MINUTE,
+			shows: '2:00',
+			inOvertime: true,
+		},
+		{
+			name: '+3:00 on 3:00 of overtime lands on the end',
+			overtimeMs: 3 * MINUTE,
+			deltaMs: 3 * MINUTE,
+			shows: '0:00',
+			inOvertime: true,
+		},
+		{
+			name: '+5:00 on 3:00 of overtime returns to a countdown',
+			overtimeMs: 3 * MINUTE,
+			deltaMs: 5 * MINUTE,
+			shows: '2:00',
+			inOvertime: false,
+		},
+		{
+			name: '−15:00, more than the clock has run, still lengthens it',
+			overtimeMs: 3 * MINUTE,
+			deltaMs: -15 * MINUTE,
+			shows: '18:00',
+			inOvertime: true,
+		},
+		{
+			name: '+1:00 on a clock holding at its limit shortens what it shows',
+			overtimeMs: 9 * MINUTE,
+			limitMs: 5 * MINUTE,
+			deltaMs: MINUTE,
+			shows: '4:00',
+			inOvertime: true,
+		},
+	])('$name', ({ overtimeMs, limitMs, deltaMs, shows, inOvertime }) => {
+		const result = applyClockAdjustment(overtimeClock(overtimeMs, { countUpLimitMs: limitMs }), now, { deltaDisplayMs: deltaMs });
+
+		expect(formatClockDisplay(result, now, '')).toBe(shows);
+		expect(expired(result)).toBe(inOvertime);
+		expect(result.durationMs).toBeGreaterThanOrEqual(0);
+	});
+
+	it.each([
+		{
+			name: 'a running clock keeps running from the adjusted overtime',
+			clock: overtimeClock(2 * MINUTE, { isRunning: true, lastStartedAt: now - MINUTE }),
+			adjustment: { deltaDisplayMs: -MINUTE },
+			shows: '4:00',
+		},
+		{
+			name: 'a set-to still sets a countdown of that length',
+			clock: overtimeClock(3 * MINUTE),
+			adjustment: { targetDisplayMs: 2 * MINUTE },
+			shows: '2:00',
+			countsDown: true,
+		},
+		{
+			name: 'a clock that holds 0:00 after its end still counts down from a +',
+			clock: overtimeClock(3 * MINUTE, { countUpAfterCountdown: false }),
+			adjustment: { deltaDisplayMs: MINUTE },
+			shows: '1:00',
+			countsDown: true,
+		},
+		{
+			name: 'a − before the end stops at the end',
+			clock: overtimeClock(-30_000),
+			adjustment: { deltaDisplayMs: -MINUTE },
+			shows: '0:00',
+		},
+	])('$name', ({ clock, adjustment, shows, countsDown }) => {
+		const result = applyClockAdjustment(clock, now, adjustment);
+
+		expect(formatClockDisplay(result, now, '')).toBe(shows);
+		if (countsDown)
+			expect(expired(result)).toBe(false);
+	});
+});
+
 describe('clockDisplayNextChangeInMs', () => {
 	const NOW = 1_000_000;
 	function running(overrides: Partial<ClockState>, elapsedMs: number): ClockState {

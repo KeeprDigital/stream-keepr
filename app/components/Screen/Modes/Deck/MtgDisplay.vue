@@ -62,11 +62,23 @@ watch(hasDisplayedDeck, async (value) => {
 	}
 }, { immediate: true });
 
-watch(pendingSwapVersion, async () => {
-	if (!hasDisplayedDeck.value) {
+/**
+ * Commit the pending deck while the body is hidden, then show it. A deck that
+ * becomes pending during the tick finds the body hidden and waits for a leave
+ * that is not coming, so it is committed here too rather than stranded.
+ */
+async function commitPendingDeckAndShow() {
+	do {
+		awaitingSwapCommit.value = false;
 		commitPendingDeck();
 		await nextTick();
-		showDeckBody.value = hasDisplayedDeck.value;
+	} while (awaitingSwapCommit.value);
+	showDeckBody.value = hasDisplayedDeck.value;
+}
+
+watch(pendingSwapVersion, async () => {
+	if (!hasDisplayedDeck.value) {
+		await commitPendingDeckAndShow();
 		return;
 	}
 
@@ -84,10 +96,7 @@ async function handleDeckAfterLeave() {
 		return;
 	}
 
-	awaitingSwapCommit.value = false;
-	commitPendingDeck();
-	await nextTick();
-	showDeckBody.value = hasDisplayedDeck.value;
+	await commitPendingDeckAndShow();
 }
 
 const resolvedBoards = computed(() => resolveDeckBoards(config.value));

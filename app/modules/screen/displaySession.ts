@@ -508,11 +508,16 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		// view — counting it would report the operator's own window back to them as
 		// a client watching, and an Identify meant to locate a display in a venue
 		// would flash the one screen they are already looking at.
+		//
+		// Not awaited: presence is not needed to render, and with realtime unable to
+		// connect the enter stays queued until the connection suspends, minutes of
+		// blank program (#1025). The session supersedes its own start on the next
+		// start or stop, and a start that fails leaves the load finished.
 		if (!embed.value) {
-			await screenRealtimeSession.start(scope.eventId, scope.screenId);
+			screenRealtimeSession.start(scope.eventId, scope.screenId).catch((err) => {
+				console.warn('Failed to start the Screen\'s realtime session:', err);
+			});
 		}
-		if (flight.stale)
-			return;
 
 		loadedOn.value = scope;
 		loadFailure.value = null;

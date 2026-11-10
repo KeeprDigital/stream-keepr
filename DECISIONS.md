@@ -606,7 +606,7 @@ Accepted · 2026-10-18 · #609
 
 **A refused attach keeps its listener.** Ably re-attaches a suspended channel by itself, and the listener must still be there when it does. A retry takes the listener off before subscribing again, so nothing is delivered twice. A `failed` channel is attached explicitly first, because ably@2.29 refuses a subscribe on one. A refusal on a covered Event starts a recovery if none is running, because nothing else retries it while the connection stays up.
 
-**`enterPresence` holds its entry instead of failing.** It resolves once entered or once held, never waiting out an outage, because a Screen Output stops loading only when it returns. A held entry enters with its latest data once its Event recovers. `leavePresence` withdraws it either way.
+**`enterPresence` holds its entry instead of failing.** It resolves once entered or once held, never waiting out a token outage. On a covered Event whose connection is down, Ably queues the enter until the connection returns or suspends (about two minutes), so a Screen Output starts its presence and commands once its Event context is read and finishes loading without waiting on them: presence is not needed to render (#1025). A held entry enters with its latest data once its Event recovers. `leavePresence` withdraws it either way.
 
 ### Why
 
@@ -627,7 +627,8 @@ The fix for #307 made a failed mint retry and report, but exhaustion still unsub
 
 - **A bounded number of recovery attempts.** It brings back the failure this removes: after the last attempt, a restored service finds nothing listening.
 - **Re-register from above the transport** (#590, #601). That would need every consumer to know about token outages and remount, and the transport is the layer that knows a subscription exists.
-- **`enterPresence` waiting for the token.** It would hold a Screen Output's load for the length of the outage.
+- **`enterPresence` waiting for the token.** It would hold its caller for the length of the outage.
+- **A Screen Output's load waiting on its presence entry** (#1025). With HTTP fine and realtime unable to connect, program stayed blank until the queued enter settled.
 - **A Screen Output attaching its Event channel before its first read** (#727). The load would wait on the attach, holding program blank for as long as a token outage lasts, for the same reason `enterPresence` does not wait.
 
 ## ADR-0024: An Event-scoped write's continuation belongs to its Event Lifetime, not its Event id

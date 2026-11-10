@@ -267,7 +267,9 @@ function formatNumber(value: number | null, options: Intl.NumberFormatOptions = 
 		return '-';
 	}
 
-	return new Intl.NumberFormat(undefined, {
+	// A fixed locale, not the output machine's: every output of a Screen shows the
+	// same figures, and the percentages beside these are written with a point too.
+	return new Intl.NumberFormat('en', {
 		maximumFractionDigits: 2,
 		...options,
 	}).format(value);

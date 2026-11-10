@@ -201,25 +201,44 @@ export interface ClockAdjustmentInput {
 	targetDisplayMs?: number;
 }
 
+/**
+ * Move a clock by `deltaDisplayMs`, or set it to `targetDisplayMs`.
+ *
+ * On a countdown a delta moves the end: `+` gives time back, `−` takes it away.
+ * A countdown counting up past its end keeps that direction, its overtime being
+ * time remaining below zero: `−` lengthens the overtime it shows (what it holds
+ * at, if it holds at its count-up limit), `+` shortens it and, past zero, counts
+ * down again. A `−` before the end stops at the end, and a set-to always sets a
+ * time of that length, which on a countdown is time remaining.
+ */
 export function applyClockAdjustment(
 	clock: ClockState,
 	now: number,
 	adjustment: ClockAdjustmentInput,
 ): ClockState {
 	const effectiveElapsedMs = getEffectiveElapsedMs(clock, now);
-	const currentDisplayMs = clock.type === 'countdown'
-		? Math.max(0, clock.durationMs - effectiveElapsedMs)
-		: effectiveElapsedMs;
+	const inOvertime = clock.type === 'countdown'
+		&& clock.countUpAfterCountdown
+		&& effectiveElapsedMs >= clock.durationMs;
+	let currentDisplayMs = effectiveElapsedMs;
+	if (inOvertime)
+		currentDisplayMs = -countUpOvertimeMs(effectiveElapsedMs - clock.durationMs, clock.countUpLimitMs);
+	else if (clock.type === 'countdown')
+		currentDisplayMs = Math.max(0, clock.durationMs - effectiveElapsedMs);
 
-	const deltaDisplayMs = adjustment.deltaDisplayMs ?? 0;
-	let targetDisplayMs = adjustment.targetDisplayMs ?? (currentDisplayMs + deltaDisplayMs);
-	targetDisplayMs = Math.max(0, targetDisplayMs);
+	const adjustedDisplayMs = currentDisplayMs + (adjustment.deltaDisplayMs ?? 0);
+	const targetDisplayMs = adjustment.targetDisplayMs === undefined && inOvertime
+		? adjustedDisplayMs
+		: Math.max(0, adjustment.targetDisplayMs ?? adjustedDisplayMs);
 
 	if (clock.type === 'countdown') {
+		// A negative target is overtime, which is elapsed time past the duration.
+		// More overtime than the clock has run cannot come off the duration alone.
+		const durationMs = Math.max(0, effectiveElapsedMs + targetDisplayMs);
 		return {
 			...clock,
-			durationMs: effectiveElapsedMs + targetDisplayMs,
-			elapsedMs: effectiveElapsedMs,
+			durationMs,
+			elapsedMs: durationMs - targetDisplayMs,
 			lastStartedAt: clock.isRunning ? now : null,
 		};
 	}

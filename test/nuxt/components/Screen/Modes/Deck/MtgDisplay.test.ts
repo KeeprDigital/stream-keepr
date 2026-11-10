@@ -1,8 +1,8 @@
 import type { HighlanderDeckSummary } from '~~/shared/types/highlander';
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/Deck/MtgDisplay.vue';
 
@@ -131,17 +131,21 @@ function createHighlanderSummary(overrides: Partial<HighlanderDeckSummary> = {})
 	};
 }
 
-async function mountComponent() {
+async function mountComponent(stubs: Record<string, boolean> = {}) {
 	return mount(Display, {
 		global: {
 			stubs: {
 				ScreenModeBase: ScreenModeBaseStub,
 				MtgManaColorDisplay: ManaColorDisplayStub,
 				ScreenModesDeckCard: DeckCardStub,
+				...stubs,
 			},
 		},
 	});
 }
+
+// Every mounted display follows the one faked mode data, so none outlives its test.
+enableAutoUnmount(afterEach);
 
 describe('screenDeckDisplay', () => {
 	beforeEach(() => {
@@ -707,6 +711,53 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.find('[data-testid="deck-meta-pill"]').exists()).toBe(false);
 		expect(wrapper.find('[data-testid="deck-card"]').exists()).toBe(false);
 		expect(wrapper.text()).toBe('');
+	});
+
+	// The deck on show is the newest one pending, however the swaps interleave: a
+	// deck that becomes pending just as another is committed is not left waiting.
+	it.each([
+		{
+			name: 'swaps to a pending deck',
+			showing: 1,
+			decks: ['Bob'],
+		},
+		{
+			name: 'swaps on to a deck that became pending as the last one was committed',
+			showing: 1,
+			decks: ['Bob', 'Carol'],
+		},
+		{
+			name: 'shows its first deck',
+			showing: 0,
+			decks: ['Bob'],
+		},
+		{
+			name: 'swaps on to a deck that became pending as its first one was committed',
+			showing: 0,
+			decks: ['Bob', 'Carol'],
+		},
+	])('$name', async ({ showing, decks }) => {
+		displayedDeckVersion.value = showing;
+		const arriving = [...decks];
+		let pending: string | undefined;
+		function arrive() {
+			pending = arriving.shift();
+			if (pending)
+				pendingSwapVersion.value += 1;
+		}
+		commitPendingDeck.mockImplementation(() => {
+			if (!pending)
+				return;
+			primaryName.value = pending;
+			displayedDeckVersion.value += 1;
+			arrive();
+		});
+		// The real transition, because its after-leave is what commits a swap.
+		const wrapper = await mountComponent({ transition: false });
+
+		arrive();
+
+		await vi.waitFor(() => expect(wrapper.text()).toContain(decks.at(-1)));
 	});
 
 	it('shows list-view point badges only when enabled', async () => {

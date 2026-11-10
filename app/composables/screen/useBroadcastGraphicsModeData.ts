@@ -210,18 +210,24 @@ export function useBroadcastGraphicsModeData(context: ScreenContext) {
 			liveFrame = requestAnimationFrame(advanceLiveClock);
 	}
 
-	// Every accepted command reaches this client as a new snapshot, and a new snapshot is
-	// the only thing that can start a phase — so that is what restarts the clock.
+	// Every accepted command reaches this client as a new snapshot, and a new snapshot
+	// starts a phase — so that restarts the clock. So do the stored graphics and
+	// channels: a looping recipe saved onto a graphic resting on air starts motion with
+	// no command. A change that moves nothing costs one frame, which stops it again.
 	watch(
-		() => {
-			const screenId = screen.value?.id;
-			const session = screenId
-				? sessionStore.sessions.get(screenId)
-				: undefined;
-			return session
-				? `${session.id}:${session.sequence}:${sessionStore.clockSynchronized}`
-				: null;
-		},
+		[
+			() => {
+				const screenId = screen.value?.id;
+				const session = screenId
+					? sessionStore.sessions.get(screenId)
+					: undefined;
+				return session
+					? `${session.id}:${session.sequence}:${sessionStore.clockSynchronized}`
+					: null;
+			},
+			graphics,
+			channels,
+		],
 		() => startLiveClock(),
 		{ immediate: true },
 	);

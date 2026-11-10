@@ -239,10 +239,14 @@ const graphicsContext = computed(() => fixedDataset.value?.context
 // per-item animation input. The trigger watches only the live context: a
 // fixed dataset is a constant, and crossing between one and the live context
 // is a data-source switch rather than an operator's reveal — the composable
-// treats an absent context as joining, so neither crossing plays motion.
+// treats an absent context as joining, so neither crossing plays motion. Nor
+// is there one while no Session is held: the live context reads its flag as
+// hidden then, and a Session arriving or leaving is no reveal or hide either.
 const { itemAnimation } = useFeatureMatchOverlaySideboardRevealAnimation(
 	config,
-	computed(() => fixedDataset.value ? undefined : graphicsContext.value),
+	computed(() => fixedDataset.value || !matchState.value
+		? undefined
+		: graphicsContext.value),
 );
 
 // An editor's Graphic Animation Preview run (#749); a live output never has one.
