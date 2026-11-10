@@ -7,7 +7,11 @@ import type { PreviousRoundStandingsResult } from './roundMatches';
 import { createError } from 'h3';
 import { mapMeleePlayersToDb } from '~~/server/mappers/melee';
 import { eventDataPublicationModule, publishSyncAfterCommit } from '~~/server/modules/event-data-publication';
-import { syncMatchesFromMelee, syncPreviousRoundStandingsFromMelee } from '~~/server/modules/melee-sync/roundMatches';
+import {
+	MeleeRoundNotReadyError,
+	syncMatchesFromMelee,
+	syncPreviousRoundStandingsFromMelee,
+} from '~~/server/modules/melee-sync/roundMatches';
 import { importedMtgCardResolverService } from '~~/server/services/importedMtgCardResolver';
 import { describeKeptStructure, removeImportedStructure } from '~~/server/services/importedStructure';
 import { requireMeleeService } from '~~/server/services/meleeIntegration';
@@ -585,6 +589,7 @@ export function createMeleeSyncWorkflows() {
 		const eligibleRounds = allRounds.filter(round => isMeleeManagedRound(round));
 		const nextRound = eligibleRounds.find(round => round.lastSyncedAt === null) ?? null;
 		const roundResults: Array<Awaited<ReturnType<typeof syncRoundMatches>> & { role: 'previous' | 'next' | 'latest' }> = [];
+		const notReadyWarnings: string[] = [];
 
 		if (advanceRound && nextRound) {
 			const nextRoundIndex = eligibleRounds.findIndex(round => round.id === nextRound.id);
@@ -599,11 +604,20 @@ export function createMeleeSyncWorkflows() {
 				steps.push('previous-round');
 				await checkpoint?.();
 			}
-			roundResults.push({
-				...await syncRoundMatches(syncContext, eventId, eventData, nextRound.id),
-				role: 'next',
-			});
-			steps.push('next-round');
+			// The next Round is unpaired for most of every Round. That is no failure
+			// of the update: what it refreshed stands, and the operator is told.
+			try {
+				roundResults.push({
+					...await syncRoundMatches(syncContext, eventId, eventData, nextRound.id),
+					role: 'next',
+				});
+				steps.push('next-round');
+			}
+			catch (error) {
+				if (!(error instanceof MeleeRoundNotReadyError))
+					throw error;
+				notReadyWarnings.push(error.message);
+			}
 		}
 		else {
 			const latestSyncedRound = eligibleRounds.filter(round => round.lastSyncedAt !== null).at(-1) ?? null;
@@ -622,6 +636,7 @@ export function createMeleeSyncWorkflows() {
 			...(playersResult.warnings ?? []),
 			...(deckListsResult?.warnings ?? []),
 			...roundResults.flatMap(result => result.warnings ?? []),
+			...notReadyWarnings,
 		];
 		return {
 			success,

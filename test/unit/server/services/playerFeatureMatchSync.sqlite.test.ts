@@ -17,11 +17,18 @@ const db = drizzle(harness.database, { schema });
 
 /** Thrown by the next Session correction instead of applying it. */
 let failNextCorrection: unknown;
+/**
+ * Each runs once around the next Session correction: after the Reverse Sync has
+ * read its Slots, and either side of the correction that precedes its Slot write.
+ */
+const aroundNextCorrection: { before?: () => Promise<unknown>; after?: () => Promise<unknown> } = {};
 
 vi.doMock('~~/server/db', () => ({ db }));
 vi.doMock('~~/server/utils/ably', () => ({
 	publishMessage: async () => {},
 	publishMessageStrict: async () => {},
+	publishScreenCommand: async () => {},
+	getOriginConnectionId: () => undefined,
 }));
 vi.doMock('~~/server/modules/broadcast-graphics-live-session', async importOriginal => ({
 	...await importOriginal<object>(),
@@ -40,7 +47,13 @@ vi.doMock('~~/server/services/featureMatchState', async (importOriginal) => {
 					failNextCorrection = undefined;
 					if (failure)
 						throw failure;
-					return await service.applyCommandToActiveSession(...args);
+					const { before, after } = aroundNextCorrection;
+					aroundNextCorrection.before = undefined;
+					aroundNextCorrection.after = undefined;
+					await before?.();
+					const result = await service.applyCommandToActiveSession(...args);
+					await after?.();
+					return result;
 				},
 			};
 		},
@@ -49,9 +62,12 @@ vi.doMock('~~/server/services/featureMatchState', async (importOriginal) => {
 
 const { playerFeatureMatchSyncService } = await import('~~/server/services/playerFeatureMatchSync');
 const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
+const { featureMatchPromotionModule } = await import('~~/server/modules/feature-match-promotion');
 
 beforeEach(() => {
 	failNextCorrection = undefined;
+	aroundNextCorrection.before = undefined;
+	aroundNextCorrection.after = undefined;
 });
 
 afterAll(async () => await harness.close());
@@ -121,6 +137,7 @@ async function stage(playersDecks: StagedDeck[][]) {
 	}
 	return {
 		eventId,
+		roundId: round!.id,
 		matchId: match!.id,
 		playerIds,
 		deckIds,
@@ -257,6 +274,55 @@ describe('which deck a Slot side shows after its Player changes', () => {
 			archetypeId: 3,
 			gameData: bob,
 		});
+	});
+});
+
+// A Slot promoted after the Reverse Sync read it holds another Match: the pass
+// leaves that Slot and its new Session alone rather than write the old pairing in.
+describe('a Slot promoted while a Reverse Sync is in flight', () => {
+	it.each([
+		{ window: 'before its Session correction', hook: 'before' as const },
+		{ window: 'between its Session correction and its Slot write', hook: 'after' as const },
+	])('keeps the promoted Match when the promotion lands $window', async ({ hook }) => {
+		const { eventId, roundId, playerIds } = await stage([[], [], [], []]);
+		const [first, second] = await db.insert(schema.matches).values([
+			{
+				eventId,
+				roundId,
+				player1Id: playerIds[0],
+				player2Id: playerIds[1],
+				sortOrder: 1,
+			},
+			{
+				eventId,
+				roundId,
+				player1Id: playerIds[2],
+				player2Id: playerIds[3],
+				sortOrder: 2,
+			},
+		]).returning();
+		const slot = await stageSlot(eventId, {});
+		const promote = async (matchId: number) =>
+			await featureMatchPromotionModule().promoteMatchToSlot({ eventId, slotId: slot.id, matchId });
+		await promote(first!.id);
+		await db.update(schema.players).set({ name: 'Renamed' }).where(eq(schema.players.id, playerIds[0]!));
+		aroundNextCorrection[hook] = async () => await promote(second!.id);
+
+		const updated = await playerFeatureMatchSyncService().syncMatchesFromPlayers(eventId, [playerIds[0]!, playerIds[1]!]);
+
+		const stored = await storedSlot(slot.id);
+		const session = await db.query.featureMatchSessions.findFirst({
+			where: eq(schema.featureMatchSessions.id, stored.activeSessionId!),
+		});
+		expect(stored).toMatchObject({
+			matchId: second!.id,
+			player1Id: playerIds[2],
+			player1Data: { name: 'Player 3' },
+			player2Data: { name: 'Player 4' },
+		});
+		expect([session?.sourceSnapshot.player1.data?.name, session?.sourceSnapshot.player2.data?.name])
+			.toEqual(['Player 3', 'Player 4']);
+		expect(updated).toEqual([]);
 	});
 });
 

@@ -1,9 +1,11 @@
+import type { H3Event } from 'h3';
 import type { MeleeMatchParsed, MeleeStandingParsed } from '~~/server/schemas/external/melee';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
-import { meleeCompetitor, meleeMatch, meleeStanding } from '~~/test/helpers/meleeFixtures';
+import { MeleeTransportError } from '~~/server/services/meleeTransport';
+import { meleeCompetitor, meleeMatch, meleePlayer, meleeStanding } from '~~/test/helpers/meleeFixtures';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /*
@@ -15,12 +17,50 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 const harness = await createSqliteD1Harness();
 const db = drizzle(harness.database, { schema });
 
-const meleeMatchesByRound = new Map<number, MeleeMatchParsed[]>();
+/** Melee Round ids: Swiss Rounds 3 and 4, then the first Top Cut Round. */
+const ROUND_3 = 3003;
+const ROUND_4 = 3004;
+const QUARTERFINALS = 4001;
+
+const meleeMatchesByRound = new Map<number, MeleeMatchParsed[] | Error>();
 const meleeStandingsByRound = new Map<number, MeleeStandingParsed[]>();
 const publishMessageStrict = vi.fn();
 const melee = {
-	fetchMatchesByRound: vi.fn(async (roundId: number) => meleeMatchesByRound.get(roundId) ?? []),
+	fetchMatchesByRound: vi.fn(async (roundId: number) => {
+		const matches = meleeMatchesByRound.get(roundId) ?? [];
+		if (matches instanceof Error)
+			throw matches;
+		return matches;
+	}),
 	fetchStandingsByRound: vi.fn(async (roundId: number) => meleeStandingsByRound.get(roundId) ?? []),
+	/** The tournament `seedEvent` stores: its structure and four Players, unchanged. */
+	fetchEvent: vi.fn(async () => ({
+		Name: 'Melee Championship',
+		Game: 'Magic: The Gathering',
+		Phases: [
+			{
+				ID: 40,
+				Name: 'Swiss',
+				FormatId: 'modern',
+				SortOrder: 0,
+				Rounds: [
+					{ ID: ROUND_3, Name: 'Round 3', SortOrder: 0 },
+					{ ID: ROUND_4, Name: 'Round 4', SortOrder: 1 },
+				],
+			},
+			{
+				ID: 41,
+				Name: 'Top Cut',
+				FormatId: 'modern',
+				SortOrder: 1,
+				Rounds: [
+					{ ID: QUARTERFINALS, Name: 'Quarterfinals', SortOrder: 0 },
+				],
+			},
+		],
+	})),
+	fetchPlayers: vi.fn(async () => [1, 2, 3, 4].map(teamId => meleePlayer(teamId))),
+	fetchCurrentStandings: vi.fn(async () => []),
 };
 
 vi.doMock('~~/server/db', () => ({ db }));
@@ -38,6 +78,7 @@ vi.doMock('~~/server/modules/broadcast-graphics-live-session', () => ({
 
 const { MeleeRoundNotReadyError, syncMatchesFromMelee } = await import('~~/server/modules/melee-sync/roundMatches');
 const { createMeleeSyncWorkflows } = await import('~~/server/modules/melee-sync/workflows');
+const { meleeSyncModule } = await import('~~/server/modules/melee-sync');
 
 afterAll(async () => await harness.close());
 
@@ -48,11 +89,6 @@ const eventData = {
 	meleeClientId: null,
 	meleeClientSecret: null,
 };
-
-/** Melee Round ids: Swiss Rounds 3 and 4, then the first Top Cut Round. */
-const ROUND_3 = 3003;
-const ROUND_4 = 3004;
-const QUARTERFINALS = 4001;
 
 /** A Swiss Phase holding Rounds 3 and 4, a Top Cut Phase after it, and four Players imported from Melee. */
 async function seedEvent() {
@@ -269,6 +305,51 @@ describe('syncing a Round from Melee', () => {
 		expect((await db.query.rounds.findFirst({
 			where: eq(schema.rounds.id, roundId(ROUND_4)),
 		}))!.lastSyncedAt).toBeNull();
+	});
+});
+
+// The next Round is unpaired for most of every Round: Update from Melee still
+// refreshes the Current Round and succeeds, naming the Round it could not import.
+describe('update from Melee while the next Round is not yet paired', () => {
+	it.each([
+		{
+			case: 'answers 404',
+			next: new MeleeTransportError('Not found', 'http', 404),
+		},
+		{ case: 'lists no Matches', next: [] },
+	])('succeeds with a warning when Melee $case for it', async ({ next }) => {
+		const { eventId, roundId } = await seedEvent();
+		await db.update(schema.events).set({
+			lastDecklistsSyncedAt: new Date(),
+		}).where(eq(schema.events.id, eventId));
+		meleeMatchesByRound.set(ROUND_3, [
+			pairing('a', [1, 2]),
+			pairing('b', [3, 4]),
+		]);
+		await syncRound(eventId, roundId(ROUND_3));
+		meleeMatchesByRound.set(ROUND_3, [
+			pairing('a', [1, 2], [2, 0]),
+			pairing('b', [3, 4]),
+		]);
+		meleeMatchesByRound.set(ROUND_4, next);
+
+		const result = await meleeSyncModule().updateFromMelee({} as H3Event, eventId);
+
+		expect(result).toMatchObject({
+			success: true,
+			warnings: ['Round 4 has not been paired in Melee.gg yet'],
+			advancedRound: null,
+			refreshedRound: {
+				id: roundId(ROUND_3),
+			},
+		});
+		expect((await matchesOf(eventId, roundId(ROUND_3))).map(match => match.hasResult)).toEqual([true, false]);
+		expect(await matchesOf(eventId, roundId(ROUND_4))).toEqual([]);
+		const event = (await db.query.events.findFirst({
+			where: eq(schema.events.id, eventId),
+		}))!;
+		expect(event.lastSyncError).toBeNull();
+		expect(event.lastPlayersSyncedAt).toBeInstanceOf(Date);
 	});
 });
 

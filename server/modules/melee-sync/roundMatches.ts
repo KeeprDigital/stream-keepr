@@ -5,6 +5,7 @@ import {
 	InvalidMeleeRoundSnapshotError,
 	mapMeleeMatchesToDbRows,
 	meleeMatchResultState,
+	UnknownMeleeParticipantError,
 } from '~~/server/mappers/melee';
 import { archetypeService } from '~~/server/services/archetype';
 import { matchService } from '~~/server/services/match';
@@ -271,8 +272,9 @@ async function syncRoundSnapshot(
 		standingTeamIds.add(standing.TeamId);
 
 		if (!playerMap.has(externalIdentityKey('melee', standing.TeamId))) {
-			throw new InvalidMeleeRoundSnapshotError(
+			throw new UnknownMeleeParticipantError(
 				`Round standings reference unknown Melee participant ${standing.TeamId}`,
+				standing.TeamId,
 			);
 		}
 	}

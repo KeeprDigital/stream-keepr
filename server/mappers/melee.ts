@@ -54,6 +54,20 @@ export class InvalidMeleeRoundSnapshotError extends Error {
 }
 
 /**
+ * The snapshot names a Melee participant the Event holds no Player for: one
+ * Melee has added since Players were last synced, which a Player sync resolves.
+ */
+export class UnknownMeleeParticipantError extends InvalidMeleeRoundSnapshotError {
+	readonly teamId: number;
+
+	constructor(message: string, teamId: number) {
+		super(message);
+		this.name = 'UnknownMeleeParticipantError';
+		this.teamId = teamId;
+	}
+}
+
+/**
  * Parsed deck list with stable Melee/format identity but without Scryfall IDs yet
  * Used as intermediate format during player sync
  */
@@ -407,8 +421,9 @@ function mapCompetitorToPlayerData(
 	const record = context.recordsByTeamId.get(competitor.TeamId);
 
 	if (!player) {
-		throw new InvalidMeleeRoundSnapshotError(
+		throw new UnknownMeleeParticipantError(
 			`Match ${matchExternalId} references unknown Melee participant ${competitor.TeamId}`,
+			competitor.TeamId,
 		);
 	}
 
@@ -517,8 +532,9 @@ function validateMeleeMatchSnapshot(
 			competitorSortOrders.add(competitor.SortOrder);
 
 			if (!context.playerMap.has(externalIdentityKey('melee', competitor.TeamId))) {
-				throw new InvalidMeleeRoundSnapshotError(
+				throw new UnknownMeleeParticipantError(
 					`Match ${match.Guid} references unknown Melee participant ${competitor.TeamId}`,
+					competitor.TeamId,
 				);
 			}
 		}

@@ -40,6 +40,7 @@ vi.doMock('~~/server/modules/broadcast-graphics-live-session', () => ({
 	refreshBroadcastGraphicsBindings: vi.fn(),
 }));
 vi.doMock('~~/server/modules/melee-sync/roundMatches', () => ({
+	MeleeRoundNotReadyError: class extends Error {},
 	syncMatchesFromMelee,
 	syncPreviousRoundStandingsFromMelee: async () => null,
 }));

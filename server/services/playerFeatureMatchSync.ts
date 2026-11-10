@@ -3,6 +3,7 @@ import type { PlayerSlotData } from '~~/shared/api';
 import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { archetypes, featureMatches, matches, phases, playerDecks, players, rounds } from '~~/server/db/schema';
+import { observedSlotPairing } from '~~/server/services/featureMatch';
 import { linkedOpSideGameData } from '~~/server/services/featureMatchSlotLeader';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
 import { chunkJsonRows } from '~~/server/utils/db';
@@ -62,24 +63,24 @@ function jsonValuesEqual(left: unknown, right: unknown): boolean {
 export function playerFeatureMatchSyncService() {
 	/**
 	 * Player → Match reverse sync.
-	 * After a player is updated, update any match snapshots that reference them.
-	 * Returns the IDs of matches that were updated.
+	 * After a player is updated, work out the match snapshots that reference them.
+	 * `commit` writes the given Slots' new snapshots, each only while its row still
+	 * holds the pairing and active Session it is given with, and answers the ids
+	 * it wrote.
 	 */
 	async function refreshMatchesFromPlayers(eventId: number, playerIds: number[]): Promise<{
-		updatedMatchIds: number[];
 		updatedSlots: DbFeatureMatch[];
 		playersById: Map<number, DbPlayer>;
-		commit: () => Promise<void>;
+		commit: (observedSlots: DbFeatureMatch[]) => Promise<number[]>;
 	}> {
 		const uniqueIds = [
 			...new Set(playerIds),
 		];
 		if (uniqueIds.length === 0) {
 			return {
-				updatedMatchIds: [],
 				updatedSlots: [],
 				playersById: new Map(),
-				commit: async () => {},
+				commit: async () => [],
 			};
 		}
 
@@ -126,10 +127,9 @@ export function playerFeatureMatchSyncService() {
 		];
 		if (affectedMatches.length === 0) {
 			return {
-				updatedMatchIds: [],
 				updatedSlots: [],
 				playersById: new Map(),
-				commit: async () => {},
+				commit: async () => [],
 			};
 		}
 
@@ -284,39 +284,13 @@ export function playerFeatureMatchSyncService() {
 		}
 		if (changed.size === 0) {
 			return {
-				updatedMatchIds: [],
 				updatedSlots: [],
 				playersById,
-				commit: async () => {},
+				commit: async () => [],
 			};
 		}
 
 		const now = new Date();
-		const updateQueries = chunkJsonRows([...changed].map(([id, update]) => ({
-			id,
-			hasPlayer1Data: update.player1Data !== undefined,
-			player1Data: update.player1Data,
-			hasPlayer2Data: update.player2Data !== undefined,
-			player2Data: update.player2Data,
-		}))).map((payload) => {
-			const incoming = sql`(
-				select value from json_each(${payload})
-				where cast(json_extract(value, '$.id') as integer) = ${featureMatches.id}
-				limit 1
-			)`;
-			return db
-				.update(featureMatches)
-				.set({
-					player1Data: sql`case when coalesce(json_extract(${incoming}, '$.hasPlayer1Data'), 0) then json_extract(${incoming}, '$.player1Data') else ${featureMatches.player1Data} end`,
-					player2Data: sql`case when coalesce(json_extract(${incoming}, '$.hasPlayer2Data'), 0) then json_extract(${incoming}, '$.player2Data') else ${featureMatches.player2Data} end`,
-					updatedAt: now,
-				})
-				.where(and(
-					eq(featureMatches.eventId, eventId),
-					sql`${featureMatches.id} in (select cast(json_extract(value, '$.id') as integer) from json_each(${payload}))`,
-				))
-				.returning({ id: featureMatches.id });
-		});
 		const updatedSlots = [
 			...changed.values(),
 		].map(({ slot, player1Data, player2Data }) => ({
@@ -330,13 +304,39 @@ export function playerFeatureMatchSyncService() {
 			updatedAt: now,
 		}));
 		return {
-			updatedMatchIds: [
-				...changed.keys(),
-			],
 			updatedSlots,
 			playersById,
-			commit: async () => {
-				await db.batch(updateQueries as [typeof updateQueries[0], ...typeof updateQueries]);
+			commit: async (observedSlots) => {
+				// Compare-and-swap on the pairing each snapshot was computed for: a Slot
+				// promoted since holds another Match, and must not take this one's data.
+				const updateQueries = observedSlots.flatMap((observed) => {
+					const update = changed.get(observed.id);
+					if (!update)
+						return [];
+					return [
+						db
+							.update(featureMatches)
+							.set({
+								...(update.player1Data === undefined
+									? {}
+									: { player1Data: update.player1Data }),
+								...(update.player2Data === undefined
+									? {}
+									: { player2Data: update.player2Data }),
+								updatedAt: now,
+							})
+							.where(and(
+								eq(featureMatches.id, observed.id),
+								eq(featureMatches.eventId, eventId),
+								observedSlotPairing(observed),
+							))
+							.returning({ id: featureMatches.id }),
+					];
+				});
+				if (updateQueries.length === 0)
+					return [];
+				const written = await db.batch(updateQueries as [typeof updateQueries[0], ...typeof updateQueries]);
+				return written.flatMap(rows => rows.map(row => row.id));
 			},
 		};
 	}
@@ -344,13 +344,15 @@ export function playerFeatureMatchSyncService() {
 	/**
 	 * Batch Player → Match reverse sync.
 	 * After multiple players are updated (e.g. Melee sync), update all affected match snapshots.
-	 * Returns the IDs of matches that were updated.
+	 * Returns the IDs of matches that were updated. A Slot whose pairing or active
+	 * Session moved after it was read is left alone, as a lost Session race is:
+	 * what it holds now was not what this pass computed for.
 	 */
 	async function syncMatchesFromPlayers(eventId: number, playerIds: number[]): Promise<number[]> {
 		if (playerIds.length === 0)
 			return [];
 
-		const { updatedMatchIds, updatedSlots, playersById, commit } = await refreshMatchesFromPlayers(eventId, playerIds);
+		const { updatedSlots, playersById, commit } = await refreshMatchesFromPlayers(eventId, playerIds);
 		const state = featureMatchStateService();
 		const defaults = updatedSlots.length > 0
 			? await state.loadEventDefaults(eventId)
@@ -359,18 +361,38 @@ export function playerFeatureMatchSyncService() {
 		// If any session CAS fails, all slots remain at their previous snapshot and
 		// the next retry will detect the same delta instead of permanently skipping
 		// the stale session.
+		const observedSlots: DbFeatureMatch[] = [];
 		for (const slot of updatedSlots) {
 			const sourceSnapshot = await state.buildSourceSnapshot(slot, defaults, playersById);
-			await state.applyCommandToActiveSession(slot.id, eventId, session => ({
-				commandId: randomCommandId('ReviewedDeckSnapshot'),
-				type: 'SnapshotCorrected',
-				payload: { sourceSnapshot },
-				baseSequence: session.sequence,
-			}));
+			// A Slot read without a Session owns the one just opened for it.
+			const observedWith = (sessionId: number): DbFeatureMatch =>
+				({ ...slot, activeSessionId: slot.activeSessionId ?? sessionId });
+			const corrected = await state.applyCommandToActiveSession(slot.id, eventId, async (session) => {
+				// The Session shown is the Slot's own only while the Slot still holds
+				// what was read. Checked after the Session is loaded, so a promotion
+				// landing later closes this Session and fails the command's own CAS.
+				const [held] = await db
+					.select({ id: featureMatches.id })
+					.from(featureMatches)
+					.where(and(
+						eq(featureMatches.id, slot.id),
+						eq(featureMatches.eventId, eventId),
+						observedSlotPairing(observedWith(session.id)),
+					));
+				if (!held)
+					return null;
+				return {
+					commandId: randomCommandId('ReviewedDeckSnapshot'),
+					type: 'SnapshotCorrected',
+					payload: { sourceSnapshot },
+					baseSequence: session.sequence,
+				};
+			});
+			if (corrected)
+				observedSlots.push(observedWith(corrected.sessionId));
 		}
-		await commit();
 
-		return updatedMatchIds;
+		return await commit(observedSlots);
 	}
 
 	/**
