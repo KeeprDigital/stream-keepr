@@ -3,9 +3,11 @@ import { localAuthBypassIsActive, requestUserSession, serverAuth } from '~~/serv
 
 /**
  * Mounts Better Auth's own router at `/api/auth/**` (#393). Every auth
- * operation — sign-in, sign-out, session reads, the admin plugin's user
- * management — is a sub-route of this handler; nothing else owns a path under
- * `/api/auth/`.
+ * operation — sign-in, sign-out, session reads, redeeming a Password Reset
+ * Link — is a sub-route of this handler; nothing else owns a path under
+ * `/api/auth/`. The admin plugin's routes are not among them: they answer 404
+ * (`disabledPaths` in `server/utils/authOptions.ts`), and user administration
+ * is `/api/admin/users/**`, behind the Graphics Administrator credential.
  */
 export default defineEventHandler((event) => {
 	// The app's client continues to ask Better Auth's ordinary session route. In

@@ -1,6 +1,7 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { events } from '~~/server/db/schema';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { conversionTargetShape, isConversionTargetInBounds } from '~~/shared/conversionTarget';
 import { EVENT_CANVAS_SIDE_BOUNDS } from '~~/shared/eventCanvas';
 import { FEATURE_MATCH_ORIENTATION_VALUES, GAME_VALUES } from '~~/shared/types/enums';
@@ -128,7 +129,7 @@ export const meleeConfigUpdateSchema = meleeConfigSchema.extend({
 
 // ROUTE PARAMS
 export const eventParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 });
 
 /* TYPES */

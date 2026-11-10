@@ -95,6 +95,7 @@ function fakePort(seed: AdministeredUser[] = []): FakePort {
 			accounts.set(userId, updated);
 			return updated;
 		},
+		revokePasswordResetTokens: async () => {},
 		countSessions: async userId => sessionCounts.get(userId) ?? 0,
 		revokeSessions: async (userId) => {
 			revoked.push(userId);

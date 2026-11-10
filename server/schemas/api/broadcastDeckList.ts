@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 
 const MAX_SOURCE_BYTES = 64 * 1024;
 const colorSelectionSchema = z.string()
@@ -40,7 +41,7 @@ export const deleteBroadcastDeckListSchema = z.object({
 }).strict();
 
 export const broadcastDeckListParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	listId: z.coerce.number().int().positive(),
 });
 

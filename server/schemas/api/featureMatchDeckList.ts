@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { PLAYER_SIDE_VALUES } from '~~/shared/types/enums';
 
 /** A pasted Feature Match Deck List: `N[x] CARDNUMBER [name]` lines (ADR-0057). */
@@ -14,7 +15,7 @@ export const saveFeatureMatchDeckListSchema = z.object({
 }).strict();
 
 export const featureMatchDeckListParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	slotId: z.coerce.number().int().positive(),
 	deckListId: z.coerce.number().int().positive(),
 });

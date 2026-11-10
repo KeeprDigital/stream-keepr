@@ -1,6 +1,7 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { rounds } from '~~/server/db/schema';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { ROUND_CONTROL_MODE_VALUES } from '~~/shared/types/enums';
 import { ROUND_DURATION_MINUTES_MAX, ROUND_DURATION_MINUTES_MIN } from '~~/shared/utils/roundClock';
 
@@ -57,7 +58,7 @@ export const updateRoundSchema = createUpdateSchema(rounds)
 
 // ROUTE PARAMS
 export const roundParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	roundId: z.coerce.number().int().positive(),
 });
 

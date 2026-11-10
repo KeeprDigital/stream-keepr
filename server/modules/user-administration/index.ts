@@ -87,6 +87,8 @@ export interface UserAdministrationPort {
 	setPassword: (userId: string, password: string) => Promise<void>;
 	/** Mints one single-use reset token redeemable until `expiresAt`. */
 	issuePasswordResetToken: (userId: string, expiresAt: Date) => Promise<string>;
+	/** Voids every reset token the account has outstanding. */
+	revokePasswordResetTokens: (userId: string) => Promise<void>;
 	setBan: (userId: string, ban: { banned: boolean; banReason: string | null }) => Promise<AdministeredUser>;
 	countSessions: (userId: string) => Promise<number>;
 	revokeSessions: (userId: string) => Promise<void>;
@@ -198,8 +200,9 @@ export async function createUserAccount(
 /**
  * A fresh reset link for an account that already exists.
  *
- * **Minting one revokes nothing; redeeming one revokes everything.** The two
- * halves are deliberately split. Issuing a link is an administrator offering
+ * **Minting one ends no session; redeeming one ends them all.** It does void
+ * the account's earlier links (`mintPasswordResetLink`). The two halves are
+ * deliberately split. Issuing a link is an administrator offering
  * somebody a way back in, and ending their sessions at that moment would punish
  * an account for being *sent* a link it has not used — a link an administrator
  * might issue and the person never open. Redemption is the account itself
@@ -240,6 +243,9 @@ export async function setUserAccountPassword(
 
 	assertPasswordWithinBounds(port, password);
 	await port.setPassword(user.id, password);
+	// The password is the administrator's answer now; a link still in somebody's
+	// chat history must not be able to replace it.
+	await port.revokePasswordResetTokens(user.id);
 
 	return { user };
 }
@@ -267,6 +273,9 @@ export async function banUserAccount(
 	await requireAccount(port, userId);
 
 	const user = await port.setBan(userId, { banned: true, banReason: banReason?.trim() || null });
+	// Redeeming a link lifts no ban, but it would set the password the account
+	// signs in with the moment the ban is lifted.
+	await port.revokePasswordResetTokens(userId);
 	const revokedSessionCount = await port.countSessions(userId);
 	await port.revokeSessions(userId);
 
@@ -327,7 +336,8 @@ async function requireAccount(
 }
 
 /**
- * One token, one expiry, one absolute URL.
+ * One token, one expiry, one absolute URL, and no earlier link left redeemable:
+ * issuing a fresh link is how an administrator answers a leaked one.
  *
  * The origin is joined by `URL` rather than by string concatenation so an
  * origin arriving with a trailing slash cannot produce `https://host//reset…`,
@@ -340,6 +350,8 @@ async function mintPasswordResetLink(
 	context: UserAdministrationContext,
 ): Promise<PasswordResetLink> {
 	const expiresAt = new Date(context.now.getTime() + PASSWORD_RESET_LINK_LIFETIME_SECONDS * 1000);
+	// Earlier links first, so the one handed over now is the account's only one.
+	await port.revokePasswordResetTokens(userId);
 	const token = await port.issuePasswordResetToken(userId, expiresAt);
 
 	return {

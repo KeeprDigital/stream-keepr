@@ -224,8 +224,11 @@ failure on `main`.
 | `NUXT_BANDAI_KEEPR_API_KEY`                      | Optional Bearer key for bandai-keepr, the One Piece card API. Blank: OP card features show "card data unavailable".        |
 | `NUXT_BANDAI_KEEPR_API_URL`                      | bandai-keepr's base URL (`https://op-api.keepr.digital`). Blank: OP card data is unavailable, as above.                    |
 
-Generate keys and secrets with `openssl rand -base64 32`. A deployed Worker
-reads no file; there these are Worker secrets (see [Worker secrets](#worker-secrets)).
+Generate keys and secrets with `openssl rand -base64 32`.
+`NUXT_GRAPHICS_ADMIN_TOKEN` and `NUXT_ADMIN_BOOTSTRAP_TOKEN` shorter than 32
+characters are treated as unset (their routes answer 503, and the server log
+says why). A deployed Worker reads no file; there these are Worker secrets (see
+[Worker secrets](#worker-secrets)).
 
 ## Development
 

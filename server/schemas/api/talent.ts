@@ -1,6 +1,7 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { eventTalents } from '~~/server/db/schema';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { graphicAssetReferenceSchema } from '~~/shared/modules/theme/background';
 import { normalizeSocialProfileInput, SocialProfileInputError } from '~~/shared/socialProfiles';
 
@@ -93,7 +94,7 @@ export const updateTalentSchema = createUpdateSchema(eventTalents)
 
 // ROUTE PARAMS
 export const talentParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	talentId: z.coerce.number().int().positive(),
 });
 

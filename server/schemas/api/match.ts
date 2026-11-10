@@ -1,6 +1,7 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { matches } from '~~/server/db/schema';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { playerGameDataSchema } from './player';
 
 // Embedded player data for match slots (same shape as feature match player data)
@@ -74,7 +75,7 @@ export const updateMatchSchema = createUpdateSchema(matches)
 
 // ROUTE PARAMS
 export const matchParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	matchId: z.coerce.number().int().positive(),
 });
 

@@ -1,11 +1,16 @@
+import { EVENT_ID_PATTERN } from '~~/server/schemas/api/eventId';
 import { eventService } from '~~/server/services/event';
 
 /**
  * Server middleware that validates event existence for all `/api/events/:id/**` routes.
  * Parses and validates the event ID, checks the event exists, and stashes
  * `event.context.eventId` for downstream route handlers.
+ *
+ * It matches whatever stands in the id segment and refuses any spelling outside
+ * the grammar the handlers' param schema reads (`eventIdParamSchema`), so no
+ * handler coerces an id this never checked.
  */
-const EVENT_PATH_RE = /^\/api\/events\/(\d+)(?:\/|$)/;
+const EVENT_PATH_RE = /^\/api\/events\/([^/]+)(?:\/|$)/;
 
 export default defineEventHandler(async (event) => {
 	const path = getRequestURL(event).pathname;
@@ -15,7 +20,7 @@ export default defineEventHandler(async (event) => {
 		return;
 
 	const id = Number(match[1]);
-	if (!Number.isInteger(id) || id <= 0) {
+	if (!EVENT_ID_PATTERN.test(match[1]!) || !Number.isSafeInteger(id)) {
 		throw createError({ statusCode: 400, message: 'Invalid event ID' });
 	}
 

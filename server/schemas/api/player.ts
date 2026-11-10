@@ -1,6 +1,7 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { players } from '~~/server/db/schema';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { OP_CARD_COLORS } from '~~/shared/types/card/op';
 import { isOpCardImageUrl } from '~~/shared/utils/card/op';
 import { storedOpLeader } from '~~/shared/utils/gameData';
@@ -127,7 +128,7 @@ export const updatePlayerSchema = createUpdateSchema(players)
 
 // ROUTE PARAMS
 export const playerParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	playerId: z.coerce.number().int().positive(),
 });
 

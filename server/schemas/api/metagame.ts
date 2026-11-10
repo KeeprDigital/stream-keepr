@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import {
 	BOARD_SELECTION_VALUES,
 	METAGAME_CARD_SORT_BY_VALUES,
@@ -94,16 +95,16 @@ export const metagameArchetypeDetailQuerySchema = metagameCardTableQuerySchema.a
 
 // Route params (reuse event params pattern)
 export const metagameParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 });
 
 export const metagameArchetypeParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	archetypeId: z.coerce.number().int().positive(),
 });
 
 export const metagameCardParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	cardId: z.coerce.number().int().positive(),
 });
 

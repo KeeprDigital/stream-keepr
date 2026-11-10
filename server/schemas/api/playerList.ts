@@ -1,6 +1,7 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { playerLists } from '~~/server/db/schema';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 
 // ── Player List CRUD Schemas ──
 
@@ -52,12 +53,12 @@ export const reorderMembersSchema = z.object({
 // ── Route Params ──
 
 export const playerListParamsSchema = z.object({
-	id: z.coerce.number().int().positive(), // eventId
+	id: eventIdParamSchema, // eventId
 	listId: z.coerce.number().int().positive(),
 });
 
 export const playerListMemberParamsSchema = z.object({
-	id: z.coerce.number().int().positive(), // eventId
+	id: eventIdParamSchema, // eventId
 	listId: z.coerce.number().int().positive(),
 	playerId: z.coerce.number().int().positive(),
 });

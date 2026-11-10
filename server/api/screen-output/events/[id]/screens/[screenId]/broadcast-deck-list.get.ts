@@ -1,48 +1,29 @@
-import type { DeckModeConfig } from '~~/shared/types/screenConfig';
-import { z } from 'zod';
 import { broadcastDeckListService } from '~~/server/services/broadcastDeckList';
-import { screenService } from '~~/server/services/screen';
-import { canReadScreenOutput } from '~~/server/utils/screenOutputAuthorization';
-
-const paramsSchema = z.object({
-	id: z.coerce.number().int().positive(),
-	screenId: z.coerce.number().int().positive(),
-});
-
-function broadcastDeckListNotFound(): never {
-	throw createError({
-		statusCode: 404,
-		statusMessage: 'Not Found',
-		message: 'Broadcast Deck List not found',
-	});
-}
+import { requireScreenOutputModeRead, screenOutputReadNotFound } from '~~/server/utils/screenOutputRead';
 
 /**
  * The complete Broadcast Deck List one Screen has selected for Deck List mode.
  *
  * There is deliberately no list id in this route. A Screen Output can read only
- * the resource its authoritative Screen configuration names, so its capability
- * cannot browse the Event library or ask for another Event's list.
+ * the resource its authoritative Screen configuration names, and only while its
+ * Screen is in Deck List mode (ADR-0022), so its capability cannot browse the
+ * Event library, ask for another Event's list, or read a list ahead of its
+ * broadcast.
  */
 export default defineEventHandler(async (event) => {
-	const { id: eventId, screenId } = await getValidatedRouterParams(event, paramsSchema.parse);
-	const screen = await screenService().findById(screenId, eventId);
-	if (!screen || !(await canReadScreenOutput(event, screen)))
-		broadcastDeckListNotFound();
+	const { eventId, config } = await requireScreenOutputModeRead(event, 'deck');
 
-	const deckConfig = screen.modeConfigs?.deck as Partial<DeckModeConfig> | undefined;
-	const source = deckConfig?.deckSource;
-	if (source?.type !== 'broadcast')
-		broadcastDeckListNotFound();
+	const source = config.deckSource;
+	if (source.type !== 'broadcast')
+		screenOutputReadNotFound();
 
 	const lists = broadcastDeckListService();
 	if (!(await lists.sourceIsSelectable(source.broadcastDeckListId, eventId)))
-		broadcastDeckListNotFound();
+		screenOutputReadNotFound();
 
 	const selected = await lists.findById(source.broadcastDeckListId, eventId);
 	if (!selected)
-		broadcastDeckListNotFound();
+		screenOutputReadNotFound();
 
-	setResponseHeader(event, 'cache-control', 'private, no-store');
 	return selected;
 });

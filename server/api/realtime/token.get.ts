@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { graphicsCatalogueClient } from '~~/server/modules/graphics-asset-library/runtime';
 import { createD1ScreenOutputAssetAuthorizer } from '~~/server/modules/screen-output-assets/authorizer';
 import { screenOutputAssetCapabilityDigest } from '~~/server/modules/screen-output-assets/capability';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { eventService } from '~~/server/services/event';
 import { getAblyClient } from '~~/server/utils/ably';
 import { optionalUserSession } from '~~/server/utils/auth';
@@ -46,7 +47,7 @@ import {
  */
 
 const tokenQuerySchema = z.object({
-	eventId: z.coerce.number().int().positive(),
+	eventId: eventIdParamSchema,
 });
 
 export default defineEventHandler(async (event) => {

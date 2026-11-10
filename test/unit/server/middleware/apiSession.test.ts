@@ -44,12 +44,18 @@ vi.stubGlobal('createError', (input: { statusCode: number; message: string }) =>
 const handler = (await import('~~/server/middleware/api-session')).default;
 
 /** A request for `path`, carrying the headers Better Auth would read a cookie from. */
-function request(path: string) {
+function request(path: string, method = 'GET', headers: Record<string, string> = {}) {
 	mockGetRequestURL.mockReturnValue(new URL(`https://stream.example${path}`));
 	return stubH3Event({
-		headers: new Headers({ cookie: 'better-auth.session_token=a-token' }),
+		method,
+		headers: new Headers({ cookie: 'better-auth.session_token=a-token', ...headers }),
 	});
 }
+
+const SESSION = {
+	session: { id: 'a-session' },
+	user: { id: 'a-user' },
+};
 
 describe('the API boundary middleware', () => {
 	beforeEach(() => {
@@ -107,6 +113,74 @@ describe('the API boundary middleware', () => {
 			await expect(handler(request(path))).resolves.toBeUndefined();
 
 		expect(mockRequestUserSession).not.toHaveBeenCalled();
+	});
+
+	// Wiring for `requestIsCrossSiteMutation`: a signed-in browser made to POST
+	// by another site is refused before a handler runs; its own page, and a
+	// client that names no origin at all, are admitted.
+	it.each([
+		[
+			'its own page',
+			'admitted',
+			{ 'sec-fetch-site': 'same-origin', 'origin': 'https://stream.example' },
+		],
+		[
+			'its own page, in a browser without Sec-Fetch-Site',
+			'admitted',
+			{ origin: 'https://stream.example' },
+		],
+		['a script or test that names no origin', 'admitted', {}],
+		[
+			'a sibling subdomain',
+			403,
+			{ 'sec-fetch-site': 'same-site', 'origin': 'https://evil.example' },
+		],
+		[
+			'another site',
+			403,
+			{ 'sec-fetch-site': 'cross-site', 'origin': 'https://not-this-installation.example' },
+		],
+		[
+			'another site, in a browser without Sec-Fetch-Site',
+			403,
+			{ origin: 'https://not-this-installation.example' },
+		],
+	] as const)('answers a signed-in POST from %s: %s', async (_from, outcome, headers) => {
+		mockRequestUserSession.mockResolvedValue(SESSION);
+
+		const answered = await Promise.resolve(handler(request('/api/events/1/screens/2/command', 'POST', headers))).then(
+			() => 'admitted',
+			(refusal: { statusCode: number }) => refusal.statusCode,
+		);
+
+		expect(answered).toBe(outcome);
+	});
+
+	it('refuses a cross-site POST as Forbidden, in words that say why', async () => {
+		mockRequestUserSession.mockResolvedValue(SESSION);
+
+		await expect(handler(request('/api/events', 'POST', { 'sec-fetch-site': 'cross-site' }))).rejects.toMatchObject({
+			statusCode: 403,
+			statusMessage: 'Forbidden',
+			message: 'Cross-site request refused',
+		});
+	});
+
+	it.each([
+		['a cross-site read of a private route', '/api/events', 'GET'],
+		// These carry their own credential and no Session cookie decides them:
+		// Better Auth checks its own origin, the rest present a token or a bearer.
+		['a cross-site POST to Better Auth\'s router', '/api/auth/sign-in/email', 'POST'],
+		['a cross-site POST to the capability surface', '/api/screen-output/screens/7/asset-capability-session', 'POST'],
+		['a cross-site POST to the Graphics Administrator surface', '/api/admin/users', 'POST'],
+		['a cross-site POST to the first-admin bootstrap', '/api/bootstrap/ensure-admin', 'POST'],
+	])('leaves %s to its own guard', async (_case, path, method) => {
+		mockRequestUserSession.mockResolvedValue(SESSION);
+
+		await expect(handler(request(path, method, {
+			'sec-fetch-site': 'cross-site',
+			'origin': 'https://not-this-installation.example',
+		}))).resolves.toBeUndefined();
 	});
 
 	it('sorts ahead of every other middleware, which is the order Nitro composes them in', () => {

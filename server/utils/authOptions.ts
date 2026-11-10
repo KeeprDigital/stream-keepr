@@ -48,6 +48,13 @@ export const AUTH_ALLOWED_HOSTS = [
 	'127.0.0.1:*',
 ];
 
+const adminPlugin = admin();
+
+/** The path of every route the installed admin plugin would mount under `/api/auth`. */
+const ADMIN_PLUGIN_HTTP_PATHS: string[] = Object.values(adminPlugin.endpoints)
+	.map(endpoint => endpoint.path)
+	.filter(path => typeof path === 'string');
+
 /**
  * The static half of this installation's Better Auth configuration: everything
  * except the database adapter and the secret, which only exist inside a running
@@ -85,7 +92,7 @@ export const authStaticOptions = {
 		 *
 		 * **It governs the link path only.** Better Auth reads this in
 		 * `/api/auth/reset-password`, so an administrator *setting* a password
-		 * directly (`PUT /api/admin/users/:id/password`) still revokes nothing —
+		 * directly (`PUT /api/admin/users/:id/password`) still ends no session —
 		 * that path is for handing somebody back in mid-show, where ending their
 		 * sessions is the opposite of the point. The explicit revoke and ban on
 		 * the same surface remain the way to end sessions deliberately.
@@ -97,8 +104,22 @@ export const authStaticOptions = {
 		updateAge: AUTH_SESSION_UPDATE_AGE_SECONDS,
 	},
 	plugins: [
-		admin(),
+		adminPlugin,
 	],
+	/**
+	 * Every admin-plugin route answers 404 over HTTP. The plugin admits any
+	 * `admin`-role Session to them, the bootstrap account's included, which
+	 * would let a Session stand in for the Graphics Administrator credential
+	 * (ADR-0010): `remove-user` hard-deletes a User that `initiatedBy` and the
+	 * Evidence Ledger name, and `impersonate-user` mints a Session as another.
+	 *
+	 * The plugin stays for its schema, its ban check at sign-in, and the
+	 * server-side `auth.api.createUser` that user administration and the
+	 * first-admin bootstrap call, which this does not touch: `disabledPaths` is
+	 * read by the router only. Derived from the plugin so a bump that adds a
+	 * route disables it too.
+	 */
+	disabledPaths: ADMIN_PLUGIN_HTTP_PATHS,
 	/**
 	 * The multi-host form, because this installation genuinely has more than one
 	 * hostname and a single string would be wrong at four of them (#410).

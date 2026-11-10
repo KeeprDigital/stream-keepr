@@ -21,7 +21,7 @@ async function adminBootstrap() {
 	return import('~~/server/modules/admin-bootstrap');
 }
 
-const CONFIGURED_TOKEN = 'an-armed-bootstrap-token';
+const CONFIGURED_TOKEN = 'an-armed-bootstrap-token-of-32ch';
 
 // The disarmed state is the one the integration suite cannot hold beside the
 // armed one, so the guard is exercised here (#394).

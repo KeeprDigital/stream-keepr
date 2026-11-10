@@ -11,6 +11,7 @@ import {
 	graphicAssetId,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { graphicTypographyFields, shapeGeometrySchema } from '~~/server/schemas/api/graphicValues';
 import { storedFrameAnimationConfigSchema } from '~~/shared/animationEffects';
 import { FEATURE_MATCH_SOURCE_ITEM_CONFIGURATION_VERSION, MAX_FEATURE_MATCH_SOURCE_ITEMS } from '~~/shared/featureMatchSourceItems';
@@ -1732,13 +1733,13 @@ export const screenThemeOverridesPatchSchema = z.object({
 
 // ROUTE PARAMS
 export const screenParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	screenId: z.coerce.number().int().positive(),
 });
 
 // Mode config update params
 export const modeConfigParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	screenId: z.coerce.number().int().positive(),
 	mode: screenModeSchema,
 });

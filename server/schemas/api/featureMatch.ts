@@ -4,6 +4,7 @@ import {
 } from 'drizzle-zod';
 import { z } from 'zod';
 import { featureMatches } from '~~/server/db/schema';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import {
 	PLAYER_SIDE_VALUES,
 	RESET_TYPE_VALUES,
@@ -167,7 +168,7 @@ export const updateFeatureMatchSchema = createUpdateSchema(featureMatches)
 
 // ROUTE PARAMS
 export const featureMatchSlotParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	slotId: z.coerce.number().int().positive(),
 });
 
@@ -178,7 +179,7 @@ export const reorderFeatureMatchSlotSchema = z.object({
 });
 
 export const featureMatchSessionParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	sessionId: z.coerce.number().int().positive(),
 });
 
