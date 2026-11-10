@@ -16,8 +16,9 @@
  * - The server-backed stage (integration, local-auth, browser gates) starts only
  *   once the cheap stage has passed, so a lint or type error never waits behind
  *   it. Those suites are timing-sensitive on a loaded machine (README § Testing):
- *   the build runs beside the cheap stage instead, so that little else competes
- *   with the servers, and only its short Worker tail overlaps them.
+ *   they run one after another, never two sets of servers at once, and the
+ *   build runs beside the cheap stage instead, so that little else competes
+ *   with the servers and only its short Worker tail overlaps them.
  *
  * Usage: node scripts/verify.mjs [--quick | --tests]
  *   --quick  the first stage only: lint, typecheck, unit and Nuxt suites.
@@ -88,13 +89,15 @@ export const GATES = {
 		command: ['run', 'test:integration', '--run'],
 		after: FIRST_STAGE,
 	},
+	// Chained rather than side by side: each starts its own servers, and the
+	// integration suite beside another gives results CI never reproduces.
 	'test:local-auth': {
 		command: ['run', 'test:local-auth'],
-		after: FIRST_STAGE,
+		after: ['test:integration'],
 	},
 	'accept:still-images': {
 		command: ['run', 'accept', 'still-images'],
-		after: FIRST_STAGE,
+		after: ['test:local-auth'],
 	},
 	'accept:silent-video': {
 		command: ['run', 'accept', 'silent-video'],

@@ -21,7 +21,7 @@ interface Step {
 interface Workflow {
 	on: Record<string, { inputs?: Record<string, { options?: string[] }> }>;
 	permissions?: Record<string, string>;
-	jobs: Record<string, { steps?: Step[] }>;
+	jobs: Record<string, { env?: Record<string, string>; steps?: Step[] }>;
 }
 
 const scripts = (JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }).scripts;
@@ -81,6 +81,17 @@ describe('verify and CI run the same gates', () => {
 	});
 });
 
+// Each starts servers, and two at once make every result meaningless (README § Testing).
+describe('verify runs the server-backed suites one at a time', () => {
+	it('chains integration, local-auth and the browser gates, each behind the one before', () => {
+		const serverBacked = Object.keys(GATES).filter(name => /^test:(?:integration|local-auth)$|^accept:/u.test(name));
+
+		expect(serverBacked.slice(0, 3)).toEqual(['test:integration', 'test:local-auth', 'accept:still-images']);
+		expect(GATES['test:integration']!.after).toEqual(expect.arrayContaining(['test:unit:coverage', 'test:nuxt:coverage']));
+		expect(serverBacked.slice(1).map(name => GATES[name as keyof typeof GATES].after)).toEqual(serverBacked.slice(0, -1).map(previous => [previous]));
+	});
+});
+
 describe('the deploy advances its promotion markers only behind every check', () => {
 	it('marks the app pending just before the first remote change, and deployed only after deploy:verify', () => {
 		const commands = scripts.deploy!.split('&&').map(command => command.trim());
@@ -121,6 +132,20 @@ describe('the deploy advances its promotion markers only behind every check', ()
 				if (position !== promote)
 					expect(step.run ?? '').not.toMatch(/git push|git tag|wrangler|pnpm (run )?deploy/);
 			}
+		});
+
+		// Job-level env reaches every step: the install's build scripts and the setup actions too.
+		it('hands the Cloudflare credentials to the promotion step and to nothing else', () => {
+			const holders = [
+				...Object.values(deploy.jobs).map(job => job.env ?? {}),
+				...all.filter((_, position) => position !== promote).map(step => step.env ?? {}),
+			];
+
+			expect(all[promote]!.env).toMatchObject({
+				CLOUDFLARE_API_TOKEN: '${{ secrets.CLOUDFLARE_API_TOKEN }}',
+				CLOUDFLARE_ACCOUNT_ID: '${{ secrets.CLOUDFLARE_ACCOUNT_ID }}',
+			});
+			expect(holders.flatMap(env => Object.entries(env)).filter(([name, value]) => /^CLOUDFLARE_|^WRANGLER_/.test(name) || value.includes('secrets.'))).toEqual([]);
 		});
 
 		it('offers exactly the validator modes the promotion accepts, and can tag', () => {

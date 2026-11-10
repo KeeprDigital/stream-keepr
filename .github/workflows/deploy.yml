@@ -84,8 +84,6 @@ jobs:
       name: production
       url: https://stream.keepr.digital
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       # The tagger identity of the annotated marker tags.
       GIT_COMMITTER_NAME: github-actions[bot]
       GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
@@ -143,6 +141,10 @@ jobs:
       # now says (README.md § Recovering from a partial promotion).
       - name: Promote (validator when decided, then build, dry run, smoke, migrate D1, promote, verify)
         env:
+          # On this step alone: job-level env would also reach the install's
+          # build scripts and the setup actions, which deploy nothing.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           INPUT_VALIDATOR: ${{ inputs.validator }}
         run: node .deploy-tooling/scripts/deploy-promotion.mjs promote "$INPUT_VALIDATOR"
       - name: Remind the operator what is still owed

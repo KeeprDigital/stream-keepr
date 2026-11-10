@@ -14,9 +14,20 @@ const runGraphicsReconciliation = vi.fn();
 const runDueLiveResultsTicks = vi.fn();
 
 vi.stubGlobal('defineNitroPlugin', (plugin: unknown) => plugin);
-vi.doMock('~~/server/modules/graphics-asset-library/runtime', () => ({
-	graphicsAssetLibraryForBindings: () => ({ runGraphicsRetention, runGraphicsReconciliation }),
-}));
+// The plugins get the real library with its two sweeps replaced in place, so a
+// sweep the library no longer has cannot be replaced and its plugin's run fails.
+vi.doMock('~~/server/modules/graphics-asset-library/runtime', async (importOriginal) => {
+	const runtime = await importOriginal<typeof import('~~/server/modules/graphics-asset-library/runtime')>();
+	return {
+		...runtime,
+		graphicsAssetLibraryForBindings: (...bindings: Parameters<typeof runtime.graphicsAssetLibraryForBindings>) => {
+			const library = runtime.graphicsAssetLibraryForBindings(...bindings);
+			vi.spyOn(library, 'runGraphicsRetention').mockImplementation(runGraphicsRetention);
+			vi.spyOn(library, 'runGraphicsReconciliation').mockImplementation(runGraphicsReconciliation);
+			return library;
+		},
+	};
+});
 vi.doMock('~~/server/modules/melee-sync/liveResults/runner', () => ({ runDueLiveResultsTicks }));
 
 const plugins = {

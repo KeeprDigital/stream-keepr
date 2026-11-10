@@ -43,6 +43,9 @@ const ci = workflow('ci.yml');
 const prTitle = workflow('pr-title.yml');
 const releasePlease = workflow('release-please.yml');
 const gates = Object.keys(ci.jobs).filter(id => !['scope', 'record', 'passed'].includes(id));
+const scripts = (JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }).scripts;
+const FOR_CODE = 'needs.scope.outputs.code == \'true\'';
+const FOR_DOCS = 'needs.scope.outputs.docs == \'true\'';
 
 function needs(job: Job) {
 	return [job.needs ?? []].flat().toSorted();
@@ -104,8 +107,25 @@ describe('the CI scope decides what a merge group can affect against the queue\'
 		const job = ci.jobs[id]!;
 
 		expect(job.needs).toBe('scope');
-		expect(job.if).toMatch(/^needs\.scope\.outputs\.(?:code|bundle) == 'true'$/);
+		expect(job.if).toMatch(id === 'checks'
+			? /^needs\.scope\.outputs\.code == 'true' \|\| needs\.scope\.outputs\.docs == 'true'$/
+			: /^needs\.scope\.outputs\.(?:code|bundle) == 'true'$/);
 		expect(JSON.stringify(job)).not.toContain('github.event.pull_request');
+	});
+
+	// A docs-only change skips the code gates, so `checks` runs what they check of a document instead.
+	it('the checks job runs each code gate only for code, and the docs checks only for a docs-only change', () => {
+		const commands = (ci.jobs.checks!.steps ?? []).filter(step => step.run).map(step => [step.run, step.if]);
+
+		expect(scope.outputs).toHaveProperty('docs', '${{ steps.scope.outputs.docs }}');
+		expect(commands).toEqual([
+			['pnpm lint', FOR_CODE],
+			['pnpm typecheck', FOR_CODE],
+			['pnpm test:unit:coverage', FOR_CODE],
+			['pnpm test:nuxt:coverage', FOR_CODE],
+			['pnpm verify:docs', FOR_DOCS],
+		]);
+		expect(scripts['verify:docs']).toBe('eslint "**/*.md" && vitest run test/unit/docs/documentation.test.ts');
 	});
 });
 

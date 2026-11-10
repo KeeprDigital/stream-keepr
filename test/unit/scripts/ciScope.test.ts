@@ -8,30 +8,36 @@ import { diffRange, scopeOf } from '../../../scripts/ci-scope.mjs';
 
 const repositoryRoot = join(import.meta.dirname, '../../..');
 
-const EVERYTHING = { code: true, bundle: true };
+const EVERYTHING = { code: true, bundle: true, docs: false };
 
 describe('what a change can affect', () => {
 	it.each([
 		[
 			'docs only',
 			['README.md', 'DECISIONS.md'],
-			{ code: false, bundle: false },
+			{ code: false, bundle: false, docs: true },
 		],
 		[
 			'editor settings and dependabot',
 			['.vscode/settings.json', '.github/dependabot.yml'],
-			{ code: false, bundle: false },
+			{ code: false, bundle: false, docs: false },
+		],
+		[
+			'docs beside editor settings',
+			['.vscode/settings.json', 'docs/notes.md'],
+			{ code: false, bundle: false, docs: true },
 		],
 		// Each is held by wiring tests, which run only if CI does.
 		[
 			'another workflow',
 			['.github/workflows/deploy.yml', '.github/workflows/pr-title.yml', '.github/workflows/release-please.yml'],
-			{ code: true, bundle: false },
+			{ code: true, bundle: false, docs: false },
 		],
+		// The code gates lint every document and run the documentation test themselves.
 		[
-			'tests only',
+			'tests and docs',
 			['test/unit/scripts/ciScope.test.ts', 'README.md'],
-			{ code: true, bundle: false },
+			{ code: true, bundle: false, docs: false },
 		],
 		[
 			'server code',
@@ -219,7 +225,7 @@ describe('the scope job\'s command line', () => {
 			PATH: `${bin}:${process.env.PATH}`,
 		});
 
-		expect(output).toBe('code=true\nbundle=true\n');
+		expect(output).toBe('code=true\nbundle=true\ndocs=false\n');
 		expect(log).toMatch(/Could not list the records.*HTTP 502/);
 		expect(log).toMatch(/running the gates/);
 	});
@@ -229,15 +235,15 @@ describe('the scope job\'s command line', () => {
 
 		expect(scope(checkout, 'merge_group', {
 			merge_group: { base_sha: base, head_sha: head },
-		}).output).toBe('code=true\nbundle=true\n');
+		}).output).toBe('code=true\nbundle=true\ndocs=false\n');
 	});
 
-	it('a merge group of docs-only PRs skips them', () => {
+	it('a merge group of docs-only PRs skips the code gates and checks the docs', () => {
 		const { checkout, base, head } = mergeGroup('docs/first.md', 'docs/second.md');
 
 		expect(scope(checkout, 'merge_group', {
 			merge_group: { base_sha: base, head_sha: head },
-		}).output).toBe('code=false\nbundle=false\n');
+		}).output).toBe('code=false\nbundle=false\ndocs=true\n');
 	});
 
 	it('a base it cannot fetch runs everything', () => {
@@ -248,6 +254,6 @@ describe('the scope job\'s command line', () => {
 				base_sha: 'f'.repeat(40),
 				head_sha: head,
 			},
-		}).output).toBe('code=true\nbundle=true\n');
+		}).output).toBe('code=true\nbundle=true\ndocs=false\n');
 	});
 });

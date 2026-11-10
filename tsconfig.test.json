@@ -17,6 +17,11 @@
 		"./app/**/*.d.ts",
 		"./server/**/*.d.ts",
 		"./shared/**/*.d.ts",
+		// Nitro loads plugins and middleware by directory, so nothing imports
+		// them: without these trees a file no test imports statically is in no
+		// typecheck program, and a renamed callee fails only in production.
+		"./server/plugins/**/*",
+		"./server/middleware/**/*",
 		"./test/**/*"
 	],
 	"exclude": [

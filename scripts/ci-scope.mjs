@@ -1,7 +1,8 @@
 /**
  * CI's `scope` job ("Decide what the change can affect"): which of CI's jobs
- * a change can affect, so a docs-only change skips the gates and a tests-only
- * change skips the Worker build (.github/workflows/ci.yml).
+ * a change can affect, so a docs-only change skips the code gates, running
+ * only what they check of a document, and a tests-only change skips the
+ * Worker build (.github/workflows/ci.yml).
  *
  * A skipped gate is only safe when what it would have checked is unchanged
  * from a revision that already passed it, so the change is always measured
@@ -27,8 +28,8 @@
  *   node scripts/ci-scope.mjs   (reads GITHUB_EVENT_NAME, GITHUB_EVENT_PATH,
  *                                and in a merge group GITHUB_REPOSITORY,
  *                                GITHUB_REPOSITORY_ID and GH_TOKEN; appends
- *                                code=, bundle= and, on reuse, verified-by=
- *                                to GITHUB_OUTPUT)
+ *                                code=, bundle=, docs= and, on reuse,
+ *                                verified-by= to GITHUB_OUTPUT)
  */
 
 import { execFileSync } from 'node:child_process';
@@ -44,6 +45,12 @@ import { verifiedRunOnGitHub } from './ci-reuse.mjs';
  */
 const OUTSIDE_CODE = /\.md$|^\.vscode\/|^\.github\/dependabot\.yml$/;
 /**
+ * What the code gates check outside the code: `pnpm lint` formats every
+ * document and the documentation test follows its links. A change that skips
+ * those gates still runs that much (`pnpm verify:docs`).
+ */
+const DOCUMENT = /\.md$/;
+/**
  * Neither a test, a workflow other than CI's own, nor anything outside the
  * code can change the uploaded Worker bundle or how CI builds it.
  */
@@ -53,14 +60,16 @@ const COMMIT_ID = /^[0-9a-f]{40}$/;
 
 /**
  * @param {readonly string[]} changedFiles repository-relative paths
- * @returns {{ code: boolean, bundle: boolean }} whether any file can affect the code gates, and the Worker bundle
+ * @returns {{ code: boolean, bundle: boolean, docs: boolean }} whether any file can affect the code gates, and the Worker bundle; and whether a change that skips the code gates touches a document
  */
 export function scopeOf(changedFiles) {
 	if (changedFiles.length === 0)
-		return { code: true, bundle: true };
+		return { code: true, bundle: true, docs: false };
 	const code = changedFiles.some(file => !OUTSIDE_CODE.test(file));
 	const bundle = changedFiles.some(file => !OUTSIDE_CODE.test(file) && !OUTSIDE_BUNDLE.test(file));
-	return { code, bundle };
+	// The code gates cover every document themselves.
+	const docs = !code && changedFiles.some(file => DOCUMENT.test(file));
+	return { code, bundle, docs };
 }
 
 /**
@@ -103,9 +112,9 @@ async function main() {
 		? await verifiedRunOnGitHub(range.head)
 		: undefined;
 	if (verified) {
-		console.log('code=false bundle=false');
+		console.log('code=false bundle=false docs=false');
 		if (process.env.GITHUB_OUTPUT)
-			appendFileSync(process.env.GITHUB_OUTPUT, `code=false\nbundle=false\nverified-by=${verified.url}\n`);
+			appendFileSync(process.env.GITHUB_OUTPUT, `code=false\nbundle=false\ndocs=false\nverified-by=${verified.url}\n`);
 		return;
 	}
 	/** @type {string[]} */
@@ -139,10 +148,10 @@ async function main() {
 			changed = [];
 		}
 	}
-	const { code, bundle } = scopeOf(changed);
-	console.log(`code=${code} bundle=${bundle}`);
+	const { code, bundle, docs } = scopeOf(changed);
+	console.log(`code=${code} bundle=${bundle} docs=${docs}`);
 	if (process.env.GITHUB_OUTPUT)
-		appendFileSync(process.env.GITHUB_OUTPUT, `code=${code}\nbundle=${bundle}\n`);
+		appendFileSync(process.env.GITHUB_OUTPUT, `code=${code}\nbundle=${bundle}\ndocs=${docs}\n`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href)
