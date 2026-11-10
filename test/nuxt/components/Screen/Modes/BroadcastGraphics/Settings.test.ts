@@ -10,6 +10,8 @@ import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 enableAutoUnmount(afterEach);
 
 const mockConfig = ref<BroadcastGraphicsModeConfig>({ graphics: [] });
+/** What the Screen store holds: the value a discarded field shows again. */
+const mockStoredConfig = ref<BroadcastGraphicsModeConfig>({ graphics: [] });
 /** The Event's canvas, other than the default so a host reading anything else shows. */
 const mockEventStore = reactive({
 	event: { canvasWidth: 1280, canvasHeight: 720 },
@@ -36,6 +38,14 @@ const mockUpdateConfig = vi.fn((patch: Record<string, unknown>) => {
 	} as BroadcastGraphicsModeConfig;
 });
 
+const mockDiscard = vi.fn((keys: readonly string[]) => {
+	const stored = mockStoredConfig.value as Record<string, unknown>;
+	mockConfig.value = {
+		...mockConfig.value,
+		...Object.fromEntries(keys.map(key => [key, stored[key]])),
+	} as BroadcastGraphicsModeConfig;
+});
+
 mockNuxtImport('useRoute', () => () => mockRoute);
 mockNuxtImport('useRouter', () => () => ({
 	replace: mockReplace,
@@ -55,8 +65,11 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	updateConfig: mockUpdateConfig,
 	resetConfig: vi.fn(),
 	retry: mockRetry,
+	discard: mockDiscard,
 }));
 const mockLeaseWritable = ref(true);
+/** Set to tell "not writable" apart from "held by another Session"; `null` follows `writable`. */
+const mockLeaseHeldByAnother = ref<boolean | null>(null);
 const mockLeaseEnabled = ref<boolean | null>(null);
 const mockTakeOver = vi.fn();
 mockNuxtImport('useGraphicsAuthoringLease', () => (options: { enabled?: () => boolean }) => {
@@ -65,7 +78,7 @@ mockNuxtImport('useGraphicsAuthoringLease', () => (options: { enabled?: () => bo
 		lease: ref(null),
 		status: ref('ready'),
 		writable: mockLeaseWritable,
-		heldByAnotherSession: computed(() => !mockLeaseWritable.value),
+		heldByAnotherSession: computed(() => mockLeaseHeldByAnother.value ?? !mockLeaseWritable.value),
 		// Who holds it, where the server resolved their session to a person (#398).
 		// Named here rather than left `null`, so this file proves the settings
 		// surface passes it on rather than only that it compiles.
@@ -87,6 +100,10 @@ mockNuxtImport('useBroadcastGraphicsLiveSessionSync', () => () => ({
 const EditWorkspaceStub = defineComponent({
 	props: {
 		graphics: { type: Array, required: true },
+		channels: {
+			type: Array,
+			default: () => [],
+		},
 		selectedTarget: { type: Object, required: true },
 		selectedGraphicId: { type: String, default: null },
 		writable: { type: Boolean, default: true },
@@ -100,6 +117,7 @@ const EditWorkspaceStub = defineComponent({
 	},
 	emits: [
 		'update:graphics',
+		'update:channels',
 		'update:selectedTarget',
 		'takeOver',
 		'retrySave',
@@ -195,8 +213,10 @@ describe('broadcastGraphicsSettings', () => {
 				{ id: 'slate', name: 'Slate', items: [] },
 			],
 		};
+		mockStoredConfig.value = mockConfig.value;
 		mockRoute.query = {};
 		mockLeaseWritable.value = true;
+		mockLeaseHeldByAnother.value = null;
 		mockLeaseEnabled.value = null;
 		mockSaveState.value = 'idle';
 		mockSaveError.value = null;
@@ -312,6 +332,46 @@ describe('broadcastGraphicsSettings', () => {
 		await nextTick();
 
 		expect(mockUpdateConfig).not.toHaveBeenCalled();
+	});
+
+	// A stack kept after another Session takes the lease would hide that Session's
+	// accepted changes, then be written over them. A lease merely not held (the
+	// Edit workspace closed, an ask that failed) refuses nothing, so the edit stays.
+	it.each([
+		{
+			lease: 'taken by another Session',
+			heldByAnother: true,
+			shown: ['lower-third', 'slate'],
+			channels: [],
+		},
+		{
+			lease: 'no longer held by anyone',
+			heldByAnother: false,
+			shown: ['bug'],
+			channels: ['lane'],
+		},
+	])('shows $shown as the stack once the lease is $lease', async ({ heldByAnother, shown, channels }) => {
+		mockRoute.query = { workspace: 'edit' };
+		const wrapper = await mountComponent();
+		await flushPromises();
+		const workspace = wrapper.getComponent(EditWorkspaceStub);
+		workspace.vm.$emit('update:channels', {
+			channels: [
+				{ id: 'lane', name: 'Lane' },
+			],
+			graphics: [
+				{ id: 'bug', name: 'Bug', items: [] },
+			],
+		});
+		await nextTick();
+		expect((workspace.props('graphics') as Array<{ id: string }>).map(graphic => graphic.id)).toEqual(['bug']);
+
+		mockLeaseHeldByAnother.value = heldByAnother;
+		mockLeaseWritable.value = false;
+		await nextTick();
+
+		expect((workspace.props('graphics') as Array<{ id: string }>).map(graphic => graphic.id)).toEqual(shown);
+		expect((workspace.props('channels') as Array<{ id: string }>).map(channel => channel.id)).toEqual(channels);
 	});
 
 	it('takes the Graphics Authoring Lease over on the observer\'s explicit request', async () => {

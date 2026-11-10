@@ -69,6 +69,10 @@ export default defineNuxtPlugin({
 			// reconnect, event switch — starts with an Event in hand and the
 			// authCallback never runs without one.
 			autoConnect: false,
+			// Ably's default closes the connection on `beforeunload`, which also
+			// fires for an unload the operator cancels. `cleanup` closes it on
+			// `pagehide` instead.
+			closeOnUnload: false,
 			authCallback: async (_tokenParams, callback) => {
 				try {
 					const eventId = activeEventId;
@@ -896,7 +900,16 @@ export default defineNuxtPlugin({
 			void disconnect();
 		}
 
-		window.addEventListener('beforeunload', cleanup);
+		// `pagehide`, not `beforeunload`: the latter also fires when the operator
+		// then picks "Stay" on the unsaved-changes prompt, and the page that stays
+		// open would have no realtime until a full reload (#1026).
+		window.addEventListener('pagehide', cleanup);
+		// A page restored from the back/forward cache was torn down above, and its
+		// handlers are gone: load it afresh rather than show it deaf.
+		window.addEventListener('pageshow', (event) => {
+			if (event.persisted)
+				window.location.reload();
+		});
 
 		return {
 			provide: {

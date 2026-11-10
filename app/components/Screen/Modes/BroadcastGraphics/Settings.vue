@@ -26,7 +26,7 @@ const route = useRoute();
 const router = useRouter();
 const eventStore = useEventStore();
 
-const { config, saving, saveState, saveError, updateConfig, resetConfig, retry } = useModeConfigUpdate(
+const { config, saving, saveState, saveError, updateConfig, resetConfig, retry, discard } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
 	'broadcast-graphics',
@@ -59,6 +59,18 @@ const workspace = computed(() => resolveBroadcastGraphicsWorkspace(route.query[B
 const editLease = useGraphicsAuthoringLease({
 	endpoint: () => `/api/events/${props.eventId}/screens/${props.screen.id}/graphics-authoring-lease`,
 	enabled: () => workspace.value === 'edit',
+});
+
+/**
+ * Another Session taking the lease drops this one's unsaved authoring edits. The
+ * server refuses them now, and kept on screen they would hide the new holder's
+ * changes, then be written over them by a retry or a later take-over (#1026).
+ * Merely not holding it (the Edit workspace closed, an ask that failed) refuses
+ * nothing, so a save still pending then is left to land.
+ */
+watch(editLease.heldByAnotherSession, (heldByAnother) => {
+	if (heldByAnother)
+		discard(['graphics', 'channels', 'background']);
 });
 
 /**

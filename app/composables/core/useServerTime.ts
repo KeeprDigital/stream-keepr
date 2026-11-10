@@ -122,7 +122,8 @@ export function useServerTime() {
 	// Auto-start on client side (lazy singleton — first consumer triggers sync)
 	if (import.meta.client && !globalSyncActive) {
 		startSync();
-		window.addEventListener('beforeunload', stopSync, { once: true });
+		// `pagehide`, not `beforeunload`, which also fires for an unload the operator cancels.
+		window.addEventListener('pagehide', stopSync, { once: true });
 		import.meta.hot?.dispose(() => stopSync());
 	}
 

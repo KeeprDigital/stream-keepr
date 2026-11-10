@@ -168,8 +168,19 @@ vi.stubGlobal('$fetch', vi.fn());
 /** A Screen Output's capability lives in `location.hash`; operator pages carry none. */
 vi.stubGlobal('window', {
 	addEventListener: vi.fn(),
-	location: { hash: '' },
+	location: {
+		hash: '',
+		reload: vi.fn(),
+	},
 });
+
+/** Deliver a window event to every listener the plugin registered for it. */
+function dispatchWindowEvent(type: string, event: object = {}) {
+	for (const [registered, listener] of vi.mocked(window.addEventListener).mock.calls) {
+		if (registered === type)
+			(listener as (event: object) => void)(event);
+	}
+}
 
 async function createTransport() {
 	vi.resetModules();
@@ -203,6 +214,7 @@ describe('realtime plugin', () => {
 		mockConnection.close.mockClear();
 		mockChannels.get.mockClear();
 		vi.mocked(window.addEventListener).mockClear();
+		vi.mocked(window.location.reload).mockClear();
 		vi.mocked(randomUuid).mockReturnValue('uuid-1');
 		vi.mocked($fetch).mockReset();
 		window.location.hash = '';
@@ -1109,6 +1121,56 @@ describe('realtime plugin', () => {
 
 		expect(shown).toBe('published before the attach');
 		scope.stop();
+	});
+
+	describe('a page unload', () => {
+		// `beforeunload` also fires for an unload the operator then cancels ("Stay"
+		// on the unsaved-changes prompt): the page lives on and must keep hearing.
+		it('keeps the room\'s handlers and the connection through an unload that may be cancelled', async () => {
+			const realtime = await createTransport();
+			const handler = vi.fn();
+			realtime.setRoom('event:1');
+			realtime.onRoom('player', { 'player:updated': handler });
+			await settle();
+
+			dispatchWindowEvent('beforeunload');
+			channels.get('event:1')!.emit('player:updated', {
+				player: { id: 1 },
+			});
+
+			expect(handler).toHaveBeenCalledOnce();
+			expect(mockConnection.close).not.toHaveBeenCalled();
+			// Ably's own default closes the connection on `beforeunload` too.
+			expect((realtimeInstances[0]!.options as { closeOnUnload?: boolean }).closeOnUnload).toBe(false);
+		});
+
+		it('closes the connection and stops delivering once the page is hidden for good', async () => {
+			const realtime = await createTransport();
+			const handler = vi.fn();
+			realtime.setRoom('event:1');
+			realtime.onRoom('player', { 'player:updated': handler });
+			await settle();
+
+			dispatchWindowEvent('pagehide', { persisted: false });
+			channels.get('event:1')!.emit('player:updated', {
+				player: { id: 1 },
+			});
+
+			expect(handler).not.toHaveBeenCalled();
+			expect(mockConnection.close).toHaveBeenCalledOnce();
+		});
+
+		// A page restored from the back/forward cache was torn down at `pagehide`.
+		it.each([
+			{ persisted: true, reloads: 1 },
+			{ persisted: false, reloads: 0 },
+		])('reloads a page shown again with persisted=$persisted $reloads time(s)', async ({ persisted, reloads }) => {
+			await createTransport();
+
+			dispatchWindowEvent('pageshow', { persisted });
+
+			expect(window.location.reload).toHaveBeenCalledTimes(reloads);
+		});
 	});
 
 	it('keeps independent room owners for the same message type', async () => {

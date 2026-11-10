@@ -75,4 +75,23 @@ describe('useServerTime', () => {
 		expect(serverTime.isSynced.value).toBe(false);
 		expect(console.warn).toHaveBeenCalledOnce();
 	});
+
+	// `beforeunload` also fires for an unload the operator cancels, so the shared
+	// sync runs until the page is actually hidden.
+	it.each([
+		{ event: 'beforeunload', keepsSyncing: true },
+		{ event: 'pagehide', keepsSyncing: false },
+	])('keeps the periodic sync running after $event: $keepsSyncing', async ({ event, keepsSyncing }) => {
+		mockFetch.mockImplementation(sample(0, 0));
+		// Restart the shared sync on this test's clock, as the first consumer starts it.
+		useServerTime().stopSync();
+		const serverTime = useServerTime();
+		await vi.advanceTimersByTimeAsync(1_000);
+		const syncedAt = serverTime.lastSyncedAt.value!;
+
+		window.dispatchEvent(new Event(event));
+		await vi.advanceTimersByTimeAsync(61_000);
+
+		expect(serverTime.lastSyncedAt.value! > syncedAt).toBe(keepsSyncing);
+	});
 });
