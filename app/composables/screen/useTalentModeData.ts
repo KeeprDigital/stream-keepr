@@ -12,7 +12,7 @@ export interface ShownTalent extends ScreenOutputTalent {
 }
 
 /** A Talent Screen reads its Talents, so an edit or delete of one it shows re-reads (#782). */
-function talentDependencies(shows: (talentId: number) => boolean): ScreenModeDependencies<ScreenOutputTalentResponse> {
+export function talentDependencies(shows: (talentId: number) => boolean): ScreenModeDependencies<ScreenOutputTalentResponse> {
 	return {
 		'talent:updated': ({ talent }) => shows(talent.id),
 		'talent:deleted': ({ talentId }) => shows(talentId),

@@ -26,7 +26,7 @@ function selection(config: HeadToHeadModeConfig): string | null {
  * between them, and the Round Standings shown for a Player holding no record
  * of their own. Melee's wholesale syncs re-read.
  */
-function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDependencies<HeldHeadToHead> {
+export function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDependencies<HeldHeadToHead> {
 	const isBoundSlot = (slotId: number) => slotId === boundSlotId();
 	const heldPlayerIds = (held: HeldHeadToHead) => [held?.player1?.id, held?.player2?.id].filter((id): id is number => id != null);
 	const holdsPlayer = (held: HeldHeadToHead, playerId: number) => heldPlayerIds(held).includes(playerId);
