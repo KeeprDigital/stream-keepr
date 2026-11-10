@@ -250,7 +250,7 @@ afterEach(async () => {
 	await rm(root, { recursive: true, force: true });
 });
 
-describe('silent-video validation Container admission', { timeout: 60_000 }, () => {
+describe('silent-video validation Container admission', () => {
 	it('answers one of two overlapping validations busy, and validates the other', async () => {
 		await startServer();
 		const first = await openConnection();

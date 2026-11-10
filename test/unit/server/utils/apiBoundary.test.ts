@@ -291,12 +291,11 @@ describe('the admin surface, which answers to its own credential', () => {
 
 	// Walking every admin route's import graph parses most of `server/`, and the
 	// first walk pays for all of it before the module cache helps the rest. Done
-	// here, under a budget sized for the whole walk, no single case below carries
-	// that cost into its own timeout while `pnpm verify` builds beside it.
+	// here, no single case below carries that cost into its own timeout.
 	beforeAll(() => {
 		for (const file of adminRouteFiles)
 			reached.set(file, scanRouteRefusals(fileURLToPath(new URL(`../../../../${file}`, import.meta.url))).files);
-	}, 30_000);
+	});
 
 	it.each(adminRouteFiles)('%s reaches the Graphics Administrator guard', (file) => {
 		expect(reached.get(file)).toContain('server/modules/graphics-administrator.ts');

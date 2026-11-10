@@ -372,7 +372,7 @@ describe('featureMatchOverlayDisplay', () => {
 			// settled trigger drops, and the flag alone decides again.
 			await vi.waitFor(() => {
 				expect(wrapper.find('[data-deck-card="Duress"]').exists()).toBe(false);
-			}, { timeout: 2000 });
+			});
 		});
 	});
 

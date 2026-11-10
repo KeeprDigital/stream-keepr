@@ -431,12 +431,16 @@ Gotchas:
   code; never a header or a body. The failure report also says when the test
   worker's own event loop stalled.
 - **A loaded machine slows the unit and Nuxt suites; it must not fail them.**
-  Their timeouts are hang detectors (`vitest.shared.ts`: 60s a test, 120s a
-  hook), and `vi.waitFor`/`vi.waitUntil` default to 20s
-  (`test/helpers/loadTolerantWaits.ts`). A test that passes alone and fails
-  under load is a defect in the test: it is racing a real timer or sharing
-  state. Reproduce it by oversubscribing (`--maxWorkers=30` beside another
-  suite), not by re-running until green.
+  Their timeouts are hang detectors, set once in
+  `test/helpers/loadTolerantBounds.ts`: 60s a test, 120s a hook, and 20s for
+  `vi.waitFor`/`vi.waitUntil` (`test/helpers/loadTolerantWaits.ts`) and the
+  settle kit (`test/helpers/settle.ts`), which fails rather than giving up
+  quietly. ESLint refuses a number written on one test, hook or wait. A run
+  stops after five failed tests, so a real hang names itself well inside CI's
+  job limit rather than spending the timeout on every test after it. A test
+  that passes alone and fails under load is a defect in the test: it is racing
+  a real timer or sharing state. Reproduce it by oversubscribing
+  (`--maxWorkers=30` beside another suite), not by re-running until green.
 - **The Nuxt suite is selected by config**, not project:
   `vitest --config vitest.nuxt.config.ts`.
 - **Local acceptance harnesses target `http://127.0.0.1:8787`**, whichever
@@ -488,7 +492,8 @@ that sorts last, so migration N must be journal entry N with
 file to claim one. If `main` gains a migration before your branch merges,
 delete yours (SQL file, snapshot and journal entry), merge, and run
 `pnpm db:generate` again. `test/unit/server/db/migrationJournal.test.ts`
-fails on a gap.
+fails on a gap, and `schemaMigrations.test.ts` beside it fails while the
+schema asks for a migration nobody generated.
 
 **Read every generated migration before committing it.** SQLite refuses
 `ALTER TABLE … ADD COLUMN … NOT NULL` without a `DEFAULT`, but only when the

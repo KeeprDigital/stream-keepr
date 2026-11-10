@@ -1,6 +1,6 @@
 import { defineVitestConfig } from '@nuxt/test-utils/config';
 import { defineConfig } from 'vitest/config';
-import { LOAD_TOLERANT_HOOK_TIMEOUT_MS, LOAD_TOLERANT_TEST_TIMEOUT_MS, nuxtCoverageConfig } from './vitest.shared.ts';
+import { hideLoadTolerantWaitFrame, LOAD_TOLERANT_BAIL_AFTER_FAILURES, LOAD_TOLERANT_HOOK_TIMEOUT_MS, LOAD_TOLERANT_TEST_TIMEOUT_MS, nuxtCoverageConfig } from './vitest.shared.ts';
 
 const nuxtVitestConfig = defineVitestConfig({
 	test: {
@@ -17,6 +17,8 @@ const nuxtVitestConfig = defineVitestConfig({
 		fsModuleCache: false,
 		testTimeout: LOAD_TOLERANT_TEST_TIMEOUT_MS,
 		hookTimeout: LOAD_TOLERANT_HOOK_TIMEOUT_MS,
+		bail: LOAD_TOLERANT_BAIL_AFTER_FAILURES,
+		onStackTrace: hideLoadTolerantWaitFrame,
 		restoreMocks: true,
 		clearMocks: true,
 		silent: 'passed-only',

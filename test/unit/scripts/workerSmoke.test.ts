@@ -417,7 +417,7 @@ describe('the built Worker smoke runner', () => {
 		// Bounded by real time, not event-loop turns: the runner does real
 		// filesystem work first, and a slow CI machine needs more turns than a
 		// fixed count allowed. `vi.waitFor` keeps real timers under fake ones.
-		await vi.waitFor(() => expect(worker.kill).toHaveBeenCalledWith('SIGTERM'), { timeout: 10_000 });
+		await vi.waitFor(() => expect(worker.kill).toHaveBeenCalledWith('SIGTERM'));
 		await vi.advanceTimersByTimeAsync(2_000);
 
 		expect(await outcome).toMatchObject({

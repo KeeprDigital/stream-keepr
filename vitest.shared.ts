@@ -16,14 +16,15 @@ const requireFromNuxt = createRequire(createRequire(import.meta.url).resolve('nu
 const requireFromNitroServer = createRequire(requireFromNuxt.resolve('@nuxt/nitro-server/package.json'));
 export const nitroH3Directory = dirname(requireFromNitroServer.resolve('h3/package.json'));
 
+export { LOAD_TOLERANT_BAIL_AFTER_FAILURES, LOAD_TOLERANT_HOOK_TIMEOUT_MS, LOAD_TOLERANT_TEST_TIMEOUT_MS } from './test/helpers/loadTolerantBounds.ts';
+
 /**
- * Timeouts detect a hang; they are not a speed budget. A test that takes two
- * seconds on an idle machine takes many times that beside a build or on fewer
- * cores, and a test cut off mid-flight keeps running into the next one. So the
- * bounds sit far above any honest slowdown.
+ * Reports a timed-out `vi.waitFor`/`vi.waitUntil` at the test's line: without
+ * this the wrapper that sets their default bound is the top frame.
  */
-export const LOAD_TOLERANT_TEST_TIMEOUT_MS = 60_000;
-export const LOAD_TOLERANT_HOOK_TIMEOUT_MS = 120_000;
+export function hideLoadTolerantWaitFrame(_error: unknown, frame: { file: string }) {
+	return !frame.file.endsWith('test/helpers/loadTolerantWaits.ts');
+}
 
 export const rootAliases = {
 	'~~': rootDir,

@@ -29,7 +29,7 @@ let harness: MiniflareD1Harness;
 
 beforeAll(async () => {
 	harness = await createMiniflareD1Harness();
-}, 120_000);
+});
 
 afterAll(async () => {
 	await harness?.dispose();
@@ -244,7 +244,7 @@ describe('the D1 catalogue under lists longer than D1 will bind', () => {
 				kind: 'installed-graphics-template',
 				name: 'Big package',
 			});
-		}, 60_000);
+		});
 
 		it('publishes a hundred exact-origin reuses at once', async () => {
 			const catalogue = createD1GraphicsAssetCatalogue(harness.database);

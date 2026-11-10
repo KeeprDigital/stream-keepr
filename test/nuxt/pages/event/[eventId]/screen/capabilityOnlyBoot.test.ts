@@ -273,7 +273,7 @@ function settleOutput() {
 async function mountOutput(route: string, ready: (text: string) => boolean) {
 	const wrapper = await mountSuspended(ScreenOutputPage, { route });
 	mounted.push(wrapper);
-	await settleUntil(() => ready(wrapper.text()), 200);
+	await settleUntil(() => ready(wrapper.text()));
 	return wrapper;
 }
 
