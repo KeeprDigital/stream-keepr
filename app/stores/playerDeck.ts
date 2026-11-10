@@ -18,25 +18,38 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 	const lifetimes = createGuardedSequence();
 	let lifetime = lifetimes.begin();
 
+	/**
+	 * One Flight per load, superseded by a newer load and by each reset, so a load
+	 * answered after its Event Lifetime ended writes nothing here (ADR-0024).
+	 */
+	const loads = createGuardedSequence();
+
+	/** Answers the loaded Decks, or null when the load was superseded. */
 	async function loadByEventId(eventId: number) {
+		const flight = loads.begin();
 		loading.value = true;
 		error.value = null;
 		try {
 			const response = await $fetch<{ decks: PlayerDeckSummaryResponse[] }>(`/api/events/${eventId}/decks`, {
 				headers: apiHeaders.getHeaders(),
 			});
+			if (flight.stale)
+				return null;
 			decks.value = response.decks;
 			isLoaded.value = true;
 			return decks.value;
 		}
 		catch (cause) {
-			error.value = cause instanceof Error
-				? cause.message
-				: 'Failed to load submitted decks';
+			if (flight.current) {
+				error.value = cause instanceof Error
+					? cause.message
+					: 'Failed to load submitted decks';
+			}
 			throw cause;
 		}
 		finally {
-			loading.value = false;
+			if (flight.current)
+				loading.value = false;
 		}
 	}
 
@@ -121,6 +134,7 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 
 	function $reset() {
 		lifetime = lifetimes.begin();
+		loads.supersede();
 		decks.value = [];
 		loading.value = false;
 		error.value = null;

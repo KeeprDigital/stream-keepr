@@ -49,7 +49,7 @@ describe('useFeatureMatchStore', () => {
 		});
 
 		it('swaps the Slots while the reorder is pending', async () => {
-			const reorder = deferred<void>();
+			const reorder = deferred<{ slots: { matchId: number; sortOrder: number }[] }>();
 			mockRepo.reorder.mockReturnValueOnce(reorder.promise);
 
 			const reordering = store.reorderFeatureMatch(1, 'down');
@@ -57,10 +57,37 @@ describe('useFeatureMatchStore', () => {
 			expect(store.featureMatches.map(m => m.id)).toEqual([2, 1]);
 			expect(mockRepo.reorder).toHaveBeenCalledWith(1, 1, 'down');
 
-			reorder.resolve();
+			reorder.resolve({
+				slots: [
+					{ matchId: 1, sortOrder: 1 },
+					{ matchId: 2, sortOrder: 0 },
+				],
+			});
 			await reordering;
 
 			expect(store.featureMatches.map(m => m.id)).toEqual([2, 1]);
+		});
+
+		// The reordering client never hears its own `featureMatch:reordered`, so the
+		// answer is where it learns the orders a peer's later message sorts by.
+		it('holds the answered sort orders, so a peer\'s later Slot keeps the order', async () => {
+			mockRepo.reorder.mockResolvedValueOnce({
+				slots: [
+					{ matchId: 1, sortOrder: 1 },
+					{ matchId: 2, sortOrder: 0 },
+				],
+			});
+
+			await store.reorderFeatureMatch(1, 'down');
+			deliver('featureMatch:created', {
+				featureMatch: createMockFeatureMatch({ id: 3, sortOrder: 2 }),
+			} as never);
+
+			expect(store.featureMatches.map(m => [m.id, m.sortOrder])).toEqual([
+				[2, 0],
+				[1, 1],
+				[3, 2],
+			]);
 		});
 
 		it('reports the server\'s sentence for a refused reorder and puts the Slots back', async () => {

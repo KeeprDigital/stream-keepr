@@ -13,9 +13,9 @@ const eventStore = useEventStore();
 const phaseStore = usePhaseStore();
 const roundStore = useRoundStore();
 const meleeStore = useMeleeStore();
-const featureMatchStore = useFeatureMatchStore();
 const overlay = useOverlay();
 const { runRequest } = useRequestFeedback();
+const { refreshAfterPhaseDelete, refreshAfterRoundDelete } = useTournamentStructureRefresh();
 
 const isMeleeEvent = computed(() => !!eventStore.event?.meleeEnabled);
 
@@ -87,7 +87,7 @@ async function handleDeletePhase(phase: Phase) {
 		{
 			success: { title: 'Phase Deleted', color: 'success' },
 			error: { title: 'Failed to Delete Phase', color: 'error' },
-			onSuccess: async () => { await roundStore.loadRoundsByEventId(eventId.value!); },
+			onSuccess: async () => { await refreshAfterPhaseDelete(eventId.value!); },
 		},
 	);
 }
@@ -147,7 +147,7 @@ async function handleDeleteRound(round: Round) {
 		{
 			success: { title: 'Round Deleted', color: 'success' },
 			error: { title: 'Failed to Delete Round', color: 'error' },
-			onSuccess: async () => { await featureMatchStore.loadFeatureMatchesByEventId(eventId.value!); },
+			onSuccess: async () => { await refreshAfterRoundDelete(eventId.value!); },
 		},
 	);
 }
