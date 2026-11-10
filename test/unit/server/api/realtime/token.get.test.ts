@@ -127,6 +127,9 @@ describe('/api/realtime/token', () => {
 					// The Screen itself, not the `screen:5:*` wildcard a session gets.
 					'screen:5:7': ['subscribe', 'presence'],
 				},
+				// Short-lived: a regenerated capability stops hearing within minutes,
+				// where Ably's default would keep the old one listening for an hour.
+				ttl: 10 * 60 * 1000,
 			});
 		});
 
