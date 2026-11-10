@@ -46,6 +46,14 @@ import {
  * bearer for one Event's Screen cannot ask for a grant over another's.
  */
 
+/**
+ * How long a capability's realtime token lasts. A token outlives the capability
+ * it was minted for, so once a Screen's capability is regenerated the old one
+ * keeps hearing until its token runs out: minutes here, where Ably's default is
+ * an hour. The client re-mints through its `authCallback` before each expiry.
+ */
+const SCREEN_OUTPUT_REALTIME_TOKEN_TTL_MS = 10 * 60 * 1000;
+
 const tokenQuerySchema = z.object({
 	eventId: eventIdParamSchema,
 });
@@ -72,6 +80,7 @@ export default defineEventHandler(async (event) => {
 					[eventRealtimeChannel(eventId)]: ['subscribe'],
 					[screenRealtimeChannel(eventId, screen.screenId)]: ['subscribe', 'presence'],
 				},
+				ttl: SCREEN_OUTPUT_REALTIME_TOKEN_TTL_MS,
 			});
 		}
 	}

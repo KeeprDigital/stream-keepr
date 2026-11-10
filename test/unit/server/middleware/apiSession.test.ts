@@ -115,6 +115,29 @@ describe('the API boundary middleware', () => {
 		expect(mockRequestUserSession).not.toHaveBeenCalled();
 	});
 
+	// The Screen Output Link exchange carries its credential in its body: OBS's
+	// browser source or a script POSTs it with no `Origin`, and no Session is read.
+	it.each([
+		['naming no origin', {}],
+		[
+			'from its own page',
+			{ 'sec-fetch-site': 'same-origin', 'origin': 'https://stream.example' },
+		],
+		[
+			'from another site',
+			{ 'sec-fetch-site': 'cross-site', 'origin': 'https://not-this-installation.example' },
+		],
+	])('admits a Screen Output Link exchange %s without asking about a session', async (_from, headers) => {
+		mockRequestUserSession.mockResolvedValue(SESSION);
+
+		await expect(handler(request('/api/screen-output/link', 'POST', {
+			'content-type': 'application/json',
+			...headers,
+		}))).resolves.toBeUndefined();
+
+		expect(mockRequestUserSession).not.toHaveBeenCalled();
+	});
+
 	// Wiring for `requestIsCrossSiteMutation`: a signed-in browser made to POST
 	// by another site is refused before a handler runs; its own page, and a
 	// client that names no origin at all, are admitted.

@@ -176,6 +176,14 @@ export default defineNuxtConfig({
 					},
 				},
 			},
+			// The output page's address carries its Screen Output Link. It is never
+			// sent as a `Referer` to the image hosts an output loads from, nor indexed.
+			'/o/**': {
+				headers: {
+					'Referrer-Policy': 'no-referrer',
+					'X-Robots-Tag': 'noindex',
+				},
+			},
 			// A TCG+ Import sends the whole export, preview and import alike (ADR-0074).
 			'/api/events/*/tcgplus/**': {
 				boundedRawMutations: {
