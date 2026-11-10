@@ -176,6 +176,13 @@ export function screenService() {
 		});
 	};
 
+	/** For a credential that names a Screen without its Event; every other read is Event-scoped. */
+	const findByIdInAnyEvent = async (id: number): Promise<DbScreen | undefined> => {
+		return await db.query.screens.findFirst({
+			where: eq(screens.id, id),
+		});
+	};
+
 	const findBySlug = async (eventId: number, slug: string): Promise<DbScreen | undefined> => {
 		return await db.query.screens.findFirst({
 			where: and(eq(screens.eventId, eventId), eq(screens.slug, slug)),
@@ -405,6 +412,7 @@ export function screenService() {
 
 	return {
 		findById,
+		findByIdInAnyEvent,
 		findBySlug,
 		findByEventId,
 		findIdsByEventId,
