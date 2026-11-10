@@ -62,31 +62,31 @@ const hasRoundOptions = computed(() => roundOptions.value.length > 1);
 interface StandingsEntry { playerId: number; wins: number | null; losses: number | null; draws: number | null; position: number | null; points: number | null }
 const standingsMap = ref<Map<number, StandingsEntry> | null>(null);
 
+// Every pick runs under one `latestKey`, "Current" included, so a read for a Round
+// since left cannot fill the table under the Round now picked.
 async function loadSelectedRoundStandings() {
 	const roundId = selectedRoundId.value;
-	if (!roundId || !eventStore.eventId) {
-		standingsMap.value = null;
-		standingsError.value = null;
-		return;
-	}
+	const currentEventId = eventStore.eventId;
 
-	standingsLoading.value = true;
 	standingsError.value = null;
-	try {
-		const data = await $fetch<{ standings: StandingsEntry[] }>(`/api/events/${eventStore.eventId}/standings?roundId=${roundId}`);
-		const map = new Map<number, StandingsEntry>();
-		for (const entry of data.standings) {
-			map.set(entry.playerId, entry);
-		}
-		standingsMap.value = map;
-	}
-	catch {
-		standingsMap.value = null;
-		standingsError.value = 'Failed to load round standings';
-	}
-	finally {
-		standingsLoading.value = false;
-	}
+	await runRequest(
+		async () => roundId && currentEventId
+			? await $fetch<{ standings: StandingsEntry[] }>(`/api/events/${currentEventId}/standings?roundId=${roundId}`)
+			: { standings: null },
+		{
+			latestKey: 'round-standings',
+			loadingRef: standingsLoading,
+			success: false,
+			error: false,
+			onSuccess: ({ standings }) => {
+				standingsMap.value = standings && new Map(standings.map(entry => [entry.playerId, entry]));
+			},
+			onFailure: () => {
+				standingsMap.value = null;
+				standingsError.value = 'Failed to load round standings';
+			},
+		},
+	);
 }
 
 watch(selectedRoundId, loadSelectedRoundStandings);

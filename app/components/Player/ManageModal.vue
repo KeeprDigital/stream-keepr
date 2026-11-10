@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
-import type { Player, PlayerData } from '~/types';
+import type { Player, PlayerData, UpdatePlayerInput } from '~/types';
 import { playerLabel, unshownPlayerReason } from '~~/shared/utils/playerName';
 import { LazyUIConfirmDeleteModal } from '#components';
 import { toCreatePlayerInput, toPlayerData } from '~/types/player';
@@ -42,18 +42,51 @@ function playerToFormData(player: Player): PlayerData {
 	});
 }
 
-const { formData, isDirty: isPlayerDirty, reset: resetPlayer } = useForm<PlayerData>({
-	initialData: playerToFormData(props.player),
+function playerToGameDataForm(player: Player) {
+	return {
+		mtg: (player.gameData as MtgPlayerGameData)?.type === 'mtg'
+			? { ...(player.gameData as MtgPlayerGameData) }
+			: { type: 'mtg', deckName: null, deckColors: null } as MtgPlayerGameData,
+	};
+}
+
+const saving = ref(false);
+
+// The Player as the store holds them now: a Melee Sync or a colleague's edit
+// can change them under the open modal, and `props.player` is as it was opened.
+const heldPlayer = computed(() => playerStore.players.find(held => held.id === props.player.id) ?? props.player);
+
+// The forms' baselines follow the held Player, so a field the operator left
+// alone is neither shown nor saved stale. Not through this modal's own save:
+// merging its optimistic value and then a refusal's rollback would take the edit back.
+const playerBaseline = shallowRef(playerToFormData(heldPlayer.value));
+const gameDataBaseline = shallowRef(playerToGameDataForm(heldPlayer.value));
+watchEffect(() => {
+	if (saving.value)
+		return;
+	playerBaseline.value = playerToFormData(heldPlayer.value);
+	gameDataBaseline.value = playerToGameDataForm(heldPlayer.value);
+});
+
+const {
+	formData,
+	isDirty: isPlayerDirty,
+	reset: resetPlayer,
+	getChanges: getPlayerChanges,
+	runSave: runPlayerSave,
+} = useForm<PlayerData>({
+	initialData: playerBaseline,
 });
 
 // Game-specific data (extracted from player's gameData), tracked as a form of
 // its own so a deck-only edit counts as a change.
-const { formData: gameDataForm, isDirty: isGameDataDirty, reset: resetGameData } = useForm({
-	initialData: {
-		mtg: (props.player.gameData as MtgPlayerGameData)?.type === 'mtg'
-			? { ...(props.player.gameData as MtgPlayerGameData) }
-			: { type: 'mtg', deckName: null, deckColors: null } as MtgPlayerGameData,
-	},
+const {
+	formData: gameDataForm,
+	isDirty: isGameDataDirty,
+	reset: resetGameData,
+	runSave: runGameDataSave,
+} = useForm({
+	initialData: gameDataBaseline,
 });
 
 const mtgGameData = computed({
@@ -76,27 +109,28 @@ const { confirmDiscard } = useModalUnsavedChanges(computed(() => isDirty.value &
 
 // ── Save ──
 
-const saving = ref(false);
 const formId = `edit-player-${props.player.id}-form`;
 
 // The server's rule: a One Piece Card Game Player may go by their Nickname alone (ADR-0074).
 const isValid = computed(() => unshownPlayerReason(props.game, formData.value) === null);
 
+// Only what the operator changed is written, through `runSave` (ADR-0044): a
+// field left alone keeps whatever the Player holds by the time the save lands.
 async function handleSave() {
-	const name = formData.value.name?.trim() ?? '';
 	if (!isValid.value || !eventStore.eventId)
 		return;
 
-	const input = toCreatePlayerInput({
-		...formData.value,
-		name,
-		gameData: props.game === 'mtg'
-			? mtgGameData.value
-			// A One Piece Player's game data is their Deck List's, written by the OP Deck List write (ADR-0074).
-			: undefined,
-	});
+	const changes = getPlayerChanges() as Partial<PlayerData>;
+	const input: UpdatePlayerInput = {
+		...toCreatePlayerInput(changes as PlayerData),
+		...('name' in changes && { name: changes.name?.trim() ?? '' }),
+		// A One Piece Player's game data is their Deck List's, written by the OP Deck List write (ADR-0074).
+		...(props.game === 'mtg' && isGameDataDirty.value && { gameData: mtgGameData.value }),
+	};
+	if (Object.keys(input).length === 0)
+		return;
 
-	await runRequest(
+	await runPlayerSave(() => runGameDataSave(() => runRequest(
 		() => playerStore.updatePlayer(eventStore.eventId!, props.player.id, input),
 		{
 			loadingRef: saving,
@@ -108,7 +142,7 @@ async function handleSave() {
 				emit('close');
 			},
 		},
-	);
+	)));
 }
 
 // ── Delete ──

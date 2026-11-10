@@ -140,6 +140,61 @@ describe('useEventStore', () => {
 			expect(store.event!.name).toBe('Original');
 		});
 
+		// A refused save takes back only what it changed: what landed while it was
+		// out, on another field or from another client, is not its to undo.
+		it.each([
+			{
+				kept: 'another save\'s field, still pending',
+				meanwhile: () => {
+					mockEventRepo.update.mockReturnValueOnce(deferred<never>().promise);
+					void store.updateEvent({ numFeatureMatches: 3 });
+				},
+				held: { name: 'Original', numFeatureMatches: 3, talents: [] },
+			},
+			{
+				kept: 'a Talent created elsewhere',
+				meanwhile: () => deliver('talent:created', {
+					talent: createMockTalent({ id: 20, eventId: 1, name: 'Ana' }),
+				} as never),
+				held: {
+					name: 'Original',
+					numFeatureMatches: 1,
+					talents: ['Ana'],
+				},
+			},
+			{
+				kept: 'the same field as updated elsewhere',
+				meanwhile: () => deliver('event:updated', {
+					event: { id: 1, name: 'Renamed elsewhere' },
+				} as never),
+				held: { name: 'Renamed elsewhere', numFeatureMatches: 1, talents: [] },
+			},
+		])('a refused update rolls back its own fields and keeps $kept', async ({ meanwhile, held }) => {
+			store.event = createEventResponse({
+				id: 1,
+				name: 'Original',
+				numFeatureMatches: 1,
+				talents: [],
+			});
+			const save = deferred<never>();
+			mockEventRepo.update.mockReturnValueOnce(save.promise);
+
+			const saving = store.updateEvent({ name: 'Updated' });
+			expect(store.event!.name).toBe('Updated');
+			meanwhile();
+			save.reject(transportFailure({
+				status: 409,
+				body: { message: 'Refused' },
+			}));
+			await saving;
+
+			expect({
+				name: store.event!.name,
+				numFeatureMatches: store.event!.numFeatureMatches,
+				talents: store.event!.talents.map(talent => talent.name),
+			}).toEqual(held);
+		});
+
 		it('reloads the Feature Match Slots when their number changes', async () => {
 			const original = createEventResponse({ id: 1, numFeatureMatches: 1 });
 			store.event = original;

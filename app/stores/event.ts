@@ -266,8 +266,12 @@ export const useEventStore = defineStore('event', () => {
 			return null;
 		}
 
-		const original = structuredClone(toRaw(event.value));
+		const eventId = event.value.id;
 		const flight = lifetime;
+		// What this save replaces, field by field, for a refused save to put back.
+		const held = toRaw(event.value);
+		const changed = Object.keys(updates) as Array<keyof UpdateEventInput & keyof Event>;
+		const replaced = changed.map(key => [key, held[key]] as const);
 
 		// Type-safe optimistic update for event
 		const optimisticEvent: Event = {
@@ -278,11 +282,11 @@ export const useEventStore = defineStore('event', () => {
 
 		return executeReporting(
 			async () => {
-				const updatedEvent = await eventRepo.update(original.id, updates);
+				const updatedEvent = await eventRepo.update(eventId, updates);
 
 				// The Events list outlives every Event Lifetime, so it learns the answer
 				// whichever Event is loaded now.
-				const listItemIndex = eventsList.value.findIndex(e => e.id === original.id);
+				const listItemIndex = eventsList.value.findIndex(e => e.id === eventId);
 				if (listItemIndex !== -1) {
 					eventsList.value[listItemIndex] = {
 						...eventsList.value[listItemIndex],
@@ -300,15 +304,26 @@ export const useEventStore = defineStore('event', () => {
 					...updatedEvent,
 				};
 
-				await syncEventDependents(original.id, updates);
+				await syncEventDependents(eventId, updates);
 
 				return event.value;
 			},
 			{
 				errorRef: error,
 				flight,
+				// Only this save's fields, and only where its value still stands: another
+				// save's field or a remote update that landed meanwhile is not its to undo.
 				onError: () => {
-					event.value = original;
+					if (!event.value)
+						return;
+					const current = toRaw(event.value);
+					const restored = replaced.filter(([key]) => current[key] === updates[key]);
+					if (restored.length) {
+						event.value = {
+							...event.value,
+							...Object.fromEntries(restored),
+						};
+					}
 				},
 			},
 		);

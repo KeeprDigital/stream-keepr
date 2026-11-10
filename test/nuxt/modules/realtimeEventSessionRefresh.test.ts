@@ -61,10 +61,11 @@ const meleeMessages: Array<{ sent: Sent; reads: string[]; invalidatesMetagame?: 
 			'melee:dataReset',
 			{ reason: 'disabled' },
 		],
+		// Matches in the scope on view: a manual Round the reset keeps stays the one shown.
 		reads: [
 			'phases',
 			'rounds',
-			'matches',
+			'matches?roundId=5',
 			'players',
 			'decks',
 			'feature-match-slots',

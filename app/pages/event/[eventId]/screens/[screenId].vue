@@ -119,6 +119,17 @@ function accessUrlOptions(output?: FeatureMatchOverlayOutput) {
 
 const modeOptions = useEventScreenModeSelectOptions();
 
+// The Screen whose presence this page holds a watch on. The watch is counted, so
+// the page lets go only of the one it took: the Screens list may hold it too.
+let watchedPresenceId: number | null = null;
+
+function releasePresence() {
+	if (watchedPresenceId === null)
+		return;
+	screenStore.unsubscribeFromScreenPresence(watchedPresenceId);
+	watchedPresenceId = null;
+}
+
 // Load screen and subscribe to presence for the current screenId, tearing down
 // the previous subscription first. Sidebar links reuse this component across
 // sibling screen routes, so this must react to route param changes, not just mount.
@@ -142,34 +153,36 @@ async function loadScreen(id: number) {
 			onSuccess: (data) => {
 				screen.value = data;
 				// Subscribe to presence after screen loads
+				releasePresence();
 				screenStore.subscribeToScreenPresence(id);
+				watchedPresenceId = id;
 			},
 		},
 	);
 }
 
-watch(screenId, (newId, oldId) => {
-	if (oldId)
-		screenStore.unsubscribeFromScreenPresence(oldId);
+watch(screenId, (newId) => {
+	releasePresence();
 	if (newId) {
 		screen.value = null;
 		void loadScreen(newId);
 	}
 }, { immediate: true });
 
-onBeforeUnmount(() => {
-	if (screenId.value) {
-		screenStore.unsubscribeFromScreenPresence(screenId.value);
-	}
-});
+onBeforeUnmount(releasePresence);
 
 // Keep screen in sync with store updates (targeted by ID, avoids deep watch)
 const storeScreen = computed(() =>
 	screenStore.screens.find(s => s.id === screenId.value) ?? null,
 );
-watch(storeScreen, (updated) => {
+watch(storeScreen, (updated, previous) => {
 	if (updated) {
 		screen.value = updated;
+	}
+	// The Screen left the list of an Event still held, so it was deleted: stop
+	// offering its settings. An Event that is ending empties the list as well.
+	else if (previous && eventId.value && screen.value?.id === previous.id) {
+		screen.value = null;
 	}
 });
 

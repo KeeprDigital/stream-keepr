@@ -1,14 +1,16 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+import { defineComponent, reactive } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockPlayer } from '~~/test/helpers/fixtures';
 import ManageModal from '~/components/Player/ManageModal.vue';
 
-const mockPlayerStore = {
+const mockPlayerStore = reactive({
+	players: [] as Array<ReturnType<typeof createMockPlayer>>,
 	updatePlayer: vi.fn(),
 	removePlayer: vi.fn(),
-};
+});
 const mockToast = {
 	add: vi.fn(),
 };
@@ -73,17 +75,20 @@ const FormFieldsStub = defineComponent({
 
 enableAutoUnmount(afterEach);
 
+/** Mounts Edit Player on a Player the store holds, as the Players page opens it. */
 async function mountModal(game: 'mtg' | 'op' = 'mtg', player: Parameters<typeof createMockPlayer>[0] = {}) {
+	const held = createMockPlayer({
+		id: 7,
+		eventId: 1,
+		name: 'Alice',
+		gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' },
+		...player,
+	});
+	mockPlayerStore.players = [held];
 	return mount(ManageModal, {
 		attrs: { 'onUpdate:open': overlayClose },
 		props: {
-			player: createMockPlayer({
-				id: 7,
-				eventId: 1,
-				name: 'Alice',
-				gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' },
-				...player,
-			}),
+			player: held,
 			game,
 		},
 		global: {
@@ -104,11 +109,25 @@ function fields(wrapper: Wrapper) {
 	return wrapper.getComponent(FormFieldsStub);
 }
 
-function editName(wrapper: Wrapper, name: string) {
+function edit(wrapper: Wrapper, changes: Record<string, unknown>) {
 	fields(wrapper).vm.$emit('update:modelValue', {
 		...fields(wrapper).props('modelValue'),
-		name,
+		...changes,
 	});
+}
+
+function editName(wrapper: Wrapper, name: string) {
+	edit(wrapper, { name });
+}
+
+/** The store's Player as a Melee Sync or a colleague's edit leaves them. */
+function holdPlayer(changes: Parameters<typeof createMockPlayer>[0]) {
+	mockPlayerStore.players = [
+		{
+			...mockPlayerStore.players[0]!,
+			...changes,
+		},
+	];
 }
 
 /** Whether the modal asked to close, by its own `close` or through the dialog. */
@@ -251,6 +270,75 @@ describe('player manage modal', () => {
 			return;
 		await wrapper.get('form').trigger('submit');
 		await flushPromises();
-		expect(mockPlayerStore.updatePlayer).toHaveBeenCalledWith(1, 7, expect.objectContaining({ name: '', nickname: 'linlin_88' }));
+		// The cleared name alone: the server reads the Nickname it falls back to from the Player.
+		expect(mockPlayerStore.updatePlayer).toHaveBeenCalledWith(1, 7, { name: '' });
+	});
+
+	// The save writes what the operator changed and nothing else, so a field a
+	// Melee Sync moved under the open modal is neither reverted nor marked as a
+	// Manually Edited Field (ADR-0046).
+	describe('a Player changed elsewhere while being edited', () => {
+		it('shows the fields the operator left alone as now held, and keeps their edit', async () => {
+			const wrapper = await mountModal('mtg', { wins: 2, lgs: null });
+			edit(wrapper, { lgs: 'Game Haven' });
+			await flushPromises();
+
+			holdPlayer({ name: 'Alicia', wins: 3 });
+			await flushPromises();
+
+			expect(fields(wrapper).props('modelValue')).toMatchObject({ name: 'Alicia', wins: 3, lgs: 'Game Haven' });
+		});
+
+		it.each([
+			{
+				edited: 'a field',
+				changes: { lgs: 'Game Haven' },
+				saved: { lgs: 'Game Haven' },
+			},
+			{
+				edited: 'a field they cleared',
+				changes: { pronouns: undefined },
+				saved: { pronouns: null },
+			},
+			{
+				edited: 'a name they padded',
+				changes: { name: ' Alicia B ' },
+				saved: { name: 'Alicia B' },
+			},
+		])('saves only $edited', async ({ changes, saved }) => {
+			const wrapper = await mountModal('mtg', { wins: 2, lgs: null, pronouns: 'she/her' });
+			edit(wrapper, changes);
+			await flushPromises();
+			holdPlayer({ name: 'Alicia', wins: 3 });
+			await flushPromises();
+
+			await wrapper.get('form').trigger('submit');
+			await flushPromises();
+
+			expect(mockPlayerStore.updatePlayer).toHaveBeenCalledWith(1, 7, saved);
+		});
+
+		// The store shows the save at once and takes it back when it is refused;
+		// neither is a change from elsewhere, so the edit is still there to retry.
+		it('keeps the edit when its own save is refused', async () => {
+			const wrapper = await mountModal('mtg', { lgs: null });
+			const save = deferred<null>();
+			mockPlayerStore.updatePlayer.mockImplementationOnce((_eventId: number, _id: number, updates: Record<string, unknown>) => {
+				holdPlayer(updates);
+				return save.promise;
+			});
+			edit(wrapper, { lgs: 'Game Haven' });
+			await flushPromises();
+
+			await wrapper.get('form').trigger('submit');
+			await flushPromises();
+			holdPlayer({ lgs: null });
+			save.resolve(null);
+			await flushPromises();
+
+			expect(fields(wrapper).props('modelValue')).toMatchObject({ lgs: 'Game Haven' });
+			expect(saveButton(wrapper).attributes('disabled')).toBeUndefined();
+			expect(closed(wrapper)).toBe(false);
+		});
 	});
 });

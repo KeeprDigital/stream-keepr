@@ -1420,7 +1420,7 @@ Accepted · 2026-10-26
 
 **A Player records the Melee-imported fields an operator has edited, and Melee Sync stops writing them.** `players.manually_edited_fields` (migration `0001_since_v1_5_0`) is a JSON list drawn from `PLAYER_MANUALLY_EDITED_FIELD_VALUES`, `name` and `pronouns`. `playerService().update`, the one manual Player write behind the Players page and a Slot setup's write-through (ADR-0045), adds a field to it in the same statement when the write changes that field's value. The Melee bulk upsert (`buildBulkPlayerUpsertQueries`), shared by the Players sync and the Deck List sync, keeps the Player's own value for each listed field and takes Melee's for the rest.
 
-**An edit is a change of value.** The Players page saves its whole form, so writing the value a field already holds marks nothing. Clearing a field is an edit: an operator who removes pronouns keeps them removed rather than taking Melee's.
+**An edit is a change of value.** Writing the value a field already holds marks nothing, whatever a save carries. Edit Player sends only the fields its operator changed, measured against the Player as held when it saves (#1026). It once sent its whole form as opened, so a name Melee Sync changed under the open modal was written back and marked. Clearing a field is an edit: an operator who removes pronouns keeps them removed rather than taking Melee's.
 
 **Records stay Melee-owned.** Wins, losses, draws, position and points are not in the list: a manual edit to one lasts until the next sync, as before. LGS and game data are not imported, so they never needed it.
 
@@ -1434,7 +1434,7 @@ The Melee upsert wrote `excluded.name` unconditionally, and `excluded.pronouns` 
 
 - Nothing hands a field back to Melee yet. A Player whose edited name later changes on Melee keeps the edited one until the field is removed from the list. A "reset to Melee" action is its own change.
 - Players imported before the migration have no list, which is read as empty, so they behave as before until edited.
-- `test/unit/server/services/playerManualEditsSurviveMeleeSync.sqlite.test.ts` covers both sync paths, a cleared field, an unchanged whole-form save, and an edit made in a Slot's setup.
+- `test/unit/server/services/playerManualEditsSurviveMeleeSync.sqlite.test.ts` covers both sync paths, a cleared field, an unchanged whole-form save, and an edit made in a Slot's setup. `test/nuxt/components/Player/ManageModal.test.ts` covers what Edit Player sends.
 
 ### Rejected alternatives
 

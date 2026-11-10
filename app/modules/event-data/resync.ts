@@ -137,10 +137,10 @@ export function storeReloaders(): EventDataReloaders {
 		phases: forLoaded(usePhaseStore, (store, eventId) => store.loadPhasesByEventId(eventId)),
 		rounds: forLoaded(useRoundStore, (store, eventId) => store.loadRoundsByEventId(eventId)),
 		// Whichever scope is held — one Round's Matches or the Event's.
-		matches: () => {
+		matches: async () => {
 			const eventId = useEventStore().eventId;
 			if (eventId)
-				return useMeleeDataRefresh().refreshCurrentMatchScope(eventId);
+				return await useMeleeDataRefresh().refreshCurrentMatchScope(eventId) !== null;
 		},
 		featureMatchSlots: forLoaded(useFeatureMatchStore, (store, eventId) => store.loadFeatureMatchesByEventId(eventId)),
 		archetypes: forLoaded(useArchetypeStore, (store, eventId) => store.loadByEventId(eventId)),
