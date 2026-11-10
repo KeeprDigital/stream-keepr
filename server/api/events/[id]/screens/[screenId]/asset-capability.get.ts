@@ -20,5 +20,5 @@ export default defineEventHandler(async (event) => {
 		});
 	}
 	setResponseHeader(event, 'cache-control', 'private, no-store');
-	return { assetCapability: result.capability };
+	return { assetCapability: result.capability, outputLink: result.link };
 });
