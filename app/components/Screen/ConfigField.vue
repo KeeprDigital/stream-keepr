@@ -142,6 +142,7 @@ function updateText(value: unknown) {
 			:min="field.min"
 			:max="numberMax"
 			:step="field.step"
+			:placeholder="placeholder"
 			class="w-32"
 			@update:model-value="updateNumber($event)"
 		/>

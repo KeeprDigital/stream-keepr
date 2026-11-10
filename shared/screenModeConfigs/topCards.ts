@@ -2,7 +2,6 @@ import type { ScreenModeConfigOf } from './contract';
 import { z } from 'zod';
 import {
 	BOARD_SELECTION_VALUES,
-	CARD_SIZING_VALUES,
 	METAGAME_CARD_SORT_BY_VALUES,
 	QUANTITY_POSITION_VALUES,
 	TOP_CARDS_STAT_VALUES,
@@ -11,6 +10,8 @@ import { METAGAME_CARD_TYPE_BUCKETS } from '../utils/metagame';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
 import {
+	cardLayoutShape,
+	DEFAULT_CARD_LAYOUT,
 	DEFAULT_HEADER_CONFIG,
 	DEFAULT_METAGAME_SCOPE,
 	DEFAULT_PAGE_ROTATION,
@@ -22,6 +23,27 @@ import {
 
 /** The most cards a Most Played Cards Screen ranks. */
 const TOP_CARDS_MAX_LIMIT = 60;
+
+/** A Fixed card's width before the Screen set one, under the former Card Sizing. */
+const FORMER_DEFAULT_CARD_WIDTH = 160;
+
+/**
+ * The Card Layout a Card Sizing meant (ADR-0054): a Fixed width is the max card
+ * size, and a column count with auto columns on is Auto. A fragment naming no
+ * Card Sizing was Fit, the former default, which has no max card size.
+ */
+function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<string, unknown> {
+	const fixed = fragment.cardSizing === 'fixed';
+	const autoColumns = fragment.autoColumns === true;
+	if (!fixed && !autoColumns)
+		return fragment;
+	const { columns, ...upgraded } = fragment;
+	if (!autoColumns && columns !== undefined)
+		upgraded.columns = columns;
+	if (fixed && !('maxCardSize' in fragment))
+		upgraded.maxCardSize = fragment.cardWidth ?? FORMER_DEFAULT_CARD_WIDTH;
+	return upgraded;
+}
 
 /**
  * The Most Played Cards Screen Mode's config contract: a ranked grid of the most played
@@ -38,11 +60,12 @@ const TOP_CARDS_MAX_LIMIT = 60;
  * Screen can rank, so a Screen that never set it shows every card on one page.
  *
  * Its badge colours (#823) are Mode Tokens; the fields it once held for them
- * are former fields, which a stored config may still carry. Its card width,
- * card gap and badge text sizes are config, read only here (ADR-0054); the size
- * presets they replaced are former fields too. `cardSizing` replaced
- * `dynamicCardSize`. Each badge is placed and sized on its own, as a Deck
- * Screen's are; one `badgeSize` once sized both. A card's image prints its
+ * are former fields, which a stored config may still carry. Its Card Layout
+ * and badge text sizes are config, read only here (ADR-0054); the size presets
+ * they replaced are former fields too. Its cards always fit: Card Sizing
+ * (`cardSizing`, `cardWidth`, `autoColumns`) is former, and a stored one reads
+ * as the Card Layout it meant (`upgradeCardSizing`). Each badge is placed and
+ * sized on its own, as a Deck Screen's are; one `badgeSize` once sized both. A card's image prints its
  * name, so `showCardNames`, a label under it, is a former field.
  */
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
@@ -58,15 +81,8 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	/** Only cards the Event's points system points, applied server-side before `limit`. */
 	pointedOnly: editorField(z.boolean(), { label: 'Pointed only' }),
 
-	// Grid layout
-	columns: editorField(z.number().int().min(1).max(12), { label: 'Columns' }),
-	/** Columns chosen from the card count and the Event Canvas, in place of `columns`. */
-	autoColumns: editorField(z.boolean(), { label: 'Auto columns' }),
-	/** Fit: every card on the page fits the screen. Fixed: cards take `cardWidth`. */
-	cardSizing: editorField(z.enum(CARD_SIZING_VALUES), { label: 'Card sizing' }),
-	/** A Fixed card's width in Event Canvas px. */
-	cardWidth: editorField(z.number().int().min(48).max(480), { label: 'Card width' }),
-	cardGap: editorField(z.number().int().min(0).max(100), { label: 'Card gap' }),
+	// Card Layout: columns, max card size and gap, each Auto while absent
+	...cardLayoutShape(TOP_CARDS_MAX_LIMIT),
 
 	// Paging: cards per page; at least `limit` is one page
 	cardsPerPage: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT), { label: 'Cards per page' }),
@@ -97,11 +113,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// reach the breakdown at all.
 	excludedCardTypes: ['Land'],
 	pointedOnly: false,
-	columns: 5,
-	autoColumns: false,
-	cardSizing: 'fit',
-	cardWidth: 160,
-	cardGap: 12,
+	...DEFAULT_CARD_LAYOUT,
 	cardsPerPage: TOP_CARDS_MAX_LIMIT,
 	...DEFAULT_PAGE_ROTATION,
 	...DEFAULT_HEADER_CONFIG,
@@ -129,7 +141,12 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		'badgeSize',
 		// A card's image prints its name.
 		'showCardNames',
+		// Card Sizing: cards always fit, under a max card size (ADR-0054).
+		'cardSizing',
+		'cardWidth',
+		'autoColumns',
 	],
+	upgradeFormerFields: upgradeCardSizing,
 });
 
 export type TopCardsModeConfig = ScreenModeConfigOf<typeof topCardsModeConfigContract>;

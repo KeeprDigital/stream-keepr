@@ -1,48 +1,53 @@
 <script setup lang="ts">
+import type { EventCanvas } from '~~/shared/eventCanvas';
 import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
-import type { CardSizing } from '~~/shared/types/enums';
 import type { NinePoint } from '~~/shared/utils/ninePoints';
-import { CARD_SIZING_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
+import { CARD_ASPECT } from '~~/shared/utils/cardGrid';
 
 /**
- * A card grid's layout settings, as Deck List's boards and Most Played Cards
- * lay their cards out (ADR-0054), in one order: sizing, alignment, a Fixed
- * card's width, stack reveal, auto columns, the column count while auto
- * columns is off, and gap. Labels and bounds come from `fields`, a mode's flat
- * fields or a board's layout block view; each edit is emitted as the patch
- * naming its layout key. Alignment and stack reveal show only where `show`
- * asks for them.
+ * A card grid's Card Layout settings (ADR-0054), in one order: alignment, max
+ * card size, stack reveal, columns and gap. Columns, max card size and gap are
+ * each a number or Auto: an emptied field is Auto, and emits the `null` that
+ * deletes its key. Labels and bounds come from `fields`, a mode's flat fields
+ * or a board's layout block view, narrowed to the grid's content: columns to
+ * `cardCount`, max card size to the largest card that fits `canvas`. Each edit
+ * is emitted as the patch naming its layout key. Alignment and stack reveal
+ * show only where `show` asks for them.
  *
- * In `view` `stack` (Deck List's sideboard strip, ADR-0054) the cards overlap
- * in one column, so its width shows whatever the sizing, and it has no
- * columns or gap.
+ * In `view` `stack` the cards overlap in one column, so it has no columns or gap.
  */
-interface CardGridLayout {
-	cardSizing: CardSizing;
-	cardWidth: number;
-	cardGap: number;
-	autoColumns: boolean;
-	columns: number;
+interface CardLayout {
+	columns?: number;
+	maxCardSize?: number;
+	cardGap?: number;
 	alignment?: NinePoint;
 	stackReveal?: number;
 }
 
-type CardGridLayoutKey = keyof CardGridLayout;
+type CardLayoutKey = keyof CardLayout;
+/** The values that are Auto while absent. */
+type AutoKey = 'columns' | 'maxCardSize' | 'cardGap';
+
+type CardLayoutPatch = {
+	[K in CardLayoutKey]?: K extends AutoKey ? number | null : CardLayout[K];
+};
 
 const props = withDefaults(defineProps<{
-	layout: CardGridLayout;
+	layout: CardLayout;
 	fields: {
-		cardSizing: ScreenModeConfigField;
-		cardWidth: ScreenModeConfigField;
-		cardGap: ScreenModeConfigField;
-		autoColumns: ScreenModeConfigField;
 		columns: ScreenModeConfigField;
+		maxCardSize: ScreenModeConfigField;
+		cardGap: ScreenModeConfigField;
 		alignment?: ScreenModeConfigField;
 		stackReveal?: ScreenModeConfigField;
 	};
+	/** The most cards the grid holds: the most columns it can have. */
+	cardCount?: number;
+	/** The Event Canvas the grid is rendered in: no card is larger. */
+	canvas?: EventCanvas;
 	show?: { alignment?: boolean; stackReveal?: boolean };
 	/** Each field's description in the mode's own words, over the defaults. */
-	descriptions?: Partial<Record<CardGridLayoutKey, string>>;
+	descriptions?: Partial<Record<CardLayoutKey, string>>;
 	/** The grid's name, naming its alignment picker. */
 	gridName?: string;
 	/** How the cards are laid out: a grid, or a stack of overlapping cards. */
@@ -55,38 +60,32 @@ const props = withDefaults(defineProps<{
 });
 
 const emit = defineEmits<{
-	update: [patch: Partial<CardGridLayout>];
+	update: [patch: CardLayoutPatch];
 }>();
 
-const DEFAULT_DESCRIPTIONS: Record<CardGridLayoutKey, string> = {
-	cardSizing: 'Fit shrinks the cards until every one fits the screen. Fixed takes the card width below and may run off the screen.',
+const DEFAULT_DESCRIPTIONS: Record<CardLayoutKey, string> = {
 	alignment: 'Where the cards sit when they don\'t fill their space.',
-	cardWidth: 'Each card\'s width in px.',
+	maxCardSize: 'The widest a card may be, in px. Empty is Auto: as large as fits.',
 	stackReveal: 'How much of each stacked card but the last shows, in px.',
-	autoColumns: 'Choose the columns from the card count and the screen\'s size.',
-	columns: 'Number of columns in the card grid.',
-	cardGap: 'The space between cards in px.',
+	columns: 'Cards per row. Empty is Auto: the count that fits the cards largest.',
+	cardGap: 'The space between cards in px. Empty is Auto: it follows the card size.',
 };
 
-function description(key: CardGridLayoutKey): string {
+function description(key: CardLayoutKey): string {
 	return props.descriptions[key] ?? DEFAULT_DESCRIPTIONS[key];
 }
 
-function write<K extends CardGridLayoutKey>(key: K, value: CardGridLayout[K] | null) {
-	if (value !== null)
-		emit('update', { [key]: value } as Partial<CardGridLayout>);
+/** The widest card that fits the Event Canvas whole. */
+const largestCard = computed(() => props.canvas
+	? Math.floor(Math.min(props.canvas.width, props.canvas.height * CARD_ASPECT))
+	: undefined);
+
+function write(patch: CardLayoutPatch) {
+	emit('update', patch);
 }
 </script>
 
 <template>
-	<ScreenConfigField
-		:field="fields.cardSizing"
-		:model-value="layout.cardSizing"
-		:items="CARD_SIZING_SELECT_OPTIONS"
-		:description="description('cardSizing')"
-		@update:model-value="write('cardSizing', $event)"
-	/>
-
 	<ScreenSettingsField
 		v-if="show.alignment && fields.alignment && layout.alignment"
 		:data-config-field="fields.alignment.key"
@@ -96,16 +95,18 @@ function write<K extends CardGridLayoutKey>(key: K, value: CardGridLayout[K] | n
 		<UINinePointPicker
 			:model-value="layout.alignment"
 			:aria-label="`${gridName} alignment`"
-			@update:model-value="write('alignment', $event)"
+			@update:model-value="write({ alignment: $event })"
 		/>
 	</ScreenSettingsField>
 
 	<ScreenConfigField
-		v-if="view === 'stack' || layout.cardSizing === 'fixed'"
-		:field="fields.cardWidth"
-		:model-value="layout.cardWidth"
-		:description="description('cardWidth')"
-		@update:model-value="write('cardWidth', $event)"
+		:field="fields.maxCardSize"
+		:model-value="layout.maxCardSize"
+		:max="largestCard"
+		:description="description('maxCardSize')"
+		placeholder="Auto"
+		nullable
+		@update:model-value="write({ maxCardSize: $event })"
 	/>
 
 	<ScreenConfigField
@@ -113,30 +114,27 @@ function write<K extends CardGridLayoutKey>(key: K, value: CardGridLayout[K] | n
 		:field="fields.stackReveal"
 		:model-value="layout.stackReveal"
 		:description="description('stackReveal')"
-		@update:model-value="write('stackReveal', $event)"
+		@update:model-value="$event !== null && write({ stackReveal: $event })"
 	/>
 
 	<template v-if="view === 'grid'">
 		<ScreenConfigField
-			:field="fields.autoColumns"
-			:model-value="layout.autoColumns"
-			:description="description('autoColumns')"
-			@update:model-value="write('autoColumns', $event)"
-		/>
-
-		<ScreenConfigField
-			v-if="!layout.autoColumns"
 			:field="fields.columns"
 			:model-value="layout.columns"
+			:max="cardCount"
 			:description="description('columns')"
-			@update:model-value="write('columns', $event)"
+			placeholder="Auto"
+			nullable
+			@update:model-value="write({ columns: $event })"
 		/>
 
 		<ScreenConfigField
 			:field="fields.cardGap"
 			:model-value="layout.cardGap"
 			:description="description('cardGap')"
-			@update:model-value="write('cardGap', $event)"
+			placeholder="Auto"
+			nullable
+			@update:model-value="write({ cardGap: $event })"
 		/>
 	</template>
 </template>

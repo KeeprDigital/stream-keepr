@@ -6,17 +6,25 @@ import { ninePointPlacement } from '~~/shared/utils/ninePoints';
 /**
  * A grid of card images, for any Screen Mode that lays cards out.
  *
- * A Fit grid takes the space its parent leaves it and gives every column the
- * one card width at which all `rows` rows fit it too, so the cards sit `gap`
- * apart both ways and the grid sits at `alignment` in the space. A Fixed grid sizes its
- * tracks to the cards, which take their own width, and may overflow;
- * `'auto-fill'` fits as many `cardWidth` tracks as there is room for.
+ * Its host solves the Card Layout (`solveCardGrid`) and passes what it solved:
+ * the `columns`, each one `cardWidth` wide, `gap` apart both ways. The grid
+ * takes the space its parent leaves it and sits at `alignment` in whatever the
+ * cards leave over, so its host can measure that space.
+ *
+ * `sizing` is the former Card Sizing, which only a Deck List still passes
+ * (#1088 removes it, with `fitCardWidth` and `labelHeight`). A Fit grid gives
+ * every column the one card width at which all `rows` rows fit its space too.
+ * A Fixed grid sizes its tracks to the cards, which take their own width, and
+ * may overflow; `'auto-fill'` fits as many `cardWidth` tracks as there is
+ * room for.
  */
 const props = withDefaults(defineProps<{
-	sizing: CardSizing;
+	/** A Deck List board's Card Sizing; absent, the grid is laid out as its host solved it. */
+	sizing?: CardSizing;
 	columns: number | 'auto-fill';
-	/** A Fit grid's row count. */
+	/** The rows of one page. */
 	rows?: number;
+	/** The solved card width; under a Card Sizing, a Fixed card's own width. */
 	cardWidth: string;
 	gap: string;
 	/** Height each Fit row spends beside its card image, such as a name label under it. */
@@ -35,6 +43,8 @@ const placement = computed(() => ninePointPlacement(props.alignment));
 
 // 61 / 85 is the `mtg-card` aspect, as CARD_ASPECT in shared/utils/cardGrid.ts.
 const fitCardWidth = computed(() => {
+	if (!props.sizing)
+		return props.cardWidth;
 	if (props.fitCardWidth)
 		return props.fitCardWidth;
 	const columns = typeof props.columns === 'number'
@@ -67,10 +77,10 @@ const fixedGridStyle = computed(() => ({
 
 <template>
 	<div
-		v-if="sizing === 'fit'"
+		v-if="sizing !== 'fixed'"
 		class="card-grid-fit"
 		:style="fitSpaceStyle"
-		data-card-sizing="fit"
+		:data-card-sizing="sizing"
 		:data-columns="columns"
 		:data-rows="rows"
 	>
@@ -91,7 +101,7 @@ const fixedGridStyle = computed(() => ({
 
 <style scoped>
 /*
- * The space a Fit grid is given; its columns read its size, and it places them at its alignment.
+ * The space a grid is given; its host, or a Fit grid's columns, read its size, and it places them at its alignment.
  * A badge a card wears just outside its edge may overhang it, into the Screen inset.
  */
 .card-grid-fit {

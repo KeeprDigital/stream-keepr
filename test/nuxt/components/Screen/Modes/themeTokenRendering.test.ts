@@ -677,7 +677,6 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 	return {
 		config: computed(() => ({
 			columns: 5,
-			cardSizing: 'fit',
 			showHeader: true,
 			showRankBadges: true,
 			rankBadgePosition: 'top-left',
