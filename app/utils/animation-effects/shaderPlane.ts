@@ -33,6 +33,14 @@ export interface ShaderPlaneEffectOptions<Params> {
 	feedback?: boolean;
 }
 
+/**
+ * Where `iTime` restarts from zero: one day of effect time. `iTime` is a
+ * float32, whose step at 86,400 is 1/128 s — half a 60 fps frame — and would
+ * reach a whole frame past 131,072. The effects are not periodic in time, so
+ * the restart is a visible one-frame jump, accepted for an unattended output.
+ */
+const EFFECT_TIME_RESTART_SECONDS = 86_400;
+
 const FULLSCREEN_VERTEX_SHADER = `
 void main() {
 	gl_Position = vec4(position, 1.0);
@@ -118,8 +126,13 @@ export function createShaderPlaneEffect<Params>(
 			}
 		},
 		render: (elapsedSeconds) => {
-			effectSeconds += (elapsedSeconds - lastElapsedSeconds) * timeScale;
-			lastElapsedSeconds = elapsedSeconds;
+			// A frame with no usable time draws the last one again. The modulus
+			// lands any delta in range in one step, however long the tab slept.
+			if (Number.isFinite(elapsedSeconds)) {
+				const advanced = effectSeconds + (elapsedSeconds - lastElapsedSeconds) * timeScale;
+				effectSeconds = Math.max(0, advanced % EFFECT_TIME_RESTART_SECONDS);
+				lastElapsedSeconds = elapsedSeconds;
+			}
 			uniforms.iTime!.value = effectSeconds;
 			if (feedbackTargets) {
 				// One pass into the write buffer reading the previous frame from the
