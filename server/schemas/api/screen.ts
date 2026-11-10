@@ -828,8 +828,8 @@ const graphicItemBaseShape = {
 	id: z.string().min(1).max(MAX_GRAPHIC_ITEM_ID_LENGTH),
 	label: z.string().min(1).max(MAX_GRAPHIC_ITEM_LABEL_LENGTH),
 	visible: z.boolean(),
-	// A Layer Lock (ADR-0063). Shared because the item is, but only a Feature
-	// Match Layout holds one: a Broadcast Graphic refuses it (`hasLayerLock`).
+	// A Layer Lock (ADR-0063), held by a Feature Match Layout's items and a
+	// Broadcast Graphic's alike.
 	locked: z.boolean().optional(),
 	anchor: graphicAnchorPointSchema,
 	rotation: graphicRotationSchema.optional(),
@@ -1173,16 +1173,6 @@ function hasSocialNetworkIcon(items: readonly { type: string; children?: readonl
 		|| (item.type === 'group' && item.children?.some(child => child.type === 'social-network-icon')));
 }
 
-/**
- * A Layer Lock is the Feature Match Overlay editor's (ADR-0063); no Broadcast
- * Graphics editor sets or reads one, so a Broadcast Graphic holding one would
- * carry a lock no author could see or lift.
- */
-function hasLayerLock(items: readonly GraphicItemConfig[]): boolean {
-	return items.some(item => item.locked !== undefined
-		|| (item.type === 'group' && item.children.some(child => child.locked !== undefined)));
-}
-
 /** A projected placeholder style is meaningful only in Broadcast Graphics. */
 function hasSocialProfilePlaceholderStyle(items: readonly GraphicItemConfig[]): boolean {
 	function projectedStyle(item: GraphicItemConfig | GraphicGroupChildConfig): boolean {
@@ -1262,10 +1252,6 @@ export const broadcastGraphicConfigSchema = z.object({
 		.refine(
 			items => new Set(graphicItemIds(items)).size === graphicItemIds(items).length,
 			'Graphic Item ids must be unique within one Broadcast Graphic',
-		)
-		.refine(
-			items => !hasLayerLock(items),
-			'Layer Locks are available only in Feature Match Layouts',
 		),
 	// Every cap and uniqueness rule sits on its own array field for the same reason
 	// the Graphic Item ones do: an object-level refinement never reaches the patch
