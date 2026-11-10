@@ -92,6 +92,10 @@ export function liveSessionSelectors(state: () => BroadcastGraphicsLiveState, se
 					: [];
 			}));
 		},
+		hasActiveSocialProfileRotation: (_screenId: number, graphics: readonly BroadcastGraphicConfig[]) =>
+			graphics.some(graphic => state().playout[graphic.id]?.onAir === true
+				&& Object.values(socialProfilePresentationProjections(state(), graphic, serverNow()))
+					.some(presentation => presentation.phase.kind !== 'static')),
 		renderedInputValues: (_screenId: number, graphics: readonly BroadcastGraphicConfig[], now?: number) =>
 			rendered<Record<string, GraphicInputValue>>(graphics, now, (graphic, instant) =>
 				broadcastGraphicRenderedInputs(state(), graphic.id, graphic.inputs ?? [], timing(graphic, instant))),

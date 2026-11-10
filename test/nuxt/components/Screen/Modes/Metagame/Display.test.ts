@@ -1,7 +1,7 @@
 import type { MetagameChartBar } from '~~/shared/utils/metagameChart';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/Metagame/Display.vue';
 
@@ -185,6 +185,29 @@ describe('screenMetagameDisplay', () => {
 			'Share',
 			'Win Rate',
 		]);
+	});
+
+	// Every output of a Screen shows the same figures, whatever locale its machine runs in.
+	it('formats figures the same on a machine whose locale writes decimals with a comma', async () => {
+		const NumberFormat = Intl.NumberFormat;
+		vi.spyOn(Intl, 'NumberFormat').mockImplementation(function (locales, options) {
+			return new NumberFormat(locales ?? 'de-DE', options);
+		} as typeof Intl.NumberFormat);
+		config.value = {
+			...config.value,
+			archetypeColumns: [
+				{ key: 'count', visible: true },
+				{ key: 'avgPlace', visible: true },
+			],
+		};
+		pageData.value = [
+			{ ...pageData.value[0], count: 1234 },
+		];
+
+		const wrapper = await mountComponent();
+		vi.restoreAllMocks();
+
+		expect(wrapper.findAll('.metagame-row .metagame-cell').map(cell => cell.text())).toEqual(['1,234', '3.2']);
 	});
 
 	it('renders the colors column when it is visible', async () => {

@@ -57,4 +57,34 @@ describe('useBroadcastGraphicsPlayoutClock', () => {
 
 		expect(requestAnimationFrame).toHaveBeenCalledOnce();
 	});
+
+	// A stored graphic or channel can start motion with no session command: a
+	// looping recipe saved onto a graphic resting on air.
+	it.each([
+		{ changed: 'graphics' },
+		{ changed: 'channels' },
+	] as const)('advances again when the stored $changed change', async ({ changed }) => {
+		const stored = {
+			graphics: ref<any[]>([]),
+			channels: ref<any[]>([]),
+		};
+		let now!: Readonly<{ value: number }>;
+		sessionStore.serverNow.mockReturnValue(1_000_000);
+		wrapper = mount(defineComponent({
+			setup() {
+				now = useBroadcastGraphicsPlayoutClock(7, stored.graphics, stored.channels);
+				return () => h('div');
+			},
+		}));
+		await nextTick();
+		nextFrame?.(1_000_000);
+		sessionStore.serverNow.mockReturnValue(1_000_500);
+
+		stored[changed].value = [
+			{ id: 'lower-third' },
+		];
+		await nextTick();
+
+		expect(now.value).toBe(1_000_500);
+	});
 });

@@ -777,8 +777,10 @@ export default defineNuxtPlugin({
 		 * The entry is a Realtime Subscription like any other: an outage holds it, and
 		 * once its Event's token lands it enters with the latest data, so control
 		 * surfaces count the output again without it remounting. Resolves once entered
-		 * or held, never waiting out an outage, because a Screen Output stops loading
-		 * only when this returns. `leavePresence` withdraws the entry either way.
+		 * or held, never waiting out a token outage. On a covered Event whose
+		 * connection is down, Ably queues the enter until the connection returns or
+		 * suspends, so no rendering waits on this. `leavePresence` withdraws the
+		 * entry either way.
 		 */
 		async function enterPresence(channelName: string, data: RealtimePresenceData): Promise<void> {
 			if (presenceEntries.has(channelName))

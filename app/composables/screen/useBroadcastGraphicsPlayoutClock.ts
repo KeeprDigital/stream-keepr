@@ -15,7 +15,7 @@ import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/typ
  * The clock advances while anything is in flight and stops when everything is
  * settled, because a settled phase cannot change and an operator's browser has
  * better things to do sixty times a second. It restarts whenever the Broadcast
- * Graphics Live Session moves on.
+ * Graphics Live Session moves on, or the stored graphics or channels change.
  */
 export function useBroadcastGraphicsPlayoutClock(
 	screenId: MaybeRefOrGetter<number>,
@@ -51,13 +51,20 @@ export function useBroadcastGraphicsPlayoutClock(
 		frame = requestAnimationFrame(advance);
 	}
 
+	// The stored graphics and channels restart it too: a looping recipe saved onto
+	// a graphic resting on air starts motion with no session command. A change that
+	// moves nothing costs one frame, which stops the clock again.
 	watch(
-		() => {
-			const session = sessionStore.sessions.get(toValue(screenId));
-			return session
-				? `${session.id}:${session.sequence}:${sessionStore.clockSynchronized}`
-				: null;
-		},
+		[
+			() => {
+				const session = sessionStore.sessions.get(toValue(screenId));
+				return session
+					? `${session.id}:${session.sequence}:${sessionStore.clockSynchronized}`
+					: null;
+			},
+			() => toValue(graphics),
+			() => toValue(channels),
+		],
 		() => {
 			if (!import.meta.client)
 				return;

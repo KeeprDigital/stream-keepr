@@ -17,6 +17,9 @@ function sample(rtt: number, offset: number) {
 	};
 }
 
+/** A `/api/time` request that gets no answer. */
+const dropped = () => Promise.reject(new Error('dropped'));
+
 async function syncWith(...answers: Array<() => Promise<unknown>>) {
 	for (const answer of answers)
 		mockFetch.mockImplementationOnce(answer);
@@ -78,6 +81,75 @@ describe('useServerTime', () => {
 		expect(serverTime.isSynced.value).toBe(true);
 		expect(serverTime.serverTimeOffset.value).toBe(800);
 		expect(console.warn).toHaveBeenCalledOnce();
+	});
+
+	// A sample's round trip is one request's: a retry inside it would count the
+	// timed-out attempt as latency and skew the offset by half of it (#1025).
+	it('does not take a sample from a request that had to be retried', async () => {
+		const retried = async (_url: string, request: { retry?: number }) => {
+			vi.setSystemTime(Date.now() + 3_000);
+			if (!request.retry)
+				throw new Error('timeout');
+			return { serverTime: Date.now() + 800 };
+		};
+
+		useState('serverTimeSynced').value = false;
+
+		const serverTime = await syncWith(retried as () => Promise<unknown>, dropped, dropped);
+
+		expect(serverTime.isSynced.value).toBe(false);
+	});
+
+	// A round trip above the ceiling bounds the offset too loosely to replace one
+	// already held; with none held, a loose offset still beats an unknown clock.
+	it.each([
+		{
+			name: 'averages in a sample at the ceiling',
+			held: true,
+			answers: [
+				sample(1_000, 2_000),
+				dropped,
+				sample(20, 900),
+			],
+			offset: 1_450,
+		},
+		{
+			name: 'leaves out a sample above the ceiling',
+			held: true,
+			answers: [
+				sample(1_002, 2_000),
+				dropped,
+				sample(20, 900),
+			],
+			offset: 900,
+		},
+		{
+			name: 'keeps the offset it holds when every sample is above the ceiling',
+			held: true,
+			answers: [
+				sample(1_002, 5_000),
+				dropped,
+				dropped,
+			],
+			offset: 800,
+		},
+		{
+			name: 'takes a sample above the ceiling while it holds no offset',
+			held: false,
+			answers: [
+				sample(1_002, 5_000),
+				dropped,
+				dropped,
+			],
+			offset: 5_000,
+		},
+	])('$name', async ({ held, answers, offset }) => {
+		await syncWith(sample(20, 800), sample(20, 800), sample(20, 800));
+		useState('serverTimeSynced').value = held;
+
+		const serverTime = await syncWith(...answers);
+
+		expect(serverTime.serverTimeOffset.value).toBe(offset);
 	});
 
 	// `beforeunload` also fires for an unload the operator cancels, so the shared

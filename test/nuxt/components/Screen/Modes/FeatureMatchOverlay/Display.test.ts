@@ -376,6 +376,69 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 	});
 
+	// A Session arriving or leaving is this output joining a value, not an operator's
+	// reveal or hide: it cuts to the settled frame and plays no authored motion.
+	describe('a Feature Match Session arriving or leaving', () => {
+		const revealedSession = {
+			player1: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
+			player2: { lifeTotal: 20, gameWins: 0, sideboardRevealed: true },
+		};
+		const SLOW = {
+			duration: 60_000,
+			easing: 'linear' as const,
+			delay: 0,
+			fade: { opacity: 0 },
+		};
+
+		beforeEach(() => {
+			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+			config.layout.composition = {
+				...createFeatureMatchLayoutComposition(),
+				items: [
+					Object.assign(getGraphicItemDefinition('deck-list').createDefault({
+						id: 'deck',
+						label: 'Deck',
+						canvasWidth: 1920,
+						canvasHeight: 1080,
+					}), {
+						view: 'grid' as const,
+						animation: { enter: SLOW, exit: SLOW },
+					}),
+				],
+			};
+			mockConfig.value = config;
+			mockSideboards.value = {
+				player1: [
+					{ name: 'Duress', quantity: 2, imageUrl: null },
+				],
+				player2: null,
+			};
+		});
+
+		it('shows a Sideboard already revealed at once, without its enter', async () => {
+			mockMatchState.value = null;
+			const wrapper = await mountComponent();
+
+			mockMatchState.value = revealedSession;
+			await nextTick();
+
+			// The enter fades in from nothing, so its first frame would be transparent.
+			const deckList = wrapper.get('[data-graphic-item-kind="deck-list"]');
+			expect(deckList.find('[data-deck-card="Duress"]').exists()).toBe(true);
+			expect(deckList.attributes('style')).not.toContain('opacity: 0');
+		});
+
+		it('drops a revealed Sideboard at once, without its exit', async () => {
+			mockMatchState.value = revealedSession;
+			const wrapper = await mountComponent();
+
+			mockMatchState.value = null;
+			await nextTick();
+
+			expect(wrapper.find('[data-deck-card="Duress"]').exists()).toBe(false);
+		});
+	});
+
 	// A One Piece deck is named by its Leader, which also sets its colours (ADR-0057).
 	it('shows a One Piece side\'s Leader where a Magic deck name and its colours would be', async () => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);

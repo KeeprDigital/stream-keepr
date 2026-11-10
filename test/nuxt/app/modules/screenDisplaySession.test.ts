@@ -384,6 +384,28 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
 	});
 
+	// Presence is not needed to render: with HTTP fine and realtime unable to connect,
+	// the presence enter stays queued for minutes, and program must not wait on it (#1025).
+	it.each([
+		[
+			'is still entering presence',
+			() => new Promise<void>(() => {}),
+		],
+		[
+			'fails to start',
+			() => Promise.reject(new Error('realtime refused')),
+		],
+	])('finishes its load while realtime %s', async (_case, start) => {
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const harness = createHarness();
+		harness.realtimeSession.start.mockImplementation(start);
+		await flushPromises();
+
+		expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
+		expect(harness.session.loading.value).toBe(false);
+		expect(harness.session.error.value).toBeNull();
+	});
+
 	it('does not reconnect realtime when a missing slug follows a valid screen', async () => {
 		const harness = createHarness();
 		await flushPromises();

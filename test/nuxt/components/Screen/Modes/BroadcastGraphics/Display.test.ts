@@ -1604,6 +1604,43 @@ describe('live playout animation in a Screen Output', () => {
 		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(false);
 	});
 
+	// Stored graphics can start motion too: a looping recipe saved onto a graphic
+	// resting on air plays at once, not from the next Take or Out.
+	it('animates a resting on-air Broadcast Graphic once a looping recipe is saved onto it', async () => {
+		const looping: BroadcastGraphicConfig = {
+			...lowerThird,
+			items: [
+				{
+					...bar,
+					animation: {
+						'on-screen': {
+							duration: 2000,
+							easing: 'linear',
+							delay: 0,
+							pause: 0,
+							repeat: 'indefinite',
+							fade: { opacity: 0 },
+						},
+					},
+				},
+			],
+		};
+		mockScreen.value = screenWithStack([lowerThird]);
+		mockPlayout.value = {
+			'lower-third': { onAir: true, effectiveStartedAt: T0 - 60_000, cut: false },
+		};
+		const wrapper = await mountComponent();
+		// Nothing moves, so its clock runs one frame and stops.
+		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+		mockScreen.value = screenWithStack([looping]);
+		await nextTick();
+		// A quarter of the way through a cycle, the fade is halfway out.
+		mockServerNow.value = T0 + 500;
+
+		await vi.waitFor(() => expect(itemStyle(wrapper)).toContain('opacity: 0.5'));
+	});
+
 	describe('a Graphic Channel the Screen Output is composed against', () => {
 		const CHANNEL: GraphicChannelConfig = { id: 'thirds', name: 'Lower thirds', handoff: 'out-then-in' };
 		const outgoing: BroadcastGraphicConfig = { ...ANIMATED, channelId: 'thirds' };
