@@ -208,7 +208,7 @@ cp .env .claude/worktrees/<name>/
 ```
 
 Without it, dev answers 503 from the admin and Screen Output surfaces, and the
-two realtime integration tests skip. That is a configuration gap, not a
+realtime integration tests skip. That is a configuration gap, not a
 failure on `main`.
 
 | Name                                             | Purpose                                                                                                                    |

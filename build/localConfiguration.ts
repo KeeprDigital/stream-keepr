@@ -82,7 +82,7 @@ export type LocallyRequiredNuxtName = typeof LOCALLY_REQUIRED_NUXT_NAMES[number]
  *
  * The Ably key is the only one here that reaches a third party. An empty one is
  * the expected state of a checkout that never claimed to have realtime, and #223
- * already owns saying so: the integration suite skips the two tests that reach the
+ * already owns saying so: the integration suite skips the tests that reach the
  * service and announces the reason once. Requiring it would warn every such
  * checkout about a secret it does not need.
  *

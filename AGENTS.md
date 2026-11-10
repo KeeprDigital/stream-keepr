@@ -33,7 +33,7 @@ runs only on PRs and in the merge queue. Open the PR from your branch and leave
 
 - A new worktree has no `.env`, `node_modules`, or `.nuxt`: `cp .env` in from
   the main checkout, then `pnpm install --frozen-lockfile`. Missing `.env`
-  produces 503s and two skipped realtime tests, not branch defects.
+  produces 503s and skipped realtime tests, not branch defects.
 - Stop dev servers with SIGINT/SIGTERM. `pnpm reap` safely removes orphaned
   `workerd`; scope any manual kill to your worktree's path
   (`pkill -f "<worktree path>/.*workerd"`), never bare `pkill -f workerd`.
