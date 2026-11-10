@@ -329,8 +329,16 @@ const openOutputItems = computed(() => [
  */
 const moreActionItems = computed(() => [
 	[
-		{ label: 'Identify', icon: 'i-lucide-scan-eye', onSelect: () => void sendCommand('identify') },
-		{ label: 'Debug', icon: 'i-lucide-bug', onSelect: () => void sendCommand('debug') },
+		{
+			label: 'Identify',
+			icon: 'i-lucide-scan-eye',
+			onSelect: () => void sendCommand('identify'),
+		},
+		{
+			label: 'Debug',
+			icon: 'i-lucide-bug',
+			onSelect: () => void sendCommand('debug'),
+		},
 	],
 	[
 		{
