@@ -1,4 +1,4 @@
-import { apiPathRequiresSession } from '~~/server/utils/apiBoundary';
+import { apiPathRequiresSession, requestIsCrossSiteMutation } from '~~/server/utils/apiBoundary';
 import { requestUserSession } from '~~/server/utils/auth';
 
 /**
@@ -25,8 +25,12 @@ import { requestUserSession } from '~~/server/utils/auth';
  *   `retired-author-session-cookies.ts` expires stale cookies. Neither is work
  *   worth doing for a request that is about to be refused.
  *
- * **The 401 is written out here, as literals, on purpose.** It is composed
- * around every route in the application, so it lands in every graph
+ * **A state-changing request another site's page made is refused 403** before
+ * the session is read: `SameSite=Lax` alone leaves a sibling subdomain able to
+ * make a signed-in browser POST here.
+ *
+ * **The 401 and the 403 are written out here, as literals, on purpose.** Each
+ * is composed around every route in the application, so it lands in every graph
  * `test/helpers/routeRefusalScan.ts` builds — and that scan resolves a `const`
  * only within the file it is reading. A status or a message imported from
  * elsewhere would arrive at the exhaustiveness check as a refusal it could not
@@ -39,8 +43,30 @@ import { requestUserSession } from '~~/server/utils/auth';
  * meets it; `test/unit/server/middleware/apiSession.test.ts` pins the shape.
  */
 export default defineEventHandler(async (event) => {
-	if (!apiPathRequiresSession(getRequestURL(event).pathname))
+	const url = getRequestURL(event);
+	if (!apiPathRequiresSession(url.pathname))
 		return;
+
+	// Before the session is read: a Session cookie on a state-changing request
+	// another site's page made is the thing being refused, so whether it is a
+	// valid one is not worth a database read to find out. The rule, and why a
+	// request naming no origin at all is admitted, is `requestIsCrossSiteMutation`.
+	// The exempt surfaces need none of it: each carries a credential a
+	// cross-site page cannot attach (a header token, a bearer, a
+	// `SameSite=Strict` cookie), and Better Auth checks its own router's origin.
+	const crossSite = requestIsCrossSiteMutation({
+		method: event.method,
+		secFetchSite: event.headers.get('sec-fetch-site'),
+		origin: event.headers.get('origin'),
+		requestHost: url.host,
+	});
+	if (crossSite) {
+		throw createError({
+			statusCode: 403,
+			statusMessage: 'Forbidden',
+			message: 'Cross-site request refused',
+		});
+	}
 
 	// Outside the opt-in Local Developer Session, a blank
 	// `NUXT_BETTER_AUTH_SECRET` raises out of here as the

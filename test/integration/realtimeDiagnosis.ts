@@ -60,6 +60,8 @@ export const SCREEN_COMMAND_ROUTE_REFUSALS: readonly RouteRefusal[] = [
 	{ statusCode: 404, message: 'Screen not found' },
 	{ statusCode: 404, message: 'Event not found' },
 	{ statusCode: 401, message: 'Authentication is required' },
+	// The boundary's other refusal: a state-changing request another site's page made.
+	{ statusCode: 403, message: 'Cross-site request refused' },
 ];
 
 /** Nitro's own miss, when no handler matched: a renamed route, not a rejected key. */

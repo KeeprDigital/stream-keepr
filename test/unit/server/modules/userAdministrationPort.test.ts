@@ -59,6 +59,8 @@ async function port() {
 	return betterAuthUserAdministrationPort(auth);
 }
 
+type Port = Awaited<ReturnType<typeof port>>;
+
 /** The token out of a link's fragment, which is the only place it is ever written. */
 function tokenFrom(url: string) {
 	return new URLSearchParams(new URL(url).hash.slice(1)).get('token') ?? '';
@@ -206,7 +208,7 @@ describe('the reset link an administrator hands over', () => {
 		expect(await context.internalAdapter.findSession(session.token)).not.toBeNull();
 
 		const issued = await issuePasswordResetLinkForUser(configured, created.user.id, CONTEXT);
-		// Issuing revokes nothing; only redeeming does.
+		// Issuing ends no session; only redeeming does.
 		expect(await context.internalAdapter.findSession(session.token)).not.toBeNull();
 
 		await redeem(tokenFrom(issued.passwordResetLink.url), 'the-replacement-password');
@@ -226,7 +228,40 @@ describe('the reset link an administrator hands over', () => {
 		expect(await context.internalAdapter.findSession(session.token)).not.toBeNull();
 	});
 
-	it('mints a different token every time, so two links are two credentials', async () => {
+	// An administrator's response to a leaked link voids it: issuing another,
+	// setting the password, or banning leaves no earlier link redeemable.
+	it.each([
+		[
+			'another link is issued',
+			false,
+			(configured: Port, userId: string) => issuePasswordResetLinkForUser(configured, userId, CONTEXT),
+		],
+		[
+			'a password is set directly',
+			false,
+			(configured: Port, userId: string) => setUserAccountPassword(configured, userId, 'set-by-an-administrator'),
+		],
+		[
+			'the account is banned',
+			false,
+			(configured: Port, userId: string) => banUserAccount(configured, userId, null),
+		],
+		[
+			'its sessions are revoked',
+			true,
+			(configured: Port, userId: string) => revokeUserSessions(configured, userId),
+		],
+	])('once %s, an earlier link still redeems: %s', async (_response, redeems, respond) => {
+		const { configured, created } = await invite();
+		const earlier = tokenFrom(created.passwordResetLink.url);
+
+		await respond(configured, created.user.id);
+
+		const redeemed = await redeem(earlier, 'chosen-with-the-leaked-link').then(() => true, () => false);
+		expect(redeemed).toBe(redeems);
+	});
+
+	it('mints a different token every time, and the newest is the one that redeems', async () => {
 		const { configured, created } = await invite();
 
 		const second = await issuePasswordResetLinkForUser(configured, created.user.id, CONTEXT);
@@ -234,9 +269,18 @@ describe('the reset link an administrator hands over', () => {
 		expect(tokenFrom(second.passwordResetLink.url))
 			.not
 			.toBe(tokenFrom(created.passwordResetLink.url));
-		// Issuing a second does not invalidate the first.
-		await redeem(tokenFrom(created.passwordResetLink.url), PASSWORD);
+		await redeem(tokenFrom(second.passwordResetLink.url), PASSWORD);
 		expect((await signIn(EMAIL, PASSWORD)).user.id).toBe(created.user.id);
+	});
+
+	it('voids one account\'s links and leaves another\'s alone', async () => {
+		const { configured, created } = await invite();
+		const other = await createUserAccount(configured, { email: 'second@keepr.digital', name: 'Another' }, CONTEXT);
+
+		await banUserAccount(configured, created.user.id, null);
+
+		await redeem(tokenFrom(other.passwordResetLink.url), PASSWORD);
+		expect((await signIn('second@keepr.digital', PASSWORD)).user.id).toBe(other.user.id);
 	});
 });
 

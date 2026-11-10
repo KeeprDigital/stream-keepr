@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { playerUpdateModule } from '~~/server/modules/player-update';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { getOriginConnectionId } from '~~/server/utils/ably';
 
 const reviewParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	playerId: z.coerce.number().int().positive(),
 	deckId: z.coerce.number().int().positive(),
 });

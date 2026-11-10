@@ -4,13 +4,14 @@ import type { ScreenOutputReader } from '~~/server/utils/screenOutputAuthorizati
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { z } from 'zod';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { screenService } from '~~/server/services/screen';
 import { screenOutputReader } from '~~/server/utils/screenOutputAuthorization';
 import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 
 const screenOutputReadParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	screenId: z.coerce.number().int().positive(),
 });
 

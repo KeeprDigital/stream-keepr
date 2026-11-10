@@ -124,6 +124,69 @@ describe('the API boundary', () => {
 		expect(response.status).toBe(200);
 	});
 
+	/**
+	 * A Session cookie is `SameSite=Lax`, which a sibling subdomain's page can
+	 * still make a browser send on a POST. The rule is exercised row by row in
+	 * the unit suite; here a real server answers each side of it once, with a
+	 * real `Host` to compare an `Origin` against.
+	 */
+	it.each([
+		[
+			'its own page says so',
+			400,
+			() => ({ 'sec-fetch-site': 'same-origin' }),
+		],
+		// Read when the case runs: the server's address exists only then.
+		[
+			'its own origin is named',
+			400,
+			() => ({ origin: new URL(url('/')).origin }),
+		],
+		[
+			'no origin is named at all, as this suite and every script asks',
+			400,
+			() => ({}),
+		],
+		[
+			'a sibling subdomain\'s page asks',
+			403,
+			() => ({ 'sec-fetch-site': 'same-site' }),
+		],
+		[
+			'another site\'s page asks',
+			403,
+			() => ({ 'sec-fetch-site': 'cross-site' }),
+		],
+		[
+			'another origin is named',
+			403,
+			() => ({ origin: 'https://not-this-installation.example' }),
+		],
+	])('answers a signed-in POST when %s: %i', async (_case, status, headers) => {
+		// An empty body, so an admitted request stops at the route's own
+		// validation and creates nothing.
+		const response = await fetch('/api/events', {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+				...headers(),
+			},
+			body: '{}',
+		});
+		const body = await response.json() as { message?: string };
+
+		expect(response.status).toBe(status);
+		expect(body.message === 'Cross-site request refused').toBe(status === 403);
+	});
+
+	it('still answers a cross-site read, which changes nothing and cannot be read back', async () => {
+		const response = await fetch('/api/events', {
+			headers: { 'sec-fetch-site': 'cross-site', 'origin': 'https://not-this-installation.example' },
+		});
+
+		expect(response.status).toBe(200);
+	});
+
 	it('answers 401 rather than 404 for a private path that does not exist', async () => {
 		// Stated on its own because it is a deliberate consequence: the boundary
 		// runs before the router, so an unauthenticated caller cannot use "Cannot

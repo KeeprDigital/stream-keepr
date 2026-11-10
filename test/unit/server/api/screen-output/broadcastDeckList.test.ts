@@ -118,6 +118,45 @@ describe('the selected Broadcast Deck List Screen Output read', () => {
 		await expect(handler(stubH3Event())).resolves.toMatchObject({ id: 23 });
 	});
 
+	// A capability reaches a mode's data only while its Screen is in that mode
+	// (ADR-0022); a Session reaches it regardless, as it reaches the Event.
+	it.each([
+		[
+			'a capability bearer',
+			'refuses',
+			true,
+			404,
+		],
+		[
+			'an operator Session',
+			'answers',
+			false,
+			200,
+		],
+	] as const)('%s reading a Screen showing another mode: %s', async (_reader, _outcome, byCapability, status) => {
+		mockFindScreenById.mockResolvedValue(screenRow({
+			currentMode: 'standings',
+			assetCapabilityDigest: await capabilityDigest(CAPABILITY),
+		}));
+		if (byCapability) {
+			mockGetRequestHeader.mockReturnValue(`Bearer ${CAPABILITY}`);
+		}
+		else {
+			mockOptionalUserSession.mockResolvedValue({
+				user: { id: 'user-1' },
+				session: { id: 'session-1' },
+			});
+		}
+		const handler = await broadcastDeckListRoute();
+
+		const answered = await handler(stubH3Event()).then(
+			() => 200,
+			(refusal: { statusCode: number }) => refusal.statusCode,
+		);
+
+		expect(answered).toBe(status);
+	});
+
 	it.each([
 		['no credential', undefined],
 		['another Screen\'s capability', `Bearer ${CAPABILITY}`],
@@ -127,7 +166,7 @@ describe('the selected Broadcast Deck List Screen Output read', () => {
 
 		await expect(handler(stubH3Event())).rejects.toMatchObject({
 			statusCode: 404,
-			message: 'Broadcast Deck List not found',
+			message: 'Not found',
 		});
 		expect(mockFindBroadcastDeckListById).not.toHaveBeenCalled();
 	});

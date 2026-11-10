@@ -1,6 +1,7 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { archetypes } from '~~/server/db/schema';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { METAGAME_CHART_SERIES_COUNT } from '~~/shared/utils/metagameChart';
 
 /** A Pinned Chart Series: one of the Theme's chart series, or null for none. Set by editing an Archetype. */
@@ -58,7 +59,7 @@ export const setArchetypeKeyCardsSchema = z.object({
 // ── Route Params ──
 
 export const archetypeParamsSchema = z.object({
-	id: z.coerce.number().int().positive(), // eventId
+	id: eventIdParamSchema, // eventId
 	archetypeId: z.coerce.number().int().positive(),
 });
 

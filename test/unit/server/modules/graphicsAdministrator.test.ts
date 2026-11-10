@@ -20,7 +20,7 @@ async function requireAdministrator() {
 	return (await import('~~/server/modules/graphics-administrator')).requireGraphicsAdministrator;
 }
 
-const CONFIGURED_TOKEN = 'a-configured-admin-token';
+const CONFIGURED_TOKEN = 'a-configured-admin-token-of-32ch';
 
 describe('the Graphics Administrator guard', () => {
 	beforeEach(() => {
@@ -49,6 +49,7 @@ describe('the Graphics Administrator guard', () => {
 		['blank', '   '],
 		['all digits', 482915736104],
 		['true', true],
+		['shorter than the floor', 'a-supplied-token'],
 	])('names the setting when the administrator token is %s', async (_label, configured) => {
 		mockRuntimeConfig.mockReturnValue({ graphicsAdminToken: configured });
 		mockRequestHeader.mockReturnValue('a-supplied-token');

@@ -1,6 +1,7 @@
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { phases } from '~~/server/db/schema';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 
 // CREATE
 export const createPhaseSchema = createInsertSchema(phases)
@@ -38,7 +39,7 @@ export const updatePhaseSchema = createUpdateSchema(phases)
 
 // ROUTE PARAMS
 export const phaseParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	phaseId: z.coerce.number().int().positive(),
 });
 

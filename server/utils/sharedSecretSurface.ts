@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3';
-import { readConfiguredSecret } from './configuredSecret';
+import { readConfiguredSecret, SHARED_SECRET_MIN_LENGTH } from './configuredSecret';
 import { ServiceConfigurationError } from './errors';
 import { secretTokensMatch } from './secretTokenComparison';
 
@@ -31,7 +31,8 @@ export interface SharedSecretSurface {
 	 * The configured secret as runtimeConfig holds it, read by the caller so the
 	 * config key stays type-checked at the site that knows which key it is.
 	 * `unknown` because runtimeConfig does not always hold a string: see
-	 * `readConfiguredSecret`. Blank means the surface is not armed.
+	 * `readConfiguredSecret`. Blank, or shorter than `SHARED_SECRET_MIN_LENGTH`,
+	 * means the surface is not armed.
 	 */
 	readonly configuredToken: unknown;
 	/**
@@ -56,7 +57,9 @@ export interface SharedSecretSurface {
 export async function requireSharedSecret(event: H3Event, surface: SharedSecretSurface) {
 	let configuredToken: string;
 	try {
-		configuredToken = readConfiguredSecret(surface.configuredToken, surface.settingName);
+		configuredToken = readConfiguredSecret(surface.configuredToken, surface.settingName, {
+			minLength: SHARED_SECRET_MIN_LENGTH,
+		});
 	}
 	catch (failure) {
 		throw failure instanceof ServiceConfigurationError

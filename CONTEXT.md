@@ -352,7 +352,7 @@ While the development bypass is active, each browser receives a synthetic **Loca
 _Avoid_: Graphics Author Session (the retired anonymous identity); login, which names the act.
 
 **Password Reset Link**:
-The single-use, expiring credential a Graphics Administrator hands a person out of band to set their own password — both a new account's first password and a forgotten one's replacement, since the installation sends no email (ADR-0010). It is returned exactly once and never stored; its token travels in the URL fragment. Redeeming it sets the password and ends every Session the account holds, without creating one or lifting a ban.
+The single-use, expiring credential a Graphics Administrator hands a person out of band to set their own password — both a new account's first password and a forgotten one's replacement, since the installation sends no email (ADR-0010). It is returned exactly once and never stored; its token travels in the URL fragment. Redeeming it sets the password and ends every Session the account holds, without creating one or lifting a ban. Issuing another, setting the account's password directly, or banning the account voids any still outstanding.
 _Avoid_: invite token, activation link.
 
 **Graphics Administrator**:

@@ -4,6 +4,9 @@ import type { UserAdministrationPort } from '.';
 import { serverAuth } from '~~/server/utils/auth';
 import { setCredentialPassword } from '~~/server/utils/betterAuthCredentials';
 
+/** What Better Auth's `/reset-password` prefixes a token with to find its row. */
+const RESET_IDENTIFIER_PREFIX = 'reset-password:';
+
 /**
  * User administration's `UserAdministrationPort`, in terms of Better Auth.
  *
@@ -113,12 +116,26 @@ export async function betterAuthUserAdministrationPort(
 			// returns and refuses an expired one, so single-use and expiring are
 			// properties of the library's consumption rather than of this write.
 			await context.internalAdapter.createVerificationValue({
-				identifier: `reset-password:${token}`,
+				identifier: `${RESET_IDENTIFIER_PREFIX}${token}`,
 				value: userId,
 				expiresAt,
 			});
 
 			return token;
+		},
+
+		revokePasswordResetTokens: async (userId) => {
+			// A reset row is keyed on its token and holds the user id as its value,
+			// so an account's outstanding links are found by value. The raw adapter,
+			// because the internal one deletes a verification only by identifier,
+			// and the tokens are what this surface never keeps.
+			await context.adapter.deleteMany({
+				model: 'verification',
+				where: [
+					{ field: 'value', value: userId },
+					{ field: 'identifier', operator: 'starts_with', value: RESET_IDENTIFIER_PREFIX },
+				],
+			});
 		},
 
 		setBan: async (userId, ban) => {

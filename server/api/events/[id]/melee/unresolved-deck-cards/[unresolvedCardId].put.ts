@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { deckListResolutionModule } from '~~/server/modules/deck-list-resolution';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { getOriginConnectionId } from '~~/server/utils/ably';
 
 const paramsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	unresolvedCardId: z.coerce.number().int().positive(),
 });
 

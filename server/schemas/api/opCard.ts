@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { OP_CARD_CATEGORIES, OP_CARD_COLORS } from '~~/shared/types/card/op';
 import { parseOpCardNumber } from '~~/shared/utils/card/op';
 
@@ -31,7 +32,7 @@ export const opCardSearchQuerySchema = z.object({
 });
 
 export const opCardParamsSchema = z.object({
-	id: z.coerce.number().int().positive(),
+	id: eventIdParamSchema,
 	number: opCardNumberSchema,
 });
 
