@@ -73,6 +73,11 @@ interface FeatureMatchLayoutEditorOptions {
 	 * Required, so an editor that forgot the lease cannot write.
 	 */
 	writable: MaybeRefOrGetter<boolean>;
+	/**
+	 * Whether a Feature Match Layout Template placement is in flight. The server is
+	 * rewriting the layout, so the editor writes nothing until the placed one is held.
+	 */
+	held?: MaybeRefOrGetter<boolean>;
 }
 
 /**
@@ -98,6 +103,11 @@ interface FeatureMatchLayoutEditorOptions {
  * every verb writes and records nothing, and losing it ends the undo history,
  * since the next holder's changes would be undone over.
  *
+ * While a Feature Match Layout Template placement is in flight the editor is held:
+ * every verb, undo and redo included, writes nothing, since each writes a whole
+ * layout from before the placement. The history is kept, and a `checkpoint` still
+ * records, so the placement undoes as one step.
+ *
  * A locked layer (#747) is left alone by every canvas verb — a move, a resize, a
  * rotation and an arrow nudge — and still edited by the property panel. The
  * lock is stored on the layer (#943), so locking is a layout edit like any other:
@@ -105,7 +115,9 @@ interface FeatureMatchLayoutEditorOptions {
  */
 export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOptions) {
 	const { config, updateConfig } = options;
-	const writable = computed(() => toValue(options.writable));
+	const leased = computed(() => toValue(options.writable));
+	/** Whether this session may edit now: it holds the lease, and no placement is in flight. */
+	const writable = computed(() => leased.value && !toValue(options.held));
 
 	const layerSelection = shallowRef<LayerSelection>(NO_LAYERS);
 	/** Every selected layer, in the order the author chose them. */
@@ -121,8 +133,8 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	const canUndo = computed(() => writable.value && history.value.past.length > 0);
 	const canRedo = computed(() => writable.value && history.value.future.length > 0);
 
-	watch(writable, (isWritable) => {
-		if (!isWritable)
+	watch(leased, (isLeased) => {
+		if (!isLeased)
 			history.value = emptyEditHistory();
 	});
 
@@ -165,7 +177,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 
 	/** Record the current layout as an undo step, without writing anything. */
 	function checkpoint(edit: FeatureMatchLayoutEditOptions = {}) {
-		if (!writable.value || gesture?.recorded)
+		if (!leased.value || gesture?.recorded)
 			return;
 		history.value = recordEdit(history.value, snapshot(), {
 			now: Date.now(),
@@ -188,7 +200,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 
 	/**
 	 * Write part of the mode config as one undoable edit: the one write every verb
-	 * takes. Answers whether it wrote, which it does only while leased.
+	 * takes. Answers whether it wrote, which it does only while leased and not held.
 	 */
 	function edit(partial: Partial<FeatureMatchOverlayModeConfig>, editOptions: FeatureMatchLayoutEditOptions = {}): boolean {
 		if (!writable.value)
