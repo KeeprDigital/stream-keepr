@@ -75,6 +75,24 @@ export function probeOrigin(env = process.env) {
 	return configured.replace(/\/$/, '');
 }
 
+/**
+ * What was delivered on each kind of channel, by message type. A Screen Output
+ * is told on its own channel what its output shows of each Event-channel
+ * message, so the two are counted apart: the Event channel's figure is the
+ * fan-out to every tab, the Screen channels' the cost of telling the outputs.
+ */
+export function deliveredByChannel(received) {
+	const byChannel = {
+		event: { delivered: 0, byType: {} },
+		screen: { delivered: 0, byType: {} },
+	};
+	for (const { channel, name } of received) {
+		byChannel[channel].delivered += 1;
+		byChannel[channel].byType[name] = (byChannel[channel].byType[name] ?? 0) + 1;
+	}
+	return byChannel;
+}
+
 /** Set by `main` from `probeOrigin`, and read by `api`. Never defaulted. */
 let origin;
 const CYCLES = Number(process.env.PROBE_CYCLES ?? 5);
@@ -402,6 +420,7 @@ async function main() {
 			return rows;
 		})(),
 		deliveredTotal: all.length,
+		byChannel: deliveredByChannel(all),
 		byType,
 		largestDeliveredMessageBytes: Math.max(...all.map(i => i.bytes)),
 	}, null, 2));
