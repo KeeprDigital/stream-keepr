@@ -277,6 +277,10 @@ _Avoid_: Preview — which composes the authored state its embedder pushes in an
 **Screen Output Asset Capability**:
 An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, its resolved Theme Tokens' included (ADR-0050) and, on a Talent Screen showing photos, its Talents' photos (ADR-0070), never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
 
+**Screen Output Link**:
+A short text, about 16 characters, that names one Screen and proves the right to its Screen Output Asset Capability. It is not presented on reads: it is exchanged once for the capability, which then does everything a capability does. It is derived from what the capability is derived from, never stored, so regenerating the capability regenerates the link and the former link stops exchanging. No Session stands in for it.
+_Avoid_: short link, output token, output code, share link.
+
 ### Client and live-state infrastructure
 
 **Event Data**:

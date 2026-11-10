@@ -112,6 +112,7 @@ describe('which API paths require a session', () => {
 	it('exempts the auth router, the capability surface and the admin surface', () => {
 		expect(apiPathRequiresSession('/api/auth/sign-in/email')).toBe(false);
 		expect(apiPathRequiresSession('/api/screen-output/screens/7/asset-capability-session')).toBe(false);
+		expect(apiPathRequiresSession('/api/screen-output/link')).toBe(false);
 		expect(apiPathRequiresSession('/api/admin/graphics-assets/health')).toBe(false);
 		expect(apiPathRequiresSession('/api/public/events/1/on-air')).toBe(false);
 	});
@@ -428,6 +429,9 @@ describe('the public surface, counted against the routes on disk', () => {
 			'server/api/screen-output/events/[id]/screens/[screenId]/top-cards.get.ts',
 			'server/api/screen-output/events/[id]/screens/[screenId]/top-cut.get.ts',
 			'server/api/screen-output/events/[id]/screens/slug/[slug].get.ts',
+			// The Screen Output Link exchange: the link in its body is its whole
+			// credential, and it has no Session arm.
+			'server/api/screen-output/link.post.ts',
 			'server/api/screen-output/screens/[screenId]/asset-capability-session.post.ts',
 			'server/api/screen-output/screens/[screenId]/assets/[assetId]/revisions/[revisionId]/content.get.ts',
 			// A clock reading for output drift correction, with no Event or Screen

@@ -41,8 +41,25 @@ describe('error-handler mapping logic', () => {
 			)).toBe('/api/screen-output/screens/:screenId/assets/:assetId/revisions/:revisionId/content');
 		});
 
+		// A Screen Output Link in the output page's address is a credential; a log names the route only.
+		it.each([
+			['/o/5Kd3NBUAdUnhyzen', '/o/:link'],
+			['/o/5Kd3NBUAdUnhyzen/', '/o/:link'],
+			['/o/5Kd3NBUAdUnhyzen?output=key', '/o/:link'],
+			['/o/5Kd3NBUAdUnhyzen/anything/after', '/o/:link'],
+			['/o/not%20a%20link', '/o/:link'],
+			['/O/5Kd3NBUAdUnhyzen', '/o/:link'],
+			['/o/', '/o/'],
+			['/o', '/o'],
+			['/other/5Kd3NBUAdUnhyzen', '/other/5Kd3NBUAdUnhyzen'],
+			['/api/o/5Kd3NBUAdUnhyzen', '/api/o/5Kd3NBUAdUnhyzen'],
+		])('logs %s as %s', (path, logged) => {
+			expect(safeErrorLogPath(path)).toBe(logged);
+		});
+
 		it('preserves unrelated paths', () => {
 			expect(safeErrorLogPath('/api/events/17')).toBe('/api/events/17');
+			expect(safeErrorLogPath(undefined)).toBeUndefined();
 		});
 	});
 
