@@ -4,18 +4,15 @@ import type { ScreenMode } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, h } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
-import { screenModeTokenName } from '~~/shared/screenModes';
 import { standingsModeTokens } from '~~/shared/screenModeTokens/standings';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { fakeScreenThemeNetwork, overrideWrites, ScreenSettingsCardStub, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
-import ThemeTokenGroup from '~/components/Screen/ThemeTokenGroup.vue';
 import ThemeTokensSettings from '~/components/Screen/ThemeTokensSettings.vue';
 
-// The residual Screen-wide look holds every token the Screen may override that
-// no mounted Screen Settings Group renders, less the host's own placement
-// tokens. It starts closed unless it holds an override.
+// The Screen-wide look holds the Foundation Tokens the Screen may override,
+// less the host's own placement tokens; a Mode Token sits in its group's Look
+// alone. It starts closed unless it holds an override.
 
 const { mockApiFetch } = vi.hoisted(() => ({
 	mockApiFetch: vi.fn(),
@@ -28,24 +25,10 @@ beforeEach(() => {
 	fakeScreenThemeNetwork(mockApiFetch);
 });
 
-/** Mount the residual card, after the Screen Settings Groups `groups` names, under a page registry. */
-async function mountSection(mode: ScreenMode, themeOverrides: StoredThemeTokens = {}, groups: string[] = []) {
+async function mountSection(mode: ScreenMode, themeOverrides: StoredThemeTokens = {}) {
 	const screen = seedThemedScreen(mode, themeOverrides);
-	const Page = defineComponent(() => {
-		provideScreenSettingsGroups();
-		return () => h('div', [
-			...groups.map(group => h(ThemeTokenGroup, {
-				screen: screen(),
-				eventId: 1,
-				group,
-			})),
-			h(ThemeTokensSettings, {
-				screen: screen(),
-				eventId: 1,
-			}),
-		]);
-	});
-	const wrapper = mount(Page, {
+	const wrapper = mount(ThemeTokensSettings, {
+		props: { screen: screen(), eventId: 1 },
 		global: {
 			stubs: { ...nuxtUiStubs, ScreenSettingsCard: ScreenSettingsCardStub },
 		},
@@ -59,30 +42,16 @@ const card = (wrapper: VueWrapper) => wrapper.get('[data-testid="screen-theme-to
 const residualRows = (wrapper: VueWrapper) => card(wrapper).findAll('[data-token]').map(row => row.attributes('data-token'));
 
 describe('the Screen-wide look', () => {
-	it('lists the mode\'s Mode Tokens and the Foundation Tokens their defaults name, but not the Screen inset or alignment', async () => {
-		const declared = Object.entries(standingsModeTokens);
-		const named = new Set<string>(declared.flatMap(([, { default: fallback }]) => typeof fallback === 'object' && 'token' in fallback
+	// A Mode Token renders in its group's Look whether or not that group is on the page, never here.
+	it('lists the Foundation Tokens the mode\'s Mode Tokens name by default, and no Mode Token, Screen inset or alignment', async () => {
+		const named = new Set<string>(Object.values(standingsModeTokens).flatMap(({ default: fallback }) => typeof fallback === 'object' && 'token' in fallback
 			? [fallback.token]
 			: []));
 
 		const wrapper = await mountSection('standings');
 
 		expect(card(wrapper).attributes('data-settings-card')).toBe('Screen-wide look');
-		expect(residualRows(wrapper).sort()).toEqual([
-			...declared.map(([token]) => screenModeTokenName('standings', token)),
-			...Object.keys(FOUNDATION_TOKENS).filter(name => named.has(name)),
-		].sort());
-	});
-
-	it('leaves out the Mode Tokens a mounted Screen Settings Group renders', async () => {
-		const wrapper = await mountSection('standings', {}, ['header']);
-
-		const inGroup = wrapper.get('[data-settings-group="header"]').findAll('[data-token]').map(row => row.attributes('data-token'));
-		expect(inGroup).toEqual(['standings.title-typography', 'standings.title-text', 'standings.title-divider']);
-		expect(residualRows(wrapper)).not.toEqual(expect.arrayContaining([
-			expect.stringMatching(/^standings\.title-/),
-		]));
-		expect(residualRows(wrapper)).toContain('standings.surface');
+		expect(residualRows(wrapper)).toEqual(Object.keys(FOUNDATION_TOKENS).filter(name => named.has(name)));
 	});
 
 	it.each([
@@ -93,9 +62,9 @@ describe('the Screen-wide look', () => {
 			true,
 		],
 		[
-			'open with an override of a Mode Token whose group is not mounted',
+			'closed with only a Mode Token overridden',
 			{ 'standings.surface': '#ff0000' },
-			true,
+			false,
 		],
 		[
 			'closed with only the Screen inset overridden',

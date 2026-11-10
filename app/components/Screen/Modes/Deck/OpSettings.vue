@@ -155,6 +155,9 @@ const headerCardSummary = computed(() => settingsSummary([
 	].filter(Boolean).join(', ') || 'Nothing shown',
 	look('header'),
 ]));
+const detailsSummary = computed(() => settingsSummary([
+	look('deck-details', 'pointed-cards'),
+], FOLLOWS_THE_THEME));
 const mainboardSummary = computed(() => settingsSummary([
 	layout.value.cardSizing === 'fixed'
 		? `${layout.value.cardWidth} px cards`
@@ -168,7 +171,7 @@ const badgesSummary = computed(() => settingsSummary([
 	props.config.showQuantities
 		? 'Quantity badge'
 		: 'No badges',
-	look('quantity-badge'),
+	look('quantity-badge', 'points-badge'),
 ]));
 
 // What the pickers load, re-read on Reconnect Resync (#610).
@@ -259,6 +262,17 @@ onMounted(async () => {
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
 		</ScreenSettingsCard>
 
+		<!-- No One Piece control sits in these groups, but their Mode Tokens are the Deck List's, so their Looks are here. -->
+		<ScreenSettingsCard
+			id="deck:deck-details"
+			title="Deck Details"
+			subtitle="The cost curve's bars take the accent; the rest styles a Magic Deck List's details row."
+			:summary="detailsSummary"
+		>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="deck-details" />
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="pointed-cards" />
+		</ScreenSettingsCard>
+
 		<ScreenSettingsCard id="deck:mainboard" title="Mainboard" :summary="mainboardSummary">
 			<p class="text-xs text-muted">
 				Grouped Character, Event, Stage, each by cost, beside the Leader.
@@ -308,6 +322,7 @@ onMounted(async () => {
 					<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="quantity-badge" />
 				</template>
 			</ScreenCardBadgeFields>
+			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="points-badge" />
 		</ScreenSettingsCard>
 	</div>
 </template>

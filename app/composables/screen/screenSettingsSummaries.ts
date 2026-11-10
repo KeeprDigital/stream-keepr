@@ -37,7 +37,7 @@ export function columnsSummary(columns: readonly { visible: boolean }[]): string
  * `mode`'s `groups` hold, or `null` while every token there follows the Theme.
  */
 export function lookSummary(mode: ScreenMode, themeOverrides: StoredThemeTokens | null | undefined, groups: readonly string[]): string | null {
-	const placed = placeScreenThemeTokens(mode, groups).groups;
+	const placed = placeScreenThemeTokens(mode).groups;
 	const overrides = themeOverrides ?? {};
 	const count = groups
 		.flatMap(group => placed[group] ?? [])

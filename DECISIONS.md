@@ -2320,13 +2320,13 @@ Accepted · 2026-11-04 · [#955](https://github.com/KeeprDigital/stream-keepr/is
 
 **Every token a Screen may override renders once on its settings page** (`placeScreenThemeTokens` in `shared/screenThemeOverrides.ts`). That is what its mode's declaration consumes, plus, on a graphics host, every Foundation Token its Graphic Items may bind (ADR-0049). Each lands in one place:
 
-- **A Mode Token** renders in its group, under a "Look" subheading after the group's config controls, as a compact row (`ScreenThemeTokenGroup`). A mounted group registers itself with the page (`provideScreenSettingsGroups`) for as long as its `ScreenSettingsCard` is on it: collapsing the card unmounts its body, but not the registration, so its tokens do not move. Until a group registers, its tokens render in the residual card, so a token never disappears or doubles while a mode's settings have not adopted its group yet.
+- **A Mode Token** renders in its group, under a "Look" subheading after the group's config controls, as a compact row (`ScreenThemeTokenGroup`), and nowhere else. A group whose controls cannot apply is not on the page, and its Look is hidden with it: Standings' reveal motion shows in the reveal view mode alone, a Deck List's point badge only where card points apply (#1065).
 - **A plain mode's host tokens**, `inset` and `alignment`, render in **Background & Placement**, beside the mode's Background Layer stack.
-- **Every other Foundation Token** renders in the residual **Screen-wide look**. Foundation Tokens stay overridable per Screen, but together: overriding one restyles every Mode Token following it, so placing it beside one element would mislead.
+- **Every other Foundation Token** renders in the **Screen-wide look**, which lists Foundation Tokens only. Foundation Tokens stay overridable per Screen, but together: overriding one restyles every Mode Token following it, so placing it beside one element would mislead.
 
-The coverage test places each mode's tokens with no group, one group and every group mounted, and fails if one is placed twice or not at all.
+The coverage test places each mode's tokens and fails if one is placed twice or not at all, or if a Mode Token lands outside a group.
 
-**The page ends with Background & Placement, then Screen-wide look.** The order is the Screen info card, the mode's settings, Background & Placement, then the Screen-wide look. Both closing cards start closed unless something in them is set or overridden: a Background Layer or a host token's override, or an override of a token the residual lists. Data and live-action cards stay open and are not collapsible. Each collapsible card remembers its open state per browser by `mode:card` id (`ScreenSettingsCard`, #964). Editor Focus Mode hides both closing cards, as it hid the Theme card. A group's Look is part of the mode's settings, so it shows in Editor Focus Mode: the Feature Match Overlay's Frame and Source Item rows show there once its inspector mounts their groups (#982).
+**The page ends with Background & Placement, then Screen-wide look.** The order is the Screen info card, the mode's settings, Background & Placement, then the Screen-wide look. Both closing cards start closed unless something in them is set or overridden: a Background Layer or a host token's override, or an override of a Foundation Token the Screen-wide look lists. Data and live-action cards stay open and are not collapsible. Each collapsible card remembers its open state per browser by `mode:card` id (`ScreenSettingsCard`, #964). Editor Focus Mode hides both closing cards, as it hid the Theme card. A group's Look is part of the mode's settings, so it shows in Editor Focus Mode: the Feature Match Overlay's Frame and Source Item rows show there, in the inspector section of the layer they style (#982).
 
 **Only where a row renders changes.** A row still writes a Screen Theme Override (`PATCH …/theme-overrides`) and shows Theme against Overridden (ADR-0049). It never becomes mode config (ADR-0051). A display reset still leaves every override in place, whichever card shows it.
 
@@ -2337,11 +2337,13 @@ All of a Screen's Mode Tokens sat in one flat Theme card above the mode's settin
 ### Consequences
 
 - `useScreenThemeOverrides` holds the Theme load, the resolution, and the per-token write and Clear for every card that renders rows. Cards mounting together share one in-flight read of the Event's Theme.
-- No mode mounts a group yet, so each mode's Mode Tokens stay in the Screen-wide look until its own settings ticket mounts them (#971–#983).
-- Both closing cards remember their open state as `<mode>:background-and-placement` and `<mode>:screen-wide-look`. Until an operator toggles one in this browser, it follows what it holds, so a group registering after the residual card mounts moves its override out and can close the card again. Once toggled, the remembered state wins over what the card holds, on every Screen of that mode.
-- A Mode Token added later must name a group of its mode, or it fails to compile. It renders in the residual card until its group is mounted.
+- Every mode's settings mount each group its Mode Tokens name (#971–#983). A group mounts nothing by registration: the page keeps no record of which groups are on it, and no card collects the tokens of a group that is not (#1065, replacing the mounted-group registration and residual placement this decision first shipped with).
+- A Mode Token whose group is hidden cannot be overridden from the page until its group shows. Its stored override still applies.
+- A One Piece Deck List has no control in the Deck Details, Pointed Cards or point badge groups, but its settings mount their Looks, so every Deck List Mode Token stays reachable there.
+- Both closing cards remember their open state as `<mode>:background-and-placement` and `<mode>:screen-wide-look`. Until an operator toggles one in this browser, it follows what it holds. Once toggled, the remembered state wins over what the card holds, on every Screen of that mode.
+- A Mode Token added later must name a group of its mode, or it fails to compile. Its mode's settings must mount that group for it to render.
 - Round Clock's and Talent's Mode Tokens name groups here too, though #968 left them for #983, so every Mode Token is placed by one rule.
-- The Feature Match Overlay's inspector shows one layer's sections at a time, so its editor holds all four of its groups while open (#982). Selecting a Source Item or a Graphic Item never moves the Frame's rows into the Screen-wide look. The rows sit inside the inspector's read-only fieldset, so an observer without the Graphics Authoring Lease sees them disabled, though the override write itself is not lease-gated (ADR-0030).
+- The Feature Match Overlay's inspector shows one layer's sections at a time, so a layer's rows show while that layer is selected (#982). The rows sit inside the inspector's read-only fieldset, so an observer without the Graphics Authoring Lease sees them disabled, though the override write itself is not lease-gated (ADR-0030).
 
 ### Rejected alternatives
 
