@@ -119,12 +119,12 @@ export function useGraphicAssetFontFaces(
 
 		/*
 		 * An unsettled window is the absence of an answer rather than a different one.
-		 * `useScreenGraphicAssetContentUrls` clears its whole URL map and goes unsettled
-		 * whenever the Screen's *asset reference set* changes — for any asset kind, not
-		 * just fonts — so a Take that brings on an image drives this composable through
-		 * one of those windows with every font reference untouched. Both legs of it have
-		 * to be sat through: the faces required are still the faces loaded, and the map
-		 * comes back holding the same URLs it was cleared of.
+		 * `useScreenGraphicAssetContentUrls` goes unsettled whenever the Screen's *asset
+		 * reference set* changes — for any asset kind, not just fonts — and clears its
+		 * URL map when the Screen or capability changes, so a Take that brings on an
+		 * image drives this composable through one of those windows with every font
+		 * reference untouched. Both legs of it have to be sat through: the faces
+		 * required are still the faces loaded, and the map settles holding the same URLs.
 		 *
 		 * Families rather than URLs on the way down, because the URLs are exactly what
 		 * is missing there; the family is derived from the pinned revision and says what

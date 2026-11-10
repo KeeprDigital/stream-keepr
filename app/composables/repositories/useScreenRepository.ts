@@ -6,6 +6,22 @@ import type {
 import { screenOutputCapabilityHeaders } from '~~/shared/utils/screenOutput';
 import { useEventDataFetch, useEventDataResource } from '~/modules/event-data/client';
 
+/**
+ * The Screen lookup could not be answered: a server fault or no answer at all.
+ * Not a missing Screen, which the route says with a 4xx.
+ */
+export class ScreenLookupUnavailable extends Error {
+	constructor(cause: unknown) {
+		super('Screen lookup unavailable', { cause });
+	}
+}
+
+function refusedByServer(failure: unknown): boolean {
+	const { statusCode, status } = (failure ?? {}) as { statusCode?: number; status?: number };
+	const code = statusCode ?? status;
+	return code !== undefined && code >= 400 && code < 500;
+}
+
 export function useScreenRepository() {
 	const base = useEventDataResource<Screen, CreateScreenInput, UpdateScreenInput>({
 		resourcePath: 'screens',
@@ -38,6 +54,9 @@ export function useScreenRepository() {
 	 * Still null on refusal. The route answers one 404 for a missing Screen, an
 	 * unknown slug and a capability for some other Screen alike, so there is nothing
 	 * for a caller to tell apart — which is the posture the capability surface keeps.
+	 *
+	 * A lookup that was not answered throws `ScreenLookupUnavailable` instead: an
+	 * output that took a brief outage for a missing Screen would never ask again.
 	 */
 	const getBySlug = async (
 		eventId: number,
@@ -49,8 +68,10 @@ export function useScreenRepository() {
 				headers: screenOutputCapabilityHeaders(assetCapability),
 			});
 		}
-		catch {
-			return null;
+		catch (failure) {
+			if (refusedByServer(failure))
+				return null;
+			throw new ScreenLookupUnavailable(failure);
 		}
 	};
 

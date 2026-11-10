@@ -66,13 +66,17 @@ describe('useServerTime', () => {
 		expect(serverTime.serverTimeOffset.value).toBe(800);
 	});
 
-	it('falls back to local time when no sample answers, warning once', async () => {
+	// A missed re-sync is not an unknown clock: Page Rotations and playout keep
+	// running on the offset already held (ADR-0009).
+	it('keeps the offset it holds when a later sync gets no answer, warning once', async () => {
+		await syncWith(sample(20, 800), sample(20, 800), sample(20, 800));
 		mockFetch.mockRejectedValue(new Error('offline'));
 
 		const serverTime = await syncWith();
 		await syncWith();
 
-		expect(serverTime.isSynced.value).toBe(false);
+		expect(serverTime.isSynced.value).toBe(true);
+		expect(serverTime.serverTimeOffset.value).toBe(800);
 		expect(console.warn).toHaveBeenCalledOnce();
 	});
 });

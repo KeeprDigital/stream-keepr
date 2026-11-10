@@ -55,9 +55,11 @@ export function useServerTime() {
 			}
 
 			if (samples.length === 0) {
-				isSynced.value = false;
+				// `isSynced` says an offset is held, not that the last sync answered:
+				// consumers read `false` as an unknown clock, and a missed re-sync
+				// leaves the offset already held as good as it was.
 				if (!hasWarned.value) {
-					console.warn('Server time sync unavailable; using local time until the API responds.');
+					console.warn('Server time sync unavailable; keeping the last known offset until the API responds.');
 					hasWarned.value = true;
 				}
 				return;
@@ -76,9 +78,8 @@ export function useServerTime() {
 			lastSyncedAt.value = Date.now();
 		}
 		catch {
-			isSynced.value = false;
 			if (!hasWarned.value) {
-				console.warn('Server time sync failed; using local time until the API responds.');
+				console.warn('Server time sync failed; keeping the last known offset until the API responds.');
 				hasWarned.value = true;
 			}
 		}

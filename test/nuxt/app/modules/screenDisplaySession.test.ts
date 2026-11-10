@@ -5,6 +5,7 @@ import { defineComponent, h, nextTick, reactive, watch } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
+import { ScreenLookupUnavailable } from '~/composables/repositories/useScreenRepository';
 import { SCREEN_OUTPUT_LOAD_RETRY_MS, useScreenDisplaySession } from '~/modules/screen/displaySession';
 
 function flushPromises() {
@@ -38,6 +39,8 @@ function createHarness(options: {
 	setupSession?: (session: ScreenDisplaySession) => void;
 	/** What the Event context read carries beyond its id and name. */
 	outputEvent?: Record<string, unknown>;
+	/** Failures the Screen lookup throws, one per attempt, before it answers. */
+	lookupFailures?: unknown[];
 } = {}) {
 	const route = options.route ?? createRoute(options.query);
 	const screens = options.screens ?? {
@@ -50,6 +53,8 @@ function createHarness(options: {
 		loadScreenBySlug: vi.fn(async (_eventId: number, slug: string) => {
 			order.push(`load:${slug}`);
 			screenStore.activeScreen = null;
+			if (options.lookupFailures?.length)
+				throw options.lookupFailures.shift();
 			const screen = screens[slug];
 			if (!screen)
 				throw new Error('Screen not found');
@@ -229,6 +234,24 @@ describe('useScreenDisplaySession', () => {
 		expect(harness.outputReads.event).not.toHaveBeenCalled();
 		expect(harness.session.error.value).toBe('Screen not found');
 		expect(harness.session.errorDetail.value).toBe('The screen "main" could not be found for this event.');
+	});
+
+	it('says a Screen lookup that could not be answered is unavailable, and retries it until the load finishes', async () => {
+		// An output that loads during a brief outage has no reconnect to wake it.
+		vi.useFakeTimers();
+		const harness = createHarness({
+			lookupFailures: [
+				new ScreenLookupUnavailable(new Error('503')),
+			],
+		});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(harness.session.error.value).toBe('Screen unavailable');
+		expect(harness.session.errorDetail.value).toBe('The screen "main" could not be loaded. Retrying automatically.');
+
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+
+		expect(harness.session.error.value).toBeNull();
+		expect(harness.realtimeSession.start).toHaveBeenCalledWith(42, 7);
 	});
 
 	it('retries a failed Event context read on its own, finishing the load', async () => {
