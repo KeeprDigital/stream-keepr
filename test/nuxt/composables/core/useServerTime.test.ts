@@ -1,9 +1,14 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockFetch } = vi.hoisted(() => ({
-	mockFetch: vi.fn(),
-}));
+const { mockFetch } = vi.hoisted(() => {
+	// Before anything else here runs: the app's boot has already started a sync
+	// that goes unanswered and ends by warning.
+	vi.spyOn(console, 'warn').mockImplementation(() => {});
+	return {
+		mockFetch: vi.fn(),
+	};
+});
 mockNuxtImport('$fetch', () => mockFetch);
 // test/nuxt/setup.ts stubs `useServerTime` for every suite; this file tests the real one.
 vi.unmock('~/composables/core/useServerTime');
@@ -31,19 +36,20 @@ async function syncWith(...answers: Array<() => Promise<unknown>>) {
 }
 
 describe('useServerTime', () => {
-	// The app's boot starts the shared sync on real timers, and its three samples
-	// would land inside a test and take that test's answers. Unanswered, the
-	// salvo ends by warning; wait for that before any test queues an answer.
+	// The app's boot starts the shared sync on real timers: three samples now and
+	// a re-sync every minute, any of which would land inside a test and take that
+	// test's answers. Stop the re-sync, then run a salvo to its end: it starts
+	// after the boot's and takes the same steps, so it ends after it.
 	beforeAll(async () => {
-		vi.spyOn(console, 'warn').mockImplementation(() => {});
-		useServerTime();
-		await vi.waitFor(() => expect(useState('serverTimeSyncWarned').value).toBe(true));
+		const serverTime = useServerTime();
+		serverTime.stopSync();
+		await serverTime.sync();
 	});
 
 	beforeEach(async () => {
 		vi.useFakeTimers({ now: 1_000_000 });
-		// The first use starts the shared periodic sync; let it settle on a clean,
-		// synced state so each test drives `sync` alone.
+		// A use while the shared sync is stopped restarts it, on this fake clock;
+		// let that settle on a clean, synced state so each test drives `sync` alone.
 		mockFetch.mockImplementation(sample(0, 0));
 		await syncWith();
 		mockFetch.mockReset();

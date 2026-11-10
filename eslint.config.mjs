@@ -24,6 +24,14 @@ const testSyntax = [
 		message: 'Run persistence on createSqliteD1Harness rather than mocking Drizzle or the schema.',
 	},
 ];
+// Unit and Nuxt bounds are hang detectors, set once in test/helpers/loadTolerantBounds.ts
+// (README § Testing). A number written on one test, hook or wait can only undercut them.
+const boundedCall = 'CallExpression:matches([callee.name=/^(?:it|test|describe|beforeAll|beforeEach|afterAll|afterEach)$/], [callee.object.name=/^(?:it|test|describe)$/], [callee.callee.object.name=/^(?:it|test|describe)$/], [callee.object.name=\'vi\'][callee.property.name=/^(?:waitFor|waitUntil)$/])';
+const explicitBoundMessage = 'Leave this test, hook or wait on the suite default (test/helpers/loadTolerantBounds.ts): a timeout detects a hang, it is not a budget.';
+const explicitBoundSyntax = [
+	{ selector: `${boundedCall} > Literal[raw=/^[\\d_]+$/]`, message: explicitBoundMessage },
+	{ selector: `${boundedCall} > ObjectExpression > Property[key.name='timeout'] > Literal[raw=/^[\\d_]+$/]`, message: explicitBoundMessage },
+];
 // antfu's defaults, which a block setting `no-restricted-syntax` would otherwise replace.
 const defaultTsSyntax = ['TSEnumDeclaration[const=true]', 'TSExportAssignment'];
 const integrationIngestionBody = 'Build ingestion initiation bodies with graphicsIngestionRequest() so the duplicate-content policy defaults to create-separate.';
@@ -131,6 +139,16 @@ export default withNuxt(
 						{ regex: 'helpers/db-mock$', message: 'Run persistence on createSqliteD1Harness.' },
 					],
 				},
+			],
+		},
+	},
+	{
+		files: ['test/{unit,nuxt}/**/*.ts'],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				...testSyntax,
+				...explicitBoundSyntax,
 			],
 		},
 	},

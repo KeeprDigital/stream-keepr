@@ -6,9 +6,7 @@
  */
 
 import { vi } from 'vitest';
-
-/** Below the suites' `testTimeout`, so a wait that never holds reports its own assertion. */
-export const LOAD_TOLERANT_WAIT_MS = 20_000;
+import { LOAD_TOLERANT_WAIT_MS } from './loadTolerantBounds';
 
 const WRAPPED = Symbol.for('stream-keepr.loadTolerantWaits');
 
@@ -17,7 +15,7 @@ type WaitOptions = number | { timeout?: number; interval?: number } | undefined;
 function withDefaultBound(options: WaitOptions): WaitOptions {
 	return typeof options === 'number'
 		? options
-		: { timeout: LOAD_TOLERANT_WAIT_MS, ...options };
+		: { ...options, timeout: options?.timeout ?? LOAD_TOLERANT_WAIT_MS };
 }
 
 const target = vi as typeof vi & { [WRAPPED]?: true };

@@ -21,7 +21,7 @@ let r2: MiniflareR2Harness;
 
 beforeAll(async () => {
 	r2 = await createMiniflareR2Harness();
-}, 60_000);
+});
 
 afterAll(async () => await r2?.dispose());
 

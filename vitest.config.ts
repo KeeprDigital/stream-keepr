@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { wasmModulePlugin } from './build/wasmModulePlugin.ts';
-import { LOAD_TOLERANT_HOOK_TIMEOUT_MS, LOAD_TOLERANT_TEST_TIMEOUT_MS, rootAliases, unitCoverageConfig } from './vitest.shared.ts';
+import { hideLoadTolerantWaitFrame, LOAD_TOLERANT_BAIL_AFTER_FAILURES, LOAD_TOLERANT_HOOK_TIMEOUT_MS, LOAD_TOLERANT_TEST_TIMEOUT_MS, rootAliases, unitCoverageConfig } from './vitest.shared.ts';
 
 export default defineConfig({
 	plugins: [
@@ -17,6 +17,8 @@ export default defineConfig({
 		setupFiles: ['./test/helpers/blockCloudflareCredentials.ts', './test/helpers/loadTolerantWaits.ts'],
 		testTimeout: LOAD_TOLERANT_TEST_TIMEOUT_MS,
 		hookTimeout: LOAD_TOLERANT_HOOK_TIMEOUT_MS,
+		bail: LOAD_TOLERANT_BAIL_AFTER_FAILURES,
+		onStackTrace: hideLoadTolerantWaitFrame,
 		server: {
 			deps: {
 				inline: ['@jsquash/jpeg', '@jsquash/webp'],
