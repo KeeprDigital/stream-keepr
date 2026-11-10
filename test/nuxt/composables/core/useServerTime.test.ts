@@ -1,5 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
@@ -28,6 +28,15 @@ async function syncWith(...answers: Array<() => Promise<unknown>>) {
 }
 
 describe('useServerTime', () => {
+	// The app's boot starts the shared sync on real timers, and its three samples
+	// would land inside a test and take that test's answers. Unanswered, the
+	// salvo ends by warning; wait for that before any test queues an answer.
+	beforeAll(async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+		useServerTime();
+		await vi.waitFor(() => expect(useState('serverTimeSyncWarned').value).toBe(true));
+	});
+
 	beforeEach(async () => {
 		vi.useFakeTimers({ now: 1_000_000 });
 		// The first use starts the shared periodic sync; let it settle on a clean,
