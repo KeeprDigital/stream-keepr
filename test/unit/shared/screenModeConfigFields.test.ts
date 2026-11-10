@@ -159,3 +159,45 @@ describe('a config contract\'s former fields', () => {
 			expect(define).not.toThrow();
 	});
 });
+
+// A former field may map to a current one: the contract's upgrade runs before former fields are dropped and bounds clamped.
+describe('a config contract upgrading its former fields', () => {
+	const contract = defineScreenModeConfigContract({
+		view: z.enum(['all', 'range']),
+		rangeEnd: z.number().int().min(1).max(500).optional(),
+		headerText: z.string().optional(),
+	}, {
+		view: 'all',
+		rangeEnd: undefined,
+		headerText: undefined,
+	}, {
+		formerFields: ['topCount'],
+		// `view: 'top'` with its `topCount` became the range 1 to that count.
+		upgradeFormerFields: fragment => fragment.view === 'top'
+			? { ...fragment, view: 'range', rangeEnd: fragment.topCount ?? 8 }
+			: fragment,
+	});
+
+	it.each([
+		{ name: 'maps a former field to its current field', stored: { view: 'top', topCount: 4, headerText: 'Top 4' }, reads: { view: 'range', rangeEnd: 4, headerText: 'Top 4' } },
+		{ name: 'maps a former value of a current field', stored: { view: 'top' }, reads: { view: 'range', rangeEnd: 8 } },
+		{ name: 'clamps what the upgrade produced', stored: { view: 'top', topCount: 9999 }, reads: { view: 'range', rangeEnd: 500 } },
+		{ name: 'drops a former field the upgrade left', stored: { view: 'all', topCount: 4 }, reads: { view: 'all' } },
+		{ name: 'reads an upgraded fragment as it is', stored: { view: 'range', rangeEnd: 4 }, reads: { view: 'range', rangeEnd: 4 } },
+	])('$name, on a read and on a write', ({ stored, reads }) => {
+		expect(contract.readStored(stored)).toEqual(reads);
+		expect(contract.readStored(contract.upgradeStored(stored))).toEqual(reads);
+		expect(contract.upgradeStored(stored)).not.toHaveProperty('topCount');
+	});
+
+	it('returns a fragment with nothing to upgrade as it is', () => {
+		const stored = { view: 'range', rangeEnd: 4 };
+
+		expect(contract.readStored(stored)).toBe(stored);
+		expect(contract.upgradeStored(stored)).toBe(stored);
+	});
+
+	it.each([null, undefined, 'top', ['top']])('leaves %j, which is no fragment, to the schema', (value) => {
+		expect(contract.upgradeStored(value)).toBe(value);
+	});
+});
