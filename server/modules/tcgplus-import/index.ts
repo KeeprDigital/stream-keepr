@@ -10,6 +10,7 @@ import { playerUpdateModule } from '~~/server/modules/player-update';
 import { opPlayerDeckListService } from '~~/server/services/opPlayerDeckList';
 import { playerService } from '~~/server/services/player';
 import { tcgPlusImportService } from '~~/server/services/tcgPlusImport';
+import { runCompensation } from '~~/server/utils/errors';
 import { requireOpEvent } from '~~/server/utils/routeGuards';
 import { playerLabel, playerMemberNumber } from '~~/shared/utils/playerName';
 import { parseTcgPlusExport, TcgPlusExportError } from './parse';
@@ -255,15 +256,14 @@ export function tcgPlusImportModule() {
 					]
 				: [];
 		});
-		// After the Players: every Player written stands even if this write fails, and a re-import finishes it.
-		const written = await deckListWrite.writeMany({ eventId, writes });
-
-		const writtenIds = new Set(written.map(player => player.id));
-		// A Player whose Nickname changed or who came back, with no Deck List written: their Slots follow them too.
-		const refreshed = reconciled.players.filter(player => !writtenIds.has(player.id) && player.updatedAt.getTime() === seenAt.getTime());
 		const warnings: string[] = [];
 		const { created, updated, deactivated } = reconciled;
-		if (created + updated + deactivated + written.length > 0) {
+		const announce = async (written: readonly DbPlayer[]) => {
+			if (created + updated + deactivated + written.length === 0)
+				return;
+			const writtenIds = new Set(written.map(player => player.id));
+			// A Player whose Nickname changed or who came back, with no Deck List written: their Slots follow them too.
+			const refreshed = reconciled.players.filter(player => !writtenIds.has(player.id) && player.updatedAt.getTime() === seenAt.getTime());
 			await publishSyncAfterCommit(warnings, async () => {
 				if (refreshed.length > 0) {
 					await playerUpdateModule().publishPlayerSnapshotUpdates({
@@ -277,7 +277,19 @@ export function tcgPlusImportModule() {
 					deckCount: written.length,
 				});
 			}, 'tcgplus_import_realtime_publish_failed');
+		};
+
+		// After the Players: every Player written stands even if this write fails, and a re-import finishes it.
+		let written: DbPlayer[];
+		try {
+			written = await deckListWrite.writeMany({ eventId, writes });
 		}
+		catch (error) {
+			// The Players are committed, so they are announced, with no Deck List, before the failure answers.
+			await runCompensation(error, () => announce([]));
+			throw error;
+		}
+		await announce(written);
 
 		return {
 			success: true,

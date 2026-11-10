@@ -20,7 +20,7 @@ import {
 	players,
 	rounds,
 } from '~~/server/db/schema';
-import { chunkArray, chunkJsonRows, SAFE_INARRAY_SIZE, selectForInsert } from '~~/server/utils/db';
+import { chunkArray, chunkJsonRows, inJsonArray, SAFE_INARRAY_SIZE, selectForInsert } from '~~/server/utils/db';
 
 export type UpsertMeleePlayerDeck = Omit<DbPlayerDeckInsert, 'id' | 'createdAt' | 'updatedAt' | 'externalSource' | 'archetypeId' | 'reviewedAt'>;
 
@@ -625,12 +625,12 @@ export function playerDeckService() {
 	};
 
 	/**
-	 * Bulk variant of `reconcilePrimaryArchetype` for reconciling many players at
-	 * once (e.g. after an Archetype delete/rename affects a batch of decks).
-	 * Fetches the primary-deck projection for all Players in one bulk query per
-	 * `SAFE_INARRAY_SIZE` chunk instead of one query per Player, then applies the
-	 * per-Player update sequentially (write count and update semantics are
-	 * unchanged from calling `reconcilePrimaryArchetype` in a loop).
+	 * Bulk variant of `reconcilePrimaryArchetype` for reconciling many Players at
+	 * once (e.g. after an Archetype delete/rename affects a batch of decks). It
+	 * reads every Player's primary-deck projection and writes them all in one
+	 * batch of JSON-bound statements, so the cost does not grow with the Players
+	 * and a failure leaves none of them re-projected. Answers the Players as
+	 * written, in the order asked.
 	 */
 	const reconcilePrimaryArchetypesForPlayers = async (
 		eventId: number,
@@ -642,58 +642,60 @@ export function playerDeckService() {
 		if (uniqueIds.length === 0)
 			return [];
 
-		const projectionsById = new Map<number, PrimaryArchetypeProjectionRow & { playerId: number }>();
-		for (const idChunk of chunkArray(uniqueIds, SAFE_INARRAY_SIZE)) {
-			const rows = await db
-				.select({
-					playerId: players.id,
-					gameData: players.gameData,
-					deckId: playerDecks.id,
-					archetypeId: playerDecks.archetypeId,
-					reviewedAt: playerDecks.reviewedAt,
-					importedName: playerDecks.name,
-					importedColors: playerDecks.colors,
-					archetypeName: archetypes.name,
-					archetypeColors: archetypes.colors,
-				})
-				.from(players)
-				.leftJoin(playerDecks, and(
-					eq(playerDecks.eventId, eventId),
-					eq(playerDecks.playerId, players.id),
-					eq(playerDecks.isPrimary, true),
-				))
-				.leftJoin(archetypes, eq(playerDecks.archetypeId, archetypes.id))
-				.where(and(
-					eq(players.eventId, eventId),
-					inArray(players.id, idChunk),
-				));
-			for (const row of rows) {
-				projectionsById.set(row.playerId, row);
-			}
-		}
-
-		const updated: DbPlayer[] = [];
-		for (const playerId of uniqueIds) {
-			const projection = projectionsById.get(playerId);
-			if (!projection)
-				continue;
-
+		const projections = await db
+			.select({
+				playerId: players.id,
+				gameData: players.gameData,
+				deckId: playerDecks.id,
+				archetypeId: playerDecks.archetypeId,
+				reviewedAt: playerDecks.reviewedAt,
+				importedName: playerDecks.name,
+				importedColors: playerDecks.colors,
+				archetypeName: archetypes.name,
+				archetypeColors: archetypes.colors,
+			})
+			.from(players)
+			.leftJoin(playerDecks, and(
+				eq(playerDecks.eventId, eventId),
+				eq(playerDecks.playerId, players.id),
+				eq(playerDecks.isPrimary, true),
+			))
+			.leftJoin(archetypes, eq(playerDecks.archetypeId, archetypes.id))
+			.where(and(
+				eq(players.eventId, eventId),
+				inJsonArray(players.id, uniqueIds),
+			));
+		const projectedById = new Map(projections.map((projection) => {
 			const { gameData, archetypeId } = computeArchetypeProjection(projection);
-			const [player] = await db
-				.update(players)
-				.set({
-					archetypeId,
-					gameData,
-					updatedAt: new Date(),
-				})
-				.where(and(eq(players.id, playerId), eq(players.eventId, eventId)))
-				.returning();
+			return [
+				projection.playerId,
+				{ playerId: projection.playerId, archetypeId, gameData: gameData ?? null },
+			];
+		}));
+		if (projectedById.size === 0)
+			return [];
 
-			if (player)
-				updated.push(player);
-		}
-
-		return updated;
+		const now = new Date();
+		const queries = chunkJsonRows([
+			...projectedById.values(),
+		]).map((payload) => {
+			const incoming = sql`(
+				select value from json_each(${payload})
+				where cast(json_extract(value, '$.playerId') as integer) = ${players.id}
+				limit 1
+			)`;
+			return db.update(players).set({
+				archetypeId: sql`json_extract(${incoming}, '$.archetypeId')`,
+				gameData: sql`json_extract(${incoming}, '$.gameData')`,
+				updatedAt: now,
+			}).where(and(
+				eq(players.eventId, eventId),
+				sql`${players.id} in (select cast(json_extract(value, '$.playerId') as integer) from json_each(${payload}))`,
+			)).returning();
+		});
+		const written = (await db.batch(queries as [typeof queries[0], ...typeof queries])).flat();
+		const writtenById = new Map(written.map(player => [player.id, player]));
+		return uniqueIds.flatMap(playerId => writtenById.get(playerId) ?? []);
 	};
 
 	const listPrimaryPlayerIdsByArchetype = async (eventId: number, archetypeId: number): Promise<number[]> => {

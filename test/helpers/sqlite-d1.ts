@@ -93,12 +93,23 @@ function d1Result<T>(result: ResultSet) {
 	};
 }
 
-function createPreparedStatement(client: Client, sql: string, args: unknown[]) {
+/** Counts the round trips a database makes: one per statement run alone, one per batch. */
+interface RoundTripCounter {
+	count: number;
+}
+
+function createPreparedStatement(source: Client, counter: RoundTripCounter, sql: string, args: unknown[]) {
+	const client = {
+		execute(statement: InStatement) {
+			counter.count++;
+			return source.execute(statement);
+		},
+	};
 	const statement = {
 		sql,
 		args,
 		bind(...values: unknown[]) {
-			return createPreparedStatement(client, sql, values);
+			return createPreparedStatement(source, counter, sql, values);
 		},
 		async first<T>(column?: string) {
 			const result = await client.execute(toStatement({ sql, args }));
@@ -135,6 +146,11 @@ function createPreparedStatement(client: Client, sql: string, args: unknown[]) {
 export interface SqliteD1Harness {
 	database: D1Database;
 	client: Client;
+	/**
+	 * How many round trips `database` has made: one per statement run alone and
+	 * one per batch, as D1 bills them. Staging through `client` is not counted.
+	 */
+	roundTrips: () => number;
 	/** Applies any migrations `throughMigration` held back, in order. */
 	applyRemainingMigrations: () => Promise<void>;
 	close: () => Promise<void>;
@@ -188,11 +204,13 @@ export async function createSqliteD1Harness(
 
 	await applyMigrations(migrations.slice(0, heldBackFrom));
 
+	const counter: RoundTripCounter = { count: 0 };
 	const database = {
 		prepare(sql: string) {
-			return createPreparedStatement(client, sql, []);
+			return createPreparedStatement(client, counter, sql, []);
 		},
 		async batch<T>(statements: ReturnType<typeof createPreparedStatement>[]) {
+			counter.count++;
 			const results = await client.batch(statements.map(toStatement), 'write');
 			return results.map(result => d1Result<T>(result));
 		},
@@ -207,6 +225,7 @@ export async function createSqliteD1Harness(
 	return {
 		database,
 		client,
+		roundTrips: () => counter.count,
 		async applyRemainingMigrations() {
 			await applyMigrations(migrations.slice(heldBackFrom));
 		},

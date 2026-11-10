@@ -188,19 +188,27 @@ export function opDeckListWriteModule() {
 			: null;
 		// Read after the lookup, so the Archetype the cleanup checks is the one this write replaces.
 		const previous = await requirePlayer(eventId, playerId);
-		const written = await playerDeckLists.replace({
-			eventId,
-			playerId,
-			view,
-			archetypeId: derived?.archetype.id ?? null,
-			handEdited: (await handEditedFlags(eventId, [
-				{ playerId, source },
-			]))[0]!,
-		});
+		const created = derived?.created
+			? [derived.created.id]
+			: [];
+		let written: DbPlayer | null;
+		try {
+			written = await playerDeckLists.replace({
+				eventId,
+				playerId,
+				view,
+				archetypeId: derived?.archetype.id ?? null,
+				handEdited: (await handEditedFlags(eventId, [
+					{ playerId, source },
+				]))[0]!,
+			});
+		}
+		catch (error) {
+			await runCompensation(error, () => removeEmptiedLeaderArchetypes(eventId, created));
+			throw error;
+		}
 		if (!written) {
-			await removeEmptiedLeaderArchetypes(eventId, derived?.created
-				? [derived.created.id]
-				: []);
+			await removeEmptiedLeaderArchetypes(eventId, created);
 			throw createError({ statusCode: 404, message: 'Player not found' });
 		}
 
@@ -320,12 +328,14 @@ export function opDeckListWriteModule() {
 	 * each from its own source: one batch for them all, each Leader's
 	 * Archetype derived once, every Session showing them corrected, and
 	 * emptied Archetypes removed. The Archetypes it creates or renames are
-	 * announced; the Players are not, one by one, so the caller announces them
-	 * as a count. Answers the Players as written.
+	 * announced; the Players are not, one by one, unless `announcePlayers`
+	 * asks, so a caller leaving it out announces them as a count. Answers the
+	 * Players as written.
 	 */
-	async function writeMany({ eventId, writes }: {
+	async function writeMany({ eventId, writes, announcePlayers = false }: {
 		eventId: number;
 		writes: ReadonlyArray<{ playerId: number; deckList: OpDeckListView; source: OpDeckListWriteSource }>;
+		announcePlayers?: boolean;
 	}): Promise<DbPlayer[]> {
 		if (writes.length === 0)
 			return [];
@@ -362,9 +372,12 @@ export function opDeckListWriteModule() {
 			throw error;
 		}
 
+		// The Archetypes go out first, so a client applying a Player knows its Archetype.
 		await announceDerivedArchetypes(eventId, [
 			...derived.values(),
 		]);
+		if (announcePlayers)
+			await publication.playersUpdated({ eventId, entities: written });
 		await playerUpdateModule().publishPlayerSnapshotUpdates({
 			eventId,
 			playerIds: written.map(player => player.id),
