@@ -121,9 +121,11 @@ describe('/api/realtime/token', () => {
 			expect(mockCreateTokenRequest).toHaveBeenCalledWith({
 				clientId: 'screen-output:7',
 				capability: {
-					'event:5': ['subscribe', 'history'],
+					// No history: an output reads nothing from before it attached, so its
+					// credential cannot fetch what was published while it was not there.
+					'event:5': ['subscribe'],
 					// The Screen itself, not the `screen:5:*` wildcard a session gets.
-					'screen:5:7': ['subscribe', 'history', 'presence'],
+					'screen:5:7': ['subscribe', 'presence'],
 				},
 			});
 		});

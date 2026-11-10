@@ -66,8 +66,11 @@ export default defineEventHandler(async (event) => {
 			return await getAblyClient().auth.createTokenRequest({
 				clientId: screenOutputRealtimeClientId(screen.screenId),
 				capability: {
-					[eventRealtimeChannel(eventId)]: ['subscribe', 'history'],
-					[screenRealtimeChannel(eventId, screen.screenId)]: ['subscribe', 'history', 'presence'],
+					// No `history`: an output applies what it hears while attached and
+					// re-reads through its Screen for the rest, so nothing it runs asks a
+					// channel for its past, and a leaked capability should not be able to.
+					[eventRealtimeChannel(eventId)]: ['subscribe'],
+					[screenRealtimeChannel(eventId, screen.screenId)]: ['subscribe', 'presence'],
 				},
 			});
 		}
