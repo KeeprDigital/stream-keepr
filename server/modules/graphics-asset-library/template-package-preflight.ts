@@ -527,7 +527,7 @@ export interface TemplatePackageMappingInput {
 	originMatch?: LocalOriginMatch;
 	/** A local revision carrying the same source identity at another revision. */
 	relatedOriginExists: boolean;
-	/** Whether the canonical byte store already holds the packaged digest. */
+	/** Whether a local revision or derivative already reaches the packaged digest. */
 	contentAlreadyStored: boolean;
 	/**
 	 * Whether an earlier mapping in this same package already accounts for these

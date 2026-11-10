@@ -865,14 +865,13 @@ describe('the Template Package preflight contract', () => {
 					};
 				},
 			});
-			const canonical = createInMemoryCanonicalGraphicsObjectStore();
 			// The retry has to be able to claim the operation, which needs the
 			// active-ingestion lease to have elapsed — so this clock advances.
 			let clock = Date.parse('2026-07-30T09:00:00.000Z');
 			const receiver = createGraphicsAssetLibrary({
 				catalogue,
 				staging: createInMemoryStagingGraphicsObjectStore(),
-				canonical,
+				canonical: createInMemoryCanonicalGraphicsObjectStore(),
 				templatePayloads: acceptEveryTemplateDocument(),
 				now: () => new Date(clock),
 				generateIdentity: (() => {
@@ -880,7 +879,7 @@ describe('the Template Package preflight contract', () => {
 					return () => `receiver-identity-${++next}`;
 				})(),
 			});
-			await ingestImage(receiver, 'Locally uploaded backdrop');
+			const local = await ingestImage(receiver, 'Locally uploaded backdrop');
 
 			const started = await receiver.initiateTemplatePackagePreflight({
 				idempotencyKey: 'preflight-interleaved',
@@ -896,12 +895,14 @@ describe('the Template Package preflight contract', () => {
 			expect(paused.stage).toBe('awaiting-confirmation');
 			const superseded = reportOf(paused).fingerprint;
 
-			// The shared bytes the first report counted on disappear, so a retry
-			// reaches a materially different proposal: real canonical growth.
+			// The asset the first report named is renamed, so a retry reaches a
+			// different proposal: the author would be confirming another name.
 			interleave = async () => {
-				await canonical.delete(
-					graphicsObjectIdentity(`sha256/${digestOf(transparentPixelPng)}`),
-				);
+				await receiver.updateGraphicAsset({
+					assetId: local.assetId,
+					name: 'Renamed after the report',
+					eventIds: [],
+				});
 				clock += 60 * 60 * 1000;
 				await receiver.retryGraphicsIngestion({
 					operationId: paused.id,
@@ -922,8 +923,7 @@ describe('the Template Package preflight contract', () => {
 			// The newer report survives intact and the operation stays paused on it.
 			expect(final.stage).toBe('awaiting-confirmation');
 			expect(reportOf(final).fingerprint).not.toBe(superseded);
-			expect(reportOf(final).quota.canonicalGrowthBytes)
-				.toBe(transparentPixelPng.byteLength);
+			expect(reportOf(final).mappings[0]!.localName).toBe('Renamed after the report');
 		});
 
 		it('treats confirming the same report twice as the same act', async () => {
@@ -1294,6 +1294,36 @@ describe('the Template Package preflight contract', () => {
 			// Every issue names what to do about it, not just what went wrong.
 			expect(report.issues.every(issue => issue.remediation.length > 0)).toBe(true);
 			expect(report.issues.every(issue => issue.severity === 'error')).toBe(true);
+		});
+
+		// Growth is what the catalogue would newly hold. Bytes lying in the
+		// canonical store that no revision or derivative reaches are not yet counted
+		// against the quota, so a package bringing them is charged for them.
+		it('charges for packaged bytes the canonical store holds but the catalogue does not', async () => {
+			const { library: sender } = createLibrary('sender');
+			const backdrop = await ingestImage(sender, 'Backdrop');
+			const archive = await exportPackage(sender, {
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
+			});
+			const { library: clean } = createLibrary('clean-receiver');
+			const expected = reportOf(await preflight(clean, archive));
+
+			const { library: receiver, canonical } = createLibrary('receiver');
+			await canonical.createImmutable({
+				identity: graphicsObjectIdentity(`sha256/${digestOf(transparentPixelPng)}`),
+				bytes: boundedBytes(transparentPixelPng),
+			});
+			const report = reportOf(await preflight(receiver, archive));
+
+			expect(expected.quota.canonicalGrowthBytes).toBeGreaterThan(transparentPixelPng.byteLength);
+			expect(report.quota.canonicalGrowthBytes).toBe(expected.quota.canonicalGrowthBytes);
+			expect(report.mappings).toEqual(expected.mappings);
+			expect(report.mappings[0]).toMatchObject({
+				contentAlreadyStored: false,
+				canonicalGrowthBytes: transparentPixelPng.byteLength,
+			});
 		});
 
 		it('blocks a package that would grow canonical storage past its quota', async () => {

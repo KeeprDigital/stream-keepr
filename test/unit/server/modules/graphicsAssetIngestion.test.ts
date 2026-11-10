@@ -13,6 +13,7 @@ import {
 	consumeBoundedByteStream,
 	createBoundedByteStream,
 	graphicsObjectIdentity,
+	unavailableObjectStoreOutcome,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { digestOf, sixteenPixelPng as sixteenPixelPosterPng, pixelPng as transparentPixelPng, vp9Webm } from '~~/test/helpers/graphicsFixtures';
@@ -796,6 +797,67 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
 	});
 
+	// A single-request transfer that staged nothing is recovered by sending the
+	// bytes again, since no retry can resume from bytes that were never held.
+	it.each([
+		{
+			interruption: 'staging answers unavailable',
+			interrupt: async (): Promise<ReturnType<typeof unavailableObjectStoreOutcome>> => unavailableObjectStoreOutcome(),
+			left: {
+				stage: 'failed',
+				failure: { code: 'staging-unavailable', retryable: true },
+			},
+		},
+		{
+			interruption: 'the transfer is interrupted',
+			interrupt: async (): Promise<never> => {
+				throw new Error('The request body was cancelled');
+			},
+			left: {
+				stage: 'failed',
+				failure: { code: 'staging-unavailable', retryable: true },
+			},
+		},
+		{
+			interruption: 'the request dies mid-transfer',
+			interrupt: (): Promise<never> => new Promise(() => {}),
+			left: { stage: 'transferring' },
+		},
+	])('accepts the bytes again after $interruption', async ({ interrupt, left }) => {
+		const delegate = createInMemoryStagingGraphicsObjectStore();
+		let interruptTransfer = true;
+		const staging = {
+			...delegate,
+			async createImmutable(input: Parameters<typeof delegate.createImmutable>[0]) {
+				if (!interruptTransfer)
+					return await delegate.createImmutable(input);
+				interruptTransfer = false;
+				return await interrupt();
+			},
+		};
+		const { library } = createLibrary(staging);
+		const operation = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'interrupted-transfer',
+			initiatedBy: 'graphics-author-1',
+			name: 'Interrupted transfer',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		const upload = () => uploadBytes(library, operation, undefined, transparentPixelPng, 16 * 1024 * 1024);
+
+		void upload().catch(() => {});
+		await vi.waitFor(async () => {
+			await expect(library.getIngestionOperation({
+				operationId: operation.id,
+				initiatedBy: operation.initiatedBy,
+			})).resolves.toMatchObject({ ...left, transferredByteLength: 0 });
+		});
+
+		await expect(upload()).resolves.toMatchObject({
+			stage: 'completed',
+			result: { outcome: 'published' },
+		});
+	});
+
 	it('resumes from staged bytes after a retryable canonical-store failure', async () => {
 		const { library, canonical } = createLibrary();
 		const operation = await library.initiateGraphicsIngestion({
@@ -822,6 +884,11 @@ describe('still-image ingestion through the Graphics Asset Library public module
 				retryable: true,
 			},
 		});
+
+		// Staged bytes are held, so the way on is a retry and never a second transfer.
+		await expect(uploadBytes(library, operation, undefined, transparentPixelPng, 16 * 1024 * 1024))
+			.rejects
+			.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
 
 		const completed = await library.retryGraphicsIngestion({
 			operationId: operation.id,
