@@ -1744,7 +1744,7 @@ Accepted · 2026-10-28
 
 **A Deck's Fit boards are laid out together from the space they measure** (`solveDeckLayout`). A Deck has no pages, so when every board shown is Fit, the Screen measures the space below its header and lays both boards out at one card size: the largest at which both fit.
 
-- **Columns:** each board's columns are chosen alongside the other's. A set column count is kept.
+- **Columns:** each board's columns are chosen alongside the other's, from 1 to the board's card count. A set column count is kept.
 - **Stack:** a stacked sideboard shows less of each card, down to its name bar (`MIN_STACK_REVEAL_SHARE`), before its cards shrink.
 - **One score, no thresholds** (`layoutScore`): each column choice is laid out at the largest card size that fits. The choices are compared on one continuous score:
   - card size, relative to the largest possible;
@@ -1758,6 +1758,12 @@ Accepted · 2026-10-28
 - **Measured, not guessed:** a board's heading and a Most Played Cards name label are measured from hidden copies, as their Theme types them, by layout height (`useLayoutHeight`), which the Screen's scale leaves alone. The gap between boards is set from the value the layout reads.
 - **Placement:** the boards are sized exactly and fill the space they share. Across the axis they share, each board sits at its own `alignment`, as far as the Screen's edge, a sideboard's heading with it. Along it they sit together at the mainboard's `alignment`, so the space they leave is shared out around them. A sideboard aligned away from the mainboard (bottom below it, right beside it) goes to that far edge instead. A board fitting itself places its cards at its own `alignment`.
 - **First frame:** until the space is measured, each board fits itself.
+
+**The card layout solvers take each constraint as Auto or a number and return the largest card that fits** (`solveCardGrid`, `solveDeckLayout`; #1072). The displays still pass them today's Card Sizing values; #1087 and #1088 move them over.
+
+- **Columns:** a set count is kept. Auto is chosen by `layoutScore` from 1 to the card count, not to 12.
+- **Max card size:** no card is wider. A Deck's boards share one card size, so they share the least max any board sets, the stacked strip with them.
+- **Gap:** an Auto gap is a fixed ratio of the solved card width, the one that gives the mode's former default gap at its former default card width: 12 px at 160 px on a card grid (`AUTO_GAP_RATIO`), 8 px at 144 px on a Deck board (`DECK_AUTO_GAP_RATIO`). A set gap is kept while it is no wider than the card it leaves. Past that the gap is the card's own width, so a gap too large for its space shrinks with the cards instead of pushing them off the Event Canvas.
 
 **Most Played Cards pages by cards.** `cardsPerPage` replaced `rowsPerPage`. Columns no longer change which cards a page holds, so the Screen chooses its auto columns from the grid space it measures, and a page laid out at a full page's capacity keeps its card size.
 
