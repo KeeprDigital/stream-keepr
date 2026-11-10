@@ -167,6 +167,35 @@ export function formatClockDisplay(clock: ClockState | null, now: number, untime
 	return formatClockTime(elapsedMs);
 }
 
+/**
+ * How long from `now` until what `formatClockDisplay` shows next changes, or
+ * `null` while it will not: no clock, untimed, stopped, run out without counting
+ * up, or holding at its count-up limit. The display floors, so a time counting up
+ * changes on the whole second and one counting down a millisecond past it.
+ */
+export function clockDisplayNextChangeInMs(clock: ClockState | null, now: number): number | null {
+	if (!clock || clock.type === 'untimed' || !clock.isRunning || !clock.lastStartedAt)
+		return null;
+
+	const elapsedMs = getEffectiveElapsedMs(clock, now);
+	if (clock.type !== 'countdown')
+		return 1000 - (elapsedMs % 1000);
+
+	const remainingMs = clock.durationMs - elapsedMs;
+	if (remainingMs > 0) {
+		// Its last second ends at the end itself when overtime then shows 0:00 too.
+		return remainingMs < 1000 && clock.countUpAfterCountdown
+			? remainingMs + 1000
+			: (remainingMs % 1000) + 1;
+	}
+	if (!clock.countUpAfterCountdown)
+		return null;
+	const overMs = -remainingMs;
+	return clock.countUpLimitMs != null && overMs >= clock.countUpLimitMs
+		? null
+		: 1000 - (overMs % 1000);
+}
+
 export interface ClockAdjustmentInput {
 	deltaDisplayMs?: number;
 	targetDisplayMs?: number;

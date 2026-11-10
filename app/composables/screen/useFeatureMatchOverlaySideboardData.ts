@@ -145,6 +145,7 @@ export function useFeatureMatchOverlaySideboardData(
 	});
 
 	async function resolveSide(
+		side: PlayerSide,
 		request: SideRequest | null,
 	): Promise<{ cards: ReadonlyArray<GraphicsDeckListCard> | null; degraded: boolean; stamp: string | null; revision: number | null }> {
 		if (!request) {
@@ -162,10 +163,20 @@ export function useFeatureMatchOverlaySideboardData(
 			: {})
 			.catch(() => null);
 		if (!read) {
+			// A read that failed is no answer about the side: what is on program for
+			// this Player stays, and the degraded cadence asks again, since the next
+			// announcement may be a long time coming.
+			const shown = displayed.stamps[side]?.startsWith(`${request.playerId}:`)
+				? side
+				: null;
 			return {
-				cards: null,
-				degraded: false,
-				stamp: `${request.playerId}::none`,
+				cards: shown
+					? displayed.sideboards[shown]
+					: null,
+				degraded: true,
+				stamp: shown
+					? displayed.stamps[shown]
+					: `${request.playerId}::none`,
 				revision: null,
 			};
 		}
@@ -246,8 +257,8 @@ export function useFeatureMatchOverlaySideboardData(
 
 		try {
 			const [player1, player2] = await Promise.all([
-				resolveSide(current.player1),
-				resolveSide(current.player2),
+				resolveSide('player1', current.player1),
+				resolveSide('player2', current.player2),
 			]);
 			if (flight.stale)
 				return;

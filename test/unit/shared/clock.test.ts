@@ -2,6 +2,7 @@ import type { ClockState } from '~~/shared/types/featureMatchState';
 import { describe, expect, it } from 'vitest';
 import {
 	applyClockAdjustment,
+	clockDisplayNextChangeInMs,
 	formatClockDisplay,
 	formatClockTime,
 	getEffectiveElapsedMs,
@@ -322,5 +323,79 @@ describe('applyClockAdjustment', () => {
 		const result = applyClockAdjustment(clock, now, { deltaDisplayMs: 10_000 });
 		expect(result.lastStartedAt).toBe(now);
 		expect(result.isRunning).toBe(true);
+	});
+});
+
+describe('clockDisplayNextChangeInMs', () => {
+	const NOW = 1_000_000;
+	function running(overrides: Partial<ClockState>, elapsedMs: number): ClockState {
+		return {
+			type: 'countdown',
+			durationMs: 60_000,
+			elapsedMs: 0,
+			isRunning: true,
+			lastStartedAt: NOW - elapsedMs,
+			countUpAfterCountdown: false,
+			...overrides,
+		};
+	}
+
+	// Waking at the named moment shows a new time, and a millisecond sooner the old one.
+	it.each([
+		[
+			'a count-up part-way through a second',
+			running({ type: 'countup' }, 12_900),
+		],
+		[
+			'a count-up on a whole second',
+			running({ type: 'countup' }, 13_000),
+		],
+		[
+			'a countdown part-way through a second',
+			running({}, 12_900),
+		],
+		[
+			'a countdown on a whole second',
+			running({}, 13_000),
+		],
+		[
+			'a countdown in its last second',
+			running({ countUpAfterCountdown: true }, 59_500),
+		],
+		[
+			'a countdown in overtime',
+			running({ countUpAfterCountdown: true }, 61_300),
+		],
+	])('names exactly when the display of %s changes', (_case, clock) => {
+		const next = clockDisplayNextChangeInMs(clock, NOW)!;
+		const shown = formatClockDisplay(clock, NOW, '');
+
+		expect(formatClockDisplay(clock, NOW + next - 1, '')).toBe(shown);
+		expect(formatClockDisplay(clock, NOW + next, '')).not.toBe(shown);
+	});
+
+	it.each([
+		['no clock', null],
+		[
+			'an untimed clock',
+			running({ type: 'untimed' }, 5_000),
+		],
+		[
+			'a stopped clock',
+			{
+				...running({}, 5_000),
+				isRunning: false,
+			},
+		],
+		[
+			'a countdown that ran out and does not count up',
+			running({}, 61_000),
+		],
+		[
+			'overtime holding at its limit',
+			running({ countUpAfterCountdown: true, countUpLimitMs: 5_000 }, 70_000),
+		],
+	])('names no change for %s', (_case, clock) => {
+		expect(clockDisplayNextChangeInMs(clock, NOW)).toBeNull();
 	});
 });
