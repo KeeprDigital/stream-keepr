@@ -56,12 +56,14 @@ export type DeclaredOutputChangeKind = Exclude<OutputChangeKind, typeof EVERY_SC
 /**
  * The ids a change may name, each by what it identifies: a `playerDeck` change
  * names the Players whose decks changed, a `match` or `roundStandings` change
- * the Round it is in, a `featureMatchSession` change its Slot.
+ * the Round it is in, a `match` change the Matches too where its message
+ * names them, a `featureMatchSession` change its Slot.
  */
 const CHANGE_ID_FIELDS = [
 	'playerIds',
 	'phaseIds',
 	'roundIds',
+	'matchIds',
 	'slotIds',
 	'archetypeIds',
 	'playerListIds',
@@ -89,10 +91,22 @@ export interface SeatedPlayers {
 }
 
 /**
+ * The Match a Feature Match Slot follows now, or that Match's Round or Phase,
+ * by the field it narrows: the caller says (`ScreenHearsContext`).
+ */
+export interface FollowedBySlot {
+	readonly followedBy: number;
+}
+
+/** The id fields the Match a Slot follows can narrow. */
+type SlotFollowedField = 'matchIds' | 'roundIds' | 'phaseIds';
+
+/**
  * How a mode's config narrows a kind it follows: only changes naming one of
  * these ids. A change naming no id of a narrowed field is still heard.
  */
-export interface OutputFollowNarrowing extends Readonly<Partial<Record<Exclude<ChangeIdField, 'playerIds'>, readonly number[]>>> {
+export interface OutputFollowNarrowing extends Readonly<Partial<Record<Exclude<ChangeIdField, 'playerIds' | SlotFollowedField>, readonly number[]>>>,
+	Readonly<Partial<Record<SlotFollowedField, readonly number[] | FollowedBySlot>>> {
 	readonly playerIds?: readonly number[] | SeatedPlayers;
 }
 
@@ -220,14 +234,17 @@ const OUTPUT_CHANGES: { [K in MessageType]: (payload: MessagePayload<K>) => read
 		{
 			kind: 'match',
 			roundIds: [match.roundId],
+			matchIds: [match.id],
 		},
 	],
 	'match:updated': ({ match }) => [
 		{
 			kind: 'match',
 			roundIds: [match.roundId],
+			matchIds: [match.id],
 		},
 	],
+	// Names no Match: the delete unlinked each Slot following it, which by now follows none.
 	'match:deleted': () => wholeKinds('match'),
 
 	'featureMatch:created': ({ featureMatch }) => [
@@ -356,12 +373,14 @@ const OUTPUT_CHANGES: { [K in MessageType]: (payload: MessagePayload<K>) => read
 	'melee:featureMatchesSynced': ({ slotIds }) => [
 		{ kind: 'featureMatchSlot', slotIds },
 	],
-	'melee:matchResultsSynced': ({ roundId }) => [
+	'melee:matchResultsSynced': ({ roundId, matchIds }) => [
 		{
 			kind: 'match',
 			roundIds: [roundId],
+			matchIds,
 		},
 	],
+	// Names no Match: it may have added, re-seated or removed any in the Round.
 	'melee:pairingsSynced': ({ roundId }) => [
 		{
 			kind: 'match',
@@ -421,18 +440,53 @@ export interface HearingScreen<M extends ScreenMode = ScreenMode> {
 
 /** What `screenHears` cannot read from the Screen itself. */
 export interface ScreenHearsContext {
-	/** The Feature Match Slot the Screen shows, and the Players it seats now. */
-	readonly slot?: { readonly id: number; readonly playerIds: readonly number[] } | null;
+	/**
+	 * The Feature Match Slot the Screen shows, as it stands after the write:
+	 * the Players it seats, and the Match it follows with that Match's Round
+	 * and Phase, `null` when it follows none. `match` left out is not told.
+	 */
+	readonly slot?: {
+		readonly id: number;
+		readonly playerIds: readonly number[];
+		readonly match?: { readonly id: number; readonly roundId: number; readonly phaseId: number } | null;
+	} | null;
 }
 
 /** The ids one narrowed field admits; `null` while they cannot be known, which admits every id. */
-function admittedIds(named: readonly number[] | SeatedPlayers, context: ScreenHearsContext): readonly number[] | null {
+function admittedIds(
+	field: ChangeIdField,
+	named: readonly number[] | SeatedPlayers | FollowedBySlot,
+	context: ScreenHearsContext,
+): readonly number[] | null {
 	if ('seatedIn' in named) {
 		// Over-approximation: who a Slot seats is the Slot's data, not the
 		// config's. Told nothing, or of another Slot, every Player is heard.
 		return context.slot?.id === named.seatedIn
 			? context.slot.playerIds
 			: null;
+	}
+	if ('followedBy' in named) {
+		// Over-approximation: told nothing, or of another Slot, every id is heard.
+		const match = context.slot?.id === named.followedBy
+			? context.slot.match
+			: undefined;
+		if (match === undefined)
+			return null;
+		// A Slot following no Match shows none, so no named Match is its own.
+		// Its Round and Phase stay unknown: the change may be the delete that
+		// took its Match away, which names only the Round or Phase deleted.
+		if (field === 'matchIds') {
+			return match
+				? [match.id]
+				: [];
+		}
+		if (!match)
+			return null;
+		return [
+			field === 'roundIds'
+				? match.roundId
+				: match.phaseId,
+		];
 	}
 	return named;
 }
@@ -444,7 +498,7 @@ function narrowingAdmits(narrowing: OutputFollowNarrowing, change: OutputChange,
 		// A change naming no id of this field may touch any of them.
 		if (named === undefined || changed === undefined)
 			return true;
-		const admitted = admittedIds(named, context);
+		const admitted = admittedIds(field, named, context);
 		return admitted === null || changed.some(id => admitted.includes(id));
 	});
 }
@@ -467,6 +521,28 @@ export function seatedSlotOf(screen: HearingScreen, kind: OutputChangeKind): num
 	return typeof narrowed === 'object' && narrowed.playerIds !== undefined && 'seatedIn' in narrowed.playerIds
 		? narrowed.playerIds.seatedIn
 		: null;
+}
+
+/**
+ * The Feature Match Slot whose row decides whether a Screen hears `change`, or
+ * `null` when none does: the mode narrows the change's kind by what a Slot
+ * seats or follows, and the change names an id that narrowing can rule out.
+ * The caller reads that Slot and passes it as `ScreenHearsContext.slot`.
+ */
+export function slotNarrowingOf(screen: HearingScreen, change: OutputChange): number | null {
+	const narrowed = declaredFollow(screen, change.kind);
+	if (typeof narrowed !== 'object')
+		return null;
+	for (const field of CHANGE_ID_FIELDS) {
+		const named = narrowed[field];
+		if (named === undefined || change[field] === undefined || Array.isArray(named))
+			continue;
+		if ('seatedIn' in named)
+			return named.seatedIn;
+		if ('followedBy' in named)
+			return named.followedBy;
+	}
+	return null;
 }
 
 /**

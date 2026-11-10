@@ -130,6 +130,9 @@ export default defineNuxtConfig({
 		// now enforces that against the built bundle (#319).
 		experimental: {
 			wasm: true,
+			// `useEvent()` names the request a publish is made in, so its Screen
+			// notices finish after the answer (`server/utils/ably.ts`).
+			asyncContext: true,
 		},
 		handlers: isIntegration
 			? [
