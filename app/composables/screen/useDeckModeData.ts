@@ -5,13 +5,13 @@ import type { HighlanderDeckSummary } from '~~/shared/types/highlander';
 import type { PlayerDeckResponse } from '~~/shared/types/metagame';
 import type { DeckSource } from '~~/shared/types/screenConfig';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 import { preloadImages } from '~/utils/preloadImage';
 
 interface DeckDisplayState {
@@ -71,58 +71,6 @@ const DECK_LOAD_FAILED = 'Failed to load deck';
 type DeckSourceRead
 	= { type: 'player'; player: Player; deck: PlayerDeckResponse | null }
 		| { type: 'broadcast'; list: BroadcastDeckListResponse };
-
-function readRevision(read: DeckSourceRead | null): number | null | undefined {
-	if (!read)
-		return undefined;
-	return read.type === 'player'
-		? deckSourceStamp(read.player.updatedAt)
-		: read.list.revision;
-}
-
-/**
- * The Event Data a Deck Source is read from. An edit to a Player's deck rolls
- * their `updatedAt` (#483), and a Broadcast Deck List carries its revision, so
- * an announcement at the revision already held carries nothing new. A Melee
- * sync, a TCG+ Import, a deck review or a resolved deck card changes what a
- * Player's deck shows without one.
- */
-export function deckDependencies(selected: () => LoadedDeckSource | null): ScreenModeDependencies<DeckSourceRead | null> {
-	const selectedPlayerId = () => {
-		const source = selected();
-		return source?.type === 'player'
-			? source.playerId
-			: null;
-	};
-	const selectedListId = () => {
-		const source = selected();
-		return source?.type === 'broadcast'
-			? source.broadcastDeckListId
-			: null;
-	};
-	const showsPlayer = () => selectedPlayerId() !== null;
-	const showsArchetype = (archetypeId: number, held: DeckSourceRead | null) =>
-		held?.type === 'player' && held.deck?.archetypeId === archetypeId;
-
-	return {
-		'player:updated': ({ player }, held) =>
-			player.id === selectedPlayerId() && deckSourceStamp(player.updatedAt) !== readRevision(held),
-		'playerDeck:reviewed': ({ deck }) => deck.playerId === selectedPlayerId(),
-		'playerDeck:cardsResolved': ({ playerIds }) => {
-			const playerId = selectedPlayerId();
-			return playerId !== null && playerIds.includes(playerId);
-		},
-		// A reviewed deck shows its Archetype's name and colours.
-		'archetype:updated': ({ archetype }, held) => showsArchetype(archetype.id, held),
-		'archetype:deleted': ({ archetypeId }, held) => showsArchetype(archetypeId, held),
-		'melee:dataReset': showsPlayer,
-		'melee:playersSynced': showsPlayer,
-		'melee:decklistsSynced': showsPlayer,
-		'tcgplus:imported': showsPlayer,
-		'broadcastDeckList:updated': ({ listId, revision }, held) =>
-			listId === selectedListId() && revision !== readRevision(held),
-	};
-}
 
 function computeDeckStats(cards: Array<{ quantity: number; compartment: string; cardType: string | null }>): Array<{ type: string; count: number }> {
 	const stats: DeckListStats = {
@@ -189,12 +137,6 @@ function computeDeckStats(cards: Array<{ quantity: number; compartment: string; 
 	return result;
 }
 
-function deckSourceStamp(updatedAt: Date | string | null | undefined): number | null {
-	return updatedAt == null
-		? null
-		: new Date(updatedAt).getTime();
-}
-
 async function preloadDeckImages(cards: DeckListCardWithData[]): Promise<boolean> {
 	if (!import.meta.client) {
 		return false;
@@ -218,7 +160,7 @@ async function preloadDeckImages(cards: DeckListCardWithData[]): Promise<boolean
 }
 
 export function useDeckModeData(context: ScreenContext) {
-	const { eventId, assetCapability, cardDataHealth } = context;
+	const { assetCapability, cardDataHealth } = context;
 	const config = useScreenModeConfig(context, 'deck');
 
 	const outputReads = useScreenOutputReads(context);
@@ -253,14 +195,13 @@ export function useDeckModeData(context: ScreenContext) {
 	}
 
 	const freshness = useScreenModeFreshness<DeckSourceRead | null>({
-		eventId,
+		hearing: useScreenModeHearing(context, 'deck', () => config.value),
 		source: () => selectedSource.value && outputReads.scopeKey.value
 			? `${outputReads.scopeKey.value}:${deckSourceKey(selectedSource.value)}`
 			: null,
 		read: readDeckSource,
 		initialData: null,
 		errorMessage: DECK_LOAD_FAILED,
-		dependsOn: deckDependencies(() => selectedSource.value),
 	});
 
 	/** One build of the deck on program, or of the deck being built for it. */

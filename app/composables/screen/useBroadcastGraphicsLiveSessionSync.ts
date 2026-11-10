@@ -1,4 +1,5 @@
 import type { MaybeRefOrGetter } from 'vue';
+import { authoringEventChannel } from '~/modules/screen/renderingChannel';
 
 /**
  * Keeping one client's view of a Broadcast Graphics Live Session honest across a
@@ -20,6 +21,12 @@ import type { MaybeRefOrGetter } from 'vue';
 export function useBroadcastGraphicsLiveSessionSync(
 	eventId: MaybeRefOrGetter<number | undefined>,
 	screenId: MaybeRefOrGetter<number | undefined>,
+	/**
+	 * The channel this client hears the Live Session's messages on. A live
+	 * rendering names its Screen's own; left out, it is the Event's, where the
+	 * Live workspace and every other operator surface hear them.
+	 */
+	channel?: MaybeRefOrGetter<string | null>,
 ) {
 	const sessionStore = useBroadcastGraphicsLiveSessionStore();
 
@@ -49,10 +56,19 @@ export function useBroadcastGraphicsLiveSessionSync(
 		{ immediate: true },
 	);
 
-	// A rendering's first load is read before its Event channel attaches. A command
+	const listenedOn = () => {
+		if (channel !== undefined)
+			return toValue(channel);
+		const event = toValue(eventId);
+		return event
+			? authoringEventChannel(event)
+			: null;
+	};
+
+	// A rendering's first load is read before its channel attaches. A command
 	// applied in between is heard by nothing, and no sequence gap reveals it until
 	// the next command, so the first attach reloads too (#733).
-	const { disconnected } = useReconnectResync(reload, eventId, undefined, { onFirstAttach: reload });
+	const { disconnected } = useReconnectResync(reload, listenedOn, undefined, { onFirstAttach: reload });
 
 	return { disconnected, reload };
 }

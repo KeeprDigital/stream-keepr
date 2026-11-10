@@ -1,37 +1,13 @@
 import type { ScreenOutputRoundClockResponse } from '~~/shared/types/screenOutputReads';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import { projectRoundClock } from '~~/shared/utils/roundClock';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 
 const NO_ROUND: ScreenOutputRoundClockResponse = { round: null };
 
 /** The longest one timer waits; a start further off is waited for in steps of it. */
 const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
-
-/**
- * The Event Data a Round Clock is read from. A picked Round re-reads on its own
- * update. The Current Round can move with any Round, Phase, Match or Melee
- * pairing, so following it re-reads on each. Melee's wholesale syncs re-read either way.
- */
-export function roundClockDependencies(roundId: () => number | undefined): ScreenModeDependencies<ScreenOutputRoundClockResponse> {
-	const follows = (id: number, held: ScreenOutputRoundClockResponse) => roundId() == null || id === roundId() || id === held.round?.id;
-	const followsCurrent = () => roundId() == null;
-
-	return {
-		'round:created': followsCurrent,
-		'round:updated': ({ round }, held) => follows(round.id, held),
-		'round:deleted': ({ roundId: id }, held) => follows(id, held),
-		'round:matchesRefreshed': followsCurrent,
-		'match:created': followsCurrent,
-		'match:deleted': followsCurrent,
-		'phase:updated': followsCurrent,
-		'phase:deleted': followsCurrent,
-		'melee:pairingsSynced': followsCurrent,
-		'melee:dataReset': true,
-		'melee:structureSynced': true,
-	};
-}
 
 /**
  * What a Round Clock Screen renders: its Round, read through the Screen and kept
@@ -40,20 +16,18 @@ export function roundClockDependencies(roundId: () => number | undefined): Scree
  * nothing writes as it runs or when it runs out.
  */
 export function useRoundClockModeData(context: ScreenContext) {
-	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'round-clock');
 	const outputReads = useScreenOutputReads(context);
 	const { getServerTime, serverTimeOffset } = useServerTime();
 
 	const freshness = useScreenModeFreshness<ScreenOutputRoundClockResponse>({
-		eventId,
+		hearing: useScreenModeHearing(context, 'round-clock', () => config.value),
 		source: () => outputReads.scopeKey.value
 			? `${outputReads.scopeKey.value}:${config.value.roundId ?? 'current'}`
 			: null,
 		read: () => outputReads.roundClock(),
 		initialData: NO_ROUND,
 		errorMessage: 'Failed to load the Round',
-		dependsOn: roundClockDependencies(() => config.value.roundId),
 	});
 	const round = computed(() => freshness.data.value.round);
 

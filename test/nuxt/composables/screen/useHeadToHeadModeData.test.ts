@@ -265,7 +265,7 @@ describe('useHeadToHeadModeData', () => {
 				change: 'a Session event that keeps its sides',
 				slotId: 4,
 				seated: [ALICE, BOB],
-				reads: 0,
+				reads: 1,
 			},
 			{
 				change: 'a swap of another Slot\'s Session',
@@ -304,28 +304,8 @@ describe('useHeadToHeadModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
 
-		it('follows a result reported between the two, and no other Match', async () => {
+		it('follows a result reported between the two', async () => {
 			await showingSlot();
-
-			deliver('match:updated', {
-				match: {
-					id: 30,
-					roundId: 32,
-					player1Id: ALICE,
-					player2Id: 9,
-				},
-			});
-			deliver('match:created', {
-				match: {
-					id: 31,
-					roundId: 32,
-					player1Id: 9,
-					player2Id: 10,
-				},
-			});
-			deliver('match:deleted', { matchId: 31 });
-			await flushPromises();
-			expect(mockFetch).not.toHaveBeenCalled();
 
 			deliver('match:updated', {
 				match: {
@@ -350,14 +330,8 @@ describe('useHeadToHeadModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(3);
 		});
 
-		it('follows a change to either Player, and to no one else', async () => {
+		it('follows a change to either Player', async () => {
 			await showingSlot();
-
-			deliver('player:updated', {
-				player: { id: 5 },
-			});
-			await flushPromises();
-			expect(mockFetch).not.toHaveBeenCalled();
 
 			deliver('player:updated', {
 				player: { id: BOB },

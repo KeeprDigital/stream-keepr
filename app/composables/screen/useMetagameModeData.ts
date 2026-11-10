@@ -8,14 +8,13 @@ import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { eventConversionTarget } from '~~/shared/conversionTarget';
 import { offeredMetagameScope } from '~~/shared/utils/metagame';
 import { projectMetagameChart } from '~~/shared/utils/metagameChart';
-import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 type MetagameDisplayRow = ArchetypeBreakdownResponse['entries'][number] | CardBreakdownResponse['entries'][number];
 
 export function useMetagameModeData(context: ScreenContext) {
-	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'metagame');
 
 	const outputReads = useScreenOutputReads(context);
@@ -29,7 +28,7 @@ export function useMetagameModeData(context: ScreenContext) {
 	// read changes with what it depends on. An `event:updated` folded into the
 	// held Event context changes the target.
 	const freshness = useScreenModeFreshness<ScreenOutputMetagameResponse | null>({
-		eventId,
+		hearing: useScreenModeHearing(context, 'metagame', () => config.value),
 		source: () => outputReads.scopeKey.value && JSON.stringify([
 			outputReads.scopeKey.value,
 			config.value.viewMode,
@@ -49,7 +48,6 @@ export function useMetagameModeData(context: ScreenContext) {
 		read: () => outputReads.metagame(),
 		initialData: null,
 		errorMessage: 'Failed to load metagame data',
-		dependsOn: metagameBreakdownDependencies(() => config.value),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;

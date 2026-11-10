@@ -6,8 +6,8 @@ import type { FeatureMatchOverlaySideboards } from '~/modules/feature-match-over
 import type { GraphicsDeckListCard } from '~/modules/graphics/renderModel';
 import type { FeatureMatch } from '~/types';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
-import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
+import { listenToScreenModeHearing, useScreenModeHearing } from '~/modules/screen-mode/hearing';
 
 const PLAYER_SIDES = ['player1', 'player2'] as const;
 
@@ -72,9 +72,10 @@ function snapshotDeckId(match: FeatureMatch | null, playerId: number): number | 
  * token-values seam via `featureMatchGraphicsContext`'s deck data parameter.
  *
  * Fetch scoping: a side is fetched only while the composition holds at least
- * one `deck-list` item for it. No item, no fetch. Live-follow rides
- * `player:updated`: a revision other than the one last read re-runs the load,
- * as does a `playerDeck:cardsResolved` naming either side's Player.
+ * one `deck-list` item for it. No item, no fetch. Live-follow re-runs the load
+ * when the Screen hears a change to either side's Player or their Deck Lists
+ * (ADR-0031): named as a cause on a live rendering's Screen channel, and worked
+ * out from the Event's messages by the same rule in a preview.
  *
  * Deck selection ladder: the session snapshot's `deckId` first, because the
  * snapshot pins what this session is actually playing; a pin the collection no
@@ -102,8 +103,6 @@ export function useFeatureMatchOverlaySideboardData(
 		sideboards: { player1: null, player2: null },
 		stamps: { player1: null, player2: null },
 	};
-	/** The Player revision each side last read, which `player:updated` is judged against. */
-	let readRevisions: Record<PlayerSide, number | null> = { player1: null, player2: null };
 
 	const requests = computed<Record<PlayerSide, SideRequest | null>>(() => {
 		const result: Record<PlayerSide, SideRequest | null> = { player1: null, player2: null };
@@ -147,13 +146,12 @@ export function useFeatureMatchOverlaySideboardData(
 	async function resolveSide(
 		side: PlayerSide,
 		request: SideRequest | null,
-	): Promise<{ cards: ReadonlyArray<GraphicsDeckListCard> | null; degraded: boolean; stamp: string | null; revision: number | null }> {
+	): Promise<{ cards: ReadonlyArray<GraphicsDeckListCard> | null; degraded: boolean; stamp: string | null }> {
 		if (!request) {
 			return {
 				cards: null,
 				degraded: false,
 				stamp: null,
-				revision: null,
 			};
 		}
 
@@ -177,11 +175,9 @@ export function useFeatureMatchOverlaySideboardData(
 				stamp: shown
 					? displayed.stamps[shown]
 					: `${request.playerId}::none`,
-				revision: null,
 			};
 		}
 
-		const revision = new Date(read.player.updatedAt).getTime();
 		// A pinned deck the collection no longer holds falls back to the
 		// collection's own selection ladder rather than rendering nothing.
 		const deck = selectPlayerDeck(read.decks, request.deckId != null
@@ -195,7 +191,6 @@ export function useFeatureMatchOverlaySideboardData(
 				cards: null,
 				degraded: false,
 				stamp: `${request.playerId}:none`,
-				revision,
 			};
 		}
 
@@ -215,7 +210,6 @@ export function useFeatureMatchOverlaySideboardData(
 				cards: [],
 				degraded: false,
 				stamp,
-				revision,
 			};
 		}
 
@@ -233,7 +227,6 @@ export function useFeatureMatchOverlaySideboardData(
 			})),
 			degraded,
 			stamp,
-			revision,
 		};
 	}
 
@@ -250,7 +243,6 @@ export function useFeatureMatchOverlaySideboardData(
 				sideboards: { player1: null, player2: null },
 				stamps: { player1: null, player2: null },
 			};
-			readRevisions = { player1: null, player2: null };
 			sideboards.value = displayed.sideboards;
 			return;
 		}
@@ -263,7 +255,6 @@ export function useFeatureMatchOverlaySideboardData(
 			if (flight.stale)
 				return;
 
-			readRevisions = { player1: player1.revision, player2: player2.revision };
 			const next: SideboardSourceState = {
 				sideboards: { player1: player1.cards, player2: player2.cards },
 				stamps: { player1: player1.stamp, player2: player2.stamp },
@@ -312,42 +303,35 @@ export function useFeatureMatchOverlaySideboardData(
 	);
 
 	/**
-	 * Live-follow of both sides: a `player:updated` whose revision differs from
-	 * the one last read re-reads, including one announced while a read is still in
-	 * flight, and so does a resolved deck card of either side's Player (#648).
-	 * Heard on the Event channel itself, because an output holds no roster for the
-	 * message to replace a record in (#604).
+	 * Live-follow of both sides: a change to either side's Player or their Deck
+	 * Lists re-reads, including one heard while a read is still in flight, which
+	 * the newer load supersedes. A cause carries no revision, so nothing is judged
+	 * against the one last read: hearing needlessly costs a read.
 	 */
-	let unsubscribeFromDeckChanges: Array<() => void> = [];
-	watch(eventId, (evtId) => {
-		unsubscribeFromDeckChanges.forEach(unsubscribe => unsubscribe());
-		unsubscribeFromDeckChanges = [];
-		if (!realtime || !evtId)
-			return;
-		const channel = eventRealtimeChannel(evtId);
-		unsubscribeFromDeckChanges.push(realtime.onChannel(channel, 'player:updated', ({ player }) => {
-			for (const side of PLAYER_SIDES) {
-				if (requests.value[side]?.playerId !== player.id)
-					continue;
-				if (new Date(player.updatedAt).getTime() !== readRevisions[side]) {
-					void load();
-					return;
-				}
-			}
-		}));
-		unsubscribeFromDeckChanges.push(realtime.onChannel(channel, 'playerDeck:cardsResolved', ({ playerIds }) => {
-			const shown = PLAYER_SIDES.flatMap(side => requests.value[side]?.playerId ?? []);
-			if (shown.some(playerId => playerIds.includes(playerId)))
-				void load();
-		}));
+	const hearing = useScreenModeHearing(context, 'feature-match-overlay', () => config.value, {
+		follows: ['player', 'playerDeck'],
+		seated: () => {
+			const slotId = config.value.featureMatchId;
+			return slotId
+				? {
+						id: slotId,
+						playerIds: PLAYER_SIDES.flatMap(side => requests.value[side]?.playerId ?? []),
+					}
+				: null;
+		},
+	});
+	watch(() => hearing.value.channel, (_channel, _previous, onCleanup) => {
+		if (realtime)
+			onCleanup(listenToScreenModeHearing(realtime, hearing.value, reread));
 	}, { immediate: true });
 
 	/**
-	 * The deck path's half of the Reconnect Resync rule (#307): a `player:updated`
+	 * The deck path's half of the Reconnect Resync rule (#307): a change
 	 * published while this client was suspended is simply gone, so coming back
-	 * re-reads both sides through the Screen. So does the Event channel's first
-	 * attach: the first read goes out as the rendering mounts, before that channel
-	 * listens, and an edit published in between was heard by nothing (#733).
+	 * re-reads both sides through the Screen. So does the first attach of the
+	 * channel it hears on: the first read goes out as the rendering mounts,
+	 * before that channel listens, and an edit published in between was heard by
+	 * nothing (#733).
 	 */
 	function reread() {
 		const current = requests.value;
@@ -356,10 +340,9 @@ export function useFeatureMatchOverlaySideboardData(
 
 		void load();
 	}
-	useReconnectResync(reread, eventId, realtime, { onFirstAttach: reread });
+	useReconnectResync(reread, () => hearing.value.channel, realtime, { onFirstAttach: reread });
 
 	onScopeDispose(() => {
-		unsubscribeFromDeckChanges.forEach(unsubscribe => unsubscribe());
 		degradedRefetch.cancel();
 		// A degraded report must not outlive the rendering that measured it.
 		if (cardDataHealth) {

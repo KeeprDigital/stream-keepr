@@ -353,21 +353,6 @@ describe('usePairingsModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(3);
 		});
 
-		it('ignores Matches of other Rounds', async () => {
-			await showingPendingPairings();
-
-			deliver('match:created', {
-				match: match({ id: 9, roundId: 32 }),
-			});
-			deliver('match:updated', {
-				match: match({ id: 9, roundId: 32 }),
-			});
-			deliver('match:deleted', { matchId: 9 });
-			await flushPromises();
-
-			expect(mockFetch).not.toHaveBeenCalled();
-		});
-
 		it('follows its own Round being renamed or re-paired, and no other', async () => {
 			await showingPendingPairings();
 
@@ -375,13 +360,6 @@ describe('usePairingsModeData', () => {
 				round: { id: 40 },
 			});
 			deliver('round:deleted', { roundId: 40 });
-			deliver('round:matchesRefreshed', {
-				roundId: 40,
-				matchCount: 8,
-				created: 1,
-				updated: 0,
-				staleDeleted: 0,
-			});
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 
@@ -412,22 +390,9 @@ describe('usePairingsModeData', () => {
 				rereads: true,
 			},
 			{
-				type: 'melee:matchResultsSynced',
-				payload: {
-					roundId: 40,
-					matchIds: [9],
-				},
-				rereads: false,
-			},
-			{
 				type: 'melee:pairingsSynced',
 				payload: { roundId: 31 },
 				rereads: true,
-			},
-			{
-				type: 'melee:pairingsSynced',
-				payload: { roundId: 40 },
-				rereads: false,
 			},
 			{
 				type: 'melee:roundStandingsSynced',
@@ -445,14 +410,8 @@ describe('usePairingsModeData', () => {
 			expect(formatResult(pageData.value[0]!)).toBe(rereads ? '2–0' : 'Pending');
 		});
 
-		it('follows a rename of a Player it shows, and of no one else', async () => {
+		it('follows a rename of a Player it shows', async () => {
 			await showingPendingPairings();
-
-			deliver('player:updated', {
-				player: { id: 5 },
-			});
-			await flushPromises();
-			expect(mockFetch).not.toHaveBeenCalled();
 
 			deliver('player:updated', {
 				player: { id: 8 },

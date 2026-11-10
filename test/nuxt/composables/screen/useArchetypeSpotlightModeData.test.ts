@@ -257,12 +257,15 @@ describe('useArchetypeSpotlightModeData', () => {
 			for (const [type, payload] of [
 				[
 					'playerDeck:reviewed',
-					{ playerId: 11 },
+					{
+						deck: { playerId: 11 },
+					},
 				],
 				[
 					'playerDeck:cardsResolved',
 					{
 						deckIds: [3],
+						playerIds: [11],
 					},
 				],
 				[

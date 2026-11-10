@@ -137,7 +137,7 @@ function mountDisplay(deckSide: 'player1' | 'player2' = 'player1') {
 	return mountSource({ type: 'featureMatchSlot', slotId: SLOT_ID, side: deckSide });
 }
 
-function mountSource(deckSource: Record<string, unknown>) {
+function mountSource(deckSource: Record<string, unknown>, { live = false } = {}) {
 	showSource(deckSource);
 	const Parent = defineComponent({
 		setup() {
@@ -146,6 +146,8 @@ function mountSource(deckSource: Record<string, unknown>) {
 				eventId: computed(() => 7),
 				interactive: ref(false),
 				overlayContainer: ref(null),
+				// A Screen Output or Program monitor: it hears its Screen's own channel.
+				followsScreenChannel: ref(live),
 			});
 			return () => h(OpDisplay);
 		},
@@ -347,6 +349,32 @@ describe('a Deck List Screen showing a Feature Match Slot side', () => {
 			player: 'Bob',
 			leader: NAMI.number,
 		});
+	});
+
+	// On a live rendering a re-pasted Deck List arrives as a Slot cause on the Screen's channel.
+	it('shows a re-pasted Deck List after its Screen channel names the Slot, keeping the outgoing one until then', async () => {
+		const wrapper = mountSource({ type: 'featureMatchSlot', slotId: SLOT_ID, side: 'player1' }, { live: true });
+		await flushPromises();
+		expect(shown(wrapper).deckListId).toBe('501');
+		const slotRead = deferred<unknown>();
+		mockFetch.mockImplementationOnce(async () => await slotRead.promise);
+
+		realtime.deliverToScreen(42, 'output:modeDataChanged', {
+			screenId: 42,
+			causes: ['featureMatchSlot'],
+		}, 7);
+		await flushPromises();
+		expect(shown(wrapper)).toMatchObject({ state: 'deck', deckListId: '501', player: 'Alice' });
+
+		slotRead.resolve({
+			slot: slot(side('Alice', LUFFY, 503), BOB),
+			match: null,
+			round: null,
+			phase: null,
+		});
+		await flushPromises();
+
+		expect(shown(wrapper)).toMatchObject({ state: 'deck', deckListId: '503', player: 'Alice' });
 	});
 
 	it('keeps its own Deck List when swapped back before the other one has loaded', async () => {

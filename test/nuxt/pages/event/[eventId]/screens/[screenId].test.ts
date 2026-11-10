@@ -349,6 +349,44 @@ describe('screen config page — degraded card data on connected outputs', () =>
 		expect(page.text()).toContain('Card data incomplete on 1 output');
 	});
 
+	// An output reports the realtime protocol it follows; one reporting none still depends on the Event channel.
+	it.each([
+		{
+			protocols: [2, undefined],
+			outdated: '1 outdated output',
+		},
+		{
+			protocols: [undefined, 1],
+			outdated: '2 outdated outputs',
+		},
+		{
+			protocols: [2, 2],
+			outdated: null,
+		},
+	])('shows $outdated for outputs reporting protocols $protocols', async ({ protocols, outdated }) => {
+		mockScreenStore.screenPresence = new Map([
+			[
+				1,
+				{
+					count: protocols.length,
+					members: protocols.map((protocol, index) => ({
+						clientId: String(index),
+						data: { screenId: 1, protocol },
+					})),
+				},
+			],
+		]);
+
+		const page = await mountLoadedPage();
+
+		const warning = page.find('[data-testid="outputs-outdated"]');
+		expect(warning.exists()
+			? warning.text()
+			: null).toEqual(outdated === null
+			? null
+			: expect.stringContaining(outdated));
+	});
+
 	it('says nothing while every reporting output is complete or silent', async () => {
 		mockScreenStore.screenPresence = new Map([
 			[

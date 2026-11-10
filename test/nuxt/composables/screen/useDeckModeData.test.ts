@@ -384,13 +384,12 @@ describe('useDeckModeData', () => {
 			expect(result.primaryHeader.value).toBe('New revision');
 		});
 
-		it('follows only the selected list, at a revision it does not hold', async () => {
+		it('follows only the selected list', async () => {
 			mockGetSelectedBroadcastDeckList.mockResolvedValue(createBroadcastList(1, 'Feature Table'));
 			mountDeckModeData();
 			await flushPromises();
 
 			deliver('broadcastDeckList:updated', { listId: 24, revision: 2 });
-			deliver('broadcastDeckList:updated', { listId: 23, revision: 1 });
 			deliver('player:updated', {
 				player: { id: 5, name: 'Alice', updatedAt: '2026-10-15T10:05:00.000Z' },
 			});
@@ -752,16 +751,18 @@ describe('useDeckModeData', () => {
 			expect(mainboardNames(result)).toEqual(['Brainstorm']);
 		});
 
-		it('neither swaps for its own unchanged revision nor for another Player\'s update', async () => {
+		it('does not swap for a read answering what is on program, and reads nothing for another Player\'s update', async () => {
 			const result = mountDeckModeData();
 			await flushPromises();
 
-			applyPlayerUpdated({ ...serverPlayer });
 			applyPlayerUpdated({ id: 6, name: 'Bob', updatedAt: AFTER_EDIT });
 			await flushPromises();
-
-			expect(result.pendingSwapVersion.value).toBe(0);
 			expect(mockPlayerDecks).toHaveBeenCalledOnce();
+
+			applyPlayerUpdated({ ...serverPlayer });
+			await flushPromises();
+			expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
+			expect(result.pendingSwapVersion.value).toBe(0);
 		});
 
 		it('shows an edit announced while the first read is in flight, which that read missed', async () => {

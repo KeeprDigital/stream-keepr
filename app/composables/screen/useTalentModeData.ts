@@ -1,22 +1,14 @@
 import type { SocialProfileProjectionValue } from '~~/shared/types/graphics';
 import type { ScreenOutputTalent, ScreenOutputTalentResponse } from '~~/shared/types/screenOutputReads';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import { msUntilNextTalentScreenProfile, projectTalentScreenSocialProfile } from '~~/shared/modules/talent-screen';
 import { TALENT_SCREEN_AUTO_HEADER_TEXT, talentScreenTalentIds } from '~~/shared/screenModeConfigs/talent';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 
 /** One shown Talent, with the Social Profiles it shows now: all of them, or the rotation's current one. */
 export interface ShownTalent extends ScreenOutputTalent {
 	shownProfiles: SocialProfileProjectionValue[];
-}
-
-/** A Talent Screen reads its Talents, so an edit or delete of one it shows re-reads (#782). */
-export function talentDependencies(shows: (talentId: number) => boolean): ScreenModeDependencies<ScreenOutputTalentResponse> {
-	return {
-		'talent:updated': ({ talent }) => shows(talent.id),
-		'talent:deleted': ({ talentId }) => shows(talentId),
-	};
 }
 
 /**
@@ -58,13 +50,12 @@ function useRotationInstant(rotating: () => boolean, dwellMs: () => number) {
  * or a lineup, each with its role, photo and the Social Profiles it shows.
  */
 export function useTalentModeData(context: ScreenContext) {
-	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'talent');
 	const outputReads = useScreenOutputReads(context);
 	const shownIds = computed(() => talentScreenTalentIds(config.value));
 
 	const freshness = useScreenModeFreshness<ScreenOutputTalentResponse>({
-		eventId,
+		hearing: useScreenModeHearing(context, 'talent', () => config.value),
 		source: () => {
 			const ids = shownIds.value;
 			if (!outputReads.scopeKey.value || ids.length === 0)
@@ -80,7 +71,6 @@ export function useTalentModeData(context: ScreenContext) {
 		read: () => outputReads.talent(),
 		initialData: { talents: [] },
 		errorMessage: 'Failed to load Talent',
-		dependsOn: talentDependencies(talentId => shownIds.value.includes(talentId)),
 	});
 
 	const rotationInstant = useRotationInstant(

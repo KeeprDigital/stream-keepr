@@ -1,6 +1,5 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { RealtimeTransport } from '~/types/realtime';
-import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 
 /**
  * Reloading authoritative state after this client has been out of touch.
@@ -20,15 +19,17 @@ import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
  *
  * ## When it re-reads
  *
- * Once the Event channel the consumer listens on is attached again having lost
- * continuity, not when the connection comes back. Ably reattaches channels only
+ * Once the channel the consumer listens on is attached again having lost
+ * continuity, not when the connection comes back. That channel is the consumer's
+ * to name: its Event's for an operator page or an editor preview, its Screen's
+ * own for a Screen Output or a Program monitor, which hears nothing else. Ably reattaches channels only
  * after the connection is back, so a read sent then can be answered before
  * anything listens again, and a change published in between is in neither the
  * read nor any message (#641). The channel's own signal also catches a loss on
  * the channel alone while the connection stays up, and stays quiet when the
  * reattach resumed, because then nothing was missed.
  *
- * A consumer listening on no Event has missed no message, but may hold nothing at
+ * A consumer listening on no channel has missed no message, but may hold nothing at
  * all: a Screen Output whose load failed has no Screen to listen for yet. For it,
  * the connection coming back is still the retry.
  *
@@ -38,7 +39,7 @@ import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
  * the channel had no continuity to lose. A consumer whose read went out before
  * its channel first attached still missed whatever was published in between:
  * nothing listened yet. Such a consumer passes `onFirstAttach`, which is told once
- * when the Event channel it starts listening on first attaches, and never when
+ * when the channel it starts listening on first attaches, and never when
  * that channel was attached already, since then it listened before it read
  * (ADR-0023, #733). It is a handler of its own rather than `resync`, because a
  * first attach usually lands while the first read is still in flight and need
@@ -55,8 +56,8 @@ import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
  */
 export function useReconnectResync(
 	resync: () => void,
-	/** The Event whose channel the consumer listens on, or nothing while it listens on none. */
-	eventId: MaybeRefOrGetter<number | null | undefined>,
+	/** The channel the consumer listens on, or nothing while it listens on none. */
+	channel: MaybeRefOrGetter<string | null | undefined>,
 	/**
 	 * The transport to watch. Defaulted rather than always resolved, because the
 	 * Screen Output's display session is handed its transport rather than looking
@@ -64,7 +65,7 @@ export function useReconnectResync(
 	 */
 	realtime: Pick<RealtimeTransport, 'connectionState' | 'onContinuityLost' | 'onceAttached'> | undefined = tryUseRealtime(),
 	options: {
-		/** Told once when the Event channel this starts listening on first attaches; see above. */
+		/** Told once when the channel this starts listening on first attaches; see above. */
 		onFirstAttach?: () => void;
 	} = {},
 ) {
@@ -84,20 +85,19 @@ export function useReconnectResync(
 			|| realtime.connectionState === 'closed';
 	});
 
-	watch(() => toValue(eventId), (listenedOn, _, onCleanup) => {
+	watch(() => toValue(channel), (listenedOn, _, onCleanup) => {
 		if (!realtime || !listenedOn)
 			return;
-		const channel = eventRealtimeChannel(listenedOn);
-		onCleanup(realtime.onContinuityLost(channel, resync));
+		onCleanup(realtime.onContinuityLost(listenedOn, resync));
 		if (options.onFirstAttach)
-			onCleanup(realtime.onceAttached(channel, options.onFirstAttach));
+			onCleanup(realtime.onceAttached(listenedOn, options.onFirstAttach));
 	}, { immediate: true });
 
 	// Only the transition back to connected, and only while listening on nothing.
 	// Watching this rather than every connection state keeps a `connecting` →
 	// `connected` flap from firing a reload on top of the one the mount already did.
 	watch(disconnected, (isDisconnected, wasDisconnected) => {
-		if (wasDisconnected && !isDisconnected && !toValue(eventId))
+		if (wasDisconnected && !isDisconnected && !toValue(channel))
 			resync();
 	});
 

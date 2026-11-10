@@ -1,8 +1,7 @@
 import type { Ref } from 'vue';
 import type { MessageType } from '~~/shared/types/messages';
 import type { MessageData, RealtimeTransport } from '~/types/realtime';
-import { computed, onScopeDispose, watch } from 'vue';
-import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
+import { computed, onScopeDispose, toValue, watch } from 'vue';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
 import { useReconnectResync } from '~/composables/core/useReconnectResync';
 import { useBroadcastDisplayData } from '~/composables/screen/useBroadcastDisplayData';
@@ -17,16 +16,26 @@ import { createGuardedSequence } from '~/utils/guardedSequence';
 export const SCREEN_MODE_REREAD_MS = 15_000;
 
 /**
- * Whether one Event message touches what a mode holds, per message type. `true`
- * means every such message does.
+ * Whether one message on the channel a mode hears touches what it holds, per
+ * message type. `true` means every such message does.
  */
 export type ScreenModeDependencies<T> = {
 	[K in MessageType]?: true | ((message: MessageData<K>, held: T) => boolean);
 };
 
 /**
+ * Where a mode hears that its read is behind: the channel it listens on, `null`
+ * while it listens on none, and which of that channel's messages say so. A
+ * Screen Mode's is `useScreenModeHearing`'s to work out.
+ */
+export interface ScreenModeHearing<T> {
+	channel: string | null;
+	dependsOn: ScreenModeDependencies<T>;
+}
+
+/**
  * Why a follow-up read is asked for while a read is in flight: a message, which
- * may postdate what that read answers, or the Event channel's first attach,
+ * may postdate what that read answers, or its channel's first attach,
  * which says only that something may have been published unheard.
  */
 type FollowUpReason = 'message' | 'first-attach';
@@ -34,7 +43,8 @@ type FollowUpReason = 'message' | 'first-attach';
 export type ScreenModeFreshnessTransport = Pick<RealtimeTransport, 'connectionState' | 'tokenError' | 'onChannel' | 'onContinuityLost' | 'onceAttached'>;
 
 export interface ScreenModeFreshnessOptions<T> {
-	eventId: Readonly<Ref<number | null>>;
+	/** Where the mode hears that it is behind. */
+	hearing: Readonly<Ref<ScreenModeHearing<T>>> | (() => ScreenModeHearing<T>);
 	/**
 	 * What the mode reads, as one comparable value; `null` while it selects
 	 * nothing, which clears what it holds. A change re-reads.
@@ -44,28 +54,27 @@ export interface ScreenModeFreshnessOptions<T> {
 	read: () => Promise<T>;
 	initialData: T;
 	errorMessage: string;
-	/** The Event Data the mode depends on. */
-	dependsOn: ScreenModeDependencies<T>;
 	realtime?: ScreenModeFreshnessTransport;
 }
 
 /**
  * Screen Mode Data Freshness: keeps one mode's read current on a Screen Output.
  *
- * A mode states what it reads and the Event Data it depends on; this owns every
- * reason to read again, so no mode invents its own:
+ * A mode states what it reads and where it hears that the read is behind; this
+ * owns every reason to read again, so no mode invents its own:
  *
  * - **load** — when what the mode selects changes;
- * - **live-follow** — on an Event message the mode depends on that touches
- *   what it holds, heard on the Event channel itself because an output holds
- *   no roster or Event Data collection for a store to update (#604);
+ * - **live-follow** — on a message the mode hears that touches what it holds.
+ *   A live rendering hears its Screen's own channel, where the server names
+ *   the kinds of Output Change its mode shows; a rendering of authored state
+ *   hears its Event's and applies the same rule itself (`useScreenModeHearing`);
  * - **degraded refetch** — on a slow cadence while realtime cannot deliver:
  *   disconnected, or connected with subscriptions waiting on a token for the
  *   one Event the transport covers (ADR-0023). It re-reads, never
  *   re-registers: holding subscriptions through an outage is the transport's;
  * - **Reconnect Resync** — once on coming back from either, because what was
  *   published meanwhile is gone;
- * - **first attach** — once when its Event channel first attaches, if it was
+ * - **first attach** — once when its channel first attaches, if it was
  *   not attached when the mode began listening: the mode's first read went out
  *   before anything listened, and that attach reports no continuity loss
  *   (ADR-0023, #733);
@@ -169,8 +178,13 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 	watch(options.source, () => refresh(true), { immediate: true });
 
 	// Live-follow.
+	const hearing = computed(() => toValue(options.hearing));
+	const channel = computed(() => hearing.value.channel);
+	/** What the channel listened on now says, fixed while it is listened on. */
+	let heardOn: ScreenModeDependencies<T> = {};
+
 	function touches<K extends MessageType>(type: K, message: MessageData<K>): boolean {
-		const dependency = options.dependsOn[type] as ScreenModeDependencies<T>[K];
+		const dependency = heardOn[type] as ScreenModeDependencies<T>[K];
 		if (options.source() == null || !dependency)
 			return false;
 		// What is held cannot judge a message the read in flight may predate.
@@ -185,13 +199,14 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 			stop();
 	}
 
-	watch(options.eventId, (eventId) => {
+	watch(channel, (listenedOn) => {
 		unsubscribe();
-		if (!realtime || !eventId)
+		heardOn = {};
+		if (!realtime || !listenedOn)
 			return;
-		const channel = eventRealtimeChannel(eventId);
-		unsubscribers = (Object.keys(options.dependsOn) as MessageType[]).map(type =>
-			realtime.onChannel(channel, type, (message) => {
+		heardOn = hearing.value.dependsOn;
+		unsubscribers = (Object.keys(heardOn) as MessageType[]).map(type =>
+			realtime.onChannel(listenedOn, type, (message) => {
 				if (touches(type, message))
 					follow('message');
 			}));
@@ -199,9 +214,9 @@ export function useScreenModeFreshness<T>(options: ScreenModeFreshnessOptions<T>
 
 	// Reconnect Resync, and its twin for subscriptions that waited on a token. A
 	// mode reads as it mounts, which on a Screen Output's first load is before its
-	// Event channel has attached: what was published in between was heard by
+	// channel has attached: what was published in between was heard by
 	// nothing, and that first attach reports no continuity loss (#733).
-	const { disconnected } = useReconnectResync(queueRefresh, options.eventId, realtime, {
+	const { disconnected } = useReconnectResync(queueRefresh, channel, realtime, {
 		onFirstAttach: () => {
 			if (options.source() != null)
 				follow('first-attach');

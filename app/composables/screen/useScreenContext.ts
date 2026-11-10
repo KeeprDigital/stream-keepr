@@ -22,6 +22,13 @@ export interface ScreenContext {
 	outputWarning?: Ref<string | null>;
 	/** True when the screen is embedded in the editor preview. */
 	isPreview?: Ref<boolean>;
+	/**
+	 * True on a live rendering of a saved Screen, a Screen Output or a Program
+	 * monitor: it hears only its Screen's own channel. Absent or false, the
+	 * rendering shows authored state (an editor preview, a settings editor) and
+	 * hears its Event's channel (`renderingChannel`).
+	 */
+	followsScreenChannel?: Ref<boolean>;
 	/** Show editor-only item guides in embedded previews. */
 	previewGuides?: Ref<boolean>;
 	/** Show advisory action-safe and title-safe guides in embedded previews. */

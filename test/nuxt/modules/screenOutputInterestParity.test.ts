@@ -10,20 +10,24 @@ import { talentScreenTalentIds } from '~~/shared/screenModeConfigs/talent';
 import { outputChangeOf, screenHears } from '~~/shared/screenOutputInterest';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { eventMessageSamples } from '~~/test/helpers/eventMessageSamples';
-import { deckDependencies } from '~/composables/screen/useDeckModeData';
-import { headToHeadDependencies } from '~/composables/screen/useHeadToHeadModeData';
-import { pairingsDependencies } from '~/composables/screen/usePairingsModeData';
-import { playerHistoryDependencies } from '~/composables/screen/usePlayerHistoryModeData';
-import { roundClockDependencies } from '~/composables/screen/useRoundClockModeData';
-import { standingsDependencies } from '~/composables/screen/useStandingsModeData';
-import { talentDependencies } from '~/composables/screen/useTalentModeData';
-import { manualBracketDependencies, topCutDependencies } from '~/composables/screen/useTopCutModeData';
-import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
+import {
+	deckDependencies,
+	headToHeadDependencies,
+	manualBracketDependencies,
+	metagameBreakdownDependencies,
+	pairingsDependencies,
+	roundClockDependencies,
+	standingsDependencies,
+	talentDependencies,
+	topCutDependencies,
+} from '~~/test/helpers/formerScreenModeDependencies';
+import { playerHistoryDependencies } from '~/composables/data/usePlayerMatchHistory';
 
 /**
- * The migration's guard: whenever a rendering re-reads on an Event message
- * today, `screenHears` says its Screen hears that message. The rule may hear
- * more than a rendering re-reads on, never less.
+ * The migration's guard: whenever a rendering re-read on an Event message
+ * while it followed a map of its own (`formerScreenModeDependencies`),
+ * `screenHears` says its Screen hears that message. A rendering now re-reads
+ * by that rule alone, so it may hear more than it did, never less.
  */
 
 /** What the Screen's config names. */
@@ -110,9 +114,8 @@ const seated: ScreenHearsContext = {
 const seatedIds = seated.slot!.playerIds;
 
 /**
- * The Slot and its Session a Slot-showing mode holds in the stores, which
- * follow these messages for it: `useScreenFeatureMatchSlot.ts:74-89` reads what
- * `realtime-event-session/featureMatchHandlers.ts:10-16` writes.
+ * The Slot and its Session a Slot-showing mode held in the stores, which the
+ * Realtime Event Session's Feature Match handlers kept current for it.
  */
 const SLOT_STORES: Dependencies = {
 	'featureMatch:updated': ({ featureMatch }) => featureMatch.id === SHOWN.slotId,
@@ -121,9 +124,8 @@ const SLOT_STORES: Dependencies = {
 };
 
 /**
- * The Feature Match Overlay's inline dependencies, which cannot be imported:
- * `useFeatureMatchOverlayModeData.ts:42-48`, and its sideboards' two channel
- * handlers, `useFeatureMatchOverlaySideboardData.ts:328-342`.
+ * The Feature Match Overlay's former inline dependencies, and its sideboards'
+ * two channel handlers.
  */
 const OVERLAY: Dependencies = {
 	...SLOT_STORES,
@@ -134,25 +136,25 @@ const OVERLAY: Dependencies = {
 	'playerDeck:cardsResolved': ({ playerIds }) => playerIds.some(id => seatedIds.includes(id)),
 };
 
-/** A One Piece Deck List's Player source, inline at `useOpDeckModeData.ts:218-223`. */
+/** A One Piece Deck List's Player source, formerly inline. */
 const OP_DECK_PLAYER: Dependencies = {
 	'player:updated': ({ player }) => player.id === SHOWN.playerId,
 	'tcgplus:imported': true,
 };
 
-/** The Card store's own messages, `realtime-event-session/screenCardHandlers.ts:14-16`, less the operator's preview. */
+/** The Card store's own messages, less the operator's preview. */
 const CARD_STORE: Dependencies = {
 	'card:updated': ({ screenId }) => screenId === SHOWN.screenId,
 	'card:cleared': ({ screenId }) => screenId === SHOWN.screenId,
 };
 
-/** The Live Session store's messages, `realtime-event-session/broadcastGraphicsHandlers.ts:9-19`. */
+/** The Live Session store's messages. */
 const LIVE_SESSION_STORE: Dependencies = {
 	'broadcastGraphicsLiveSession:commandApplied': ({ screenId }) => screenId === SHOWN.screenId,
 	'broadcastGraphicsLiveSession:epochEnded': ({ screenId }) => screenId === SHOWN.screenId,
 };
 
-/** What every rendering holds: its Screen, and its Event context with the Theme (`screenCardHandlers.ts:11`, `eventTalentHandlers.ts:11-12`). */
+/** What every rendering holds: its Screen, and its Event context with the Theme. */
 const EVERY_RENDERING: Dependencies = {
 	'screen:updated': ({ screenId }) => screenId === SHOWN.screenId,
 	'event:updated': true,
@@ -445,7 +447,7 @@ const CASES: ParityCase[] = [
 	},
 ];
 
-/** Every message a case's rendering re-reads on today, given what it holds. */
+/** Every message a case's rendering re-read on, given what it held. */
 const REREADS = CASES.flatMap(parityCase =>
 	(Object.keys(parityCase.dependsOn) as MessageType[]).flatMap(type =>
 		Object.entries(MESSAGES).flatMap(([naming, samples]) => {

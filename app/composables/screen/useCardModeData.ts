@@ -1,7 +1,9 @@
 import type { Ref } from 'vue';
 import type { ScreenCard } from '~~/shared/types/card/mtg';
+import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 
 const CARD_LOAD_FAILED = 'Failed to load card data';
 
@@ -14,7 +16,7 @@ export function useCardModeData(context: ScreenContext) {
 
 	const { card, loading, error, answered } = sampleDataset
 		? holdSampleCard(context)
-		: followScreenCard(context, screenId);
+		: followScreenCard(context, screenId, config);
 
 	return {
 		config,
@@ -55,8 +57,8 @@ function holdSampleCard(context: ScreenContext) {
 }
 
 /** The Screen's Card, held by the Card store and kept fresh as it changes. */
-function followScreenCard(context: ScreenContext, screenId: Readonly<Ref<number | null>>) {
-	const { eventId, cardDataHealth } = context;
+function followScreenCard(context: ScreenContext, screenId: Readonly<Ref<number | null>>, config: Readonly<Ref<ModeConfigTypeMap['card']>>) {
+	const { cardDataHealth } = context;
 	const cardStore = useCardStore();
 	const outputReads = useScreenOutputReads(context);
 	// A rendering of the Screen reads its Card through the Screen (#604).
@@ -84,7 +86,8 @@ function followScreenCard(context: ScreenContext, screenId: Readonly<Ref<number 
 	// The store follows the Card's own messages; this owns re-reading it on
 	// reconnection and while realtime is degraded (#610).
 	const freshness = useScreenModeFreshness<null>({
-		eventId,
+		// The Card's own messages reach the store whole, so no message asks for a read.
+		hearing: useScreenModeHearing(context, 'card', () => config.value, { follows: [] }),
 		source: () => screenId.value === null
 			? null
 			: String(screenId.value),
@@ -97,7 +100,6 @@ function followScreenCard(context: ScreenContext, screenId: Readonly<Ref<number 
 		},
 		initialData: null,
 		errorMessage: CARD_LOAD_FAILED,
-		dependsOn: {},
 	});
 
 	return {

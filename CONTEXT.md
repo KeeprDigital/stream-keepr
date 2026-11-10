@@ -287,14 +287,14 @@ An opaque, long-lived, revocable right that lets one Screen Output resolve only 
 The client-side access path for Event-scoped data such as Players, Phases, Rounds, Matches, Feature Match Slots, Feature Match Assignments, Screens, Talents, Archetypes, Player Lists, and Player Decks.
 
 **Realtime Event Session**:
-The client-side subscription for Event messages.
+The client-side subscription for Event messages. An operator's client holds one for its Event, and so does an editor preview, which renders configuration not yet saved. A **Screen Output** or **Program monitor** holds none: it hears only its **Screen**'s own channel.
 
 **Realtime Subscription**:
 A consumer's standing request to the realtime transport: a room handler, a channel handler, a presence watch, or a presence entry. The transport holds it from creation until its consumer disposes it, attaching it whenever its **Event** is covered; no failure ends one (ADR-0023).
 _Avoid_: registration.
 
 **Reconnect Resync**:
-The client-side module owning the invariant "losing message continuity is itself a reason to re-read authoritative state." Realtime messages are notifications and the server holds authority, so a resync re-reads and never clears. It re-reads once the Event channel its consumer listens on is attached again having lost continuity, not when the connection comes back, which is before anything listens again (ADR-0023). A consumer listening on no Event yet re-reads when the connection comes back instead. A consumer that read before its Event channel first attached also re-reads once off that attach, which reports no continuity loss yet followed a window nothing listened in. It exposes the disconnection so a control surface can disable its actions, while an output on program does not.
+The client-side module owning the invariant "losing message continuity is itself a reason to re-read authoritative state." Realtime messages are notifications and the server holds authority, so a resync re-reads and never clears. It re-reads once the channel its consumer listens on is attached again having lost continuity, not when the connection comes back, which is before anything listens again (ADR-0023). That channel is the consumer's to name: its Event's for an operator page or a preview, its **Screen**'s own for a **Screen Output** or **Program monitor**. A consumer listening on no channel yet re-reads when the connection comes back instead. A consumer that read before its channel first attached also re-reads once off that attach, which reports no continuity loss yet followed a window nothing listened in. It exposes the disconnection so a control surface can disable its actions, while an output on program does not.
 _Avoid_: reconnect handler, resubscribe hook.
 
 **Event Data Resync**:
@@ -302,7 +302,7 @@ The client-side module owning which Event Data this client consumes, so **Reconn
 _Avoid_: refresh registry, reload list.
 
 **Screen Mode Data Freshness**:
-The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads and which Event Data messages touch what it holds; the module owns the initial load, live-follow on those messages from the Event channel, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), the same slow re-read after its latest read failed, a re-read once its Event channel first attaches, and **Reconnect Resync**. A message or that first attach heard while a read is in flight asks for one follow-up read once it settles, rather than superseding it, so a burst of messages costs one more read per read in flight. Every re-read holds the last accepted rendering until it answers.
+The client-side module owning the invariant "a Screen Output shows its Screen Mode's current data." A mode states what it reads; what its rendering shows is declared once, as the **Output Changes** its **Screen Mode Definition** follows, and one rule reads that declaration. A **Screen Output** or **Program monitor** hears its **Screen**'s own channel, where the server has applied the rule to the Screen as saved and names the kinds of Output Change that touched it; a preview or settings editor hears its Event's channel and applies the same rule to the configuration it renders. The module owns the initial load, live-follow on what it hears, a slow re-read while realtime is degraded (disconnected, or its subscriptions waiting on a token for the Event the transport covers), the same slow re-read after its latest read failed, a re-read once the channel it hears on first attaches, and **Reconnect Resync**. A message or that first attach heard while a read is in flight asks for one follow-up read once it settles, rather than superseding it, so a burst of messages costs one more read per read in flight. Every re-read holds the last accepted rendering until it answers.
 _Avoid_: mode refresh hook, per-mode live sync.
 
 **Rendering Readiness**:
@@ -830,6 +830,8 @@ _Avoid_: worst-case data, overflow data
 - A client that cannot mint a realtime token for its **Event** re-attempts, and reports a persistent failure where an operator can see it
 - A **Realtime Subscription** outlives any token or transport failure until its consumer disposes it; once its **Event** recovers, the original handler receives again — and a held presence entry enters — without a remount (ADR-0023)
 - Only a **Screen Output** enters its **Screen**'s presence and answers its **Screen**'s commands; a **Program monitor** or preview joins neither, so every count of what is watching a **Screen** counts outputs alone
+- A **Screen Output** or **Program monitor** hears only its **Screen**'s own channel and nothing of its Event's; a preview, which renders configuration not yet saved, stays in its Event's room
+- A **Screen Output**'s presence entry reports the realtime protocol it follows; one reporting none was loaded before outputs followed their **Screen**'s channel, and a control surface says so until it is reloaded
 - A **Screen Output** carries its **Screen Output Asset Capability** in its URL; every surface handing an operator such a URL obtains one at that moment or hands out nothing
 - A **Screen Output** holding no capability renders nothing at all (ADR-0010)
 - A **Screen Output** reads everything it renders through its **Screen**, never through an operator's Event reads, and never changes live state by reading it (ADR-0022)
