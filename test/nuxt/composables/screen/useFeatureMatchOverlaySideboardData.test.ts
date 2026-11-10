@@ -573,6 +573,42 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		}
 	});
 
+	// A re-read that fails leaves the sideboard on program as it was, and is asked
+	// again on the recovery cadence rather than waiting for the next announcement.
+	it('keeps a side\'s sideboard on program through a failed re-read, and reads it again by itself', async () => {
+		vi.useFakeTimers();
+		try {
+			config.value = overlayConfig([
+				deckListItem('player1'),
+			]);
+			match.value = slotMatch();
+			mockBuildDeckListArrays.mockReturnValue({
+				mainboard: [],
+				sideboard: [
+					enrichedCard('Duress', 'https://img/duress.jpg'),
+				],
+			});
+			const { sideboards } = mountSideboardData();
+			await vi.advanceTimersByTimeAsync(0);
+			const onProgram = sideboards.value.player1;
+			expect(onProgram).toHaveLength(1);
+
+			mockPlayerDecks.mockRejectedValueOnce(new Error('503 Service Unavailable'));
+			announcePlayerUpdated(rosterPlayer(5, '2026-08-21T01:00:00.000Z'));
+			await vi.advanceTimersByTimeAsync(0);
+			expect(sideboards.value.player1).toEqual(onProgram);
+			expect(mockCardDataHealth.value).toBe('degraded');
+
+			const readsBefore = mockPlayerDecks.mock.calls.length;
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(mockPlayerDecks.mock.calls.length).toBe(readsBefore + 1);
+			expect(mockCardDataHealth.value).toBe('complete');
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('settles the degraded lifecycle when the last deck-list item is un-authored', async () => {
 		vi.useFakeTimers();
 		try {

@@ -1,6 +1,6 @@
 import type { ClockState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reactive } from 'vue';
 
 mockNuxtImport('useServerTime', () => () => ({
@@ -25,6 +25,24 @@ function clock(overrides: Partial<ClockState> = {}): ClockState {
 }
 
 describe('useClockDisplay', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	// Renderings of one clock change digit together: each re-renders as the shown
+	// second runs out, not a second after whenever it happened to mount.
+	it('shows the next second as the clock reaches it, wherever in the second it began', async () => {
+		vi.useFakeTimers({ now: 1_000_000 });
+		const display = useClockDisplay(clock({ type: 'countup', isRunning: true, lastStartedAt: 1_000_000 - 12_900 }));
+		expect(display.displayTime.value).toBe('0:12');
+
+		await vi.advanceTimersByTimeAsync(100);
+		expect(display.displayTime.value).toBe('0:13');
+
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(display.displayTime.value).toBe('0:14');
+	});
+
 	it.each([
 		['no clock', null, '0:00'],
 		[

@@ -83,6 +83,8 @@ export function projectRoundClock(timing: RoundTiming, now: number, countUp: Rou
 	return {
 		state: 'running',
 		display: formatClockTime(remainingMs),
-		nextChangeInMs: remainingMs % 1000 || 1000,
+		// The display floors the time remaining, so it holds through the whole
+		// second and changes one millisecond past it.
+		nextChangeInMs: (remainingMs % 1000) + 1,
 	};
 }

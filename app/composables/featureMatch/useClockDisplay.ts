@@ -1,8 +1,7 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { ClockState } from '~~/shared/types/featureMatchState';
-import { useIntervalFn } from '@vueuse/core';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { formatClockDisplay } from '~~/shared/utils/clock';
+import { clockDisplayNextChangeInMs, formatClockDisplay, getEffectiveElapsedMs } from '~~/shared/utils/clock';
 
 /**
  * Composable that encapsulates clock display logic:
@@ -23,22 +22,37 @@ export function useClockDisplay(clock: MaybeRefOrGetter<ClockState | null>) {
 	const untimedLabel = computed(() => toFeatureMatchDefaults(eventStore.displayEvent).untimedLabel.trim());
 	const showsClock = computed(() => !isUntimed.value || untimedLabel.value !== '');
 
-	// Single tick counter that forces reactivity updates while clock is running
+	/**
+	 * Advanced each time the running clock's display, or its expiry, is due to
+	 * change. Timed from server time rather than a free-running interval, so every
+	 * rendering of one clock (an overlay's fill and key, say) changes digit together.
+	 */
 	const tick = ref(0);
-	const { pause: pauseTick, resume: resumeTick } = useIntervalFn(
-		() => { tick.value++; },
-		1000,
-		{ immediate: false },
-	);
-
-	// Start/stop the tick interval based on clock running state
 	watch(
-		() => toValue(clock)?.isRunning,
-		(isRunning) => {
-			if (isRunning)
-				resumeTick();
-			else
-				pauseTick();
+		// By the fields that move the display, so a clock updated in place re-times too.
+		[
+			() => {
+				const held = toValue(clock);
+				return held && `${held.type}:${held.isRunning}:${held.lastStartedAt}:${held.elapsedMs}:${held.durationMs}`;
+			},
+			tick,
+		],
+		(_changed, _previous, onCleanup) => {
+			const held = toValue(clock);
+			if (!held)
+				return;
+			const now = getServerTime();
+			const untilDisplayChanges = clockDisplayNextChangeInMs(held, now);
+			if (untilDisplayChanges == null)
+				return;
+			const untilExpiry = held.type === 'countdown'
+				? held.durationMs - getEffectiveElapsedMs(held, now)
+				: 0;
+			const delay = untilExpiry > 0
+				? Math.min(untilDisplayChanges, untilExpiry)
+				: untilDisplayChanges;
+			const timer = setTimeout(() => tick.value++, delay);
+			onCleanup(() => clearTimeout(timer));
 		},
 		{ immediate: true },
 	);

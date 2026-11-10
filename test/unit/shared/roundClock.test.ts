@@ -65,19 +65,34 @@ describe('projectRoundClock', () => {
 		expect(projectRoundClock(timing, now)).toMatchObject(expected);
 	});
 
-	// A rendering re-evaluates exactly then: each whole second while running, the start while pending.
+	// Waking at the named moment shows a new time, and a millisecond sooner the old one:
+	// a rendering that wakes early holds a second twice and then skips one.
+	it.each([
+		['part-way through a second', 1500],
+		['on a whole second', 2000],
+		['a millisecond past a whole second', 2001],
+	] as const)('next changes exactly when its display does: %s', (_case, sinceStart) => {
+		const timing = { startedAt: START, durationMinutes: 50 };
+		const now = START + sinceStart;
+		const { display, nextChangeInMs } = projectRoundClock(timing, now);
+
+		expect(projectRoundClock(timing, now + nextChangeInMs! - 1).display).toBe(display);
+		expect(projectRoundClock(timing, now + nextChangeInMs!).display).not.toBe(display);
+	});
+
+	// A rendering re-evaluates exactly then: as each second's display runs out while running, the start while pending.
 	it.each([
 		[
 			'running, part-way through a second',
 			START,
 			START + 1500,
-			500,
+			501,
 		],
 		[
 			'running, on a whole second',
 			START,
 			START + 2000,
-			1000,
+			1,
 		],
 		[
 			'pending a start',
