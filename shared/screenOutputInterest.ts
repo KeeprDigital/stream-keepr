@@ -398,6 +398,10 @@ const OUTPUT_CHANGES: { [K in MessageType]: (payload: MessagePayload<K>) => read
 	'screen:command:refresh': () => NOTHING_AN_OUTPUT_SHOWS,
 	'screen:command:identify': () => NOTHING_AN_OUTPUT_SHOWS,
 	'screen:command:debug': () => NOTHING_AN_OUTPUT_SHOWS,
+
+	// What a Screen's channel tells its outputs of the changes above: no change of their own.
+	'output:eventContextChanged': () => NOTHING_AN_OUTPUT_SHOWS,
+	'output:modeDataChanged': () => NOTHING_AN_OUTPUT_SHOWS,
 };
 
 /**
@@ -445,6 +449,26 @@ function narrowingAdmits(narrowing: OutputFollowNarrowing, change: OutputChange,
 	});
 }
 
+/** What a Screen's mode declares for one kind, as its config narrows it: every such change, none, or those naming these ids. */
+function declaredFollow(screen: HearingScreen, kind: OutputChangeKind): boolean | OutputFollowNarrowing {
+	const follow = SCREEN_MODES[screen.mode].outputFollows[kind as DeclaredOutputChangeKind];
+	if (!follow)
+		return false;
+	return follow === true || follow(screen.config);
+}
+
+/**
+ * The Feature Match Slot whose seated Players narrow what a Screen hears of
+ * one kind of change, or `null` when none does. Who it seats is for the
+ * caller to read and pass as `ScreenHearsContext.slot`.
+ */
+export function seatedSlotOf(screen: HearingScreen, kind: OutputChangeKind): number | null {
+	const narrowed = declaredFollow(screen, kind);
+	return typeof narrowed === 'object' && narrowed.playerIds !== undefined && 'seatedIn' in narrowed.playerIds
+		? narrowed.playerIds.seatedIn
+		: null;
+}
+
 /**
  * Whether a Screen's output shows `change`, and so should re-read.
  *
@@ -462,10 +486,7 @@ export function screenHears<M extends ScreenMode>(
 	if ((EVERY_SCREEN_FOLLOWS as readonly OutputChangeKind[]).includes(change.kind))
 		return true;
 
-	const follow = SCREEN_MODES[screen.mode].outputFollows[change.kind as DeclaredOutputChangeKind];
-	if (!follow)
-		return false;
-	const narrowed = follow === true || follow(screen.config);
+	const narrowed = declaredFollow(screen, change.kind);
 	return typeof narrowed === 'boolean'
 		? narrowed
 		: narrowingAdmits(narrowed, change, context);

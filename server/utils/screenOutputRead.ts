@@ -2,13 +2,12 @@ import type { H3Event } from 'h3';
 import type { DbScreen } from '~~/server/db/schema';
 import type { ScreenOutputReader } from '~~/server/utils/screenOutputAuthorization';
 import type { ScreenMode } from '~~/shared/types/enums';
-import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { z } from 'zod';
 import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { screenService } from '~~/server/services/screen';
 import { screenOutputReader } from '~~/server/utils/screenOutputAuthorization';
-import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
+import { screenOutputFeatureMatchSlotId, screenOutputModeConfig } from '~~/server/utils/screenOutputSelection';
 
 const screenOutputReadParamsSchema = z.object({
 	id: eventIdParamSchema,
@@ -78,24 +77,6 @@ export async function requireScreenOutputModeRead<M extends ScreenMode>(event: H
 		...read,
 		config: screenOutputModeConfig(read.screen, mode),
 	};
-}
-
-/** The saved configuration of one mode, completed with its defaults as an output renders it. */
-export function screenOutputModeConfig<M extends ScreenMode>(screen: DbScreen, mode: M): ModeConfigTypeMap[M] {
-	return resolveScreenModeConfig(screen.modeConfigs, mode);
-}
-
-/** The Feature Match Slot the Screen's current mode shows, if that mode shows one: a Deck List Screen shows a side of one. */
-export function screenOutputFeatureMatchSlotId(screen: DbScreen): number | null {
-	if (screen.currentMode === 'deck') {
-		const source = screenOutputModeConfig(screen, 'deck').deckSource;
-		return source.type === 'featureMatchSlot'
-			? source.slotId
-			: null;
-	}
-	if (screen.currentMode !== 'feature-match' && screen.currentMode !== 'feature-match-overlay')
-		return null;
-	return screenOutputModeConfig(screen, screen.currentMode).featureMatchId ?? null;
 }
 
 /**

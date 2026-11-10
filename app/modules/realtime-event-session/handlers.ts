@@ -1,4 +1,4 @@
-import type { MessageType, screenCommandMessageTypes } from '~~/shared/types/messages';
+import type { MessageType, screenCommandMessageTypes, screenOutputMessageTypes } from '~~/shared/types/messages';
 import type { AcceptRealtimeMessage } from './types';
 import type { RealtimeHandler } from '~/types/realtime';
 import { createBroadcastDeckListRealtimeHandlers } from './broadcastDeckListHandlers';
@@ -19,9 +19,11 @@ interface EventRealtimeSessionHandlerOptions {
 	realtime: ReturnType<typeof useRealtime>;
 }
 
-type DirectChannelMessageType = (typeof screenCommandMessageTypes)[keyof typeof screenCommandMessageTypes];
+type DirectChannelMessageType
+	= | (typeof screenCommandMessageTypes)[keyof typeof screenCommandMessageTypes]
+		| (typeof screenOutputMessageTypes)[number];
 
-/** Every message on the Event room has a handler; Screen commands travel on their own channel. */
+/** Every message on the Event room has a handler; Screen commands and a Screen Output's own messages travel on the Screen's channel. */
 type EventRoomHandlers = { [K in Exclude<MessageType, DirectChannelMessageType>]: RealtimeHandler<K> };
 
 /**
