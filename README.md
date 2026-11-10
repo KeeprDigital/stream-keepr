@@ -401,6 +401,11 @@ Gotchas:
   and channels are named by Event id, so each server mints Event ids from its
   own block of a million (`integrationEventIdBlocks`); without that, two files
   hear each other's publications (#630).
+- **Only `*.realtime.test.ts` files reach Ably.** They run first, one at a
+  time, against the one server given the key. Every other file runs against a
+  server whose key is blank, so its writes open no channels on the account
+  production shares. A test that subscribes or needs a publish accepted belongs
+  in a `*.realtime.test.ts` file; anywhere else it fails on import, saying so.
 - **A failed integration test prints its requests.** The
   `[integration] requests during "…"` block lists each request with its time;
   on a timeout, the one marked `never returned` is the stall. It names the
