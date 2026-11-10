@@ -18,8 +18,9 @@
 #   - Not on draft PRs. `pnpm verify:quick` is the gate while a branch is in
 #     progress; marking the PR ready for review runs CI, the full gate, so
 #     nobody runs `pnpm verify` locally just to repeat it.
-#   - Only the jobs a change can affect: none for docs, no Worker build for
-#     tests or the other workflows alone. The `scope` job decides, measuring a PR
+#   - Only the jobs a change can affect: for docs alone, only the docs checks
+#     (`pnpm verify:docs`, in the `checks` job); no Worker build for tests or
+#     the other workflows alone. The `scope` job decides, measuring a PR
 #     against its base and a merge group against the queue's base
 #     (scripts/ci-scope.mjs); anything it cannot measure runs everything.
 #   - Not twice on the same tree. A merge group whose tree is byte-identical
@@ -72,6 +73,7 @@ jobs:
     outputs:
       code: ${{ steps.scope.outputs.code }}
       bundle: ${{ steps.scope.outputs.bundle }}
+      docs: ${{ steps.scope.outputs.docs }}
       verified-by: ${{ steps.scope.outputs.verified-by }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -93,7 +95,9 @@ jobs:
   checks:
     name: Lint, typecheck, unit and Nuxt suites
     needs: scope
-    if: needs.scope.outputs.code == 'true'
+    # Every step below runs for exactly one of the two: the code gates for a
+    # change that can affect the code, the docs checks for one that cannot.
+    if: needs.scope.outputs.code == 'true' || needs.scope.outputs.docs == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -102,14 +106,25 @@ jobs:
       # Cheap gates first so they fail fast. Neither cache is restored: a cold
       # run is the backstop for what the local per-file ESLint cache can miss
       # (README § Testing).
-      - run: pnpm lint
+      - if: needs.scope.outputs.code == 'true'
+        run: pnpm lint
       # Includes the silent-video validator Worker's own program (#618), and
       # fails when either committed worker-configuration.d.ts is stale.
-      - run: pnpm typecheck
+      - if: needs.scope.outputs.code == 'true'
+        run: pnpm typecheck
       # With --coverage, so the thresholds in vitest.shared.ts fail these steps
       # when coverage drops below them (#469).
-      - run: pnpm test:unit:coverage
-      - run: pnpm test:nuxt:coverage
+      - if: needs.scope.outputs.code == 'true'
+        run: pnpm test:unit:coverage
+      - if: needs.scope.outputs.code == 'true'
+        run: pnpm test:nuxt:coverage
+      # A docs-only change skips the gates above, but `pnpm lint` formats every
+      # document and the documentation test follows its links: unchecked, a
+      # bad document would fail the next code change instead (#1028). A step of
+      # this job, not a job of its own, so that a full run still has no skipped
+      # job: a merge group reuses only such a run (scripts/ci-reuse.mjs).
+      - if: needs.scope.outputs.docs == 'true'
+        run: pnpm verify:docs
 
   integration:
     name: Integration suite (${{ matrix.shard }}/2)

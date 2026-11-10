@@ -13,6 +13,7 @@
 	"scripts": {
 		"verify": "node scripts/verify.mjs",
 		"verify:quick": "node scripts/verify.mjs --quick",
+		"verify:docs": "eslint \"**/*.md\" && vitest run test/unit/docs/documentation.test.ts",
 		"build": "nuxt build",
 		"dev": "node scripts/reap-workerd.mjs && pnpm db:migrate && nuxt dev",
 		"dev:bypass": "STREAM_KEEPR_LOCAL_AUTH_BYPASS=true pnpm dev",
