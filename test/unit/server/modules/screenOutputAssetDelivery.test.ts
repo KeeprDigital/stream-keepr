@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createScreenOutputAssetDelivery } from '~~/server/modules/screen-output-assets';
+import {
+	createScreenOutputAssetDelivery,
+	SCREEN_OUTPUT_ASSET_CACHE_MAXIMUM_BYTES,
+} from '~~/server/modules/screen-output-assets';
 
 const signingKey = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 const sourceBytes = Uint8Array.of(10, 20, 30, 40, 50);
@@ -125,6 +128,30 @@ describe('screen Output exact Graphic Asset Revision delivery', () => {
 		expect(cacheRequest.url).not.toContain('revision-1');
 		expect(cacheRequest.url).not.toContain('internal-content-digest');
 		expect(cacheResponse.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+	});
+
+	// Filling the cache tees the body, and a tee holds whatever its slower
+	// reader has not taken. Only a body small enough to hold whole is teed.
+	it.each([
+		{ size: 'at the bound', byteLength: SCREEN_OUTPUT_ASSET_CACHE_MAXIMUM_BYTES, cachePuts: 1 },
+		{ size: 'over the bound', byteLength: SCREEN_OUTPUT_ASSET_CACHE_MAXIMUM_BYTES + 1, cachePuts: 0 },
+	])('delivers a full body $size and fills the cache $cachePuts time(s)', async ({ byteLength, cachePuts }) => {
+		inspect.mockResolvedValue({ outcome: 'available', byteLength, contentType: 'video/webm' });
+		resolve.mockResolvedValue({
+			...availableContent(),
+			byteLength,
+			contentType: 'video/webm',
+		});
+
+		const result = await delivery().deliver(request);
+
+		if (result.outcome !== 'delivered')
+			throw new Error('expected delivered response');
+		expect(result.response.status).toBe(200);
+		expect(result.response.headers.get('content-length')).toBe(String(byteLength));
+		expect(await responseBytes(result.response)).toEqual([10, 20, 30, 40, 50]);
+		await Promise.all(defer.mock.calls.map(([deferred]) => deferred));
+		expect(put).toHaveBeenCalledTimes(cachePuts);
 	});
 
 	it('returns a strong conditional 304 only after confirming bytes are available', async () => {

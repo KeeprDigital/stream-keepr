@@ -13,6 +13,7 @@ import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { deferred } from '~~/test/helpers/deferred';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 
 const {
@@ -194,15 +195,77 @@ const inputStub = defineComponent({
 	emits: ['update:modelValue'],
 	template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
 });
+/** Disabled while `loading`, as the real button is: a loading control cannot be clicked. */
 const buttonStub = defineComponent({
-	props: ['label', 'disabled'],
+	props: ['label', 'disabled', 'loading'],
 	emits: ['click'],
-	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')"><slot />{{ label }}</button>',
+	template: '<button type="button" :disabled="disabled || loading" @click="$emit(\'click\')"><slot />{{ label }}</button>',
 });
 const badgeStub = defineComponent({
 	props: ['label'],
 	template: '<span>{{ label }}<slot /></span>',
 });
+
+const ingestionOperations = '/api/graphics-assets/ingestion-operations';
+
+/** A local upload's operation as the library answers its initiation: nothing transferred yet. */
+function createdUpload(file: File, id = 'operation-upload'): GraphicsIngestionOperation {
+	return {
+		...completedOperation,
+		id: id as never,
+		name: file.name,
+		sourceFileName: file.name,
+		declaredMime: file.type,
+		declaredByteLength: file.size,
+		transferredByteLength: 0,
+		stage: 'created',
+		report: undefined,
+		result: undefined,
+	};
+}
+
+/** The same operation once the library has started a resumable transfer for it. */
+function startedMultipart(
+	created: GraphicsIngestionOperation,
+	maximumConcurrentParts = 1,
+): GraphicsIngestionOperation {
+	return {
+		...created,
+		stage: 'transferring',
+		transfer: {
+			method: 'multipart',
+			partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+			maximumConcurrentParts,
+			maximumPartAttempts: 3,
+			partCount: 2,
+			cleanupPending: false,
+			completedParts: [],
+		},
+	};
+}
+
+function cancelledUpload(operation: GraphicsIngestionOperation): GraphicsIngestionOperation {
+	return {
+		...operation,
+		stage: 'cancelled',
+		failure: {
+			code: 'ingestion-cancelled',
+			retryable: false,
+			message: 'Graphics ingestion was cancelled before publication.',
+		},
+	};
+}
+
+/** The network boundary for a request that never answers: it rejects once its signal aborts. */
+function pendingUntilAborted(request?: { signal?: AbortSignal }) {
+	return new Promise<never>((_resolve, reject) => {
+		request?.signal?.addEventListener('abort', () => reject(request.signal!.reason));
+	});
+}
+
+function buttonLabelled(wrapper: Awaited<ReturnType<typeof mountPage>>, label: string) {
+	return wrapper.findAll('button').find(button => button.text().includes(label));
+}
 
 async function mountPage() {
 	const { default: LibraryWorkspace } = await import('../../../../app/pages/graphics-assets/index.vue');
@@ -1062,6 +1125,255 @@ describe('the Graphics Asset Library Workspace', () => {
 	});
 
 	// A read's 401 means this browser is signed out too, so it lights the writes' banner (#360, #398).
+	// A running upload stays cancellable: the library is asked to cancel the
+	// operation and, once it has, the bytes still being sent are abandoned.
+	it.each([
+		{
+			transfer: 'single-request',
+			file: () => new File([jpegPixel], 'scoreboard.jpg', { type: 'image/jpeg' }),
+			carriesBytes: (path: string) => path.endsWith('/content'),
+		},
+		{
+			transfer: 'multipart',
+			file: () => new File(
+				[
+					new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1),
+				],
+				'large-scoreboard.png',
+				{ type: 'image/png' },
+			),
+			carriesBytes: (path: string) => path.includes('/multipart/parts/'),
+		},
+	])('cancels a $transfer upload while it is running', async ({ file, carriesBytes }) => {
+		const source = file();
+		const created = createdUpload(source);
+		const byteSignals: AbortSignal[] = [];
+		mockApiFetch.mockImplementation((path: string, request?: { method?: string; signal?: AbortSignal }) => {
+			if (carriesBytes(path)) {
+				byteSignals.push(request!.signal!);
+				return pendingUntilAborted(request);
+			}
+			if (request?.method === 'DELETE')
+				return Promise.resolve(cancelledUpload(created));
+			return Promise.resolve(path.endsWith('/multipart')
+				? startedMultipart(created)
+				: created);
+		});
+		const wrapper = await mountPage();
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', source);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
+		await flushPromises();
+		const cancel = buttonLabelled(wrapper, 'Cancel ingestion')!;
+		expect(cancel.attributes('disabled')).toBeUndefined();
+		await cancel.trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch).toHaveBeenCalledWith(
+			`${ingestionOperations}/operation-upload`,
+			{ method: 'DELETE' },
+		);
+		expect(byteSignals.map(signal => signal?.aborted)).toEqual([true]);
+		expect(wrapper.text()).toContain('stage cancelled');
+		expect(wrapper.find('[data-testid="upload-error"]').exists()).toBe(false);
+		// The source is still selected, so it can be uploaded afresh.
+		expect(wrapper.get('[data-testid="upload-image"]').attributes('disabled')).toBeUndefined();
+		expect(localStorage.getItem('graphics-asset-ingestion-operation')).toBeNull();
+	});
+
+	// A snapshot that lands late never takes the panel back from a terminal
+	// stage, nor away from the operation now on show. Here one part is refused,
+	// which ends the transfer while its sibling is still in flight.
+	it.each([
+		{
+			panelHolds: 'the cancelled operation',
+			uploadAgain: false,
+			shown: 'operation-a',
+			stage: 'stage cancelled',
+		},
+		{
+			panelHolds: 'a newer operation',
+			uploadAgain: true,
+			shown: 'operation-b',
+			stage: 'stage created',
+		},
+	])('keeps $panelHolds on show when a late part checkpoint arrives', async ({ uploadAgain, shown, stage }) => {
+		const source = new File(
+			[
+				new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1),
+			],
+			'large-scoreboard.png',
+			{ type: 'image/png' },
+		);
+		const first = createdUpload(source, 'operation-a');
+		const second = createdUpload(source, 'operation-b');
+		const latePart = deferred<GraphicsIngestionOperation>();
+		let initiations = 0;
+		mockApiFetch.mockImplementation((path: string, request?: { method?: string }) => {
+			if (path === ingestionOperations) {
+				return Promise.resolve(initiations++ === 0
+					? first
+					: second);
+			}
+			if (path.endsWith('/operation-a/multipart/parts/1'))
+				return Promise.reject(transportFailure({ status: 400 }));
+			if (path.endsWith('/operation-a/multipart/parts/2'))
+				return latePart.promise;
+			if (path.includes('/operation-b/'))
+				return new Promise(() => {});
+			if (request?.method === 'DELETE')
+				return Promise.resolve(cancelledUpload(first));
+			return Promise.resolve(path.endsWith('/multipart')
+				? startedMultipart(first, 2)
+				: first);
+		});
+		const wrapper = await mountPage();
+
+		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', source);
+		await flushPromises();
+		await wrapper.get('[data-testid="upload-image"]').trigger('click');
+		await flushPromises();
+		await buttonLabelled(wrapper, 'Cancel ingestion')!.trigger('click');
+		await flushPromises();
+		if (uploadAgain) {
+			await wrapper.get('[data-testid="upload-image"]').trigger('click');
+			await flushPromises();
+		}
+		latePart.resolve({
+			...startedMultipart(first, 2),
+			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+		});
+		await flushPromises();
+
+		const panel = wrapper.get('[data-testid="ingestion-operation"]');
+		expect(panel.attributes('data-operation-id')).toBe(shown);
+		expect(panel.text()).toContain(stage);
+	});
+
+	/** Readies upload, remote copy and replacement, so that each could be started. */
+	async function prepareEveryFlow(wrapper: Awaited<ReturnType<typeof mountPage>>) {
+		wrapper.getComponent(fileUploadStub).vm.$emit(
+			'update:modelValue',
+			new File([jpegPixel], 'scoreboard.jpg', { type: 'image/jpeg' }),
+		);
+		await wrapper.get('[data-testid="remote-source-url"]').setValue('https://cdn.example.com/logo.png');
+		await wrapper.get('[data-testid="remote-source-name"]').setValue('Remote logo');
+		await buttonLabelled(wrapper, 'Replace content')!.trigger('click');
+		wrapper.findAllComponents(fileUploadStub).at(-1)!.vm.$emit(
+			'update:modelValue',
+			new File([jpegPixel], 'replacement.jpg', { type: 'image/jpeg' }),
+		);
+		await flushPromises();
+	}
+
+	function flowControls(wrapper: Awaited<ReturnType<typeof mountPage>>) {
+		return {
+			upload: wrapper.get('[data-testid="upload-image"]'),
+			remoteCopy: wrapper.get('[data-testid="copy-remote-source"]'),
+			replacement: buttonLabelled(wrapper, 'Replace with new Graphic Asset Revision')!,
+		};
+	}
+
+	// One Graphics Ingestion Operation runs at a time: while one flow is in
+	// flight the others cannot start, and the page says so.
+	it.each(['upload', 'remoteCopy', 'replacement'] as const)(
+		'holds the other flows back while the %s flow is in flight',
+		async (flow) => {
+			const initiation = deferred<GraphicsIngestionOperation>();
+			mockApiFetch.mockReturnValue(initiation.promise);
+			const wrapper = await mountPage();
+			await prepareEveryFlow(wrapper);
+			const disabled = () => Object.entries(flowControls(wrapper))
+				.filter(([, control]) => control.attributes('disabled') !== undefined)
+				.map(([name]) => name);
+			expect(disabled()).toEqual([]);
+			expect(wrapper.find('[data-testid="ingestion-in-flight"]').exists()).toBe(false);
+
+			await flowControls(wrapper)[flow].trigger('click');
+			await flushPromises();
+
+			expect(disabled()).toEqual(['upload', 'remoteCopy', 'replacement']);
+			expect(wrapper.get('[data-testid="ingestion-in-flight"]').attributes('role')).toBe('status');
+
+			initiation.reject(transportFailure({ status: 503 }));
+			await flushPromises();
+
+			expect(disabled()).toEqual([]);
+			expect(wrapper.find('[data-testid="ingestion-in-flight"]').exists()).toBe(false);
+		},
+	);
+
+	// A remote copy that publishes clears its own form, not a local upload the
+	// author has prepared beside it.
+	it('keeps a prepared local upload when a remote copy completes', async () => {
+		const copied: GraphicsIngestionOperation = {
+			...completedOperation,
+			id: 'operation-remote' as never,
+			source: 'remote-copy',
+			name: 'Remote logo',
+		};
+		mockApiFetch.mockResolvedValue(copied);
+		const wrapper = await mountPage();
+		await prepareEveryFlow(wrapper);
+
+		await flowControls(wrapper).remoteCopy.trigger('click');
+		await flushPromises();
+
+		expect(wrapper.get('[data-testid="ingestion-operation"]').text()).toContain('stage completed');
+		expect(flowControls(wrapper).upload.attributes('disabled')).toBeUndefined();
+		expect(flowControls(wrapper).remoteCopy.attributes('disabled')).toBeDefined();
+	});
+
+	// A failed upload that staged nothing has no bytes to retry from: the
+	// library takes the source again, so Retry sends it rather than POSTing /retry.
+	it.each([
+		{
+			selected: true,
+			sent: [`PUT ${ingestionOperations}/operation-upload/content`],
+			error: false,
+		},
+		{ selected: false, sent: [], error: true },
+	])('re-sends the source for a failed upload that staged nothing (source selected: $selected)', async ({ selected, sent, error }) => {
+		const source = new File([jpegPixel], 'scoreboard.jpg', { type: 'image/jpeg' });
+		const failed: GraphicsIngestionOperation = {
+			...createdUpload(source),
+			stage: 'failed',
+			failure: {
+				code: 'staging-unavailable',
+				retryable: true,
+				message: 'Staging byte storage was interrupted.',
+			},
+		};
+		localStorage.setItem('graphics-asset-ingestion-operation', failed.id);
+		mockApiFetch.mockImplementation((_path: string, request?: { method?: string }) =>
+			Promise.resolve(request?.method === 'PUT'
+				? { ...completedJpegOperation, id: failed.id }
+				: failed));
+		const wrapper = await mountPage();
+		await flushPromises();
+		if (selected) {
+			wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', source);
+			await flushPromises();
+		}
+
+		expect(wrapper.text()).not.toContain('Retry from staged bytes');
+		await buttonLabelled(wrapper, 'Send the source again')!.trigger('click');
+		await flushPromises();
+
+		expect(mockApiFetch.mock.calls
+			.filter(([, request]) => request?.method)
+			.map(([path, request]) => `${request.method} ${path}`)).toEqual(sent);
+		expect(wrapper.find('[data-testid="upload-error"]').exists()).toBe(error);
+		if (error) {
+			expect(wrapper.get('[data-testid="upload-error"]').text())
+				.toContain('Reselect the same source file');
+		}
+		else {
+			expect(wrapper.get('[data-testid="ingestion-operation"]').text()).toContain('stage completed');
+		}
+	});
+
 	it('names the ended session when the library listing answers 401, exactly as the writes do', async () => {
 		listingError.value = transportFailure({
 			status: 401,
