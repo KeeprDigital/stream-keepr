@@ -227,22 +227,49 @@ describe('solveCardGrid', () => {
 		},
 		{
 			name: 'a set column count binds on the width',
-			input: { count: 10, width: 1036, height: 5000, columns: 5, gap: 9 },
-			expected: { columns: 5, rows: 2, cardWidth: 200, gap: 9 },
+			input: {
+				count: 10,
+				width: 1036,
+				height: 5000,
+				columns: 5,
+				gap: 9,
+			},
+			expected: {
+				columns: 5,
+				rows: 2,
+				cardWidth: 200,
+				gap: 9,
+			},
 		},
 		{
 			name: 'a max card size leaves the rest of the space empty',
-			input: { count: 3, width: 1920, height: 1080, maxCardWidth: 122 },
+			input: {
+				count: 3,
+				width: 1920,
+				height: 1080,
+				maxCardWidth: 122,
+			},
 			expected: { columns: 3, rows: 1, cardWidth: 122 },
 		},
 		{
 			name: 'Auto columns go past twelve when the cards are largest there',
-			input: { count: 16, width: 3840, height: 300, gap: 0 },
+			input: {
+				count: 16,
+				width: 3840,
+				height: 300,
+				gap: 0,
+			},
 			expected: { columns: 16, rows: 1 },
 		},
 		{
 			name: 'a page of at most two rows',
-			input: { count: 60, width: 1920, height: 1080, gap: 12, maxRows: 2 },
+			input: {
+				count: 60,
+				width: 1920,
+				height: 1080,
+				gap: 12,
+				maxRows: 2,
+			},
 			expected: { columns: 5, rows: 2 },
 		},
 		{

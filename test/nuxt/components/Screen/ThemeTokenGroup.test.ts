@@ -3,10 +3,9 @@ import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, h, ref } from 'vue';
+import { defineComponent, h } from 'vue';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { fakeScreenThemeNetwork, overrideWrites, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
-import ScreenSettingsCard from '~/components/Screen/SettingsCard.vue';
 import ThemeTokenGroup from '~/components/Screen/ThemeTokenGroup.vue';
 
 // A Screen Settings Group renders the Mode Tokens that name it under "Look",

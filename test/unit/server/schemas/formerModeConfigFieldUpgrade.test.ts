@@ -25,8 +25,12 @@ vi.mock('~~/shared/screenModeConfigs/roundClock', async (importOriginal) => {
  * PATCH of another field drops the former one from storage.
  */
 describe('a Screen storing a former field its contract upgrades', () => {
-	const stored = { 'round-clock': { limitMinutes: 5, showRoundName: false } };
-	const upgraded = { 'round-clock': { countUpLimitMinutes: 5, showRoundName: false } };
+	const stored = {
+		'round-clock': { limitMinutes: 5, showRoundName: false },
+	};
+	const upgraded = {
+		'round-clock': { countUpLimitMinutes: 5, showRoundName: false },
+	};
 
 	it('reads as the current field, everywhere it is read', () => {
 		expect(resolveScreenModeConfig(stored, 'round-clock')).toMatchObject(upgraded['round-clock']);
@@ -39,10 +43,26 @@ describe('a Screen storing a former field its contract upgrades', () => {
 	});
 
 	it.each([
-		{ name: 'naming the former field stores the current one', patch: { limitMinutes: 7 }, patched: { countUpLimitMinutes: 7, showRoundName: false } },
-		{ name: 'of another field keeps the upgraded value', patch: { showRoundName: true }, patched: { countUpLimitMinutes: 5, showRoundName: true } },
-		{ name: 'of the current field replaces the upgraded value', patch: { countUpLimitMinutes: 9 }, patched: { countUpLimitMinutes: 9, showRoundName: false } },
-		{ name: 'deleting the current field is not undone by the stored former one', patch: { countUpLimitMinutes: null }, patched: { showRoundName: false } },
+		{
+			name: 'naming the former field stores the current one',
+			patch: { limitMinutes: 7 },
+			patched: { countUpLimitMinutes: 7, showRoundName: false },
+		},
+		{
+			name: 'of another field keeps the upgraded value',
+			patch: { showRoundName: true },
+			patched: { countUpLimitMinutes: 5, showRoundName: true },
+		},
+		{
+			name: 'of the current field replaces the upgraded value',
+			patch: { countUpLimitMinutes: 9 },
+			patched: { countUpLimitMinutes: 9, showRoundName: false },
+		},
+		{
+			name: 'deleting the current field is not undone by the stored former one',
+			patch: { countUpLimitMinutes: null },
+			patched: { showRoundName: false },
+		},
 	])('a PATCH $name', ({ patch, patched }) => {
 		const parsed = modeConfigPatchSchemaMap['round-clock'].parse(patch) as Record<string, unknown>;
 

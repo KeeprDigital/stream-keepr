@@ -2,7 +2,7 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, h, nextTick, reactive, ref } from 'vue';
+import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { media } from '~~/test/helpers/graphicsComposition';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';

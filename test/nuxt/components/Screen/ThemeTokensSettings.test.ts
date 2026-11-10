@@ -28,7 +28,10 @@ beforeEach(() => {
 async function mountSection(mode: ScreenMode, themeOverrides: StoredThemeTokens = {}) {
 	const screen = seedThemedScreen(mode, themeOverrides);
 	const wrapper = mount(ThemeTokensSettings, {
-		props: { screen: screen(), eventId: 1 },
+		props: {
+			screen: screen(),
+			eventId: 1,
+		},
 		global: {
 			stubs: { ...nuxtUiStubs, ScreenSettingsCard: ScreenSettingsCardStub },
 		},

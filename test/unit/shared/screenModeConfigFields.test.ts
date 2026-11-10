@@ -179,11 +179,31 @@ describe('a config contract upgrading its former fields', () => {
 	});
 
 	it.each([
-		{ name: 'maps a former field to its current field', stored: { view: 'top', topCount: 4, headerText: 'Top 4' }, reads: { view: 'range', rangeEnd: 4, headerText: 'Top 4' } },
-		{ name: 'maps a former value of a current field', stored: { view: 'top' }, reads: { view: 'range', rangeEnd: 8 } },
-		{ name: 'clamps what the upgrade produced', stored: { view: 'top', topCount: 9999 }, reads: { view: 'range', rangeEnd: 500 } },
-		{ name: 'drops a former field the upgrade left', stored: { view: 'all', topCount: 4 }, reads: { view: 'all' } },
-		{ name: 'reads an upgraded fragment as it is', stored: { view: 'range', rangeEnd: 4 }, reads: { view: 'range', rangeEnd: 4 } },
+		{
+			name: 'maps a former field to its current field',
+			stored: { view: 'top', topCount: 4, headerText: 'Top 4' },
+			reads: { view: 'range', rangeEnd: 4, headerText: 'Top 4' },
+		},
+		{
+			name: 'maps a former value of a current field',
+			stored: { view: 'top' },
+			reads: { view: 'range', rangeEnd: 8 },
+		},
+		{
+			name: 'clamps what the upgrade produced',
+			stored: { view: 'top', topCount: 9999 },
+			reads: { view: 'range', rangeEnd: 500 },
+		},
+		{
+			name: 'drops a former field the upgrade left',
+			stored: { view: 'all', topCount: 4 },
+			reads: { view: 'all' },
+		},
+		{
+			name: 'reads an upgraded fragment as it is',
+			stored: { view: 'range', rangeEnd: 4 },
+			reads: { view: 'range', rangeEnd: 4 },
+		},
 	])('$name, on a read and on a write', ({ stored, reads }) => {
 		expect(contract.readStored(stored)).toEqual(reads);
 		expect(contract.readStored(contract.upgradeStored(stored))).toEqual(reads);
@@ -197,7 +217,12 @@ describe('a config contract upgrading its former fields', () => {
 		expect(contract.upgradeStored(stored)).toBe(stored);
 	});
 
-	it.each([null, undefined, 'top', ['top']])('leaves %j, which is no fragment, to the schema', (value) => {
+	it.each([
+		null,
+		undefined,
+		'top',
+		['top'],
+	])('leaves %j, which is no fragment, to the schema', (value) => {
 		expect(contract.upgradeStored(value)).toBe(value);
 	});
 });

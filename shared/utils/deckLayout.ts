@@ -69,8 +69,11 @@ type Board = DeckLayoutGridBoard | DeckLayoutStackBoard;
 function columnChoices(board: Board | null): (number | null)[] {
 	if (!board || board.view === 'stack')
 		return [null];
-	if (board.columns !== null)
-		return [Math.max(1, Math.floor(board.columns))];
+	if (board.columns !== null) {
+		return [
+			Math.max(1, Math.floor(board.columns)),
+		];
+	}
 	return Array.from({
 		length: Math.max(1, board.count),
 	}, (_, index) => index + 1);
@@ -123,7 +126,9 @@ function widestCard(input: DeckLayoutInput, mainColumns: number | null, sideColu
 	const between = boards.length > 1
 		? input.boardGap
 		: 0;
-	const bounds: number[] = [maxCardWidthOf(input)];
+	const bounds: number[] = [
+		maxCardWidthOf(input),
+	];
 
 	if (input.placement === 'beside' || boards.length === 1) {
 		// Across: every board's columns side by side; a stack is one card wide.

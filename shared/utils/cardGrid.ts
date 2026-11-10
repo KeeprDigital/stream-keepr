@@ -51,7 +51,10 @@ export interface GapTerms {
 
 export function gapTerms(gap: number | null | undefined, autoRatio: number = AUTO_GAP_RATIO): GapTerms {
 	return typeof gap === 'number'
-		? { fixed: Math.max(0, gap), ratio: 0 }
+		? {
+				fixed: Math.max(0, gap),
+				ratio: 0,
+			}
 		: { fixed: 0, ratio: autoRatio };
 }
 
