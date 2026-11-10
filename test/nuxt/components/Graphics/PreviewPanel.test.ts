@@ -361,7 +361,9 @@ describe('graphicsPreviewPanel', () => {
 		function mountWithAnimation(props: Record<string, unknown> = {}) {
 			return mount(PreviewPanel, {
 				props: { canvasWidth: 1920, canvasHeight: 1080, ...props },
-				slots: { animation: () => h('p', { 'data-testid': 'host-animation' }) },
+				slots: {
+					animation: () => h('p', { 'data-testid': 'host-animation' }),
+				},
 				global,
 				attachTo: document.body,
 			});

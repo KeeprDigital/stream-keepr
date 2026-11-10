@@ -1,7 +1,7 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import SaveState from '~/components/Graphics/SaveState.vue';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import SaveState from '~/components/Graphics/SaveState.vue';
 
 // The one save-state display of both graphics editors: what each answer of the
 // authored save reads as, and who sees it.
@@ -11,7 +11,10 @@ enableAutoUnmount(afterEach);
 type SaveStateValue = 'idle' | 'saving' | 'committed' | 'failed';
 
 function mountSaveState(props: { saveState: SaveStateValue; saveError?: string | null; writable: boolean }) {
-	return mount(SaveState, { props, global: { stubs: nuxtUiStubs } });
+	return mount(SaveState, {
+		props,
+		global: { stubs: nuxtUiStubs },
+	});
 }
 
 const display = '[data-testid="graphics-save-state"]';
@@ -19,11 +22,31 @@ const retry = '[data-testid="graphics-save-retry"]';
 
 describe('graphicsSaveState', () => {
 	it.each<{ saveState: SaveStateValue; saveError: string | null; text: string; retry: boolean }>([
-		{ saveState: 'saving', saveError: null, text: 'Saving…', retry: false },
-		{ saveState: 'committed', saveError: null, text: 'Saved', retry: false },
+		{
+			saveState: 'saving',
+			saveError: null,
+			text: 'Saving…',
+			retry: false,
+		},
+		{
+			saveState: 'committed',
+			saveError: null,
+			text: 'Saved',
+			retry: false,
+		},
 		// The authority's own sentence: a refusal names the path it refused.
-		{ saveState: 'failed', saveError: 'Graphic Asset Reference at layout.frame.asset is not selectable', text: 'Graphic Asset Reference at layout.frame.asset is not selectable', retry: true },
-		{ saveState: 'failed', saveError: null, text: 'The last save failed.', retry: true },
+		{
+			saveState: 'failed',
+			saveError: 'Graphic Asset Reference at layout.frame.asset is not selectable',
+			text: 'Graphic Asset Reference at layout.frame.asset is not selectable',
+			retry: true,
+		},
+		{
+			saveState: 'failed',
+			saveError: null,
+			text: 'The last save failed.',
+			retry: true,
+		},
 	])('tells the lease holder a $saveState save as "$text"', ({ saveState, saveError, text, retry: offersRetry }) => {
 		const wrapper = mountSaveState({ saveState, saveError, writable: true });
 
