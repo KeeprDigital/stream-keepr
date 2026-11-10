@@ -7,6 +7,7 @@ import type {
 	RoundResponse,
 	TalentResponse,
 } from '../api';
+import type { OutputChangeKind } from '../screenOutputInterest';
 import type { BroadcastDeckListSummaryResponse } from './broadcastDeckList';
 import type {
 	BroadcastGraphicsCommandAppliedPayload,
@@ -429,6 +430,21 @@ export interface MessageDefinitions {
 		screenId: number;
 	};
 
+	/*
+	 * What a Screen Output is told on its own Screen's channel, beside the
+	 * messages of its Screen forwarded there unchanged. Each says only that
+	 * something changed: the output re-reads it through its Screen (ADR-0022).
+	 */
+
+	/** The Event context the Screen renders in changed: its Event, or the Event's Theme. */
+	'output:eventContextChanged': Record<never, never>;
+
+	/** Event Data the Screen's current mode shows changed, in these kinds of Output Change. */
+	'output:modeDataChanged': {
+		screenId: number;
+		causes: OutputChangeKind[];
+	};
+
 }
 
 // Extract message types from the definitions
@@ -440,9 +456,16 @@ export const screenCommandMessageTypes = {
 	debug: 'screen:command:debug',
 } as const satisfies Record<ScreenCommand, MessageType>;
 
-export const directChannelMessageTypes = new Set<MessageType>(
-	Object.values(screenCommandMessageTypes),
-);
+/** The messages only a Screen's own channel carries, which tell its outputs to re-read. */
+export const screenOutputMessageTypes = [
+	'output:eventContextChanged',
+	'output:modeDataChanged',
+] as const satisfies readonly MessageType[];
+
+export const directChannelMessageTypes = new Set<MessageType>([
+	...Object.values(screenCommandMessageTypes),
+	...screenOutputMessageTypes,
+]);
 
 // Extract payload types for each message type
 export type MessagePayload<T extends MessageType> = MessageDefinitions[T];

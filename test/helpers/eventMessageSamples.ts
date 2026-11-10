@@ -167,6 +167,11 @@ export function eventMessageSamples(ids: EventMessageSampleIds): { [K in Message
 		'screen:command:refresh': { screenId: ids.screenId },
 		'screen:command:identify': { screenId: ids.screenId },
 		'screen:command:debug': { screenId: ids.screenId },
+		'output:eventContextChanged': {},
+		'output:modeDataChanged': {
+			screenId: ids.screenId,
+			causes: ['player'],
+		},
 	};
 	return samples as unknown as { [K in MessageType]: MessagePayload<K> };
 }
