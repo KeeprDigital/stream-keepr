@@ -185,19 +185,6 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 			property: 'borderLeftColor',
 			config: { viewMode: 'chart' },
 		},
-		...Object.fromEntries(CHART_SLOTS.map(slot => [
-			`chart-series-${slot}`,
-			{
-				selector: `[data-color-slot="${slot}"]`,
-				property: 'backgroundColor',
-				config: { viewMode: 'chart' },
-			},
-		])),
-		'chart-other': {
-			selector: '[data-color-slot="other"]',
-			property: 'backgroundColor',
-			config: { viewMode: 'chart' },
-		},
 		'max-width': { selector: '[data-testid="metagame-content"]', property: 'maxWidth' },
 		'row-motion': { selector: '.metagame-row', motionProperties: '--metagame-row' },
 	},
@@ -1105,8 +1092,48 @@ describe('a Theme\'s shadow', () => {
 	});
 });
 
-// Metagame's chart bars grow and shrink on its rows' motion timing.
+// Metagame's chart reads the Theme's chart palette directly, the `series-1` …
+// `series-8` and `series-other` Foundation Tokens its Screen host sets, and its
+// bars grow and shrink on its rows' motion timing.
 describe('a Metagame Screen\'s chart', () => {
+	const SERIES = [
+		...CHART_SLOTS.map(slot => ({ token: `series-${slot}`, slot: String(slot) })),
+		{ token: 'series-other', slot: 'other' },
+	];
+	const fill = (slot: string): Probe => ({
+		selector: `[data-color-slot="${slot}"]`,
+		property: 'backgroundColor',
+		config: { viewMode: 'chart' },
+	});
+
+	it.each(SERIES)('fills slot $slot from the Theme\'s $token', async ({ token, slot }) => {
+		const probe = fill(slot);
+		await mountMode('metagame', { [token]: 'rgb(12, 34, 56)' }, { config: probe.config });
+		await shown(probe);
+
+		expect(painted(probe, 'color')).toBe('rgb(12, 34, 56)');
+	});
+
+	it.each(SERIES)('fills slot $slot as the Default Theme ships $token when its Event has no Theme', async ({ token, slot }) => {
+		const probe = fill(slot);
+		await mountMode('metagame', undefined, { config: probe.config });
+		await shown(probe);
+
+		expect(painted(probe, 'color')).toBe(FOUNDATION_TOKENS[token as 'series-1'].default);
+	});
+
+	// A former token is read by nothing, wherever it is still stored.
+	it.each([
+		['its Theme', { theme: { 'metagame.chart-series-1': 'rgb(9, 9, 9)' }, themeOverrides: {} }],
+		['its Screen Theme Overrides', { theme: {}, themeOverrides: { 'metagame.chart-series-1': 'rgb(9, 9, 9)' } }],
+	])('ignores a former chart Mode Token stored in %s', async (_case, { theme, themeOverrides }) => {
+		const probe = fill('1');
+		await mountMode('metagame', { ...theme, 'series-1': 'rgb(12, 34, 56)' }, { config: probe.config, themeOverrides });
+		await shown(probe);
+
+		expect(painted(probe, 'color')).toBe('rgb(12, 34, 56)');
+	});
+
 	it('times its bars by row-motion', async () => {
 		const bar = {
 			selector: '[data-color-slot="1"]',
@@ -1128,16 +1155,6 @@ describe('a Foundation Token a Mode Token\'s default names', () => {
 			token: 'surface',
 			part: 'a built-in preset\'s Frame',
 			probe: { selector: '.feature-match-overlay__frame-fill', attribute: 'fill' },
-		},
-		{
-			mode: 'metagame',
-			token: 'series-1',
-			part: 'the first chart series',
-			probe: {
-				selector: '[data-color-slot="1"]',
-				property: 'backgroundColor',
-				config: { viewMode: 'chart' },
-			},
 		},
 	] satisfies Array<{ mode: ScreenMode; token: string; part: string; probe: Probe }>;
 
@@ -1211,6 +1228,22 @@ describe('a library font in the Theme', () => {
 		await flushPromises();
 
 		expect(painted(title, 'typography')).toMatchObject({ fontFamily: 'stream-keepr-graphic-asset-asset-brand-face-revision-2' });
+	});
+
+	// The fonts a display may read are the Theme's `heading` and `body`, whichever Mode Tokens its mode declares.
+	it.each(['heading', 'body'] as const)('loads the Theme\'s %s face on a mode declaring no typography Mode Token', async (token) => {
+		await mountMode('card', {
+			[token]: {
+				...FOUNDATION_TOKENS[token].default,
+				font: {
+					kind: 'asset',
+					reference: testGraphicAssetReference('asset-brand-face', 'revision-1'),
+				},
+			},
+		});
+		await vi.waitFor(() => expect(wrapper!.get('.screen-renderer').attributes('data-font-ready')).toBe('true'));
+
+		expect(fonts.constructed.map(face => face.family)).toEqual(['stream-keepr-graphic-asset-asset-brand-face-revision-1']);
 	});
 });
 

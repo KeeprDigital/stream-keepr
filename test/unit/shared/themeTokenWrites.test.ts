@@ -213,7 +213,7 @@ describe('a Theme Token write', () => {
 			'unknown-token',
 		],
 		[
-			'a former or misspelt Mode Token',
+			'a misspelt Mode Token',
 			'standings.nonsense',
 			'#fff',
 			'unknown-token',
@@ -345,5 +345,14 @@ describe('a Theme Token write', () => {
 		],
 	])('refuses %s', (_case, name, value, refusal) => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: false, refusal });
+	});
+
+	// A former token is one its mode declared once: accepted whatever it holds, and never stored.
+	it.each([
+		['a value it once held', 'metagame.chart-series-1', '#ff0000'],
+		['a reference it once held', 'metagame.chart-other', { token: 'accent' }],
+		['a value it could never hold', 'metagame.chart-series-8', 12],
+	])('accepts a former token given %s, and drops it', (_case, name, value) => {
+		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, dropped: true });
 	});
 });
