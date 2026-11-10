@@ -16,6 +16,7 @@ import {
 	createPackageLibrary,
 	exportPackage,
 	ingestPackageImage as ingestImage,
+	ingestPackageSilentVideo as ingestSilentVideo,
 	ingestPackageStaticFont as ingestStaticFont,
 	installPackage as install,
 	installationOf,
@@ -45,7 +46,6 @@ function createLibrary(
 					return override ?? Reflect.get(target, property, receiver);
 				},
 			}),
-			silentVideoPlaybackValidator: undefined,
 			now: () => new Date('2026-07-31T09:00:00.000Z'),
 		}),
 		catalogue,
@@ -59,6 +59,62 @@ async function activeAssets(library: Library): Promise<GraphicAsset[]> {
 }
 
 describe('the Template Package installation contract', () => {
+	// The validator proves the staged source of the operation it is given; a
+	// packaged video is one entry of the staged archive, never that archive.
+	it('installs a packaged silent video the validator proved from its own staged bytes', async () => {
+		const { library: sender } = createLibrary('sender');
+		const motion = await ingestSilentVideo(sender, 'Motion');
+		const archive = await exportPackage(sender, {
+			assets: [
+				{ slot: 'motion', reference: motion },
+			],
+		});
+
+		const { library: receiver, staging } = createLibrary('receiver');
+		const completed = await install(receiver, archive);
+
+		expect(completed.failure).toBeUndefined();
+		expect(completed.stage).toBe('completed');
+		expect(installationOf(completed).assets).toEqual([
+			expect.objectContaining({
+				outcome: 'created',
+				name: 'Motion',
+				kind: 'silent-video',
+				compatibilityProfile: 'silent-video-v1',
+			}),
+		]);
+		// Neither the archive nor the copy staged for the validator outlives it.
+		const left = await staging.list({ prefix: 'ingestion/' });
+		expect(left.outcome === 'listed' && left.listing.objects).toEqual([]);
+	});
+
+	// A retryable failure keeps the archive staged for the retry, and nothing else.
+	// The validator answers "still running" long before a long video is proven, and
+	// reads the copy after that: taking it away then strands the validation.
+	it('keeps the staged copy of a packaged silent video whose validation has not answered yet', async () => {
+		const { library: sender } = createLibrary('sender');
+		const motion = await ingestSilentVideo(sender, 'Motion');
+		const archive = await exportPackage(sender, {
+			assets: [
+				{ slot: 'motion', reference: motion },
+			],
+		});
+
+		const { library: receiver, staging } = createPackageLibrary('receiver', {
+			silentVideoPlaybackValidator: {
+				validate: async () => ({ outcome: 'unavailable', retryable: true }),
+			},
+		});
+		const failed = await preflight(receiver, archive);
+
+		expect(failed.failure).toMatchObject({ code: 'validation-runtime-unavailable', retryable: true });
+		const left = await staging.list({ prefix: 'ingestion/' });
+		expect(left.outcome === 'listed' && left.listing.objects.map(object => object.identity).sort()).toEqual([
+			`ingestion/${failed.id}-packaged-video/source`,
+			`ingestion/${failed.id}/source`,
+		]);
+	});
+
 	it('installs a Template and its assets into a library that holds neither', async () => {
 		const { library: sender } = createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');

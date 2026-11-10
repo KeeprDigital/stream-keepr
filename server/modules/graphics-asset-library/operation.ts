@@ -37,7 +37,25 @@ export function stagedIngestionObjectIdentities(operationId: GraphicsIngestionOp
 	return [
 		graphicsObjectIdentity(`ingestion/${operationId}/source`),
 		graphicsObjectIdentity(`ingestion/${operationId}/video-poster`),
+		graphicsObjectIdentity(`ingestion/${templatePackageVideoWorkingCopyOperationId(operationId)}/source`),
 	];
+}
+
+/**
+ * The staged working copy of the one packaged silent video a Template Package
+ * operation is validating.
+ *
+ * The pinned validation runtime reads the whole staged source of the operation
+ * it is given, and a package's staged source is the archive, not the video. So
+ * each video entry is copied out under this reserved operation name, where the
+ * runtime reads it exactly as it reads an uploaded one. The copy is one of the
+ * objects the package operation owns, so every release of its staged input
+ * reclaims a copy an interrupted preflight left behind.
+ */
+export function templatePackageVideoWorkingCopyOperationId(
+	operationId: GraphicsIngestionOperationId,
+): GraphicsIngestionOperationId {
+	return `${operationId}-packaged-video` as GraphicsIngestionOperationId;
 }
 
 /**
