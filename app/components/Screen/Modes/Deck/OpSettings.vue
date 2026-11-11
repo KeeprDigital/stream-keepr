@@ -153,7 +153,6 @@ const headerCardSummary = computed(() => settingsSummary([
 		props.config.showDeckName !== false && 'Leader',
 		props.config.showDeckColors !== false && 'colours',
 	].filter(Boolean).join(', ') || 'Nothing shown',
-	look('header'),
 ]));
 const detailsSummary = computed(() => settingsSummary([
 	look('deck-details', 'pointed-cards'),
@@ -164,9 +163,6 @@ const mainboardSummary = computed(() => settingsSummary([
 		: 'Fit',
 	props.config.showCostCurve !== false && 'Cost curve',
 ]));
-const cardLookSummary = computed(() => settingsSummary([
-	look('card-look'),
-], FOLLOWS_THE_THEME));
 const badgesSummary = computed(() => settingsSummary([
 	props.config.showQuantities
 		? 'Quantity badge'
@@ -258,8 +254,6 @@ onMounted(async () => {
 				description="The Leader's colours, beside its name."
 				@update:model-value="emit('update', { showDeckColors: $event === true })"
 			/>
-
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
 		</ScreenSettingsSection>
 
 		<!-- No One Piece control sits in these groups, but their Mode Tokens are the Deck List's, so their Looks are here. -->
@@ -295,15 +289,6 @@ onMounted(async () => {
 				grid-name="Mainboard"
 				@update="updateLayout($event)"
 			/>
-		</ScreenSettingsSection>
-
-		<ScreenSettingsSection
-			id="deck:card-look"
-			title="Card Look"
-			subtitle="How the Deck List's cards read."
-			:summary="cardLookSummary"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="card-look" />
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection id="deck:card-badges" title="Card Badges" :summary="badgesSummary">

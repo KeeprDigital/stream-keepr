@@ -8,7 +8,7 @@ import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
-import { FOLLOWS_THE_THEME, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -311,7 +311,6 @@ const headerCardSummary = computed(() => settingsSummary([
 		config.value.showDeckName !== false && (isBroadcastSource.value ? 'archetype' : 'deck name'),
 		config.value.showDeckColors !== false && 'colours',
 	].filter(Boolean).join(', ') || 'Nothing shown',
-	look('header'),
 ]));
 const detailsSummary = computed(() => settingsSummary([
 	showsDetailsRow.value
@@ -335,9 +334,6 @@ function boardSummary(section: BoardSection): string {
 	]);
 }
 
-const cardLookSummary = computed(() => settingsSummary([
-	look('card-look'),
-], FOLLOWS_THE_THEME));
 const badgesSummary = computed(() => {
 	const shown = [
 		config.value.showQuantities && 'Quantity',
@@ -428,8 +424,6 @@ const badgesSummary = computed(() => {
 				description="The deck's mana colours, beside its name."
 				@update:model-value="updateConfig({ showDeckColors: $event === true })"
 			/>
-
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection id="deck:deck-details" title="Deck Details" :summary="detailsSummary">
@@ -569,15 +563,6 @@ const badgesSummary = computed(() => {
 					@update:model-value="$event !== null && updateBoardLayout(section.key, { listColumns: Number($event) })"
 				/>
 			</template>
-		</ScreenSettingsSection>
-
-		<ScreenSettingsSection
-			id="deck:card-look"
-			title="Card Look"
-			subtitle="How both boards' cards read."
-			:summary="cardLookSummary"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="card-look" />
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection id="deck:card-badges" title="Card Badges" :summary="badgesSummary">

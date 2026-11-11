@@ -2,7 +2,7 @@
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import { useElementSize } from '@vueuse/core';
 import { fitColumns } from '~~/shared/utils/cardGrid';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
 const { config, error, ready, isEmpty, headerText, pageEntries, currentPage, totalPages, pageCapacity } = useTopCardsModeData(useScreenContext());
@@ -37,17 +37,17 @@ const rows = computed(() => Math.ceil(pageCapacity.value / (typeof columns.value
 
 /** Set on the root, so a card without an image takes it. */
 const displayStyle = {
-	...modeTypographyStyle('top-cards', 'name-typography'),
-	color: modeTokenVar('top-cards', 'name-text'),
+	...foundationTypographyStyle('body'),
+	color: foundationTokenVar('text-primary'),
 };
 const titleStyle = {
-	...modeTypographyStyle('top-cards', 'title-typography'),
-	color: modeTokenVar('top-cards', 'title-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-primary'),
 };
 /** Over the shared page indicator's own face. */
 const pageIndicatorStyle = {
-	...modeTypographyStyle('top-cards', 'name-typography'),
-	color: modeTokenVar('top-cards', 'page-indicator-text'),
+	...foundationTypographyStyle('body'),
+	color: foundationTokenVar('text-secondary'),
 };
 
 // Its sizes are its own config, in Event Canvas px (ADR-0054).
@@ -56,8 +56,8 @@ const cardWidth = computed(() => `${config.value.cardWidth}px`);
 
 /** A badge lifts off the card's art on a soft shadow. */
 const badgeStyle = {
-	...modeTypographyStyle('top-cards', 'badge-typography'),
-	boxShadow: `0 4px 6px -1px ${modeTokenVar('top-cards', 'badge-shadow')}`,
+	...foundationTypographyStyle('heading'),
+	boxShadow: `0 4px 6px -1px ${foundationTokenVar('shadow')}`,
 };
 
 // Each badge sits where its config places it, and sizes itself around its own text size.
@@ -91,7 +91,7 @@ const pointsBadgeStyle = computed(() => ({
 }));
 
 const cardStyle = {
-	backgroundColor: modeTokenVar('top-cards', 'card-placeholder-surface'),
+	backgroundColor: foundationTokenVar('surface-raised'),
 };
 
 function statText(entry: CardBreakdownEntry): string | null {
