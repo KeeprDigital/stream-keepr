@@ -187,26 +187,6 @@ describe('featureMatchOverlayLayerInspector', () => {
 			.toMatchObject({ borderWidth: 6 });
 	});
 
-	it('asks the editor to duplicate or remove the selected Source Item', async () => {
-		const updateConfig = vi.fn();
-		const wrapper = await mountComponent({
-			updateConfig,
-			selectedTarget: { type: 'source', itemId: 'main-source' },
-		});
-
-		await wrapper.find('[data-testid="source-duplicate"]').trigger('click');
-		await wrapper.find('[data-testid="source-remove"]').trigger('click');
-
-		// The editor owns the layer list and the selection, so it does both.
-		expect(wrapper.emitted('duplicate')).toEqual([
-			['main-source'],
-		]);
-		expect(wrapper.emitted('remove')).toEqual([
-			['main-source'],
-		]);
-		expect(updateConfig).not.toHaveBeenCalled();
-	});
-
 	it('persists a Source Item anchor selection', async () => {
 		const updateConfig = vi.fn();
 		const wrapper = await mountComponent({

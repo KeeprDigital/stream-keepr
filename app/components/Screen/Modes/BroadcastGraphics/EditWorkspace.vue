@@ -163,17 +163,6 @@ const placing = ref(false);
 /** Whether this session may edit now: it holds the lease, and no placement is in flight. */
 const canAuthor = computed(() => holdsLease.value && !placing.value);
 
-/**
- * Only the session whose write it is may be told about it. An observer's
- * workspace has no save in flight, and a failure strip on it would prescribe
- * retrying a colleague's write.
- */
-const visibleSaveState = computed(() => {
-	if (!holdsLease.value || !props.saveState || props.saveState === 'idle')
-		return null;
-	return props.saveState;
-});
-
 /*
  * Copy and paste (#746): ⌘C and ⌘V copy the selected Graphic Item and paste it
  * into the selected Broadcast Graphic, on this Screen or another; ⌘⌥C and ⌘⌥V do
@@ -267,42 +256,13 @@ useEventListener(import.meta.client
 			@take-over="emit('takeOver')"
 		/>
 
-		<div
-			v-if="visibleSaveState === 'failed'"
-			class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-error/40 bg-error/10 p-3"
-			data-testid="edit-save-state"
-			data-save-state="failed"
-		>
-			<UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 text-error" />
-			<p class="min-w-0 flex-1 text-sm">
-				{{ saveError ?? 'The last save of this Screen\'s authored graphics failed.' }}
-			</p>
-			<UButton
-				size="xs"
-				color="error"
-				variant="soft"
-				icon="i-lucide-rotate-cw"
-				data-testid="edit-save-retry"
-				@click="emit('retrySave')"
-			>
-				Retry
-			</UButton>
-		</div>
-		<div
-			v-else-if="visibleSaveState"
-			class="mb-2 flex items-center justify-end gap-1.5 text-xs text-muted"
-			data-testid="edit-save-state"
-			:data-save-state="visibleSaveState"
-		>
-			<template v-if="visibleSaveState === 'saving'">
-				<UIcon name="i-lucide-loader-circle" class="size-3.5 animate-spin" />
-				Saving changes…
-			</template>
-			<template v-else>
-				<UIcon name="i-lucide-check" class="size-3.5 text-success" />
-				All changes saved
-			</template>
-		</div>
+		<GraphicsSaveState
+			class="mb-2 justify-end"
+			:save-state="saveState ?? 'idle'"
+			:save-error="saveError"
+			:writable="holdsLease"
+			@retry="emit('retrySave')"
+		/>
 
 		<div class="grid min-h-[calc(100vh-18rem)] items-start gap-4 xl:grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)_minmax(19rem,24rem)] 2xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(24rem,30rem)]">
 			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">

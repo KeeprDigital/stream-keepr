@@ -514,6 +514,26 @@ describe('graphicAnimationPreview', () => {
 		expect(latestPlan(messages)).toBeNull();
 	});
 
+	// Wiring: the controls live behind the preview panel's one animation control,
+	// which is told when their run is playing.
+	it('keeps the animation controls behind one control that says a run is playing', async () => {
+		const wrapper = await mountComponent({
+			selectedTarget: { type: 'graphic', graphicId: 'lower-third' },
+		});
+		const toggle = wrapper.get('[data-testid="preview-animation-toggle"]');
+
+		expect(toggle.attributes('aria-expanded')).toBe('false');
+		expect(wrapper.get(`[id="${toggle.attributes('aria-controls')}"]`)
+			.find('[data-testid="animation-preview-controls"]')
+			.exists()).toBe(true);
+		expect(toggle.attributes('data-playing')).toBe('false');
+
+		await wrapper.get('[data-testid="animation-preview-play"]').trigger('click');
+		await nextTick();
+
+		expect(toggle.attributes('data-playing')).toBe('true');
+	});
+
 	it('reaches the preview frame only, and never live Screen state', async () => {
 		// Gating, stated as a property of the surface: the preview's whole channel is
 		// one postMessage to the frame it embedded. It emits no configuration update,

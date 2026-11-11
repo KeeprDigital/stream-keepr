@@ -42,6 +42,7 @@ import {
 	applyGraphicSurfaceStyleEdit,
 	applyShapeGeometryPreset,
 	authorsGraphicInputs,
+	authorsGraphicStack,
 	clearMediaGraphicItemAsset,
 	DEFAULT_GRAPHIC_FONT_ID,
 	deleteGraphicInput,
@@ -638,6 +639,7 @@ const selectedGraphicInputs = computed<GraphicInputDeclaration[]>(() =>
  * controls anyway would let one write a declaration nothing resolves.
  */
 const authorsInputs = computed(() => authorsGraphicInputs(props.contract));
+const authorsStack = computed(() => authorsGraphicStack(props.contract));
 
 /**
  * The placeholder keys this host supplies itself, empty when the composition
@@ -1227,7 +1229,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					@update:model-value="relabelItem(String($event))"
 				/>
 			</UFormField>
-			<UFormField label="Visible" size="sm">
+			<!-- A host with a layer list hides a layer from its row; Broadcast Graphics has none until #1100. -->
+			<UFormField v-if="authorsStack" label="Visible" size="sm">
 				<USwitch
 					:model-value="selectedItem.visible"
 					data-testid="graphic-item-visible"

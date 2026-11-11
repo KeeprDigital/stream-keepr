@@ -13,7 +13,7 @@ const props = defineProps<{
 	eventId: number;
 }>();
 
-const overrides = useScreenThemeOverrides(() => props.screen, () => props.eventId);
+const overrides = useScreenThemeOverrides();
 
 const names = computed(() => placeScreenThemeTokens(props.screen.currentMode).foundationTokens);
 
@@ -42,7 +42,6 @@ const subtitle = computed(() => overrides.themeName.value
 			description="Inherited values are shown as the Default Theme ships them."
 		/>
 		<ScreenThemeTokenRows
-			:screen="screen"
 			:event-id="eventId"
 			heading="Foundation"
 			:names="names"

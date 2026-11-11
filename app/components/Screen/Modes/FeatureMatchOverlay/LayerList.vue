@@ -15,7 +15,6 @@ import {
 	graphicItemKindLabel,
 } from '~~/shared/modules/graphics';
 import { editorSelectionKey } from '~/modules/feature-match-overlay/editorSelection';
-import { ALIGN_COMMANDS, DISTRIBUTE_COMMANDS } from '~/modules/feature-match-overlay/layerAlignment';
 import { layerDropAt, layerGroupMoves } from '~/modules/feature-match-overlay/layerDrag';
 import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/layerGrouping';
 import { isLayerSelected } from '~/modules/feature-match-overlay/layerSelection';
@@ -30,18 +29,21 @@ import { isSelectionToggle } from '~/modules/graphics/selection';
  * at the back. Each section reorders within itself; nothing here offers to move a
  * Source Item in front of a Graphic Item, because nothing renders one there.
  *
- * Front at the top, so the arrow pointing up moves a layer toward the front.
+ * Front at the top, so "Bring forward" moves a row up the list.
  *
  * Shift-click selects the run of rows from the one chosen last, and ⌘- or
  * Ctrl-click adds or takes out one row (#740). A selected row's menu duplicates
- * and deletes every selected layer, and aligns and distributes them (#919);
- * another row's menu aligns that layer alone, to its container. Its moves, like
- * the arrows, move its own. Its eye and lock act on every selected layer. A
- * locked row keeps its lock in view as its badge (#747).
+ * and deletes every selected layer; its moves move its own. Its eye and lock act
+ * on every selected layer. A locked row keeps its lock in view as its badge
+ * (#747).
+ *
+ * Each action is offered once (#1069): a row reorders by drag, its menu and
+ * ⌘] / ⌘[, and duplicates, removes, hides and locks here, not in the property
+ * panel, which is the one place that aligns.
  *
  * One row drags at a time, and is selected alone as it goes: within its section,
  * into a Graphic Group or out of one, as one undo step; Escape cancels, and a
- * drop that is refused says why (#741). The arrows and the row menu's "Move to
+ * drop that is refused says why (#741). The row menu's moves and "Move to
  * group" do the same from the keyboard. A locked row drags too: a lock keeps a
  * layer from canvas edits only.
  *
@@ -194,35 +196,6 @@ function rowTarget(row: LayerRow): FeatureMatchLayoutEditorLayer | undefined {
 		: row.target;
 }
 
-/** Align the row's layer, or the selection it speaks for; distribute the selection. */
-function arrangeMenu(target: FeatureMatchLayoutEditorLayer | undefined): DropdownMenuItem[] {
-	const align: DropdownMenuItem = {
-		label: 'Align',
-		icon: ALIGN_COMMANDS[0]!.icon,
-		disabled: !props.editor.canAlign(target),
-		children: (['x', 'y'] as const).map(axis => ALIGN_COMMANDS.filter(command => command.axis === axis).map(command => ({
-			label: command.label,
-			icon: command.icon,
-			onSelect: () => props.editor.align(command.edge, target),
-		}))),
-	};
-	if (target)
-		return [align];
-	return [
-		align,
-		{
-			label: 'Distribute',
-			icon: DISTRIBUTE_COMMANDS[0]!.icon,
-			disabled: !props.editor.canDistribute(),
-			children: DISTRIBUTE_COMMANDS.map(command => ({
-				label: command.label,
-				icon: command.icon,
-				onSelect: () => props.editor.distribute(command.axis),
-			})),
-		},
-	];
-}
-
 const REFUSALS: Record<GraphicItemPlacementRefusal, string> = {
 	'rotated-into-arranged-group': 'A rotated layer can\'t go into a row or column group',
 	'group-into-group': 'A group can\'t go into another group',
@@ -295,8 +268,21 @@ function rowMenu(row: LayerRow): DropdownMenuItem[][] {
 			},
 			...groupingMenu(row),
 		],
-		arrangeMenu(target),
 		[
+			{
+				label: 'Bring forward',
+				icon: 'i-lucide-arrow-up',
+				kbds: ['meta', ']'],
+				disabled: !row.canMoveForward,
+				onSelect: () => props.editor.move(row.target, 1),
+			},
+			{
+				label: 'Send backward',
+				icon: 'i-lucide-arrow-down',
+				kbds: ['meta', '['],
+				disabled: !row.canMoveBackward,
+				onSelect: () => props.editor.move(row.target, -1),
+			},
 			{
 				label: 'Bring to front',
 				icon: 'i-lucide-bring-to-front',
@@ -702,26 +688,6 @@ function dropIndicatorClass(row: LayerRow) {
 							class="shrink-0 items-center"
 							:class="isSelected(row) ? 'flex' : 'hidden group-hover:flex group-focus-within:flex'"
 						>
-							<UButton
-								size="xs"
-								variant="ghost"
-								color="neutral"
-								icon="i-lucide-arrow-up"
-								:disabled="!row.canMoveForward"
-								:aria-label="`Move ${row.label} forward`"
-								data-testid="layer-forward"
-								@click="editor.move(row.target, 1)"
-							/>
-							<UButton
-								size="xs"
-								variant="ghost"
-								color="neutral"
-								icon="i-lucide-arrow-down"
-								:disabled="!row.canMoveBackward"
-								:aria-label="`Move ${row.label} backward`"
-								data-testid="layer-backward"
-								@click="editor.move(row.target, -1)"
-							/>
 							<UDropdownMenu :items="rowMenu(row)" :content="{ align: 'end' }">
 								<UButton
 									size="xs"

@@ -39,7 +39,7 @@ import { cardModeTokens } from './screenModeTokens/card';
 import { deckModeTokens } from './screenModeTokens/deck';
 import { featureMatchOverlayModeTokens } from './screenModeTokens/featureMatchOverlay';
 import { headToHeadModeTokens } from './screenModeTokens/headToHead';
-import { metagameModeTokens } from './screenModeTokens/metagame';
+import { metagameFormerModeTokens, metagameModeTokens } from './screenModeTokens/metagame';
 import { pairingsModeTokens } from './screenModeTokens/pairings';
 import { playerHistoryModeTokens } from './screenModeTokens/playerHistory';
 import { roundClockModeTokens } from './screenModeTokens/roundClock';
@@ -171,11 +171,19 @@ export interface ScreenModeDefinition {
 	 *
 	 * Declared here and nowhere else. The Screen host resolves them and sets
 	 * them as CSS custom properties for the display (`screenModeTokens`,
-	 * `resolveThemeTokens`), and the display reads only them. A mode not yet on
+	 * `resolveThemeTokens`), beside every Foundation Token, which the display
+	 * reads directly for its shared chrome. A mode not yet on
 	 * Theme Tokens leaves it out; Feature Match Controls, an operator surface,
 	 * always will.
 	 */
 	modeTokens?: Readonly<Record<string, AnyDeclaredModeTokenDefinition>>;
+	/**
+	 * The Mode Tokens an earlier version of the mode declared, by name within
+	 * the mode, which a Theme or a Screen Theme Override may still store. As a
+	 * config contract's `formerFields`: no reader sees one, and a write naming
+	 * one is accepted without storing it (`isFormerThemeToken`).
+	 */
+	formerModeTokens?: readonly string[];
 }
 
 /** A Feature Match Slot a config names, or nothing while it names none. */
@@ -422,6 +430,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		outputFollows: METAGAME_OUTPUT_FOLLOWS,
 		pageRotation: { pageSize: 'pageSize' },
 		modeTokens: metagameModeTokens,
+		formerModeTokens: metagameFormerModeTokens,
 	},
 	'top-cards': {
 		label: 'Most Played Cards',
@@ -683,4 +692,9 @@ export function screenModeTokens(mode: ScreenMode): Readonly<Record<ScreenModeTo
 		screenModeTokenName(mode, token),
 		definition,
 	]));
+}
+
+/** A mode's former Mode Tokens by full name; none for a mode that dropped none. */
+export function screenModeFormerTokens(mode: ScreenMode): ScreenModeTokenName[] {
+	return (SCREEN_MODES[mode].formerModeTokens ?? []).map(token => screenModeTokenName(mode, token));
 }

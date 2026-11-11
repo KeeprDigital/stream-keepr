@@ -1525,10 +1525,14 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 **Stream Keepr owns every token.** Users set values, never names.
 
 - **Foundation Tokens** are app-wide roles and hold a literal. A colour inside a composite Foundation Token (a fill, a surface, or a colour layer of the `background` stack) may name a colour Foundation Token instead, and a colour holds a literal only (#829, #831).
-- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to a Foundation Token, except where none fills its role: a badge shadow's colour (no shadow role exists) or Card Spotlight's zoom (no motion Foundation Token holds it) defaults to its shipped literal (#823, #844). A composite Mode Token's literal default may name colour Foundation Tokens inside it, as the Feature Match Overlay's Frame and Source Item surfaces fill with `surface` and outline in `accent`, so a change to those tokens restyles every placed preset; the Frame fills at full opacity, so the Theme's colour, alpha included, is what it paints. Metagame's chart slots follow the `series-1` … `series-8` and `series-other` Foundation Tokens (#851).
+- **Mode Tokens** are declared by a Screen Mode Definition. Each holds a literal or names a same-type Foundation Token, and defaults to a Foundation Token, except where none fills its role: a badge shadow's colour (no shadow role exists) or Card Spotlight's zoom (no motion Foundation Token holds it) defaults to its shipped literal (#823, #844). A composite Mode Token's literal default may name colour Foundation Tokens inside it, as the Feature Match Overlay's Frame and Source Item surfaces fill with `surface` and outline in `accent`, so a change to those tokens restyles every placed preset; the Frame fills at full opacity, so the Theme's colour, alpha included, is what it paints. Metagame's chart reads the `series-1` … `series-8` and `series-other` Foundation Tokens directly; the Mode Tokens that only repeated them are former tokens (#851, #1066).
 - **Graphic Item properties** name a whole Foundation Token or hold a literal. Nothing is bound partially, and nothing names a Mode Token. Resolution therefore takes at most two steps (a Mode Token or binding, its Foundation Token, then a colour that token names) and cannot cycle. It was one step until #829: the PRD has a composite's colour name a colour token, so a change to the accent reaches every surface using it.
 
 **A Theme stores only the tokens it sets.** A token added later reaches every existing Theme through its default. Renames and removals follow ADR-0043 and ADR-0037.
+
+**A display reads Foundation Tokens directly** (#1066). A Screen host sets every Foundation Token a custom property can carry beside its mode's Mode Tokens, and loads the library fonts of `heading` and `body`, so a display takes the Theme's shared chrome from the Foundation Token itself and needs a Mode Token only for what is its own.
+
+**A Mode Token a mode drops is a former token** (#1066). Each Screen Mode Definition lists its own (`formerModeTokens`), as a config contract lists `formerFields` (ADR-0037). A Theme or Screen Theme Override write naming one is accepted and the token dropped: a write naming nothing else answers 200 with the Theme or Screen as it stands, bumps no revision and announces nothing. A stored one is read by nothing and is not migrated. Metagame's nine chart slot tokens are the first.
 
 **Graphic Style Sets are deleted, with `.skstyle` and the override-pin rules of ADR-0006, and so are Animation Effect Presets with `.skeffect`** (#830). Their data is dropped, not migrated. Templates keep their values as literals.
 
@@ -1922,6 +1926,8 @@ Accepted · 2026-11-03 · [#749](https://github.com/KeeprDigital/stream-keepr/is
 
 **Only a preview frame listens, and nothing writes.** A live Screen Output installs no listener for the run. The controls send a plan to the embedded frame and write no Screen configuration, so they need no Graphics Authoring Lease and work for a read-only observer.
 
+**The controls sit behind one control in the preview toolbar, closed on every visit ([#1070](https://github.com/KeeprDigital/stream-keepr/issues/1070)).** Both editors mount them in the shared preview panel's `animation` slot. Hiding them does not stop a run: they stay mounted, a loop keeps playing, and the one control is marked as playing so a moving preview is explained.
+
 ### Why
 
 The two editors author the same Graphic Item recipes, and a Feature Match Layout has no lifecycle on air of its own, so the composition run is the only place an author sees an enter, on-screen and exit together. The item run answers "what does this recipe do?" without the rest of the layout moving.
@@ -1931,7 +1937,7 @@ The two editors author the same Graphic Item recipes, and a Feature Match Layout
 - Broadcast Graphics still previews a whole Broadcast Graphic; its frame ignores an `itemId`.
 - During a one-item run in a preview backed by a real Feature Match Slot, a sideboard reveal on another Deck List Graphic Item snaps rather than plays, because its recipes are isolated away. A live output is unaffected.
 - A frame that reloads mid-run (an output or guide switch) is handed the same run and plays it from the start.
-- `test/unit/app/modules/graphicsAnimationPreview.test.ts` holds the timing and isolation rules; the Feature Match Overlay Display and preview aside tests hold the wiring.
+- `test/unit/app/modules/graphicsAnimationPreview.test.ts` holds the timing and isolation rules; the Feature Match Overlay Display and preview aside tests hold the wiring; the preview panel test holds the one control.
 
 ### Rejected alternatives
 
@@ -2232,7 +2238,7 @@ Accepted · 2026-11-04 · [#909](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**The pin is a series slot, 1 to 8, stored on the Archetype.** The `archetypes` row holds a nullable `chart_series` (migration `0001_since_v1_5_0`). It names one of the Metagame Mode Tokens `chart-series-1` to `chart-series-8`; the Theme, or a Screen Theme Override, still decides what each series looks like, and a Screen holds no look of its own (ADR-0051).
+**The pin is a series slot, 1 to 8, stored on the Archetype.** The `archetypes` row holds a nullable `chart_series` (migration `0001_since_v1_5_0`). It names one of the chart series Foundation Tokens `series-1` to `series-8`, which the Metagame chart reads directly (ADR-0049); the Theme, or a Screen Theme Override, still decides what each series looks like, and a Screen holds no look of its own (ADR-0051).
 
 **An operator sets and clears it through the Archetype write.** The Archetype PATCH takes `chartSeries` (an integer 1–8, or null); the write announces `archetype:updated`, which every Metagame Screen already re-reads on. Creating an Archetype takes no pin, and Melee Sync writes no Archetype field, so it never writes one. The Archetype's Metagame page edits it, naming any other Archetype pinning the same series and warning when the chosen one is taken.
 
@@ -2345,7 +2351,7 @@ All of a Screen's Mode Tokens sat in one flat Theme card above the mode's settin
 
 ### Consequences
 
-- `useScreenThemeOverrides` holds the Theme load, the resolution, and the per-token write and Clear for every card that renders rows. Cards mounting together share one in-flight read of the Event's Theme.
+- The Screen's page holds one instance of the Theme load, the resolution, and the per-token write and Clear (`provideScreenThemeOverrides`), and every card that renders rows reads it (`useScreenThemeOverrides`). The page reads the Event's Theme once, however many cards mount and whenever they mount, and a row rendered outside a Screen's page throws (#1076, replacing one instance per token group over a shared in-flight read).
 - Every mode's settings mount each group its Mode Tokens name (#971–#983). A group mounts nothing by registration: the page keeps no record of which groups are on it, and no card collects the tokens of a group that is not (#1065, replacing the mounted-group registration and residual placement this decision first shipped with).
 - A Mode Token whose group is hidden cannot be overridden from the page until its group shows. Its stored override still applies.
 - A One Piece Deck List has no control in the Deck Details, Pointed Cards or point badge groups, but its settings mount their Looks, so every Deck List Mode Token stays reachable there.

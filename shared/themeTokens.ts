@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { themeCompositeColorReferences } from './modules/theme/composites';
 import { themeTokenValueSchema } from './modules/theme/tokens';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
-import { SCREEN_MODES, screenModeTokens } from './screenModes';
+import { SCREEN_MODES, screenModeFormerTokens, screenModeTokens } from './screenModes';
 import { SCREEN_MODE_VALUES } from './types/enums';
 
 /** The Mode Tokens of one themed Screen Mode, by full name, as a Theme editor groups them. */
@@ -37,11 +37,26 @@ const MODE_TOKENS: Readonly<Record<string, AnyDeclaredModeTokenDefinition>> = Ob
 	...THEMED_SCREEN_MODE_TOKENS.map(({ tokens }) => tokens),
 );
 
+const FORMER_TOKENS: ReadonlySet<string> = new Set(SCREEN_MODE_VALUES.flatMap(screenModeFormerTokens));
+for (const name of FORMER_TOKENS) {
+	if (Object.hasOwn(MODE_TOKENS, name))
+		throw new Error(`Theme Token "${name}" cannot be both a Mode Token and a former token of its mode.`);
+}
+
+/**
+ * Whether `name` is a former token: one a Screen Mode declared once and no
+ * longer does. A Theme or Screen Theme Override write naming one is accepted
+ * and the token dropped, and a stored one is read by nothing.
+ */
+export function isFormerThemeToken(name: string): boolean {
+	return FORMER_TOKENS.has(name);
+}
+
 export type ThemeTokenDefinitionOf
 	= | { tier: 'foundation'; definition: FoundationTokenDefinition }
 		| { tier: 'mode'; definition: AnyDeclaredModeTokenDefinition };
 
-/** The Theme Token `name` names, with its tier, or undefined for a name no token has. */
+/** The Theme Token `name` names, with its tier, or undefined for a name no token has now. */
 export function themeTokenDefinition(name: string): ThemeTokenDefinitionOf | undefined {
 	if (Object.hasOwn(FOUNDATION_TOKENS, name))
 		return { tier: 'foundation', definition: FOUNDATION_TOKENS[name as FoundationTokenName] };
@@ -55,7 +70,8 @@ const referenceSchema = z.object({
 }).strict();
 
 export type ThemeTokenWrite
-	= | { ok: true; value: ThemeTokenValue | ThemeTokenReference }
+	= | { ok: true; dropped?: false; value: ThemeTokenValue | ThemeTokenReference }
+		| { ok: true; dropped: true }
 		| { ok: false; refusal: ThemeTokenWriteRefusal };
 
 /**
@@ -64,9 +80,12 @@ export type ThemeTokenWrite
  * Unlike a read, a write is not forgiving: a value of the wrong type or outside
  * its bounds is refused, never clamped. A Foundation Token holds a literal; a
  * Mode Token holds a literal or names a Foundation Token of its own type, and
- * nothing names a Mode Token, so resolution stays one step.
+ * nothing names a Mode Token, so resolution stays one step. A former token is
+ * accepted whatever it is given and `dropped`: there is nothing to store.
  */
 export function parseThemeTokenWrite(name: string, value: unknown): ThemeTokenWrite {
+	if (isFormerThemeToken(name))
+		return { ok: true, dropped: true };
 	const token = themeTokenDefinition(name);
 	if (!token)
 		return { ok: false, refusal: 'unknown-token' };

@@ -73,8 +73,9 @@ const containerBackgroundStyle = computed(() =>
 );
 
 /**
- * The mode's resolved Mode Tokens, as the custom properties its display reads:
- * the Screen's own Screen Theme Overrides over its Event's Theme.
+ * The resolved Foundation Tokens and the mode's Mode Tokens, as the custom
+ * properties its display reads: the Screen's own Screen Theme Overrides over
+ * its Event's Theme.
  */
 const themeTokenStyle = computed(() => screenModeThemeTokenStyle(
 	props.mode,
@@ -83,7 +84,8 @@ const themeTokenStyle = computed(() => screenModeThemeTokenStyle(
 ));
 
 /**
- * The library fonts the mode's typography Mode Tokens resolve to, loaded as
+ * The library fonts the Theme's `heading` and `body`, and the mode's
+ * typography Mode Tokens, resolve to, loaded as
  * `FontFace`s through the Screen Output Asset Capability, which admits what
  * the Screen's resolved tokens supply (ADR-0050). The mode's display hides
  * while they load, so text never flashes in a fallback face, and the

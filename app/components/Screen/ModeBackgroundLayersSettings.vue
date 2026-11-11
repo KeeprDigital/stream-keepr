@@ -53,7 +53,6 @@ function writeLayers(nextLayers: BackgroundLayer[]) {
 			@update:layers="writeLayers"
 		/>
 		<ScreenThemeTokenRows
-			:screen="screen"
 			:event-id="eventId"
 			heading="Placement"
 			:names="placementTokens"
