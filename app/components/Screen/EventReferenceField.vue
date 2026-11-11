@@ -35,7 +35,14 @@ defineSlots<{
 	'item-label'?: (props: { item: Item }) => unknown;
 }>();
 
-const options = computed<(Item | { label: string; value: null })[]>(() => [
+interface Choice {
+	label: string;
+	value: number | null;
+}
+
+// The controls see plain choices; the `item-label` slot gets each kind's own item back.
+const choices = computed<Choice[]>(() => props.items);
+const options = computed<Choice[]>(() => [
 	{ label: props.nullLabel, value: null },
 	...props.items,
 ]);
@@ -58,7 +65,7 @@ function pick(id: unknown) {
 		<UInputMenu
 			v-if="searchable"
 			:model-value="modelValue ?? undefined"
-			:items="items"
+			:items="choices"
 			value-key="value"
 			:search-term="searchTerm"
 			:ignore-filter="searchTerm !== undefined"
@@ -78,7 +85,7 @@ function pick(id: unknown) {
 			@update:model-value="pick"
 		>
 			<template v-if="$slots['item-label']" #item-label="{ item }">
-				<slot v-if="item.value !== null" name="item-label" :item="item as Item" />
+				<slot v-if="item.value !== null" name="item-label" :item="item as unknown as Item" />
 				<template v-else>
 					{{ item.label }}
 				</template>
