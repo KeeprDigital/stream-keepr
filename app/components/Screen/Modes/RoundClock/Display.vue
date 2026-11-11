@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import type { RoundClockState } from '~~/shared/utils/roundClock';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 
 const { config, error, ready, isEmpty, round, clock } = useRoundClockModeData(useScreenContext());
 
 const surfaceStyle = {
-	backgroundColor: modeTokenVar('round-clock', 'surface'),
+	backgroundColor: foundationTokenVar('surface'),
 };
 const roundNameStyle = {
-	...modeTypographyStyle('round-clock', 'round-name-typography'),
-	color: modeTokenVar('round-clock', 'round-name-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-secondary'),
 };
 
 const clockColors: Record<Exclude<RoundClockState, 'untimed'>, string> = {
@@ -19,7 +19,7 @@ const clockColors: Record<Exclude<RoundClockState, 'untimed'>, string> = {
 };
 
 const clockStyle = computed(() => ({
-	...modeTypographyStyle('round-clock', 'clock-typography'),
+	...foundationTypographyStyle('heading'),
 	color: clock.value.state === 'untimed'
 		? undefined
 		: clockColors[clock.value.state],

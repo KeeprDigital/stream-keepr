@@ -867,13 +867,13 @@ describe('a capability-only Feature Match Overlay output', () => {
  */
 describe('a capability-only output\'s Theme', () => {
 	const eventPath = '/api/screen-output/events/42/screens/7/event';
-	const TITLE = '--theme-standings-title-text';
+	const TITLE = '--theme-text-primary';
 
 	function theme(id: string, revision: number, titleText: string) {
 		return {
 			id,
 			revision,
-			tokens: { 'standings.title-text': titleText },
+			tokens: { 'text-primary': titleText },
 		};
 	}
 
