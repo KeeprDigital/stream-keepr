@@ -3,7 +3,7 @@ import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { parseThemeTokenWrite } from '~~/shared/themeTokens';
 
 // A Theme write is strict where a read forgives: a wrong type or an out-of-bounds value is
-// refused, never clamped, and a Mode Token may name only a same-type Foundation Token.
+// refused, never clamped, and a value that names another token is refused whole.
 
 const typography = {
 	font: { kind: 'application', fontId: 'inter' },
@@ -46,16 +46,6 @@ describe('a Theme Token write', () => {
 		['a Foundation dimension at its upper bound', 'inset', insetMax],
 		['a Foundation typography', 'heading', typography],
 		['a Mode Token literal', 'standings.rise', '#ff0000'],
-		[
-			'a Mode Token naming a same-type Foundation Token',
-			'standings.rise',
-			{ token: 'accent' },
-		],
-		[
-			'a typography Mode Token naming a typography Foundation Token',
-			'talent.name-typography',
-			{ token: 'body' },
-		],
 		[
 			'a background of colour, gradient, Remote Media URL and animation layers',
 			'background',
@@ -111,14 +101,6 @@ describe('a Theme Token write', () => {
 			],
 		],
 		[
-			'a fill whose colour follows a colour token',
-			'accent-fill',
-			{
-				type: 'solid',
-				color: { token: 'positive' },
-			},
-		],
-		[
 			'a gradient at its fewest stops',
 			'accent-fill',
 			{
@@ -126,60 +108,33 @@ describe('a Theme Token write', () => {
 				angle: 0,
 				stops: [
 					{ color: '#fff', position: 0, opacity: 1 },
-					{
-						color: { token: 'accent' },
-						position: 1,
-						opacity: 0.5,
-					},
+					{ color: '#123456', position: 1, opacity: 0.5 },
 				],
 			},
 		],
 		[
-			'a surface with a literal fill and an outline following a colour token',
+			'a surface with a fill and an outline',
 			'panel',
 			{
 				fill: { type: 'solid', color: '#123456' },
 				fillOpacity: 0.5,
-				outline: {
-					color: { token: 'divider' },
-					width: 2,
-				},
+				outline: { color: '#abcdef', width: 2 },
 			},
 		],
 		[
-			'a background whose colour layer names a colour Foundation Token',
-			'background',
-			[
-				{
-					...colorLayer,
-					color: { token: 'accent' },
-				},
-			],
-		],
-		[
-			'a Feature Match Overlay surface whose colours name Foundation Tokens',
+			'a Feature Match Overlay surface with an outline and a glow',
 			'feature-match-overlay.frame-surface',
 			{
-				fill: {
-					type: 'solid',
-					color: { token: 'surface-raised' },
-				},
+				fill: { type: 'solid', color: '#202020' },
 				fillOpacity: 1,
-				outline: {
-					color: { token: 'accent' },
-					width: 3,
-				},
-				glow: {
-					color: { token: 'accent' },
-					size: 8,
-					opacity: 0.5,
-				},
+				outline: { color: '#ff0000', width: 3 },
+				glow: { color: '#ff0000', size: 8, opacity: 0.5 },
 			},
 		],
 		[
-			'a Feature Match Overlay Frame media naming the logo',
+			'a Feature Match Overlay Frame media',
 			'feature-match-overlay.frame-media',
-			{ token: 'logo' },
+			{ kind: 'image', ...libraryRevision },
 		],
 		[
 			'a Shape Geometry',
@@ -261,21 +216,15 @@ describe('a Theme Token write', () => {
 			'invalid-value',
 		],
 		[
-			'a Mode Token naming a Foundation Token of another type',
+			'a Mode Token naming a Foundation Token of its type',
 			'standings.rise',
-			{ token: 'heading' },
+			{ token: 'accent' },
 			'invalid-value',
 		],
 		[
-			'a Mode Token naming a Mode Token',
-			'standings.rise',
-			{ token: 'standings.fall' },
-			'invalid-value',
-		],
-		[
-			'a Mode Token naming no token',
-			'standings.rise',
-			{ token: 'nonsense' },
+			'an asset Mode Token naming the logo',
+			'feature-match-overlay.frame-media',
+			{ token: 'logo' },
 			'invalid-value',
 		],
 		[
@@ -297,32 +246,67 @@ describe('a Theme Token write', () => {
 			'invalid-value',
 		],
 		[
-			'a fill whose colour names a token of another type',
+			'a fill whose colour names a colour Foundation Token',
 			'accent-fill',
 			{
 				type: 'solid',
-				color: { token: 'heading' },
+				color: { token: 'positive' },
 			},
 			'invalid-value',
 		],
 		[
-			'a background whose colour layer names a token of another type',
+			'a gradient whose stop names a colour Foundation Token',
+			'accent-fill',
+			{
+				type: 'linear-gradient',
+				angle: 0,
+				stops: [
+					{ color: '#fff', position: 0, opacity: 1 },
+					{
+						color: { token: 'accent' },
+						position: 1,
+						opacity: 0.5,
+					},
+				],
+			},
+			'invalid-value',
+		],
+		[
+			'a surface whose outline names a colour Foundation Token',
+			'panel',
+			{
+				fill: { type: 'solid', color: '#123456' },
+				fillOpacity: 0.5,
+				outline: {
+					color: { token: 'divider' },
+					width: 2,
+				},
+			},
+			'invalid-value',
+		],
+		[
+			'a Mode Token surface whose glow names a colour Foundation Token',
+			'feature-match-overlay.frame-surface',
+			{
+				fill: { type: 'solid', color: '#202020' },
+				fillOpacity: 1,
+				glow: {
+					color: { token: 'accent' },
+					size: 8,
+					opacity: 0.5,
+				},
+			},
+			'invalid-value',
+		],
+		[
+			'a background whose colour layer names a colour Foundation Token',
 			'background',
 			[
 				{
 					...colorLayer,
-					color: { token: 'heading' },
+					color: { token: 'accent' },
 				},
 			],
-			'invalid-value',
-		],
-		[
-			'a fill whose colour names no token',
-			'accent-fill',
-			{
-				type: 'solid',
-				color: { token: 'nonsense' },
-			},
 			'invalid-value',
 		],
 		[

@@ -10,8 +10,8 @@ import { clampToShapeBounds } from '../../screenModeConfigs/fields';
 import { HORIZONTAL_ALIGN_VALUES, VERTICAL_ALIGN_VALUES } from '../../types/enums';
 import { GRAPHIC_TEXT_TRANSFORM_VALUES } from '../../types/graphics';
 import { GRAPHIC_FONT_IDS } from '../graphics/typography';
-import { graphicAssetReferenceSchema, themeBackgroundLayerStackSchema } from './background';
-import { THEME_COMPOSITE_VALUE_SCHEMAS } from './composites';
+import { backgroundLayerStackSchema, graphicAssetReferenceSchema, storedThemeBackgroundLayerStackSchema } from './background';
+import { STORED_THEME_COMPOSITE_VALUE_SCHEMAS, THEME_COMPOSITE_VALUE_SCHEMAS } from './composites';
 
 /**
  * A typography Theme Token: a face and how it is set, never a size. Each
@@ -99,12 +99,16 @@ export type FoundationTokenDefinition = {
 /** The whole Foundation Token vocabulary, by token name. */
 export type FoundationTokenVocabulary = Readonly<Record<string, FoundationTokenDefinition>>;
 
-/** A same-type Foundation Token a Mode Token names, as declared or stored. */
+/**
+ * A Foundation Token another token names. A Mode Token's shipped default may be
+ * one, and so may a colour inside a shipped composite default. No write stores
+ * one; a read still resolves one stored before writes were literal-only.
+ */
 export interface ThemeTokenReference<Name extends string = string> {
 	token: Name;
 }
 
-/** A Mode Token's default, or a stored Mode Token value: a Foundation Token it names, or a literal. */
+/** A Mode Token's default: a Foundation Token it names, or a literal. */
 export type ModeTokenValue<T extends ThemeTokenType = ThemeTokenType, Name extends string = string>
 	= | ThemeTokenReference<Name>
 		| ThemeTokenValueTypes[T];
@@ -150,8 +154,13 @@ const alignmentSchema = z.object({
 	vertical: z.enum(VERTICAL_ALIGN_VALUES),
 }).strict();
 
-/** The literals a token of `definition`'s type holds, within its bounds. */
-export function themeTokenValueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition): z.ZodType {
+/**
+ * A token of `definition`'s type within its bounds, in one of two forms. A
+ * `written` value names no other token. A `stored` one is what a read accepts:
+ * the same, and a composite or background colour naming a colour Foundation
+ * Token, which a write once admitted.
+ */
+function tokenValueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition, form: 'written' | 'stored'): z.ZodType {
 	switch (definition.type) {
 		case 'color':
 			return z.string().min(1).max(500);
@@ -162,7 +171,9 @@ export function themeTokenValueSchema(definition: FoundationTokenDefinition | Mo
 		case 'typography':
 			return typographySchema;
 		case 'backgroundLayers':
-			return themeBackgroundLayerStackSchema;
+			return form === 'written'
+				? backgroundLayerStackSchema
+				: storedThemeBackgroundLayerStackSchema;
 		case 'animationEffect':
 			return animationEffectSelectionSchema;
 		case 'asset':
@@ -174,22 +185,30 @@ export function themeTokenValueSchema(definition: FoundationTokenDefinition | Mo
 		case 'surface-style':
 		case 'shape-geometry':
 		case 'animation-recipe':
-			return THEME_COMPOSITE_VALUE_SCHEMAS[definition.type];
+			return (form === 'written'
+				? THEME_COMPOSITE_VALUE_SCHEMAS
+				: STORED_THEME_COMPOSITE_VALUE_SCHEMAS)[definition.type];
 		case 'alignment':
 			return alignmentSchema;
 	}
+}
+
+/** What a write may store for a token of `definition`'s type: a literal within its bounds, naming no other token. */
+export function themeTokenValueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition): z.ZodType {
+	return tokenValueSchema(definition, 'written');
 }
 
 /**
  * A stored literal read as `definition`'s type, or undefined when it is not
  * one. A number outside a bound that has since tightened reads as the nearest
  * bound, as a Screen Mode's stored config does (ADR-0037); anything else that
- * does not fit is ignored, so the read falls through to the next source.
+ * does not fit is ignored, so the read falls through to the next source. A
+ * colour naming a colour Foundation Token is kept for the resolver to read.
  */
 export function readTokenLiteral(definition: FoundationTokenDefinition | ModeTokenDefinition, stored: unknown): ThemeTokenValue | undefined {
 	if (stored === undefined)
 		return undefined;
-	const schema = themeTokenValueSchema(definition);
+	const schema = tokenValueSchema(definition, 'stored');
 	const { value } = clampToShapeBounds({ value: schema }, { value: stored });
 	const parsed = schema.safeParse(value);
 	return parsed.success

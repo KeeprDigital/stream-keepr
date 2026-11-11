@@ -125,6 +125,7 @@ describe('resolveThemeTokens', () => {
 			{ accent: 'rgb(4, 0, 0)' },
 			'rgb(6, 0, 0)',
 		],
+	// A default names a Foundation Token; so may a value stored before writes were literal-only.
 	])('reads a Mode Token naming a Foundation Token as %s', (_, theme, overrides, expected) => {
 		expect(resolve(theme, overrides).values['demo.title']).toBe(expected);
 	});
@@ -343,6 +344,25 @@ describe('a composite Foundation Token naming a colour', () => {
 	])('reads it as %s', (_, theme, overrides, expected) => {
 		expect(panel(theme, overrides).fill.stops[0].color).toBe(expected);
 		expect(panel(theme, overrides).fill.stops[1].color).toBe('#000000');
+	});
+
+	// A surface stored before writes were literal-only reads to its literal, as a default does.
+	it('reads a stored surface whose colour names the accent as the accent', () => {
+		const theme = {
+			accent: 'rgb(3, 0, 0)',
+			panel: {
+				fill: {
+					type: 'solid',
+					color: { token: 'accent' },
+				},
+				fillOpacity: 0.5,
+			},
+		};
+
+		expect(panel(theme)).toEqual({
+			fill: { type: 'solid', color: 'rgb(3, 0, 0)' },
+			fillOpacity: 0.5,
+		});
 	});
 
 	it.each([

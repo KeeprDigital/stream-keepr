@@ -127,16 +127,16 @@ describe('the Theme library', () => {
 		const theme = await create('Tokens');
 
 		await set(theme.id, 'accent', '#ff0000');
-		await set(theme.id, 'standings.rise', { token: 'accent' });
+		await set(theme.id, 'standings.rise', '#00ff00');
 		await set(theme.id, 'accent', 'rgba(0, 0, 255, 0.5)');
 		expect(await storedTokens(theme.id)).toEqual({
 			'accent': 'rgba(0, 0, 255, 0.5)',
-			'standings.rise': { token: 'accent' },
+			'standings.rise': '#00ff00',
 		});
 
 		const cleared = await clear(theme.id, 'accent');
 		expect(cleared.tokens).toEqual({
-			'standings.rise': { token: 'accent' },
+			'standings.rise': '#00ff00',
 		});
 		expect(await storedTokens(theme.id)).toEqual(cleared.tokens);
 	});
