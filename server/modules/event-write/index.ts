@@ -97,7 +97,7 @@ export function eventWriteModule() {
 			const slotService = featureMatchService();
 			try {
 				const { clearedScreens } = await slotService.syncFeatureMatches(eventId, updatedEvent.numFeatureMatches);
-				// Each Deck Source a deleted Slot released, with no origin (ADR-0032).
+				// Each Screen a deleted Slot released, with no origin (ADR-0032, ADR-0060).
 				for (const screen of clearedScreens)
 					await publication.screenUpdated({ eventId, entity: screen });
 			}

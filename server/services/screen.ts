@@ -7,7 +7,7 @@ import type { CreateScreenInput, UpdateScreenInput } from '~~/shared/api';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { archetypes, eventTalents, phases, players, rounds, screens } from '~~/server/db/schema';
+import { archetypes, eventTalents, featureMatches, phases, players, rounds, screens } from '~~/server/db/schema';
 import {
 	graphicsAuthoringLeaseConflict,
 	graphicsAuthoringLeaseFenceCondition,
@@ -98,10 +98,14 @@ const RELEASED_EVENT_REFERENCE_TABLES = {
 	archetype: archetypes,
 	talent: eventTalents,
 	talentLineup: eventTalents,
+	featureMatchSlot: featureMatches,
 };
 
 /** The released kinds whose field holds a list of ids: a release drops the missing ids and keeps the rest in order. */
 const RELEASED_EVENT_REFERENCE_LISTS: ReadonlySet<ReleasedEventReferenceKind> = new Set(['talentLineup']);
+
+/** The released kinds whose field its mode's config requires: a release sets it to null, where an optional field is removed. */
+const RELEASED_EVENT_REFERENCE_NULLED: ReadonlySet<ReleasedEventReferenceKind> = new Set(['featureMatchSlot']);
 
 export type ReleasedEventReferenceKind = keyof typeof RELEASED_EVENT_REFERENCE_TABLES;
 
@@ -112,6 +116,7 @@ export type ReleasedEventReferenceKind = keyof typeof RELEASED_EVENT_REFERENCE_T
  * delete, so it also releases what the delete cascaded away and what an
  * imported structure removal decided to delete as it ran. A list of ids, such
  * as a Talent lineup, loses only the missing ids, the rest in order (ADR-0070).
+ * A Feature Match Slot reference is set to null, the field kept.
  */
 export function buildReleaseScreenEventReferencesQuery(eventId: number, kinds: readonly ReleasedEventReferenceKind[]) {
 	const released = SCREEN_MODE_VALUES.flatMap(mode =>
@@ -127,23 +132,35 @@ export function buildReleaseScreenEventReferencesQuery(eventId: number, kinds: r
 					select item.value from json_each(${screens.modeConfigs}, ${path}) as item
 					where item.value in ${held} order by item.key
 				))`;
+				const missing = sql`exists (select 1 from json_each(${screens.modeConfigs}, ${path}) as item where item.value not in ${held})`;
 				return [
 					{
-						missing: sql`exists (select 1 from json_each(${screens.modeConfigs}, ${path}) as item where item.value not in ${held})`,
+						missing,
 						// A merge patch replaces an array whole.
-						removal: sql`json_object(${mode}, json_object(${field}, json(${kept})))`,
+						release: (configs: SQL) => sql`json_patch(${configs}, case when ${missing} then json_object(${mode}, json_object(${field}, json(${kept}))) else '{}' end)`,
 					},
 				];
 			}
 			const value = sql`json_extract(${screens.modeConfigs}, ${path})`;
+			// Unset is not missing: `NULL NOT IN` an empty set is true.
+			const missing = sql`(${value} is not null and ${value} not in ${held})`;
+			if (RELEASED_EVENT_REFERENCE_NULLED.has(releasedKind)) {
+				return [
+					{
+						missing,
+						// A merge patch cannot write a null, so the id is replaced where it stands: by null, or by itself.
+						release: (configs: SQL) => sql`json_replace(${configs}, ${path}, case when ${missing} then null else ${value} end)`,
+					},
+				];
+			}
+			// A merge patch's null removes the field, leaving it unset as an optional field is.
+			const removal = JSON.stringify({
+				[mode]: { [field]: null },
+			});
 			return [
 				{
-				// Unset is not missing: `NULL NOT IN` an empty set is true.
-					missing: sql`(${value} is not null and ${value} not in ${held})`,
-					// A merge patch's null removes the field, leaving it unset as an optional field is.
-					removal: sql`${JSON.stringify({
-						[mode]: { [field]: null },
-					})}`,
+					missing,
+					release: (configs: SQL) => sql`json_patch(${configs}, case when ${missing} then ${removal} else '{}' end)`,
 				},
 			];
 		}));
@@ -153,10 +170,7 @@ export function buildReleaseScreenEventReferencesQuery(eventId: number, kinds: r
 	return db
 		.update(screens)
 		.set({
-			modeConfigs: released.reduce<SQL>(
-				(configs, { missing, removal }) => sql`json_patch(${configs}, case when ${missing} then ${removal} else '{}' end)`,
-				sql`${screens.modeConfigs}`,
-			),
+			modeConfigs: released.reduce<SQL>((configs, { release }) => release(configs), sql`${screens.modeConfigs}`),
 			stateVersion: sql`${screens.stateVersion} + 1`,
 		})
 		.where(and(

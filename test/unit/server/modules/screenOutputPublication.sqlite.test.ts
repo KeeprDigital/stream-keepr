@@ -90,6 +90,7 @@ const SCREENS = {
 	standings: await stageScreen(eventId, 'standings', { roundId: round!.id }),
 	overlay: await stageScreen(eventId, 'feature-match-overlay', { featureMatchId: slot!.id }),
 	otherOverlay: await stageScreen(eventId, 'feature-match-overlay', { featureMatchId: otherSlot!.id }),
+	controls: await stageScreen(eventId, 'feature-match', { featureMatchId: slot!.id }),
 	headToHead: await stageScreen(eventId, 'head-to-head', { playerSource: 'featureMatchSlot', featureMatchId: slot!.id }),
 	card: await stageScreen(eventId, 'card'),
 	graphics: await stageScreen(eventId, 'broadcast-graphics'),
@@ -187,6 +188,9 @@ describe('what a Screen\'s channel is sent', () => {
 			messages: [sessionEvent],
 			screens: {
 				overlay: [
+					forwarded(sessionEvent),
+				],
+				controls: [
 					forwarded(sessionEvent),
 				],
 				headToHead: [
@@ -341,6 +345,9 @@ describe('what a Screen\'s channel is sent', () => {
 				overlay: [
 					changed('overlay', 'player'),
 				],
+				controls: [
+					changed('controls', 'player'),
+				],
 				headToHead: [
 					changed('headToHead', 'player'),
 				],
@@ -363,6 +370,40 @@ describe('what a Screen\'s channel is sent', () => {
 			},
 		},
 		{
+			name: 'a seated Player\'s deck change reaches the control Screen of their Slot, which no Slot message announces',
+			messages: [
+				message('playerDeck:cardsResolved'),
+			],
+			screens: {
+				overlay: [
+					changed('overlay', 'playerDeck'),
+				],
+				controls: [
+					changed('controls', 'playerDeck'),
+				],
+				headToHead: [
+					changed('headToHead', 'playerDeck'),
+				],
+			},
+		},
+		{
+			name: 'an unseated Player\'s deck change does not reach a control Screen',
+			messages: [
+				message('playerDeck:cardsResolved', {
+					deckIds: [],
+					playerIds: [unseated!.id],
+				}),
+			],
+			screens: {
+				otherOverlay: [
+					changed('otherOverlay', 'playerDeck'),
+				],
+				headToHead: [
+					changed('headToHead', 'playerDeck'),
+				],
+			},
+		},
+		{
 			name: 'a Slot change is a cause, never a payload',
 			messages: [
 				message('featureMatch:updated'),
@@ -370,6 +411,9 @@ describe('what a Screen\'s channel is sent', () => {
 			screens: {
 				overlay: [
 					changed('overlay', 'featureMatchSlot'),
+				],
+				controls: [
+					changed('controls', 'featureMatchSlot'),
 				],
 				headToHead: [
 					changed('headToHead', 'featureMatchSlot'),
@@ -406,6 +450,9 @@ describe('what a Screen\'s channel is sent', () => {
 				otherOverlay: [
 					changed('otherOverlay', 'player', 'round'),
 				],
+				controls: [
+					changed('controls', 'player'),
+				],
 				headToHead: [
 					changed('headToHead', 'player', 'round'),
 				],
@@ -426,6 +473,11 @@ describe('what a Screen\'s channel is sent', () => {
 					forwarded(sessionEvent),
 					contextChanged,
 					changed('overlay', 'featureMatchSlot'),
+				],
+				controls: [
+					forwarded(sessionEvent),
+					contextChanged,
+					changed('controls', 'featureMatchSlot'),
 				],
 				headToHead: [
 					contextChanged,

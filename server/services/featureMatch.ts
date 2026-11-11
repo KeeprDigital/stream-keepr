@@ -8,7 +8,7 @@ import { db } from '~~/server/db';
 import { events, featureMatches, featureMatchSessions, matches } from '~~/server/db/schema';
 import { toStoredSlotLeaders, withCatalogueLeaders } from '~~/server/services/featureMatchSlotLeader';
 import { featureMatchStateService } from '~~/server/services/featureMatchState';
-import { buildClearDeckSourceSlotsQuery } from '~~/server/services/screen';
+import { buildClearDeckSourceSlotsQuery, buildReleaseScreenEventReferencesQuery } from '~~/server/services/screen';
 import { inJsonArray, observedValue, selectForInsert } from '~~/server/utils/db';
 import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
@@ -126,6 +126,16 @@ export function observedSlotPairing(slot: DbFeatureMatch) {
 		observedValue(featureMatches.player2Id, slot.player2Id),
 		observedValue(featureMatches.activeSessionId, slot.activeSessionId),
 	);
+}
+
+/** The Screens a Slot delete released: one both releases rewrote answers once, at the later version. */
+function releasedOnce(deckSourceScreens: DbScreen[], referenceScreens: DbScreen[]): DbScreen[] {
+	return [
+		...new Map([
+			...deckSourceScreens,
+			...referenceScreens,
+		].map(screen => [screen.id, screen])).values(),
+	];
 }
 
 export function featureMatchService() {
@@ -420,9 +430,12 @@ export function featureMatchService() {
 		return slots.map(slot => slot.id);
 	};
 
-	/** Deletes the Slot, and in the same write releases every Deck Source showing a side of it. */
+	/**
+	 * Deletes the Slot, and in the same write releases every Deck Source showing
+	 * a side of it and every Screen reference to it (ADR-0060).
+	 */
 	const remove = async (id: number, eventId: number): Promise<{ deleted: boolean; clearedScreens: DbScreen[] }> => {
-		const [clearedScreens, deleted] = await db.batch([
+		const [deckSourceScreens, deleted, referenceScreens] = await db.batch([
 			buildClearDeckSourceSlotsQuery(eventId, [id]),
 			db
 				.delete(featureMatches)
@@ -433,9 +446,13 @@ export function featureMatchService() {
 					),
 				)
 				.returning({ id: featureMatches.id }),
+			buildReleaseScreenEventReferencesQuery(eventId, ['featureMatchSlot']),
 		]);
 
-		return { deleted: deleted.length > 0, clearedScreens };
+		return {
+			deleted: deleted.length > 0,
+			clearedScreens: releasedOnce(deckSourceScreens, referenceScreens),
+		};
 	};
 
 	const exists = async (id: number, eventId: number): Promise<boolean> => {
@@ -469,7 +486,10 @@ export function featureMatchService() {
 		return result?.count ?? 0;
 	};
 
-	/** Adds or deletes Slots to `targetCount`; a delete releases every Deck Source showing a side of a deleted Slot. */
+	/**
+	 * Adds or deletes Slots to `targetCount`; a delete releases every Deck Source
+	 * showing a side of a deleted Slot and every Screen reference to one (ADR-0060).
+	 */
 	const syncFeatureMatches = async (eventId: number, targetCount: number): Promise<{ created: DbFeatureMatch[]; deleted: number[]; clearedScreens: DbScreen[] }> => {
 		// Get current matches ordered by sortOrder, then id
 		const currentMatches = await findByEventId(eventId);
@@ -536,7 +556,7 @@ export function featureMatchService() {
 			const matchesToDelete = sorted.slice(0, currentCount - targetCount);
 			const idsToDelete = matchesToDelete.map(m => m.id);
 
-			[clearedScreens] = await db.batch([
+			const [deckSourceScreens, , referenceScreens] = await db.batch([
 				buildClearDeckSourceSlotsQuery(eventId, idsToDelete),
 				db
 					.delete(featureMatches)
@@ -546,7 +566,9 @@ export function featureMatchService() {
 							inJsonArray(featureMatches.id, idsToDelete),
 						),
 					),
+				buildReleaseScreenEventReferencesQuery(eventId, ['featureMatchSlot']),
 			]);
+			clearedScreens = releasedOnce(deckSourceScreens, referenceScreens);
 
 			deleted.push(...idsToDelete);
 		}
