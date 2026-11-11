@@ -190,9 +190,15 @@ describe('page rotation page size', () => {
 	const declaration = { pageSize: 'cardsPerPage' };
 
 	it.each([
-		{ config: { cardsPerPage: 4 }, pageSize: 4 },
+		{
+			config: { cardsPerPage: 4 },
+			pageSize: 4,
+		},
 		{ config: {}, pageSize: undefined },
-		{ config: { cardsPerPage: undefined }, pageSize: undefined },
+		{
+			config: { cardsPerPage: undefined },
+			pageSize: undefined,
+		},
 	])('reads $config as $pageSize', ({ config, pageSize }) => {
 		expect(rotationPageSize(declaration, config)).toBe(pageSize);
 	});

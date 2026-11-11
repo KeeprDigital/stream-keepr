@@ -954,8 +954,12 @@ describe('topCardsModeConfigSchema', () => {
 		expect(resolveScreenModeConfig({}, 'top-cards').cardsPerPage).toBeUndefined();
 
 		const patch = modeConfigPatchSchemaMap['top-cards'].parse({ cardsPerPage: null }) as Record<string, unknown>;
-		expect(parseModeConfigPatchResult({ 'top-cards': { cardsPerPage: 4, limit: 12 } }, 'top-cards', patch))
-			.toEqual({ 'top-cards': { limit: 12 } });
+		expect(parseModeConfigPatchResult({
+			'top-cards': { cardsPerPage: 4, limit: 12 },
+		}, 'top-cards', patch))
+			.toEqual({
+				'top-cards': { limit: 12 },
+			});
 	});
 
 	it('rejects a page of more grid rows than the shared page size bound', () => {

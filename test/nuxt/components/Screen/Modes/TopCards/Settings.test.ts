@@ -601,10 +601,34 @@ describe('screenTopCardsSettings', () => {
 	// Cards per page is Auto, one page of every card, or a number; a page smaller than the ranking pages it.
 	describe('paging', () => {
 		it.each([
-			{ limit: 10, cardsPerPage: undefined, pages: false, shown: '', summary: 'Top 10 · One page' },
-			{ limit: 10, cardsPerPage: 10, pages: false, shown: '10', summary: 'Top 10 · One page' },
-			{ limit: 10, cardsPerPage: 60, pages: false, shown: '60', summary: 'Top 10 · One page' },
-			{ limit: 12, cardsPerPage: 4, pages: true, shown: '4', summary: 'Top 12 · 4 per page' },
+			{
+				limit: 10,
+				cardsPerPage: undefined,
+				pages: false,
+				shown: '',
+				summary: 'Top 10 · One page',
+			},
+			{
+				limit: 10,
+				cardsPerPage: 10,
+				pages: false,
+				shown: '10',
+				summary: 'Top 10 · One page',
+			},
+			{
+				limit: 10,
+				cardsPerPage: 60,
+				pages: false,
+				shown: '60',
+				summary: 'Top 10 · One page',
+			},
+			{
+				limit: 12,
+				cardsPerPage: 4,
+				pages: true,
+				shown: '4',
+				summary: 'Top 12 · 4 per page',
+			},
 		])('$limit cards at $cardsPerPage a page offer the rotation: $pages', async ({ limit, cardsPerPage, pages, shown, summary }) => {
 			mockConfig.value = { ...mockConfig.value, limit, cardsPerPage };
 			mockFetch.mockResolvedValue(ranking(limit));
@@ -621,7 +645,12 @@ describe('screenTopCardsSettings', () => {
 			{ name: 'a number', emitted: 5, cardsPerPage: 5 },
 			{ name: 'Auto, by emptying it', emitted: null, cardsPerPage: null },
 		])('writes $name, returning to page 1', async ({ emitted, cardsPerPage }) => {
-			mockConfig.value = { ...mockConfig.value, limit: 12, cardsPerPage: 4, currentPage: 2 };
+			mockConfig.value = {
+				...mockConfig.value,
+				limit: 12,
+				cardsPerPage: 4,
+				currentPage: 2,
+			};
 			const wrapper = await mountComponent();
 
 			configControl(wrapper, UInputNumberStub, 'cardsPerPage')!.vm.$emit('update:modelValue', emitted);
