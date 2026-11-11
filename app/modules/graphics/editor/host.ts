@@ -61,6 +61,8 @@ export type GraphicsEditorLayerPatch = Partial<GraphicRect> & { label?: string; 
 export interface GraphicsEditorOwnedLayers<D, L extends GraphicsEditorLayer> {
 	/** What the layer list's add menu calls one, such as "Source Item". */
 	label: string;
+	/** The icon its layer list row and add menu show. */
+	icon: string;
 	/** Add a new one in front of its siblings. */
 	create: (document: D) => { document: D; layer: L };
 	find: (document: D, layer: L) => GraphicsEditorLayerConfig | undefined;
@@ -86,16 +88,23 @@ export interface GraphicsEditorTree<D, L extends GraphicsEditorLayer> {
 	key: (layer: L) => string;
 	/** Every layer in the layer list's order, front to back, a group's children beneath it. */
 	order: (document: D) => L[];
+	/** Every composition the document holds: what `forbidden.composition` is asked of. */
+	compositions: (document: D) => readonly BroadcastGraphicConfig[];
 	/** The composition a Graphic Item layer sits in and its id there; null for a layer the host owns. */
 	item: (document: D, layer: L) => { composition: BroadcastGraphicConfig; itemId: string } | null;
 	/** The layer naming a Graphic Item of a composition. */
 	itemLayer: (composition: BroadcastGraphicConfig, itemId: string) => L;
 	/** The composition a new or pasted Graphic Item joins, given what is selected. */
 	destination: (document: D, selected: readonly L[]) => BroadcastGraphicConfig | null;
-	/** The document with one composition replaced, matched by its id. */
+	/** The document with one composition replaced, matched by its id, or added when it has none by that id. */
 	withComposition: (document: D, composition: BroadcastGraphicConfig) => D;
 	/** Everything positioned on the canvas a layer sits on: what it snaps to. */
 	canvasLayers: (document: D, layer: L) => readonly SnapLayer[];
+	/**
+	 * Why a layer cannot be removed on its own, or null when it can: a Broadcast
+	 * Graphic's Presentation Group goes only with its Social Profile Projection.
+	 */
+	removal?: (document: D, layer: L) => string | null;
 	/** The layer kind the host owns, when it has one. */
 	owned?: GraphicsEditorOwnedLayers<D, L>;
 	/** Copy layers. Copying is not a write. */
@@ -108,10 +117,25 @@ export interface GraphicsEditorTree<D, L extends GraphicsEditorLayer> {
 	) => GraphicsEditorPaste<D, L>;
 }
 
+/** One section of the layer list, as a host names it: a Feature Match Layout's Source Items, or one Broadcast Graphic. */
+export interface GraphicsLayerListSection<L extends GraphicsEditorLayer> {
+	key: string;
+	title: string;
+	/** Its layers front to back, each group's children beneath it. */
+	layers: readonly L[];
+	empty: string;
+}
+
 /** Document written: where the editor reads the document and where an edit goes. */
 export interface GraphicsEditorDocument<D> {
 	read: () => D;
 	write: (next: D) => void;
+	/**
+	 * What an undo or redo writes, given the document it restores and the one it
+	 * replaces: a host keeps here what it sets outside undo. The restored document
+	 * when absent.
+	 */
+	restore?: (restored: D, current: D) => D;
 }
 
 /** Forbidden edits: when and what this session may not write. */
@@ -128,7 +152,8 @@ export interface GraphicsEditorForbiddenEdits {
 	held?: () => boolean;
 	/**
 	 * Whether a composition may not be written now, such as a Broadcast Graphic on
-	 * air: none of its Graphic Items is written, and nothing is added to it.
+	 * air: no write changes it, none of its Graphic Items is written, nothing is
+	 * added to it, and undo and redo leave it as it is.
 	 */
 	composition?: (composition: BroadcastGraphicConfig) => boolean;
 }
