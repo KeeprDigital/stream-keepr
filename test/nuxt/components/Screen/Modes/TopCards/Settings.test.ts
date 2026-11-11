@@ -249,7 +249,7 @@ describe('screenTopCardsSettings', () => {
 		expect(settingsLayout(wrapper)).toEqual([
 			{
 				id: 'top-cards:data',
-				title: 'Data',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},
@@ -261,7 +261,7 @@ describe('screenTopCardsSettings', () => {
 			},
 			{
 				id: 'top-cards:ranking-and-pages',
-				title: 'Ranking & Pages',
+				title: 'Ranking and pages',
 				collapsible: true,
 				groups: [],
 			},
@@ -279,7 +279,7 @@ describe('screenTopCardsSettings', () => {
 			},
 			{
 				id: 'top-cards:card-badges',
-				title: 'Card Badges',
+				title: 'Card badges',
 				collapsible: true,
 				groups: badgeGroups,
 			},
@@ -642,7 +642,7 @@ describe('screenTopCardsSettings', () => {
 			const wrapper = await mountComponent();
 
 			expect(configControl(wrapper, UInputNumberStub, 'cardsPerPage')!.text()).toBe(shown);
-			expect(wrapper.text().includes('Automatic Paging')).toBe(pages);
+			expect(wrapper.text().includes('Automatic paging')).toBe(pages);
 			expect(settingsSummaries(wrapper)['top-cards:ranking-and-pages']).toBe(summary);
 			expect(wrapper.text()).not.toContain('Split into pages');
 		});

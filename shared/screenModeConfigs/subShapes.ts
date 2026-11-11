@@ -1,7 +1,18 @@
+import type { BoardSelection, MetagameScope } from '../types/enums';
+import type { ScreenSettingsContext } from './fields';
 import { z } from 'zod';
+import { getFeatureMatchStateTracking, getMetagameRules } from '../config/games';
 import { EVENT_CANVAS_SIDE_BOUNDS } from '../eventCanvas';
 import { METAGAME_SCOPE_VALUES } from '../types/enums';
 import { editorField } from './fields';
+
+/** What each Metagame Scope is called on its select. */
+const METAGAME_SCOPE_LABELS = {
+	all: 'All Players',
+	topN: 'Top N',
+	minPoints: 'Minimum points',
+	playerList: 'Player List',
+} as const satisfies Record<MetagameScope, string>;
 
 /**
  * Sub-shapes more than one Screen Mode's config contract repeats, so a bound
@@ -46,11 +57,22 @@ export function withEveryColumn<Column extends { key: string; visible: boolean }
 	];
 }
 
-/** The optional header above a mode's content. */
-export const headerConfigShape = {
-	showHeader: editorField(z.boolean(), { label: 'Show header' }),
-	headerText: editorField(z.string().max(200).optional(), { label: 'Custom header text' }),
-};
+/**
+ * The optional header above a mode's content, described in the mode's own
+ * words: what the header shows, and what it shows while its text is empty.
+ */
+export function headerConfigShape(header: { shows: string; auto: string }) {
+	return {
+		showHeader: editorField(z.boolean(), { label: 'Show header', card: 'header', description: header.shows }),
+		headerText: editorField(z.string().max(200).optional(), {
+			label: 'Header text',
+			card: 'header',
+			description: header.auto,
+			placeholder: 'Auto',
+			showWhen: ({ config }) => config.showHeader === true,
+		}),
+	};
+}
 
 export const DEFAULT_HEADER_CONFIG = {
 	showHeader: true,
@@ -66,10 +88,38 @@ export const DEFAULT_HEADER_CONFIG = {
  * Reference each mode declares on its definition (ADR-0038).
  */
 export const metagameScopeShape = {
-	scope: editorField(z.enum(METAGAME_SCOPE_VALUES), { label: 'Player scope' }),
-	topN: editorField(z.number().int().min(1).max(500), { label: 'Top N' }),
-	minPoints: editorField(z.number().int().min(0).max(999), { label: 'Minimum points' }),
-	playerListId: z.number().int().positive().optional(),
+	scope: editorField(z.enum(METAGAME_SCOPE_VALUES), {
+		label: 'Player scope',
+		card: 'source',
+		description: 'Which Players the metagame counts.',
+		// Every scope the Event's Card Game reads (ADR-0074); a Player List only once the Event holds one.
+		options: ({ event, hasPlayerLists }) => {
+			const scopes = event?.game
+				? getMetagameRules(event.game).scopes
+				: METAGAME_SCOPE_VALUES;
+			return Object.fromEntries(Object.entries(METAGAME_SCOPE_LABELS)
+				.filter(([scope]) => scopes.includes(scope as MetagameScope) && (scope !== 'playerList' || hasPlayerLists)));
+		},
+	}),
+	topN: editorField(z.number().int().min(1).max(500), {
+		label: 'Top N',
+		card: 'source',
+		description: 'Count the top N Players by position.',
+		showWhen: ({ config }) => config.scope === 'topN',
+	}),
+	minPoints: editorField(z.number().int().min(0).max(999), {
+		label: 'Minimum points',
+		card: 'source',
+		description: 'Count Players with at least this many match points.',
+		showWhen: ({ config }) => config.scope === 'minPoints',
+	}),
+	playerListId: editorField(z.number().int().positive().optional(), {
+		label: 'Player List',
+		card: 'source',
+		reference: 'playerList',
+		description: 'Count this list\'s Players only.',
+		showWhen: ({ config }) => config.scope === 'playerList',
+	}),
 };
 
 /** The Metagame Scope's fields, which a display reset keeps on every mode carrying it. */
@@ -87,8 +137,25 @@ export const DEFAULT_METAGAME_SCOPE = {
 	playerListId: undefined,
 } as const;
 
+/** What each part of a deck a card read counts is called. */
+export const BOARD_SELECTION_LABELS = {
+	full: 'Full deck',
+	mainboard: 'Mainboard',
+	sideboard: 'Sideboard',
+} as const satisfies Record<BoardSelection, string>;
+
+/** Whether the Event's Card Game has Sideboards, so a board choice can apply; assumed until the Event loads. */
+export function hasSideboard({ event }: ScreenSettingsContext): boolean {
+	return !event?.game || getFeatureMatchStateTracking(event.game).sideboard;
+}
+
 /** A card read's archetype filter: an Archetype's name, narrowing the cards to its decks. */
-export const metagameArchetypeFilterField = editorField(z.string().max(200).optional(), { label: 'Archetype filter' });
+export const metagameArchetypeFilterField = editorField(z.string().max(200).optional(), {
+	label: 'Archetype filter',
+	card: 'source',
+	description: 'Count one archetype\'s cards only.',
+	placeholder: 'All archetypes',
+});
 
 /**
  * A paginated mode's Page Rotation: `currentPage` is the manually selected page
@@ -99,10 +166,16 @@ export const metagameArchetypeFilterField = editorField(z.string().max(200).opti
  * `pageRotationPageSize`.
  */
 export const pageRotationShape = {
-	autoPageEnabled: editorField(z.boolean(), { label: 'Auto-page' }),
-	autoPageIntervalMs: editorField(z.number().int().min(3000).max(60000), { label: 'Interval (seconds)', displayScale: 1000 }),
-	currentPage: z.number().int().min(1).optional(),
-	rotationAnchor: z.number().int().nonnegative().optional(),
+	autoPageEnabled: editorField(z.boolean(), { label: 'Auto-page', card: 'live', description: 'Show each page in turn.' }),
+	autoPageIntervalMs: editorField(z.number().int().min(3000).max(60000), {
+		label: 'Interval (seconds)',
+		card: 'paging',
+		description: 'How long each page shows.',
+		displayScale: 1000,
+		showWhen: ({ config }) => config.autoPageEnabled === true,
+	}),
+	currentPage: editorField(z.number().int().min(1).optional(), { label: 'Page', card: 'live', slot: 'page-rotation' }),
+	rotationAnchor: editorField(z.number().int().nonnegative().optional(), { label: 'Rotation start', card: 'live', slot: 'page-rotation' }),
 };
 
 /** The Page Rotation fields as a paginated mode's config holds them. */
@@ -114,21 +187,36 @@ export const DEFAULT_PAGE_ROTATION = {
 } as const;
 
 /** How many rows a page of a Page Rotation holds, under whichever name its mode gives the field. */
-export const pageRotationPageSize = editorField(z.number().int().min(1).max(100), { label: 'Rows per page' });
+export const pageRotationPageSize = editorField(z.number().int().min(1).max(100), { label: 'Rows per page', card: 'paging' });
+
+/** A list board's rows show in columns; a Card Layout lays out a grid. */
+const showsCardGrid = ({ block }: ScreenSettingsContext) => block?.view !== 'list';
 
 /**
  * A card grid's Card Layout (ADR-0054): each value a number, or Auto while
  * absent. Columns run to `mostCards`, the most cards the grid can hold; a max
  * card size to the largest side an Event Canvas may have; the gap bound is the
  * one every card grid shares. An editor narrows each to its content: the
- * grid's card count, and its Event's canvas.
+ * grid's card count, and its Event's canvas. `group` is the Screen Settings
+ * Group of the Content card the grid's settings sit in; each shows for a grid
+ * whose layout is `editable`, as a sideboard following the mainboard's is not.
  */
-export function cardLayoutShape(mostCards: number) {
+export function cardLayoutShape(mostCards: number, group: string, editable: (context: ScreenSettingsContext) => boolean = () => true) {
+	const place = {
+		card: 'content',
+		group,
+		placeholder: 'Auto',
+		showWhen: (context: ScreenSettingsContext) => showsCardGrid(context) && editable(context),
+	} as const;
 	return {
-		columns: editorField(z.number().int().min(1).max(mostCards).optional(), { label: 'Columns' }),
+		columns: editorField(z.number().int().min(1).max(mostCards).optional(), { ...place, label: 'Columns' }),
 		/** The widest a card may be, in Event Canvas px. */
-		maxCardSize: editorField(z.number().int().min(48).max(EVENT_CANVAS_SIDE_BOUNDS.max).optional(), { label: 'Max card size' }),
-		cardGap: editorField(z.number().int().min(0).max(100).optional(), { label: 'Card gap' }),
+		maxCardSize: editorField(z.number().int().min(48).max(EVENT_CANVAS_SIDE_BOUNDS.max).optional(), {
+			...place,
+			label: 'Max card size',
+			description: 'The widest a card may be, in px.',
+		}),
+		cardGap: editorField(z.number().int().min(0).max(100).optional(), { ...place, label: 'Card gap' }),
 	};
 }
 
@@ -143,13 +231,32 @@ export const DEFAULT_CARD_LAYOUT = {
  * A card badge's size: its text size in px, which the badge is laid out around
  * in em. Absent is Auto: a share of its card's solved width (`cardBadgeTextSize`).
  */
-export const cardBadgeSizeField = editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge size' });
+export function cardBadgeSizeField(group: string, showWhen?: (context: ScreenSettingsContext) => boolean) {
+	return editorField(z.number().int().min(8).max(48).optional(), {
+		label: 'Badge size',
+		card: 'content',
+		group,
+		placeholder: 'Auto',
+		description: 'Its text size in px; Auto follows the card.',
+		showWhen,
+	});
+}
 
 /**
  * The widest a table mode's content runs, in Event Canvas pixels, under the name
- * `maxWidth`. Absent is Auto: the content fills its Screen.
+ * `maxWidth`. Absent is Auto: the content fills its Screen. `group` is the
+ * Screen Settings Group of the Content card it sits in.
  */
-export const tableMaxWidthField = editorField(
-	z.number().int().min(EVENT_CANVAS_SIDE_BOUNDS.min).max(EVENT_CANVAS_SIDE_BOUNDS.max).optional(),
-	{ label: 'Max width' },
-);
+export function tableMaxWidthField(group: string, showWhen?: (context: ScreenSettingsContext) => boolean) {
+	return editorField(
+		z.number().int().min(EVENT_CANVAS_SIDE_BOUNDS.min).max(EVENT_CANVAS_SIDE_BOUNDS.max).optional(),
+		{
+			label: 'Max width',
+			card: 'content',
+			group,
+			placeholder: 'Auto',
+			description: 'The widest it runs, centred. Auto fills the Screen.',
+			showWhen,
+		},
+	);
+}

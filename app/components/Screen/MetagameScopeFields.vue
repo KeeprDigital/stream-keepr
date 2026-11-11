@@ -61,7 +61,7 @@ const scopeOptions = computed(() => {
 	const options: { label: string; value: MetagameScope }[] = [
 		{ label: 'All Players', value: 'all' },
 		{ label: 'Top N', value: 'topN' },
-		{ label: 'Minimum Points', value: 'minPoints' },
+		{ label: 'Minimum points', value: 'minPoints' },
 	];
 
 	if (playerListStore.lists.length > 0)

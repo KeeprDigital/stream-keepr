@@ -29,7 +29,7 @@ const cardSummary = computed(() => settingsSummary([
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="card:feature-match-slot" title="Feature Match Slot" :collapsible="false">
+		<ScreenSettingsSection id="card:feature-match-slot" title="Source" :collapsible="false">
 			<ScreenFeatureMatchSlotField
 				:model-value="config.featureMatchId"
 				:event-id="eventId"

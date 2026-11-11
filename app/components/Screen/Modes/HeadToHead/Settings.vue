@@ -32,14 +32,14 @@ const playerDetailsSummary = computed(() => settingsSummary([
 	config.value.showPronouns && hasPronouns.value
 		? 'Pronouns shown'
 		: 'Pronouns hidden',
-	config.value.showDeckColors ? 'Deck colors shown' : 'Deck colors hidden',
+	config.value.showDeckColors ? 'Deck colours shown' : 'Deck colours hidden',
 ]));
 const headerCardSummary = computed(() => headerSummary(config.value));
 </script>
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="head-to-head:players" title="Players" :collapsible="false">
+		<ScreenSettingsSection id="head-to-head:players" title="Source" :collapsible="false">
 			<ScreenConfigField
 				:field="fields.playerSource"
 				:model-value="config.playerSource"
@@ -75,7 +75,7 @@ const headerCardSummary = computed(() => headerSummary(config.value));
 			</template>
 		</ScreenSettingsSection>
 
-		<ScreenSettingsSection id="head-to-head:player-details" title="Player Details" :summary="playerDetailsSummary">
+		<ScreenSettingsSection id="head-to-head:player-details" title="Player details" :summary="playerDetailsSummary">
 			<ScreenConfigField
 				:field="fields.showPronouns"
 				:model-value="config.showPronouns"

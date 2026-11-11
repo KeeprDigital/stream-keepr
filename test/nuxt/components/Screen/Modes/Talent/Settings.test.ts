@@ -77,12 +77,12 @@ describe('screenTalentSettings', () => {
 	});
 
 	// Every element it paints has a Foundation role, so no card holds a Look.
-	it('orders its cards Talent, Layout, Header, Social Profiles', async () => {
+	it('orders its cards Source, Layout, Header, Social Profiles', async () => {
 		const wrapper = await mountComponent();
 
 		expect(settingsCards(wrapper)).toEqual([
 			{
-				title: 'Talent',
+				title: 'Source',
 				id: 'talent:talent',
 				collapsible: false,
 				looks: [],

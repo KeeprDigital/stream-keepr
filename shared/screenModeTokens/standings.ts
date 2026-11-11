@@ -1,8 +1,10 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { standingsModeConfigContract } from '../screenModeConfigs/standings';
 import { rowMotionModeToken } from './rowMotion';
 
-/** The Standings settings groups its Mode Tokens may name (ADR-0072). */
-export type StandingsSettingsGroup = 'data' | 'table';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type StandingsSettingsGroup = ScreenSettingsGroupOf<typeof standingsModeConfigContract>;
 
 /** How the Standings Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const standingsModeTokens = {
@@ -25,7 +27,7 @@ export const standingsModeTokens = {
 	'reveal-motion': {
 		type: 'animation-recipe',
 		label: 'Revealed row enter and exit',
-		settingsGroup: 'data',
+		settingsGroup: 'reveal',
 		default: {
 			duration: 600,
 			easing: 'ease-out',

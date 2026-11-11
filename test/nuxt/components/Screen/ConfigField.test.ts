@@ -38,6 +38,8 @@ const colorField: ScreenModeConfigField = {
 	key: 'accent',
 	label: 'Accent',
 	control: 'color',
+	card: 'content',
+	clearable: true,
 	displayScale: 1,
 };
 

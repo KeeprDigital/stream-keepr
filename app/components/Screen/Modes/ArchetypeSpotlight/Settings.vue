@@ -31,7 +31,7 @@ const readsStandings = computed(() => !game.value || getMetagameRules(game.value
 const hasSideboard = computed(() => !game.value || getFeatureMatchStateTracking(game.value).sideboard);
 
 const boardOptions = [
-	{ label: 'Full Deck', value: 'full' },
+	{ label: 'Full deck', value: 'full' },
 	{ label: 'Mainboard', value: 'mainboard' },
 	{ label: 'Sideboard', value: 'sideboard' },
 ];
@@ -75,7 +75,7 @@ const headerCardSummary = computed(() => headerSummary(config.value));
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="archetype-spotlight:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="archetype-spotlight:data" title="Source" :collapsible="false">
 			<ScreenArchetypeField
 				:model-value="config.archetypeId"
 				:event-id="eventId"
@@ -96,7 +96,7 @@ const headerCardSummary = computed(() => headerSummary(config.value));
 			<ScreenConversionTargetField v-if="readsStandings" :event-id="eventId" />
 		</ScreenSettingsSection>
 
-		<ScreenSettingsSection id="archetype-spotlight:top-cards" title="Top Cards" :summary="topCardsSummary">
+		<ScreenSettingsSection id="archetype-spotlight:top-cards" title="Top cards" :summary="topCardsSummary">
 			<ScreenConfigField
 				:field="fields.cardLimit"
 				:model-value="config.cardLimit"

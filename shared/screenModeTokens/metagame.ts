@@ -1,8 +1,10 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { metagameModeConfigContract } from '../screenModeConfigs/metagame';
 import { rowMotionModeToken } from './rowMotion';
 
-/** The Metagame settings groups its Mode Tokens may name (ADR-0072). */
-export type MetagameSettingsGroup = 'table';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type MetagameSettingsGroup = ScreenSettingsGroupOf<typeof metagameModeConfigContract>;
 
 /**
  * How the Metagame Screen Mode looks: its Mode Tokens, by name within the mode.

@@ -1,7 +1,9 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { featureMatchOverlayModeConfigContract } from '../screenModeConfigs/featureMatchOverlay';
 
-/** The Feature Match Overlay settings groups its Mode Tokens may name (ADR-0072). */
-export type FeatureMatchOverlaySettingsGroup = 'frame-surface' | 'frame-video' | 'frame-animation' | 'source-appearance';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type FeatureMatchOverlaySettingsGroup = ScreenSettingsGroupOf<typeof featureMatchOverlayModeConfigContract>;
 
 /**
  * How the Feature Match Overlay's host-owned parts look: the Frame's and the

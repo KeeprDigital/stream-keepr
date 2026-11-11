@@ -1,4 +1,5 @@
 import type { ScreenModeConfigOf } from './contract';
+import type { ScreenSettingsContext } from './fields';
 import { z } from 'zod';
 import {
 	BOARD_SELECTION_VALUES,
@@ -10,12 +11,14 @@ import { METAGAME_CARD_TYPE_BUCKETS } from '../utils/metagame';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
 import {
+	BOARD_SELECTION_LABELS,
 	cardBadgeSizeField,
 	cardLayoutShape,
 	DEFAULT_CARD_LAYOUT,
 	DEFAULT_HEADER_CONFIG,
 	DEFAULT_METAGAME_SCOPE,
 	DEFAULT_PAGE_ROTATION,
+	hasSideboard,
 	headerConfigShape,
 	metagameArchetypeFilterField,
 	metagameScopeShape,
@@ -27,6 +30,18 @@ const TOP_CARDS_MAX_LIMIT = 60;
 
 /** A Fixed card's width before the Screen set one, under the former Card Sizing. */
 const FORMER_DEFAULT_CARD_WIDTH = 160;
+
+/** Whether the Event points cards: a One Piece Card Game Event never does. */
+function hasPointsSystem(event: ScreenSettingsContext['event']): boolean {
+	return event?.game !== 'op' && !!event?.pointsSystem;
+}
+
+/** A card badge's field, in its own group of the Content card. */
+function badge(group: string) {
+	return { card: 'content', group } as const;
+}
+
+const showsStatBadge = ({ config }: ScreenSettingsContext) => config.statBadge !== 'none';
 
 /**
  * The Card Layout a Card Sizing meant (ADR-0054): a Fixed width is the max card
@@ -76,35 +91,104 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	archetypeFilter: metagameArchetypeFilterField,
 
 	// Data selection & filtering
-	board: editorField(z.enum(BOARD_SELECTION_VALUES), { label: 'Board' }),
-	sortBy: editorField(z.enum(METAGAME_CARD_SORT_BY_VALUES), { label: 'Rank by' }),
-	limit: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT), { label: 'Card count' }),
-	excludedCardTypes: z.array(z.enum(METAGAME_CARD_TYPE_BUCKETS)).max(METAGAME_CARD_TYPE_BUCKETS.length),
+	board: editorField(z.enum(BOARD_SELECTION_VALUES), {
+		label: 'Board',
+		card: 'source',
+		description: 'Count cards from this part of each deck.',
+		options: BOARD_SELECTION_LABELS,
+		showWhen: hasSideboard,
+	}),
+	sortBy: editorField(z.enum(METAGAME_CARD_SORT_BY_VALUES), {
+		label: 'Sort by',
+		card: 'content',
+		group: 'ranking',
+		options: { inclusionRate: 'Inclusion rate', avgCopies: 'Average copies', totalCopies: 'Total copies' },
+	}),
+	limit: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT), {
+		label: 'Limit',
+		card: 'content',
+		group: 'ranking',
+		description: 'How many of the top cards the ranking shows.',
+	}),
+	excludedCardTypes: editorField(z.array(z.enum(METAGAME_CARD_TYPE_BUCKETS)).max(METAGAME_CARD_TYPE_BUCKETS.length), {
+		label: 'Card types',
+		card: 'source',
+		slot: 'card-type-filter',
+		description: 'The card types the ranking may include; ranking pointed cards keeps nonbasic lands in.',
+	}),
 	/** Only cards the Event's points system points, applied server-side before `limit`. */
-	pointedOnly: editorField(z.boolean(), { label: 'Pointed only' }),
+	pointedOnly: editorField(z.boolean(), {
+		label: 'Pointed only',
+		card: 'source',
+		description: 'Rank only cards the Event\'s points system gives points, pointed lands such as Strip Mine included.',
+		// Kept while on, so a Screen whose Event lost its points system can turn it off.
+		showWhen: ({ config, event }) => hasPointsSystem(event) || config.pointedOnly === true,
+	}),
 
 	// Card Layout: columns, max card size and gap, each Auto while absent
-	...cardLayoutShape(TOP_CARDS_MAX_LIMIT),
+	...cardLayoutShape(TOP_CARDS_MAX_LIMIT, 'layout'),
 
 	// Paging: cards per page, Auto (one page) while absent; at least `limit` is one page too
-	cardsPerPage: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT).optional(), { label: 'Cards per page' }),
+	cardsPerPage: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT).optional(), {
+		label: 'Cards per page',
+		card: 'paging',
+		placeholder: 'Auto',
+		description: 'However many columns the Screen lays them out in. Auto shows every card on one page.',
+	}),
 	...pageRotationShape,
 
 	// Header
-	...headerConfigShape,
+	...headerConfigShape({
+		shows: 'Show the title above the card grid.',
+		auto: 'Empty shows a title for the ranking and scope.',
+	}),
 
 	// Card badges: each placed on its card, and sized around its own text size: Auto while absent, or px.
-	showRankBadges: editorField(z.boolean(), { label: 'Show rank badges' }),
-	rankBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
-	rankBadgeTextSize: cardBadgeSizeField,
+	showRankBadges: editorField(z.boolean(), {
+		...badge('rank-badge'),
+		label: 'Show rank badges',
+		description: 'Each card\'s position in the ranking.',
+	}),
+	rankBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), {
+		...badge('rank-badge'),
+		label: 'Badge position',
+		control: 'position',
+		showWhen: ({ config }) => config.showRankBadges === true,
+	}),
+	rankBadgeTextSize: cardBadgeSizeField('rank-badge', ({ config }) => config.showRankBadges === true),
 	/** Which metric the stat badge shows; 'none' hides the badge. */
-	statBadge: editorField(z.enum(TOP_CARDS_STAT_VALUES), { label: 'Stat badge' }),
-	statBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
-	statBadgeTextSize: cardBadgeSizeField,
+	statBadge: editorField(z.enum(TOP_CARDS_STAT_VALUES), {
+		...badge('stat-badge'),
+		label: 'Stat badge',
+		description: 'One metric on each card.',
+		options: {
+			none: 'None',
+			inclusionRate: 'Inclusion rate',
+			avgCopies: 'Average copies',
+			totalCopies: 'Total copies',
+			deckCount: 'Deck count',
+		},
+	}),
+	statBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), {
+		...badge('stat-badge'),
+		label: 'Badge position',
+		control: 'position',
+		showWhen: showsStatBadge,
+	}),
+	statBadgeTextSize: cardBadgeSizeField('stat-badge', showsStatBadge),
 	/** A pointed card's points from the Event's points system; an unpointed card shows none. */
-	showPointsBadges: editorField(z.boolean(), { label: 'Show point badges' }),
-	pointsBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
-	pointsBadgeTextSize: cardBadgeSizeField,
+	showPointsBadges: editorField(z.boolean(), {
+		...badge('points-badge'),
+		label: 'Show point badges',
+		description: 'Each pointed card\'s points from the Event\'s points system.',
+	}),
+	pointsBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), {
+		...badge('points-badge'),
+		label: 'Badge position',
+		control: 'position',
+		showWhen: ({ config }) => config.showPointsBadges === true,
+	}),
+	pointsBadgeTextSize: cardBadgeSizeField('points-badge', ({ config }) => config.showPointsBadges === true),
 }, {
 	...DEFAULT_METAGAME_SCOPE,
 	archetypeFilter: undefined,
@@ -150,6 +234,18 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		'autoColumns',
 	],
 	upgradeFormerFields: upgradeCardSizing,
+	groups: {
+		'ranking': { title: 'Ranking', card: 'content' },
+		'layout': { title: 'Layout', card: 'content' },
+		'rank-badge': { title: 'Rank badge', card: 'content' },
+		'stat-badge': { title: 'Stat badge', card: 'content' },
+		// Kept while shown, so a Screen whose Event lost its points system can turn them off.
+		'points-badge': {
+			title: 'Point badge',
+			card: 'content',
+			showWhen: ({ config, event }) => hasPointsSystem(event) || config.showPointsBadges === true,
+		},
+	},
 });
 
 export type TopCardsModeConfig = ScreenModeConfigOf<typeof topCardsModeConfigContract>;

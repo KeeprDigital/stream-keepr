@@ -178,7 +178,7 @@ describe('the Standings settings editor\'s columns', () => {
 			'Record (W-L-D)',
 			'Points',
 			'Deck',
-			'Position Change',
+			'Position change',
 		]);
 
 		await rows[5]!.get('[data-testid="u-switch"]').trigger('click');
@@ -250,7 +250,7 @@ describe('the Standings settings editor\'s Round picker', () => {
 	});
 });
 
-const DATA = { id: 'standings:data', title: 'Data', collapsible: false };
+const DATA = { id: 'standings:data', title: 'Source', collapsible: false };
 const TABLE = {
 	id: 'standings:table',
 	title: 'Table',
@@ -290,11 +290,11 @@ describe('the Standings settings layout', () => {
 			[
 				{
 					...DATA,
-					groups: ['data'],
+					groups: ['reveal'],
 				},
 				{
 					id: 'standings:reveal-controls',
-					title: 'Reveal Controls',
+					title: 'Reveal controls',
 					collapsible: false,
 					groups: [],
 				},
@@ -323,7 +323,7 @@ describe('the Standings settings layout', () => {
 			viewMode,
 		});
 
-		expect(wrapper.find('[data-settings-group="data"]').exists()).toBe(shown);
+		expect(wrapper.find('[data-settings-group="reveal"]').exists()).toBe(shown);
 	});
 
 	// Each view mode's own fields sit directly under the view mode select that reveals them.

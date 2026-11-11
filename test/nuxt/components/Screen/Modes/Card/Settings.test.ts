@@ -69,7 +69,7 @@ describe('the Card Spotlight settings editor', () => {
 		expect(settingsLayout(wrapper)).toEqual([
 			{
 				id: 'card:feature-match-slot',
-				title: 'Feature Match Slot',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},

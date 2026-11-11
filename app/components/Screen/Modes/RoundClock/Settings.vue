@@ -29,7 +29,7 @@ const clockSummary = computed(() => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="round-clock:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="round-clock:data" title="Source" :collapsible="false">
 			<!-- Unset follows the Current Round from Round to Round (ADR-0066). -->
 			<ScreenRoundField
 				:model-value="config.roundId"
@@ -42,7 +42,7 @@ const clockSummary = computed(() => {
 
 		<ScreenSettingsSection
 			id="round-clock:round-name"
-			title="Round Name"
+			title="Round name"
 			:summary="config.showRoundName ? 'Shown above the clock' : 'Hidden'"
 		>
 			<ScreenConfigField

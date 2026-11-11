@@ -172,7 +172,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		[
 			['Archetype filter', 'archetypeFilter', 'Rakdos Midrange'],
 			['Max width', 'maxWidth', 1200],
-			['Custom header text', 'headerText', 'Day 2 Metagame'],
+			['Header text', 'headerText', 'Day 2 Metagame'],
 			['Player List', 'playerListId', 7],
 		],
 	],
@@ -182,7 +182,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		{ scope: 'playerList' },
 		[
 			['Archetype filter', 'archetypeFilter', 'Azorius Control'],
-			['Custom header text', 'headerText', 'Top Cards'],
+			['Header text', 'headerText', 'Top Cards'],
 			['Player List', 'playerListId', 7],
 		],
 	],
@@ -191,7 +191,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'standings',
 		{ viewMode: 'watchlist' },
 		[
-			['Custom header text', 'headerText', 'Final Standings'],
+			['Header text', 'headerText', 'Final Standings'],
 			['Max width', 'maxWidth', 1200],
 			['Player List', 'playerListId', 7],
 		],
@@ -201,7 +201,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'player-history',
 		{},
 		[
-			['Custom header text', 'headerText', 'Match History'],
+			['Header text', 'headerText', 'Match History'],
 			['Player', 'playerId', 5],
 		],
 	],
@@ -210,7 +210,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'pairings',
 		{},
 		[
-			['Custom header text', 'headerText', 'Top Tables'],
+			['Header text', 'headerText', 'Top Tables'],
 			['Round', 'roundId', 31],
 		],
 	],
@@ -219,7 +219,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'head-to-head',
 		{},
 		[
-			['Custom header text', 'headerText', 'Feature Match Preview'],
+			['Header text', 'headerText', 'Feature Match Preview'],
 			['Feature Match Slot', 'featureMatchId', 4],
 		],
 	],
@@ -237,7 +237,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'talent',
 		{},
 		[
-			['Custom header text', 'headerText', 'Your Casters'],
+			['Header text', 'headerText', 'Your Casters'],
 			['Talent', 'talentId', 7],
 		],
 	],
@@ -246,7 +246,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'top-cut',
 		{},
 		[
-			['Custom header text', 'headerText', 'Championship Bracket'],
+			['Header text', 'headerText', 'Championship Bracket'],
 			['Phase', 'phaseId', 3],
 			['Bracket size', 'bracketSizeOverride', 8],
 		],
@@ -265,7 +265,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'archetype-spotlight',
 		{ scope: 'playerList' },
 		[
-			['Custom header text', 'headerText', 'Deck to Beat'],
+			['Header text', 'headerText', 'Deck to Beat'],
 			['Archetype', 'archetypeId', 4],
 			['Player List', 'playerListId', 7],
 		],

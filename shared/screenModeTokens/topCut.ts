@@ -1,7 +1,9 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { topCutModeConfigContract } from '../screenModeConfigs/topCut';
 
-/** The Top Cut Bracket settings groups its Mode Tokens may name (ADR-0072). */
-export type TopCutSettingsGroup = 'bracket' | 'champion';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type TopCutSettingsGroup = ScreenSettingsGroupOf<typeof topCutModeConfigContract>;
 
 /** How the Top Cut Bracket Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const topCutModeTokens = {

@@ -224,7 +224,7 @@ describe('screenModesPairingsSettings', () => {
 		expect(settingsLayout(wrapper)).toEqual([
 			{
 				id: 'pairings:data',
-				title: 'Data',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},

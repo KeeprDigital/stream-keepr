@@ -65,19 +65,19 @@ describe('the Archetype Spotlight settings editor', () => {
 	});
 
 	// Each Mode Token's Look sits in the card for what it styles (ADR-0072).
-	it('lays out Data, Top Cards, Pilots and Header, each holding its Look', async () => {
+	it('lays out Source, Top cards, Pilots and Header, each holding its Look', async () => {
 		const wrapper = await mountSettings();
 
 		expect(settingsLayout(wrapper)).toEqual([
 			{
 				id: 'archetype-spotlight:data',
-				title: 'Data',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},
 			{
 				id: 'archetype-spotlight:top-cards',
-				title: 'Top Cards',
+				title: 'Top cards',
 				collapsible: true,
 				groups: ['top-cards'],
 			},
@@ -95,7 +95,7 @@ describe('the Archetype Spotlight settings editor', () => {
 			},
 		]);
 		expect(settingsSummaries(wrapper)).toEqual({
-			'archetype-spotlight:top-cards': 'Top 8 · Full Deck',
+			'archetype-spotlight:top-cards': 'Top 8 · Full deck',
 			'archetype-spotlight:pilots': '8 per page · Manual paging',
 			'archetype-spotlight:header': 'Auto title',
 		});

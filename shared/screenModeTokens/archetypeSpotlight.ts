@@ -1,7 +1,9 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { archetypeSpotlightModeConfigContract } from '../screenModeConfigs/archetypeSpotlight';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
 
-/** The Archetype Spotlight settings groups its Mode Tokens may name (ADR-0072). */
-export type ArchetypeSpotlightSettingsGroup = 'top-cards';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type ArchetypeSpotlightSettingsGroup = ScreenSettingsGroupOf<typeof archetypeSpotlightModeConfigContract>;
 
 /** How the Archetype Spotlight Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const archetypeSpotlightModeTokens = {

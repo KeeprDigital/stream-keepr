@@ -1,5 +1,6 @@
 import type { Game } from '../types/enums';
 import type { ScreenModeConfigOf } from './contract';
+import type { ScreenSettingsContext } from './fields';
 import { z } from 'zod';
 import { manualBracketPositionCounts } from '../modules/top-cut-bracket/manual';
 import { TOP_CUT_BRACKET_SIZES } from '../modules/top-cut-bracket/seeding';
@@ -76,6 +77,11 @@ export const manualBracketSchema = z.object({
 	});
 });
 
+/** Whether the bracket is a Phase's, as `topCutBracketSource` decides it: never on a One Piece Card Game Event. */
+function readsPhase({ event, config }: ScreenSettingsContext): boolean {
+	return event?.game !== 'op' && config.bracketSource === 'phase';
+}
+
 /**
  * The Top Cut Bracket Screen Mode's config contract: its shape, type, and defaults.
  *
@@ -96,14 +102,63 @@ export const manualBracketSchema = z.object({
  * its Top Cut Bracket is always its Manual Bracket.
  */
 export const topCutModeConfigContract = defineScreenModeConfigContract({
-	bracketSource: editorField(z.enum(TOP_CUT_BRACKET_SOURCE_VALUES), { label: 'Bracket from' }),
-	phaseId: z.number().int().positive().optional(),
-	manualBracket: manualBracketSchema,
-	bracketSizeOverride: z.literal(TOP_CUT_BRACKET_SIZES).optional(),
-	showSeeds: editorField(z.boolean(), { label: 'Show Seeds' }),
-	showArchetypes: editorField(z.boolean(), { label: 'Show Archetypes' }),
-	playerNameShown: editorField(z.enum(PLAYER_NAME_SHOWN_VALUES), { label: 'Show Players by' }),
-	...headerConfigShape,
+	bracketSource: editorField(z.enum(TOP_CUT_BRACKET_SOURCE_VALUES), {
+		label: 'Bracket from',
+		card: 'source',
+		description: 'Derive the bracket from a Phase\'s Rounds and Match Results, or enter its entrants and results by hand.',
+		options: { phase: 'A Phase', manual: 'Entered by hand' },
+		// A One Piece Card Game Event holds no Phases, so it offers only the Manual Bracket (ADR-0075).
+		showWhen: ({ event }) => event?.game !== 'op',
+	}),
+	phaseId: editorField(z.number().int().positive().optional(), {
+		label: 'Phase',
+		card: 'source',
+		reference: 'phase',
+		description: 'The bracket shows this Phase\'s Rounds in order, its first Round placed by each Player\'s Seed.',
+		showWhen: readsPhase,
+	}),
+	manualBracket: editorField(manualBracketSchema, {
+		label: 'Manual Bracket',
+		card: 'live',
+		reference: 'manualBracket',
+		slot: 'manual-bracket',
+		showWhen: context => !readsPhase(context),
+	}),
+	bracketSizeOverride: editorField(z.literal(TOP_CUT_BRACKET_SIZES).optional(), {
+		label: 'Bracket size',
+		card: 'source',
+		slot: 'bracket-size',
+		placeholder: 'From the first Round',
+		description: 'Set it to show the byes the best Seeds take before the next Round is paired; a size smaller than the first Round needs is ignored.',
+		showWhen: readsPhase,
+	}),
+	showSeeds: editorField(z.boolean(), {
+		label: 'Show Seeds',
+		card: 'content',
+		group: 'entrants',
+		description: context => readsPhase(context)
+			? 'Show each Player\'s final position in the last Round Standings before this Phase.'
+			: 'Show each entrant\'s Seed, their place in the Manual Bracket\'s list.',
+	}),
+	showArchetypes: editorField(z.boolean(), {
+		label: 'Show archetypes',
+		card: 'content',
+		group: 'entrants',
+		description: 'Show each Player\'s archetype under their name, or their Deck List\'s deck name; blank when they have neither.',
+	}),
+	playerNameShown: editorField(z.enum(PLAYER_NAME_SHOWN_VALUES), {
+		label: 'Show Players by',
+		card: 'content',
+		group: 'entrants',
+		description: 'Their name or their Nickname; a Player without the one chosen shows the other.',
+		options: { name: 'Name', nickname: 'Nickname' },
+		// Only a One Piece Card Game Player has a Nickname to show instead (ADR-0077).
+		showWhen: ({ event }) => event?.game === 'op',
+	}),
+	...headerConfigShape({
+		shows: 'Show a title above the bracket.',
+		auto: 'Empty shows the Phase\'s name.',
+	}),
 }, {
 	bracketSource: 'phase',
 	phaseId: undefined,
@@ -115,6 +170,11 @@ export const topCutModeConfigContract = defineScreenModeConfigContract({
 	...DEFAULT_HEADER_CONFIG,
 }, {
 	formerFields: ['bracketSize'],
+	groups: {
+		entrants: { title: 'Entrants', card: 'content' },
+		bracket: { title: 'Bracket', card: 'content' },
+		champion: { title: 'Champion', card: 'content' },
+	},
 });
 
 export type TopCutModeConfig = ScreenModeConfigOf<typeof topCutModeConfigContract>;

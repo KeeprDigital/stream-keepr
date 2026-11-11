@@ -1,7 +1,9 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { pairingsModeConfigContract } from '../screenModeConfigs/pairings';
 
-/** The Pairings settings groups its Mode Tokens may name (ADR-0072). */
-export type PairingsSettingsGroup = 'result-badge';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type PairingsSettingsGroup = ScreenSettingsGroupOf<typeof pairingsModeConfigContract>;
 
 /** How the Pairings Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const pairingsModeTokens = {

@@ -83,7 +83,7 @@ const headerCardSummary = computed(() => headerSummary(config.value));
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="top-cut:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="top-cut:data" title="Source" :collapsible="false">
 			<ScreenConfigField
 				v-if="offersPhases"
 				:field="fields.bracketSource"

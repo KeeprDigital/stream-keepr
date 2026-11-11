@@ -1,5 +1,6 @@
 import type { BoardSelection, QuantityPosition, SideboardPlacement } from '../types/enums';
 import type { ScreenModeConfigOf } from './contract';
+import type { ScreenSettingsContext } from './fields';
 import { z } from 'zod';
 import {
 	BOARD_SELECTION_VALUES,
@@ -19,6 +20,9 @@ const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
 /** The most cards a board lays out, so the most columns its grid can have: a hundred-card singleton deck. */
 const DECK_BOARD_MAX_CARDS = 100;
 
+/** What each board view is called. */
+const BOARD_VIEW_LABELS = { grid: 'Grid', stack: 'Stack', list: 'List' } as const;
+
 /**
  * One board's complete layout block. The Mainboard and Sideboard each carry
  * their own (#478): which view renders the board, and the knobs each view
@@ -28,21 +32,48 @@ const DECK_BOARD_MAX_CARDS = 100;
  * views, and only it says how much of a stacked card shows. Visibility is the
  * `board` selection's concern, so a block carries no show/hide of its own.
  */
-function deckBoardLayoutShape<const Views extends readonly [string, ...string[]]>(views: Views) {
+function deckBoardLayoutShape<const Views extends readonly [string, ...string[]]>(
+	views: Views,
+	group: 'mainboard' | 'sideboard',
+	/** Whether the board's layout values are its own to edit: a sideboard following the mainboard's are not (#1091). */
+	ownLayout: (context: ScreenSettingsContext) => boolean = () => true,
+) {
+	const place = { card: 'content', group } as const;
 	return {
-		view: editorField(z.enum(views).optional(), { label: 'View' }),
-		...cardLayoutShape(DECK_BOARD_MAX_CARDS),
-		listColumns: editorField(z.number().int().min(1).max(4).optional(), { label: 'List Columns' }),
+		view: editorField(z.enum(views).optional(), {
+			...place,
+			label: 'View',
+			description: `How the ${group}'s cards are shown.`,
+			options: Object.fromEntries(views.map(view => [view, BOARD_VIEW_LABELS[view as keyof typeof BOARD_VIEW_LABELS]])) as Record<Views[number], string>,
+		}),
+		...cardLayoutShape(DECK_BOARD_MAX_CARDS, group, ownLayout),
+		listColumns: editorField(z.number().int().min(1).max(4).optional(), {
+			...place,
+			label: 'List columns',
+			showWhen: context => context.block?.view === 'list' && ownLayout(context),
+		}),
 		/** Where the board's cards sit in its space when they leave some over. */
-		alignment: editorField(z.enum(NINE_POINT_VALUES).optional(), { label: 'Alignment' }),
+		alignment: editorField(z.enum(NINE_POINT_VALUES).optional(), {
+			...place,
+			label: 'Alignment',
+			control: 'position',
+			description: 'Where the cards sit when they leave space over.',
+			showWhen: context => context.block?.view !== 'list' && ownLayout(context),
+		}),
 	};
 }
 
-const mainboardLayoutShape = deckBoardLayoutShape(MAINBOARD_VIEW_VALUES);
+const mainboardLayoutShape = deckBoardLayoutShape(MAINBOARD_VIEW_VALUES, 'mainboard');
 const sideboardLayoutShape = {
-	...deckBoardLayoutShape(SIDEBOARD_VIEW_VALUES),
+	...deckBoardLayoutShape(SIDEBOARD_VIEW_VALUES, 'sideboard', ({ block }) => sideboardStoresOwnLayout(block)),
 	/** How much of each stacked card but the last shows, in px. */
-	stackReveal: editorField(z.number().int().min(4).max(240).optional(), { label: 'Stack Reveal' }),
+	stackReveal: editorField(z.number().int().min(4).max(240).optional(), {
+		label: 'Stack reveal',
+		card: 'content',
+		group: 'sideboard',
+		description: 'How much of each stacked card but the last shows, in px.',
+		showWhen: ({ block }) => block?.view === 'stack',
+	}),
 };
 
 /**
@@ -148,7 +179,7 @@ const DEFAULT_SIDEBOARD_LAYOUT: ResolvedSideboardLayout = {
  * always names its alignment and list columns, so a layout of all Auto Card
  * Layout values is still its own.
  */
-function sideboardStoresOwnLayout(block: Partial<SideboardLayout> | undefined): boolean {
+function sideboardStoresOwnLayout(block: Readonly<Record<string, unknown>> | undefined): boolean {
 	return Object.entries(block ?? {})
 		.some(([key, value]) => key !== 'view' && key !== 'stackReveal' && value !== undefined);
 }
@@ -190,11 +221,35 @@ export const DEFAULT_HIGHLANDER_POINTS_POSITION: QuantityPosition = 'top-left';
 /** Top centre: clear of the corner badges, and shown by a stacked card's top slice. */
 export const DEFAULT_COMPANION_TAG_POSITION: QuantityPosition = 'top';
 
+/** A Magic Deck List's page; a One Piece Card Game Deck List has no sideboard, companion or card points (ADR-0057). */
+function isMagic({ event }: ScreenSettingsContext): boolean {
+	return event?.game !== 'op';
+}
+
+function isBroadcastSource({ config }: ScreenSettingsContext): boolean {
+	return config.deckSource?.type === 'broadcast';
+}
+
+/** Card points come from the Event's points system; a Broadcast Deck List carries none. */
+function showsCardPoints(context: ScreenSettingsContext): boolean {
+	return isMagic(context) && !isBroadcastSource(context) && !!context.event?.pointsSystem;
+}
+
+function showsPointBadges(context: ScreenSettingsContext): boolean {
+	return showsCardPoints(context) && context.config.showHighlanderPoints !== false;
+}
+
+/** The details row shows only with something in it, so its own settings show only then. */
+function showsDetailsRow(context: ScreenSettingsContext): boolean {
+	return isMagic(context)
+		&& (!!context.config.showDeckStats || (showsCardPoints(context) && context.config.showHighlanderTotal !== false));
+}
+
 /** The Deck List Screen Mode's config contract: its shape, type, and defaults. */
 export const deckModeConfigContract = defineScreenModeConfigContract({
 	// The Deck Source (ADR-0032): no Player or one Player, one Broadcast Deck
 	// List, or one player side of a Feature Match Slot, followed live (ADR-0057).
-	deckSource: z.discriminatedUnion('type', [
+	deckSource: editorField(z.discriminatedUnion('type', [
 		z.object({
 			type: z.literal('player'),
 			playerId: z.number().int().positive().nullable(),
@@ -210,43 +265,173 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 			/** The side shown, in the Session's order: whichever player sits there now (ADR-0058). */
 			side: z.enum(PLAYER_SIDE_VALUES),
 		}).strict(),
-	]),
+	]), {
+		label: 'Deck Source',
+		card: 'source',
+		reference: 'deckSource',
+	}),
 	/**
-	 * Which boards render (#477). "Both hidden" is impossible by construction.
-	 * Its editor is each board's own show toggle, so it carries no editor meta.
+	 * Which boards render (#477). "Both hidden" is impossible by construction,
+	 * so its editor is each board's own show toggle, writing this one field.
 	 */
-	board: z.enum(BOARD_SELECTION_VALUES).optional(),
+	board: editorField(z.enum(BOARD_SELECTION_VALUES).optional(), {
+		label: 'Boards',
+		card: 'content',
+		slot: 'board-toggles',
+		showWhen: isMagic,
+	}),
 	/** Where the sideboard sits relative to the mainboard. Read only at `board: 'full'`. */
-	sideboardPlacement: editorField(z.enum(SIDEBOARD_PLACEMENT_VALUES).optional(), { label: 'Sideboard Placement' }),
-	mainboard: mainboardLayoutConfigSchema.optional(),
-	sideboard: sideboardLayoutConfigSchema.optional(),
-	showQuantities: editorField(z.boolean().optional(), { label: 'Show Quantities' }),
+	sideboardPlacement: editorField(z.enum(SIDEBOARD_PLACEMENT_VALUES).optional(), {
+		label: 'Placement',
+		card: 'content',
+		group: 'sideboard',
+		description: 'Where the sideboard sits relative to the mainboard.',
+		options: { beside: 'Beside the mainboard', below: 'Below the mainboard' },
+		showWhen: ({ config }) => (config.board ?? DEFAULT_BOARD) === 'full',
+	}),
+	mainboard: editorField(mainboardLayoutConfigSchema.optional(), {
+		label: 'Mainboard layout',
+		card: 'content',
+		group: 'mainboard',
+		showWhen: ({ config }) => (config.board ?? DEFAULT_BOARD) !== 'sideboard',
+	}),
+	sideboard: editorField(sideboardLayoutConfigSchema.optional(), {
+		label: 'Sideboard layout',
+		card: 'content',
+		group: 'sideboard',
+		showWhen: ({ config }) => (config.board ?? DEFAULT_BOARD) !== 'mainboard',
+	}),
+	showQuantities: editorField(z.boolean().optional(), {
+		label: 'Show quantity badges',
+		card: 'content',
+		group: 'quantity-badge',
+		description: 'On cards with multiple copies.',
+	}),
 	/** The header's first line: the Player's name, or a Broadcast Deck List's own name. */
-	showPlayerName: editorField(z.boolean().optional(), { label: 'Show Player Name' }),
+	showPlayerName: editorField(z.boolean().optional(), {
+		label: 'Show Player name',
+		labelFor: context => isBroadcastSource(context)
+			? 'Show list name'
+			: 'Show Player name',
+		card: 'header',
+		description: context => isBroadcastSource(context)
+			? 'The Broadcast Deck List\'s name, on the first line.'
+			: 'The Player\'s name, on the first line.',
+	}),
 	/** The header's second line: the deck's name, or a Broadcast Deck List's archetype. */
-	showDeckName: editorField(z.boolean().optional(), { label: 'Show Deck Name' }),
-	showDeckColors: editorField(z.boolean().optional(), { label: 'Show Deck Colors' }),
+	showDeckName: editorField(z.boolean().optional(), {
+		label: 'Show deck name',
+		labelFor: context => isBroadcastSource(context)
+			? 'Show archetype'
+			: 'Show deck name',
+		card: 'header',
+		description: (context) => {
+			if (!isMagic(context))
+				return 'The Leader\'s name, which names the deck.';
+			return isBroadcastSource(context)
+				? 'The list\'s archetype, beside its name.'
+				: 'The deck\'s name, beside the Player\'s.';
+		},
+	}),
+	showDeckColors: editorField(z.boolean().optional(), {
+		label: 'Show deck colours',
+		card: 'header',
+		description: context => isMagic(context)
+			? 'The deck\'s mana colours, beside its name.'
+			: 'The Leader\'s colours, beside its name.',
+	}),
 	/** The companion as its own card image, beside the boards. */
-	showCompanion: editorField(z.boolean().optional(), { label: 'Show Companion' }),
-	showDeckStats: editorField(z.boolean().optional(), { label: 'Show Deck Stats' }),
+	showCompanion: editorField(z.boolean().optional(), {
+		label: 'Show companion',
+		card: 'content',
+		group: 'sideboard',
+		description: 'The deck\'s companion as the sideboard\'s first card.',
+	}),
+	showDeckStats: editorField(z.boolean().optional(), {
+		label: 'Show deck stats',
+		card: 'content',
+		group: 'deck-details',
+		description: 'Card counts by type: creatures, instants and so on.',
+		showWhen: isMagic,
+	}),
 	/** A One Piece Card Game Deck List's cost curve, beside its Leader. */
-	showCostCurve: editorField(z.boolean().optional(), { label: 'Show Cost Curve' }),
-	showDeckMetaPill: editorField(z.boolean().optional(), { label: 'Show Deck Meta Pill' }),
-	showHighlanderTotal: editorField(z.boolean().optional(), { label: 'Show Total Points' }),
-	showHighlanderPointedCards: editorField(z.boolean().optional(), { label: 'Show Pointed Cards' }),
-	showHighlanderPoints: editorField(z.boolean().optional(), { label: 'Show Point Badges' }),
-	highlanderPointsPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
+	showCostCurve: editorField(z.boolean().optional(), {
+		label: 'Show cost curve',
+		card: 'content',
+		group: 'mainboard',
+		description: 'Cards by cost, under the Leader.',
+		showWhen: context => !isMagic(context),
+	}),
+	showDeckMetaPill: editorField(z.boolean().optional(), {
+		label: 'Show as a pill',
+		card: 'content',
+		group: 'deck-details',
+		description: 'Wrap the details row in a pill.',
+		showWhen: showsDetailsRow,
+	}),
+	showHighlanderTotal: editorField(z.boolean().optional(), {
+		label: 'Show total points',
+		card: 'content',
+		group: 'deck-details',
+		description: 'The deck\'s total points from the Event\'s points system.',
+		showWhen: showsCardPoints,
+	}),
+	showHighlanderPointedCards: editorField(z.boolean().optional(), {
+		label: 'Show pointed cards',
+		card: 'content',
+		group: 'pointed-cards',
+		description: 'A chip per pointed card, under the details row.',
+		showWhen: showsCardPoints,
+	}),
+	showHighlanderPoints: editorField(z.boolean().optional(), {
+		label: 'Show point badges',
+		card: 'content',
+		group: 'points-badge',
+		description: 'Each pointed card\'s points; placed on a grid\'s cards.',
+		showWhen: showsCardPoints,
+	}),
+	highlanderPointsPosition: editorField(quantityPositionSchema.optional(), {
+		label: 'Badge position',
+		card: 'content',
+		group: 'points-badge',
+		control: 'position',
+		showWhen: showsPointBadges,
+	}),
 
 	// Quantity badge placement
-	quantityPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
+	quantityPosition: editorField(quantityPositionSchema.optional(), {
+		label: 'Badge position',
+		card: 'content',
+		group: 'quantity-badge',
+		control: 'position',
+		showWhen: ({ config }) => config.showQuantities !== false,
+	}),
 	/** Where the companion's tag sits on its card: a corner puts the tag's own edge there. */
-	companionTagPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
+	companionTagPosition: editorField(quantityPositionSchema.optional(), {
+		label: 'Badge position',
+		card: 'content',
+		group: 'companion-badge',
+		control: 'position',
+		description: 'On the companion\'s card; in a corner, it lines up with that side.',
+	}),
 
 	// Text sizes; each badge, pill and chip sizes itself around its own (ADR-0054). A badge's is Auto while absent.
-	quantityBadgeSize: cardBadgeSizeField,
-	pointsBadgeSize: cardBadgeSizeField,
-	metaPillSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Details Text Size' }),
-	pointedCardSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Pointed Card Text Size' }),
+	quantityBadgeSize: cardBadgeSizeField('quantity-badge', ({ config }) => config.showQuantities !== false),
+	pointsBadgeSize: cardBadgeSizeField('points-badge', showsPointBadges),
+	metaPillSize: editorField(z.number().int().min(8).max(48).optional(), {
+		label: 'Details text size',
+		card: 'content',
+		group: 'deck-details',
+		description: 'The row\'s text size in px; a pill sizes itself around it.',
+		showWhen: showsDetailsRow,
+	}),
+	pointedCardSize: editorField(z.number().int().min(8).max(48).optional(), {
+		label: 'Pointed card text size',
+		card: 'content',
+		group: 'pointed-cards',
+		description: 'Each chip\'s text size in px; the chip sizes itself around it.',
+		showWhen: context => showsCardPoints(context) && context.config.showHighlanderPointedCards !== false,
+	}),
 }, {
 	deckSource: { type: 'player', playerId: null },
 	board: DEFAULT_BOARD,
@@ -295,6 +480,28 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 		...FORMER_BOARD_LAYOUT_FIELDS.flatMap(field => [`mainboard.${field}`, `sideboard.${field}`]),
 	],
 	upgradeFormerFields: upgradeCardSizing,
+	groups: {
+		'mainboard': { title: 'Mainboard', card: 'content' },
+		'sideboard': { title: 'Sideboard', card: 'content', showWhen: isMagic },
+		'deck-details': { title: 'Deck details', card: 'content' },
+		// A One Piece Deck List has no card points, but its page keeps their Looks reachable (ADR-0072).
+		'pointed-cards': {
+			title: 'Pointed cards',
+			card: 'content',
+			showWhen: context => !isMagic(context) || showsCardPoints(context),
+		},
+		'quantity-badge': { title: 'Quantity badge', card: 'content' },
+		'points-badge': {
+			title: 'Point badge',
+			card: 'content',
+			showWhen: context => !isMagic(context) || showsCardPoints(context),
+		},
+		'companion-badge': {
+			title: 'Companion badge',
+			card: 'content',
+			showWhen: context => isMagic(context) && context.config.showCompanion !== false,
+		},
+	},
 });
 
 export type DeckModeConfig = ScreenModeConfigOf<typeof deckModeConfigContract>;

@@ -82,7 +82,7 @@ describe('screenCardBadgeFields', () => {
 			name: 'a badge with no size: no size control',
 			props: companion,
 			controls: [
-				['companionTagPosition', 'Badge Position'],
+				['companionTagPosition', 'Badge position'],
 			],
 		},
 	])('lays out $name in one row named for the badge', ({ props, controls }) => {

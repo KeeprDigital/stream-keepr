@@ -101,29 +101,29 @@ describe('screenFeatureMatchSettings', () => {
 		const wrapper = await mountSettings();
 
 		expect(wrapper.findAll('h3').map(title => title.text())).toEqual([
-			'Feature Match Slot',
-			'Player Info',
-			'Match Display',
-			'Game State',
-			'Control Permissions',
+			'Source',
+			'Player info',
+			'Match display',
+			'Game state',
+			'Control permissions',
 		]);
 	});
 
 	it.each([
-		{ key: 'showPronouns', title: 'Player Info' },
-		{ key: 'showDeckNames', title: 'Player Info' },
-		{ key: 'showRecords', title: 'Player Info' },
-		{ key: 'showLgs', title: 'Player Info' },
-		{ key: 'showClock', title: 'Match Display' },
-		{ key: 'showTableNumber', title: 'Match Display' },
-		{ key: 'showSeatLabels', title: 'Match Display' },
-		{ key: 'showCounters', title: 'Game State' },
-		{ key: 'showTurnControls', title: 'Game State' },
-		{ key: 'showOvertime', title: 'Game State' },
-		{ key: 'showMulliganInfo', title: 'Game State' },
-		{ key: 'allowLifeControls', title: 'Control Permissions' },
-		{ key: 'allowGameWinControls', title: 'Control Permissions' },
-		{ key: 'allowCounterControls', title: 'Control Permissions' },
+		{ key: 'showPronouns', title: 'Player info' },
+		{ key: 'showDeckNames', title: 'Player info' },
+		{ key: 'showRecords', title: 'Player info' },
+		{ key: 'showLgs', title: 'Player info' },
+		{ key: 'showClock', title: 'Match display' },
+		{ key: 'showTableNumber', title: 'Match display' },
+		{ key: 'showSeatLabels', title: 'Match display' },
+		{ key: 'showCounters', title: 'Game state' },
+		{ key: 'showTurnControls', title: 'Game state' },
+		{ key: 'showOvertime', title: 'Game state' },
+		{ key: 'showMulliganInfo', title: 'Game state' },
+		{ key: 'allowLifeControls', title: 'Control permissions' },
+		{ key: 'allowGameWinControls', title: 'Control permissions' },
+		{ key: 'allowCounterControls', title: 'Control permissions' },
 	])('puts the $key toggle in the $title card, writing it as its own field', async ({ key, title }) => {
 		const wrapper = await mountSettings();
 
@@ -205,8 +205,8 @@ describe('screenFeatureMatchSettings', () => {
 	});
 
 	it.each([
-		{ game: 'mtg', label: 'Show Deck Names', description: 'Show player deck names below their name.' },
-		{ game: 'op', label: 'Show Leader Names', description: 'Show player leader names below their name.' },
+		{ game: 'mtg', label: 'Show deck names', description: 'Show player deck names below their name.' },
+		{ game: 'op', label: 'Show leader names', description: 'Show player leader names below their name.' },
 	] as const)('names the $game player identity in the deck names toggle', async ({ game, label, description }) => {
 		mockEvent.value = createMockEvent({ ...everyFeature, game });
 		const wrapper = await mountSettings();
@@ -234,7 +234,7 @@ describe('screenFeatureMatchSettings', () => {
 	it('puts the left side select in the Match Display card, writing it as its own field', async () => {
 		const wrapper = await mountSettings();
 
-		await card(wrapper, 'Match Display').get('[data-config-field="leftSidePlayer"] select').setValue('player2');
+		await card(wrapper, 'Match display').get('[data-config-field="leftSidePlayer"] select').setValue('player2');
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ leftSidePlayer: 'player2' });
 	});
@@ -242,7 +242,7 @@ describe('screenFeatureMatchSettings', () => {
 	it('binds the Screen to a Feature Match Slot and loads its state', async () => {
 		const wrapper = await mountSettings();
 
-		await card(wrapper, 'Feature Match Slot').get('select').setValue('5');
+		await card(wrapper, 'Source').get('select').setValue('5');
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ featureMatchId: 5 });
 		expect(mockLoadState).toHaveBeenCalledWith(1, 5);
@@ -251,48 +251,48 @@ describe('screenFeatureMatchSettings', () => {
 	it('keeps the Feature Match Slot card open, with no collapse control', async () => {
 		const wrapper = await mountSettings();
 
-		expect(collapseToggle(wrapper, 'Feature Match Slot').exists()).toBe(false);
+		expect(collapseToggle(wrapper, 'Source').exists()).toBe(false);
 	});
 
 	it.each([
 		{
-			title: 'Player Info',
+			title: 'Player info',
 			event: {},
 			config: {},
-			summary: 'Pronouns · Deck Names · Player Record · LGS',
+			summary: 'Names · Pronouns · Deck names · Record · LGS',
 		},
 		{
-			title: 'Player Info',
+			title: 'Player info',
 			event: { lgsEnabled: false },
 			config: { showPronouns: false },
-			summary: 'Deck Names · Player Record',
+			summary: 'Names · Deck names · Record',
 		},
 		{
-			title: 'Player Info',
+			title: 'Player info',
 			event: { pronounsEnabled: false, standingsEnabled: false, lgsEnabled: false },
-			config: { showDeckNames: false },
+			config: { showNames: false, showDeckNames: false },
 			summary: 'Nothing shown',
 		},
 		{
-			title: 'Match Display',
+			title: 'Match display',
 			event: { tableNumberEnabled: false },
 			config: { leftSidePlayer: 'player2' },
-			summary: 'Clock · Seat Labels · Left Side of Screen: Right player',
+			summary: 'Clock · Seat labels · Left side of Screen: Right player',
 		},
 		{
-			title: 'Game State',
+			title: 'Game state',
 			event: { game: 'op' },
 			config: {},
-			summary: 'Turn Controls',
+			summary: 'Turn controls',
 		},
 		{
-			title: 'Control Permissions',
+			title: 'Control permissions',
 			event: {},
 			config: { allowGameWinControls: false },
-			summary: 'Life Total Controls · Counter Controls',
+			summary: 'Life total controls · Counter controls',
 		},
 		{
-			title: 'Control Permissions',
+			title: 'Control permissions',
 			event: { game: 'op' },
 			config: { allowGameWinControls: false },
 			summary: 'None allowed',
@@ -316,12 +316,12 @@ describe('screenFeatureMatchSettings', () => {
 
 	it('remembers a collapsed card for the next visit', async () => {
 		const first = await mountSettings();
-		await collapseToggle(first, 'Game State').trigger('click');
+		await collapseToggle(first, 'Game state').trigger('click');
 		first.unmount();
 
 		const next = await mountSettings();
 
-		expect(collapseToggle(next, 'Game State').attributes('aria-expanded')).toBe('false');
-		expect(collapseToggle(next, 'Player Info').attributes('aria-expanded')).toBe('true');
+		expect(collapseToggle(next, 'Game state').attributes('aria-expanded')).toBe('false');
+		expect(collapseToggle(next, 'Player info').attributes('aria-expanded')).toBe('true');
 	});
 });

@@ -1,7 +1,9 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { playerHistoryModeConfigContract } from '../screenModeConfigs/playerHistory';
 
-/** The Player History settings groups its Mode Tokens may name (ADR-0072). */
-export type PlayerHistorySettingsGroup = 'outcome-badge';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type PlayerHistorySettingsGroup = ScreenSettingsGroupOf<typeof playerHistoryModeConfigContract>;
 
 /** How the Player History Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const playerHistoryModeTokens = {

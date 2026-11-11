@@ -107,7 +107,7 @@ const socialProfilesSummary = computed(() => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="talent:talent" title="Talent" :collapsible="false">
+		<ScreenSettingsSection id="talent:talent" title="Source" :collapsible="false">
 			<ScreenConfigField
 				:field="fields.selection"
 				:model-value="config.selection"

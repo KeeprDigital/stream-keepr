@@ -1,7 +1,9 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { roundClockModeConfigContract } from '../screenModeConfigs/roundClock';
 
-/** The Round Clock settings groups its Mode Tokens may name (ADR-0072). */
-export type RoundClockSettingsGroup = 'clock';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type RoundClockSettingsGroup = ScreenSettingsGroupOf<typeof roundClockModeConfigContract>;
 
 /** How the Round Clock Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const roundClockModeTokens = {

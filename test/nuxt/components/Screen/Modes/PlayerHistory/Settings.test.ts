@@ -114,7 +114,7 @@ describe('screenPlayerHistorySettings', () => {
 		expect(settingsLayout(wrapper)).toEqual([
 			{
 				id: 'player-history:data',
-				title: 'Data',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},

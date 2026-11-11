@@ -96,14 +96,14 @@ describe('screenMetagameScopeFields', () => {
 	] as const)('offers %s every scope', (_mode, fields) => {
 		const wrapper = mountFields({ config: baseConfig, fields });
 
-		expect(field(wrapper, 'Player scope')!.text()).toBe('All Players|Top N|Minimum Points|Player List');
+		expect(field(wrapper, 'Player scope')!.text()).toBe('All Players|Top N|Minimum points|Player List');
 	});
 
 	it('offers the Player List scope only while the Event has a list', () => {
 		mockPlayerListStore.lists = [];
 		const wrapper = mountFields({ config: baseConfig, fields: metagameFields });
 
-		expect(field(wrapper, 'Player scope')!.text()).toBe('All Players|Top N|Minimum Points');
+		expect(field(wrapper, 'Player scope')!.text()).toBe('All Players|Top N|Minimum points');
 	});
 
 	it('emits a scope edit as the patch naming it', () => {
