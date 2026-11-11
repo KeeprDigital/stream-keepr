@@ -1,3 +1,4 @@
+import type { TopCutBracketSize } from '~~/shared/modules/top-cut-bracket';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { TOP_CUT_BRACKET_SIZES } from '~~/shared/screenModeConfigs/topCut';
@@ -9,7 +10,7 @@ import BracketSizeField from '~/components/Screen/Modes/TopCut/BracketSizeField.
 
 enableAutoUnmount(afterEach);
 
-function mountField(modelValue: number | undefined) {
+function mountField(modelValue: TopCutBracketSize | undefined) {
 	return mount(BracketSizeField, {
 		props: {
 			entry: {
