@@ -309,6 +309,32 @@ describe('screenTopCardsDisplay', () => {
 		expect(card.attributes('data-stat-badge-size')).toBe(`${badges.statBadgeTextSize}px`);
 	});
 
+	// An Auto badge follows its card's solved width: 14 px, today's size, on the former default 160 px card.
+	it.each([
+		{ maxCardSize: 160, size: '14px' },
+		{ maxCardSize: 320, size: '28px' },
+	])('sizes Auto badges on a $maxCardSize px card at $size', async ({ maxCardSize, size }) => {
+		config.value = {
+			...config.value,
+			columns: 2,
+			cardGap: 0,
+			maxCardSize,
+			showPointsBadges: true,
+			rankBadgeTextSize: undefined,
+			statBadgeTextSize: undefined,
+			pointsBadgeTextSize: undefined,
+		};
+		[measured.width, measured.height] = [2000, 2000];
+
+		const card = (await mountComponent()).get('[data-testid="top-cards-item"]');
+
+		expect([
+			card.attributes('data-rank-badge-size'),
+			card.attributes('data-stat-badge-size'),
+			card.attributes('data-points-badge-size'),
+		]).toEqual([size, size, size]);
+	});
+
 	// Points come from the Event's points system: a card it leaves out, or a Screen not badging them, shows none.
 	it.each([
 		{ showPointsBadges: true, highlanderPoints: 2, shown: '2' },

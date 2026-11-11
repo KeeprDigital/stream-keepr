@@ -555,7 +555,7 @@ describe('screenDeckSettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const picker = wrapper.get(`[data-config-field="${field}"] [role="radiogroup"]`);
+		const picker = wrapper.get(`[role="radiogroup"][data-config-field="${field}"]`);
 		expect(picker.get('[aria-checked="true"]').attributes('data-point')).toBe(current);
 		expect(picker.get('[data-point="center"]').attributes('disabled')).toBeDefined();
 
@@ -748,15 +748,17 @@ describe('screenDeckSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenLastCalledWith(patch);
 	});
 
-	it('writes each card badge\'s text size', async () => {
+	// Each badge's size is Auto or px; emptying it returns it to Auto.
+	it.each([
+		{ key: 'quantityBadgeSize', value: 20 },
+		{ key: 'pointsBadgeSize', value: 18 },
+		{ key: 'quantityBadgeSize', value: null },
+	])('writes the $key $value from its badge row', async ({ key, value }) => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const sizes = card(wrapper, 'Card Badges').findAll('[data-label="Badge Text Size"]');
-		sizes[0]!.getComponent(UInputNumberStub).vm.$emit('update:modelValue', 20);
-		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ quantityBadgeSize: 20 });
-		sizes[1]!.getComponent(UInputNumberStub).vm.$emit('update:modelValue', 18);
-		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ pointsBadgeSize: 18 });
+		card(wrapper, 'Card Badges').get(`[data-config-field="${key}"]`).getComponent(UInputNumberStub).vm.$emit('update:modelValue', value);
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ [key]: value });
 	});
 
 	// Only a sideboard stacks, and only beside the mainboard (ADR-0054).

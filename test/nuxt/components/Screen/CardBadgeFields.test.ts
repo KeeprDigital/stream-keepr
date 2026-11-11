@@ -5,8 +5,8 @@ import { screenModeConfigContract } from '~~/shared/screenModes';
 import { nuxtUiStubs, UFormFieldBesideStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import CardBadgeFields from '~/components/Screen/CardBadgeFields.vue';
 
-// One card badge's settings: whether it shows, then its position (never the card's centre,
-// which would cover its art) and its text size, each written under its contract field's key.
+// One card badge's row: whether it shows, then its position (never the card's centre,
+// which would cover its art) and its size, Auto or px, each written under its contract field's key.
 
 const topCards = screenModeConfigContract('top-cards').fields;
 const deck = screenModeConfigContract('deck').fields;
@@ -17,7 +17,7 @@ interface Props {
 	shownField?: ScreenModeConfigField;
 	position: string;
 	positionField: ScreenModeConfigField;
-	textSize?: number;
+	size?: number;
 	sizeField?: ScreenModeConfigField;
 }
 
@@ -27,7 +27,7 @@ const rank: Props = {
 	shownField: topCards.showRankBadges,
 	position: 'top-left',
 	positionField: topCards.rankBadgePosition,
-	textSize: 18,
+	size: 18,
 	sizeField: topCards.rankBadgeTextSize,
 };
 
@@ -48,8 +48,16 @@ function mountFields(props: Props, slots: Record<string, string> = {}) {
 	});
 }
 
-function renderedKeys(wrapper: ReturnType<typeof mountFields>) {
-	return wrapper.findAll('[data-config-field]').map(field => field.attributes('data-config-field'));
+/** The row's controls, in order, by the field each writes and its accessible name. */
+function rowControls(wrapper: ReturnType<typeof mountFields>) {
+	const row = wrapper.get('[role="group"]');
+	return {
+		row: row.attributes('aria-label'),
+		controls: row.findAll('[data-config-field]').map(field => [
+			field.attributes('data-config-field'),
+			field.attributes('aria-label'),
+		]),
+	};
 }
 
 describe('screenCardBadgeFields', () => {
@@ -57,35 +65,45 @@ describe('screenCardBadgeFields', () => {
 		{
 			name: 'a shown badge: its toggle, position and size',
 			props: rank,
-			keys: ['showRankBadges', 'rankBadgePosition', 'rankBadgeTextSize'],
+			controls: [
+				['showRankBadges', 'Show rank badges'],
+				['rankBadgePosition', 'Badge position'],
+				['rankBadgeTextSize', 'Badge size'],
+			],
 		},
 		{
 			name: 'a hidden badge: its toggle only',
 			props: { ...rank, shown: false },
-			keys: ['showRankBadges'],
+			controls: [
+				['showRankBadges', 'Show rank badges'],
+			],
 		},
 		{
-			name: 'a badge with no text size: no size control',
+			name: 'a badge with no size: no size control',
 			props: companion,
-			keys: ['companionTagPosition'],
+			controls: [
+				['companionTagPosition', 'Badge Position'],
+			],
 		},
-	])('renders $name', ({ props, keys }) => {
-		expect(renderedKeys(mountFields(props))).toEqual(keys);
+	])('lays out $name in one row named for the badge', ({ props, controls }) => {
+		expect(rowControls(mountFields(props))).toEqual({ row: props.title, controls });
 	});
 
 	it.each([
-		{ name: 'shown', shown: true, positioned: true },
-		{ name: 'hidden', shown: false, positioned: false },
-	])('takes its show control from the slot, with position and size only while $name', ({ shown, positioned }) => {
+		{
+			name: 'shown',
+			shown: true,
+			keys: ['rankBadgePosition', 'rankBadgeTextSize'],
+		},
+		{ name: 'hidden', shown: false, keys: [] },
+	])('takes its show control from the slot, with position and size only while $name', ({ shown, keys }) => {
 		const wrapper = mountFields(
 			{ ...rank, shownField: undefined, shown },
 			{ shown: '<select data-testid="stat-badge" />' },
 		);
 
-		expect(wrapper.find('[data-testid="stat-badge"]').exists()).toBe(true);
-		expect(renderedKeys(wrapper)).toEqual(positioned
-			? ['rankBadgePosition', 'rankBadgeTextSize']
-			: []);
+		expect(wrapper.find('[role="group"] [data-testid="stat-badge"]').exists()).toBe(true);
+		expect(rowControls(wrapper).controls.map(([key]) => key)).toEqual(keys);
 	});
 
 	it('offers every position but the centre', () => {
@@ -93,7 +111,18 @@ describe('screenCardBadgeFields', () => {
 
 		expect(wrapper.get('[data-point="center"]').attributes('disabled')).toBeDefined();
 		expect(wrapper.get('[data-point="top-right"]').attributes('disabled')).toBeUndefined();
-		expect(wrapper.get('[role="radiogroup"]').attributes('aria-label')).toBe('Rank Badge position');
+	});
+
+	it.each([
+		{ name: 'a set size', size: 18, shows: '18' },
+		{ name: 'Auto', size: undefined, shows: '' },
+	])('shows $name in the size field, with Auto its placeholder', ({ size, shows }) => {
+		const input = mountFields({ ...rank, size }).get('input[type="number"]');
+
+		expect([
+			(input.element as HTMLInputElement).value,
+			input.attributes('placeholder'),
+		]).toEqual([shows, 'Auto']);
 	});
 
 	it.each([
@@ -108,9 +137,14 @@ describe('screenCardBadgeFields', () => {
 			patch: { rankBadgePosition: 'bottom-right' },
 		},
 		{
-			name: 'resizes its text',
+			name: 'sets its size',
 			act: (w: ReturnType<typeof mountFields>) => w.get('input[type="number"]').setValue('22'),
 			patch: { rankBadgeTextSize: 22 },
+		},
+		{
+			name: 'returns its size to Auto when emptied',
+			act: (w: ReturnType<typeof mountFields>) => w.get('input[type="number"]').setValue(''),
+			patch: { rankBadgeTextSize: null },
 		},
 	])('$name, under its field\'s key', async ({ act, patch }) => {
 		const wrapper = mountFields(rank);
@@ -121,7 +155,7 @@ describe('screenCardBadgeFields', () => {
 		]);
 	});
 
-	it('bounds the text size by its field', () => {
+	it('bounds the size by its field', () => {
 		const input = mountFields(rank).get('input[type="number"]');
 
 		expect({
@@ -129,11 +163,5 @@ describe('screenCardBadgeFields', () => {
 			max: Number(input.attributes('max')),
 		})
 			.toEqual({ min: topCards.rankBadgeTextSize.min, max: topCards.rankBadgeTextSize.max });
-	});
-
-	it('renders the Look slot after its fields', () => {
-		const html = mountFields(rank, { look: '<p data-testid="look">Look</p>' }).html();
-
-		expect(html.indexOf('data-testid="look"')).toBeGreaterThan(html.indexOf('data-config-field="rankBadgeTextSize"'));
 	});
 });

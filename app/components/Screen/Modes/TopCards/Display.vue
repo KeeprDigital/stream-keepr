@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import { useElementSize } from '@vueuse/core';
+import { cardBadgeTextSize, TOP_CARDS_AUTO_BADGE_RATIO } from '~~/shared/utils/cardBadgeSize';
 import { solveCardGrid } from '~~/shared/utils/cardGrid';
 import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
@@ -48,14 +49,19 @@ const badgeStyle = {
 	boxShadow: `0 4px 6px -1px ${foundationTokenVar('shadow')}`,
 };
 
-// Each badge sits where its config places it, and sizes itself around its own text size.
+// Each badge sits where its config places it, and sizes itself around its own
+// text size: set in px, or Auto, a share of the solved card width.
+function badgeTextSize(size: number | undefined): string {
+	return `${cardBadgeTextSize(size, grid.value.cardWidth, TOP_CARDS_AUTO_BADGE_RATIO)}px`;
+}
+
 const rankBadgeClass = computed(() => CARD_BADGE_POSITION_CLASSES[config.value.rankBadgePosition]);
 const statBadgeClass = computed(() => CARD_BADGE_POSITION_CLASSES[config.value.statBadgePosition]);
 const pointsBadgeClass = computed(() => CARD_BADGE_POSITION_CLASSES[config.value.pointsBadgePosition]);
 
 const rankBadgeStyle = computed(() => ({
 	...badgeStyle,
-	fontSize: `${config.value.rankBadgeTextSize}px`,
+	fontSize: badgeTextSize(config.value.rankBadgeTextSize),
 	width: '1.75em',
 	height: '1.75em',
 	color: modeTokenVar('top-cards', 'rank-badge-text'),
@@ -64,7 +70,7 @@ const rankBadgeStyle = computed(() => ({
 
 const statBadgeStyle = computed(() => ({
 	...badgeStyle,
-	fontSize: `${config.value.statBadgeTextSize}px`,
+	fontSize: badgeTextSize(config.value.statBadgeTextSize),
 	padding: '0.3em 0.6em',
 	color: modeTokenVar('top-cards', 'stat-badge-text'),
 	backgroundColor: modeTokenVar('top-cards', 'stat-badge-surface'),
@@ -72,7 +78,7 @@ const statBadgeStyle = computed(() => ({
 
 const pointsBadgeStyle = computed(() => ({
 	...badgeStyle,
-	fontSize: `${config.value.pointsBadgeTextSize}px`,
+	fontSize: badgeTextSize(config.value.pointsBadgeTextSize),
 	padding: '0.3em 0.6em',
 	color: modeTokenVar('top-cards', 'points-badge-text'),
 	backgroundColor: modeTokenVar('top-cards', 'points-badge-surface'),
