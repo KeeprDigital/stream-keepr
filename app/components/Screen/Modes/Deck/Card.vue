@@ -4,16 +4,12 @@ import { modeTokenVar } from '~/modules/screen-mode';
 
 const props = defineProps<{
 	card: DeckListCardWithData;
-	/** Its width while its sizing is fixed: its board's card width. */
-	width?: string;
 	showQuantity: boolean;
 	showHighlanderPoints: boolean;
 	quantityPositionClass: string;
 	quantityBadgeStyle: Record<string, string>;
 	highlanderPointsPositionClass: string;
 	highlanderPointsBadgeStyle: Record<string, string>;
-	/** Fixed takes `width`; fill takes its column; fit fits its grid cell both ways. */
-	sizing: 'fixed' | 'fill' | 'fit';
 	/** A tag naming the card's role, such as the companion's. */
 	tag?: string;
 	/** Where the tag sits, as the other badges are placed. */
@@ -29,11 +25,6 @@ const tagStyle = computed(() => ({
 	backgroundColor: modeTokenVar('deck', 'quantity-badge-surface'),
 }));
 
-// A Fit grid's columns are already card-sized, so a fitted card fills its column.
-const cardStyle = computed(() => props.sizing === 'fixed'
-	? { width: props.width }
-	: { width: '100%' });
-
 const placeholderStyle = {
 	backgroundColor: modeTokenVar('deck', 'card-placeholder'),
 };
@@ -44,11 +35,9 @@ function getCardImageUrl(card: DeckListCardWithData): string | null {
 </script>
 
 <template>
-	<div class="min-w-0 min-h-0" :data-sizing="sizing">
-		<div
-			class="card-item relative"
-			:style="cardStyle"
-		>
+	<!-- Its board solves the card's width (ADR-0054), so the card fills the column or strip it is given. -->
+	<div class="min-w-0 min-h-0">
+		<div class="card-item relative w-full">
 			<div class="mtg-card" :style="placeholderStyle">
 				<NuxtImg
 					v-if="getCardImageUrl(card)"

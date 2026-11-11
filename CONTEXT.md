@@ -271,12 +271,8 @@ A Screen Output that renders the final composed opacity as a grayscale alpha mat
 _Avoid_: Black-and-white export, chroma key.
 
 **Card Layout**:
-How a card grid on a Most Played Cards Screen lays out its cards: columns, max card size and gap, each a number or Auto. The cards always fit the space the grid is given, so none leave the Event Canvas. Auto columns are the count at which the cards are largest, a max card size is the widest a card may be, and an Auto gap follows the card's size (ADR-0054).
-_Avoid_: Fit, Fixed width, auto columns, card width.
-
-**Card Sizing**:
-How a card grid on a Deck List Screen sizes its cards; a Most Played Cards Screen has a Card Layout in its place. Fixed width: each card takes the grid's own card width, and the grid may run off the Event Canvas. Fit to screen: every card on the page takes the largest size at which all of them fit the space the grid is given, so none overflow. Either may take auto columns, chosen from the card count and the Event Canvas (ADR-0054).
-_Avoid_: dynamic card size, card size presets.
+How a card grid on a Most Played Cards Screen or a Deck List board lays out its cards: columns, max card size and gap, each a number or Auto. The cards always fit the space the grid is given, so none leave the Event Canvas. Auto columns are the count at which the cards are largest, a max card size is the widest a card may be, and an Auto gap follows the card's size. A Deck's boards share one card size (ADR-0054).
+_Avoid_: Card Sizing, Fit, Fixed width, auto columns, card width, dynamic card size.
 
 **Program monitor**:
 A control surface's own live rendering of the Screen it drives. It composes what playout has taken, resolving media exactly as a Screen Output does, but is not a Screen Output.

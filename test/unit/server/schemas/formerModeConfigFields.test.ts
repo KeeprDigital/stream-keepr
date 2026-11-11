@@ -181,7 +181,7 @@ describe.each([
 			showDeckName: false,
 		},
 	},
-	// `cardSizing` replaced it (ADR-0054); nothing migrated stored values, so a straggler reads as the default.
+	// Card Sizing replaced it, and the Card Layout Card Sizing (ADR-0054); a straggler alone reads as the default.
 	{
 		mode: 'deck',
 		stored: {

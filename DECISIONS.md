@@ -1122,7 +1122,7 @@ Accepted · 2026-10-21 · [#587](https://github.com/KeeprDigital/stream-keepr/is
 
 **A field a contract drops is declared a former field, and a stored one still loads and saves** (#752). Top Cut Bracket's placeholder `bracketSize` went when its bracket came to be derived from a Phase; Screens may still store it. Standings' `revealTrigger` and `revealIntervalMs`, which nothing ever read, went the same way (#1064). `defineScreenModeConfigContract(shape, defaults, { formerFields })` names such fields, and they may not also be fields of the shape. `contract.readStored` drops them before clamping, so no reader or client sees one. The `stored` and `patch` write forms drop them before validating, so a client that read a Screen before the field went, and sends it back in a full write or a stale display reset, is accepted rather than refused on an unknown key. `mergeScreenModeConfig` drops them from what a PATCH stores, so the next write of the mode's config removes the field from storage. Every other unknown key is still refused. A field of a nested block is named by its path, as Deck's board blocks name theirs (`mainboard.cardGap`), and is dropped from that block alone (#824).
 
-**A contract may upgrade a former field to the current field that replaced it** (#1071). Dropping is right for a field nothing replaced; a field that was renamed or folded into another, such as a count that became a range, would otherwise read as the default and change what the Screen shows. `defineScreenModeConfigContract(shape, defaults, { formerFields, upgradeFormerFields })` takes a function from a fragment the earlier contract wrote to the fragment as the contract now holds it. It sees the former fields, may set current fields from them, and may rewrite a current field holding a value only the earlier contract allowed, which a dropped enum value needs. `contract.upgradeStored` runs it and then drops the former fields, everywhere they were dropped before: `readStored` upgrades before it clamps, so the mapped value is clamped like a stored one; the `stored` and `patch` write forms upgrade before they validate, so a stale client's write stores the current field and a mapped value outside its bounds is refused; and `mergeScreenModeConfig` upgrades the stored fragment before the patch lands on it, so a PATCH of another field keeps the mapped value where it used to lose the former one, and a PATCH of the current field, its `null` included, wins over the stored former field. Storage is still not migrated: it holds the former field until the mode's config is next written. The function returns the fragment itself when it maps nothing and maps its own output to itself, because every read runs it. A PATCH body naming only part of what a mapping needs is the function's to map or to leave to be dropped; the contract does not read the stored rest for it. Standings declares the first (#1080): its Top N count and slice pair became one position range, `rangeStart` to `rangeEnd`, under the `range` view. A stored Top N view reads as the range 1 to N (1 to 8, the count's former default, where it stored none), a stored slice view as the range its pair named, and a count a stale client sends alone, as the Top N view's editor sent it, as the range 1 to that count. The range selects by position, as the slice did, so a Player without a position is outside every range, where the Top N view counted rows. Most Played Cards declares one too: its former Card Sizing reads as its Card Layout (ADR-0054, #1087).
+**A contract may upgrade a former field to the current field that replaced it** (#1071). Dropping is right for a field nothing replaced; a field that was renamed or folded into another, such as a count that became a range, would otherwise read as the default and change what the Screen shows. `defineScreenModeConfigContract(shape, defaults, { formerFields, upgradeFormerFields })` takes a function from a fragment the earlier contract wrote to the fragment as the contract now holds it. It sees the former fields, may set current fields from them, and may rewrite a current field holding a value only the earlier contract allowed, which a dropped enum value needs. `contract.upgradeStored` runs it and then drops the former fields, everywhere they were dropped before: `readStored` upgrades before it clamps, so the mapped value is clamped like a stored one; the `stored` and `patch` write forms upgrade before they validate, so a stale client's write stores the current field and a mapped value outside its bounds is refused; and `mergeScreenModeConfig` upgrades the stored fragment before the patch lands on it, so a PATCH of another field keeps the mapped value where it used to lose the former one, and a PATCH of the current field, its `null` included, wins over the stored former field. Storage is still not migrated: it holds the former field until the mode's config is next written. The function returns the fragment itself when it maps nothing and maps its own output to itself, because every read runs it. A PATCH body naming only part of what a mapping needs is the function's to map or to leave to be dropped; the contract does not read the stored rest for it. Standings declares the first (#1080): its Top N count and slice pair became one position range, `rangeStart` to `rangeEnd`, under the `range` view. A stored Top N view reads as the range 1 to N (1 to 8, the count's former default, where it stored none), a stored slice view as the range its pair named, and a count a stale client sends alone, as the Top N view's editor sent it, as the range 1 to that count. The range selects by position, as the slice did, so a Player without a position is outside every range, where the Top N view counted rows. Most Played Cards and Deck List declare one too: a former Card Sizing reads as the Card Layout it meant (ADR-0054, #1087, #1088).
 
 ### Why
 
@@ -1630,7 +1630,7 @@ Canvas size and wording are set once per production, not per brand or per Screen
 - Holding text stays on the Event but is set in Event Controls, not Event Presentation Settings: an operator rewrites it during a show, while the settings here are set once per production.
 - The existing look fields are dropped, not migrated, and existing Screens render the Default Theme.
 - The plain modes' remaining look fields became Mode Tokens and former fields (#844): their colours, type and Card Spotlight's enter and exit. Card Spotlight's on/off switch went with its speed, since a motion recipe with no channel cuts.
-- **A Theme Token is shared, never a value one display alone reads** (amended by ADR-0054). A Mode Token defaults to a Foundation Token, so it carries a shared value to the place it is consumed. A size or spacing only one display reads is that mode's config, edited beside the control it sizes: Most Played Cards' card width, gap and badge size; each Deck board's card width and gap, the sideboard's stack reveal, and the Deck's badge, pill and chip text sizes; Card Spotlight's card width. A badge's size is its text size, and the badge is laid out around it in em, so one value sizes it whole. A colour, type, motion or surface a brand would set stays a Theme look even where one mode reads it, such as the Metagame chart palette. The badges' shadow is the `shadow` Foundation Token.
+- **A Theme Token is shared, never a value one display alone reads** (amended by ADR-0054). A Mode Token defaults to a Foundation Token, so it carries a shared value to the place it is consumed. A size or spacing only one display reads is that mode's config, edited beside the control it sizes: Most Played Cards' Card Layout and badge size; each Deck board's Card Layout, the sideboard's stack reveal, and the Deck's badge, pill and chip text sizes; Card Spotlight's card width. A badge's size is its text size, and the badge is laid out around it in em, so one value sizes it whole. A colour, type, motion or surface a brand would set stays a Theme look even where one mode reads it, such as the Metagame chart palette. The badges' shadow is the `shadow` Foundation Token.
 - Standings and Metagame followed (#851). Max table width became the `max-width` dimension, shipped at the widest Event Canvas, so a table fills its Screen until a Theme narrows it. Animate entries became `row-motion`, which also times Metagame's chart bars. Standings' `reveal` view mode keeps its own rise as `reveal-motion`. An entering row starts an eighth of the duration after the one above it, so a cut has no stagger either. No plain mode keeps a size or motion field in config.
 - A motion Mode Token reaches its display as custom properties a CSS transition reads: its timing, and the excursion state the element enters from and leaves to. A slide clearing its parent travels the whole Screen, which is the size container its Screen host sets.
 - `text-inverse` is text on the primary text colour. Every badge, pill and chip whose surface is `text-primary` pairs it with `text-inverse`, so a light Theme sets the two as a pair.
@@ -1725,21 +1725,50 @@ Some modes held program and others did not. The Deck List preloaded its card art
 - **Hold program by scanning the DOM alone, with no declaration.** An async display's chunk has not mounted when the scan runs, so an empty rendering would look ready.
 - **Vue `<Suspense>`.** Still experimental, and suspending setup would keep the incoming rendering from mounting, which is what starts its media loading.
 
-## ADR-0054: Cards fit the Event Canvas or take a fixed width
+## ADR-0054: Cards always fit the Event Canvas, laid out by a Card Layout
 
-Accepted · 2026-10-28
+Accepted · 2026-10-28 · Amended 2026-11-11: Card Sizing, Fixed width or Fit to screen, gave way to the Card Layout, and nothing leaves the Event Canvas · [#1087](https://github.com/KeeprDigital/stream-keepr/issues/1087), [#1088](https://github.com/KeeprDigital/stream-keepr/issues/1088)
 
 ### Decision
 
-**A card grid's Card Sizing is Fixed width or Fit to screen.** `cardSizing: 'fixed' | 'fit'` replaces `dynamicCardSize` on Most Played Cards and on each Deck List board. Fixed takes the grid's own `cardWidth` and may overflow. Fit gives the grid the height its display leaves it, splits it into equal rows (`ScreenCardGrid`), and sizes each card in its cell as `min(100cqw, 100cqh × 61/85)` (`MtgCardFitBox`), so no card leaves the Event Canvas. This is CSS: nothing measures the rendered page. A Most Played Cards page lays out a full page's rows, `min(rowsPerPage, rows)`, so a short last page keeps its card size. Deck boards below each other share the height by their Fit rows, and a Fixed board keeps its own height.
+**A card grid always fits the space its display gives it.** Most Played Cards and each Deck List board lay their cards out by a Card Layout of three values, each a number or Auto, stored as the number or as absent, and all Auto by default: `columns`, `maxCardSize` and `cardGap` (`cardLayoutShape`). Alignment stays a nine-point value. The Card Sizing it replaced (`cardSizing`: Fixed width, which could overflow, or Fit to screen) is gone, with its CSS paths: Fit's container-query card width and Fixed's `auto-fill` tracks.
 
-**Auto columns are chosen from the Event Canvas, never measured.** `autoColumns` sits beside `columns`. Fit picks the column count, from 1 to 12, at which the cards are largest (`fitColumns`). Fixed fits as many card-width columns as there is room for (`fixedColumns`). Both read the canvas inside the Screen inset and the grid's own width and gap (`useCardGridColumns`), and the settings editor's mode data now carries its Event's canvas and Theme, for the inset. Most Played Cards chooses its columns over every card and then pages them, so the column count and the page size never depend on each other. A Fixed Deck grid with auto columns uses CSS `auto-fill`, because a Deck has no pages to agree on.
+- **Solved, not styled:** a display measures the space its cards have and lays out what a solver returns, so `ScreenCardGrid` is handed its columns, card width and gap in px and only places them. Until a space is measured, its cards have no size.
+- **Bounds follow the content:** columns run to the card count, not to 12, and a max card size to the Event Canvas, not to 480 px. The contract holds the outer bound: the most cards a Screen ranks, a hundred on a Deck board, and the largest side a canvas may have. The editor narrows each to the Screen's own card count, where it knows it, and to the largest card its Event's canvas holds whole. Every card grid shares one gap bound, 0 to 100 px.
+- **A stored Card Sizing reads as the Card Layout it meant** (`upgradeFormerFields`, ADR-0037). `cardSizing`, `cardWidth` and `autoColumns` are former fields. A Fixed width is the max card size, a new key so that the mapping holds on every read; a Fit grid has none. A column count with auto columns on is Auto. The former default differs by mode, so the mapping does too:
+  - **Most Played Cards:** its default was Fit, so a config naming no Card Sizing has no max card size.
+  - **Deck List:** its default was Fixed 144 px, so a board storing a `cardWidth` and no Card Sizing reads that width as its max card size, and an explicit Fixed with no width reads 144. A board storing neither is Auto, so an operator can clear the max. Each board is upgraded on its own, and a board not stored stays absent.
+- **A Screen that never set its layout changes:** it showed the mode's fixed columns at its default width and now chooses both, at the largest size that fits. A stored `cardGap` is kept as a set gap, since a stored default cannot be told from a choice.
 
-**Only a sideboard stacks, as the strip beside the mainboard.** The mainboard's views are grid and list. A sideboard stack placed below the mainboard, or shown alone, renders as a grid and keeps `view: 'stack'` stored, so moving it back beside restores the strip. Settings shows the Stack tab disabled in those cases. A Fit strip is one mainboard column wide, and its cards fit the whole stack to its height while the sideboard's `stackReveal` stays in px. A mainboard stack stored by an older client reads as a grid (`resolveDeckBoards`).
+**The card layout solvers take each constraint as Auto or a number and return the largest card that fits** (`solveCardGrid`, `solveDeckLayout`, `solveDeckGroups`; #1072).
 
-**A card grid's sizes are its mode's config, not Mode Tokens.** Each one a single display reads moved back beside the control it sizes, which amends ADR-0051's #844 bullet: a Theme Token is shared. Most Played Cards holds `cardWidth`, `cardGap`, and each badge's own text size and position (`rankBadgeTextSize`, `statBadgeTextSize`, `rankBadgePosition`, `statBadgePosition`), as a Deck's badges are; each Deck board `cardWidth` and `cardGap`, the sideboard `stackReveal`, and the Deck its four text sizes; Card Spotlight `cardWidth`. The three badge shadows read a new `shadow` Foundation Token.
+- **Columns:** a set count is kept. Auto is chosen by one continuous score (`layoutScore`) from 1 to the card count. Each column choice is laid out at the largest card size that fits, and the choices are compared on:
+  - card size, relative to the largest possible;
+  - the share of the width the cards span;
+  - the square root of the share of the height they span;
+  - how full their rows are.
 
-**Nothing is migrated.** The Themes work is not in production, and existing Screens are deleted and set up again rather than carried over. Every replaced field is a former field, so a stored one reads as the mode's default until the Screen is next written:
+  Every term is a ratio, so the same choice holds at any canvas, card or gap size, and no small change flips it. Width counts more than height: space under a grid reads as margin, space beside it as a gap.
+
+- **Max card size:** no card is wider. A Deck's boards share one card size, so they share the least max any board sets, the stacked strip's included.
+- **Gap:** an Auto gap is a fixed ratio of the solved card width, the one that gives the mode's former default gap at its former default card width: 12 px at 160 px on a card grid (`AUTO_GAP_RATIO`), 8 px at 144 px on a Deck board (`DECK_AUTO_GAP_RATIO`). A set gap is kept while it is no wider than the card it leaves. Past that the gap is the card's own width, so a gap too large for its space shrinks with the cards instead of pushing them off the Event Canvas.
+
+**A Deck's boards are laid out together from the space they measure** (`solveDeckLayout`). A Deck has no pages, so the Screen measures the space below its header and lays both boards out at one card size: the largest at which both fit.
+
+- **Columns:** each board's columns are chosen alongside the other's. A sideboard below the mainboard, choosing its own columns, wraps at the mainboard's width: it takes as many as the mainboard has, or as many as it has cards.
+- **Stack:** a stacked sideboard shows less of each card, down to its name bar (`MIN_STACK_REVEAL_SHARE`), before its cards shrink. The strip and its reveal are otherwise unchanged.
+- **A list is not laid out:** a board beside or under a list is laid out alone, in the space the list leaves it. Beside, a list takes a share of the width by its list columns, a grid by its set columns, a strip one.
+- **The companion alone:** with no sideboard shown, the companion is laid out as a one-card sideboard grid, in the sideboard's place.
+- **Measured, not guessed:** a board's heading and a Most Played Cards name label are measured from hidden copies, as their Theme types them, by layout height (`useLayoutHeight`), which the Screen's scale leaves alone. The gap between boards is set from the value the layout reads.
+- **Placement:** boards laid out together are sized exactly and fill the space they share. Across the axis they share, each board sits at its own `alignment`, as far as the Screen's edge, a sideboard's heading with it. Along it they sit together at the mainboard's `alignment`, so the space they leave is shared out around them. A sideboard aligned away from the mainboard (bottom below it, right beside it) goes to that far edge instead.
+
+**A One Piece Card Game Deck List's groups are laid out together** (`solveDeckGroups`). Character, Event and Stage sit one under the other beside the Leader, at one column count, so their cards line up, and one card size, the largest at which every group, its heading and the gaps between them fit. They sit together at the Mainboard's alignment. The Leader fits a fixed share of the Screen.
+
+**Only a sideboard stacks, as the strip beside the mainboard.** The mainboard's views are grid and list. A sideboard stack placed below the mainboard, or shown alone, renders as a grid and keeps `view: 'stack'` stored, so moving it back beside restores the strip. Settings shows the Stack tab disabled in those cases. A mainboard stack stored by an older client reads as a grid (`resolveDeckBoards`).
+
+**A card grid's sizes are its mode's config, not Mode Tokens.** Each one a single display reads moved back beside the control it sizes, which amends ADR-0051's #844 bullet: a Theme Token is shared. Most Played Cards holds its Card Layout and each badge's own text size and position (`rankBadgeTextSize`, `statBadgeTextSize`, `rankBadgePosition`, `statBadgePosition`), as a Deck's badges are; each Deck board its Card Layout, the sideboard `stackReveal`, and the Deck its four text sizes; Card Spotlight `cardWidth`. The three badge shadows read a new `shadow` Foundation Token.
+
+**Earlier sizes were not migrated.** Every field Card Sizing replaced is a former field, which a stored config may still carry and which reads as the mode's default until the Screen is next written:
 
 - `dynamicCardSize`;
 - the size presets;
@@ -1747,37 +1776,7 @@ Accepted · 2026-10-28
 - `scale`;
 - `rowsPerPage` on Most Played Cards.
 
-**A Deck's Fit boards are laid out together from the space they measure** (`solveDeckLayout`). A Deck has no pages, so when every board shown is Fit, the Screen measures the space below its header and lays both boards out at one card size: the largest at which both fit.
-
-- **Columns:** each board's columns are chosen alongside the other's, from 1 to the board's card count. A set column count is kept.
-- **Stack:** a stacked sideboard shows less of each card, down to its name bar (`MIN_STACK_REVEAL_SHARE`), before its cards shrink.
-- **One score, no thresholds** (`layoutScore`): each column choice is laid out at the largest card size that fits. The choices are compared on one continuous score:
-  - card size, relative to the largest possible;
-  - the share of the width the deck spans;
-  - the square root of the share of the height it spans;
-  - how full its rows are.
-
-  Every term is a ratio, so the same choice holds at any canvas, card or gap size, and no small change flips it. Width counts more than height: space under a deck reads as margin, space beside it as a gap. Most Played Cards' auto columns use the same score (`fitColumns`).
-
-- **A sideboard below wraps at the mainboard's width**: choosing its own columns, it takes as many as the mainboard has, or as many as it has cards.
-- **Measured, not guessed:** a board's heading and a Most Played Cards name label are measured from hidden copies, as their Theme types them, by layout height (`useLayoutHeight`), which the Screen's scale leaves alone. The gap between boards is set from the value the layout reads.
-- **Placement:** the boards are sized exactly and fill the space they share. Across the axis they share, each board sits at its own `alignment`, as far as the Screen's edge, a sideboard's heading with it. Along it they sit together at the mainboard's `alignment`, so the space they leave is shared out around them. A sideboard aligned away from the mainboard (bottom below it, right beside it) goes to that far edge instead. A board fitting itself places its cards at its own `alignment`.
-- **First frame:** until the space is measured, each board fits itself.
-
-**The card layout solvers take each constraint as Auto or a number and return the largest card that fits** (`solveCardGrid`, `solveDeckLayout`; #1072). Most Played Cards passes them its Card Layout (#1087); a Deck List still passes today's Card Sizing values, until #1088 moves it over.
-
-- **Columns:** a set count is kept. Auto is chosen by `layoutScore` from 1 to the card count, not to 12.
-- **Max card size:** no card is wider. A Deck's boards share one card size, so they share the least max any board sets, the stacked strip with them.
-- **Gap:** an Auto gap is a fixed ratio of the solved card width, the one that gives the mode's former default gap at its former default card width: 12 px at 160 px on a card grid (`AUTO_GAP_RATIO`), 8 px at 144 px on a Deck board (`DECK_AUTO_GAP_RATIO`). A set gap is kept while it is no wider than the card it leaves. Past that the gap is the card's own width, so a gap too large for its space shrinks with the cards instead of pushing them off the Event Canvas.
-
-**A Most Played Cards Screen's cards always fit** (#1087). Its Card Sizing is gone: nothing should leave the Event Canvas, so there is no Fixed width to overflow it. In its place is a Card Layout of three values, each a number or Auto, stored as the number or as absent, and all Auto by default: `columns`, `maxCardSize` and `cardGap` (`cardLayoutShape`, which a Deck List board takes next, #1088).
-
-- **Solved, not styled:** the Screen measures its grid's space and lays out what `solveCardGrid` returns for a full page, so `ScreenCardGrid` is handed its columns, card width and gap in px and only places them.
-- **Bounds follow the content:** columns run to the card count and a max card size to the Event Canvas, in place of 12 columns and 480 px. The contract holds the outer bound, the most cards a Screen ranks and the largest side a canvas may have, and the editor narrows each to the Screen's own card count and the largest card its Event's canvas holds whole. Every card grid shares one gap bound, 0 to 100 px.
-- **A stored Card Sizing reads as the Card Layout it meant** (`upgradeFormerFields`, ADR-0037): `cardSizing`, `cardWidth` and `autoColumns` are former fields. A Fixed width is the max card size, a new key so that the mapping holds on every read; a Fit grid, and one storing no Card Sizing, which was Fit, has none. A column count with auto columns on is Auto.
-- **A Screen that never set its layout changes:** it showed 5 columns 12 px apart and now chooses both. A stored `cardGap` is kept as a set gap, since a stored default cannot be told from a choice.
-
-**Most Played Cards pages by cards.** `cardsPerPage` replaced `rowsPerPage`. Columns no longer change which cards a page holds, so the Screen chooses its auto columns from the grid space it measures, and a page laid out at a full page's capacity keeps its card size.
+**Most Played Cards pages by cards.** `cardsPerPage` replaced `rowsPerPage`. Columns no longer change which cards a page holds, so the Screen chooses its auto columns from the grid space it measures, and a page laid out at a full page's capacity keeps its card size. Page counts stay computed from inputs every surface holds, so the settings editor and the Screen Output agree.
 
 **The Deck's information is the deck's alone.**
 
@@ -1788,20 +1787,20 @@ Accepted · 2026-10-28
 - **Hidden settings:** a setting that cannot have an effect is not shown:
   - card points without an Event points system;
   - the details row's look while the row is empty;
-  - the column count while auto columns choose it;
-  - the sideboard's alignment while both boards are placed together.
+  - a stack's columns and gap, since its cards overlap in one column.
 
 ### Why
 
 A Theme exists to share a look across Screens. A size only one display reads gained nothing from the Theme and cost an override section away from the control it sized.
 
-With "Dynamic card size", columns only filled the canvas width. Card height followed the card's aspect, so enough rows ran off the bottom of the Event Canvas with no way to stop them. Operators need one mode that never overflows and one that takes an exact width and accepts overflow. Choosing auto columns from inputs every surface holds keeps the settings editor's page count equal to the Screen Output's. The mainboard stack and the horizontal sideboard row were never used.
+With "Dynamic card size", columns only filled the canvas width. Card height followed the card's aspect, so enough rows ran off the bottom of the Event Canvas with no way to stop them. Card Sizing answered that with a Fit mode beside a Fixed one that took an exact width and accepted overflow. Nothing should ever leave the Event Canvas, so Fixed width and its overflow went too: a max card size keeps what Fixed was for, a few cards not growing to fill the screen, without the overflow. The mainboard stack and the horizontal sideboard row were never used.
 
 ### Consequences
 
-- Most Played Cards always fits, so a Screen that filled its columns now also fits its height, and a long grid shrinks instead of overflowing. A Screen that was Fixed looks the same while it fits and shrinks where it used to overflow.
-- Fit cards in a page of 60 can be small. Paging, not a minimum size, is the operator's way to keep them large.
-- Canvas aspect only chooses the auto column count; the rendered Fit size always comes from the grid's real space, so a tall header costs size, never overflow.
+- A Screen that was Fixed looks the same while it fits and shrinks where it used to overflow.
+- Cards in a page of 60, or in a long deck, can be small. Paging, not a minimum size, is the operator's way to keep Most Played Cards large.
+- A tall header costs card size, never overflow.
+- Deck List Screens that never set a layout grow from 144 px cards to the largest that fit.
 
 ## ADR-0055: A stopgap public read names an Event's commentators and holding text
 
