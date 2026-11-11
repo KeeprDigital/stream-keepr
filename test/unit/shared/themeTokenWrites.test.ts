@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
-import { parseThemeTokenWrite } from '~~/shared/themeTokens';
+import { parseThemeTokenValue, parseThemeTokenWrite } from '~~/shared/themeTokens';
 
-// A Theme write is strict where a read forgives: a wrong type or an out-of-bounds value is
-// refused, never clamped, and a value that names another token is refused whole.
+// A stored value is checked strictly where a read forgives: a wrong type or an out-of-bounds
+// value is refused, never clamped, and a value that names another token is refused whole.
 
 const typography = {
 	font: { kind: 'application', fontId: 'inter' },
@@ -39,7 +39,7 @@ const remoteVideoLayer = {
 	source: { kind: 'url', url: 'https://example.com/loop.webm' },
 } as const;
 
-describe('a Theme Token write', () => {
+describe('a Theme Token value', () => {
 	it.each([
 		['a Foundation colour', 'accent', 'rgba(255, 0, 0, 0.5)'],
 		['a Foundation dimension at its lower bound', 'inset', 0],
@@ -156,8 +156,8 @@ describe('a Theme Token write', () => {
 			'alignment',
 			{ horizontal: 'left', vertical: 'bottom' },
 		],
-	])('stores %s', (_case, name, value) => {
-		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, value });
+	])('admits %s', (_case, name, value) => {
+		expect(parseThemeTokenValue(name, value)).toEqual({ ok: true, value });
 	});
 
 	it.each([
@@ -328,7 +328,34 @@ describe('a Theme Token write', () => {
 			'invalid-value',
 		],
 	])('refuses %s', (_case, name, value, refusal) => {
-		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: false, refusal });
+		expect(parseThemeTokenValue(name, value)).toEqual({ ok: false, refusal });
+	});
+});
+
+describe('a Theme Token write', () => {
+	it('stores a Foundation Token\'s value', () => {
+		expect(parseThemeTokenWrite('accent', '#ff0000')).toEqual({ ok: true, value: '#ff0000' });
+	});
+
+	it('refuses a Foundation Token\'s invalid value', () => {
+		expect(parseThemeTokenWrite('accent', 12)).toEqual({ ok: false, refusal: 'invalid-value' });
+	});
+
+	// A Theme stores Foundation Tokens only: a Mode Token is set per Screen.
+	it.each([
+		['a value it may hold', 'standings.rise', '#ff0000'],
+		['a value it could never hold', 'standings.rise', 12],
+		[
+			'an asset',
+			'feature-match-overlay.frame-media',
+			{ kind: 'image', assetId: 'asset-brand', revisionId: 'revision-brand' },
+		],
+	])('accepts a Mode Token given %s, and drops it', (_case, name, value) => {
+		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, dropped: true });
+	});
+
+	it('refuses a name no token has', () => {
+		expect(parseThemeTokenWrite('standings.nonsense', '#fff')).toEqual({ ok: false, refusal: 'unknown-token' });
 	});
 
 	// A former token is one its mode declared once: accepted whatever it holds, and never stored.

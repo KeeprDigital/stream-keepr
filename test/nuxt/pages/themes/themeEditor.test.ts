@@ -144,11 +144,79 @@ function writes() {
 }
 
 describe('the Theme editor', () => {
+	// A Theme stores Foundation Tokens only: a Mode Token is set per Screen, so no mode has a card here.
+	it('lists every Foundation Token once, grouped by kind, and no Mode Token', async () => {
+		storedTokens = { 'standings.rise': '#ff0000' };
+		const wrapper = await mountEditor();
+
+		const kinds = wrapper.findAll('[data-token-kind]').map(card => [
+			card.attributes('data-token-kind'),
+			card.findAll('[data-token]').map(row => row.attributes('data-token')),
+		]);
+		expect(kinds).toEqual([
+			[
+				'colours',
+				[
+					'surface',
+					'surface-raised',
+					'text-primary',
+					'text-secondary',
+					'text-inverse',
+					'accent',
+					'positive',
+					'negative',
+					'caution',
+					'divider',
+					'shadow',
+				],
+			],
+			[
+				'type',
+				['heading', 'body'],
+			],
+			[
+				'motion',
+				['motion-enter', 'motion-update', 'motion-exit'],
+			],
+			[
+				'surfaces',
+				['accent-fill', 'panel', 'panel-shape'],
+			],
+			[
+				'background',
+				[
+					'inset',
+					'alignment',
+					'background',
+					'animation-effect',
+				],
+			],
+			[
+				'assets',
+				['logo'],
+			],
+			[
+				'chart',
+				[
+					'series-1',
+					'series-2',
+					'series-3',
+					'series-4',
+					'series-5',
+					'series-6',
+					'series-7',
+					'series-8',
+					'series-other',
+				],
+			],
+		]);
+		expect(wrapper.findAll('[data-token]')).toHaveLength(33);
+	});
+
 	it.each([
 		['a Foundation colour', 'accent', 'Default: #0077a3'],
 		['a Foundation dimension', 'inset', 'Default: 0px'],
 		['the Screen alignment', 'alignment', 'Default: center center'],
-		['a Mode Token following a Foundation Token', 'top-cut.pending-position-border', 'Default: follows Divider'],
 		['the background', 'background', 'Default: no layers'],
 		['the Animation Effect', 'animation-effect', 'Default: Fog'],
 		['the logo', 'logo', 'Default: none'],
@@ -173,13 +241,6 @@ describe('the Theme editor', () => {
 			'alpha',
 			'50',
 			'rgba(0, 119, 163, 0.5)',
-		],
-		[
-			'a Mode Token\'s own colour, keeping the alpha it follows',
-			'top-cut.pending-position-border',
-			'hue',
-			'#00ff00',
-			'rgba(0, 255, 0, 0.12)',
 		],
 	] as const)('writes %s as one token, and shows it set once the write lands', async (_case, token, control, entered, value) => {
 		answerWrite = () => theme(2, { [token]: value });
@@ -244,17 +305,17 @@ describe('the Theme editor', () => {
 		const older = deferred<ThemeResponse>();
 		const answers = [
 			() => older.promise,
-			() => theme(3, { 'accent': '#ff0000', 'standings.rise': '#000000' }),
+			() => theme(3, { accent: '#ff0000', divider: '#000000' }),
 		];
 		answerWrite = () => answers.shift()!();
 		const wrapper = await mountEditor();
 
 		await commitColour(wrapper, 'accent', 'hue', '#ff0000');
-		await commitColour(wrapper, 'standings.rise', 'hue', '#111111');
+		await commitColour(wrapper, 'divider', 'hue', '#111111');
 		older.resolve(theme(2, { accent: '#ff0000' }));
 		await flushPromises();
 
-		expect(field(wrapper, 'standings.rise').attributes('data-token-state')).toBe('set');
+		expect(field(wrapper, 'divider').attributes('data-token-state')).toBe('set');
 	});
 
 	it('writes the background once its edits pause, as the whole stack', async () => {

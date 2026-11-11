@@ -372,7 +372,7 @@ The exclusive, Session-scoped right to edit one graphics authoring artifact: a S
 ### Theming
 
 **Theme**:
-A named, installation-scoped set of Theme Token values giving every Screen of an Event one look and feel, whatever its Screen Mode. It holds values, never compositions: it may supply a logo a Broadcast Graphic shows, but the Broadcast Graphic itself is a template's. An Event uses one Theme; a Theme may serve many Events. An edit reaches every Screen using it at once, with no draft or publish step. It themes what Screens render, never the operator app.
+A named, installation-scoped set of Foundation Token values giving every Screen of an Event one look and feel, whatever its Screen Mode. It holds Foundation Tokens only: a Mode Token is set per Screen, so a Theme never styles one Screen Mode differently from another. It holds values, never compositions: it may supply a logo a Broadcast Graphic shows, but the Broadcast Graphic itself is a template's. An Event uses one Theme; a Theme may serve many Events. An edit reaches every Screen using it at once, with no draft or publish step. It themes what Screens render, never the operator app.
 _Avoid_: Style Set, brand, skin, palette (when naming the whole)
 
 **Default Theme**:
@@ -387,11 +387,11 @@ _Avoid_: variable, style entry
 A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr. A Screen Mode's display reads one directly for its shared chrome: its type from `heading` and `body`, its title, surface, text and dividers from the colour of that role, as the Metagame chart reads the chart series.
 
 **Mode Token**:
-A Theme Token a Screen Mode Definition declares for an element of its rendering that has no Foundation role, such as Standings' Position Change climb colour or a Pairings result badge's colours. A mode whose every element has a Foundation role declares none, as Head-to-Head and Talent do. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. A motion one follows a Foundation motion's timing and keeps its own movement, as the row motion Standings and Metagame share takes the enter motion's pace and its own slide. Where no Foundation Token fills its role, such as Card Spotlight's zoom, whose pace matches no Foundation motion, it defaults to a literal; a composite default's colours still name Foundation Tokens where they can, as the Feature Match Overlay Frame's fill names `surface`. Only its default names a token: a value set for it is a literal.
+A Theme Token a Screen Mode Definition declares for an element of its rendering that has no Foundation role, such as Standings' Position Change climb colour or a Pairings result badge's colours. A mode whose every element has a Foundation role declares none, as Head-to-Head and Talent do. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. A motion one follows a Foundation motion's timing and keeps its own movement, as the row motion Standings and Metagame share takes the enter motion's pace and its own slide. Where no Foundation Token fills its role, such as Card Spotlight's zoom, whose pace matches no Foundation motion, it defaults to a literal; a composite default's colours still name Foundation Tokens where they can, as the Feature Match Overlay Frame's fill names `surface`. Only its default names a token: a value set for it is a literal. It is set per Screen, as a Screen Theme Override, never in a Theme; unset, it reads its default.
 _Avoid_: component token
 
 **Screen Theme Override**:
-A Screen's own value for one Theme Token, used by that Screen in place of its Theme's. Clearing it returns the Screen to the Theme's value.
+A Screen's own value for one Theme Token, used by that Screen in place of what the token inherits: its Theme's value of a Foundation Token, or a Mode Token's default. Clearing it returns the Screen to that.
 _Avoid_: local style, pin
 
 **Screen Settings Group**:
@@ -845,11 +845,11 @@ _Avoid_: worst-case data, overflow data
 
 - An **Event** uses exactly one **Theme**; an Event that chose none uses the **Default Theme**, which ships with Stream Keepr and cannot be edited or deleted
 - A **Theme** in use by any **Event** cannot be deleted, and the refusal names those Events
-- A **Theme** stores only the **Theme Tokens** it sets; every other token reads its shipped default
+- A **Theme** stores only the **Foundation Tokens** it sets; every other token reads its shipped default. A write naming a **Mode Token** is accepted and the token dropped, and one stored before is read by nothing
 - A value a **Theme** or a **Screen Theme Override** stores for a **Theme Token** never names another token: it is a literal, and so is every colour inside a fill, a surface or a background colour layer
 - Only a shipped default names a token: a **Mode Token**'s default may name a **Foundation Token** of its type, a motion one may follow a motion **Foundation Token**'s timing with its own movement, and a colour inside a composite default may name a colour **Foundation Token**; nothing names a **Mode Token**, and a colour's default names nothing
 - A stored value that names a token, written before values were literals, still reads as the literal it resolves to, and the next edit of its token stores that literal
-- A **Screen** resolves each **Theme Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every default and **Graphic Item** on that Screen that names it
+- A **Screen** resolves a **Mode Token** from its own **Screen Theme Override**, else the token's default, and a **Foundation Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every default and **Graphic Item** on that Screen that names it
 - A **Screen Theme Override** of another mode's **Mode Token** is kept while the **Screen** shows a different **Screen Mode**, and applies again on its return
 - A **Graphic Item** property either names a whole **Foundation Token** of its type or holds its own value; detaching copies the token's resolved value in
 - A typography **Theme Token** carries no size; the consuming **Graphic Item** or **Screen Mode** display owns it

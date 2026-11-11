@@ -37,11 +37,6 @@ function lowerThirdName(gallery: VueWrapper) {
 	return tile(gallery, 'broadcast-graphics').findAll('p').find(text => text.text() === 'Alexandra Whitfield-Moreau');
 }
 
-/** Card Spotlight's Card, shown once its image has loaded. */
-function spotlightCard(gallery: VueWrapper) {
-	return tile(gallery, 'card').find('[data-testid="spotlight-card"] img');
-}
-
 describe('the Theme preview gallery', () => {
 	// A Theme serves Events of either Card Game, so its preview shows the one picked, Magic first.
 	it.each([
@@ -67,21 +62,6 @@ describe('the Theme preview gallery', () => {
 			shown: (gallery: VueWrapper) => gallery.find('.standings-table').exists(),
 			painted: (gallery: VueWrapper) => getComputedStyle(gallery.get('.standings-table').element).backgroundColor,
 			value: 'rgb(9, 8, 7)',
-		},
-		{
-			mode: 'card',
-			tokens: {
-				'card.motion': {
-					duration: 500,
-					easing: 'ease-in-out',
-					delay: 0,
-					fade: { opacity: 0 },
-					scale: { factor: 0.7, origin: 'center' },
-				},
-			},
-			shown: (gallery: VueWrapper) => spotlightCard(gallery).exists(),
-			painted: (gallery: VueWrapper) => (tile(gallery, 'card').get('.screen-renderer').element as HTMLElement).style.getPropertyValue('--theme-card-motion-duration'),
-			value: '500ms',
 		},
 		{
 			mode: 'broadcast-graphics',

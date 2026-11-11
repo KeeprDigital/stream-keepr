@@ -1059,9 +1059,12 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 	if (!probes || !tokens.length)
 		return;
 
-	it.each(tokens)('paints $name from the Theme', async ({ name, definition, probe }) => {
+	it.each(tokens)('paints $name from the Screen\'s override', async ({ name, definition, probe }) => {
 		const sample = SAMPLES[definition.type];
-		await mountMode(mode, { [name]: sample }, { config: probe.config });
+		await mountMode(mode, undefined, {
+			config: probe.config,
+			themeOverrides: { [name]: sample },
+		});
 		await shown(probe);
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, sample));
@@ -1196,7 +1199,10 @@ describe('a Metagame Screen\'s chart', () => {
 			selector: '[data-color-slot="1"]',
 			config: { viewMode: 'chart' },
 		};
-		await mountMode('metagame', { 'metagame.row-motion': SAMPLES['animation-recipe'] }, { config: bar.config });
+		await mountMode('metagame', undefined, {
+			config: bar.config,
+			themeOverrides: { 'metagame.row-motion': SAMPLES['animation-recipe'] },
+		});
 		await shown(bar);
 
 		expect(painted(bar, 'animation-recipe')).toEqual(expectedPaint('animation-recipe', SAMPLES['animation-recipe']));

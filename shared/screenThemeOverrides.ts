@@ -1,6 +1,6 @@
 // Which Theme Tokens a Screen may override, and what an override write may
-// store (ADR-0049). It sits beside `themeTokens.ts`, whose Theme write rules a
-// Screen Theme Override shares.
+// store (ADR-0049). It sits beside `themeTokens.ts`, whose value rules a
+// Screen Theme Override shares with a Theme.
 
 import type { ThemeTokenType, ThemeTokenValue } from './modules/theme/tokens';
 import type { FoundationTokenName } from './modules/theme/vocabulary';
@@ -10,7 +10,7 @@ import { resolveThemeTokens } from './modules/theme/resolution';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
 import { screenModeHostTokens } from './screenModeDefinitions';
 import { SCREEN_MODES, screenModeSupportsBackgroundLayers, screenModeTokens } from './screenModes';
-import { isFormerThemeToken, parseThemeTokenWrite, themeTokenDefinition } from './themeTokens';
+import { isFormerThemeToken, parseThemeTokenValue, themeTokenDefinition } from './themeTokens';
 import { THEME_TOKEN_WRITE_REFUSALS } from './types/theme';
 
 /** Why a Screen Theme Override write was refused. */
@@ -123,8 +123,8 @@ export type ScreenThemeOverrideWrite
 
 /**
  * What a Screen in `mode` may store as its override of `name`, or why not. A
- * `null` value clears the override. A set holds what a Theme may hold for the
- * token (`parseThemeTokenWrite`); a set or clear of a token the mode cannot
+ * `null` value clears the override. A set holds a value the token may be
+ * stored as (`parseThemeTokenValue`); a set or clear of a token the mode cannot
  * consume is refused, while one stored for another mode stays dormant. A set
  * or clear of a former token, whichever mode declared it, is accepted and
  * `dropped`: nothing is stored or removed for it.
@@ -138,5 +138,5 @@ export function parseScreenThemeOverrideWrite(mode: ScreenMode, name: string, va
 		return { ok: false, refusal: 'unconsumable-token' };
 	if (value === null)
 		return { ok: true, value: null };
-	return parseThemeTokenWrite(name, value);
+	return parseThemeTokenValue(name, value);
 }

@@ -17,7 +17,7 @@ export interface ResolveThemeTokensInput {
 	vocabulary: FoundationTokenVocabulary;
 	/** The Screen Mode's declared Mode Tokens, by full name. */
 	modeTokens: ModeTokenDeclarations;
-	/** The Event's Theme's stored values; the Default Theme stores none. */
+	/** The Event's Theme's stored values; the Default Theme stores none. Only its Foundation Tokens are read. */
 	theme: StoredThemeTokens;
 	/** The Screen's Screen Theme Overrides. */
 	overrides: StoredThemeTokens;
@@ -111,8 +111,10 @@ export function resolveFoundationTokens(input: Omit<ResolveThemeTokensInput, 'mo
  * Resolves a Screen's Theme Tokens: the single home of every resolution rule
  * (ADR-0049).
  *
- * - Each token reads from the Screen Theme Override, else the Theme, else its
- *   shipped default.
+ * - A Mode Token reads from the Screen Theme Override, else its shipped
+ *   default: a Theme stores Foundation Tokens only, and a Mode Token one stored
+ *   before is never read. A Foundation Token reads from the override, else the
+ *   Theme, else its default.
  * - A stored value is a literal, read in one step. A default may name a
  *   Foundation Token, read by the same precedence, so a Foundation override
  *   reaches every default naming it. Nothing names a Mode Token, so this is one
@@ -133,7 +135,7 @@ export function resolveFoundationTokens(input: Omit<ResolveThemeTokensInput, 'mo
  *   this mode's Mode Tokens are read.
  */
 export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThemeTokens {
-	const { vocabulary, modeTokens, theme, overrides, hostTokens = [] } = input;
+	const { vocabulary, modeTokens, overrides, hostTokens = [] } = input;
 	const { resolveFoundation, readLiteral } = foundationResolver(input);
 
 	/** A Mode Token's value as one source holds it, or undefined when it holds none it can read. */
@@ -157,7 +159,7 @@ export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThem
 
 	const values: Record<string, ThemeTokenValue> = {};
 	for (const [name, definition] of Object.entries(modeTokens))
-		values[name] = firstReadable([overrides[name], theme[name], definition.default], stored => readModeToken(definition, stored))!;
+		values[name] = firstReadable([overrides[name], definition.default], stored => readModeToken(definition, stored))!;
 
 	const namedByDefaults = new Set([
 		...Object.values(modeTokens).flatMap(({ default: fallback }) => isReference(fallback) || isMotionFollow(fallback)
