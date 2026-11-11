@@ -1,17 +1,16 @@
 import type { GraphicGroupItemConfig, GraphicRect } from '~~/shared/types/graphics';
-import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
-import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
+import type { GraphicsEditorLayer, GraphicsEditorTree } from './host';
 import type { AlignEdge, BoxMove, DistributeAxis } from '~/modules/graphics/canvasAlignment';
-import { findGraphicItem } from '~~/shared/modules/graphics';
 import { alignBoxes, distributeBoxes } from '~/modules/graphics/canvasAlignment';
 import { rotatedBounds } from '~/modules/graphics/canvasManipulation';
-import { editorLayerCanvasBox, editorSelectionLayer } from './editorSelection';
+import { layerConfig, layerItemLocation } from './host';
+import { editorLayerCanvasBox } from './layerFrame';
 
 /**
- * Aligning and distributing the Feature Match Overlay editor's selected layers
- * (#919): which of them move, and in which container's pixels.
+ * Aligning and distributing the graphics editor's selected layers (#919): which
+ * of them move, and in which container's pixels.
  *
- * Pure. Source Items and Graphic Items align together (E8). Several align to the
+ * Pure. A host's own layers and Graphic Items align together (E8). Several align to the
  * bounds they cover, and one to its container (E10): the canvas, or a group
  * child's group's padded box. Each counts by the box it covers, a rotated one by
  * the axis-aligned box it turns into, as snapping counts it.
@@ -70,15 +69,15 @@ export const DISTRIBUTE_COMMANDS: readonly { axis: DistributeAxis; label: string
 ];
 
 /** Where a layer's stored rectangle moves to. */
-export interface LayerPosition {
-	layer: FeatureMatchLayoutEditorLayer;
+export interface LayerPosition<L extends GraphicsEditorLayer> {
+	layer: L;
 	x: number;
 	y: number;
 }
 
 /** A selected layer that aligns. */
-interface Member {
-	layer: FeatureMatchLayoutEditorLayer;
+interface Member<L extends GraphicsEditorLayer> {
+	layer: L;
 	/** The stored top-left rectangle. */
 	rect: GraphicRect;
 	/** The box it covers, in the space they align in. */
@@ -86,32 +85,31 @@ interface Member {
 }
 
 /** The Graphic Group a layer is a child of, if any. */
-function parentGroup(layout: FeatureMatchLayoutConfig, layer: FeatureMatchLayoutEditorLayer) {
-	return layer.type === 'item'
-		? findGraphicItem(layout.composition, layer.itemId)?.group
-		: undefined;
+function parentGroup<D, L extends GraphicsEditorLayer>(tree: GraphicsEditorTree<D, L>, document: D, layer: L) {
+	return layerItemLocation(tree, document, layer)?.group;
 }
 
 /**
  * The selected layers that align, and the group whose padded box they align in
  * when they are all its children; otherwise they align on the canvas.
  */
-function alignmentMembers(
-	layout: FeatureMatchLayoutConfig,
-	layers: readonly FeatureMatchLayoutEditorLayer[],
-): { members: Member[]; group?: GraphicGroupItemConfig } {
+function alignmentMembers<D, L extends GraphicsEditorLayer>(
+	tree: GraphicsEditorTree<D, L>,
+	document: D,
+	layers: readonly L[],
+): { members: Member<L>[]; group?: GraphicGroupItemConfig } {
 	const present = layers.filter((layer) => {
-		const group = parentGroup(layout, layer);
-		return editorSelectionLayer(layout, layer) !== undefined
+		const group = parentGroup(tree, document, layer);
+		return layerConfig(tree, document, layer) !== undefined
 			&& (!group || group.arrangement === 'canvas');
 	});
-	const groups = new Set(present.map(layer => parentGroup(layout, layer)));
+	const groups = new Set(present.map(layer => parentGroup(tree, document, layer)));
 	const [group] = groups;
 	if (groups.size === 1 && group) {
 		return {
 			group,
 			members: present.map((layer) => {
-				const item = findGraphicItem(layout.composition, layer.itemId)!.item;
+				const item = layerItemLocation(tree, document, layer)!.item;
 				return {
 					layer,
 					rect: item,
@@ -122,12 +120,12 @@ function alignmentMembers(
 	}
 	return {
 		members: present.flatMap((layer) => {
-			const box = editorLayerCanvasBox(layout, layer);
+			const box = editorLayerCanvasBox(tree, document, layer);
 			return box
 				? [
 						{
 							layer,
-							rect: editorSelectionLayer(layout, layer)!,
+							rect: layerConfig(tree, document, layer)!,
 							box,
 						},
 					]
@@ -149,7 +147,7 @@ function container(group: GraphicGroupItemConfig | undefined, canvas: { width: n
 	};
 }
 
-function positions(members: readonly Member[], moves: readonly BoxMove[]): LayerPosition[] {
+function positions<L extends GraphicsEditorLayer>(members: readonly Member<L>[], moves: readonly BoxMove[]): LayerPosition<L>[] {
 	return members.flatMap(({ layer, rect }, index) => {
 		const move = moves[index]!;
 		return move.x === 0 && move.y === 0
@@ -164,33 +162,36 @@ function positions(members: readonly Member[], moves: readonly BoxMove[]): Layer
  * Whether aligning the selected layers has anything to line up: one that aligns
  * to its container, or two or more that align to each other.
  */
-export function canAlignLayers(
-	layout: FeatureMatchLayoutConfig,
-	layers: readonly FeatureMatchLayoutEditorLayer[],
+export function canAlignLayers<D, L extends GraphicsEditorLayer>(
+	tree: GraphicsEditorTree<D, L>,
+	document: D,
+	layers: readonly L[],
 ): boolean {
-	const { members } = alignmentMembers(layout, layers);
+	const { members } = alignmentMembers(tree, document, layers);
 	return members.length > 0 && members.length >= Math.min(2, layers.length);
 }
 
 /** Whether three or more of the selected layers distribute. */
-export function canDistributeLayers(
-	layout: FeatureMatchLayoutConfig,
-	layers: readonly FeatureMatchLayoutEditorLayer[],
+export function canDistributeLayers<D, L extends GraphicsEditorLayer>(
+	tree: GraphicsEditorTree<D, L>,
+	document: D,
+	layers: readonly L[],
 ): boolean {
-	return alignmentMembers(layout, layers).members.length >= 3;
+	return alignmentMembers(tree, document, layers).members.length >= 3;
 }
 
 /**
  * Where aligning the selected layers' edge or centre puts each one that moves:
  * several to the bounds the ones that align cover, one to its container.
  */
-export function alignLayers(
-	layout: FeatureMatchLayoutConfig,
-	layers: readonly FeatureMatchLayoutEditorLayer[],
+export function alignLayers<D, L extends GraphicsEditorLayer>(
+	tree: GraphicsEditorTree<D, L>,
+	document: D,
+	layers: readonly L[],
 	canvas: { width: number; height: number },
 	edge: AlignEdge,
-): LayerPosition[] {
-	const { members, group } = alignmentMembers(layout, layers);
+): LayerPosition<L>[] {
+	const { members, group } = alignmentMembers(tree, document, layers);
 	const to = layers.length > 1
 		? undefined
 		: container(group, canvas);
@@ -201,11 +202,12 @@ export function alignLayers(
  * Where spacing the selected layers evenly along an axis puts each one that
  * moves: the outermost two stay. Fewer than three that distribute move none.
  */
-export function distributeLayers(
-	layout: FeatureMatchLayoutConfig,
-	layers: readonly FeatureMatchLayoutEditorLayer[],
+export function distributeLayers<D, L extends GraphicsEditorLayer>(
+	tree: GraphicsEditorTree<D, L>,
+	document: D,
+	layers: readonly L[],
 	axis: DistributeAxis,
-): LayerPosition[] {
-	const { members } = alignmentMembers(layout, layers);
+): LayerPosition<L>[] {
+	const { members } = alignmentMembers(tree, document, layers);
 	return positions(members, distributeBoxes(members.map(member => member.box), axis));
 }

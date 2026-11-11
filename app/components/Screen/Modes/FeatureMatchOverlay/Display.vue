@@ -15,7 +15,7 @@ import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureM
 import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFeatureMatchOverlaySideboardData';
 import { useFeatureMatchOverlaySideboardRevealAnimation } from '~/composables/screen/useFeatureMatchOverlaySideboardRevealAnimation';
 import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
-import { lockedLayers } from '~/modules/feature-match-overlay/layerLocks';
+import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~/modules/feature-match-overlay/editorHost';
 import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE,
 	isFeatureMatchOverlayPreviewSelectedTargetMessage,
@@ -24,6 +24,7 @@ import { frameBorderLine, resolveFeatureMatchOverlayRenderModel } from '~/module
 import { featureMatchOverlaySelectionKey } from '~/modules/feature-match-overlay/selection';
 import { resolveFeatureMatchOverlayThemeValues } from '~/modules/feature-match-overlay/themeTokens';
 import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/feature-match-overlay/tokenValues';
+import { lockedLayers } from '~/modules/graphics/editor/layerLocks';
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
@@ -350,7 +351,7 @@ function isPreviewTargetSelected(target: FeatureMatchOverlaySelectionTarget) {
  * (#943). Their guides are drawn but not offered, so a click on one falls through
  * to the layer beneath it, or to the canvas.
  */
-const locked = computed(() => lockedLayers(config.value.layout));
+const locked = computed(() => lockedLayers(FEATURE_MATCH_LAYOUT_EDITOR_TREE, config.value.layout));
 const lockedItemIds = computed(() => locked.value.flatMap(layer => layer.type === 'item'
 	? [layer.itemId]
 	: []));

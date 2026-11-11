@@ -1,22 +1,21 @@
 import type { GraphicGroupItemConfig, GraphicItemConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
+import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~~/app/modules/feature-match-overlay/editorHost';
 import {
 	compositorSelectionTarget,
-	editorLayersFrame,
-	editorSelectionExists,
-	editorSelectionFrame,
 	editorSelectionLabel,
 	fromCompositorSelectionTarget,
 	fromHostSelectionTarget,
 	hostSelectionTarget,
 } from '~~/app/modules/feature-match-overlay/editorSelection';
+import { editorLayersFrame, editorSelectionFrame } from '~~/app/modules/graphics/editor/layerFrame';
 import { addGraphicGroupChild, addGraphicItem } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
 /**
- * The Feature Match Overlay editor's one selection, and the two vocabularies it
- * projects into.
+ * The Feature Match Overlay editor's one selection and the two vocabularies it
+ * projects into, and where the shared editor frames its layers on the canvas.
  */
 
 const CANVAS = { canvasWidth: 1920, canvasHeight: 1080 };
@@ -55,16 +54,6 @@ describe('feature match layout editor selection', () => {
 		expect(fromCompositorSelectionTarget({ type: 'graphic', graphicId: 'feature-match-layout' })).toEqual({ type: 'canvas' });
 	});
 
-	it('knows when what it names has left the layout', () => {
-		const layout = layoutWith(composition => addGraphicItem(composition, { kind: 'text', id: 'title', ...CANVAS }).graphic);
-
-		expect(editorSelectionExists(layout, { type: 'canvas' })).toBe(true);
-		expect(editorSelectionExists(layout, { type: 'item', itemId: 'title' })).toBe(true);
-		expect(editorSelectionExists(layout, { type: 'item', itemId: 'gone' })).toBe(false);
-		expect(editorSelectionExists(layout, { type: 'source', itemId: 'main-source' })).toBe(true);
-		expect(editorSelectionExists(layout, { type: 'source', itemId: 'gone' })).toBe(false);
-	});
-
 	it('names the layer it selects, a group child included, and nothing for the canvas or a layer that has gone', () => {
 		const layout = layoutWith(composition => addGraphicGroupChild(
 			addGraphicItem(composition, { kind: 'group', id: 'cluster', ...CANVAS }).graphic,
@@ -84,7 +73,7 @@ describe('feature match layout editor selection', () => {
 		const title = layout.composition.items[0]!;
 		const source = layout.sources.find(item => item.id === 'main-source')!;
 
-		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'title' }, CANVAS_SIZE)).toMatchObject({
+		expect(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, { type: 'item', itemId: 'title' }, CANVAS_SIZE)).toMatchObject({
 			rect: {
 				x: title.x,
 				y: title.y,
@@ -93,14 +82,14 @@ describe('feature match layout editor selection', () => {
 			},
 			origin: { x: 0, y: 0 },
 		});
-		expect(editorSelectionFrame(layout, { type: 'source', itemId: 'main-source' }, CANVAS_SIZE)?.rect)
+		expect(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, { type: 'source', itemId: 'main-source' }, CANVAS_SIZE)?.rect)
 			.toEqual({
 				x: source.x,
 				y: source.y,
 				width: source.width,
 				height: source.height,
 			});
-		expect(editorSelectionFrame(layout, { type: 'canvas' }, CANVAS_SIZE)).toBeNull();
+		expect(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, { type: 'canvas' }, CANVAS_SIZE)).toBeNull();
 	});
 
 	it('snaps a top-level Graphic Item and a Source Item to each other, since they share the canvas', () => {
@@ -108,9 +97,9 @@ describe('feature match layout editor selection', () => {
 		const title = layout.composition.items[0]!;
 		const source = layout.sources.find(item => item.id === 'main-source')!;
 
-		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'title' }, CANVAS_SIZE)?.snapLines.x)
+		expect(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, { type: 'item', itemId: 'title' }, CANVAS_SIZE)?.snapLines.x)
 			.toEqual(expect.arrayContaining([source.x, source.x + source.width]));
-		expect(editorSelectionFrame(layout, { type: 'source', itemId: 'main-source' }, CANVAS_SIZE)?.snapLines.y)
+		expect(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, { type: 'source', itemId: 'main-source' }, CANVAS_SIZE)?.snapLines.y)
 			.toEqual(expect.arrayContaining([title.y, title.y + title.height]));
 	});
 
@@ -134,7 +123,7 @@ describe('feature match layout editor selection', () => {
 			},
 		};
 
-		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE)?.origin).toEqual({ x: 54, y: 64 });
+		expect(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE)?.origin).toEqual({ x: 54, y: 64 });
 	});
 
 	it('offers a rotated item with its rotation about its anchor, and a Source Item as one that cannot turn', () => {
@@ -142,7 +131,7 @@ describe('feature match layout editor selection', () => {
 		layout.composition.items = layout.composition.items.map(item => ({ ...item, rotation: 15, anchor: 'center' }) as GraphicItemConfig);
 		const title = layout.composition.items[0]!;
 
-		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'title' }, CANVAS_SIZE)).toMatchObject({
+		expect(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, { type: 'item', itemId: 'title' }, CANVAS_SIZE)).toMatchObject({
 			rect: {
 				x: title.x,
 				y: title.y,
@@ -152,7 +141,7 @@ describe('feature match layout editor selection', () => {
 			rotation: 15,
 			anchor: 'center',
 		});
-		expect(editorSelectionFrame(layout, { type: 'source', itemId: 'main-source' }, CANVAS_SIZE)?.rotation).toBeUndefined();
+		expect(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, { type: 'source', itemId: 'main-source' }, CANVAS_SIZE)?.rotation).toBeUndefined();
 	});
 
 	it('offers nothing to move for a row child or a rotated group\'s child', () => {
@@ -172,7 +161,7 @@ describe('feature match layout editor selection', () => {
 				],
 			},
 		};
-		expect(editorSelectionFrame(layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE)).toBeNull();
+		expect(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE)).toBeNull();
 
 		const turnedGroup = {
 			...layout,
@@ -187,7 +176,7 @@ describe('feature match layout editor selection', () => {
 				],
 			},
 		};
-		expect(editorSelectionFrame(turnedGroup, { type: 'item', itemId: 'child' }, CANVAS_SIZE)).toBeNull();
+		expect(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, turnedGroup, { type: 'item', itemId: 'child' }, CANVAS_SIZE)).toBeNull();
 	});
 
 	describe('several layers (#740)', () => {
@@ -240,7 +229,7 @@ describe('feature match layout editor selection', () => {
 		}
 
 		it('moves them as the box they cover on the canvas, a group child placed in its group', () => {
-			const frame = editorLayersFrame(layoutOfThree(), [
+			const frame = editorLayersFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layoutOfThree(), [
 				{ type: 'item', itemId: 'child' },
 				{ type: 'item', itemId: 'title' },
 				{ type: 'source', itemId: 'main-source' },
@@ -276,11 +265,11 @@ describe('feature match layout editor selection', () => {
 		it('frames one layer as that layer alone, and none as nothing', () => {
 			const layout = layoutOfThree();
 
-			expect(editorLayersFrame(layout, [
+			expect(editorLayersFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, [
 				{ type: 'item', itemId: 'child' },
 			], CANVAS_SIZE))
-				.toEqual(editorSelectionFrame(layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE));
-			expect(editorLayersFrame(layout, [], CANVAS_SIZE)).toBeNull();
+				.toEqual(editorSelectionFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, { type: 'item', itemId: 'child' }, CANVAS_SIZE));
+			expect(editorLayersFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, [], CANVAS_SIZE)).toBeNull();
 		});
 
 		it('offers nothing to move when the canvas cannot move one of them', () => {
@@ -295,7 +284,7 @@ describe('feature match layout editor selection', () => {
 				},
 			};
 
-			expect(editorLayersFrame(rowCluster, [
+			expect(editorLayersFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, rowCluster, [
 				{ type: 'item', itemId: 'child' },
 				{ type: 'item', itemId: 'title' },
 			], CANVAS_SIZE)).toBeNull();
@@ -313,7 +302,7 @@ describe('feature match layout editor selection', () => {
 				},
 			};
 
-			expect(editorLayersFrame(turned, [
+			expect(editorLayersFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, turned, [
 				{ type: 'item', itemId: 'title' },
 				{ type: 'source', itemId: 'main-source' },
 			], CANVAS_SIZE)?.members).toEqual([
@@ -351,11 +340,11 @@ describe('feature match layout editor selection', () => {
 					[TITLE, SOURCE],
 				],
 			])('offers nothing to move for %s', (_, layers) => {
-				expect(editorLayersFrame(layoutOfThree(), layers, CANVAS_SIZE, lockedOnly('item:title', 'source:main-source'))).toBeNull();
+				expect(editorLayersFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layoutOfThree(), layers, CANVAS_SIZE, lockedOnly('item:title', 'source:main-source'))).toBeNull();
 			});
 
 			it('moves only the unlocked ones, leaving a locked one where it is to snap to', () => {
-				const frame = editorLayersFrame(layoutOfThree(), [CHILD, TITLE, SOURCE], CANVAS_SIZE, lockedOnly('item:title'));
+				const frame = editorLayersFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layoutOfThree(), [CHILD, TITLE, SOURCE], CANVAS_SIZE, lockedOnly('item:title'));
 
 				expect(frame).toMatchObject({
 					rect: {
@@ -379,7 +368,7 @@ describe('feature match layout editor selection', () => {
 			});
 
 			it('still only moves one unlocked layer selected among locked ones, offering no resize', () => {
-				expect(editorLayersFrame(layoutOfThree(), [TITLE, SOURCE], CANVAS_SIZE, lockedOnly('item:title'))?.members)
+				expect(editorLayersFrame(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layoutOfThree(), [TITLE, SOURCE], CANVAS_SIZE, lockedOnly('item:title'))?.members)
 					.toEqual([
 						{
 							x: 100,

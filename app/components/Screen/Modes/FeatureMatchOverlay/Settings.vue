@@ -3,22 +3,21 @@ import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
-import { useEventListener } from '@vueuse/core';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
-import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
-import { hasTextSelection, useGraphicsClipboard } from '~/composables/useGraphicsClipboard';
+import { useGraphicsEditor } from '~/composables/useGraphicsEditor';
+import { useGraphicsEditorKeyboard } from '~/composables/useGraphicsEditorKeyboard';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { featureMatchLayoutEditorHost } from '~/modules/feature-match-overlay/editorHost';
 import {
-	CANVAS_SELECTION,
 	compositorSelectionTarget,
 	editorSelectionLabel,
 	fromCompositorSelectionTarget,
 	fromHostSelectionTarget,
 	hostSelectionTarget,
 } from '~/modules/feature-match-overlay/editorSelection';
-import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/layerGrouping';
+import { CANVAS_SELECTION } from '~/modules/graphics/editor/host';
+import { GRAPHICS_EDITOR_SHORTCUTS } from '~/modules/graphics/editor/shortcuts';
 import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
-import { isTypingTarget } from '~/utils/typingTarget';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayLayerList from './LayerList.vue';
@@ -110,14 +109,14 @@ const canvasHeight = computed(() => eventCanvas.value.height);
  * The editor: one selection of layers, one history
  * ──────────────────────────────────────────────── */
 
-const editor = useFeatureMatchLayoutEditor({
+const editor = useGraphicsEditor(featureMatchLayoutEditorHost({
 	config,
 	updateConfig,
 	canvasWidth,
 	canvasHeight,
 	writable,
 	held: placing,
-});
+}));
 const { selection, layers } = editor;
 /** Several layers selected: the panel edits what they share, and the preview marks none alone (#740). */
 const severalSelected = computed(() => layers.value.length > 1);
@@ -194,7 +193,7 @@ onBeforeUnmount(stopWatchingRemoteUpdates);
 
 /** Property panel edits: undoable, one step per burst of typing. */
 function updateFields(partial: Partial<FeatureMatchOverlayModeConfig>) {
-	editor.editFields(partial);
+	editor.commit(() => updateConfig(partial), { coalesce: 'fields' });
 }
 
 /** A drag on a property panel's number label undoes as one step, however long it pauses. */
@@ -218,233 +217,11 @@ function templatePlaced() {
  * Keyboard
  * ──────────────────────────────────────────────── */
 
-const SHORTCUTS = [
-	{
-		keys: ['⌘', 'Z'],
-		label: 'Undo',
-	},
-	{
-		keys: ['⌘', '⇧', 'Z'],
-		label: 'Redo',
-	},
-	{
-		keys: ['⌘', 'D'],
-		label: 'Duplicate',
-	},
-	{
-		keys: ['⌘', 'C'],
-		label: 'Copy',
-	},
-	{
-		keys: ['⌘', 'V'],
-		label: 'Paste, here or on another Screen',
-	},
-	{
-		keys: ['⌘', '⌥', 'C'],
-		label: 'Copy style',
-	},
-	{
-		keys: ['⌘', '⌥', 'V'],
-		label: 'Paste style',
-	},
-	{
-		keys: ['⌫'],
-		label: 'Delete',
-	},
-	{
-		keys: ['←↑↓→'],
-		label: 'Nudge 1px (⇧ 10px)',
-	},
-	{
-		keys: ['⌘', ']'],
-		label: 'Bring forward (⇧ to front)',
-	},
-	{
-		keys: ['⌘', '['],
-		label: 'Send backward (⇧ to back)',
-	},
-	{
-		keys: ['⌘', '⇧', 'H'],
-		label: 'Hide or show',
-	},
-	{
-		keys: ['⌘', 'G'],
-		label: 'Group the selected layers',
-	},
-	{
-		keys: ['⌘', '⇧', 'G'],
-		label: 'Ungroup the selected group',
-	},
-	{
-		keys: ['F2'],
-		label: 'Rename the focused layer (or double-click it)',
-	},
-	{
-		keys: ['⌘', '⇧', 'L'],
-		label: 'Lock or unlock against canvas edits',
-	},
-	{
-		keys: ['⌘ click'],
-		label: 'Add or remove a layer from the selection',
-	},
-	{
-		keys: ['⇧ click'],
-		label: 'Select a run of layers in the list',
-	},
-	{
-		keys: ['Esc'],
-		label: 'Select one layer, then the canvas',
-	},
-	{
-		keys: ['⇧ drag'],
-		label: 'Keep aspect ratio (rotate in 15° steps)',
-	},
-	{
-		keys: ['⌥ drag'],
-		label: 'Turn off snapping',
-	},
-	{
-		keys: ['⌘ scroll'],
-		label: 'Zoom the preview',
-	},
-	{
-		keys: ['Space drag'],
-		label: 'Pan the preview (or middle-drag)',
-	},
-	{
-		keys: ['⌘', '0'],
-		label: 'Fit the preview',
-	},
-	{
-		keys: ['⌘', '1'],
-		label: 'Preview at 100%',
-	},
-] as const;
+const SHORTCUTS = GRAPHICS_EDITOR_SHORTCUTS;
 
-const NUDGE: Record<string, { x: number; y: number }> = {
-	ArrowLeft: { x: -1, y: 0 },
-	ArrowRight: { x: 1, y: 0 },
-	ArrowUp: { x: 0, y: -1 },
-	ArrowDown: { x: 0, y: 1 },
-};
-
-/** ⌘G: group the selection, or say why it cannot be grouped (#920, E8). */
-function groupSelection() {
-	const refusal = editor.groupRefusal.value;
-	if (!refusal) {
-		editor.group();
-		return;
-	}
-	toast.add({
-		title: 'Can\'t group these layers',
-		description: LAYER_GROUP_REFUSAL_REASONS[refusal],
-		color: 'warning',
-	});
-}
-
-/**
- * Copy and paste (#746) keep what is copied in this browser, so it pastes into
- * another Screen's layout too. Copying is not a write; pasting is.
- */
-const clipboard = useGraphicsClipboard('feature-match-overlay');
-
-async function pasteLayers() {
-	const copied = await clipboard.layersToPaste();
-	const refusal = copied && editor.paste(copied);
-	if (refusal)
-		clipboard.refuse(refusal);
-}
-
-async function pasteStyle() {
-	const copied = await clipboard.styleToPaste();
-	const refusal = copied && editor.pasteStyle(copied);
-	if (refusal)
-		clipboard.refuse(refusal);
-}
-
-function handleKeydown(event: KeyboardEvent) {
-	if (event.defaultPrevented || isTypingTarget(event.target) || templatesOpen.value)
-		return;
-
-	const mod = event.metaKey || event.ctrlKey;
-	const key = event.key.toLowerCase();
-	const current = selection.value;
-	let handled = true;
-
-	// By code: ⌥ changes the character a key types.
-	if (mod && !event.shiftKey && event.code === 'KeyC' && !hasTextSelection()) {
-		const copied = event.altKey
-			? clipboard.copyStyle(editor.copyStyle())
-			: clipboard.copyLayers(editor.copy());
-		if (copied)
-			event.preventDefault();
-		return;
-	}
-
-	// The editor writes nothing without the lease anyway. This keeps an observer's
-	// keys from being swallowed, so ⌘Z or ⌘D reach the browser; Escape still selects.
-	if (!canAuthor.value && event.key !== 'Escape')
-		return;
-
-	if (mod && key === 'z' && !event.shiftKey) {
-		editor.undo();
-	}
-	else if (mod && ((key === 'z' && event.shiftKey) || key === 'y')) {
-		editor.redo();
-	}
-	else if (mod && key === 'd') {
-		editor.duplicate();
-	}
-	else if (mod && !event.shiftKey && event.code === 'KeyV') {
-		void (event.altKey
-			? pasteStyle()
-			: pasteLayers());
-	}
-	else if (mod && (event.code === 'BracketRight' || event.code === 'BracketLeft')) {
-		const forward = event.code === 'BracketRight';
-		if (event.shiftKey) {
-			editor.moveToEdge(current, forward ? 'front' : 'back');
-		}
-		else {
-			editor.move(current, forward
-				? 1
-				: -1);
-		}
-	}
-	else if (mod && event.shiftKey && key === 'h') {
-		editor.toggleVisible();
-	}
-	else if (mod && event.shiftKey && key === 'g') {
-		editor.ungroup();
-	}
-	else if (mod && key === 'g' && layers.value.length > 0) {
-		groupSelection();
-	}
-	else if (mod && event.shiftKey && key === 'l') {
-		editor.toggleLock();
-	}
-	else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) {
-		editor.remove();
-	}
-	else if (!mod && event.key in NUDGE && layers.value.length > 0) {
-		const step = event.shiftKey ? 10 : 1;
-		const direction = NUDGE[event.key]!;
-		editor.nudge({ x: direction.x * step, y: direction.y * step });
-	}
-	else if (event.key === 'Escape' && layers.value.length > 0) {
-		editor.collapseSelection();
-	}
-	else {
-		handled = false;
-	}
-
-	if (handled)
-		event.preventDefault();
-}
-
-useEventListener(import.meta.client
-	? window
-	: undefined, 'keydown', handleKeydown);
+useGraphicsEditorKeyboard(editor, 'feature-match-overlay', {
+	suspended: () => templatesOpen.value,
+});
 </script>
 
 <template>
