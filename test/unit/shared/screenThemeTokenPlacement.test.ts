@@ -2,7 +2,7 @@ import type { ScreenMode } from '~~/shared/types/enums';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, resolveThemeTokens } from '~~/shared/modules/theme';
 import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
-import { screenModeTokens } from '~~/shared/screenModes';
+import { screenModeConfigContract, screenModeTokens } from '~~/shared/screenModes';
 import { placeScreenThemeTokens, screenModeBindableFoundationTokens } from '~~/shared/screenThemeOverrides';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
@@ -47,6 +47,12 @@ describe('where a Screen settings page renders each Theme Token', () => {
 		const placed = placeScreenThemeTokens(mode);
 
 		expect(Object.values(placed.groups).flat().sort()).toEqual(Object.keys(screenModeTokens(mode)).sort());
+	});
+
+	it.each(MODES)('places every %s Mode Token in a group its config contract declares', (mode) => {
+		const declared = Object.keys(screenModeConfigContract(mode).groups);
+
+		expect(declared).toEqual(expect.arrayContaining(Object.keys(placeScreenThemeTokens(mode).groups)));
 	});
 
 	it('places a Mode Token in the group it names, in declaration order', () => {

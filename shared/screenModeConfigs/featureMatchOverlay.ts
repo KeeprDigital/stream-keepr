@@ -2,6 +2,7 @@ import type { FeatureMatchLayoutConfig } from '../types/screenConfig';
 import { z } from 'zod';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { defineScreenModeConfigContract, serverValidatedField } from './contract';
+import { editorField } from './fields';
 
 /** The built-in Feature Match Layout Templates, by the id each has always had. */
 export type FeatureMatchOverlayPresetId = 'full-table' | 'left-stacked-player-cams' | 'neon-feature-match';
@@ -16,8 +17,17 @@ export type FeatureMatchOverlayPresetId = 'full-table' | 'left-stacked-player-ca
  * display reset restores the default layout, and `null` reads as it again.
  */
 const featureMatchOverlayModeConfigShape = {
-	featureMatchId: z.number().int().positive().nullable(),
-	layout: serverValidatedField<FeatureMatchLayoutConfig>(),
+	featureMatchId: editorField(z.number().int().positive().nullable(), {
+		label: 'Feature Match Slot',
+		card: 'source',
+		reference: 'featureMatchSlot',
+	}),
+	/** Edited by the graphics editor, whose inspector sections hold the overlay's Looks (ADR-0072). */
+	layout: serverValidatedField<FeatureMatchLayoutConfig>({
+		label: 'Layout',
+		card: 'content',
+		slot: 'feature-match-layout',
+	}),
 };
 
 /**
@@ -41,5 +51,11 @@ export const featureMatchOverlayModeConfigContract = defineScreenModeConfigContr
 	DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
 	{
 		formerFields: ['presetId'],
+		groups: {
+			'frame-surface': { title: 'Frame surface', card: 'content' },
+			'frame-video': { title: 'Frame video', card: 'content' },
+			'frame-animation': { title: 'Frame animation', card: 'content' },
+			'source-appearance': { title: 'Source appearance', card: 'content' },
+		},
 	},
 );

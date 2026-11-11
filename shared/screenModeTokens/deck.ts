@@ -1,7 +1,9 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { deckModeConfigContract } from '../screenModeConfigs/deck';
 
-/** The Deck List settings groups its Mode Tokens may name (ADR-0072). */
-export type DeckSettingsGroup = 'deck-details' | 'pointed-cards' | 'quantity-badge' | 'points-badge';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type DeckSettingsGroup = ScreenSettingsGroupOf<typeof deckModeConfigContract>;
 
 /**
  * How the Deck List Screen Mode looks: its Mode Tokens, by name within the mode.

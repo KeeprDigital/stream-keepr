@@ -9,7 +9,7 @@ import HeaderSettingsCard from '~/components/Screen/HeaderSettingsCard.vue';
 // The one Header card a Screen Mode's settings render: the header toggle, and the custom text
 // only while the header shows, cleared as the `null` that deletes it (ADR-0041).
 
-const fields = screenModeConfigFields(headerConfigShape);
+const fields = screenModeConfigFields(headerConfigShape({ shows: 'Show a title.', auto: 'Empty shows the title.' }));
 
 const ScreenSettingsCardStub = defineComponent({
 	props: {

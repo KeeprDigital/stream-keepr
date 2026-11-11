@@ -70,7 +70,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="player-history:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="player-history:data" title="Source" :collapsible="false">
 			<ScreenPlayerField
 				:model-value="config.playerId"
 				:event-id="eventId"
@@ -91,7 +91,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 				@update="updateConfig({ columns: $event })"
 			/>
 
-			<ScreenSettingsGroup title="Outcome Badge">
+			<ScreenSettingsGroup title="Outcome badge">
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="outcome-badge" />
 			</ScreenSettingsGroup>
 		</ScreenSettingsSection>

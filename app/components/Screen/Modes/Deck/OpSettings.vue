@@ -74,7 +74,7 @@ const badgesSummary = computed(() => settingsSummary([
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="deck:deck-source" title="Deck Source" :collapsible="false">
+		<ScreenSettingsSection id="deck:deck-source" title="Source" :collapsible="false">
 			<ScreenDeckSourceField
 				:model-value="config.deckSource"
 				:event-id="eventId"
@@ -106,7 +106,7 @@ const badgesSummary = computed(() => settingsSummary([
 		<!-- No One Piece control sits in these groups, but their Mode Tokens are the Deck List's, so their Looks are here. -->
 		<ScreenSettingsSection
 			id="deck:deck-details"
-			title="Deck Details"
+			title="Deck details"
 			subtitle="The cost curve's bars take the accent; the rest styles a Magic Deck List's details row."
 			:summary="detailsSummary"
 		>
@@ -139,9 +139,9 @@ const badgesSummary = computed(() => settingsSummary([
 			/>
 		</ScreenSettingsSection>
 
-		<ScreenSettingsSection id="deck:card-badges" title="Card Badges" :summary="badgesSummary">
+		<ScreenSettingsSection id="deck:card-badges" title="Card badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
-				title="Quantity Badge"
+				title="Quantity badge"
 				description="On cards with multiple copies."
 				:shown="!!config.showQuantities"
 				:shown-field="fields.showQuantities"

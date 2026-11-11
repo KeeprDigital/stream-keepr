@@ -47,16 +47,16 @@ const viewModeOptions = [
 ];
 
 const sortByOptions = computed(() => ([
-	{ label: 'Meta Share', value: 'metaShare' },
+	{ label: 'Meta share', value: 'metaShare' },
 	{ label: 'Count', value: 'count' },
-	{ label: 'Win Rate', value: 'winRate' },
-	{ label: 'Conversion Rate', value: 'conversionRate' },
+	{ label: 'Win rate', value: 'winRate' },
+	{ label: 'Conversion rate', value: 'conversionRate' },
 ] satisfies { label: string; value: MetagameSortBy }[]).filter(option => isMetagameSortOffered(game.value, option.value)));
 
 const cardSortByOptions = [
-	{ label: 'Inclusion Rate', value: 'inclusionRate' },
-	{ label: 'Avg Copies', value: 'avgCopies' },
-	{ label: 'Total Copies', value: 'totalCopies' },
+	{ label: 'Inclusion rate', value: 'inclusionRate' },
+	{ label: 'Average copies', value: 'avgCopies' },
+	{ label: 'Total copies', value: 'totalCopies' },
 ];
 
 type ActiveMetagameColumnConfig = MetagameArchetypeColumnConfig | MetagameCardColumnConfig;
@@ -65,16 +65,16 @@ const columnLabels: Record<MetagameArchetypeColumnKey | MetagameCardColumnKey, s
 	archetype: 'Archetype',
 	count: 'Count',
 	metaShare: 'Share',
-	winRate: 'Win Rate',
-	avgPlace: 'Avg Place',
-	colors: 'Colors',
-	conversionRate: 'Conversion Rate',
+	winRate: 'Win rate',
+	avgPlace: 'Average place',
+	colors: 'Colours',
+	conversionRate: 'Conversion rate',
 	card: 'Card',
 	manaCost: 'Cost',
 	type: 'Type',
 	inclusionRate: 'Inclusion',
-	avgCopies: 'Avg Copies',
-	totalCopies: 'Total Copies',
+	avgCopies: 'Average copies',
+	totalCopies: 'Total copies',
 	deckCount: 'Decks',
 	mainboardCount: 'Main',
 	sideboardCount: 'Side',
@@ -160,7 +160,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="metagame:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="metagame:data" title="Source" :collapsible="false">
 			<ScreenConfigField
 				:field="fields.viewMode"
 				:model-value="config.viewMode"
@@ -241,7 +241,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			title="Chart"
 		>
 			<ScreenSettingsField
-				label="Pinned Chart Series"
+				label="Pinned chart series"
 				description="Give an Archetype its own chart series on the Metagame page, so it keeps that series whichever others show."
 			>
 				<NuxtLink

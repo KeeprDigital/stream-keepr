@@ -40,7 +40,7 @@ const COLUMN_LABELS: Record<StandingsColumnConfig['key'], string> = {
 	record: 'Record (W-L-D)',
 	points: 'Points',
 	deck: 'Deck',
-	positionChange: 'Position Change',
+	positionChange: 'Position change',
 };
 
 // A Screen whose columns were saved before a column existed is offered it too,
@@ -125,7 +125,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="standings:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="standings:data" title="Source" :collapsible="false">
 			<ScreenRoundField
 				:model-value="config.roundId"
 				null-label="Current standings"
@@ -179,14 +179,14 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 					description="Direction players are revealed."
 					@update:model-value="updateConfig({ revealOrder: $event as RevealOrder })"
 				/>
-				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="data" />
+				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="reveal" />
 			</template>
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection
 			v-if="config.viewMode === 'reveal'"
 			id="standings:reveal-controls"
-			title="Reveal Controls"
+			title="Reveal controls"
 			:collapsible="false"
 		>
 			<div class="flex items-center justify-between gap-4 max-sm:flex-col max-sm:items-stretch">

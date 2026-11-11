@@ -313,7 +313,7 @@ describe('screenDeckSettings', () => {
 		expect(settingsLayout(wrapper)).toEqual([
 			{
 				id: 'deck:deck-source',
-				title: 'Deck Source',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},
@@ -325,7 +325,7 @@ describe('screenDeckSettings', () => {
 			},
 			{
 				id: 'deck:deck-details',
-				title: 'Deck Details',
+				title: 'Deck details',
 				collapsible: true,
 				groups: details,
 			},
@@ -343,7 +343,7 @@ describe('screenDeckSettings', () => {
 			},
 			{
 				id: 'deck:card-badges',
-				title: 'Card Badges',
+				title: 'Card badges',
 				collapsible: true,
 				groups: badges,
 			},
@@ -372,11 +372,11 @@ describe('screenDeckSettings', () => {
 	it.each([
 		{
 			source: { type: 'player', playerId: 1 },
-			labels: ['Show Player Name', 'Show Deck Name', 'Show Deck Colors'],
+			labels: ['Show Player name', 'Show deck name', 'Show deck colours'],
 		},
 		{
 			source: { type: 'broadcast', broadcastDeckListId: 23 },
-			labels: ['Show List Name', 'Show Archetype', 'Show Deck Colors'],
+			labels: ['Show list name', 'Show archetype', 'Show deck colours'],
 		},
 	])('labels the Header toggles for a $source.type source', async ({ source, labels }) => {
 		mockConfig.value = {
@@ -419,7 +419,7 @@ describe('screenDeckSettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		await boardCard(wrapper, toggle).get(`[data-label="Show ${toggle}"]`).trigger('click');
+		await boardCard(wrapper, toggle).get(`[data-label="Show ${toggle.toLowerCase()}"]`).trigger('click');
 
 		if (written)
 			expect(mockUpdateConfig).toHaveBeenCalledWith({ board: written });
@@ -486,9 +486,9 @@ describe('screenDeckSettings', () => {
 		};
 		let wrapper = await mountComponent();
 		await flushPromises();
-		expect(wrapper.text()).not.toContain('Show Total Points');
-		expect(wrapper.text()).not.toContain('Show Pointed Cards');
-		expect(wrapper.text()).not.toContain('Highlander Point Badge');
+		expect(wrapper.text()).not.toContain('Show total points');
+		expect(wrapper.text()).not.toContain('Show pointed cards');
+		expect(wrapper.text()).not.toContain('Point badge');
 		expect(mockConfig.value.showHighlanderTotal).toBe(true);
 		expect(mockConfig.value.showHighlanderPointedCards).toBe(true);
 		expect(mockConfig.value.showHighlanderPoints).toBe(true);
@@ -499,9 +499,9 @@ describe('screenDeckSettings', () => {
 		};
 		wrapper = await mountComponent();
 		await flushPromises();
-		expect(wrapper.text()).toContain('Show Total Points');
-		expect(wrapper.text()).toContain('Show Pointed Cards');
-		expect(wrapper.text()).toContain('Highlander Point Badge');
+		expect(wrapper.text()).toContain('Show total points');
+		expect(wrapper.text()).toContain('Show pointed cards');
+		expect(wrapper.text()).toContain('Point badge');
 	});
 
 	// Card points are the Event's points system; with none, no card point setting shows.
@@ -513,7 +513,7 @@ describe('screenDeckSettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		for (const text of ['Show Total Points', 'Show Pointed Cards', 'Highlander Point Badge'])
+		for (const text of ['Show total points', 'Show pointed cards', 'Point badge'])
 			expect(wrapper.text().includes(text), text).toBe(shown);
 	});
 
@@ -542,9 +542,9 @@ describe('screenDeckSettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const details = card(wrapper, 'Deck Details');
+		const details = card(wrapper, 'Deck details');
 		expect(details.find('[data-label="Details Text Size"]').exists()).toBe(shown);
-		expect(details.find('[data-label="Show Deck Meta Pill"]').exists()).toBe(shown);
+		expect(details.find('[data-label="Show as a pill"]').exists()).toBe(shown);
 	});
 
 	it.each([
@@ -600,8 +600,8 @@ describe('screenDeckSettings', () => {
 		await flushPromises();
 
 		const sideboard = boardCard(wrapper, 'Sideboard');
-		expect(sideboard.find('[data-label="Sideboard Placement"]').exists()).toBe(placement);
-		await sideboard.get('[data-label="Show Companion"]').trigger('click');
+		expect(sideboard.find('[data-label="Placement"]').exists()).toBe(placement);
+		await sideboard.get('[data-label="Show companion"]').trigger('click');
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ showCompanion: false });
 	});
 
@@ -832,19 +832,19 @@ describe('screenDeckSettings', () => {
 		},
 		{
 			title: 'Sideboard',
-			label: 'Stack Reveal',
+			label: 'Stack reveal',
 			patch: {
 				sideboard: expect.objectContaining({ stackReveal: 200 }),
 			},
 		},
 		{
-			title: 'Deck Details',
-			label: 'Details Text Size',
+			title: 'Deck details',
+			label: 'Details text size',
 			patch: { metaPillSize: 200 },
 		},
 		{
-			title: 'Deck Details',
-			label: 'Pointed Card Text Size',
+			title: 'Deck details',
+			label: 'Pointed card text size',
 			patch: { pointedCardSize: 200 },
 		},
 	])('writes the $title $label', async ({ title, label, patch }) => {
@@ -865,7 +865,7 @@ describe('screenDeckSettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		card(wrapper, 'Card Badges').get(`[data-config-field="${key}"]`).getComponent(UInputNumberStub).vm.$emit('update:modelValue', value);
+		card(wrapper, 'Card badges').get(`[data-config-field="${key}"]`).getComponent(UInputNumberStub).vm.$emit('update:modelValue', value);
 		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ [key]: value });
 	});
 
@@ -981,7 +981,7 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 		expect(layout).toEqual([
 			{
 				id: 'deck:deck-source',
-				title: 'Deck Source',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},
@@ -993,7 +993,7 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 			},
 			{
 				id: 'deck:deck-details',
-				title: 'Deck Details',
+				title: 'Deck details',
 				collapsible: true,
 				groups: ['deck-details', 'pointed-cards'],
 			},
@@ -1005,7 +1005,7 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 			},
 			{
 				id: 'deck:card-badges',
-				title: 'Card Badges',
+				title: 'Card badges',
 				collapsible: true,
 				groups: ['quantity-badge', 'points-badge'],
 			},
@@ -1029,7 +1029,7 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 
 		await wrapper.get('[data-testid="source-tabs"] [data-value="player"]').trigger('click');
 		await wrapper.get('[data-testid="deck-source-player"] [role="combobox"]').setValue(search);
-		const options = card(wrapper, 'Deck Source').findAll('[role="option"]');
+		const options = card(wrapper, 'Source').findAll('[role="option"]');
 		expect(options.map(option => option.text())).toEqual(['zoro_main']);
 		await options[0]!.trigger('click');
 

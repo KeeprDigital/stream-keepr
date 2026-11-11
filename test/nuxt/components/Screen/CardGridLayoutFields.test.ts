@@ -13,17 +13,21 @@ const topCards = screenModeConfigContract('top-cards').fields;
 
 /** A board's layout block view: the Card Layout beside an alignment and a stack reveal. */
 const board = {
-	...screenModeConfigFields(cardLayoutShape(100)),
+	...screenModeConfigFields(cardLayoutShape(100, 'layout')),
 	alignment: {
 		key: 'alignment',
 		label: 'Alignment',
-		control: 'select',
+		control: 'position',
+		card: 'content',
+		clearable: true,
 		displayScale: 1,
 	},
 	stackReveal: {
 		key: 'stackReveal',
-		label: 'Stack Reveal',
+		label: 'Stack reveal',
 		control: 'number',
+		card: 'content',
+		clearable: true,
 		min: 4,
 		max: 240,
 		displayScale: 1,

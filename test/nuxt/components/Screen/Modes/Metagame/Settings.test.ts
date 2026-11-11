@@ -226,7 +226,7 @@ describe('screenMetagameSettings', () => {
 		expect(settingsLayout(wrapper)).toEqual([
 			{
 				id: 'metagame:data',
-				title: 'Data',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},
@@ -321,10 +321,10 @@ describe('screenMetagameSettings', () => {
 				'Archetype',
 				'Count',
 				'Share',
-				'Win Rate',
-				'Avg Place',
-				'Colors',
-				'Conversion Rate',
+				'Win rate',
+				'Average place',
+				'Colours',
+				'Conversion rate',
 			]);
 
 		await wrapper.findAll('[data-testid="u-switch"]')[6]!.trigger('click');
@@ -393,8 +393,8 @@ describe('screenMetagameSettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		const sortBy = wrapper.findAll('[data-testid="form-field"]').find(field => field.find('span').text() === 'Sort archetypes by')!;
-		expect(sortBy.text()).toContain('Conversion Rate');
+		const sortBy = wrapper.findAll('[data-testid="form-field"]').find(field => field.find('span').text() === 'Sort by')!;
+		expect(sortBy.text()).toContain('Conversion rate');
 		sortBy.getComponent(USelectStub).vm.$emit('update:modelValue', 'conversionRate');
 		await nextTick();
 
@@ -417,7 +417,7 @@ describe('screenMetagameSettings', () => {
 
 			const select = (label: string) => wrapper.findAll('[data-testid="form-field"]').find(field => field.find('span').text() === label)!.get('[data-testid="u-select"]').text();
 			expect(select('Player scope')).toBe('All Players|Player List');
-			expect(select('Sort archetypes by')).toBe('Meta Share|Count');
+			expect(select('Sort by')).toBe('Meta share|Count');
 			expect(wrapper.find('[data-testid="event-conversion-target"]').exists()).toBe(false);
 		});
 
@@ -437,8 +437,8 @@ describe('screenMetagameSettings', () => {
 					'Card',
 					'Type',
 					'Inclusion',
-					'Avg Copies',
-					'Total Copies',
+					'Average copies',
+					'Total copies',
 					'Decks',
 					'Main',
 				],
@@ -507,8 +507,8 @@ describe('screenMetagameSettings', () => {
 		await flushPromises();
 
 		const fieldLabels = wrapper.findAll('[data-testid="form-field"]').map(field => field.find('span').text());
-		expect(fieldLabels).toEqual(expect.arrayContaining(['Player scope', 'Sort archetypes by', 'Top archetypes']));
-		expect(fieldLabels).not.toContain('Card limit');
+		expect(fieldLabels).toEqual(expect.arrayContaining(['Player scope', 'Sort by', 'Limit']));
+		expect(wrapper.find('[data-config-field="limit"]').exists()).toBe(false);
 		expect(fieldLabels).not.toContain('Rows per page');
 
 		const cardTitles = wrapper.findAll('[data-testid="settings-card"]').map(card => card.find('h2').text());

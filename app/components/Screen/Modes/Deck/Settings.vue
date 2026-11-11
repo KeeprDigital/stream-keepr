@@ -299,7 +299,7 @@ const badgesSummary = computed(() => {
 		@update="updateConfig"
 	/>
 	<div v-else class="flex flex-col gap-6">
-		<ScreenSettingsSection id="deck:deck-source" title="Deck Source" :collapsible="false">
+		<ScreenSettingsSection id="deck:deck-source" title="Source" :collapsible="false">
 			<ScreenDeckSourceField
 				:model-value="config.deckSource"
 				:event-id="eventId"
@@ -311,14 +311,14 @@ const badgesSummary = computed(() => {
 			<!-- A Broadcast Deck List names a list and its archetype, so these two toggles say so. -->
 			<ScreenSettingsToggle
 				:data-config-field="fields.showPlayerName.key"
-				:label="isBroadcastSource ? 'Show List Name' : fields.showPlayerName.label"
+				:label="isBroadcastSource ? 'Show list name' : fields.showPlayerName.label"
 				:description="isBroadcastSource ? 'The Broadcast Deck List\'s name, on the first line.' : 'The Player\'s name, on the first line.'"
 				:model-value="config.showPlayerName !== false"
 				@update:model-value="updateConfig({ showPlayerName: $event })"
 			/>
 			<ScreenSettingsToggle
 				:data-config-field="fields.showDeckName.key"
-				:label="isBroadcastSource ? 'Show Archetype' : fields.showDeckName.label"
+				:label="isBroadcastSource ? 'Show archetype' : fields.showDeckName.label"
 				:description="isBroadcastSource ? 'The list\'s archetype, beside its name.' : 'The deck\'s name, beside the Player\'s.'"
 				:model-value="config.showDeckName !== false"
 				@update:model-value="updateConfig({ showDeckName: $event })"
@@ -331,7 +331,7 @@ const badgesSummary = computed(() => {
 			/>
 		</ScreenSettingsSection>
 
-		<ScreenSettingsSection id="deck:deck-details" title="Deck Details" :summary="detailsSummary">
+		<ScreenSettingsSection id="deck:deck-details" title="Deck details" :summary="detailsSummary">
 			<ScreenSettingsHint>
 				A row under the header, shown only when something in it is on.
 			</ScreenSettingsHint>
@@ -369,7 +369,7 @@ const badgesSummary = computed(() => {
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="deck-details" />
 
-			<ScreenSettingsGroup v-if="showsCardPoints" title="Pointed Cards">
+			<ScreenSettingsGroup v-if="showsCardPoints" title="Pointed cards">
 				<ScreenConfigField
 					:field="fields.showHighlanderPointedCards"
 					:model-value="config.showHighlanderPointedCards !== false"
@@ -397,7 +397,7 @@ const badgesSummary = computed(() => {
 			:summary="boardSummary(section)"
 		>
 			<ScreenSettingsToggle
-				:label="`Show ${section.title}`"
+				:label="`Show ${section.title.toLowerCase()}`"
 				:description="section.shown && !(mainboardShown && sideboardShown)
 					? 'The only board shown, so it stays on; show the other board to hide this one.'
 					: `Show the ${section.title.toLowerCase()} on the Screen.`"
@@ -500,9 +500,9 @@ const badgesSummary = computed(() => {
 			</template>
 		</ScreenSettingsSection>
 
-		<ScreenSettingsSection id="deck:card-badges" title="Card Badges" :summary="badgesSummary">
+		<ScreenSettingsSection id="deck:card-badges" title="Card badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
-				title="Quantity Badge"
+				title="Quantity badge"
 				description="On cards with multiple copies."
 				:shown="!!config.showQuantities"
 				:shown-field="fields.showQuantities"
@@ -515,7 +515,7 @@ const badgesSummary = computed(() => {
 
 			<ScreenCardBadgeFields
 				v-if="showsCardPoints"
-				title="Highlander Point Badge"
+				title="Point badge"
 				description="7 Point Highlander points on pointed cards; placed on a grid's cards."
 				:shown="!!config.showHighlanderPoints"
 				:shown-field="fields.showHighlanderPoints"
@@ -528,7 +528,7 @@ const badgesSummary = computed(() => {
 
 			<ScreenCardBadgeFields
 				v-if="config.showCompanion !== false"
-				title="Companion Badge"
+				title="Companion badge"
 				description="On the companion's card; in a corner, it lines up with that side."
 				shown
 				:position="config.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION"

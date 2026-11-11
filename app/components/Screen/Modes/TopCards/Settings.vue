@@ -86,23 +86,23 @@ const pageSizeDescription = computed(() => {
 });
 
 const boardOptions = [
-	{ label: 'Full Deck', value: 'full' },
+	{ label: 'Full deck', value: 'full' },
 	{ label: 'Mainboard', value: 'mainboard' },
 	{ label: 'Sideboard', value: 'sideboard' },
 ];
 
 const sortByOptions = [
-	{ label: 'Inclusion Rate', value: 'inclusionRate' },
-	{ label: 'Avg Copies', value: 'avgCopies' },
-	{ label: 'Total Copies', value: 'totalCopies' },
+	{ label: 'Inclusion rate', value: 'inclusionRate' },
+	{ label: 'Average copies', value: 'avgCopies' },
+	{ label: 'Total copies', value: 'totalCopies' },
 ];
 
 const statBadgeOptions = [
 	{ label: 'None', value: 'none' },
-	{ label: 'Inclusion Rate', value: 'inclusionRate' },
-	{ label: 'Avg Copies', value: 'avgCopies' },
-	{ label: 'Total Copies', value: 'totalCopies' },
-	{ label: 'Deck Count', value: 'deckCount' },
+	{ label: 'Inclusion rate', value: 'inclusionRate' },
+	{ label: 'Average copies', value: 'avgCopies' },
+	{ label: 'Total copies', value: 'totalCopies' },
+	{ label: 'Deck count', value: 'deckCount' },
 ];
 
 // Points come from the Event's points system. A Screen left filtering to
@@ -185,7 +185,7 @@ const badgesSummary = computed(() => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection id="top-cards:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="top-cards:data" title="Source" :collapsible="false">
 			<ScreenMetagameScopeFields
 				:config="config"
 				:fields="fields"
@@ -233,7 +233,7 @@ const badgesSummary = computed(() => {
 			/>
 		</ScreenSettingsSection>
 
-		<ScreenSettingsSection id="top-cards:ranking-and-pages" title="Ranking & Pages" :summary="rankingSummary">
+		<ScreenSettingsSection id="top-cards:ranking-and-pages" title="Ranking and pages" :summary="rankingSummary">
 			<ScreenConfigField
 				:field="fields.limit"
 				:model-value="config.limit"
@@ -282,9 +282,9 @@ const badgesSummary = computed(() => {
 			@update="updateConfig($event)"
 		/>
 
-		<ScreenSettingsSection id="top-cards:card-badges" title="Card Badges" :summary="badgesSummary">
+		<ScreenSettingsSection id="top-cards:card-badges" title="Card badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
-				title="Rank Badge"
+				title="Rank badge"
 				description="Each card's position in the ranking."
 				:shown="config.showRankBadges"
 				:shown-field="fields.showRankBadges"
@@ -296,7 +296,7 @@ const badgesSummary = computed(() => {
 			/>
 
 			<ScreenCardBadgeFields
-				title="Stat Badge"
+				title="Stat badge"
 				description="One metric on each card."
 				:shown="config.statBadge !== 'none'"
 				:position="config.statBadgePosition"
@@ -319,7 +319,7 @@ const badgesSummary = computed(() => {
 
 			<ScreenCardBadgeFields
 				v-if="showsPointsBadges"
-				title="Point Badge"
+				title="Point badge"
 				description="Each pointed card's points from the Event's points system."
 				:shown="config.showPointsBadges"
 				:shown-field="fields.showPointsBadges"

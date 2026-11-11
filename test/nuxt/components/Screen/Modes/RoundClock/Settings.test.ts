@@ -68,13 +68,13 @@ describe('screenRoundClockSettings', () => {
 
 		expect(settingsCards(wrapper)).toEqual([
 			{
-				title: 'Data',
+				title: 'Source',
 				id: 'round-clock:data',
 				collapsible: false,
 				looks: [],
 			},
 			{
-				title: 'Round Name',
+				title: 'Round name',
 				id: 'round-clock:round-name',
 				collapsible: true,
 				looks: [],
@@ -112,7 +112,7 @@ describe('screenRoundClockSettings', () => {
 		await wrapper.get('[data-config-field="showRoundName"] [role="switch"]').trigger('click');
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ showRoundName: written });
-		expect(settingsCardSummary(wrapper, 'Round Name')).toBe(summary);
+		expect(settingsCardSummary(wrapper, 'Round name')).toBe(summary);
 	});
 
 	// The limit is offered only while counting up; emptied, it counts up without one.

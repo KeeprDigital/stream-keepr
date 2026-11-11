@@ -57,7 +57,8 @@ describe('the Metagame Scope', () => {
 
 		it(archetypeFilter ? 'carries the shared archetype filter' : 'carries no archetype filter', () => {
 			if (archetypeFilter)
-				expect(shape.archetypeFilter).toBe(metagameArchetypeFilterField);
+				// The shared schema itself; a mode may describe when it shows (#1093).
+				expect((shape.archetypeFilter as typeof metagameArchetypeFilterField)._zod.def).toBe(metagameArchetypeFilterField._zod.def);
 			else
 				expect(shape).not.toHaveProperty('archetypeFilter');
 		});

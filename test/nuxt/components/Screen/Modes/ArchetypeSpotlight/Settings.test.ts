@@ -71,13 +71,13 @@ describe('the Archetype Spotlight settings editor', () => {
 		expect(settingsLayout(wrapper)).toEqual([
 			{
 				id: 'archetype-spotlight:data',
-				title: 'Data',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},
 			{
 				id: 'archetype-spotlight:top-cards',
-				title: 'Top Cards',
+				title: 'Top cards',
 				collapsible: true,
 				groups: ['top-cards'],
 			},

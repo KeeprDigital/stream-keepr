@@ -234,7 +234,7 @@ describe('screenModesTopCutSettings', () => {
 
 	it.each([
 		['Show Seeds', 'showSeeds'],
-		['Show Archetypes', 'showArchetypes'],
+		['Show archetypes', 'showArchetypes'],
 	])('writes %s as the Screen\'s %s', async (label, field) => {
 		const wrapper = await mountEditor();
 
@@ -252,7 +252,7 @@ describe('screenModesTopCutSettings', () => {
 		expect(settingsLayout(wrapper)).toEqual([
 			{
 				id: 'top-cut:data',
-				title: 'Data',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},

@@ -151,13 +151,13 @@ describe('screenHeadToHeadSettings', () => {
 		expect(settingsLayout(wrapper)).toEqual([
 			{
 				id: 'head-to-head:players',
-				title: 'Players',
+				title: 'Source',
 				collapsible: false,
 				groups: [],
 			},
 			{
 				id: 'head-to-head:player-details',
-				title: 'Player Details',
+				title: 'Player details',
 				collapsible: true,
 				groups: [],
 			},
