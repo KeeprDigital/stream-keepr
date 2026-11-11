@@ -157,6 +157,26 @@ beforeEach(async () => {
 	screenId = (await createScreen('main', 'top-cut')).id;
 });
 
+/** A Theme storing the Feature Match Overlay's Frame media, as one written before a Theme held Foundation Tokens only did. */
+async function storeThemeFrameMedia(revision: Revision) {
+	await db.update(schema.themes)
+		.set({
+			tokens: {
+				'feature-match-overlay.frame-media': { kind: 'image', ...revision },
+			},
+		})
+		.where(eq(schema.themes.id, themeId));
+	await db.insert(graphicAssetReferences).values({
+		id: 'theme-frame-media',
+		assetId: revision.assetId,
+		revisionId: revision.revisionId,
+		ownerKind: 'theme',
+		ownerId: themeId,
+		ownerSlot: 'feature-match-overlay.frame-media',
+		eventId: null,
+	} as never);
+}
+
 const retire = (revision: Revision) => context.library.retireGraphicAsset({ assetId: revision.assetId, actor: 'author' });
 const trash = (revision: Revision) => context.library.trashGraphicAsset({ assetId: revision.assetId, actor: 'author' });
 
@@ -360,6 +380,24 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 		expect((await db.select().from(graphicAssetReferences)).map(row => row.ownerSlot)).toEqual(['background.plate']);
 	});
 
+	// A Theme stores Foundation Tokens only: a Mode Token is set per Screen.
+	it('pins nothing for a Mode Token a Theme write names', async () => {
+		await call(setToken, { themeId, token: 'feature-match-overlay.frame-media' }, {
+			value: { kind: 'image', ...plate },
+		});
+
+		expect((await retire(plate)).outcome).toBe('retired');
+	});
+
+	it('keeps the reference of a Mode Token a Theme stored before until that token is cleared', async () => {
+		await storeThemeFrameMedia(plate);
+		expect((await retire(plate)).outcome).toBe('in-use');
+
+		await call(clearToken, { themeId, token: 'feature-match-overlay.frame-media' });
+
+		expect((await retire(plate)).outcome).toBe('retired');
+	});
+
 	it('refuses an override naming a retired asset, storing nothing', async () => {
 		await retire(unrelated);
 
@@ -433,6 +471,13 @@ describe('a Screen Output\'s capability over its Theme\'s content', () => {
 
 		await db.update(schema.screens).set({ currentMode: 'feature-match-overlay' }).where(eq(schema.screens.id, screenId));
 		expect(await resolves(await screenRow(screenId), plate)).toBe(true);
+	});
+
+	it('resolves nothing of a Mode Token its Theme stored before', async () => {
+		await storeThemeFrameMedia(plate);
+		await db.update(schema.screens).set({ currentMode: 'feature-match-overlay' }).where(eq(schema.screens.id, screenId));
+
+		expect(await resolves(await screenRow(screenId), plate)).toBe(false);
 	});
 
 	it('resolves nothing of a Theme its Event does not use', async () => {

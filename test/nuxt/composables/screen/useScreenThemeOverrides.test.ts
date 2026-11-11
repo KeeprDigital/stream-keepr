@@ -74,16 +74,13 @@ describe('useScreenThemeOverrides', () => {
 			{ token: 'positive' },
 			'#123456',
 		],
-		// The former stored form: shown as the literal it resolves to, never as stored.
+		// A Theme stores Foundation Tokens only; a Mode Token one stored before is never read.
 		[
-			'a Mode Token whose Theme value names a Foundation Token',
-			{
-				'accent': '#aa0000',
-				'standings.rise': { token: 'accent' },
-			},
+			'a Mode Token following its default, whatever the Theme stores for it',
+			{ 'standings.rise': '#aa0000' },
 			'standings.rise',
-			'#aa0000',
-			'#aa0000',
+			{ token: 'positive' },
+			FOUNDATION_TOKENS.positive.default,
 		],
 	])('reads %s from the Event\'s Theme', async (_case, tokens, name, inherited, resolved) => {
 		network.themeTokens = tokens;

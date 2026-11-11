@@ -1,38 +1,21 @@
-// The whole Theme Token vocabulary a Theme may set: every Foundation Token,
-// and every Mode Token a Screen Mode Definition declares. Stream Keepr owns
-// each name (ADR-0049). It sits beside `screenModes.ts` rather than in
-// `modules/theme`, because Mode Tokens are read off the Screen Mode
-// Definitions, which already import that module.
+// The whole Theme Token vocabulary: every Foundation Token, which a Theme sets,
+// and every Mode Token a Screen Mode Definition declares, which a Screen sets.
+// Stream Keepr owns each name (ADR-0049). It sits beside `screenModes.ts`
+// rather than in `modules/theme`, because Mode Tokens are read off the Screen
+// Mode Definitions, which already import that module.
 
 import type { FoundationTokenDefinition, ThemeTokenValue } from './modules/theme/tokens';
 import type { AnyDeclaredModeTokenDefinition, FoundationTokenName } from './modules/theme/vocabulary';
-import type { ScreenModeTokenName } from './screenModes';
-import type { ScreenMode } from './types/enums';
 import type { ThemeTokenWriteRefusal } from './types/theme';
 import { themeTokenValueSchema } from './modules/theme/tokens';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
-import { SCREEN_MODES, screenModeFormerTokens, screenModeTokens } from './screenModes';
+import { screenModeFormerTokens, screenModeTokens } from './screenModes';
 import { SCREEN_MODE_VALUES } from './types/enums';
 
-/** The Mode Tokens of one themed Screen Mode, by full name, as a Theme editor groups them. */
-export interface ThemedScreenModeTokens {
-	mode: ScreenMode;
-	label: string;
-	tokens: Readonly<Record<ScreenModeTokenName, AnyDeclaredModeTokenDefinition>>;
-}
-
-/** Every Screen Mode that declares Mode Tokens, in Screen Mode order. */
-export const THEMED_SCREEN_MODE_TOKENS: readonly ThemedScreenModeTokens[] = SCREEN_MODE_VALUES
-	.filter(mode => SCREEN_MODES[mode].modeTokens)
-	.map(mode => ({
-		mode,
-		label: SCREEN_MODES[mode].label,
-		tokens: screenModeTokens(mode),
-	}));
-
+/** Every Mode Token any Screen Mode declares, by full name. */
 const MODE_TOKENS: Readonly<Record<string, AnyDeclaredModeTokenDefinition>> = Object.assign(
 	{},
-	...THEMED_SCREEN_MODE_TOKENS.map(({ tokens }) => tokens),
+	...SCREEN_MODE_VALUES.map(screenModeTokens),
 );
 
 const FORMER_TOKENS: ReadonlySet<string> = new Set(SCREEN_MODE_VALUES.flatMap(screenModeFormerTokens));
@@ -69,7 +52,8 @@ export type ThemeTokenWrite
 		| { ok: false; refusal: ThemeTokenWriteRefusal };
 
 /**
- * A value a Theme may store for `name`, or why not.
+ * A value `name` may be stored as, in a Theme or a Screen Theme Override, or
+ * why not.
  *
  * Unlike a read, a write is not forgiving: a value of the wrong type or outside
  * its bounds is refused, never clamped. A stored value never names another
@@ -78,7 +62,7 @@ export type ThemeTokenWrite
  * value is. A former token is accepted whatever it is given and `dropped`:
  * there is nothing to store.
  */
-export function parseThemeTokenWrite(name: string, value: unknown): ThemeTokenWrite {
+export function parseThemeTokenValue(name: string, value: unknown): ThemeTokenWrite {
 	if (isFormerThemeToken(name))
 		return { ok: true, dropped: true };
 	const token = themeTokenDefinition(name);
@@ -89,4 +73,15 @@ export function parseThemeTokenWrite(name: string, value: unknown): ThemeTokenWr
 	return literal.success
 		? { ok: true, value: literal.data as ThemeTokenValue }
 		: { ok: false, refusal: 'invalid-value' };
+}
+
+/**
+ * What a Theme may store for `name`, or why not. A Theme stores Foundation
+ * Tokens only: a Mode Token is a Screen's own, so one is accepted whatever it
+ * is given and `dropped`, as a former token is.
+ */
+export function parseThemeTokenWrite(name: string, value: unknown): ThemeTokenWrite {
+	return themeTokenDefinition(name)?.tier === 'mode'
+		? { ok: true, dropped: true }
+		: parseThemeTokenValue(name, value);
 }

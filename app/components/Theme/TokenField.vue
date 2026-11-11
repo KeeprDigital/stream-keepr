@@ -24,7 +24,8 @@ const props = defineProps<{
 	writing?: boolean;
 	/**
 	 * Where it is set: in a Theme, inheriting its default (the default), or as
-	 * a Screen Theme Override, inheriting `inherited` from the Event's Theme.
+	 * a Screen Theme Override, inheriting `inherited`: a Foundation Token's from
+	 * the Event's Theme, a Mode Token's default.
 	 */
 	scope?: 'theme' | 'screen';
 	/** What it reads when unset: a literal, or the Foundation Token its default names. */
@@ -80,7 +81,13 @@ const SCOPE_TEXT = {
 		resetLabel: (label: string) => `Clear the ${label} override`,
 	},
 } as const;
-const text = computed(() => SCOPE_TEXT[props.scope ?? 'theme']);
+const text = computed(() => {
+	const scoped = SCOPE_TEXT[props.scope ?? 'theme'];
+	// A Theme stores Foundation Tokens only, so a Mode Token inherits its default wherever it is set.
+	return props.token.tier === 'mode'
+		? { ...scoped, inherited: SCOPE_TEXT.theme.inherited }
+		: scoped;
+});
 const inheritedValue = computed(() => props.inherited ?? definition.value.default);
 const inherited = computed(() => `${text.value.inherited}: ${valueText(inheritedValue.value)}`);
 const badge = computed(() => {
