@@ -17,7 +17,6 @@ const { apiFetch } = vi.hoisted(() => ({
 
 mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard }));
 mockNuxtImport('useToast', () => () => ({ add: toastAdd }));
-mockNuxtImport('useRequestURL', () => () => new URL('http://localhost/'));
 mockNuxtImport('$fetch', () => apiFetch);
 
 function mountAside(props: {
@@ -44,8 +43,6 @@ function mountAside(props: {
 		global: {
 			stubs: {
 				...nuxtUiStubs,
-				// Its popovers open by default here, so every hand-out control is on screen.
-				UPopover: { template: '<div><slot /><slot name="content" /></div>' },
 				ScreenSettingsSection: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
 				GraphicsCanvasManipulationOverlay: true,
 			},
@@ -77,33 +74,38 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-// How a hand-out obtains and carries the Screen Output Asset Capability is
-// `useScreenOutputAccessUrl`'s test; here each control is wired to it once, with
-// this surface's own words for what went wrong (#231).
+/** Copies the Screen's output URL through the hand-out, and answers what reached the clipboard. */
+async function copiedOutputUrl(wrapper: Wrapper): Promise<string> {
+	await wrapper.get('[data-hand-out="copy"]').trigger('click');
+	await wrapper.findAll('[role="menuitem"]').find(entry => entry.text() === 'Copy output URL')!.trigger('click');
+	await flushPromises();
+	return copyToClipboard.mock.lastCall![0];
+}
+
+/** Opens the PNG menu and chooses the capture of `output`. */
+async function downloadPng(wrapper: Wrapper, output: string) {
+	await wrapper.get('[data-testid="download-output"]').trigger('click');
+	const item = wrapper.findAll('[role="menuitem"]').find(entry => entry.text() === `${output} PNG`);
+	if (!item)
+		throw new Error(`No "${output} PNG" item`);
+	await item.trigger('click');
+	await flushPromises();
+}
+
+// The URL hand-out is the shared component's test; here it is wired once, beside the
+// PNG capture this editor keeps, with this surface's own words for a refused capture (#231, #1104).
 describe('feature Match Overlay preview aside — output hand-outs', () => {
-	it('copies an output URL carrying asset access, saying nothing beyond the clipboard', async () => {
+	it('hands out this Screen\'s fill and key outputs through the shared hand-out', async () => {
 		const wrapper = mountAside();
 
-		await wrapper.get('[data-testid="copy-output-key"]').trigger('click');
+		await wrapper.get('[data-hand-out="copy"]').trigger('click');
+		await wrapper.findAll('[role="menuitem"]').find(entry => entry.text() === 'Copy key output URL')!.trigger('click');
 		await flushPromises();
 
 		expect(copyToClipboard).toHaveBeenCalledExactlyOnceWith(
 			`${window.location.origin}/event/1/screen/main?output=key#asset-capability=${capability}`,
-			expect.objectContaining({ successDescription: 'KEY output URL copied.' }),
+			expect.anything(),
 		);
-		expect(toastAdd).not.toHaveBeenCalled();
-	});
-
-	it('copies nothing when asset access is refused, and says so rather than blaming the clipboard (#257)', async () => {
-		apiFetch.mockRejectedValue(new Error('unavailable'));
-		const wrapper = mountAside();
-
-		await wrapper.get('[data-testid="copy-output-overlay"]').trigger('click');
-		await flushPromises();
-
-		expect(copyToClipboard).toHaveBeenCalledExactlyOnceWith('', expect.objectContaining({
-			nothingToCopyDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
-		}));
 	});
 
 	it('points a PNG capture at a URL carrying asset access', async () => {
@@ -115,8 +117,7 @@ describe('feature Match Overlay preview aside — output hand-outs', () => {
 		vi.stubGlobal('open', vi.fn(() => captureWindow));
 		const wrapper = mountAside();
 
-		await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
-		await flushPromises();
+		await downloadPng(wrapper, 'Fill');
 
 		expect(captureWindow.location.href).toBe(`${window.location.origin}/event/1/screen/main?output=fill&download=1#asset-capability=${capability}`);
 		expect(toastAdd).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ title: 'Preparing download' }));
@@ -145,8 +146,7 @@ describe('feature Match Overlay preview aside — output hand-outs', () => {
 		arrange();
 		const wrapper = mountAside();
 
-		await wrapper.get('[data-testid="download-output-fill"]').trigger('click');
-		await flushPromises();
+		await downloadPng(wrapper, 'Fill');
 
 		expect(toastAdd).toHaveBeenCalledTimes(2);
 		expect(toastAdd.mock.lastCall![0]).toMatchObject({
@@ -157,11 +157,11 @@ describe('feature Match Overlay preview aside — output hand-outs', () => {
 
 	it('disables every hand-out, explaining why, while Graphic Asset publication is blocked', async () => {
 		const wrapper = mountAside({ publicationBlocked: true, publicationBlockReason: 'A pinned revision is missing.' });
-		const blocked = wrapper.findAll('button[disabled]')
-			.filter(button => !button.element.closest('[data-testid="animation-preview-controls"]'));
+		const controls = ['[data-hand-out="open"]', '[data-hand-out="copy"]', '[data-testid="download-output"]']
+			.map(selector => wrapper.get(selector));
 
-		expect(blocked.length).toBeGreaterThanOrEqual(3);
-		expect(blocked.every(button => button.attributes('title') === 'A pinned revision is missing.')).toBe(true);
+		expect(controls.map(control => [control.attributes('disabled'), control.attributes('title')]))
+			.toEqual(Array.from({ length: 3 }, () => ['', 'A pinned revision is missing.']));
 	});
 });
 
@@ -277,9 +277,9 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 		await wrapper.get('[data-testid="preview-item-guides"]').trigger('click');
 		expect(src()).not.toContain('guides=1');
 
-		const outputUrls = wrapper.findAll('input').map(input => (input.element as HTMLInputElement).value).filter(Boolean);
-		expect(outputUrls.length).toBeGreaterThan(0);
-		expect(outputUrls.some(url => /embed=preview|guides=1|safe=1/.test(url))).toBe(false);
+		// Both guides on: the hand-out still copies none.
+		await wrapper.get('[data-testid="preview-item-guides"]').trigger('click');
+		expect(await copiedOutputUrl(wrapper)).not.toMatch(/embed=preview|guides=1|safe=1/);
 	});
 
 	// The stress toggle is editor state: it rides the preview's URL and is never written.
@@ -297,9 +297,8 @@ describe('feature Match Overlay preview aside — its preview frame', () => {
 		expect(src()).not.toContain('stress=1');
 
 		await toggle().trigger('click');
-		const outputUrls = wrapper.findAll('input').map(input => (input.element as HTMLInputElement).value).filter(Boolean);
-		expect(outputUrls.some(url => url.includes('stress=1'))).toBe(false);
 		expect(apiFetch).not.toHaveBeenCalled();
+		expect(await copiedOutputUrl(wrapper)).not.toContain('stress=1');
 	});
 
 	it('fits the preview to the canvas aspect ratio', () => {

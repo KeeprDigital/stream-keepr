@@ -78,7 +78,7 @@ describe('screen Mode Definition module', () => {
 	it('exposes overlay, fill, and key Screen Outputs for Broadcast Graphics', () => {
 		const policy = getScreenModeConfigurationPolicy('broadcast-graphics');
 
-		expect(policy.outputOptions.map(option => option.value)).toEqual(['overlay', 'fill', 'key']);
+		expect(policy.outputs).toEqual(['overlay', 'fill', 'key']);
 	});
 
 	it('gives every graphics host the full Screen configuration width for its compositor', () => {
@@ -90,6 +90,6 @@ describe('screen Mode Definition module', () => {
 	it('keeps Feature Match Overlay output options in shared policy', () => {
 		const policy = getScreenModeConfigurationPolicy('feature-match-overlay');
 
-		expect(policy.outputOptions.map(option => option.value)).toEqual(['overlay', 'fill', 'key']);
+		expect(policy.outputs).toEqual(['overlay', 'fill', 'key']);
 	});
 });

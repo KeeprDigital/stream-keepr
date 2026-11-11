@@ -25,7 +25,7 @@ import {
 /**
  * The Feature Match Overlay editor preview: the shared preview panel (output
  * selection, zoom, item guides, advisory action-safe and title-safe guides), plus
- * output URL hand-out, PNG capture, and Graphic Animation Preview.
+ * the shared output hand-out, PNG capture, and Graphic Animation Preview.
  *
  * Two selections travel through it, because the page has two authoring surfaces.
  * The host-owned one names the Frame or a Source Item; the
@@ -78,18 +78,13 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
-const { copyToClipboard } = useCopyToClipboard();
-const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
-const requestUrl = useRequestURL();
+const { openScreenOutput } = useScreenOutputAccessUrl();
 const previewOutput = ref<FeatureMatchOverlayOutput>('overlay');
 const itemGuides = ref(true);
 const safeAreaGuides = ref(false);
 const stressDataset = ref(false);
 const previewFrame = ref<HTMLIFrameElement | null>(null);
 
-const outputBaseUrl = computed(() => import.meta.client
-	? window.location.origin
-	: requestUrl.origin);
 const previewUrl = computed(() => screenOutputPath({
 	eventId: props.eventId,
 	screenSlug: props.screen.slug,
@@ -99,32 +94,6 @@ const previewUrl = computed(() => screenOutputPath({
 	safeAreaGuides: safeAreaGuides.value,
 	stressDataset: stressDataset.value,
 }));
-
-/**
- * The output's address, shown so an operator can read where it lives.
- *
- * Deliberately without this Screen's Screen Output Asset Capability, which is a
- * secret and does not belong in a field on a page anyone can be standing behind.
- * The copy and download controls beside it obtain one and carry it; this is the
- * address, not the hand-out (#231).
- */
-function outputUrl(output: FeatureMatchOverlayOutput) {
-	return `${outputBaseUrl.value}${screenOutputPath({
-		eventId: props.eventId,
-		screenSlug: props.screen.slug,
-		output,
-	})}`;
-}
-
-function accessUrlOptions(output: FeatureMatchOverlayOutput, download = false) {
-	return {
-		eventId: props.eventId,
-		screenId: props.screen.id,
-		screenSlug: props.screen.slug,
-		output,
-		download,
-	};
-}
 
 function syncSelectedTargetToPreview() {
 	if (!import.meta.client || !previewFrame.value?.contentWindow)
@@ -309,20 +278,6 @@ watch([itemGuides, safeAreaGuides, stressDataset], () => {
 	void nextTick(syncPreviewState);
 });
 
-async function copyOutputUrl(output: FeatureMatchOverlayOutput) {
-	if (props.publicationBlocked)
-		return;
-	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions(output)), {
-		successTitle: 'URL copied',
-		successDescription: `${output.toUpperCase()} output URL copied.`,
-		// The empty string means asset access was refused, not that the clipboard
-		// declined the write — and an operator told the latter reaches for the address
-		// in their browser's bar, which resolves no media at all (#231, #257).
-		nothingToCopyTitle: 'Nothing copied',
-		nothingToCopyDescription: `Asset access for this Screen could not be obtained, so the ${output.toUpperCase()} output URL would have opened an output without its media. Try again.`,
-	});
-}
-
 async function downloadOutput(output: FeatureMatchOverlayOutput) {
 	if (props.publicationBlocked)
 		return;
@@ -330,7 +285,13 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 	// A capture browser that cannot resolve this Screen's assets produces a PNG that
 	// looks finished and is missing every image, video and library font in it, so a
 	// capture that cannot carry a capability is refused rather than exported (#231).
-	const result = await openScreenOutput(accessUrlOptions(output, true));
+	const result = await openScreenOutput({
+		eventId: props.eventId,
+		screenId: props.screen.id,
+		screenSlug: props.screen.slug,
+		output,
+		download: true,
+	});
 	if (result === 'access-refused') {
 		toast.add({
 			title: 'Download unavailable',
@@ -350,6 +311,14 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 		});
 	}
 }
+
+/** The PNG capture stays the editor's own, beside the shared hand-out (#1104). */
+const OUTPUT_VALUES = SCREEN_OUTPUT_OPTIONS.map(option => option.value);
+const downloadItems = SCREEN_OUTPUT_OPTIONS.map(option => ({
+	label: `${option.label} PNG`,
+	icon: option.icon,
+	onSelect: () => void downloadOutput(option.value),
+}));
 </script>
 
 <template>
@@ -377,71 +346,26 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 				>
 					Stress test
 				</UButton>
-				<UPopover>
+				<ScreenOutputHandOut
+					:event-id="eventId"
+					:screen="screen"
+					:outputs="OUTPUT_VALUES"
+					:disabled="publicationBlocked"
+					:disabled-reason="publicationBlockReason"
+				/>
+				<UDropdownMenu :items="downloadItems" :disabled="publicationBlocked">
 					<UButton
 						size="sm"
 						variant="soft"
 						color="neutral"
-						icon="i-lucide-link"
+						icon="i-lucide-download"
 						trailing-icon="i-lucide-chevron-down"
+						label="PNG"
 						:disabled="publicationBlocked"
-						:title="publicationBlockReason"
-					>
-						Outputs
-					</UButton>
-					<template #content>
-						<div class="w-[min(38rem,calc(100vw-2rem))] space-y-3 p-3">
-							<div class="flex items-start justify-between gap-3">
-								<div>
-									<p class="text-sm font-medium">
-										Output URLs
-									</p>
-									<p class="text-xs text-muted">
-										Copy broadcast URLs or download PNG captures.
-									</p>
-								</div>
-							</div>
-							<div class="space-y-2">
-								<div
-									v-for="output in SCREEN_OUTPUT_OPTIONS"
-									:key="output.value"
-									class="grid gap-2 rounded-lg border border-default/70 bg-muted/20 p-2 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto_auto] sm:items-center"
-								>
-									<UBadge variant="soft" class="justify-center uppercase">
-										{{ output.value }}
-									</UBadge>
-									<UInput
-										:model-value="outputUrl(output.value)"
-										readonly
-										size="sm"
-										class="min-w-0"
-									/>
-									<UButton
-										size="sm"
-										variant="soft"
-										icon="i-lucide-copy"
-										:disabled="publicationBlocked"
-										:title="publicationBlockReason"
-										:data-testid="`copy-output-${output.value}`"
-										@click="copyOutputUrl(output.value)"
-									>
-										Copy
-									</UButton>
-									<UButton
-										size="sm"
-										icon="i-lucide-download"
-										:disabled="publicationBlocked"
-										:title="publicationBlockReason"
-										:data-testid="`download-output-${output.value}`"
-										@click="downloadOutput(output.value)"
-									>
-										PNG
-									</UButton>
-								</div>
-							</div>
-						</div>
-					</template>
-				</UPopover>
+						:title="publicationBlocked ? publicationBlockReason : 'Download a Screen Output as a PNG, captured with the asset access that resolves its media'"
+						data-testid="download-output"
+					/>
+				</UDropdownMenu>
 			</template>
 
 			<template #animation>

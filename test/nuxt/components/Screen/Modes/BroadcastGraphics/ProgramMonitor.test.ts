@@ -49,12 +49,7 @@ const { mockApiFetch } = vi.hoisted(() => ({
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 
-/** What the hand-out controls report through, and what they were handed. */
-const mockCopyToClipboard = vi.fn();
-const mockToastAdd = vi.fn();
-
-mockNuxtImport('useCopyToClipboard', () => () => ({ copyToClipboard: mockCopyToClipboard }));
-mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
+mockNuxtImport('useToast', () => () => ({ add: vi.fn() }));
 
 const UAlertStub = defineComponent({
 	props: {
@@ -429,116 +424,22 @@ describe('broadcastGraphicsProgramMonitor', () => {
 		});
 	});
 
-	// Before #237 the Live workspace had no way to hand out the output it is watching, so an
-	// operator either walked to the Screen settings page or typed the address they could see — and…
-	describe('handing out the real Overlay Output', () => {
-		// The capability is rotated between mount and the click, and the copied URL has to carry
-		// the new one.
-		it('copies a URL carrying asset access, obtained at the moment of the hand-out', async () => {
-			const wrapper = await mountComponent();
-			mockCapabilityResponse.value = 'rotated-capability';
+	// Wiring only: the shared hand-out owns its controls and their words (#237, #1104).
+	it('hands out this Screen\'s Overlay Output where the operator watches it', async () => {
+		const outputWindow = {
+			opener: {} as unknown,
+			location: { href: '' },
+			close: vi.fn(),
+		};
+		vi.stubGlobal('open', vi.fn(() => outputWindow));
+		const wrapper = await mountComponent();
 
-			await wrapper.get('[data-testid="copy-screen-output-url"]').trigger('click');
-			await flushPromises();
+		await wrapper.get('[data-hand-out="open"]').trigger('click');
+		await flushPromises();
 
-			expect(mockApiFetch).toHaveBeenCalledWith('/api/events/7/screens/3/asset-capability');
-			expect(mockCopyToClipboard).toHaveBeenCalledWith(
-				`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=rotated-capability`,
-				expect.objectContaining({
-					successTitle: 'Output URL copied',
-					successDescription: expect.stringContaining('asset access'),
-				}),
-			);
-		});
-
-		// Refused rather than degraded: the empty string is what the clipboard helper reports as
-		// having nothing to copy, and it costs the operator a retry — where a URL without the…
-		it('copies nothing at all when asset access cannot be obtained, and names why', async () => {
-			mockCapabilityResponse.value = null;
-			const wrapper = await mountComponent();
-
-			await wrapper.get('[data-testid="copy-screen-output-url"]').trigger('click');
-			await flushPromises();
-
-			expect(mockCopyToClipboard).toHaveBeenCalledWith('', expect.objectContaining({
-				nothingToCopyTitle: 'Nothing copied',
-				nothingToCopyDescription: expect.stringContaining('Asset access for this Screen could not be obtained'),
-			}));
-		});
-
-		/** Rotated between mount and the click here too, for the same reason. */
-		it('opens the output in a tab it points only once asset access is in hand', async () => {
-			const outputWindow = {
-				opener: {} as unknown,
-				location: { href: '' },
-				close: vi.fn(),
-			};
-			vi.stubGlobal('open', vi.fn(() => outputWindow));
-			const wrapper = await mountComponent();
-			mockCapabilityResponse.value = 'rotated-capability';
-
-			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
-			await flushPromises();
-
-			expect(window.open).toHaveBeenCalledWith('', '_blank');
-			expect(outputWindow.opener).toBeNull();
-			expect(outputWindow.location.href).toBe(
-				`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=rotated-capability`,
-			);
-			expect(outputWindow.close).not.toHaveBeenCalled();
-			vi.unstubAllGlobals();
-		});
-
-		it('opens no output, and says why, when asset access cannot be obtained', async () => {
-			mockCapabilityResponse.value = null;
-			const outputWindow = {
-				opener: {} as unknown,
-				location: { href: '' },
-				close: vi.fn(),
-			};
-			vi.stubGlobal('open', vi.fn(() => outputWindow));
-			const wrapper = await mountComponent();
-
-			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
-			await flushPromises();
-
-			expect(outputWindow.location.href).toBe('');
-			expect(outputWindow.close).toHaveBeenCalledOnce();
-			// The tab opened and closed again, so nothing visibly happened.
-			expect(mockToastAdd).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-				description: expect.stringContaining('Asset access for this Screen could not be obtained'),
-			}));
-			vi.unstubAllGlobals();
-		});
-
-		// And the popup blocker it was being mistaken for gets its own words.
-		it('names the browser, not asset access, when the output window is blocked', async () => {
-			vi.stubGlobal('open', vi.fn(() => null));
-			const wrapper = await mountComponent();
-
-			await wrapper.get('[data-testid="open-screen-output"]').trigger('click');
-			await flushPromises();
-
-			// Counted before it is read. Reading the last call cannot see a spurious
-			// earlier one, and with no toast at all the destructure throws `undefined is
-			// not iterable` rather than saying what was expected (#278).
-			expect(mockToastAdd).toHaveBeenCalledOnce();
-			const [reported] = mockToastAdd.mock.calls[0] as [{ description: string }];
-			expect(reported.description).toContain('pop-up');
-			expect(reported.description).not.toContain('Asset access');
-			vi.unstubAllGlobals();
-		});
-
-		// The #234 precedent: a control says what it does.
-		it('names both controls by what they hand out and what the hand-out carries', async () => {
-			const wrapper = await mountComponent();
-
-			const open = wrapper.get('[data-testid="open-screen-output"]');
-			const copy = wrapper.get('[data-testid="copy-screen-output-url"]');
-			expect(open.text()).toBe('Open output');
-			expect(copy.text()).toBe('Copy output URL');
-			expect(open.attributes('title')).toContain('asset access');
-			expect(copy.attributes('title')).toContain('asset access');
-		});
+		expect(outputWindow.location.href).toBe(
+			`${window.location.origin}/event/7/screen/main?output=overlay#asset-capability=program-capability`,
+		);
+		vi.unstubAllGlobals();
 	});
 });

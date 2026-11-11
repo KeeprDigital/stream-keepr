@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { BackgroundLayersCapableMode } from '~~/shared/screenModes';
-import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { Screen, ScreenCommand, ScreenMode } from '~/types';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
@@ -14,9 +13,6 @@ definePageMeta({
 const route = useRoute();
 const eventStore = useEventStore();
 const screenStore = useScreenStore();
-const toast = useToast();
-const { copyToClipboard } = useCopyToClipboard();
-const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 const { runRequest } = useRequestFeedback();
 
 const event = computed(() => eventStore.event);
@@ -110,15 +106,6 @@ const screenUrl = computed(() => {
 	return `${baseUrl}/event/${eventId.value}/screen/${screen.value.slug}`;
 });
 
-function accessUrlOptions(output?: FeatureMatchOverlayOutput) {
-	return {
-		eventId: eventId.value,
-		screenId: screen.value!.id,
-		screenSlug: screen.value!.slug,
-		output,
-	};
-}
-
 const modeOptions = useEventScreenModeSelectOptions();
 
 // The Screen whose presence this page holds a watch on. The watch is counted, so
@@ -210,23 +197,6 @@ async function setMode(mode: ScreenMode) {
 	);
 }
 
-async function copyUrl() {
-	if (!screen.value)
-		return;
-	// An empty URL is what the composable answers with when it could not obtain a
-	// capability, and the clipboard helper reports having nothing rather than putting a
-	// media-losing URL on the operator's clipboard. The reason for having nothing is
-	// this page's to name — "copy failed" sends an operator to the address in their own
-	// browser's bar, which is the URL this refusal exists to withhold — and since #257
-	// naming it can no longer mis-name a clipboard that refused the write.
-	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions()), {
-		successTitle: 'Output URL copied',
-		successDescription: 'It carries asset access, so the output resolves this Screen\'s media.',
-		nothingToCopyTitle: 'Nothing copied',
-		nothingToCopyDescription: 'Asset access for this Screen could not be obtained, so the URL would have opened an output without its media. Try again.',
-	});
-}
-
 async function rotateAssetCapability() {
 	if (!screen.value)
 		return;
@@ -255,72 +225,10 @@ async function rotateAssetCapability() {
 }
 
 /**
- * Hands out a Screen Output in a new tab, and says which of the two ways it could not.
- *
- * `openScreenOutput` opens the tab on the click and closes it again unpointed when
- * asset access could not be obtained, so an operator whose open was refused is looking
- * at nothing having happened. Discarding that answer, which this page did until #250,
- * left the refusal reading as a popup blocker rather than as the media-losing hand-out
- * it declined to make (#231, #237).
- *
- * And then blamed asset access for the popup blocker itself, because one boolean
- * covered both. They are opposite instructions — retry, or change a browser setting —
- * so since #258 they are separate answers and separate sentences.
- *
- * One reporter for both open controls: the default output and a Screen Mode's own
- * outputs fail the same way, and an operator must not meet two vocabularies for it.
+ * The Screen Mode's own Screen Outputs, which the hand-out offers after the Screen's
+ * output, each named by the output it is (#266, #1104).
  */
-async function openOutput(output?: FeatureMatchOverlayOutput) {
-	if (!screen.value)
-		return;
-	const result = await openScreenOutput(accessUrlOptions(output));
-	if (result === 'opened')
-		return;
-
-	toast.add(result === 'window-blocked'
-		? {
-				title: 'Output not opened',
-				description: 'This browser blocked the new tab. Allow pop-ups for this site, then open the output again.',
-				color: 'error',
-			}
-		: {
-				title: 'Output not opened',
-				description: 'Asset access for this Screen could not be obtained, so the output would have rendered without its media. Try again.',
-				color: 'error',
-			});
-}
-
-function openInNewTab() {
-	void openOutput();
-}
-
-function openOutputInNewTab(output: FeatureMatchOverlayOutput) {
-	void openOutput(output);
-}
-
-/**
- * Named for the thing handed out, not for the tab it appears in.
- *
- * "Open default screen" said neither what it opens nor that what it opens resolves
- * media — a Screen is not an output, and the address printed a few pixels away is a
- * Screen too. The Live workspace's control settled the voice in #234/#237, and this
- * is the same hand-out (#266). The Screen Mode's own outputs sit in the group below,
- * each named by the output it is.
- */
-const openOutputItems = computed(() => [
-	[
-		{ label: 'Open output', icon: 'i-lucide-external-link', onSelect: openInNewTab },
-	],
-	...(screenModeConfigurationPolicy.value?.outputOptions.length
-		? [
-				screenModeConfigurationPolicy.value.outputOptions.map(option => ({
-					label: option.label,
-					icon: option.icon,
-					onSelect: () => openOutputInNewTab(option.value),
-				})),
-			]
-		: []),
-]);
+const ownOutputs = computed(() => screenModeConfigurationPolicy.value?.outputs ?? []);
 
 /**
  * The actions an operator rarely needs, and the two that destroy something, kept
@@ -461,35 +369,13 @@ async function sendCommand(command: ScreenCommand) {
 
 						<!-- Controls Row -->
 						<div class="flex items-center gap-3">
+							<ScreenOutputHandOut
+								:event-id="eventId"
+								:screen="screen"
+								:outputs="ownOutputs"
+								data-header-action="hand-out"
+							/>
 							<UFieldGroup size="sm">
-								<UDropdownMenu :items="openOutputItems">
-									<UButton
-										variant="soft"
-										color="neutral"
-										icon="i-lucide-external-link"
-										trailing-icon="i-lucide-chevron-down"
-										label="Open"
-										title="Open a Screen Output in a new tab, with the asset access that resolves its media"
-										data-header-action="open"
-										data-testid="open-output-menu"
-									/>
-								</UDropdownMenu>
-								<!--
-									Named for what it hands out, not for the address printed above,
-									which is the one thing it does not copy: this is the Overlay
-									Output's URL carrying asset access (#231, #266).
-								-->
-								<UTooltip text="Copy this Screen's Overlay Output URL, with the asset access that resolves its media">
-									<UButton
-										variant="soft"
-										color="neutral"
-										icon="i-lucide-copy"
-										label="Copy URL"
-										aria-label="Copy output URL"
-										data-header-action="copy-output-url"
-										@click="copyUrl"
-									/>
-								</UTooltip>
 								<UTooltip text="Refresh all clients">
 									<UButton
 										variant="soft"
