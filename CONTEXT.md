@@ -270,8 +270,12 @@ _Avoid_: Beauty when naming product concepts.
 A Screen Output that renders the final composed opacity as a grayscale alpha matte.
 _Avoid_: Black-and-white export, chroma key.
 
+**Card Layout**:
+How a card grid on a Most Played Cards Screen lays out its cards: columns, max card size and gap, each a number or Auto. The cards always fit the space the grid is given, so none leave the Event Canvas. Auto columns are the count at which the cards are largest, a max card size is the widest a card may be, and an Auto gap follows the card's size (ADR-0054).
+_Avoid_: Fit, Fixed width, auto columns, card width.
+
 **Card Sizing**:
-How a card grid on a Most Played Cards or Deck List Screen sizes its cards. Fixed width: each card takes the grid's own card width, and the grid may run off the Event Canvas. Fit to screen: every card on the page takes the largest size at which all of them fit the space the grid is given, so none overflow. Either may take auto columns, chosen from the card count and the Event Canvas (ADR-0054).
+How a card grid on a Deck List Screen sizes its cards; a Most Played Cards Screen has a Card Layout in its place. Fixed width: each card takes the grid's own card width, and the grid may run off the Event Canvas. Fit to screen: every card on the page takes the largest size at which all of them fit the space the grid is given, so none overflow. Either may take auto columns, chosen from the card count and the Event Canvas (ADR-0054).
 _Avoid_: dynamic card size, card size presets.
 
 **Program monitor**:
