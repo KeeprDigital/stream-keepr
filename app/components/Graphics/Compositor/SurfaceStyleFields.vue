@@ -50,6 +50,8 @@ const props = defineProps<{
 const emit = defineEmits<{ edit: [edit: GraphicSurfaceStyleEdit] }>();
 
 defineSlots<{
+	/** Which Theme token this surface follows, if any: see the template. */
+	binding?: () => unknown;
 	/** Replaces the colour picker for each colour of the surface: its fill's, a stop's, the outline's and the glow's. */
 	color?: (props: {
 		target: 'solid' | 'stop' | 'border' | 'glow';
