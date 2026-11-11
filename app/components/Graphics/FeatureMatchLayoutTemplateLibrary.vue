@@ -163,46 +163,37 @@ async function place(templateId: string) {
 		v-bind="bare ? {} : { title: 'Layout template library', defaultOpen: false }"
 		data-testid="layout-template-library"
 	>
-		<div class="space-y-3">
-			<p class="text-xs text-muted">
+		<GraphicsTemplateLibrarySurface
+			kind="sklayout"
+			test-id="layout-template"
+			:writable="canAuthor"
+			:package-import="packageImport"
+			:error="error"
+			:signed-out="signedOut"
+			error-title="Layout template action failed"
+			:empty="templates.length === 0 && !loading"
+			empty-title="No Feature Match Layout Templates"
+			empty-description="Save a finished layout to reuse it on any Feature Match Overlay Screen."
+		>
+			<template #intro>
 				Reusable Feature Match Layout Templates, shared across every Event in this installation.
 				Placing one replaces this Screen's whole layout with an independent copy.
-			</p>
+			</template>
 
-			<UButton
-				v-if="canAuthor"
-				size="xs"
-				variant="soft"
-				icon="i-lucide-bookmark-plus"
-				:disabled="saving"
-				data-testid="layout-template-save"
-				@click="save"
-			>
-				Save this layout as a template
-			</UButton>
+			<template v-if="canAuthor" #save>
+				<UButton
+					size="xs"
+					variant="soft"
+					icon="i-lucide-bookmark-plus"
+					:disabled="saving"
+					data-testid="layout-template-save"
+					@click="save"
+				>
+					Save this layout as a template
+				</UButton>
+			</template>
 
-			<GraphicsTemplateLibraryImport
-				kind="sklayout"
-				test-id="layout-template-import"
-				:writable="canAuthor"
-				:state="packageImport"
-			/>
-
-			<GraphicsReusableLibraryError
-				title="Layout template action failed"
-				:message="error"
-				:signed-out="signedOut"
-				test-id="layout-template-error"
-			/>
-
-			<UIEmptyState
-				v-if="templates.length === 0 && !loading"
-				icon="i-lucide-library"
-				title="No Feature Match Layout Templates"
-				description="Save a finished layout to reuse it on any Feature Match Overlay Screen."
-			/>
-
-			<div v-else class="space-y-1.5">
+			<template #default>
 				<GraphicsTemplateLibraryEntry
 					v-for="template in templates"
 					:key="template.id"
@@ -308,7 +299,7 @@ async function place(templateId: string) {
 						Layouts already placed from it are not affected.
 					</GraphicsTemplateLibraryConfirmation>
 				</GraphicsTemplateLibraryEntry>
-			</div>
-		</div>
+			</template>
+		</GraphicsTemplateLibrarySurface>
 	</component>
 </template>

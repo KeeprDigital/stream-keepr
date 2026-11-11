@@ -16,7 +16,8 @@ import { randomUuid } from '~~/shared/utils/uuid';
  * lane it runs in. That is why this sits beside the compositor's stack tree instead
  * of inside it — joining a lane changes nothing about a design or about Graphic Layer
  * Order, and a graphic must be able to leave a channel without its composition
- * moving.
+ * moving. There it is a section that starts closed and says how many lanes the
+ * Screen declares, so the stack is what an author sees.
  *
  * It lives in the Edit workspace because it is authoring, and so is covered by the
  * same Graphics Authoring Lease every other control here is: an observer reads the
@@ -66,6 +67,21 @@ const memberships = computed(() => props.graphics.map(graphic => ({
 		? graphic.channelId ?? null
 		: null,
 })));
+
+/**
+ * The closed section in one line: how many lanes, and how many of the Screen's
+ * Broadcast Graphics run in one. Counted from `memberships`, so a membership of
+ * a Graphic Channel the Screen no longer declares counts as none here too.
+ */
+const summary = computed(() => {
+	const lanes = props.channels.length;
+	if (lanes === 0)
+		return 'None';
+	const assigned = memberships.value.filter(entry => entry.channelId !== null).length;
+	return `${lanes} ${lanes === 1
+		? 'channel'
+		: 'channels'} · ${assigned} of ${props.graphics.length} graphics assigned`;
+});
 
 const channelOptions = computed(() => [
 	{ value: null, label: 'No Graphic Channel' },
@@ -138,27 +154,28 @@ function setMembership(graphicId: string, channelId: string | null) {
 </script>
 
 <template>
-	<section data-testid="graphic-channels">
-		<div class="mb-2 flex items-center gap-2">
-			<h3 class="min-w-0 flex-1 truncate text-sm font-medium">
-				Graphic Channels
-			</h3>
-			<UButton
-				size="xs"
-				variant="soft"
-				icon="i-lucide-plus"
-				:disabled="!canAuthor"
-				data-testid="graphic-channel-add"
-				@click="addChannel"
-			>
-				Add
-			</UButton>
-		</div>
-
-		<p class="mb-2 text-xs text-muted">
+	<ScreenSettingsSection
+		id="broadcast-graphics-channels"
+		density="row"
+		title="Graphic Channels"
+		:summary="summary"
+		data-testid="graphic-channels"
+	>
+		<p class="text-xs text-muted">
 			A Graphic Channel keeps at most one of its Broadcast Graphics on air. Graphics in
 			different channels, or in none, run concurrently.
 		</p>
+
+		<UButton
+			size="xs"
+			variant="soft"
+			icon="i-lucide-plus"
+			:disabled="!canAuthor"
+			data-testid="graphic-channel-add"
+			@click="addChannel"
+		>
+			Add Graphic Channel
+		</UButton>
 
 		<div v-if="channels.length > 0" class="space-y-2">
 			<div
@@ -202,7 +219,7 @@ function setMembership(graphicId: string, channelId: string | null) {
 			</div>
 		</div>
 
-		<div v-if="channels.length > 0 && graphics.length > 0" class="mt-3 space-y-1.5">
+		<div v-if="channels.length > 0 && graphics.length > 0" class="space-y-1.5">
 			<p class="text-xs font-medium">
 				Membership
 			</p>
@@ -226,5 +243,5 @@ function setMembership(graphicId: string, channelId: string | null) {
 				/>
 			</div>
 		</div>
-	</section>
+	</ScreenSettingsSection>
 </template>
