@@ -148,7 +148,7 @@ describe('the Theme editor', () => {
 		['a Foundation colour', 'accent', 'Default: #0077a3'],
 		['a Foundation dimension', 'inset', 'Default: 0px'],
 		['the Screen alignment', 'alignment', 'Default: center center'],
-		['a Mode Token following a Foundation Token', 'top-cut.position-border', 'Default: follows Divider'],
+		['a Mode Token following a Foundation Token', 'top-cut.pending-position-border', 'Default: follows Divider'],
 		['the background', 'background', 'Default: no layers'],
 		['the Animation Effect', 'animation-effect', 'Default: Fog'],
 		['the logo', 'logo', 'Default: none'],
@@ -176,7 +176,7 @@ describe('the Theme editor', () => {
 		],
 		[
 			'a Mode Token\'s own colour, keeping the alpha it follows',
-			'top-cut.position-border',
+			'top-cut.pending-position-border',
 			'hue',
 			'#00ff00',
 			'rgba(0, 255, 0, 0.12)',

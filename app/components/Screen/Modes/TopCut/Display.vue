@@ -1,33 +1,33 @@
 <script setup lang="ts">
 import type { BracketPosition } from '~~/shared/modules/top-cut-bracket';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 
 const { config, error, ready, isEmpty, headerText, bracket } = useTopCutModeData(useScreenContext());
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = {
-	...modeTypographyStyle('top-cut', 'entrant-typography'),
-	color: modeTokenVar('top-cut', 'primary-text'),
+	...foundationTypographyStyle('body'),
+	color: foundationTokenVar('text-primary'),
 };
 const titleDividerStyle = {
-	borderBottomColor: modeTokenVar('top-cut', 'title-divider'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 const titleStyle = {
-	...modeTypographyStyle('top-cut', 'title-typography'),
-	color: modeTokenVar('top-cut', 'title-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-primary'),
 };
 const roundNameStyle = {
-	...modeTypographyStyle('top-cut', 'round-name-typography'),
-	color: modeTokenVar('top-cut', 'round-name-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-secondary'),
 };
 const secondaryTextStyle = {
-	color: modeTokenVar('top-cut', 'secondary-text'),
+	color: foundationTokenVar('text-secondary'),
 };
 const connectorStyle = {
 	borderColor: modeTokenVar('top-cut', 'connector'),
 };
 const championStyle = {
-	...modeTypographyStyle('top-cut', 'champion-typography'),
+	...foundationTypographyStyle('heading'),
 	borderColor: modeTokenVar('top-cut', 'champion-border'),
 };
 
@@ -68,7 +68,7 @@ function positionStyle(position: BracketPosition) {
 		backgroundColor: modeTokenVar('top-cut', 'position-surface'),
 		borderColor: position.status === 'awaiting'
 			? modeTokenVar('top-cut', 'pending-position-border')
-			: modeTokenVar('top-cut', 'position-border'),
+			: foundationTokenVar('divider'),
 	};
 }
 
@@ -77,7 +77,7 @@ function entrantStyle(position: BracketPosition, side: 0 | 1) {
 	const { 'is-winner': isWinner, 'is-eliminated': isEliminated, 'is-unknown': isUnknown } = entrantClass(position, side);
 	return {
 		borderTopColor: side === 1
-			? modeTokenVar('top-cut', 'entrant-divider')
+			? foundationTokenVar('divider')
 			: undefined,
 		backgroundColor: isWinner
 			? modeTokenVar('top-cut', 'winner-surface')

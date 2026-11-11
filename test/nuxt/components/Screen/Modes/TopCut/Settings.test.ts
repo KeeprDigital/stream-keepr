@@ -260,7 +260,7 @@ describe('screenModesTopCutSettings', () => {
 				id: 'top-cut:entrants',
 				title: 'Entrants',
 				collapsible: true,
-				groups: ['entrants'],
+				groups: [],
 			},
 			{
 				id: 'top-cut:bracket',
@@ -278,7 +278,7 @@ describe('screenModesTopCutSettings', () => {
 				id: 'top-cut:header',
 				title: 'Header',
 				collapsible: true,
-				groups: ['header'],
+				groups: [],
 			},
 		]);
 	});
