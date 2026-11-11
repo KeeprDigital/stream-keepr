@@ -5,6 +5,7 @@ import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { BackgroundLayer, ScreenVideoPlayback } from '~~/shared/types/screenConfig';
 import { animationEffectRenderPlan, parseAnimationEffectSelection } from '~~/shared/animationEffects';
 import { screenMediaSourceReference } from '~~/shared/utils/graphicsAssetReferences';
+import { graphicFillCss } from '~/modules/screen/outputPaint';
 import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 
 /**
@@ -62,7 +63,10 @@ function layerView(layer: BackgroundLayer): BackgroundLayerView {
 			view.style.backgroundColor = layer.color;
 			break;
 		case 'gradient':
-			view.style.backgroundImage = layer.gradient;
+			// A Background Layer is never keyed, so it paints its authored colours.
+			view.style.backgroundImage = typeof layer.gradient === 'string'
+				? layer.gradient
+				: graphicFillCss('overlay', layer.gradient);
 			break;
 		case 'image':
 			view.imageUrl = screenMediaSourceUrl(layer.source, contentUrl);

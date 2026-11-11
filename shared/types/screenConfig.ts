@@ -3,7 +3,7 @@ import type { ScreenModeConfigOf } from '../screenModeConfigs/contract';
 import type { BackgroundLayersCapableMode } from '../screenModes';
 import type { ScreenMode } from './enums';
 import type { MediaFit } from './graphicItem';
-import type { BroadcastGraphicConfig } from './graphics';
+import type { BroadcastGraphicConfig, GraphicLinearGradientFill } from './graphics';
 import type { GraphicAssetId, GraphicAssetRevisionId } from './graphicsAsset';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND, DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '../screenGraphicsDefaults';
@@ -167,10 +167,13 @@ export interface ColorBackgroundLayer extends BackgroundLayerBase {
 	color: string;
 }
 
-/** `gradient` is a raw CSS gradient string, as the Feature Match Overlay Frame's is. */
+/**
+ * `gradient` is a Graphic Fill gradient. A layer stored before #1073 holds a raw
+ * CSS gradient string instead, which paints as stored until an edit replaces it.
+ */
 export interface GradientBackgroundLayer extends BackgroundLayerBase {
 	type: 'gradient';
-	gradient: string;
+	gradient: GraphicLinearGradientFill | string;
 }
 
 export interface ImageBackgroundLayer extends BackgroundLayerBase {
@@ -458,9 +461,8 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'broadcast-graphics': [],
 	'standings': [
 		'viewMode',
-		'topNCount',
-		'sliceStart',
-		'sliceEnd',
+		'rangeStart',
+		'rangeEnd',
 		'playerListId',
 		'revealCount',
 		'roundId',

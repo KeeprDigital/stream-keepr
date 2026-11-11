@@ -1,3 +1,4 @@
+import type { GraphicLinearGradientFill } from '~~/shared/types/graphics';
 import type { BackgroundLayer, BackgroundModeConfig } from '~~/shared/types/screenConfig';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
@@ -88,6 +89,25 @@ function colorLayer(id: string, overrides: Partial<Extract<BackgroundLayer, { ty
 	};
 }
 
+const STARTING_GRADIENT: GraphicLinearGradientFill = {
+	type: 'linear-gradient',
+	angle: 180,
+	stops: [
+		{ color: '#0f172a', position: 0, opacity: 1 },
+		{ color: '#020617', position: 1, opacity: 1 },
+	],
+};
+
+function gradientLayer(id: string, gradient: Extract<BackgroundLayer, { type: 'gradient' }>['gradient']): BackgroundLayer {
+	return {
+		id,
+		type: 'gradient',
+		enabled: true,
+		opacity: 1,
+		gradient,
+	};
+}
+
 function animationLayer(id: string): BackgroundLayer {
 	return {
 		id,
@@ -175,6 +195,59 @@ describe('screenModesBackgroundSettings', () => {
 			type: 'animation',
 			animation: { effect: 'fog' },
 		});
+	});
+
+	it('starts a new gradient layer on a Graphic Fill gradient', async () => {
+		const wrapper = await mountComponent();
+
+		await wrapper.find('[data-testid="add-layer-type"] select').setValue('gradient');
+		await wrapper.find('[data-testid="add-layer"]').trigger('click');
+
+		expect(lastLayersWrite()[0]).toMatchObject({ type: 'gradient', gradient: STARTING_GRADIENT });
+	});
+
+	it('edits a gradient layer through the shared fill control, as a gradient only', async () => {
+		config.value = {
+			layers: [
+				gradientLayer('grad', STARTING_GRADIENT),
+			],
+		};
+		const wrapper = await mountComponent();
+		const row = wrapper.get('[data-layer-id="grad"]');
+
+		expect(row.findAll('[data-testid="background-gradient-stop"]')).toHaveLength(2);
+		expect(row.find('[data-testid="background-gradient-kind"]').exists()).toBe(false);
+
+		await row.get('[data-testid="background-gradient-add-stop"]').trigger('click');
+
+		expect(lastLayersWrite()[0]).toMatchObject({
+			gradient: {
+				...STARTING_GRADIENT,
+				stops: [...STARTING_GRADIENT.stops, STARTING_GRADIENT.stops[1]],
+			},
+		});
+	});
+
+	// A CSS gradient string stored before the layer held a Graphic Fill: shown, never typed.
+	it('shows a stored CSS gradient as stored, and replaces it with a Graphic Fill gradient', async () => {
+		config.value = {
+			layers: [
+				gradientLayer('grad', 'radial-gradient(#000, #123)'),
+			],
+		};
+		const wrapper = await mountComponent();
+		const row = wrapper.get('[data-layer-id="grad"]');
+
+		expect(row.get('[data-testid="stored-css-gradient"]').text()).toBe('radial-gradient(#000, #123)');
+		expect(row.find('[data-testid="background-gradient-stop"]').exists()).toBe(false);
+		expect(row.find('input[data-testid="u-input"]').exists()).toBe(false);
+		expect(updateConfig).not.toHaveBeenCalled();
+
+		await row.get('[data-testid="replace-stored-gradient"]').trigger('click');
+
+		expect(lastLayersWrite()).toEqual([
+			gradientLayer('grad', STARTING_GRADIENT),
+		]);
 	});
 
 	it('refuses a second animation layer at the editor, matching the schema rule', async () => {
