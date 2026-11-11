@@ -30,6 +30,21 @@ export function paginationSummary(rotation: Pick<PageRotationControls, 'pageSize
 		: `${pageSize} per page`} · ${paging}`;
 }
 
+/** A card grid's Card Layout: each value it sets, or Auto while it sets none. */
+export function cardLayoutSummary(layout: { columns?: number; maxCardSize?: number; cardGap?: number }): string {
+	const { columns, maxCardSize, cardGap } = layout;
+	const set = [
+		columns !== undefined && `${columns} ${columns === 1
+			? 'column'
+			: 'columns'}`,
+		maxCardSize !== undefined && `Max ${maxCardSize} px`,
+		cardGap !== undefined && `${cardGap} px gap`,
+	].filter(Boolean);
+	return set.length > 0
+		? set.join(' · ')
+		: 'Auto';
+}
+
 /** How many of a table's columns show. */
 export function columnsSummary(columns: readonly { visible: boolean }[]): string {
 	return `${columns.filter(column => column.visible).length} of ${columns.length} columns shown`;

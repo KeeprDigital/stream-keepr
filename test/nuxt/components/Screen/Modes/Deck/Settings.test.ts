@@ -198,17 +198,13 @@ function defaultDeckConfig(): Record<string, any> {
 			view: 'grid',
 			columns: 4,
 			listColumns: 2,
-			cardSizing: 'fixed',
-			autoColumns: false,
-			cardWidth: 144,
+			maxCardSize: 144,
 			cardGap: 8,
 		},
 		sideboard: {
 			view: 'stack',
 			columns: 4,
 			listColumns: 2,
-			cardSizing: 'fixed',
-			autoColumns: false,
 		},
 		showQuantities: true,
 		showDeckName: true,
@@ -362,7 +358,7 @@ describe('screenDeckSettings', () => {
 		expect(settingsSummaries(wrapper)).toEqual({
 			'deck:header': 'Player name, deck name, colours',
 			'deck:deck-details': 'Shown',
-			'deck:mainboard': 'Grid · 144 px cards',
+			'deck:mainboard': 'Grid · 4 columns · Max 144 px · 8 px gap',
 			'deck:sideboard': 'Hidden',
 			'deck:card-badges': 'Quantity, Point badges',
 		});
@@ -391,13 +387,6 @@ describe('screenDeckSettings', () => {
 
 	// Wiring: the board's view reaches its grid fields, whose home test owns what a stack shows.
 	it('lays out a stacked sideboard\'s grid fields as a stack', async () => {
-		mockConfig.value = {
-			...defaultDeckConfig(),
-			sideboard: {
-				...defaultDeckConfig().sideboard,
-				cardSizing: 'fit',
-			},
-		};
 		const wrapper = await mountComponent();
 		await flushPromises();
 
@@ -406,9 +395,8 @@ describe('screenDeckSettings', () => {
 				'sideboardPlacement',
 				'showCompanion',
 				'view',
-				'cardSizing',
 				'alignment',
-				'cardWidth',
+				'maxCardSize',
 				'stackReveal',
 			]);
 	});
@@ -613,26 +601,29 @@ describe('screenDeckSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ showCompanion: false });
 	});
 
-	// Both boards Fit are placed as one group at the mainboard's alignment; the sideboard's places it along the mainboard.
+	// Both boards laid out are placed as one group at the mainboard's alignment; the sideboard's places it along the mainboard.
+	// A list is not laid out, so beside one the sideboard places its own cards.
 	it.each([
-		{ sideboardSizing: 'fit', description: 'Up and down, where the sideboard sits, top to bottom of the screen. Right sends it to the right edge; otherwise it sits beside the mainboard.' },
-		{ sideboardSizing: 'fixed', description: 'Where the cards sit when they don\'t fill the board\'s space. A Fixed grid places them across only.' },
-	] as const)('describes the sideboard alignment while it is $sideboardSizing', async ({ sideboardSizing, description }) => {
+		{ mainboardView: 'grid', description: 'Up and down, where the sideboard sits, top to bottom of the screen. Right sends it to the right edge; otherwise it sits beside the mainboard.' },
+		{ mainboardView: 'list', description: 'Where the cards sit when they don\'t fill the board\'s space.' },
+	] as const)('describes the sideboard alignment beside a $mainboardView mainboard', async ({ mainboardView, description }) => {
 		mockConfig.value = {
 			...defaultDeckConfig(),
 			mainboard: {
 				...defaultDeckConfig().mainboard,
-				cardSizing: 'fit',
-			},
-			sideboard: {
-				...defaultDeckConfig().sideboard,
-				cardSizing: sideboardSizing,
+				view: mainboardView,
 			},
 		};
 		const wrapper = await mountComponent();
 		await flushPromises();
 
 		expect(boardCard(wrapper, 'Sideboard').get('[data-label="Alignment"]').attributes('data-description')).toBe(description);
+	});
+
+	it('writes a board\'s alignment', async () => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
 		const picker = boardCard(wrapper, 'Mainboard').get('[role="radiogroup"][aria-label="Mainboard alignment"]');
 		await picker.get('[data-point="top-left"]').trigger('click');
 		expect(mockUpdateConfig).toHaveBeenLastCalledWith({
@@ -645,19 +636,19 @@ describe('screenDeckSettings', () => {
 		await flushPromises();
 
 		const mainboardSection = card(wrapper, 'Mainboard');
-		expect(mainboardSection.find('[data-label="Grid Columns"]').exists()).toBe(true);
-		expect(mainboardSection.find('[data-label="Card Sizing"]').exists()).toBe(true);
-		expect(mainboardSection.find('[data-label="Auto Columns"]').exists()).toBe(true);
+		expect(mainboardSection.find('[data-label="Columns"]').exists()).toBe(true);
+		expect(mainboardSection.find('[data-label="Max card size"]').exists()).toBe(true);
 		expect(mainboardSection.find('[data-label="List Columns"]').exists()).toBe(false);
 
-		// A stack's look is otherwise all Mode Tokens, so it offers only its view and sizing.
+		// A stack's cards overlap in one column, so it has no columns or gap.
 		const sideboardSection = card(wrapper, 'Sideboard');
-		expect(sideboardSection.find('[data-label="Grid Columns"]').exists()).toBe(false);
-		expect(sideboardSection.find('[data-label="Card Sizing"]').exists()).toBe(true);
-		expect(sideboardSection.find('[data-label="Auto Columns"]').exists()).toBe(false);
+		expect(sideboardSection.find('[data-label="Columns"]').exists()).toBe(false);
+		expect(sideboardSection.find('[data-label="Card gap"]').exists()).toBe(false);
+		expect(sideboardSection.find('[data-label="Max card size"]').exists()).toBe(true);
 		expect(sideboardSection.find('[data-label="List Columns"]').exists()).toBe(false);
 	});
 
+	// The block is written whole, so a value left Auto is its absent key.
 	it('writes a complete board block when one knob changes', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
@@ -671,37 +662,64 @@ describe('screenDeckSettings', () => {
 				view: 'grid',
 				columns: 4,
 				listColumns: 2,
-				cardSizing: 'fixed',
-				autoColumns: false,
-				cardWidth: 144,
-				cardGap: 8,
 				alignment: 'center',
 				stackReveal: 30,
 			},
 		});
 	});
 
+	// An emptied value is Auto: the block is written without it.
+	it.each([
+		{
+			label: 'Max card size',
+			patched: {
+				view: 'grid',
+				columns: 4,
+				listColumns: 2,
+				cardGap: 8,
+				alignment: 'center',
+			},
+		},
+		{
+			label: 'Columns',
+			patched: {
+				view: 'grid',
+				listColumns: 2,
+				maxCardSize: 144,
+				cardGap: 8,
+				alignment: 'center',
+			},
+		},
+	])('writes the mainboard\'s $label back to Auto', async ({ label, patched }) => {
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		card(wrapper, 'Mainboard').get(`[data-label="${label}"]`).getComponent(UInputNumberStub).vm.$emit('update:modelValue', null);
+
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ mainboard: patched });
+	});
+
 	// Each size sits beside the control it sizes, and writes that one field (ADR-0054).
 	it.each([
 		{
 			title: 'Mainboard',
-			label: 'Card Width',
+			label: 'Max card size',
 			patch: {
-				mainboard: expect.objectContaining({ cardWidth: 200 }),
+				mainboard: expect.objectContaining({ maxCardSize: 200 }),
 			},
 		},
 		{
 			title: 'Mainboard',
-			label: 'Card Gap',
+			label: 'Card gap',
 			patch: {
 				mainboard: expect.objectContaining({ cardGap: 200 }),
 			},
 		},
 		{
 			title: 'Sideboard',
-			label: 'Card Width',
+			label: 'Max card size',
 			patch: {
-				sideboard: expect.objectContaining({ cardWidth: 200 }),
+				sideboard: expect.objectContaining({ maxCardSize: 200 }),
 			},
 		},
 		{
@@ -741,24 +759,6 @@ describe('screenDeckSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ pointsBadgeSize: 18 });
 	});
 
-	// A Fit grid sizes its cards to the screen, so it offers no width.
-	it.each([
-		{ cardSizing: 'fixed', offered: true },
-		{ cardSizing: 'fit', offered: false },
-	])('offers a $cardSizing grid a card width: $offered', async ({ cardSizing, offered }) => {
-		mockConfig.value = {
-			...defaultDeckConfig(),
-			mainboard: {
-				...defaultDeckConfig().mainboard,
-				cardSizing,
-			},
-		};
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		expect(card(wrapper, 'Mainboard').find('[data-label="Card Width"]').exists()).toBe(offered);
-	});
-
 	// Only a sideboard stacks, and only beside the mainboard (ADR-0054).
 	it.each([
 		{ name: 'beside', config: {}, stackEnabled: true },
@@ -786,25 +786,6 @@ describe('screenDeckSettings', () => {
 			: ['grid', 'list']);
 		const stackTab = tabsOf('Sideboard').find(tab => tab.attributes('data-value') === 'stack')!;
 		expect(stackTab.attributes('disabled')).toBe(stackEnabled ? undefined : '');
-	});
-
-	it('picks a grid\'s card sizing, and its columns by count or automatically', async () => {
-		const wrapper = await mountComponent();
-		await flushPromises();
-		const mainboardSection = () => card(wrapper, 'Mainboard');
-
-		await mainboardSection().get('[data-label="Card Sizing"] [data-value="fit"]').trigger('click');
-		expect(mockUpdateConfig).toHaveBeenLastCalledWith({
-			mainboard: expect.objectContaining({ cardSizing: 'fit' }),
-		});
-
-		await mainboardSection().get('[data-label="Auto Columns"]').trigger('click');
-		expect(mockUpdateConfig).toHaveBeenLastCalledWith({
-			mainboard: expect.objectContaining({ autoColumns: true }),
-		});
-		await flushPromises();
-		// Auto columns choose the count, so the count is not offered.
-		expect(mainboardSection().find('[data-label="Grid Columns"]').exists()).toBe(false);
 	});
 
 	it('hints when the selected deck has no sideboard cards', async () => {

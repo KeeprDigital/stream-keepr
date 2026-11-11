@@ -1,13 +1,6 @@
 /** A card image's width over its height. Keep in step with the `mtg-card` utility in main.css. */
 export const CARD_ASPECT = 61 / 85;
 
-/** The most columns a card grid lays out, auto or not. */
-export const MAX_CARD_GRID_COLUMNS = 12;
-
-function clampColumns(columns: number): number {
-	return Math.min(MAX_CARD_GRID_COLUMNS, Math.max(1, columns));
-}
-
 export interface LayoutScoreInput {
 	/** The layout's card width, and the largest any layout of the same cards in the same space reaches. */
 	cardWidth: number;
@@ -172,19 +165,4 @@ export function solveCardGrid(input: CardGridInput): CardGrid {
 		cardWidth,
 		gap,
 	};
-}
-
-/**
- * The column count, from 1 to `MAX_CARD_GRID_COLUMNS`, at which `count` cards
- * `gap` apart use their space best (`layoutScore`). It chooses only the count:
- * a Fit grid sizes its cards from the space it is given, so the area need only
- * be close.
- */
-export function fitColumns(input: { count: number; width: number; height: number; gap: number; maxRows?: number; labelHeight?: number }): number {
-	return bestGrid(input, clampColumns(input.count)).columns;
-}
-
-/** How many `cardWidth` cards, `gap` apart, fit across `width`. */
-export function fixedColumns({ width, cardWidth, gap }: { width: number; cardWidth: number; gap: number }): number {
-	return clampColumns(Math.floor((width + gap) / (cardWidth + gap)));
 }

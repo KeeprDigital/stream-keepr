@@ -733,7 +733,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	config: computed(() => ({
 		board: 'full',
 		sideboardPlacement: 'beside',
-		mainboard: { view: 'grid', columns: 4, cardSizing: 'fixed' },
+		mainboard: { view: 'grid', columns: 4 },
 		sideboard: { view: 'stack' },
 		showQuantities: true,
 		showDeckName: true,
@@ -784,10 +784,6 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	displayedDeckVersion: ref(1),
 	pendingSwapVersion: ref(0),
 	commitPendingDeck: () => {},
-	boardColumns: {
-		mainboard: computed(() => 4),
-		sideboard: computed(() => 2),
-	},
 }));
 
 const spotlightCard = {
