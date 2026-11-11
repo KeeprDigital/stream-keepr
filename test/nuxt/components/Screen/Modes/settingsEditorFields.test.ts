@@ -81,8 +81,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	'standings': {
 		editor: 'Standings',
 		variants: [
-			{ viewMode: 'topN' },
-			{ viewMode: 'slice' },
+			{ viewMode: 'range' },
 			{
 				viewMode: 'reveal',
 				autoPageEnabled: true,

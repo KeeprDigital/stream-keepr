@@ -41,8 +41,7 @@ onMounted(async () => {
 // ── View Mode Options ──
 const viewModeOptions: { label: string; value: StandingsViewMode }[] = [
 	{ label: 'All', value: 'all' },
-	{ label: 'Top N', value: 'topN' },
-	{ label: 'Slice', value: 'slice' },
+	{ label: 'Position range', value: 'range' },
 	{ label: 'Watchlist', value: 'watchlist' },
 	{ label: 'Reveal', value: 'reveal' },
 ];
@@ -159,26 +158,18 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 				@update:model-value="updateConfig({ viewMode: $event as StandingsViewMode })"
 			/>
 
-			<ScreenConfigField
-				v-if="config.viewMode === 'topN'"
-				:field="fields.topNCount"
-				:model-value="config.topNCount"
-				description="Show the top N players by position."
-				@update:model-value="updateConfig({ topNCount: Number($event) })"
-			/>
-
-			<template v-else-if="config.viewMode === 'slice'">
+			<template v-if="config.viewMode === 'range'">
 				<ScreenConfigField
-					:field="fields.sliceStart"
-					:model-value="config.sliceStart"
-					description="First position to include."
-					@update:model-value="updateConfig({ sliceStart: Number($event) })"
+					:field="fields.rangeStart"
+					:model-value="config.rangeStart"
+					description="First position to include. 1 shows from the top."
+					@update:model-value="updateConfig({ rangeStart: Number($event) })"
 				/>
 				<ScreenConfigField
-					:field="fields.sliceEnd"
-					:model-value="config.sliceEnd"
+					:field="fields.rangeEnd"
+					:model-value="config.rangeEnd"
 					description="Last position to include."
-					@update:model-value="updateConfig({ sliceEnd: Number($event) })"
+					@update:model-value="updateConfig({ rangeEnd: Number($event) })"
 				/>
 			</template>
 
