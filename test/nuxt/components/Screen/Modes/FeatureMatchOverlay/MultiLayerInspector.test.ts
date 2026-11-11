@@ -1,6 +1,6 @@
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
-import type { LayerGroupRefusal } from '~/modules/feature-match-overlay/layerGrouping';
+import type { LayerGroupRefusal } from '~/modules/graphics/editor/layerGrouping';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
