@@ -146,7 +146,12 @@ const MultiLayerInspectorStub = defineComponent({
 		writable: { type: Boolean, required: false },
 		groupRefusal: { type: String, required: false },
 	},
-	emits: ['update', 'group', 'align', 'distribute'],
+	emits: [
+		'update',
+		'group',
+		'align',
+		'distribute',
+	],
 	template: '<div data-testid="multi-layer-inspector" :data-layers="JSON.stringify(layers)" :data-writable="String(writable)" :data-group-refusal="groupRefusal" />',
 });
 

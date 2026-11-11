@@ -167,7 +167,9 @@ describe('featureMatchOverlayMultiLayerInspector', () => {
 
 		await wrapper.get(`button[aria-label="${label}"]`).trigger('click');
 
-		expect(wrapper.emitted(event)).toEqual([[argument]]);
+		expect(wrapper.emitted(event)).toEqual([
+			[argument],
+		]);
 	});
 
 	// Distributing needs three, so two selected layers are offered alignment alone.
@@ -175,15 +177,23 @@ describe('featureMatchOverlayMultiLayerInspector', () => {
 		[2, 6, 0],
 		[3, 6, 2],
 	])('offers %i selected layers %i align and %i distribute controls', (count, aligns, distributes) => {
-		const wrapper = mountPanel({ layers: SELECTED.slice(0, count) });
+		const wrapper = mountPanel({
+			layers: SELECTED.slice(0, count),
+		});
 
 		expect(wrapper.findAll('button[aria-label^="Align "]')).toHaveLength(aligns);
 		expect(wrapper.findAll('button[aria-label^="Distribute "]')).toHaveLength(distributes);
 	});
 
 	it.each([
-		['layers that do not align', { canAlign: false, canDistribute: false }],
-		['a session without the lease', { writable: false }],
+		[
+			'layers that do not align',
+			{ canAlign: false, canDistribute: false },
+		],
+		[
+			'a session without the lease',
+			{ writable: false },
+		],
 	])('aligns and distributes nothing for %s', async (_case, options) => {
 		const wrapper = mountPanel(options);
 

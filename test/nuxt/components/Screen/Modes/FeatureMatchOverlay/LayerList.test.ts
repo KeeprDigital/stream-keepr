@@ -276,8 +276,18 @@ describe('featureMatchOverlayLayerList', () => {
 
 	// Each action once (#1069): a row reorders from its menu, its drag and ⌘] / ⌘[, and carries no arrows.
 	it.each<[string, string, string, string[]]>([
-		['Bring forward', 'item:back', 'Send backward', ['cluster', 'back']],
-		['Send backward', 'item:cluster', 'Bring forward', ['cluster', 'back']],
+		[
+			'Bring forward',
+			'item:back',
+			'Send backward',
+			['cluster', 'back'],
+		],
+		[
+			'Send backward',
+			'item:cluster',
+			'Bring forward',
+			['cluster', 'back'],
+		],
 	])('%s in a row\'s menu moves it one step, and the step off the end is disabled', async (entry, row, disabled, order) => {
 		const { wrapper, config, sync } = await mountList();
 		const found = wrapper.get(`[data-layer-key="${row}"]`);
@@ -297,7 +307,15 @@ describe('featureMatchOverlayLayerList', () => {
 		const entries = wrapper.findAll('[data-layer-key="source:main-source"] [data-menu-entry]').map(entry => entry.attributes('data-menu-entry'));
 
 		expect(wrapper.findAll('[data-testid="layer-forward"], [data-testid="layer-backward"]')).toHaveLength(0);
-		expect(entries).toEqual(['Duplicate', 'Group selection', 'Bring forward', 'Send backward', 'Bring to front', 'Send to back', 'Delete']);
+		expect(entries).toEqual([
+			'Duplicate',
+			'Group selection',
+			'Bring forward',
+			'Send backward',
+			'Bring to front',
+			'Send to back',
+			'Delete',
+		]);
 	});
 
 	it('hides and shows a layer from its row', async () => {
