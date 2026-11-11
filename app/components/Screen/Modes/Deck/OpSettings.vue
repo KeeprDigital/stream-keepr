@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import type { InputMenuItem, TabsItem } from '@nuxt/ui';
 import type { PlayerSide } from '~~/shared/types/enums';
-import type { DeckModeConfig, ResolvedMainboardLayout } from '~~/shared/types/screenConfig';
+import type { DeckModeConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
-import { DECK_MAINBOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
+import { DECK_MAINBOARD_LAYOUT_FIELDS, patchedBoardLayout } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
 import { playerLabel, playerMatchesSearch } from '~~/shared/utils/playerName';
-import { FOLLOWS_THE_THEME, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { cardLayoutSummary, FOLLOWS_THE_THEME, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSession';
 
@@ -29,6 +30,7 @@ const emit = defineEmits<{
 	update: [patch: Partial<DeckModeConfig>];
 }>();
 
+const eventStore = useEventStore();
 const featureMatchStore = useFeatureMatchStore();
 const featureMatchStateStore = useFeatureMatchStateStore();
 const playerStore = usePlayerStore();
@@ -126,20 +128,19 @@ const emptySideHint = computed(() => {
 
 const layout = computed(() => resolveDeckBoards(props.config).mainboard);
 
-// The mode-config PATCH replaces a board block wholesale.
-function updateLayout(patch: Partial<ResolvedMainboardLayout>) {
+/** The Event Canvas the Screen renders in, which bounds the max card size. */
+const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
+
+// The mode-config PATCH replaces a board block wholesale, an Auto value as its absent key.
+function updateLayout(patch: Parameters<typeof patchedBoardLayout>[1]) {
 	emit('update', {
-		mainboard: {
-			...layout.value,
-			...patch,
-		},
+		mainboard: patchedBoardLayout(layout.value, patch),
 	});
 }
 
 const layoutDescriptions = {
-	cardSizing: 'Fit shrinks the cards until every one fits the screen; Fixed takes the card width below, shows the Leader at twice it, and may run off the screen.',
-	alignment: 'Where the cards sit when they don\'t fill their space; a Fixed grid places them across only.',
-	columns: 'Number of columns in each group\'s grid.',
+	alignment: 'Where the groups sit when they don\'t fill their space.',
+	columns: 'Cards per row of every group. Empty is Auto: the count that fits the cards largest.',
 };
 
 /** For a closed card's summary: how many Screen Theme Overrides the Looks of mounted `groups` hold. */
@@ -158,9 +159,7 @@ const detailsSummary = computed(() => settingsSummary([
 	look('deck-details', 'pointed-cards'),
 ], FOLLOWS_THE_THEME));
 const mainboardSummary = computed(() => settingsSummary([
-	layout.value.cardSizing === 'fixed'
-		? `${layout.value.cardWidth} px cards`
-		: 'Fit',
+	cardLayoutSummary(layout.value),
 	props.config.showCostCurve !== false && 'Cost curve',
 ]));
 const badgesSummary = computed(() => settingsSummary([
@@ -281,9 +280,10 @@ onMounted(async () => {
 
 			<USeparator />
 
-			<ScreenModesDeckCardSizingLayoutFields
+			<ScreenCardGridLayoutFields
 				:layout="layout"
 				:fields="layoutFields"
+				:canvas="eventCanvas"
 				:show="{ alignment: true }"
 				:descriptions="layoutDescriptions"
 				grid-name="Mainboard"

@@ -39,9 +39,10 @@ describe('a stored mode config outside its contract\'s bounds', () => {
 });
 
 /**
- * Every bound #498 tightened to its editor's range: a value the former contract
+ * Every bound tightened to its editor's range (#498): a value the former contract
  * accepted, as production may hold, reads as the nearest bound of the new range,
- * keeps the rest of its fragment, and is refused as a new write.
+ * keeps the rest of its fragment, and is refused as a new write. A Deck board's
+ * columns run to its most cards since #1088.
  */
 const TIGHTENED_BOUNDS = [
 	{
@@ -50,14 +51,14 @@ const TIGHTENED_BOUNDS = [
 		stored: {
 			mainboard: {
 				view: 'grid',
-				columns: 16,
+				columns: 140,
 			},
 			showDeckStats: true,
 		},
 		reads: {
 			mainboard: {
 				view: 'grid',
-				columns: 12,
+				columns: 100,
 			},
 			showDeckStats: true,
 		},

@@ -59,8 +59,7 @@ describe('deckModeConfigSchema', () => {
 			view: 'grid' as const,
 			columns: 4,
 			listColumns: 2,
-			cardSizing: 'fixed' as const,
-			autoColumns: false,
+			maxCardSize: 144,
 		},
 		sideboard: {
 			view: 'stack' as const,

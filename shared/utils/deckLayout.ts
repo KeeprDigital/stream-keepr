@@ -25,6 +25,8 @@ export interface DeckLayoutStackBoard {
 	count: number;
 	/** The most of each card but the last that shows. */
 	reveal: number;
+	/** The widest a card may be, or Auto (absent or null). Every board shares the least. */
+	maxCardWidth?: number | null;
 	labelHeight: number;
 }
 
@@ -109,11 +111,9 @@ function boardGap(board: Board | null): GapTerms {
 		: NO_GAP;
 }
 
-/** The least max card size any grid board sets. */
+/** The least max card size any board sets, the stacked strip's with them. */
 function maxCardWidthOf(input: DeckLayoutInput): number {
-	return Math.min(...[input.mainboard, input.sideboard].map(board => (board?.view === 'grid'
-		? board.maxCardWidth
-		: null) ?? Infinity));
+	return Math.min(...[input.mainboard, input.sideboard].map(board => board?.maxCardWidth ?? Infinity));
 }
 
 /** The widest card at which every board, laid out with these columns and gaps, fits the space. */
@@ -315,5 +315,104 @@ function laidOut(input: DeckLayoutInput, main: number | null, side: number | nul
 			: input.sideboard.view === 'stack'
 				? solvedStack(input.sideboard, cardWidth, input.height)
 				: solvedGrid(input.sideboard, side!, cardWidth, gaps.sideboard),
+	};
+}
+
+export interface DeckGroupsInput {
+	/** Each group's card count, in the order the groups sit under each other. */
+	counts: readonly number[];
+	/** The space the groups share, in Event Canvas px. */
+	width: number;
+	height: number;
+	/** A set column count, or Auto (absent or null): the count that uses the space best. */
+	columns?: number | null;
+	/** The widest a card may be, or Auto (absent or null): as wide as fits. */
+	maxCardWidth?: number | null;
+	/** A set gap in px, or Auto (absent or null): `DECK_AUTO_GAP_RATIO` of the solved card width. */
+	gap?: number | null;
+	/** Height each group's heading takes above its cards. */
+	labelHeight: number;
+	/** The space between two groups. */
+	groupGap: number;
+}
+
+export interface DeckGroups {
+	/** The one column count every group shares, so their cards line up. */
+	columns: number;
+	/** Each group's rows, in the order of `counts`. */
+	rows: number[];
+	cardWidth: number;
+	gap: number;
+}
+
+interface ScoredDeckGroups extends DeckGroups {
+	widthShare: number;
+	heightShare: number;
+	slotFill: number;
+}
+
+function groupsAt(input: DeckGroupsInput, columns: number): ScoredDeckGroups {
+	const rows = input.counts.map(count => Math.max(1, Math.ceil(count / columns)));
+	const rowsTotal = rows.reduce((sum, groupRows) => sum + groupRows, 0);
+	const gapsDown = rowsTotal - rows.length;
+	const fixedHeight = rows.length * input.labelHeight + Math.max(0, rows.length - 1) * input.groupGap;
+	const widest = (terms: GapTerms) => Math.max(0, Math.min(
+		widestAcross(input.width, columns, terms),
+		(input.height - fixedHeight - gapsDown * terms.fixed) / (rowsTotal / CARD_ASPECT + gapsDown * terms.ratio),
+		input.maxCardWidth ?? Infinity,
+	));
+	let terms = gapTerms(input.gap, DECK_AUTO_GAP_RATIO);
+	let cardWidth = widest(terms);
+	if (cardWidth < terms.fixed) {
+		terms = GAP_AS_WIDE_AS_ITS_CARD;
+		cardWidth = widest(terms);
+	}
+	const gap = gapAt(terms, cardWidth);
+	const cards = input.counts.reduce((sum, count) => sum + count, 0);
+	return {
+		columns,
+		rows,
+		cardWidth,
+		gap,
+		widthShare: (columns * cardWidth + (columns - 1) * gap) / input.width,
+		heightShare: (fixedHeight + rowsTotal * (cardWidth / CARD_ASPECT) + gapsDown * gap) / input.height,
+		slotFill: cards > 0
+			? cards / (columns * rowsTotal)
+			: 1,
+	};
+}
+
+/**
+ * A deck's groups, one under the other, laid out together at one card size
+ * and one column count, so their cards line up: the largest card at which
+ * every group's rows, headings and the gaps between them fit the space. A set
+ * column count is kept; Auto takes the count, from 1 to the largest group's
+ * card count, that uses the space best (`layoutScore`). The card is never
+ * wider than a set max card size, and a gap is sized as a Deck board's is.
+ */
+export function solveDeckGroups(input: DeckGroupsInput): DeckGroups {
+	const choices = typeof input.columns === 'number'
+		? [
+				Math.max(1, Math.floor(input.columns)),
+			]
+		: Array.from({
+				length: Math.max(1, ...input.counts),
+			}, (_, index) => index + 1);
+	const layouts = choices.map(columns => groupsAt(input, columns));
+	const largestCardWidth = Math.max(...layouts.map(layout => layout.cardWidth));
+	let best = layouts[0]!;
+	let bestScore = -Infinity;
+	for (const layout of layouts) {
+		const score = layoutScore({ ...layout, largestCardWidth });
+		if (score > bestScore) {
+			best = layout;
+			bestScore = score;
+		}
+	}
+	return {
+		columns: best.columns,
+		rows: best.rows,
+		cardWidth: best.cardWidth,
+		gap: best.gap,
 	};
 }
