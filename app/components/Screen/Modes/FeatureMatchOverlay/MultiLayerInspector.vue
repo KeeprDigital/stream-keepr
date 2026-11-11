@@ -3,7 +3,9 @@ import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
 import type { LayerGroupRefusal } from '~/modules/feature-match-overlay/layerGrouping';
+import type { AlignEdge, DistributeAxis } from '~/modules/graphics/canvasAlignment';
 import { editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
+import { ALIGN_COMMANDS, DISTRIBUTE_COMMANDS } from '~/modules/feature-match-overlay/layerAlignment';
 import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/layerGrouping';
 
 /**
@@ -16,6 +18,9 @@ import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/lay
  * position is within its group. Nothing kind-specific is offered, since the
  * selection can mix Source Items and Graphic Items of any kind.
  *
+ * It is the one place that aligns the selection, to the bounds it covers, and
+ * distributes it, which is offered at three or more (#1069).
+ *
  * Group wraps the selection in a Graphic Group, as ⌘G does, and a selection it
  * cannot group says why beside the disabled control (#920).
  */
@@ -26,11 +31,17 @@ const props = defineProps<{
 	writable?: boolean;
 	/** Why the selection cannot be grouped, or null when it can. */
 	groupRefusal?: LayerGroupRefusal | null;
+	/** Whether the selected layers have anything to line up. */
+	canAlign?: boolean;
+	/** Whether three or more of the selected layers distribute. */
+	canDistribute?: boolean;
 }>();
 
 const emit = defineEmits<{
 	update: [patch: Partial<GraphicRect>];
 	group: [];
+	align: [edge: AlignEdge];
+	distribute: [axis: DistributeAxis];
 }>();
 
 const FIELDS = [
@@ -94,6 +105,42 @@ function update(axis: keyof GraphicRect, value: number | null | undefined) {
 				@update:model-value="update(field.axis, $event)"
 			/>
 		</fieldset>
+
+		<div
+			class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1"
+			role="toolbar"
+			aria-label="Align and distribute"
+			data-testid="multi-layer-align"
+		>
+			<div class="flex items-center">
+				<UButton
+					v-for="command in ALIGN_COMMANDS"
+					:key="command.edge"
+					size="xs"
+					variant="ghost"
+					color="neutral"
+					:icon="command.icon"
+					:disabled="writable !== true || !canAlign"
+					:aria-label="`Align ${command.label.toLowerCase()}`"
+					:title="`Align ${command.label.toLowerCase()} to the selection`"
+					@click="emit('align', command.edge)"
+				/>
+			</div>
+			<div v-if="layers.length >= 3" class="flex items-center">
+				<UButton
+					v-for="command in DISTRIBUTE_COMMANDS"
+					:key="command.axis"
+					size="xs"
+					variant="ghost"
+					color="neutral"
+					:icon="command.icon"
+					:disabled="writable !== true || !canDistribute"
+					:aria-label="`Distribute ${command.label.toLowerCase()}`"
+					:title="`Distribute ${command.label.toLowerCase()}`"
+					@click="emit('distribute', command.axis)"
+				/>
+			</div>
+		</div>
 
 		<div class="mt-3 border-t border-default/70 pt-3">
 			<UButton

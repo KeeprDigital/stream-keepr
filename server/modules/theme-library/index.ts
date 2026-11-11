@@ -89,7 +89,8 @@ export function themeLibraryModule() {
 	}
 
 	/**
-	 * Set a token. A value naming library content holds it as the Theme's own
+	 * Set a token; a former token is accepted and answers the Theme as it
+	 * stands. A value naming library content holds it as the Theme's own
 	 * Graphic Asset References (ADR-0050): each must be one an author could
 	 * select now, asked of the library first so a refusal names the slot, and
 	 * again in the statement that commits.
@@ -106,6 +107,9 @@ export function themeLibraryModule() {
 				data: { code: write.refusal },
 			});
 		}
+		// A former token: accepted, with nothing to store, version or announce.
+		if (write.dropped)
+			return await get(themeId);
 		const references = isReference(write.value)
 			? []
 			: themeTokenValueGraphicAssetReferences(themeTokenDefinition(token)!.definition.type, write.value, token);

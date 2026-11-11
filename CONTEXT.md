@@ -76,7 +76,7 @@ Which Players a Metagame read counts: every Player, the top N by placement, thos
 A strategic Deck classification assigned to Players and used for Metagame analysis. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand. An operator renaming one or pinning its series customises it, and a customised Archetype stays when its last Player leaves (ADR-0074).
 
 **Pinned Chart Series**:
-One of the Theme's eight chart series, `chart-series-1` to `chart-series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme, or a Screen Theme Override, decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).
+One of the Theme's eight chart series, the Foundation Tokens `series-1` to `series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme, or a Screen Theme Override, decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).
 _Avoid_: archetype colour, chart colour (an Archetype's mana colours are its colours).
 
 **Pilot**:
@@ -380,11 +380,11 @@ The built-in Theme that ships with Stream Keepr, used by every Event that picks 
 _Avoid_: base theme, fallback theme
 
 **Theme Token**:
-One named value a Screen may consume from its Theme, such as a colour, font, or Graphic Asset. Stream Keepr owns every token's name, type, and where it may be consumed; users set values, never names.
+One named value a Screen may consume from its Theme, such as a colour, font, or Graphic Asset. Stream Keepr owns every token's name, type, and where it may be consumed; users set values, never names. A token Stream Keepr removes is a former token: a write naming one is accepted and the token dropped, and a stored one is read by nothing.
 _Avoid_: variable, style entry
 
 **Foundation Token**:
-A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr.
+A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr. A Screen Mode's display reads one directly for its shared chrome, as the Metagame chart reads the chart series.
 
 **Mode Token**:
 A Theme Token a Screen Mode Definition declares for its own rendering, such as a Standings row's surface. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. Where no Foundation Token fills its role, such as a badge shadow's colour or Card Spotlight's zoom, it defaults to a literal; a composite literal's colours still name Foundation Tokens where they can, as the Feature Match Overlay Frame's fill names `surface`.

@@ -21,7 +21,6 @@ import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/lay
 import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
 import { isTypingTarget } from '~/utils/typingTarget';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
-import FeatureMatchOverlayLayerAlignControls from './LayerAlignControls.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayLayerList from './LayerList.vue';
 import FeatureMatchOverlayMultiLayerInspector from './MultiLayerInspector.vue';
@@ -531,38 +530,13 @@ useEventListener(import.meta.client
 				</UFormField>
 
 				<div class="ml-auto flex items-center gap-1">
-					<div
-						v-if="writable && saveState !== 'idle'"
-						class="mr-1 flex items-center gap-1.5 text-xs"
-						:class="saveState === 'failed' ? 'text-error' : 'text-muted'"
-						:title="saveState === 'failed' ? (saveError ?? undefined) : undefined"
-						role="status"
-						data-testid="layout-save-state"
-						:data-save-state="saveState"
-					>
-						<template v-if="saveState === 'saving'">
-							<UIcon name="i-lucide-loader-circle" class="size-3.5 animate-spin" />
-							Saving…
-						</template>
-						<template v-else-if="saveState === 'committed'">
-							<UIcon name="i-lucide-check" class="size-3.5 text-success" />
-							Saved
-						</template>
-						<template v-else>
-							<UIcon name="i-lucide-triangle-alert" class="size-3.5" />
-							Not saved
-							<UButton
-								size="xs"
-								color="error"
-								variant="soft"
-								icon="i-lucide-rotate-cw"
-								data-testid="layout-save-retry"
-								@click="retrySave()"
-							>
-								Retry
-							</UButton>
-						</template>
-					</div>
+					<GraphicsSaveState
+						class="mr-1"
+						:save-state="saveState"
+						:save-error="saveError"
+						:writable="writable"
+						@retry="retrySave()"
+					/>
 					<UFieldGroup size="sm">
 						<UButton
 							variant="soft"
@@ -704,19 +678,18 @@ useEventListener(import.meta.client
 			</section>
 
 			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-				<FeatureMatchOverlayLayerAlignControls
-					v-if="layers.length > 0"
-					:editor="editor"
-					class="mb-3 border-b border-default/70 pb-2"
-				/>
 				<FeatureMatchOverlayMultiLayerInspector
 					v-if="severalSelected"
 					:layout="config.layout"
 					:layers="layers"
 					:writable="canAuthor"
 					:group-refusal="editor.groupRefusal.value"
+					:can-align="editor.canAlign()"
+					:can-distribute="editor.canDistribute()"
 					@update="editor.setLayersGeometry"
 					@group="editor.group()"
+					@align="edge => editor.align(edge)"
+					@distribute="axis => editor.distribute(axis)"
 				/>
 				<FeatureMatchOverlayCompositorInspector
 					v-else-if="selection.type === 'item'"
@@ -739,8 +712,6 @@ useEventListener(import.meta.client
 					:screen="screen"
 					:event-id="eventId"
 					:writable="canAuthor"
-					@remove="itemId => editor.remove({ type: 'source', itemId })"
-					@duplicate="itemId => editor.duplicate({ type: 'source', itemId })"
 				/>
 			</section>
 		</div>

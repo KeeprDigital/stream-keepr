@@ -1,15 +1,18 @@
 /**
  * A Screen's Theme Token rows on its settings page: the Event's Theme read and
  * the Screen Theme Override write faked at the network, a Screen seeded in the
- * real stores, and a settings card showing whether it starts open.
+ * real stores, the page's one Screen Theme Override instance over a card, and
+ * a settings card showing whether it starts open.
  */
 import type { Mock } from 'vitest';
+import type { Component, VNodeChild } from 'vue';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { ThemeResponse } from '~~/shared/types/theme';
 import type { Screen } from '~/types';
 import { defineComponent } from 'vue';
 import { createWireMockScreen } from '~~/test/helpers/fixtures';
+import { provideScreenThemeOverrides } from '~/composables/screen/useScreenThemeOverrides';
 import { useEventStore } from '~/stores/event';
 import { useScreenStore } from '~/stores/screen';
 
@@ -25,7 +28,7 @@ interface OverrideWrite {
 export interface ScreenThemeNetwork {
 	/** What the Event's Theme, "Brand", stores. */
 	themeTokens: StoredThemeTokens;
-	/** The Screen an override write answers with, by default the write applied. */
+	/** The Screen an override write answers with, by default one holding what the write set and nothing it cleared. */
 	answerWrite: (write: OverrideWrite) => Promise<Screen> | Screen;
 }
 
@@ -33,7 +36,7 @@ function appliedWrite(mode: ScreenMode) {
 	return ({ tokens, stateVersion }: OverrideWrite) => createWireMockScreen({
 		id: 1,
 		currentMode: mode,
-		themeOverrides: tokens,
+		themeOverrides: Object.fromEntries(Object.entries(tokens).filter(([, value]) => value !== null)),
 		stateVersion: stateVersion + 1,
 	}) as unknown as Screen;
 }
@@ -75,6 +78,24 @@ export function seedThemedScreen(mode: ScreenMode, themeOverrides: StoredThemeTo
 		createWireMockScreen({ id: 1, currentMode: mode, themeOverrides }) as unknown as Screen,
 	];
 	return () => screenStore.screens[0]!;
+}
+
+/**
+ * A stand-in for the Screen's settings page: it holds the one Screen Theme
+ * Override instance for `screen`, of Event 1, and renders `cards` under it.
+ */
+export function screenSettingsPage(screen: () => Screen | null, cards: () => VNodeChild): Component {
+	return defineComponent({
+		setup() {
+			provideScreenThemeOverrides(screen, 1);
+			return cards;
+		},
+	});
+}
+
+/** How many times the Event's Theme was read. */
+export function themeReads(fetch: Mock): number {
+	return fetch.mock.calls.filter(([url]) => url === THEME_PATH).length;
 }
 
 /** The token maps each override write sent, in order. */

@@ -23,7 +23,7 @@ import { editorLayerCanvasBox, editorSelectionLayer } from './editorSelection';
  * so neither moves among canvas layers; the rest still do.
  */
 
-/** The align commands the property panel and the layer list offer, in their order, each along one axis. */
+/** The align commands the property panel offers several selected layers, in their order, each along one axis. */
 export const ALIGN_COMMANDS: readonly { edge: AlignEdge; axis: DistributeAxis; label: string; icon: string }[] = [
 	{
 		edge: 'left',
@@ -63,7 +63,7 @@ export const ALIGN_COMMANDS: readonly { edge: AlignEdge; axis: DistributeAxis; l
 	},
 ];
 
-/** The distribute commands the property panel and the layer list offer. */
+/** The distribute commands the property panel offers three or more selected layers. */
 export const DISTRIBUTE_COMMANDS: readonly { axis: DistributeAxis; label: string; icon: string }[] = [
 	{ axis: 'x', label: 'Horizontally', icon: 'i-lucide-align-horizontal-space-around' },
 	{ axis: 'y', label: 'Vertically', icon: 'i-lucide-align-vertical-space-around' },

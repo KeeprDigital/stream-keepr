@@ -7,6 +7,7 @@ import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events } from '~~/server/db/schema';
+import { mapScreenToResponse } from '~~/server/mappers/screen';
 import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import {
@@ -532,7 +533,8 @@ export function screenWriteModule() {
 	 * checked against the mode the Screen shows, read here; the write is
 	 * versioned on that read (or the client's `stateVersion`), so a mode change
 	 * landing first refuses it as a conflict rather than letting the check go
-	 * stale. An override of another mode's Mode Token is left as stored.
+	 * stale. An override of another mode's Mode Token is left as stored, and a
+	 * former token named is dropped.
 	 */
 	async function updateThemeOverrides({ eventId, screenId, tokens, stateVersion, originConnectionId, graphicsAssets }: UpdateThemeOverridesParams): Promise<ScreenResponse> {
 		const existing = await screens.findById(screenId, eventId);
@@ -540,6 +542,7 @@ export function screenWriteModule() {
 			throw createError({ statusCode: 404, message: 'Screen not found' });
 
 		const next: Record<string, unknown> = { ...existing.themeOverrides };
+		let applied = 0;
 		for (const [token, value] of Object.entries(tokens)) {
 			const write = parseScreenThemeOverrideWrite(existing.currentMode, token, value);
 			if (!write.ok) {
@@ -549,11 +552,17 @@ export function screenWriteModule() {
 					data: { code: write.refusal, token },
 				});
 			}
+			if (write.dropped)
+				continue;
+			applied += 1;
 			if (write.value === null)
 				delete next[token];
 			else
 				next[token] = write.value;
 		}
+		// Every token named was a former one: accepted, with nothing to store, version or announce.
+		if (applied === 0)
+			return mapScreenToResponse(existing);
 
 		// A newly named Graphic Asset Revision must be one an author could select
 		// now (ADR-0050); one the override already held is not asked again.

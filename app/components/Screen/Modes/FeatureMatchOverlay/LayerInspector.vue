@@ -33,11 +33,6 @@ const props = defineProps<{
 	writable?: boolean;
 }>();
 
-const emit = defineEmits<{
-	remove: [itemId: string];
-	duplicate: [itemId: string];
-}>();
-
 const { patchFrame } = useFeatureMatchOverlayConfigEditor({
 	config: toRef(props, 'config'),
 	updateConfig: props.updateConfig,
@@ -116,8 +111,6 @@ const header = computed(() => {
 				:screen="screen"
 				:event-id="eventId"
 				:item="selection.item"
-				@remove="emit('remove', $event)"
-				@duplicate="emit('duplicate', $event)"
 			/>
 		</fieldset>
 	</section>

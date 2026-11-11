@@ -3,9 +3,9 @@ import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, h } from 'vue';
+import { h } from 'vue';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import { fakeScreenThemeNetwork, overrideWrites, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import ThemeTokenGroup from '~/components/Screen/ThemeTokenGroup.vue';
 
 // A Screen Settings Group renders the Mode Tokens that name it under "Look",
@@ -24,12 +24,11 @@ beforeEach(() => {
 
 async function mountGroup(group: string, themeOverrides: StoredThemeTokens = {}) {
 	const screen = seedThemedScreen('standings', themeOverrides);
-	const Host = defineComponent(() => () => h(ThemeTokenGroup, {
+	const wrapper = mount(screenSettingsPage(screen, () => h(ThemeTokenGroup, {
 		screen: screen(),
 		eventId: 1,
 		group,
-	}));
-	const wrapper = mount(Host, {
+	})), {
 		global: { stubs: nuxtUiStubs },
 	});
 	await flushPromises();

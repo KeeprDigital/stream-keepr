@@ -27,6 +27,10 @@ const screen = ref<Screen | null>(null);
 const loading = ref(true);
 const isUpdating = ref(false);
 
+// The Screen's Screen Theme Overrides and its one read of the Event's Theme,
+// for every card below: a group's Look shows in Editor Focus Mode too.
+provideScreenThemeOverrides(screen, eventId);
+
 /**
  * Editor Focus Mode (#744): while a graphics editor's Edit workspace offers it
  * and it is on, the editor gets the page. The layout drops the app sidebar and

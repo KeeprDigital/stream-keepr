@@ -4,10 +4,11 @@ import type { ScreenMode } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { h } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { standingsModeTokens } from '~~/shared/screenModeTokens/standings';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import { fakeScreenThemeNetwork, overrideWrites, ScreenSettingsCardStub, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { fakeScreenThemeNetwork, overrideWrites, ScreenSettingsCardStub, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import ThemeTokensSettings from '~/components/Screen/ThemeTokensSettings.vue';
 
 // The Screen-wide look holds the Foundation Tokens the Screen may override,
@@ -27,11 +28,10 @@ beforeEach(() => {
 
 async function mountSection(mode: ScreenMode, themeOverrides: StoredThemeTokens = {}) {
 	const screen = seedThemedScreen(mode, themeOverrides);
-	const wrapper = mount(ThemeTokensSettings, {
-		props: {
-			screen: screen(),
-			eventId: 1,
-		},
+	const wrapper = mount(screenSettingsPage(screen, () => h(ThemeTokensSettings, {
+		screen: screen(),
+		eventId: 1,
+	})), {
 		global: {
 			stubs: { ...nuxtUiStubs, ScreenSettingsCard: ScreenSettingsCardStub },
 		},

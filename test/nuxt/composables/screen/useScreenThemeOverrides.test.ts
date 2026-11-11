@@ -1,38 +1,54 @@
-import type { EffectScope } from 'vue';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
+import type { ScreenMode } from '~~/shared/types/enums';
 import type { ScreenThemeNetwork } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import type { ScreenThemeOverrides } from '~/composables/screen/useScreenThemeOverrides';
 import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { effectScope } from 'vue';
+import { defineComponent, h, ref } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { deferred } from '~~/test/helpers/deferred';
 import { createWireMockScreen } from '~~/test/helpers/fixtures';
-import { fakeScreenThemeNetwork, overrideWrites, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedScreen, themeReads } from '~~/test/nuxt/helpers/screenThemeOverrides';
 
-// A Screen's Theme Token rows read what each token inherits from the Event's
-// Theme, loaded once however many rows ask, and write one Screen Theme
-// Override per edit, shown while the write is out.
+// A Screen's settings page holds one instance for all its cards: what each
+// token inherits from the Event's Theme, read once for the page, and one
+// Screen Theme Override write per edit, shown while the write is out.
 
 const { mockApiFetch } = vi.hoisted(() => ({
 	mockApiFetch: vi.fn(),
 }));
 mockNuxtImport('$fetch', () => mockApiFetch);
 
+enableAutoUnmount(afterEach);
+
 let network: ScreenThemeNetwork;
-let scope: EffectScope;
 
 beforeEach(() => {
 	network = fakeScreenThemeNetwork(mockApiFetch);
-	scope = effectScope();
 });
 
-afterEach(() => scope.stop());
+/** A page of two cards over `screen`, and a third once `showLater` is set; answers what each card was handed. */
+function mountPage(screen: () => Screen | null) {
+	const handed: ScreenThemeOverrides[] = [];
+	const showLater = ref(false);
+	const Card = defineComponent(() => {
+		handed.push(useScreenThemeOverrides());
+		return () => null;
+	});
+	mount(screenSettingsPage(screen, () => [
+		h(Card),
+		h(Card),
+		showLater.value
+			? h(Card)
+			: null,
+	]));
+	return { handed, showLater };
+}
 
-function setUp(themeOverrides: StoredThemeTokens = {}) {
-	const screen = seedThemedScreen('standings', themeOverrides);
-	return scope.run(() => useScreenThemeOverrides(screen, 1))!;
+function setUp(themeOverrides: StoredThemeTokens = {}, mode: ScreenMode = 'standings') {
+	return mountPage(seedThemedScreen(mode, themeOverrides)).handed[0]!;
 }
 
 describe('useScreenThemeOverrides', () => {
@@ -82,8 +98,7 @@ describe('useScreenThemeOverrides', () => {
 	});
 
 	it('reads a Mode Token resolving to none, as an unset asset does', async () => {
-		const screen = seedThemedScreen('feature-match-overlay');
-		const overrides = scope.run(() => useScreenThemeOverrides(screen, 1))!;
+		const overrides = setUp({}, 'feature-match-overlay');
 		await flushPromises();
 
 		expect(overrides.entry('feature-match-overlay.frame-media').resolved).toBeNull();
@@ -105,12 +120,48 @@ describe('useScreenThemeOverrides', () => {
 		expect(overrides.entry('divider').inherited).toBe('#654321');
 	});
 
-	it('loads the Event\'s Theme once for every row group asking at the same time', async () => {
-		setUp();
-		scope.run(() => useScreenThemeOverrides(() => useScreenStore().screens[0]!, 1));
+	// A group's Look may mount long after the page, as a card opens or a layer is selected.
+	it('reads the Event\'s Theme once for every card of the page, one mounting later included', async () => {
+		const { handed, showLater } = mountPage(seedThemedScreen('standings'));
 		await flushPromises();
 
-		expect(mockApiFetch.mock.calls.filter(([url]) => url === '/api/themes/brand')).toHaveLength(1);
+		showLater.value = true;
+		await flushPromises();
+
+		expect(handed).toHaveLength(3);
+		expect(handed.map(overrides => overrides.themeName.value)).toEqual(['Brand', 'Brand', 'Brand']);
+		expect(themeReads(mockApiFetch)).toBe(1);
+	});
+
+	it('shows a write that is out to every card', async () => {
+		const answer = deferred<Screen>();
+		network.answerWrite = () => answer.promise;
+		const { handed } = mountPage(seedThemedScreen('standings'));
+		await flushPromises();
+
+		void handed[0]!.set('divider', '#ff0000');
+		await flushPromises();
+		expect(handed[1]!.writing.value.has('divider')).toBe(true);
+
+		answer.resolve(createWireMockScreen({
+			id: 1,
+			currentMode: 'standings',
+			themeOverrides: { divider: '#ff0000' },
+			stateVersion: 1,
+		}) as unknown as Screen);
+		await flushPromises();
+		expect(handed[1]!.writing.value.has('divider')).toBe(false);
+	});
+
+	it('holds no override and writes nothing until the page has loaded its Screen', async () => {
+		seedThemedScreen('standings');
+		const overrides = mountPage(() => null).handed[0]!;
+		await flushPromises();
+
+		await overrides.set('divider', '#ff0000');
+
+		expect(overrides.entry('divider')).toMatchObject({ stored: undefined, resolved: FOUNDATION_TOKENS.divider.default });
+		expect(overrideWrites(mockApiFetch)).toEqual([]);
 	});
 
 	it('says when the Event\'s Theme could not be loaded, and reads the Default Theme', async () => {
