@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { msUntilNextRotationFlip, projectRotationPage, rotationAnchorForPage } from '~~/shared/modules/page-rotation';
+import { msUntilNextRotationFlip, pageRotationEdit, projectRotationPage, rotationAnchorForPage, rotationPageCount, rotationPageSize } from '~~/shared/modules/page-rotation';
 
 describe('page rotation projection', () => {
 	it('projects the page as elapsed whole durations since the anchor, wrapping past the last page', () => {
@@ -182,5 +182,34 @@ describe('page rotation projection', () => {
 			totalPages: 3,
 			now: 25_000,
 		})).toBeNull();
+	});
+});
+
+/** A page size is a number of rows, or Auto while absent: every row on one page. */
+describe('page rotation page size', () => {
+	const declaration = { pageSize: 'cardsPerPage' };
+
+	it.each([
+		{ config: { cardsPerPage: 4 }, pageSize: 4 },
+		{ config: {}, pageSize: undefined },
+		{ config: { cardsPerPage: undefined }, pageSize: undefined },
+	])('reads $config as $pageSize', ({ config, pageSize }) => {
+		expect(rotationPageSize(declaration, config)).toBe(pageSize);
+	});
+
+	it.each([
+		{ rowCount: 20, pageSize: 5, pages: 4 },
+		{ rowCount: 21, pageSize: 5, pages: 5 },
+		{ rowCount: 3, pageSize: 5, pages: 1 },
+		{ rowCount: 0, pageSize: 5, pages: 1 },
+		{ rowCount: 60, pageSize: undefined, pages: 1 },
+		{ rowCount: 0, pageSize: undefined, pages: 1 },
+	])('pages $rowCount rows at $pageSize a page into $pages', ({ rowCount, pageSize, pages }) => {
+		expect(rotationPageCount(rowCount, pageSize)).toBe(pages);
+	});
+
+	it('an edit returning the page size to Auto is a page size edit', () => {
+		expect(pageRotationEdit(declaration, { autoPageEnabled: true }, { cardsPerPage: null }, 1_000_000.25))
+			.toEqual({ cardsPerPage: null, currentPage: 1, rotationAnchor: 1_000_000 });
 	});
 });

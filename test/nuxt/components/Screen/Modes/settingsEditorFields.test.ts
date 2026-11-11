@@ -26,8 +26,6 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 const BESPOKE_CONTROLS: Record<string, string> = {
 	// Each board's own show toggle writes the one board selection both share.
 	'deck.board': 'the Mainboard and Sideboard show toggles',
-	// Paging on is a page smaller than the ranking, so its toggle and its page size both read the card count.
-	'top-cards.cardsPerPage': 'the Split into pages toggle, and a page size kept below the card count',
 	// A Card Layout's bounds follow its content (ADR-0054), tested at `ScreenCardGridLayoutFields`.
 	'top-cards.columns': 'a column count kept to the card count',
 	'top-cards.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',

@@ -50,6 +50,10 @@ describe('screen Mode Page Rotation', () => {
 		}
 	});
 
+	it('most Played Cards pages by Auto until a page size is set', () => {
+		expect(SCREEN_MODES['top-cards'].config.defaults.cardsPerPage).toBeUndefined();
+	});
+
 	describe.each(paginated)('$mode', ({ mode, pageRotation }) => {
 		const contract = SCREEN_MODES[mode].config;
 		const pageSizeEdit = { [pageRotation.pageSize]: 4 };
@@ -90,9 +94,10 @@ describe('screen Mode Page Rotation', () => {
 			expect(reset).toMatchObject({
 				autoPageEnabled: false,
 				autoPageIntervalMs: 10_000,
-				[pageRotation.pageSize]: (contract.defaults as Record<string, unknown>)[pageRotation.pageSize],
 				currentPage: 1,
 			});
+			// Named even where the default is Auto (absent), so the reset clears a set page size.
+			expect(reset).toHaveProperty([pageRotation.pageSize], (contract.defaults as Record<string, unknown>)[pageRotation.pageSize]);
 			// Auto-page is off once reset, so the reset writes no Rotation Anchor.
 			expect(reset).not.toHaveProperty('rotationAnchor');
 		});
