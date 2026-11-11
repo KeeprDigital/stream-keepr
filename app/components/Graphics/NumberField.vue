@@ -140,7 +140,7 @@ onBeforeUnmount(() => end());
 				@click="click"
 			>{{ label }}</span>
 		</template>
-		<UInputNumber
+		<ScreenSettingsNumberField
 			v-bind="inputAttrs"
 			:model-value="modelValue"
 			:min="min"
@@ -149,7 +149,7 @@ onBeforeUnmount(() => end());
 			:step-snapping="stepSnapping"
 			:size="size"
 			:disabled="disabled"
-			class="w-full"
+			fill
 			@update:model-value="emit('update:modelValue', $event ?? null)"
 		/>
 	</UFormField>

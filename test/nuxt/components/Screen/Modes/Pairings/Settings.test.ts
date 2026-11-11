@@ -232,13 +232,13 @@ describe('screenModesPairingsSettings', () => {
 				id: 'pairings:table',
 				title: 'Table',
 				collapsible: true,
-				groups: ['table', 'result-badge'],
+				groups: ['result-badge'],
 			},
 			{
 				id: 'pairings:header',
 				title: 'Header',
 				collapsible: true,
-				groups: ['header'],
+				groups: [],
 			},
 			{
 				id: 'pairings:pagination',
@@ -261,12 +261,12 @@ describe('screenModesPairingsSettings', () => {
 			},
 		],
 		[
-			'a hidden header and overridden table tokens',
+			'a hidden header and overridden result badge tokens',
 			{ showHeader: false },
-			{ 'pairings.surface': '#000000', 'pairings.result-bye': '#ffaa00', 'pairings.title-text': '#ffffff' },
+			{ 'pairings.result-reported': '#00ff00', 'pairings.result-bye': '#ffaa00' },
 			{
 				'pairings:table': '2 Screen Theme Overrides',
-				'pairings:header': 'Hidden · 1 Screen Theme Override',
+				'pairings:header': 'Hidden',
 				'pairings:pagination': '8 per page · Manual paging',
 			},
 		],

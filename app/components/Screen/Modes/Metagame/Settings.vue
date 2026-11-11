@@ -166,22 +166,16 @@ const tableSummary = computed(() => settingsSummary([
 	columnsSummary(activeColumns.value),
 	look('table'),
 ]));
-const chartSummary = computed(() => settingsSummary([
-	look('chart'),
-], FOLLOWS_THE_THEME));
 const sizeAndSurfaceSummary = computed(() => settingsSummary([
 	look('size-and-surface'),
 ], FOLLOWS_THE_THEME));
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	look('header'),
-]));
+const headerCardSummary = computed(() => headerSummary(config.value));
 const paginationCardSummary = computed(() => paginationSummary(rotation));
 </script>
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="metagame:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="metagame:data" title="Data" :collapsible="false">
 			<ScreenConfigField
 				:field="fields.viewMode"
 				:model-value="config.viewMode"
@@ -237,9 +231,9 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 					@update:model-value="$event !== null && updateConfig({ limit: Number($event), currentPage: 1 })"
 				/>
 			</template>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			v-if="config.viewMode !== 'chart'"
 			id="metagame:table"
 			title="Table"
@@ -253,13 +247,12 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="table" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			v-else
 			id="metagame:chart"
 			title="Chart"
-			:summary="chartSummary"
 		>
 			<ScreenSettingsField
 				label="Pinned Chart Series"
@@ -273,18 +266,16 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 					Pin on the Metagame page
 				</NuxtLink>
 			</ScreenSettingsField>
+		</ScreenSettingsSection>
 
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="chart" />
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			id="metagame:size-and-surface"
 			title="Size & Surface"
 			subtitle="How wide the table or chart runs, and what it sits on."
 			:summary="sizeAndSurfaceSummary"
 		>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="size-and-surface" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
 			id="metagame:header"
@@ -294,9 +285,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			show-description="Show the metagame title above the table."
 			auto-description="Leave empty for an auto-generated title."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 
 		<ScreenPaginationSettingsCard
 			v-if="config.viewMode !== 'chart'"

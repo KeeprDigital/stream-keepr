@@ -33,7 +33,7 @@ async function mountSection(mode: ScreenMode, themeOverrides: StoredThemeTokens 
 		eventId: 1,
 	})), {
 		global: {
-			stubs: { ...nuxtUiStubs, ScreenSettingsCard: ScreenSettingsCardStub },
+			stubs: { ...nuxtUiStubs, ScreenSettingsSection: ScreenSettingsCardStub },
 		},
 	});
 	await flushPromises();
@@ -61,12 +61,12 @@ describe('the Screen-wide look', () => {
 		['closed with nothing overridden', {}, false],
 		[
 			'open with a Foundation Token overridden',
-			{ divider: '#ff0000' },
+			{ positive: '#ff0000' },
 			true,
 		],
 		[
 			'closed with only a Mode Token overridden',
-			{ 'standings.surface': '#ff0000' },
+			{ 'standings.rise': '#ff0000' },
 			false,
 		],
 		[
@@ -103,20 +103,20 @@ describe('the Screen-wide look', () => {
 	});
 
 	it('clears a row\'s override as one write', async () => {
-		const wrapper = await mountSection('standings', { divider: '#ff0000' });
+		const wrapper = await mountSection('standings', { positive: '#ff0000' });
 
-		await card(wrapper).get('[data-token="divider"]').findAll('button').find(button => button.text() === 'Clear')!.trigger('click');
+		await card(wrapper).get('[data-token="positive"]').findAll('button').find(button => button.text() === 'Clear')!.trigger('click');
 		await flushPromises();
 
 		expect(overrideWrites(mockApiFetch)).toEqual([
-			{ divider: null },
+			{ positive: null },
 		]);
 	});
 
 	// Each override write announces `screen:updated`, so a drag writes once, on close.
 	it('writes a colour override once its picker closes, carrying its alpha', async () => {
 		const wrapper = await mountSection('standings');
-		const row = card(wrapper).get('[data-token="divider"]');
+		const row = card(wrapper).get('[data-token="positive"]');
 
 		await row.get('[data-token-part="colour"]').trigger('click');
 		await row.get('[data-color-part="hue"]').setValue('#00ff00');
@@ -128,7 +128,7 @@ describe('the Screen-wide look', () => {
 		await row.get('[data-token-part="colour"]').trigger('click');
 		await flushPromises();
 		expect(overrideWrites(mockApiFetch)).toEqual([
-			{ divider: 'rgba(255, 0, 0, 0.4)' },
+			{ positive: 'rgba(255, 0, 0, 0.4)' },
 		]);
 	});
 });

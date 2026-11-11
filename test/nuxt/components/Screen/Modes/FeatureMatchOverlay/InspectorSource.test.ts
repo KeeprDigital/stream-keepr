@@ -93,7 +93,7 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue, themeOverride
 	})), {
 		global: {
 			stubs: {
-				FeatureMatchOverlayControlSection: ControlSectionStub,
+				ScreenSettingsSection: ControlSectionStub,
 				FeatureMatchOverlaySourceFramingStyleFields: true,
 				FeatureMatchOverlayOrderSection: true,
 				ScreenSettingsToggle: true,

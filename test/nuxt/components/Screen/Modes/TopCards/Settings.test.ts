@@ -39,11 +39,9 @@ const defaultConfig = {
 	limit: 10,
 	excludedCardTypes: ['Land'],
 	pointedOnly: false,
-	columns: 5,
-	autoColumns: false,
-	cardSizing: 'fit',
-	cardWidth: 160,
-	cardGap: 12,
+	columns: undefined,
+	maxCardSize: undefined,
+	cardGap: undefined,
 	cardsPerPage: 60,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
@@ -156,20 +154,12 @@ const UButtonStub = defineComponent({
 const UInputNumberStub = defineComponent({
 	props: {
 		modelValue: { type: Number, required: false },
+		max: { type: Number, required: false },
 		disabled: { type: Boolean, required: false },
 	},
 	emits: ['update:modelValue'],
-	template: '<div data-testid="u-input-number" :aria-disabled="disabled">{{ modelValue }}</div>',
+	template: '<div data-testid="u-input-number" :data-max="max" :aria-disabled="disabled">{{ modelValue }}</div>',
 });
-
-/** The control under the form field or toggle labelled `label`. */
-function control<T>(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: string, stub: T) {
-	const field = wrapper.findAll('[data-testid="form-field"], [data-testid="settings-toggle"]').find(item => item.text().includes(label));
-	expect(field, label).toBeDefined();
-	return field!.findComponent(stub as any).exists()
-		? field!.getComponent(stub as any)
-		: field!;
-}
 
 /** The `stub` control of the contract field `key`, if rendered. */
 function configControl<T>(wrapper: Awaited<ReturnType<typeof mountComponent>>, stub: T, key: string) {
@@ -302,7 +292,7 @@ describe('screenTopCardsSettings', () => {
 		expect(settingsSummaries(wrapper)).toEqual({
 			'top-cards:filters': 'Pointed only · 1 type excluded',
 			'top-cards:ranking-and-pages': 'Top 10 · One page',
-			'top-cards:layout': 'Fit · 5 columns',
+			'top-cards:layout': 'Auto',
 			'top-cards:header': 'Auto title',
 			'top-cards:card-badges': 'Rank badge',
 		});
@@ -559,48 +549,19 @@ describe('screenTopCardsSettings', () => {
 		});
 	});
 
-	describe('card sizing', () => {
-		it('offers Fixed width and Fit to screen, and writes the choice', async () => {
-			const wrapper = await mountComponent();
-
-			const select = control(wrapper, 'Card sizing', USelectStub);
-			expect(select.text()).toBe('Fixed width|Fit to screen');
-			(select as any).vm.$emit('update:modelValue', 'fixed');
-
-			expect(mockUpdateConfig).toHaveBeenCalledWith({ cardSizing: 'fixed' });
-		});
-
-		it('turns auto columns on', async () => {
-			const wrapper = await mountComponent();
-
-			await control(wrapper, 'Auto columns', ScreenSettingsToggleStub).trigger('click');
-
-			expect(mockUpdateConfig).toHaveBeenCalledWith({ autoColumns: true });
-		});
-
-		// Auto columns choose the count, so the count is offered only while they are off.
-		it.each([
-			{ autoColumns: false, offered: true },
-			{ autoColumns: true, offered: false },
-		])('offers a column count while auto columns is $autoColumns: $offered', async ({ autoColumns, offered }) => {
-			mockConfig.value = { ...mockConfig.value, autoColumns };
-			const wrapper = await mountComponent();
-
-			expect(wrapper.findAll('[data-testid="form-field"]').some(field => field.text().includes('Columns'))).toBe(offered);
-		});
-
-		// Each size sits beside the control it sizes and writes that one field (ADR-0054).
+	// Wiring: the Layout card edits the Screen's Card Layout, bounded by its card
+	// count. The fields' own rules are tested at `ScreenCardGridLayoutFields`.
+	describe('card layout', () => {
 		it.each([
 			{
-				label: 'Card width',
-				patch: { cardWidth: 200 },
+				label: 'Columns',
+				patch: { columns: null },
 			},
 			{
-				label: 'Card gap',
-				patch: { cardGap: 20 },
+				label: 'Max card size',
+				patch: { maxCardSize: 200 },
 			},
-		])('writes the $label', async ({ label, patch }) => {
-			mockConfig.value = { ...mockConfig.value, cardSizing: 'fixed' };
+		])('writes $label as $patch', async ({ label, patch }) => {
 			const wrapper = await mountComponent();
 
 			numberInput(wrapper, label).vm.$emit('update:modelValue', Object.values(patch)[0]);
@@ -608,15 +569,32 @@ describe('screenTopCardsSettings', () => {
 			expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
 		});
 
-		// A Fit grid sizes its cards to the screen, so it offers no width.
-		it.each([
-			{ cardSizing: 'fixed', offered: true },
-			{ cardSizing: 'fit', offered: false },
-		])('offers a $cardSizing grid a card width: $offered', async ({ cardSizing, offered }) => {
-			mockConfig.value = { ...mockConfig.value, cardSizing };
+		it('offers columns up to the card count, and a max card size up to the Event Canvas', async () => {
+			mockConfig.value = { ...mockConfig.value, limit: 7 };
 			const wrapper = await mountComponent();
 
-			expect(wrapper.findAll('[data-testid="form-field"]').some(field => field.text().includes('Card width'))).toBe(offered);
+			expect(numberInput(wrapper, 'Columns').attributes('data-max')).toBe('7');
+			expect(numberInput(wrapper, 'Max card size').attributes('data-max')).toBe('775');
+		});
+
+		it.each([
+			{ layout: {}, summary: 'Auto' },
+			{
+				layout: { columns: 1 },
+				summary: '1 column',
+			},
+			{
+				layout: { columns: 5, maxCardSize: 200, cardGap: 0 },
+				summary: '5 columns · Max 200 px · 0 px gap',
+			},
+		])('summarises $layout as $summary', async ({ layout, summary }) => {
+			mockConfig.value = {
+				...mockConfig.value,
+				...layout,
+			};
+			const wrapper = await mountComponent();
+
+			expect(settingsSummaries(wrapper)['top-cards:layout']).toBe(summary);
 		});
 	});
 
@@ -664,7 +642,7 @@ describe('screenTopCardsSettings', () => {
 			mockConfig.value = { ...mockConfig.value, limit: 12, cardsPerPage: 4 };
 			const wrapper = await mountComponent();
 
-			expect(numberInput(wrapper, 'Cards per page').attributes('max')).toBe('11');
+			expect(numberInput(wrapper, 'Cards per page').attributes('data-max')).toBe('11');
 		});
 	});
 

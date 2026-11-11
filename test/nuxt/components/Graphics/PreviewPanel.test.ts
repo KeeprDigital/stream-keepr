@@ -28,7 +28,7 @@ const ScreenSettingsCardStub = defineComponent({
 
 const global = {
 	stubs: {
-		ScreenSettingsCard: ScreenSettingsCardStub,
+		ScreenSettingsSection: ScreenSettingsCardStub,
 		UFormField: SlotOnlyStub,
 		UFieldGroup: SlotOnlyStub,
 		USwitch: defineComponent({

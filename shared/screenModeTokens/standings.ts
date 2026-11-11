@@ -2,58 +2,10 @@ import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 import { EVENT_CANVAS_SIDE_BOUNDS } from '../eventCanvas';
 
 /** The Standings settings groups its Mode Tokens may name (ADR-0072). */
-export type StandingsSettingsGroup = 'header' | 'data' | 'table';
+export type StandingsSettingsGroup = 'data' | 'table';
 
 /** How the Standings Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const standingsModeTokens = {
-	'surface': {
-		type: 'color',
-		label: 'Table surface',
-		settingsGroup: 'table',
-		default: { token: 'surface' },
-	},
-	'title-typography': {
-		type: 'typography',
-		label: 'Title type',
-		settingsGroup: 'header',
-		default: { token: 'heading' },
-	},
-	'title-text': {
-		type: 'color',
-		label: 'Title text',
-		settingsGroup: 'header',
-		default: { token: 'text-primary' },
-	},
-	'title-divider': {
-		type: 'color',
-		label: 'Title divider',
-		settingsGroup: 'header',
-		default: { token: 'divider' },
-	},
-	'row-typography': {
-		type: 'typography',
-		label: 'Row type',
-		settingsGroup: 'table',
-		default: { token: 'body' },
-	},
-	'row-divider': {
-		type: 'color',
-		label: 'Row divider',
-		settingsGroup: 'table',
-		default: { token: 'divider' },
-	},
-	'primary-text': {
-		type: 'color',
-		label: 'Name and points text',
-		settingsGroup: 'table',
-		default: { token: 'text-primary' },
-	},
-	'secondary-text': {
-		type: 'color',
-		label: 'Position, record and deck text',
-		settingsGroup: 'table',
-		default: { token: 'text-secondary' },
-	},
 	'rise': {
 		type: 'color',
 		label: 'Position Change climb',
@@ -104,3 +56,18 @@ export const standingsModeTokens = {
 		},
 	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition<StandingsSettingsGroup>>>;
+
+/**
+ * The Mode Tokens Standings once declared: its type and shared chrome, which only
+ * repeated the Foundation Tokens its display now reads directly.
+ */
+export const standingsFormerModeTokens = [
+	'surface',
+	'title-typography',
+	'title-text',
+	'title-divider',
+	'row-typography',
+	'row-divider',
+	'primary-text',
+	'secondary-text',
+] as const;

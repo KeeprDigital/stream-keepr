@@ -38,20 +38,18 @@ const pageSize = computed(() => props.rotation.pageSize.value);
 </script>
 
 <template>
-	<ScreenSettingsCard :id="id" :title="title" :summary="summary">
-		<UFormField
+	<ScreenSettingsSection :id="id" :title="title" :summary="summary">
+		<ScreenSettingsField
 			:label="fields.pageSize.label"
 			:description="pageSizeDescription"
-			class="flex max-sm:flex-col justify-between items-start gap-4"
 		>
-			<UInputNumber
+			<ScreenSettingsNumberField
 				:model-value="pageSize"
 				:min="fields.pageSize.min"
 				:max="fields.pageSize.max"
-				class="w-32"
 				@update:model-value="rotation.setPageSize(Number($event))"
 			/>
-		</UFormField>
+		</ScreenSettingsField>
 
 		<USeparator />
 
@@ -63,5 +61,5 @@ const pageSize = computed(() => props.rotation.pageSize.value);
 		/>
 
 		<slot />
-	</ScreenSettingsCard>
+	</ScreenSettingsSection>
 </template>

@@ -343,4 +343,52 @@ describe('a Theme Token write', () => {
 	])('accepts a former token given %s, and drops it', (_case, name, value) => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, dropped: true });
 	});
+
+	// The table modes' type and shared chrome read Foundation Tokens (#1077).
+	const SHARED_CHROME = [
+		'surface',
+		'title-typography',
+		'title-text',
+		'title-divider',
+		'row-typography',
+		'row-divider',
+		'primary-text',
+		'secondary-text',
+	];
+	it.each([
+		['standings', SHARED_CHROME],
+		[
+			'metagame',
+			[
+				...SHARED_CHROME,
+				'header-typography',
+				'header-text',
+				'header-divider',
+				'chart-baseline',
+			],
+		],
+		[
+			'pairings',
+			[...SHARED_CHROME, 'result-typography'],
+		],
+		[
+			'player-history',
+			[...SHARED_CHROME, 'outcome-typography'],
+		],
+		[
+			'head-to-head',
+			[...SHARED_CHROME, 'name-typography', 'label-typography'],
+		],
+		[
+			'round-clock',
+			[
+				'surface',
+				'round-name-typography',
+				'round-name-text',
+				'clock-typography',
+			],
+		],
+	])('accepts each typography and shared chrome token %s once declared, and drops it', (mode, tokens) => {
+		expect(tokens.map(token => parseThemeTokenWrite(`${mode}.${token}`, '#ff0000'))).toEqual(tokens.map(() => ({ ok: true, dropped: true })));
+	});
 });

@@ -144,7 +144,7 @@ async function place(templateId: string) {
 </script>
 
 <template>
-	<ScreenSettingsCard title="Template library" :default-open="true" data-testid="template-library">
+	<ScreenSettingsSection title="Template library" :default-open="true" data-testid="template-library">
 		<div class="space-y-3">
 			<p class="text-xs text-muted">
 				Reusable Broadcast Graphic Templates, shared across every Event in this installation.
@@ -271,5 +271,5 @@ async function place(templateId: string) {
 				</GraphicsTemplateLibraryEntry>
 			</div>
 		</div>
-	</ScreenSettingsCard>
+	</ScreenSettingsSection>
 </template>

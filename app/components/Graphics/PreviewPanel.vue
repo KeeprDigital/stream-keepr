@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-	<ScreenSettingsCard title="Preview" :default-open="true" :collapsible="collapsible">
+	<ScreenSettingsSection title="Preview" :default-open="true" :collapsible="collapsible">
 		<template #actions="{ open }">
 			<div v-if="open" class="flex flex-wrap items-center gap-3">
 				<UFieldGroup size="sm">
@@ -460,5 +460,5 @@ onBeforeUnmount(() => {
 				@pointerdown="startSurfacePan"
 			/>
 		</div>
-	</ScreenSettingsCard>
+	</ScreenSettingsSection>
 </template>

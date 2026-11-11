@@ -25,7 +25,7 @@ const subtitle = computed(() => overrides.themeName.value
 </script>
 
 <template>
-	<ScreenSettingsCard
+	<ScreenSettingsSection
 		v-if="names.length"
 		:id="`${screen.currentMode}:screen-wide-look`"
 		title="Screen-wide look"
@@ -47,5 +47,5 @@ const subtitle = computed(() => overrides.themeName.value
 			:names="names"
 			:compact="false"
 		/>
-	</ScreenSettingsCard>
+	</ScreenSettingsSection>
 </template>

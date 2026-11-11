@@ -69,9 +69,9 @@ describe('useScreenThemeOverrides', () => {
 		],
 		[
 			'a Mode Token following its default',
-			{ divider: '#123456' },
-			'standings.row-divider',
-			{ token: 'divider' },
+			{ positive: '#123456' },
+			'standings.rise',
+			{ token: 'positive' },
 			'#123456',
 		],
 		// The former stored form: shown as the literal it resolves to, never as stored.
@@ -79,9 +79,9 @@ describe('useScreenThemeOverrides', () => {
 			'a Mode Token whose Theme value names a Foundation Token',
 			{
 				'accent': '#aa0000',
-				'standings.row-divider': { token: 'accent' },
+				'standings.rise': { token: 'accent' },
 			},
-			'standings.row-divider',
+			'standings.rise',
 			'#aa0000',
 			'#aa0000',
 		],

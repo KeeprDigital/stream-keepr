@@ -159,6 +159,7 @@ const TemplateLibraryStub = defineComponent({
 	props: {
 		writable: { type: Boolean, required: false },
 		flushEdits: { type: Function, default: undefined },
+		canvasAspectRatio: { type: Number, default: undefined },
 	},
 	emits: ['placing', 'placed', 'update:placing'],
 	template: '<div data-testid="template-library" :data-writable="String(writable)" />',
@@ -224,7 +225,7 @@ const UButtonStub = defineComponent({
 });
 
 const SETTINGS_STUBS = {
-	ScreenSettingsCard: ScreenSettingsCardStub,
+	ScreenSettingsSection: ScreenSettingsCardStub,
 	FeatureMatchOverlayLayerInspector: LayerInspectorStub,
 	FeatureMatchOverlayLayerList: LayerListStub,
 	FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
@@ -323,7 +324,7 @@ describe('featureMatchOverlaySettings', () => {
 		expect(selectedTarget(wrapper)).toEqual({ type: 'source', itemId: 'main-source' });
 		expect(previewSelectedTarget(wrapper)).toEqual({ type: 'source', itemId: 'main-source' });
 		expect(compositorTarget(wrapper)).toEqual({ type: 'canvas' });
-		expect(previewConfig(wrapper).presetId).toBe(mockConfig.value.presetId);
+		expect(previewConfig(wrapper).layout).toEqual(mockConfig.value.layout);
 	});
 
 	// ADR-0051: the canvas is the Event's, set in Event Presentation Settings, not here.
@@ -590,41 +591,6 @@ describe('featureMatchOverlaySettings', () => {
 		});
 	});
 
-	describe('whole-layout replacement', () => {
-		it('asks before resetting the layout to its preset', async () => {
-			const wrapper = await mountComponent();
-			await flushPromises();
-
-			await wrapper.get('[data-testid="reset-preset"]').trigger('click');
-
-			expect(mockUpdateConfig).not.toHaveBeenCalled();
-			expect(wrapper.get('[data-testid="modal"]').text()).toContain('Reset to preset?');
-
-			await wrapper.get('[data-testid="confirm-preset"]').trigger('click');
-
-			expect(mockUpdateConfig).toHaveBeenCalledTimes(1);
-			expect(wrapper.find('[data-testid="modal"]').exists()).toBe(false);
-		});
-
-		it('can undo a preset reset', async () => {
-			const wrapper = await mountComponent();
-			await flushPromises();
-			mockConfig.value = {
-				...mockConfig.value,
-				layout: { ...mockConfig.value.layout, sources: [] },
-			};
-			await nextTick();
-
-			await wrapper.get('[data-testid="reset-preset"]').trigger('click');
-			await wrapper.get('[data-testid="confirm-preset"]').trigger('click');
-			expect(sourceIds().length).toBeGreaterThan(0);
-
-			await wrapper.get('[data-testid="layout-undo"]').trigger('click');
-
-			expect(sourceIds()).toEqual([]);
-		});
-	});
-
 	// A placement rewrites the stored layout and the Screen is then reloaded, so an
 	// edit sent across it would write the layout from before it over the placed one.
 	describe('a Feature Match Layout Template placement', () => {
@@ -638,6 +604,13 @@ describe('featureMatchOverlaySettings', () => {
 				library: wrapper.getComponent(TemplateLibraryStub),
 			};
 		}
+
+		// A built-in template warns against this shape when it is placed.
+		it('hands the library the Event Canvas\'s aspect ratio', async () => {
+			const { library } = await mountWithLibrary();
+
+			expect(library.props('canvasAspectRatio')).toBeCloseTo(1280 / 720);
+		});
 
 		it('hands the library the flush of the layout\'s unsaved edits', async () => {
 			const { library } = await mountWithLibrary();
@@ -656,7 +629,6 @@ describe('featureMatchOverlaySettings', () => {
 			await nextTick();
 			expect(authoring()).toBe('false');
 			expect(preview(wrapper).props('selectionFrame')).toBeNull();
-			expect(wrapper.get('[data-testid="reset-preset"]').attributes('disabled')).toBeDefined();
 			expect(exposed.resetBlocked).toBe(true);
 			preview(wrapper).vm.$emit('manipulate', { x: 1, y: 2, width: 3, height: 4 }, 1);
 			exposed.resetConfig();
@@ -1031,7 +1003,7 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 		mockLeaseWritable.value = false;
 		await nextTick();
 
-		expect(mockDiscard).toHaveBeenCalledWith(['layout', 'presetId']);
+		expect(mockDiscard).toHaveBeenCalledWith(['layout']);
 	});
 
 	it('hands every other write path a read-only state', async () => {
@@ -1040,7 +1012,6 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 		expect(preview(wrapper).props('selectionFrame')).toBeNull();
 		expect(wrapper.get('[data-testid="layer-inspector"]').attributes('data-writable')).toBe('false');
 		expect(wrapper.get('[data-testid="template-library"]').attributes('data-writable')).toBe('false');
-		expect(wrapper.get('[data-testid="reset-preset"]').attributes('disabled')).toBeDefined();
 		expect(wrapper.get('[data-testid="layout-undo"]').attributes('disabled')).toBeDefined();
 		expect((wrapper.vm as unknown as { resetBlocked: boolean }).resetBlocked).toBe(true);
 
@@ -1055,7 +1026,7 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 			FeatureMatchOverlayPreviewOutputAside: false,
 			GraphicsCanvasManipulationOverlay: true,
 			// The real preview panel, whose toolbar is its card's actions.
-			ScreenSettingsCard: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
+			ScreenSettingsSection: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
 		});
 		await flushPromises();
 		const toggle = wrapper.get('[data-testid="preview-stress-dataset"]');

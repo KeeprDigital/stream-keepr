@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EVENT_CANVAS_SIDE_BOUNDS } from '../eventCanvas';
 import { METAGAME_SCOPE_VALUES } from '../types/enums';
 import { editorField } from './fields';
 
@@ -114,3 +115,26 @@ export const DEFAULT_PAGE_ROTATION = {
 
 /** How many rows a page of a Page Rotation holds, under whichever name its mode gives the field. */
 export const pageRotationPageSize = editorField(z.number().int().min(1).max(100), { label: 'Rows per page' });
+
+/**
+ * A card grid's Card Layout (ADR-0054): each value a number, or Auto while
+ * absent. Columns run to `mostCards`, the most cards the grid can hold; a max
+ * card size to the largest side an Event Canvas may have; the gap bound is the
+ * one every card grid shares. An editor narrows each to its content: the
+ * grid's card count, and its Event's canvas.
+ */
+export function cardLayoutShape(mostCards: number) {
+	return {
+		columns: editorField(z.number().int().min(1).max(mostCards).optional(), { label: 'Columns' }),
+		/** The widest a card may be, in Event Canvas px. */
+		maxCardSize: editorField(z.number().int().min(48).max(EVENT_CANVAS_SIDE_BOUNDS.max).optional(), { label: 'Max card size' }),
+		cardGap: editorField(z.number().int().min(0).max(100).optional(), { label: 'Card gap' }),
+	};
+}
+
+/** A Card Layout nobody has set: every value Auto. Named, so a display reset returns each to Auto. */
+export const DEFAULT_CARD_LAYOUT = {
+	columns: undefined,
+	maxCardSize: undefined,
+	cardGap: undefined,
+} as const;

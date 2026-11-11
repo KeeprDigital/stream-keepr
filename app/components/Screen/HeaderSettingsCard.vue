@@ -29,7 +29,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-	<ScreenSettingsCard :id="id" :title="title" :summary="summary">
+	<ScreenSettingsSection :id="id" :title="title" :summary="summary">
 		<ScreenConfigField
 			:field="fields.showHeader"
 			:model-value="config.showHeader"
@@ -48,5 +48,5 @@ const emit = defineEmits<{
 		/>
 
 		<slot />
-	</ScreenSettingsCard>
+	</ScreenSettingsSection>
 </template>

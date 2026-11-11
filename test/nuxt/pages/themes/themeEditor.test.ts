@@ -148,7 +148,7 @@ describe('the Theme editor', () => {
 		['a Foundation colour', 'accent', 'Default: #0077a3'],
 		['a Foundation dimension', 'inset', 'Default: 0px'],
 		['the Screen alignment', 'alignment', 'Default: center center'],
-		['a Mode Token following a Foundation Token', 'standings.row-divider', 'Default: follows Divider'],
+		['a Mode Token following a Foundation Token', 'top-cut.position-border', 'Default: follows Divider'],
 		['the background', 'background', 'Default: no layers'],
 		['the Animation Effect', 'animation-effect', 'Default: Fog'],
 		['the logo', 'logo', 'Default: none'],
@@ -176,7 +176,7 @@ describe('the Theme editor', () => {
 		],
 		[
 			'a Mode Token\'s own colour, keeping the alpha it follows',
-			'standings.row-divider',
+			'top-cut.position-border',
 			'hue',
 			'#00ff00',
 			'rgba(0, 255, 0, 0.12)',
@@ -198,11 +198,11 @@ describe('the Theme editor', () => {
 	});
 
 	it('repaints its preview once a write lands', async () => {
-		answerWrite = () => theme(2, { 'standings.surface': 'rgb(0, 255, 0)' });
+		answerWrite = () => theme(2, { surface: 'rgb(0, 255, 0)' });
 		const wrapper = await mountEditor({ preview: true });
 		await settleUntil(() => wrapper.find('.standings-table').exists());
 
-		await commitColour(wrapper, 'standings.surface', 'hue', '#00ff00');
+		await commitColour(wrapper, 'surface', 'hue', '#00ff00');
 
 		expect(getComputedStyle(wrapper.get('.standings-table').element).backgroundColor).toBe('rgb(0, 255, 0)');
 	});
@@ -244,17 +244,17 @@ describe('the Theme editor', () => {
 		const older = deferred<ThemeResponse>();
 		const answers = [
 			() => older.promise,
-			() => theme(3, { 'accent': '#ff0000', 'standings.surface': '#000000' }),
+			() => theme(3, { 'accent': '#ff0000', 'standings.rise': '#000000' }),
 		];
 		answerWrite = () => answers.shift()!();
 		const wrapper = await mountEditor();
 
 		await commitColour(wrapper, 'accent', 'hue', '#ff0000');
-		await commitColour(wrapper, 'standings.surface', 'hue', '#111111');
+		await commitColour(wrapper, 'standings.rise', 'hue', '#111111');
 		older.resolve(theme(2, { accent: '#ff0000' }));
 		await flushPromises();
 
-		expect(field(wrapper, 'standings.surface').attributes('data-token-state')).toBe('set');
+		expect(field(wrapper, 'standings.rise').attributes('data-token-state')).toBe('set');
 	});
 
 	it('writes the background once its edits pause, as the whole stack', async () => {

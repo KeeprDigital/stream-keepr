@@ -2,7 +2,7 @@
 import type { Game } from '~~/shared/types/enums';
 import type { MetagameChartBar } from '~~/shared/utils/metagameChart';
 import { useElementSize } from '@vueuse/core';
-import { foundationTokenVar, modeMotionVars, modeTokenVar } from '~/modules/screen-mode';
+import { foundationTokenVar, modeMotionVars } from '~/modules/screen-mode';
 
 /**
  * The Metagame Screen's chart display: meta share by Archetype as horizontal
@@ -30,10 +30,10 @@ const SERIES_FILLS = [
 ];
 
 const chartStyle = {
-	backgroundColor: modeTokenVar('metagame', 'surface'),
+	backgroundColor: foundationTokenVar('surface'),
 };
 const trackStyle = {
-	borderLeftColor: modeTokenVar('metagame', 'chart-baseline'),
+	borderLeftColor: foundationTokenVar('divider'),
 };
 /** A live update grows or shrinks each bar in place on the rows' motion timing; a cut snaps it. */
 const rowMotion = modeMotionVars('metagame', 'row-motion');

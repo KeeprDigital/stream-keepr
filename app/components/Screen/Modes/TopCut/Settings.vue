@@ -104,7 +104,7 @@ const headerCardSummary = computed(() => settingsSummary([
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="top-cut:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="top-cut:data" title="Data" :collapsible="false">
 			<ScreenConfigField
 				v-if="offersPhases"
 				:field="fields.bracketSource"
@@ -147,9 +147,9 @@ const headerCardSummary = computed(() => settingsSummary([
 					/>
 				</ScreenSettingsField>
 			</template>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="top-cut:entrants" title="Entrants" :summary="entrantsSummary">
+		<ScreenSettingsSection id="top-cut:entrants" title="Entrants" :summary="entrantsSummary">
 			<ScreenConfigField
 				v-if="game === 'op'"
 				:field="fields.playerNameShown"
@@ -174,15 +174,15 @@ const headerCardSummary = computed(() => settingsSummary([
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="entrants" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="top-cut:bracket" title="Bracket" :summary="bracketSummary">
+		<ScreenSettingsSection id="top-cut:bracket" title="Bracket" :summary="bracketSummary">
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="bracket" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="top-cut:champion" title="Champion" :summary="championSummary">
+		<ScreenSettingsSection id="top-cut:champion" title="Champion" :summary="championSummary">
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="champion" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
 			id="top-cut:header"

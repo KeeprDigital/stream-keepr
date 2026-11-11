@@ -1,5 +1,5 @@
 import type { VueWrapper } from '@vue/test-utils';
-import type { StoredThemeTokens, ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
+import type { FoundationTokenName, StoredThemeTokens, ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
 import type { BracketEntrant, BracketPosition, TopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicApplicationFontSelection } from '~~/shared/types/graphics';
@@ -22,8 +22,9 @@ import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import Renderer from '~/components/Screen/Renderer.vue';
 
 // Each Screen Mode's display, mounted by its Screen host under a resolved
-// token set, paints every Mode Token it declares, and a plain mode's host
-// insets and aligns it by the Theme (ADR-0049, ADR-0051).
+// token set, paints every Mode Token it declares and its shared chrome from the
+// Foundation Tokens, and a plain mode's host insets and aligns it by the Theme
+// (ADR-0049, ADR-0051).
 
 type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize' | 'maxWidth';
 
@@ -45,14 +46,6 @@ const CHART_SLOTS = Array.from({ length: METAGAME_CHART_MAX_ARCHETYPES }, (_, in
 /** Each themed mode's probes, one per Mode Token it declares, by the token's name within the mode. */
 const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 	'standings': {
-		'surface': { selector: '.standings-table', property: 'backgroundColor' },
-		'title-typography': { selector: '.standings-header h2' },
-		'title-text': { selector: '.standings-header h2', property: 'color' },
-		'title-divider': { selector: '.standings-header', property: 'borderBottomColor' },
-		'row-typography': { selector: '.cell-position' },
-		'row-divider': { selector: '.standings-row', property: 'borderBottomColor' },
-		'primary-text': { selector: '.cell-name', property: 'color' },
-		'secondary-text': { selector: '.cell-record', property: 'color' },
 		'rise': { selector: '[data-position-change="up"]', property: 'color' },
 		'fall': { selector: '[data-position-change="down"]', property: 'color' },
 		'max-width': { selector: '[data-testid="standings-content"]', property: 'maxWidth' },
@@ -64,52 +57,19 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		},
 	},
 	'pairings': {
-		'surface': { selector: '.pairings-rows', property: 'backgroundColor' },
-		'title-typography': { selector: '.pairings-header h2' },
-		'title-text': { selector: '.pairings-header h2', property: 'color' },
-		'title-divider': { selector: '.pairings-header', property: 'borderBottomColor' },
-		'row-typography': { selector: '.pairing-row .table' },
-		'row-divider': { selector: '.pairing-row', property: 'borderBottomColor' },
-		'primary-text': { selector: '.player-1', property: 'color' },
-		'secondary-text': { selector: '.versus', property: 'color' },
-		'result-typography': { selector: '[data-result="reported"]' },
 		'result-reported': { selector: '[data-result="reported"]', property: 'color' },
 		'result-pending': { selector: '[data-result="pending"]', property: 'color' },
 		'result-bye': { selector: '[data-result="bye"]', property: 'color' },
 	},
 	'player-history': {
-		'surface': { selector: '.history-rows', property: 'backgroundColor' },
-		'title-typography': { selector: '.history-header h2' },
-		'title-text': { selector: '.history-header h2', property: 'color' },
-		'title-divider': { selector: '.history-header', property: 'borderBottomColor' },
-		'row-typography': { selector: '.history-row .round' },
-		'row-divider': { selector: '.history-row', property: 'borderBottomColor' },
-		'primary-text': { selector: '.opponent', property: 'color' },
-		'secondary-text': { selector: '.round', property: 'color' },
-		'outcome-typography': { selector: '[data-outcome="win"]' },
 		'outcome-win': { selector: '[data-outcome="win"]', property: 'color' },
 		'outcome-loss': { selector: '[data-outcome="loss"]', property: 'color' },
 		'outcome-draw': { selector: '[data-outcome="draw"]', property: 'color' },
 		'outcome-pending': { selector: '[data-outcome="pending"]', property: 'color' },
 	},
-	'head-to-head': {
-		'title-typography': { selector: '.head-to-head-header h2' },
-		'title-text': { selector: '.head-to-head-header h2', property: 'color' },
-		'title-divider': { selector: '.head-to-head-header', property: 'borderBottomColor' },
-		'name-typography': { selector: '.name' },
-		'label-typography': { selector: '.earlier-matches-title' },
-		'surface': { selector: '.head-to-head-earlier-matches', property: 'backgroundColor' },
-		'row-typography': { selector: '.earlier-match .round' },
-		'row-divider': { selector: '.earlier-match', property: 'borderBottomColor' },
-		'primary-text': { selector: '.name', property: 'color' },
-		'secondary-text': { selector: '.versus', property: 'color' },
-	},
+	'head-to-head': {},
 	// The clock's colour follows its state, which the mocked data takes from `clockState`.
 	'round-clock': {
-		'surface': { selector: '.round-clock-display', property: 'backgroundColor' },
-		'round-name-typography': { selector: '.round-clock-name' },
-		'round-name-text': { selector: '.round-clock-name', property: 'color' },
-		'clock-typography': { selector: '.round-clock-time' },
 		'running-clock-text': { selector: '[data-clock-state="running"] .round-clock-time', property: 'color' },
 		'pending-clock-text': {
 			selector: '[data-clock-state="pending"] .round-clock-time',
@@ -169,22 +129,6 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'champion-border': { selector: '.bracket-champion-name', property: 'borderTopColor' },
 	},
 	'metagame': {
-		'surface': { selector: '.metagame-table', property: 'backgroundColor' },
-		'title-typography': { selector: '.metagame-title h2' },
-		'title-text': { selector: '.metagame-title h2', property: 'color' },
-		'title-divider': { selector: '.metagame-title', property: 'borderBottomColor' },
-		'header-typography': { selector: '.metagame-header-cell' },
-		'header-text': { selector: '.metagame-header-row', property: 'color' },
-		'header-divider': { selector: '.metagame-header-row', property: 'borderBottomColor' },
-		'row-typography': { selector: '.metagame-cell' },
-		'row-divider': { selector: '.metagame-row', property: 'borderBottomColor' },
-		'primary-text': { selector: '.metagame-cell.is-name', property: 'color' },
-		'secondary-text': { selector: '.metagame-cell:not(.is-name):not(.is-primary-metric)', property: 'color' },
-		'chart-baseline': {
-			selector: '.metagame-chart-track',
-			property: 'borderLeftColor',
-			config: { viewMode: 'chart' },
-		},
 		'max-width': { selector: '[data-testid="metagame-content"]', property: 'maxWidth' },
 		'row-motion': { selector: '.metagame-row', motionProperties: '--metagame-row' },
 	},
@@ -233,6 +177,85 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'pointed-card-accent': { selector: '[data-testid="highlander-pointed-card-chip"] span', property: 'color' },
 		'pointed-card-border': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'borderColor' },
 		'badge-shadow': { selector: '[data-testid="highlander-card-badge"]', property: 'boxShadow' },
+	},
+};
+
+/** A part of a display's shared chrome: where it paints, and the Foundation Token it reads. */
+type ChromeProbe = Probe & { token: FoundationTokenName };
+
+/**
+ * Each culled mode's shared chrome, by the former Mode Token that styled each
+ * part: the display reads the Theme's Foundation Token for it directly.
+ */
+const FOUNDATION_CHROME: Partial<Record<ScreenMode, Record<string, ChromeProbe>>> = {
+	'standings': {
+		'surface': { token: 'surface', selector: '.standings-table', property: 'backgroundColor' },
+		'title-typography': { token: 'heading', selector: '.standings-header h2' },
+		'title-text': { token: 'text-primary', selector: '.standings-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.standings-header', property: 'borderBottomColor' },
+		'row-typography': { token: 'body', selector: '.cell-position' },
+		'row-divider': { token: 'divider', selector: '.standings-row', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.cell-name', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.cell-record', property: 'color' },
+	},
+	'pairings': {
+		'surface': { token: 'surface', selector: '.pairings-rows', property: 'backgroundColor' },
+		'title-typography': { token: 'heading', selector: '.pairings-header h2' },
+		'title-text': { token: 'text-primary', selector: '.pairings-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.pairings-header', property: 'borderBottomColor' },
+		'row-typography': { token: 'body', selector: '.pairing-row .table' },
+		'row-divider': { token: 'divider', selector: '.pairing-row', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.player-1', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.versus', property: 'color' },
+		'result-typography': { token: 'heading', selector: '[data-result="reported"]' },
+	},
+	'player-history': {
+		'surface': { token: 'surface', selector: '.history-rows', property: 'backgroundColor' },
+		'title-typography': { token: 'heading', selector: '.history-header h2' },
+		'title-text': { token: 'text-primary', selector: '.history-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.history-header', property: 'borderBottomColor' },
+		'row-typography': { token: 'body', selector: '.history-row .round' },
+		'row-divider': { token: 'divider', selector: '.history-row', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.opponent', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.round', property: 'color' },
+		'outcome-typography': { token: 'heading', selector: '[data-outcome="win"]' },
+	},
+	'head-to-head': {
+		'title-typography': { token: 'heading', selector: '.head-to-head-header h2' },
+		'title-text': { token: 'text-primary', selector: '.head-to-head-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.head-to-head-header', property: 'borderBottomColor' },
+		'name-typography': { token: 'heading', selector: '.name' },
+		'label-typography': { token: 'heading', selector: '.earlier-matches-title' },
+		'surface': { token: 'surface', selector: '.head-to-head-earlier-matches', property: 'backgroundColor' },
+		'row-typography': { token: 'body', selector: '.earlier-match .round' },
+		'row-divider': { token: 'divider', selector: '.earlier-match', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.name', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.versus', property: 'color' },
+	},
+	'round-clock': {
+		'surface': { token: 'surface', selector: '.round-clock-display', property: 'backgroundColor' },
+		'round-name-typography': { token: 'heading', selector: '.round-clock-name' },
+		'round-name-text': { token: 'text-secondary', selector: '.round-clock-name', property: 'color' },
+		'clock-typography': { token: 'heading', selector: '.round-clock-time' },
+	},
+	'metagame': {
+		'surface': { token: 'surface', selector: '.metagame-table', property: 'backgroundColor' },
+		'title-typography': { token: 'heading', selector: '.metagame-title h2' },
+		'title-text': { token: 'text-primary', selector: '.metagame-title h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.metagame-title', property: 'borderBottomColor' },
+		'header-typography': { token: 'heading', selector: '.metagame-header-cell' },
+		'header-text': { token: 'text-secondary', selector: '.metagame-header-row', property: 'color' },
+		'header-divider': { token: 'divider', selector: '.metagame-header-row', property: 'borderBottomColor' },
+		'row-typography': { token: 'body', selector: '.metagame-cell' },
+		'row-divider': { token: 'divider', selector: '.metagame-row', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.metagame-cell.is-name', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.metagame-cell:not(.is-name):not(.is-primary-metric)', property: 'color' },
+		'chart-baseline': {
+			token: 'divider',
+			selector: '.metagame-chart-track',
+			property: 'borderLeftColor',
+			config: { viewMode: 'chart' },
+		},
 	},
 };
 
@@ -664,7 +687,6 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 	return {
 		config: computed(() => ({
 			columns: 5,
-			cardSizing: 'fit',
 			showHeader: true,
 			showRankBadges: true,
 			rankBadgePosition: 'top-left',
@@ -1026,14 +1048,13 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 		expect(Object.keys(probes ?? {}).map(token => screenModeTokenName(mode, token)).sort()).toEqual(Object.keys(declared).sort());
 	});
 
-	if (!probes)
-		return;
-
 	const tokens = Object.entries(SCREEN_MODES[mode].modeTokens ?? {}).map(([token, definition]) => ({
 		name: screenModeTokenName(mode, token),
 		definition,
-		probe: probes[token]!,
+		probe: probes?.[token] as Probe,
 	}));
+	if (!probes || !tokens.length)
+		return;
 
 	it.each(tokens)('paints $name from the Theme', async ({ name, definition, probe }) => {
 		// A dimension sample sits within the token's bounds, which a stored value outside reads clamped to.
@@ -1054,6 +1075,34 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 		await shown(probe);
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, shipped));
+	});
+});
+
+// A display reads the Theme's Foundation Token for each part of its shared
+// chrome. The Mode Token that styled the part is a former token, read by
+// nothing wherever it is still stored.
+describe.each(Object.entries(FOUNDATION_CHROME) as [ScreenMode, Record<string, ChromeProbe>][])('the %s display\'s shared chrome', (mode, chrome) => {
+	const STORED_FORMER = {
+		color: 'rgb(9, 9, 9)',
+		typography: {
+			...SAMPLES.typography,
+			font: { kind: 'application', fontId: 'saira-condensed' },
+			weight: 900,
+		},
+	} as const;
+	const parts = Object.entries(chrome).map(([former, probe]) => ({
+		former,
+		token: probe.token,
+		type: FOUNDATION_TOKENS[probe.token].type as keyof typeof STORED_FORMER,
+		probe,
+	}));
+
+	it.each(parts)('paints what $former styled from the Theme\'s $token, whatever is stored under the former token', async ({ former, token, type, probe }) => {
+		const stored = { [screenModeTokenName(mode, former)]: STORED_FORMER[type] };
+		await mountMode(mode, { ...stored, [token]: SAMPLES[type] }, { config: probe.config, themeOverrides: stored });
+		await shown(probe);
+
+		expect(painted(probe, type)).toEqual(expectedPaint(type, SAMPLES[type]));
 	});
 });
 
@@ -1182,9 +1231,9 @@ describe('a Foundation Token a Mode Token\'s default names', () => {
 });
 
 describe('a Screen Theme Override', () => {
-	const dividers = [THEMED_DISPLAYS.standings!['title-divider']!, THEMED_DISPLAYS.standings!['row-divider']!];
+	const dividers = [FOUNDATION_CHROME.standings!['title-divider']!, FOUNDATION_CHROME.standings!['row-divider']!];
 
-	it('paints over the Theme wherever its Foundation Token is named, and the Theme again once cleared', async () => {
+	it('paints over the Theme wherever its Foundation Token is read, and the Theme again once cleared', async () => {
 		await mountMode('standings', { divider: 'rgb(1, 2, 3)' }, {
 			themeOverrides: { divider: 'rgb(4, 5, 6)' },
 		});
@@ -1200,7 +1249,7 @@ describe('a Screen Theme Override', () => {
 // A library font in the Theme is loaded on the output as a `FontFace` through the
 // Screen Output Asset Capability, and a Theme edit restyles live text (ADR-0050).
 describe('a library font in the Theme', () => {
-	const title = THEMED_DISPLAYS.standings!['title-typography']!;
+	const title = FOUNDATION_CHROME.standings!['title-typography']!;
 	const heading = (revisionId: string) => ({
 		...FOUNDATION_TOKENS.heading.default,
 		font: {

@@ -126,7 +126,7 @@ async function mountComponent() {
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: defineComponent({ template: '<section><slot /></section>' }),
+				ScreenSettingsSection: defineComponent({ template: '<section><slot /></section>' }),
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 				ScreenAnimationEffectFields: AnimationEffectFieldsStub,
 				GraphicsAssetFocusPicker: defineComponent({ template: '<div data-testid="asset-picker" />' }),

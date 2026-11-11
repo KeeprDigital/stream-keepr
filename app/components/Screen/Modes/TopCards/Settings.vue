@@ -7,6 +7,7 @@ import type {
 import type { MetagameCardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
 import { getFeatureMatchStateTracking } from '~~/shared/config/games';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { getMetagameCardTypeBuckets } from '~~/shared/utils/metagame';
 import { headerSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
@@ -131,19 +132,13 @@ const lockedTypes = computed<MetagameCardTypeBucket[]>(() => config.value.pointe
 	? ['Land']
 	: []);
 
+// The Card Layout: each value a number, or Auto while absent (ADR-0054).
 const gridLayout = computed(() => ({
-	cardSizing: config.value.cardSizing,
-	cardWidth: config.value.cardWidth,
-	cardGap: config.value.cardGap,
-	autoColumns: config.value.autoColumns,
 	columns: config.value.columns,
+	maxCardSize: config.value.maxCardSize,
+	cardGap: config.value.cardGap,
 }));
-
-const layoutDescriptions = {
-	cardSizing: 'Fit shrinks the cards until every one on the page fits the screen; Fixed takes the card width below and may run off the screen.',
-	autoColumns: 'Choose the columns from the space the cards have on the Screen.',
-	columns: 'Number of cards per row.',
-};
+const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
 
 /** For a closed card's summary: how many Screen Theme Overrides the Looks of mounted `groups` hold. */
 function look(...groups: string[]) {
@@ -167,15 +162,22 @@ const rankingSummary = computed(() => settingsSummary([
 		: 'One page',
 	look('ranking-and-pages'),
 ]));
-const layoutSummary = computed(() => settingsSummary([
-	config.value.cardSizing === 'fixed'
-		? `Fixed ${config.value.cardWidth} px`
-		: 'Fit',
-	config.value.autoColumns
-		? 'Auto columns'
-		: `${config.value.columns} columns`,
-	look('layout'),
-]));
+const layoutSummary = computed(() => {
+	const { columns, maxCardSize, cardGap } = config.value;
+	const set = [
+		columns !== undefined && `${columns} ${columns === 1
+			? 'column'
+			: 'columns'}`,
+		maxCardSize !== undefined && `Max ${maxCardSize} px`,
+		cardGap !== undefined && `${cardGap} px gap`,
+	].filter(Boolean);
+	return settingsSummary([
+		...(set.length > 0
+			? set
+			: ['Auto']),
+		look('layout'),
+	]);
+});
 const headerCardSummary = computed(() => settingsSummary([
 	headerSummary(config.value),
 	look('header'),
@@ -201,7 +203,7 @@ const badgesSummary = computed(() => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="top-cards:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="top-cards:data" title="Data" :collapsible="false">
 			<ScreenMetagameScopeFields
 				:config="config"
 				:fields="fields"
@@ -225,9 +227,9 @@ const badgesSummary = computed(() => {
 				description="Order cards using this metric."
 				@update:model-value="$event !== null && updateConfig({ sortBy: $event as MetagameCardSortBy, currentPage: 1 })"
 			/>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="top-cards:filters" title="Filters" :summary="filtersSummary">
+		<ScreenSettingsSection id="top-cards:filters" title="Filters" :summary="filtersSummary">
 			<ScreenConfigField
 				v-if="showsPointedOnly"
 				:field="fields.pointedOnly"
@@ -246,9 +248,9 @@ const badgesSummary = computed(() => {
 				test-id-prefix="top-cards-type"
 				@update="updateConfig({ excludedCardTypes: $event, currentPage: 1 })"
 			/>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="top-cards:ranking-and-pages" title="Ranking & Pages" :summary="rankingSummary">
+		<ScreenSettingsSection id="top-cards:ranking-and-pages" title="Ranking & Pages" :summary="rankingSummary">
 			<ScreenConfigField
 				:field="fields.limit"
 				:model-value="config.limit"
@@ -285,18 +287,19 @@ const badgesSummary = computed(() => {
 			</template>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="ranking-and-pages" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="top-cards:layout" title="Layout" :summary="layoutSummary">
+		<ScreenSettingsSection id="top-cards:layout" title="Layout" :summary="layoutSummary">
 			<ScreenCardGridLayoutFields
 				:layout="gridLayout"
 				:fields="fields"
-				:descriptions="layoutDescriptions"
+				:card-count="config.limit"
+				:canvas="eventCanvas"
 				@update="updateConfig($event)"
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="layout" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
 			id="top-cards:header"
@@ -310,7 +313,7 @@ const badgesSummary = computed(() => {
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
 		</ScreenHeaderSettingsCard>
 
-		<ScreenSettingsCard id="top-cards:card-badges" title="Card Badges" :summary="badgesSummary">
+		<ScreenSettingsSection id="top-cards:card-badges" title="Card Badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
 				title="Rank Badge"
 				:shown="config.showRankBadges"
@@ -373,6 +376,6 @@ const badgesSummary = computed(() => {
 			</template>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="card-badges" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 	</div>
 </template>

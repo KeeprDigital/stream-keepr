@@ -131,7 +131,7 @@ async function mountLibrary(props: Record<string, unknown> = {}) {
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsCardStub,
 				UIEmptyState: UIEmptyStateStub,
 				UAlert: UAlertStub,
 				UIcon: UIconStub,
@@ -225,6 +225,96 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		// suppressed, so the authoritative Screen is reloaded.
 		expect(mockGetScreenById).toHaveBeenCalledWith(7, 3);
 		expect(wrapper.emitted('placed')).toHaveLength(1);
+	});
+
+	describe('a built-in template', () => {
+		const builtIn = summary({
+			id: 'builtin:full-table',
+			name: 'Full Table',
+			authored: false,
+			builtIn: true,
+			aspectRatio: 16 / 9,
+		});
+		const saved = summary({ id: 'template-2', name: 'Saved here' });
+
+		async function mountWith(props: Record<string, unknown> = {}) {
+			mockList.mockResolvedValue([
+				builtIn,
+				saved,
+			]);
+			const wrapper = await mountLibrary(props);
+			const entry = (templateId: string) => wrapper.get(`[data-template-id="${templateId}"]`);
+			return { wrapper, entry };
+		}
+
+		it('is marked built-in, and offers placing alone', async () => {
+			const { entry } = await mountWith();
+
+			expect(entry(builtIn.id).find('[data-testid="layout-template-built-in"]').exists()).toBe(true);
+			expect(entry(saved.id).find('[data-testid="layout-template-built-in"]').exists()).toBe(false);
+			expect(entry(builtIn.id).find('[data-testid="layout-template-place"]').exists()).toBe(true);
+			for (const action of [
+				'name',
+				'description',
+				'export',
+				'delete',
+			]) {
+				expect(entry(builtIn.id).find(`[data-testid="layout-template-${action}"]`).exists(), action).toBe(false);
+				expect(entry(saved.id).find(`[data-testid="layout-template-${action}"]`).exists(), action).toBe(true);
+			}
+		});
+
+		// The built-ins were drawn for 16:9. A saved layout states no shape, so it never warns.
+		it.each([
+			[
+				'warns',
+				'the built-in',
+				'of another shape',
+				builtIn.id,
+				4 / 3,
+				true,
+			],
+			[
+				'does not warn',
+				'the built-in',
+				'of its own shape',
+				builtIn.id,
+				1920 / 1080,
+				false,
+			],
+			[
+				'does not warn',
+				'the built-in',
+				'within tolerance of its shape',
+				builtIn.id,
+				16 / 9 + 0.04,
+				false,
+			],
+			[
+				'warns',
+				'the built-in',
+				'just past tolerance of its shape',
+				builtIn.id,
+				16 / 9 + 0.06,
+				true,
+			],
+			[
+				'does not warn',
+				'a saved layout',
+				'of another shape',
+				saved.id,
+				4 / 3,
+				false,
+			],
+		])('%s when asked to place %s on an Event Canvas %s', async (_outcome, _which, _shape, templateId, canvasAspectRatio, warns) => {
+			const { wrapper, entry } = await mountWith({ canvasAspectRatio });
+			expect(wrapper.find('[data-testid="layout-template-place-aspect-warning"]').exists()).toBe(false);
+
+			await entry(templateId).get('[data-testid="layout-template-place"]').trigger('click');
+
+			expect(entry(templateId).find('[data-testid="layout-template-place-confirm"]').exists()).toBe(true);
+			expect(entry(templateId).find('[data-testid="layout-template-place-aspect-warning"]').exists()).toBe(warns);
+		});
 	});
 
 	// A placement rewrites the stored layout and a save reads it, so an edit still

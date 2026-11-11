@@ -46,10 +46,9 @@ import * as layoutWriter from '~/modules/feature-match-overlay/layout';
 import { nudgeRect } from '~/modules/graphics/canvasManipulation';
 import { copyGraphicLayers, copyGraphicStyle, pasteFeatureMatchLayers, pasteGraphicStyle } from '~/modules/graphics/clipboard';
 
-/** What one undo step restores: the authored layout and the preset it started from. */
+/** What one undo step restores: the authored layout. */
 interface LayoutSnapshot {
 	layout: FeatureMatchOverlayModeConfig['layout'];
-	presetId: FeatureMatchOverlayModeConfig['presetId'];
 }
 
 /** The fields every layer has, Source Item and Graphic Item alike. */
@@ -139,7 +138,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	});
 
 	function snapshot(): LayoutSnapshot {
-		return JSON.parse(JSON.stringify({ layout: config.value.layout, presetId: config.value.presetId }));
+		return JSON.parse(JSON.stringify({ layout: config.value.layout }));
 	}
 
 	/** Select one layer, or none with the canvas. */
@@ -216,7 +215,7 @@ export function useFeatureMatchLayoutEditor(options: FeatureMatchLayoutEditorOpt
 	}
 
 	function restore(next: LayoutSnapshot) {
-		updateConfig({ layout: next.layout, presetId: next.presetId });
+		updateConfig({ layout: next.layout });
 	}
 
 	function undo() {

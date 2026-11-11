@@ -168,14 +168,14 @@ function sameJson(left: unknown, right: unknown): boolean {
 /**
  * The part of each Screen Mode's configuration that is the Screen's graphics Edit
  * workspace: the whole Broadcast Graphics stack, and a Feature Match Overlay's
- * Feature Match Layout as authored, its layout and the preset it started from.
+ * Feature Match Layout.
  * The Feature Match Slot is what the Screen points at, live operation the lease
  * never restricts (#738). The canvas is the Event's (ADR-0051), so no Screen
  * field is one.
  */
 const EDIT_WORKSPACE_FIELDS: Partial<Record<ScreenMode, 'whole' | readonly string[]>> = {
 	'broadcast-graphics': 'whole',
-	'feature-match-overlay': ['layout', 'presetId'],
+	'feature-match-overlay': ['layout'],
 };
 
 function editWorkspaceOf(mode: ScreenMode, config: unknown): unknown {
