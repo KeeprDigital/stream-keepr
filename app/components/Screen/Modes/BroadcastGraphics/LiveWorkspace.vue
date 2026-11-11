@@ -317,7 +317,7 @@ async function resetLiveState() {
 		grid, beside the hoisted Program monitor that fills its first cell (#335).
 	-->
 	<div class="contents">
-		<ScreenSettingsCard title="On air" :default-open="true">
+		<ScreenSettingsSection title="On air" :default-open="true">
 			<UIEmptyState
 				v-if="graphics.length === 0"
 				icon="i-lucide-layers"
@@ -537,7 +537,7 @@ async function resetLiveState() {
 					</div>
 				</div>
 			</div>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenModesBroadcastGraphicsLiveControl
 			v-if="selectedEntry"

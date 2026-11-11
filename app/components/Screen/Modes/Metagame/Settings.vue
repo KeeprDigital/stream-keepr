@@ -181,7 +181,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="metagame:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="metagame:data" title="Data" :collapsible="false">
 			<ScreenConfigField
 				:field="fields.viewMode"
 				:model-value="config.viewMode"
@@ -237,9 +237,9 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 					@update:model-value="$event !== null && updateConfig({ limit: Number($event), currentPage: 1 })"
 				/>
 			</template>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			v-if="config.viewMode !== 'chart'"
 			id="metagame:table"
 			title="Table"
@@ -253,9 +253,9 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="table" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			v-else
 			id="metagame:chart"
 			title="Chart"
@@ -275,16 +275,16 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			</ScreenSettingsField>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="chart" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			id="metagame:size-and-surface"
 			title="Size & Surface"
 			subtitle="How wide the table or chart runs, and what it sits on."
 			:summary="sizeAndSurfaceSummary"
 		>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="size-and-surface" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
 			id="metagame:header"

@@ -65,18 +65,6 @@ const numberMax = computed(() => {
 		: Math.min(own, props.max);
 });
 
-const displayedNumber = computed(() => typeof props.modelValue === 'number'
-	? props.modelValue / props.field.displayScale
-	: undefined);
-
-/** Displayed units back to stored ones, without the float noise a scale adds (4.1 s is 4100 ms). */
-function toStored(displayed: number): number {
-	const scale = props.field.displayScale;
-	return scale === 1
-		? displayed
-		: Number((displayed * scale).toPrecision(12));
-}
-
 function isEmpty(value: unknown): boolean {
 	return value === null || value === undefined || value === '' || (typeof value === 'number' && Number.isNaN(value));
 }
@@ -93,7 +81,7 @@ function updateNumber(value: number | null | undefined) {
 	if (isEmpty(value))
 		emitEmpty();
 	else
-		emit('update:modelValue', toStored(Number(value)) as Value);
+		emit('update:modelValue', Number(value) as Value);
 }
 
 function updateValue(value: unknown) {
@@ -136,14 +124,14 @@ function updateText(value: unknown) {
 		:label="field.label"
 		:description="description"
 	>
-		<UInputNumber
+		<ScreenSettingsNumberField
 			v-if="field.control === 'number'"
-			:model-value="displayedNumber"
+			:model-value="typeof modelValue === 'number' ? modelValue : undefined"
 			:min="field.min"
 			:max="numberMax"
 			:step="field.step"
+			:display-scale="field.displayScale"
 			:placeholder="placeholder"
-			class="w-32"
 			@update:model-value="updateNumber($event)"
 		/>
 		<USelect

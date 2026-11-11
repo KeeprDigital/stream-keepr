@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import type { Screen } from '~/types';
-
 // Theme Tokens under a subheading, each writing its own Screen Theme Override:
 // a Screen Settings Group's Look, Background & Placement's host tokens, or the
-// Screen-wide look's Foundation Tokens. Nothing renders for no tokens.
+// Screen-wide look's Foundation Tokens. Nothing renders for no tokens. The
+// rows read and write through the one instance the Screen's page provides.
 
 const props = withDefaults(defineProps<{
-	screen: Screen;
+	/** The Event whose Graphics Assets an asset row picks from. */
 	eventId: number;
 	heading: string;
 	names: readonly string[];
@@ -16,15 +15,15 @@ const props = withDefaults(defineProps<{
 	compact: true,
 });
 
-const overrides = useScreenThemeOverrides(() => props.screen, () => props.eventId);
+const overrides = useScreenThemeOverrides();
 const entries = computed(() => props.names.map(name => overrides.entry(name)));
 </script>
 
 <template>
 	<div v-if="entries.length">
-		<p class="text-xs font-medium uppercase text-muted">
+		<ScreenSettingsSubheading>
 			{{ heading }}
-		</p>
+		</ScreenSettingsSubheading>
 		<ThemeTokenField
 			v-for="entry in entries"
 			:key="entry.name"

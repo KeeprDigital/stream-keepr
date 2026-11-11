@@ -84,8 +84,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	'standings': {
 		editor: 'Standings',
 		variants: [
-			{ viewMode: 'topN' },
-			{ viewMode: 'slice' },
+			{ viewMode: 'range' },
 			{
 				viewMode: 'reveal',
 				autoPageEnabled: true,
@@ -309,7 +308,7 @@ function differentItem(props: Record<string, any>) {
 }
 
 const stubs = {
-	ScreenSettingsCard: defineComponent({
+	ScreenSettingsSection: defineComponent({
 		setup: (_, { slots }) => () => h('section', slots.default?.()),
 	}),
 	ScreenSettingsToggle: controlStub('toggle', props => !props.modelValue),

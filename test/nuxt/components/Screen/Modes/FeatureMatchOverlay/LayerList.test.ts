@@ -274,65 +274,48 @@ describe('featureMatchOverlayLayerList', () => {
 		expect(config.value.layout.composition.items.map(item => item.id)).toEqual(['back', 'child']);
 	});
 
-	// #919. Player 1's Source is 340×250 at (24, 16), Player 2's at (24, 800), and the main Source 1500×900 at (400, 90).
-	it.each<[string, string[], string, string, Record<string, { x: number; y: number }>]>([
+	// Each action once (#1069): a row reorders from its menu, its drag and ⌘] / ⌘[, and carries no arrows.
+	it.each<[string, string, string, string[]]>([
 		[
-			'Align › Right in a selected row\'s menu aligns the selection to its bounds',
-			['source:player2-source', 'source:main-source'],
-			'source:player2-source',
-			'Right',
-			{
-				'player2-source': { x: 1560, y: 800 },
-				'main-source': { x: 400, y: 90 },
-			},
+			'Bring forward',
+			'item:back',
+			'Send backward',
+			['cluster', 'back'],
 		],
 		[
-			'Align › Left in another row\'s menu aligns that row alone to the canvas',
-			['source:player2-source', 'source:main-source'],
-			'source:player1-source',
-			'Left',
-			{
-				'player1-source': { x: 0, y: 16 },
-				'player2-source': { x: 24, y: 800 },
-			},
+			'Send backward',
+			'item:cluster',
+			'Bring forward',
+			['cluster', 'back'],
 		],
-		[
-			'Distribute › Vertically in a selected row\'s menu spaces the selection',
-			['source:player1-source', 'source:main-source', 'source:player2-source'],
-			'source:main-source',
-			'Vertically',
-			{
-				'player1-source': { x: 24, y: 16 },
-				'main-source': { x: 400, y: 83 },
-				'player2-source': { x: 24, y: 800 },
-			},
-		],
-	])('%s', async (_, selecting, row, entry, placed) => {
-		const { wrapper, config } = await mountList();
-		for (const [index, key] of selecting.entries())
-			await wrapper.get(`[data-layer-key="${key}"] [data-testid="layer-select"]`).trigger('click', { metaKey: index > 0 });
-
-		await wrapper.get(`[data-layer-key="${row}"] [data-menu-entry="${entry}"]`).trigger('click');
-
-		expect(Object.fromEntries(Object.keys(placed).map((id) => {
-			const source = config.value.layout.sources.find(item => item.id === id)!;
-			return [
-				id,
-				{ x: source.x, y: source.y },
-			];
-		}))).toEqual(placed);
-	});
-
-	it('moves a row toward the front with the arrow pointing up', async () => {
+	])('%s in a row\'s menu moves it one step, and the step off the end is disabled', async (entry, row, disabled, order) => {
 		const { wrapper, config, sync } = await mountList();
-		const back = wrapper.get('[data-layer-key="item:back"]');
+		const found = wrapper.get(`[data-layer-key="${row}"]`);
 
-		expect(back.get('[data-testid="layer-backward"]').attributes('disabled')).toBeDefined();
-		await back.get('[data-testid="layer-forward"]').trigger('click');
+		expect(found.get(`[data-menu-entry="${disabled}"]`).attributes('disabled')).toBeDefined();
+		await found.get(`[data-menu-entry="${entry}"]`).trigger('click');
 		await sync();
 
-		expect(config.value.layout.composition.items.map(item => item.id)).toEqual(['cluster', 'back']);
-		expect(rowKeys(wrapper).slice(0, 3)).toEqual(['item:back', 'item:cluster', 'item:child']);
+		expect(config.value.layout.composition.items.map(item => item.id)).toEqual(order);
+	});
+
+	// Each action once (#1069): arrows are gone from the row, and alignment lives in the geometry section.
+	it('offers a row no arrow buttons, and its menu no alignment', async () => {
+		const { wrapper } = await mountList();
+		for (const key of ['source:player1-source', 'source:main-source', 'source:player2-source'])
+			await wrapper.get(`[data-layer-key="${key}"] [data-testid="layer-select"]`).trigger('click', { metaKey: true });
+		const entries = wrapper.findAll('[data-layer-key="source:main-source"] [data-menu-entry]').map(entry => entry.attributes('data-menu-entry'));
+
+		expect(wrapper.findAll('[data-testid="layer-forward"], [data-testid="layer-backward"]')).toHaveLength(0);
+		expect(entries).toEqual([
+			'Duplicate',
+			'Group selection',
+			'Bring forward',
+			'Send backward',
+			'Bring to front',
+			'Send to back',
+			'Delete',
+		]);
 	});
 
 	it('hides and shows a layer from its row', async () => {

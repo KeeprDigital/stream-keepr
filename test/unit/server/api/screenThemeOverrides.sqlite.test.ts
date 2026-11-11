@@ -102,6 +102,11 @@ async function storedOverrides(screenId: number) {
 	return row?.themeOverrides;
 }
 
+async function storedVersion(screenId: number) {
+	const [row] = await db.select().from(schema.screens).where(eq(schema.screens.id, screenId));
+	return row?.stateVersion;
+}
+
 function announcedScreens() {
 	return published
 		.filter(message => message.type === 'screen:updated')
@@ -318,6 +323,36 @@ describe('screen Theme Overrides', () => {
 			'animation-effect': { effect: 'fog' },
 		}))).toEqual({ statusCode: 400, code: 'unconsumable-token' });
 		expect(await storedOverrides(screenId)).toEqual({});
+	});
+
+	// A former token is accepted wherever it is named and never stored (ADR-0049).
+	it.each([
+		['set on a Screen of its mode', 'metagame', '#ff0000'],
+		['cleared on a Screen of its mode', 'metagame', null],
+		['set on a Screen of another mode', 'standings', '#ff0000'],
+	])('accepts a former token %s and drops it, so nothing is stored, versioned or announced', async (_case, mode, value) => {
+		const screenId = await createScreen(mode as ScreenMode, 'main');
+		const before = await storedVersion(screenId);
+
+		const answered = await override(screenId, { 'metagame.chart-series-1': value });
+
+		expect(answered).toMatchObject({ id: screenId, themeOverrides: {}, stateVersion: before });
+		expect(await storedOverrides(screenId)).toEqual({});
+		expect(await storedVersion(screenId)).toBe(before);
+		expect(published).toEqual([]);
+	});
+
+	it('stores the rest of a write naming a former token', async () => {
+		const screenId = await createScreen('metagame', 'main');
+
+		const answered = await override(screenId, {
+			'metagame.chart-other': '#ff0000',
+			'metagame.chart-baseline': '#00ff00',
+		});
+
+		expect(answered.themeOverrides).toEqual({ 'metagame.chart-baseline': '#00ff00' });
+		expect(await storedOverrides(screenId)).toEqual({ 'metagame.chart-baseline': '#00ff00' });
+		expect(announcedScreens()).toEqual([screenId]);
 	});
 
 	it('refuses a write naming no token, so nothing is versioned or announced', async () => {

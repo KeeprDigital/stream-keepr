@@ -53,7 +53,8 @@ function label(bucket: MetagameCardTypeBucket): string {
 </script>
 
 <template>
-	<UFormField
+	<ScreenSettingsField
+		stacked
 		label="Card types"
 		:description="description"
 		class="flex flex-col gap-3"
@@ -72,5 +73,5 @@ function label(bucket: MetagameCardTypeBucket): string {
 				@click="toggle(bucket)"
 			/>
 		</div>
-	</UFormField>
+	</ScreenSettingsField>
 </template>

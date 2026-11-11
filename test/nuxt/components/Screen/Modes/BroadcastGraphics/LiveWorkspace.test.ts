@@ -175,7 +175,7 @@ async function mountComponent(
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsCardStub,
 				UIEmptyState: UIEmptyStateStub,
 				UBadge: UBadgeStub,
 				UIcon: UIconStub,

@@ -360,6 +360,7 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 			v-model:safe-area-guides="safeAreaGuides"
 			:collapsible="false"
 			:fit-height="fitHeight"
+			:animation-playing="animationPlan !== null"
 			:canvas-width="canvasWidth"
 			:canvas-height="canvasHeight"
 		>
@@ -443,26 +444,28 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 				</UPopover>
 			</template>
 
-			<GraphicsAnimationPreviewControls
-				:target="animationTarget"
-				:phases="FEATURE_MATCH_LAYOUT_ANIMATION_PHASES"
-				hint="Select a Graphic Item to preview its animation alone."
-				@update:plan="plan => { animationPlan = plan }"
-			>
-				<UFieldGroup size="xs">
-					<UButton
-						v-for="subject in ANIMATION_SUBJECTS"
-						:key="subject.value"
-						:color="animationSubject === subject.value ? 'primary' : 'neutral'"
-						:variant="animationSubject === subject.value ? 'subtle' : 'outline'"
-						:aria-pressed="animationSubject === subject.value"
-						:data-testid="`animation-preview-subject-${subject.value}`"
-						@click="() => { animationSubject = subject.value }"
-					>
-						{{ subject.label }}
-					</UButton>
-				</UFieldGroup>
-			</GraphicsAnimationPreviewControls>
+			<template #animation>
+				<GraphicsAnimationPreviewControls
+					:target="animationTarget"
+					:phases="FEATURE_MATCH_LAYOUT_ANIMATION_PHASES"
+					hint="Select a Graphic Item to preview its animation alone."
+					@update:plan="plan => { animationPlan = plan }"
+				>
+					<UFieldGroup size="xs">
+						<UButton
+							v-for="subject in ANIMATION_SUBJECTS"
+							:key="subject.value"
+							:color="animationSubject === subject.value ? 'primary' : 'neutral'"
+							:variant="animationSubject === subject.value ? 'subtle' : 'outline'"
+							:aria-pressed="animationSubject === subject.value"
+							:data-testid="`animation-preview-subject-${subject.value}`"
+							@click="() => { animationSubject = subject.value }"
+						>
+							{{ subject.label }}
+						</UButton>
+					</UFieldGroup>
+				</GraphicsAnimationPreviewControls>
+			</template>
 
 			<template #viewport>
 				<iframe

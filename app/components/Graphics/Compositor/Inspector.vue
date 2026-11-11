@@ -42,6 +42,7 @@ import {
 	applyGraphicSurfaceStyleEdit,
 	applyShapeGeometryPreset,
 	authorsGraphicInputs,
+	authorsGraphicStack,
 	clearMediaGraphicItemAsset,
 	DEFAULT_GRAPHIC_FONT_ID,
 	deleteGraphicInput,
@@ -109,7 +110,6 @@ import { graphicsSelectionKey, resolveGraphicsSelection } from '~/modules/graphi
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 import { OPACITY_INPUT } from '~/utils/opacityInput';
 import GraphicsGeometryFields from '../GeometryFields.vue';
-import GraphicsInspectorSection from '../InspectorSection.vue';
 import GraphicsShapeGeometryFields from '../ShapeGeometryFields.vue';
 import GraphicsCompositorAnimation from './Animation.vue';
 import GraphicsCompositorBindings from './Bindings.vue';
@@ -639,6 +639,7 @@ const selectedGraphicInputs = computed<GraphicInputDeclaration[]>(() =>
  * controls anyway would let one write a declaration nothing resolves.
  */
 const authorsInputs = computed(() => authorsGraphicInputs(props.contract));
+const authorsStack = computed(() => authorsGraphicStack(props.contract));
 
 /**
  * The placeholder keys this host supplies itself, empty when the composition
@@ -1228,7 +1229,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					@update:model-value="relabelItem(String($event))"
 				/>
 			</UFormField>
-			<UFormField label="Visible" size="sm">
+			<!-- A host with a layer list hides a layer from its row; Broadcast Graphics has none until #1100. -->
+			<UFormField v-if="authorsStack" label="Visible" size="sm">
 				<USwitch
 					:model-value="selectedItem.visible"
 					data-testid="graphic-item-visible"
@@ -1237,9 +1239,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			</UFormField>
 		</div>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="selectedItem"
 			id="layout"
+			density="row"
 			title="Position and size"
 			icon="i-lucide-move"
 			default-open
@@ -1304,11 +1307,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="selectedGroup"
 			id="group"
+			density="row"
 			title="Group layout"
 			icon="i-lucide-group"
 			:summary="groupSummary"
@@ -1406,11 +1410,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</UFormField>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="hasContentSection"
 			id="content"
+			density="row"
 			:title="contentTitle"
 			icon="i-lucide-file-text"
 			default-open
@@ -1767,11 +1772,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</UFormField>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="selectedTypography || selectedTextOverflow"
 			id="typography"
+			density="row"
 			title="Text style"
 			icon="i-lucide-type"
 			:summary="typographySummary"
@@ -1960,11 +1966,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</template>
 				</UCollapsible>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="selectedShapeGeometry"
 			id="shape"
+			density="row"
 			:title="geometryTitle"
 			icon="i-lucide-shapes"
 			:summary="shapeSummary"
@@ -1986,11 +1993,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="hasSurfaceSection"
 			id="surface"
+			density="row"
 			title="Fill and outline"
 			icon="i-lucide-paint-bucket"
 			:summary="surfaceSummary"
@@ -2075,11 +2083,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</template>
 				</GraphicsCompositorSurfaceStyleFields>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="selection.kind === 'graphic' || selection.kind === 'item'"
 			id="animation"
+			density="row"
 			title="Animation"
 			icon="i-lucide-wand-sparkles"
 			:summary="animationSummary"
@@ -2094,6 +2103,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:canvas-height="canvasHeight"
 				@update:graphics="emit('update:graphics', $event)"
 			/>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 	</fieldset>
 </template>

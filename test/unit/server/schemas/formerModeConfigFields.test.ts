@@ -73,6 +73,22 @@ describe.each([
 		kept: { archetypeId: 3 },
 		patch: { archetypeId: 4 },
 	},
+	// Reveal advances by the operator's `revealedCount` alone; nothing read these.
+	{
+		mode: 'standings' as const,
+		formerFields: [
+			'maxTableWidth',
+			'animateEntries',
+			'revealTrigger',
+			'revealIntervalMs',
+			'topNCount',
+			'sliceStart',
+			'sliceEnd',
+		],
+		former: { revealTrigger: 'auto', revealIntervalMs: 5000 },
+		kept: { revealCount: 4 },
+		patch: { revealCount: 6 },
+	},
 ])('a $mode Screen storing its dropped $formerFields', ({ mode, formerFields, former, kept, patch }) => {
 	const stored = {
 		[mode]: {
@@ -115,7 +131,10 @@ describe.each([
 	});
 
 	it('is still refused as a field of any other mode', () => {
-		expect(modeConfigPatchSchemaMap.standings.safeParse(former).success).toBe(false);
+		const otherMode = mode === 'standings'
+			? 'top-cut'
+			: 'standings';
+		expect(modeConfigPatchSchemaMap[otherMode].safeParse(former).success).toBe(false);
 	});
 });
 
@@ -182,10 +201,10 @@ describe.each([
 	},
 	{
 		mode: 'standings',
-		stored: { maxTableWidth: 1200, animateEntries: false, topNCount: 8 },
-		reads: { topNCount: 8 },
-		patch: { topNCount: 16 },
-		patched: { topNCount: 16 },
+		stored: { maxTableWidth: 1200, animateEntries: false, revealCount: 8 },
+		reads: { revealCount: 8 },
+		patch: { revealCount: 16 },
+		patched: { revealCount: 16 },
 	},
 	{
 		mode: 'metagame',

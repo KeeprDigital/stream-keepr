@@ -3,9 +3,9 @@ import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayModeConfig } fro
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+import { defineComponent, h } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
-import { fakeScreenThemeNetwork, overrideWrites, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import FrameStyleCard from '~/components/Screen/Modes/FeatureMatchOverlay/FrameStyleCard.vue';
 
 const { mockApiFetch } = vi.hoisted(() => ({
@@ -101,13 +101,14 @@ async function mountComponent(options: Partial<{
 	themeOverrides: StoredThemeTokens;
 }> = {}) {
 	const screen = seedThemedScreen('feature-match-overlay', options.themeOverrides);
-	const wrapper = mount(FrameStyleCard, {
-		props: {
-			config: options.config ?? structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
-			patchFrame: options.patchFrame ?? vi.fn<(updates: Partial<FeatureMatchLayoutFrameConfig>) => void>(),
-			screen: screen(),
-			eventId: 1,
-		},
+	const config = options.config ?? structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+	const patchFrame = options.patchFrame ?? vi.fn<(updates: Partial<FeatureMatchLayoutFrameConfig>) => void>();
+	const wrapper = mount(screenSettingsPage(screen, () => h(FrameStyleCard, {
+		config,
+		patchFrame,
+		screen: screen(),
+		eventId: 1,
+	})), {
 		global: {
 			stubs: {
 				UFormField: UFormFieldStub,
@@ -117,7 +118,7 @@ async function mountComponent(options: Partial<{
 				USelect: USelectStub,
 				ScreenMediaBackgroundFields: defineComponent({ template: '<div data-testid="media-background-fields" />' }),
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
-				FeatureMatchOverlayControlSection: ControlSectionStub,
+				ScreenSettingsSection: ControlSectionStub,
 				USwitch: USwitchStub,
 				UButton: defineComponent({ template: '<button type="button"><slot /></button>' }),
 				UIOpacityInput: defineComponent({ template: '<input />' }),

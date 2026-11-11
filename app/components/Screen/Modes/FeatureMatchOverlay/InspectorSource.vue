@@ -5,7 +5,6 @@ import type { Screen } from '~/types';
 import GraphicsGeometryFields from '~/components/Graphics/GeometryFields.vue';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import { appearanceSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
-import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlaySourceFramingStyleFields from './SourceFramingStyleFields.vue';
 
 const props = defineProps<{
@@ -17,15 +16,6 @@ const props = defineProps<{
 	screenWidth: number;
 	screenHeight: number;
 	item: FeatureMatchSourceItemConfig;
-}>();
-
-/**
- * Removing and duplicating change the layer list and the selection, so they are
- * the editor's to do; this asks.
- */
-const emit = defineEmits<{
-	remove: [itemId: string];
-	duplicate: [itemId: string];
 }>();
 
 const editor = useFeatureMatchOverlayConfigEditor({
@@ -42,49 +32,25 @@ const SOURCE_ROLE_OPTIONS = [
 
 <template>
 	<div class="min-w-0">
-		<FeatureMatchOverlayControlSection
+		<ScreenSettingsSection
+			id="feature-match-overlay-details"
+			density="row"
 			title="Details"
 			:summary="item.label"
 		>
-			<div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
-				<UFormField label="Name">
-					<UInput
-						:model-value="item.label"
-						size="sm"
-						class="w-full"
-						@update:model-value="editor.updateSource(item.id, { label: String($event) })"
-					/>
-				</UFormField>
-				<div class="flex items-center gap-1">
-					<UButton
-						color="neutral"
-						variant="soft"
-						icon="i-lucide-copy"
-						aria-label="Duplicate Source Item"
-						title="Duplicate Source Item"
-						data-testid="source-duplicate"
-						@click="emit('duplicate', item.id)"
-					/>
-					<UButton
-						color="error"
-						variant="soft"
-						icon="i-lucide-trash-2"
-						aria-label="Remove Source Item"
-						title="Remove Source Item"
-						data-testid="source-remove"
-						@click="emit('remove', item.id)"
-					/>
-				</div>
-			</div>
-			<ScreenSettingsToggle
-				class="mt-3"
-				label="Visible"
-				:model-value="item.visible"
-				@update:model-value="editor.updateSource(item.id, { visible: $event })"
-			/>
-		</FeatureMatchOverlayControlSection>
+			<UFormField label="Name">
+				<UInput
+					:model-value="item.label"
+					size="sm"
+					class="w-full"
+					@update:model-value="editor.updateSource(item.id, { label: String($event) })"
+				/>
+			</UFormField>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection
+		<ScreenSettingsSection
+			id="feature-match-overlay-bounds"
+			density="row"
 			title="Bounds"
 			:summary="rectSummary(item)"
 			default-open
@@ -97,9 +63,11 @@ const SOURCE_ROLE_OPTIONS = [
 				@update:anchor="anchor => editor.updateSource(item.id, { anchor })"
 				@update="patch => editor.updateSource(item.id, patch)"
 			/>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection
+		<ScreenSettingsSection
+			id="feature-match-overlay-content"
+			density="row"
 			title="Content"
 			:summary="item.sourceRole || 'Video source'"
 			default-open
@@ -128,9 +96,11 @@ const SOURCE_ROLE_OPTIONS = [
 					/>
 				</UFormField>
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection
+		<ScreenSettingsSection
+			id="feature-match-overlay-appearance"
+			density="row"
 			title="Appearance"
 			:summary="appearanceSummary(item.framingStyle)"
 		>
@@ -142,6 +112,6 @@ const SOURCE_ROLE_OPTIONS = [
 				<!-- Every Source Item shares this Look, so it writes a Screen Theme Override, not this item. -->
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="source-appearance" />
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 	</div>
 </template>

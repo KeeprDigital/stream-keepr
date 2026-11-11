@@ -146,7 +146,12 @@ const MultiLayerInspectorStub = defineComponent({
 		writable: { type: Boolean, required: false },
 		groupRefusal: { type: String, required: false },
 	},
-	emits: ['update', 'group'],
+	emits: [
+		'update',
+		'group',
+		'align',
+		'distribute',
+	],
 	template: '<div data-testid="multi-layer-inspector" :data-layers="JSON.stringify(layers)" :data-writable="String(writable)" :data-group-refusal="groupRefusal" />',
 });
 
@@ -219,7 +224,7 @@ const UButtonStub = defineComponent({
 });
 
 const SETTINGS_STUBS = {
-	ScreenSettingsCard: ScreenSettingsCardStub,
+	ScreenSettingsSection: ScreenSettingsCardStub,
 	FeatureMatchOverlayLayerInspector: LayerInspectorStub,
 	FeatureMatchOverlayLayerList: LayerListStub,
 	FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
@@ -567,7 +572,8 @@ describe('featureMatchOverlaySettings', () => {
 		it('aligns them from the property panel', async () => {
 			const wrapper = await mountWithTwo();
 
-			await wrapper.get('[data-testid="layer-align-controls"] button[aria-label="Align top"]').trigger('click');
+			wrapper.getComponent(MultiLayerInspectorStub).vm.$emit('align', 'top');
+			await nextTick();
 
 			expect(positions().map(position => position?.y)).toEqual([90, 90]);
 		});
@@ -930,16 +936,16 @@ describe('featureMatchOverlaySettings', () => {
 		it('says whether the layout is saved, and offers a retry when it is not', async () => {
 			const wrapper = await mountComponent();
 			await flushPromises();
-			expect(wrapper.find('[data-testid="layout-save-state"]').exists()).toBe(false);
+			expect(wrapper.find('[data-testid="graphics-save-state"]').exists()).toBe(false);
 
 			mockSaveState.value = 'committed';
 			await nextTick();
-			expect(wrapper.get('[data-testid="layout-save-state"]').text()).toContain('Saved');
+			expect(wrapper.get('[data-testid="graphics-save-state"]').text()).toContain('Saved');
 
 			mockSaveState.value = 'failed';
 			await nextTick();
-			expect(wrapper.get('[data-testid="layout-save-state"]').attributes('title')).toBe('Screen refused the layout');
-			await wrapper.get('[data-testid="layout-save-retry"]').trigger('click');
+			expect(wrapper.get('[data-testid="graphics-save-state"]').text()).toContain('Screen refused the layout');
+			await wrapper.get('[data-testid="graphics-save-retry"]').trigger('click');
 			expect(mockRetry).toHaveBeenCalledTimes(1);
 		});
 	});
@@ -1049,7 +1055,7 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 			FeatureMatchOverlayPreviewOutputAside: false,
 			GraphicsCanvasManipulationOverlay: true,
 			// The real preview panel, whose toolbar is its card's actions.
-			ScreenSettingsCard: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
+			ScreenSettingsSection: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
 		});
 		await flushPromises();
 		const toggle = wrapper.get('[data-testid="preview-stress-dataset"]');

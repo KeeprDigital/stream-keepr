@@ -43,9 +43,9 @@ function write(field: ScreenModeConfigField, value: boolean | number | QuantityP
 
 <template>
 	<div class="flex flex-col gap-4">
-		<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+		<ScreenSettingsSubheading>
 			{{ title }}
-		</p>
+		</ScreenSettingsSubheading>
 
 		<ScreenConfigField
 			v-if="shownField"

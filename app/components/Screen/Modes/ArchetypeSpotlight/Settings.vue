@@ -103,7 +103,7 @@ const headerCardSummary = computed(() => settingsSummary([
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="archetype-spotlight:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="archetype-spotlight:data" title="Data" :collapsible="false">
 			<ScreenSettingsField label="Archetype" description="The archetype to spotlight.">
 				<USelect
 					:model-value="config.archetypeId ?? null"
@@ -125,9 +125,9 @@ const headerCardSummary = computed(() => settingsSummary([
 			<ScreenConversionTargetField v-if="readsStandings" :event-id="eventId" />
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="data" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="archetype-spotlight:top-cards" title="Top Cards" :summary="topCardsSummary">
+		<ScreenSettingsSection id="archetype-spotlight:top-cards" title="Top Cards" :summary="topCardsSummary">
 			<ScreenConfigField
 				:field="fields.cardLimit"
 				:model-value="config.cardLimit"
@@ -155,7 +155,7 @@ const headerCardSummary = computed(() => settingsSummary([
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="top-cards" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenPaginationSettingsCard
 			id="archetype-spotlight:pilots"

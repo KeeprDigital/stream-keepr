@@ -189,7 +189,7 @@ onMounted(async () => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="deck:deck-source" title="Deck Source" :collapsible="false">
+		<ScreenSettingsSection id="deck:deck-source" title="Deck Source" :collapsible="false">
 			<UTabs v-model="sourceTab" :items="sourceTabs" :content="false" />
 
 			<template v-if="sourceTab === 'player'">
@@ -237,9 +237,9 @@ onMounted(async () => {
 					{{ emptySideHint }}
 				</p>
 			</template>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="deck:header" title="Header" :summary="headerCardSummary">
+		<ScreenSettingsSection id="deck:header" title="Header" :summary="headerCardSummary">
 			<ScreenConfigField
 				:field="fields.showPlayerName"
 				:model-value="config.showPlayerName !== false"
@@ -260,10 +260,10 @@ onMounted(async () => {
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<!-- No One Piece control sits in these groups, but their Mode Tokens are the Deck List's, so their Looks are here. -->
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			id="deck:deck-details"
 			title="Deck Details"
 			subtitle="The cost curve's bars take the accent; the rest styles a Magic Deck List's details row."
@@ -271,12 +271,12 @@ onMounted(async () => {
 		>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="deck-details" />
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="pointed-cards" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="deck:mainboard" title="Mainboard" :summary="mainboardSummary">
-			<p class="text-xs text-muted">
+		<ScreenSettingsSection id="deck:mainboard" title="Mainboard" :summary="mainboardSummary">
+			<ScreenSettingsHint>
 				Grouped Character, Event, Stage, each by cost, beside the Leader.
-			</p>
+			</ScreenSettingsHint>
 
 			<ScreenConfigField
 				:field="fields.showCostCurve"
@@ -295,18 +295,18 @@ onMounted(async () => {
 				grid-name="Mainboard"
 				@update="updateLayout($event)"
 			/>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			id="deck:card-look"
 			title="Card Look"
 			subtitle="How the Deck List's cards read."
 			:summary="cardLookSummary"
 		>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="card-look" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="deck:card-badges" title="Card Badges" :summary="badgesSummary">
+		<ScreenSettingsSection id="deck:card-badges" title="Card Badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
 				title="Quantity Badge"
 				:shown="!!config.showQuantities"
@@ -323,6 +323,6 @@ onMounted(async () => {
 				</template>
 			</ScreenCardBadgeFields>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="points-badge" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 	</div>
 </template>

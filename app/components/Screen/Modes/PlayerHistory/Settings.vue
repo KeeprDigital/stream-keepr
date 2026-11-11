@@ -89,7 +89,7 @@ onMounted(async () => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="player-history:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="player-history:data" title="Data" :collapsible="false">
 			<ScreenSettingsField
 				label="Player"
 				description="Select the player whose match history should be shown."
@@ -101,9 +101,9 @@ onMounted(async () => {
 					@update:model-value="updateConfig({ playerId: $event, currentPage: 1 })"
 				/>
 			</ScreenSettingsField>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			id="player-history:table"
 			title="Table"
 			subtitle="Drag to reorder, toggle to show/hide."
@@ -120,7 +120,7 @@ onMounted(async () => {
 			<ScreenSettingsGroup title="Outcome Badge">
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="outcome-badge" />
 			</ScreenSettingsGroup>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
 			id="player-history:header"

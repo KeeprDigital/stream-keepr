@@ -4,7 +4,7 @@ import { modeConfigPatchSchemaMap, modeConfigsMapSchema, parseModeConfigPatchRes
 import { resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 
-// No shipped contract upgrades a former field yet, so Round Clock stands in:
+// The rule on a contract that declares nothing else, so Round Clock stands in:
 // here its count-up limit was once stored as `limitMinutes`.
 vi.mock('~~/shared/screenModeConfigs/roundClock', async (importOriginal) => {
 	const { defineScreenModeConfigContract } = await import('~~/shared/screenModeConfigs/contract');

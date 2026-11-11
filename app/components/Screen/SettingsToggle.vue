@@ -41,17 +41,17 @@ function onUpdate(value: boolean) {
 
 <template>
 	<div>
-		<UFormField
+		<ScreenSettingsField
 			:label="label"
 			:description="resolvedDescription"
-			class="flex max-sm:flex-col justify-between gap-4 items-center"
+			align="center"
 		>
 			<USwitch
 				:model-value="resolvedValue"
 				:disabled="isDisabled"
 				@update:model-value="onUpdate"
 			/>
-		</UFormField>
+		</ScreenSettingsField>
 		<div v-if="$slots.default" class="mt-3">
 			<slot />
 		</div>

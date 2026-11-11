@@ -2,7 +2,7 @@
 import type { Game } from '~~/shared/types/enums';
 import type { MetagameChartBar } from '~~/shared/utils/metagameChart';
 import { useElementSize } from '@vueuse/core';
-import { modeMotionVars, modeTokenVar } from '~/modules/screen-mode';
+import { foundationTokenVar, modeMotionVars, modeTokenVar } from '~/modules/screen-mode';
 
 /**
  * The Metagame Screen's chart display: meta share by Archetype as horizontal
@@ -17,16 +17,16 @@ const props = defineProps<{
 	game: Game | undefined;
 }>();
 
-/** Each categorical colour slot's fill, slot 1 first. */
+/** Each categorical colour slot's fill, slot 1 first: the Theme's chart series, read directly. */
 const SERIES_FILLS = [
-	modeTokenVar('metagame', 'chart-series-1'),
-	modeTokenVar('metagame', 'chart-series-2'),
-	modeTokenVar('metagame', 'chart-series-3'),
-	modeTokenVar('metagame', 'chart-series-4'),
-	modeTokenVar('metagame', 'chart-series-5'),
-	modeTokenVar('metagame', 'chart-series-6'),
-	modeTokenVar('metagame', 'chart-series-7'),
-	modeTokenVar('metagame', 'chart-series-8'),
+	foundationTokenVar('series-1'),
+	foundationTokenVar('series-2'),
+	foundationTokenVar('series-3'),
+	foundationTokenVar('series-4'),
+	foundationTokenVar('series-5'),
+	foundationTokenVar('series-6'),
+	foundationTokenVar('series-7'),
+	foundationTokenVar('series-8'),
 ];
 
 const chartStyle = {
@@ -63,7 +63,7 @@ const layoutStyle = computed(() => {
 
 function fillOf(bar: MetagameChartBar): string {
 	return bar.colorSlot == null
-		? modeTokenVar('metagame', 'chart-other')
+		? foundationTokenVar('series-other')
 		: SERIES_FILLS[bar.colorSlot - 1]!;
 }
 </script>

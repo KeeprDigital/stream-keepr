@@ -4,7 +4,7 @@ import type { PageRotationControls } from '~/modules/screen-mode/rotationWrites'
 import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 
 // The one line a closed Screen settings card shows in place of its body
-// (`ScreenSettingsCard`'s `summary`, ADR-0072).
+// (`ScreenSettingsSection`'s `summary`, ADR-0072).
 
 /** What the Header card's header shows: hidden, the mode's own title, or the custom text. */
 export function headerSummary(config: { showHeader: boolean; headerText?: string | null }): string {

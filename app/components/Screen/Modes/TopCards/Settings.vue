@@ -203,7 +203,7 @@ const badgesSummary = computed(() => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="top-cards:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="top-cards:data" title="Data" :collapsible="false">
 			<ScreenMetagameScopeFields
 				:config="config"
 				:fields="fields"
@@ -227,9 +227,9 @@ const badgesSummary = computed(() => {
 				description="Order cards using this metric."
 				@update:model-value="$event !== null && updateConfig({ sortBy: $event as MetagameCardSortBy, currentPage: 1 })"
 			/>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="top-cards:filters" title="Filters" :summary="filtersSummary">
+		<ScreenSettingsSection id="top-cards:filters" title="Filters" :summary="filtersSummary">
 			<ScreenConfigField
 				v-if="showsPointedOnly"
 				:field="fields.pointedOnly"
@@ -248,9 +248,9 @@ const badgesSummary = computed(() => {
 				test-id-prefix="top-cards-type"
 				@update="updateConfig({ excludedCardTypes: $event, currentPage: 1 })"
 			/>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="top-cards:ranking-and-pages" title="Ranking & Pages" :summary="rankingSummary">
+		<ScreenSettingsSection id="top-cards:ranking-and-pages" title="Ranking & Pages" :summary="rankingSummary">
 			<ScreenConfigField
 				:field="fields.limit"
 				:model-value="config.limit"
@@ -287,9 +287,9 @@ const badgesSummary = computed(() => {
 			</template>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="ranking-and-pages" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="top-cards:layout" title="Layout" :summary="layoutSummary">
+		<ScreenSettingsSection id="top-cards:layout" title="Layout" :summary="layoutSummary">
 			<ScreenCardGridLayoutFields
 				:layout="gridLayout"
 				:fields="fields"
@@ -299,7 +299,7 @@ const badgesSummary = computed(() => {
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="layout" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
 			id="top-cards:header"
@@ -313,7 +313,7 @@ const badgesSummary = computed(() => {
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
 		</ScreenHeaderSettingsCard>
 
-		<ScreenSettingsCard id="top-cards:card-badges" title="Card Badges" :summary="badgesSummary">
+		<ScreenSettingsSection id="top-cards:card-badges" title="Card Badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
 				title="Rank Badge"
 				:shown="config.showRankBadges"
@@ -376,6 +376,6 @@ const badgesSummary = computed(() => {
 			</template>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="card-badges" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 	</div>
 </template>

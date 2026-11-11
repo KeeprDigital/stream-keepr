@@ -254,6 +254,23 @@ describe('a Theme\'s announcements', () => {
 		expect(published).toEqual([]);
 	});
 
+	it('accepts a write of a former token and drops it, so nothing is stored, versioned or announced', async () => {
+		const theme = await create('Former');
+		const event = await createEvent('Former Event');
+		await select(event, theme.id);
+		const written = await set(theme.id, 'accent', '#123456');
+		published.length = 0;
+
+		const answered = await set(theme.id, 'metagame.chart-series-1', '#ff0000');
+
+		expect(answered).toMatchObject({
+			revision: written.revision,
+			tokens: { accent: '#123456' },
+		});
+		expect(await storedTokens(theme.id)).toEqual({ accent: '#123456' });
+		expect(published).toEqual([]);
+	});
+
 	it('announces a Theme switch to its Event as an Event update', async () => {
 		const theme = await create('Switched');
 		const event = await createEvent('Switching');

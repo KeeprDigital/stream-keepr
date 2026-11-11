@@ -112,7 +112,7 @@ const socialProfilesSummary = computed(() => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="talent:talent" title="Talent" :collapsible="false">
+		<ScreenSettingsSection id="talent:talent" title="Talent" :collapsible="false">
 			<ScreenConfigField
 				:field="fields.selection"
 				:model-value="config.selection"
@@ -192,9 +192,9 @@ const socialProfilesSummary = computed(() => {
 					/>
 				</ScreenSettingsField>
 			</template>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="talent:layout" title="Layout" :summary="layoutSummary">
+		<ScreenSettingsSection id="talent:layout" title="Layout" :summary="layoutSummary">
 			<ScreenConfigField
 				:field="fields.layout"
 				:model-value="config.layout"
@@ -215,7 +215,7 @@ const socialProfilesSummary = computed(() => {
 				@update:model-value="updateConfig({ showRole: $event === true })"
 			/>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="layout" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
 			id="talent:header"
@@ -229,7 +229,7 @@ const socialProfilesSummary = computed(() => {
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
 		</ScreenHeaderSettingsCard>
 
-		<ScreenSettingsCard id="talent:social-profiles" title="Social Profiles" :summary="socialProfilesSummary">
+		<ScreenSettingsSection id="talent:social-profiles" title="Social Profiles" :summary="socialProfilesSummary">
 			<ScreenSettingsField label="Networks" description="The Social Profiles shown, in this order.">
 				<div class="flex flex-wrap gap-x-4 gap-y-2">
 					<UCheckbox
@@ -255,6 +255,6 @@ const socialProfilesSummary = computed(() => {
 				@update:model-value="updateConfig({ socialProfileDwellMs: Number($event) })"
 			/>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="social-profiles" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 	</div>
 </template>

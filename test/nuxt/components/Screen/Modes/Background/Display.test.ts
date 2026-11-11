@@ -123,18 +123,47 @@ describe('screenModesBackgroundDisplay', () => {
 		expect(wrapper.find('[data-layer-id="wash"]').attributes('style')).toContain('opacity: 0.35');
 	});
 
-	it('paints a colour layer and a gradient layer with their own values', async () => {
+	it('paints a colour layer with its own colour', async () => {
 		config.value = {
 			layers: [
 				layer({ id: 'wash', type: 'color', color: 'rgb(16, 16, 16)' }),
-				layer({ id: 'grad', type: 'gradient', gradient: 'linear-gradient(#000, #123)' }),
 			],
 		};
 
 		const wrapper = await mountComponent();
 
 		expect(wrapper.find('[data-layer-id="wash"]').attributes('style')).toContain('background-color: rgb(16, 16, 16)');
-		expect(wrapper.find('[data-layer-id="grad"]').attributes('style')).toContain('linear-gradient');
+	});
+
+	// A gradient layer holds a Graphic Fill gradient; one stored as a CSS string paints as stored.
+	it.each([
+		[
+			'a Graphic Fill gradient, each stop at its own opacity',
+			{
+				type: 'linear-gradient' as const,
+				angle: 135,
+				stops: [
+					{ color: '#0f172a', position: 0, opacity: 1 },
+					{ color: '#020617', position: 0.75, opacity: 0.5 },
+				],
+			},
+			'linear-gradient(135deg, #0f172a 0%, #02061780 75%)',
+		],
+		[
+			'a stored CSS gradient string',
+			'radial-gradient(#000, #123)',
+			'radial-gradient(#000, #123)',
+		],
+	])('paints a gradient layer holding %s', async (_, gradient, painted) => {
+		config.value = {
+			layers: [
+				layer({ id: 'grad', type: 'gradient', gradient }),
+			],
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.find('[data-layer-id="grad"]').attributes('style')).toContain(`background-image: ${painted}`);
 	});
 
 	it('renders a URL-sourced image layer directly and an asset-sourced one through the resolved content URL', async () => {

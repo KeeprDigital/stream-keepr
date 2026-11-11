@@ -315,7 +315,7 @@ describe('the Standings settings layout', () => {
 	// The reveal's motion applies in the reveal view mode alone, so its Look is absent elsewhere.
 	it.each([
 		['all', false],
-		['topN', false],
+		['range', false],
 		['reveal', true],
 	])('shows the reveal\'s Look in the %s view mode: %s', async (viewMode, shown) => {
 		const wrapper = await mountSettings({
@@ -333,12 +333,8 @@ describe('the Standings settings layout', () => {
 			['viewMode'],
 		],
 		[
-			'topN',
-			['viewMode', 'topNCount'],
-		],
-		[
-			'slice',
-			['viewMode', 'sliceStart', 'sliceEnd'],
+			'range',
+			['viewMode', 'rangeStart', 'rangeEnd'],
 		],
 		[
 			'watchlist',
@@ -406,16 +402,16 @@ describe('the Standings settings layout', () => {
 			patch: { roundId: 31, currentPage: 1 },
 		},
 		{
-			name: 'sets the top N count',
-			viewMode: 'topN',
-			act: (w: Wrapper) => w.get('[data-config-field="topNCount"] input').setValue('12'),
-			patch: { topNCount: 12 },
+			name: 'sets the range\'s first position',
+			viewMode: 'range',
+			act: (w: Wrapper) => w.get('[data-config-field="rangeStart"] input').setValue('9'),
+			patch: { rangeStart: 9 },
 		},
 		{
-			name: 'sets the slice end',
-			viewMode: 'slice',
-			act: (w: Wrapper) => w.get('[data-config-field="sliceEnd"] input').setValue('24'),
-			patch: { sliceEnd: 24 },
+			name: 'sets the range\'s last position',
+			viewMode: 'range',
+			act: (w: Wrapper) => w.get('[data-config-field="rangeEnd"] input').setValue('24'),
+			patch: { rangeEnd: 24 },
 		},
 		{
 			name: 'sets the reveal order',

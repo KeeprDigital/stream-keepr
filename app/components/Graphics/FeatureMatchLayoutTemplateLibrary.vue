@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FeatureMatchLayoutTemplateSummary } from '~~/shared/types/featureMatchLayoutTemplate';
-import ScreenSettingsCard from '~/components/Screen/SettingsCard.vue';
+import ScreenSettingsSection from '~/components/Screen/SettingsSection.vue';
 
 /**
  * The Feature Match Layout Template library, as an author browses and manages it.
@@ -159,7 +159,7 @@ async function place(templateId: string) {
 
 <template>
 	<component
-		:is="bare ? 'div' : ScreenSettingsCard"
+		:is="bare ? 'div' : ScreenSettingsSection"
 		v-bind="bare ? {} : { title: 'Layout template library', defaultOpen: false }"
 		data-testid="layout-template-library"
 	>

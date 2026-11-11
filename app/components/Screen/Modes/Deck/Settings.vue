@@ -366,7 +366,7 @@ const badgesSummary = computed(() => {
 		@update="updateConfig"
 	/>
 	<div v-else class="flex flex-col gap-6">
-		<ScreenSettingsCard id="deck:deck-source" title="Deck Source" :collapsible="false">
+		<ScreenSettingsSection id="deck:deck-source" title="Deck Source" :collapsible="false">
 			<UTabs
 				v-if="broadcastDeckListsEnabled"
 				v-model="sourceTab"
@@ -404,9 +404,9 @@ const badgesSummary = computed(() => {
 					No Broadcast Deck Lists are available. Create one in Event Settings → Broadcast.
 				</p>
 			</div>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="deck:header" title="Header" :summary="headerCardSummary">
+		<ScreenSettingsSection id="deck:header" title="Header" :summary="headerCardSummary">
 			<!-- A Broadcast Deck List names a list and its archetype, so these two toggles say so. -->
 			<ScreenSettingsToggle
 				:data-config-field="fields.showPlayerName.key"
@@ -430,12 +430,12 @@ const badgesSummary = computed(() => {
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="deck:deck-details" title="Deck Details" :summary="detailsSummary">
-			<p class="text-xs text-muted">
+		<ScreenSettingsSection id="deck:deck-details" title="Deck Details" :summary="detailsSummary">
+			<ScreenSettingsHint>
 				A row under the header, shown only when something in it is on.
-			</p>
+			</ScreenSettingsHint>
 
 			<ScreenConfigField
 				:field="fields.showDeckStats"
@@ -488,9 +488,9 @@ const badgesSummary = computed(() => {
 
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="pointed-cards" />
 			</ScreenSettingsGroup>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			v-for="section in boardSections"
 			:id="`deck:${section.key}`"
 			:key="section.key"
@@ -569,18 +569,18 @@ const badgesSummary = computed(() => {
 					@update:model-value="$event !== null && updateBoardLayout(section.key, { listColumns: Number($event) })"
 				/>
 			</template>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			id="deck:card-look"
 			title="Card Look"
 			subtitle="How both boards' cards read."
 			:summary="cardLookSummary"
 		>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="card-look" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="deck:card-badges" title="Card Badges" :summary="badgesSummary">
+		<ScreenSettingsSection id="deck:card-badges" title="Card Badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
 				title="Quantity Badge"
 				:shown="!!config.showQuantities"
@@ -630,6 +630,6 @@ const badgesSummary = computed(() => {
 					@update="updateConfig($event)"
 				/>
 			</template>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 	</div>
 </template>
