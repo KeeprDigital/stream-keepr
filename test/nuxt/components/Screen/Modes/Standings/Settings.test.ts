@@ -323,7 +323,7 @@ describe('the Standings settings layout', () => {
 			viewMode,
 		});
 
-		expect(wrapper.find('[data-settings-group="data"]').exists()).toBe(shown);
+		expect(wrapper.find('[data-settings-group="reveal"]').exists()).toBe(shown);
 	});
 
 	// Each view mode's own fields sit directly under the view mode select that reveals them.

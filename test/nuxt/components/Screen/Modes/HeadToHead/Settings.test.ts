@@ -176,7 +176,7 @@ describe('screenHeadToHeadSettings', () => {
 			{},
 			{},
 			{
-				'head-to-head:player-details': 'Pronouns shown · Deck colors shown',
+				'head-to-head:player-details': 'Pronouns shown · Deck colours shown',
 				'head-to-head:header': 'Auto title',
 			},
 		],
@@ -185,7 +185,7 @@ describe('screenHeadToHeadSettings', () => {
 			{ showPronouns: false, showDeckColors: false, showHeader: false },
 			{ 'head-to-head.surface': '#000000' },
 			{
-				'head-to-head:player-details': 'Pronouns hidden · Deck colors hidden',
+				'head-to-head:player-details': 'Pronouns hidden · Deck colours hidden',
 				'head-to-head:header': 'Hidden',
 			},
 		],
