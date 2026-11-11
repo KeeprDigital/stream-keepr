@@ -2,6 +2,7 @@ import { rm } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import { resolve } from 'node:path';
 import process from 'node:process';
+import { INTEGRATION_ABLY_API_KEY_ENV } from './realtimeDiagnosis.ts';
 
 export const INTEGRATION_MODE_ENV = 'STREAM_KEEPR_INTEGRATION';
 /**
@@ -60,6 +61,46 @@ export function integrationEventIdBlocks(count: number, random: () => number = M
 /** The state directory of the `slot`th server (1-based), matching `VITEST_POOL_ID`. */
 export function integrationServerPersistDir(slot: number): string {
 	return `${DEFAULT_INTEGRATION_WRANGLER_PERSIST_DIR}-${slot}`;
+}
+
+/**
+ * § realtime server. One server holds the Ably key, and only the files that test
+ * realtime run against it.
+ *
+ * Every write publishes, and an Event's channels are named by its id, so a server
+ * holding the key opens a new channel on the real Ably app for nearly every Event
+ * its files create. The account's channel limit is shared with production, and
+ * runs from several worktrees exceeded it. So `*.realtime.test.ts` files run
+ * first, one at a time, against the one keyed server; every other file runs
+ * against a server whose key is blank, where a publish is logged and the write
+ * still answers, as in CI.
+ */
+export const INTEGRATION_REALTIME_TEST_FILES = 'test/integration/**/*.realtime.test.ts';
+/** Set by `vitest.integration.config.ts` on the project that runs those files. */
+export const INTEGRATION_REALTIME_PROJECT_ENV = 'STREAM_KEEPR_INTEGRATION_REALTIME_PROJECT';
+/** The realtime server's address, as `selectServer.ts` reads it. */
+export const INTEGRATION_REALTIME_SERVER_ENV = 'STREAM_KEEPR_INTEGRATION_REALTIME_SERVER';
+/** Set by `selectServer.ts` in a worker whose server holds no key. */
+export const INTEGRATION_KEYLESS_WORKER_ENV = 'STREAM_KEEPR_INTEGRATION_KEYLESS_WORKER';
+export const INTEGRATION_REALTIME_SERVER_PERSIST_DIR = `${DEFAULT_INTEGRATION_WRANGLER_PERSIST_DIR}-realtime`;
+
+/** `env` with the Ably key blanked: empty, not absent, because `nuxt dev` fills an unset name from `.env`. */
+export function withoutAblyKey(env: Record<string, string>): Record<string, string> {
+	return { ...env, [INTEGRATION_ABLY_API_KEY_ENV]: '' };
+}
+
+/**
+ * Refuse a realtime test in a file that runs against a keyless server. Without
+ * this it would wait out its timeout for a publish that never left.
+ */
+export function assertRealtimeTestFile(env: NodeJS.ProcessEnv = process.env) {
+	if (env[INTEGRATION_KEYLESS_WORKER_ENV] !== 'true')
+		return;
+	throw new Error(
+		'This file reads the Ably key, but it runs against an integration server that has none. '
+		+ 'Only *.realtime.test.ts files run against the server holding the key: rename this file, '
+		+ 'or move its realtime test into one that is. See test/integration/state.ts § realtime server.',
+	);
 }
 
 /**

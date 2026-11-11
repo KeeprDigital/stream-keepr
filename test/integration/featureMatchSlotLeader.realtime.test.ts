@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
 import { LAW, NAMI, ZORO } from '../helpers/opCards';
 import { $fetch } from './client';
-import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
+import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './realtimeKey';
 
 // A Slot side's Leader on a One Piece Event (ADR-0057): a change during a
 // Feature Match Session reaches its snapshot and its followers.
