@@ -35,7 +35,7 @@ function items(): GraphicItemConfig[] {
 	];
 }
 
-function rect(editing: Editing, id: string) {
+function rect(editing: Pick<Editing, 'composition'>, id: string) {
 	const item = findGraphicItem(editing.composition(), id)?.item;
 	return item && {
 		x: item.x,
@@ -726,7 +726,10 @@ describe('the shared graphics editor\'s Source Items on the Feature Match Overla
 /** Broadcast Graphics' own rules: several Broadcast Graphics, one of them perhaps on air. */
 describe('the shared graphics editor\'s Broadcast Graphics', () => {
 	function editing() {
-		const harness = broadcastGraphicsEditing({ writable: true, items: items() });
+		const harness = broadcastGraphicsEditing({
+			writable: true,
+			items: items(),
+		});
 		harness.editor.select(harness.layer('a'));
 		return harness;
 	}
@@ -760,7 +763,9 @@ describe('the shared graphics editor\'s Broadcast Graphics', () => {
 	it('keeps the Graphic Channel each graphic is in now through an undo', () => {
 		const harness = editing();
 		harness.editor.toggleVisible();
-		harness.channels.value = [{ id: 'thirds', name: 'Lower thirds' }];
+		harness.channels.value = [
+			{ id: 'thirds', name: 'Lower thirds' },
+		];
 		harness.graphics.value = harness.graphics.value.map(graphic => ({ ...graphic, channelId: 'thirds' }));
 
 		harness.editor.undo();

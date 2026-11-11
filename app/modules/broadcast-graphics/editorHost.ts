@@ -98,8 +98,7 @@ export function broadcastGraphicsEditorTree(selectedGraphicId: () => string | nu
 		destination,
 		withComposition: withGraphic,
 		// A projection reads its Presentation Group, so the two go together or not at all.
-		removal: (graphics, layer) => graphicOf(graphics, layer.graphicId)?.socialProfileProjections
-			?.some(projection => projection.presentationGroupId === layer.itemId)
+		removal: (graphics, layer) => graphicOf(graphics, layer.graphicId)?.socialProfileProjections?.some(projection => projection.presentationGroupId === layer.itemId)
 			? PRESENTATION_GROUP_REMOVAL
 			: null,
 		// A layer snaps to the items of its own Broadcast Graphic: the others may never share program with it.

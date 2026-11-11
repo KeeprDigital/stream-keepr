@@ -108,7 +108,11 @@ export function broadcastGraphicsEditing(options: { writable: boolean; items?: G
 				text('s', { x: 40, y: 40 }),
 			],
 		},
-		{ id: EDITED_GRAPHIC_ID, name: 'Lower Third', items: structuredClone(options.items ?? []) },
+		{
+			id: EDITED_GRAPHIC_ID,
+			name: 'Lower Third',
+			items: structuredClone(options.items ?? []),
+		},
 	]);
 	const channels = ref<GraphicChannelConfig[]>([]);
 	const writes: BroadcastGraphicConfig[][] = [];
@@ -116,7 +120,7 @@ export function broadcastGraphicsEditing(options: { writable: boolean; items?: G
 	const held = ref(false);
 	const onAir = ref(new Set<string>());
 	const selectedGraphicId = ref<string | null>(EDITED_GRAPHIC_ID);
-	const editor = useGraphicsEditor(broadcastGraphicsEditorHost({
+	const host = broadcastGraphicsEditorHost({
 		graphics: () => graphics.value,
 		channels: () => channels.value,
 		write: (next) => {
@@ -129,7 +133,8 @@ export function broadcastGraphicsEditing(options: { writable: boolean; items?: G
 		writable: leased,
 		held,
 		onAir: graphicId => onAir.value.has(graphicId),
-	}));
+	});
+	const editor = useGraphicsEditor(host);
 	const graphic = (id: string) => graphics.value.find(entry => entry.id === id)!;
 	const harness: GraphicsEditorHarness<readonly BroadcastGraphicConfig[], BroadcastGraphicsEditorLayer> = {
 		editor,
@@ -147,6 +152,7 @@ export function broadcastGraphicsEditing(options: { writable: boolean; items?: G
 	};
 	return {
 		...harness,
+		tree: host.tree,
 		graphics,
 		channels,
 		onAir,
