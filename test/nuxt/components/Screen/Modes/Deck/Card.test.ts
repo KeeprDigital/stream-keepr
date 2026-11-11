@@ -26,7 +26,6 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 			quantityBadgeStyle: { color: 'white', backgroundColor: 'purple' },
 			highlanderPointsPositionClass: '-bottom-1 -left-1',
 			highlanderPointsBadgeStyle: { color: 'red', backgroundColor: 'blue' },
-			sizing: 'fixed',
 			...props,
 		},
 		global: {
@@ -45,17 +44,6 @@ describe('screenDeckCard', () => {
 		expect(badge.text()).toBe('1');
 		expect(badge.attributes('style')).toContain('color: red;');
 		expect(badge.attributes('style')).toContain('background-color: blue;');
-	});
-
-	// Fixed takes the width its board gives it; fill and fit take their column, which a Fit grid sizes to the card.
-	it.each([
-		{ sizing: 'fixed', width: '200px' },
-		{ sizing: 'fill', width: '100%' },
-		{ sizing: 'fit', width: '100%' },
-	])('sizes a $sizing card', async ({ sizing, width }) => {
-		const wrapper = await mountComponent({ sizing, width: '200px' });
-
-		expect((wrapper.get('.card-item').element as HTMLElement).style.width).toBe(width);
 	});
 
 	// A card in a role, such as the companion, says so on its face.

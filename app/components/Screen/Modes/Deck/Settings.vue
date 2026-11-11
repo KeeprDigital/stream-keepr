@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import type { BoardSelection, SideboardPlacement, SideboardView } from '~~/shared/types/enums';
-import type { ResolvedDeckBoardLayout, ResolvedSideboardLayout } from '~~/shared/types/screenConfig';
+import type { ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
-import { DECK_SIDEBOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
+import { DECK_SIDEBOARD_LAYOUT_FIELDS, patchedBoardLayout } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
-import { lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { cardLayoutSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -33,6 +34,9 @@ defineExpose({ resetConfig, saving });
 // blocks label and bound their knobs alike; only their views differ.
 const fields = screenModeConfigContract('deck').fields;
 const boardFields = DECK_SIDEBOARD_LAYOUT_FIELDS;
+
+/** The Event Canvas the Screen renders in, which bounds a board's max card size. */
+const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
 
 /** A One Piece Card Game Event shows a Feature Match Slot side's or a Player's Deck List, set up in its own settings (ADR-0057, ADR-0074). */
 const isOpEvent = computed(() => eventStore.event?.game === 'op');
@@ -168,18 +172,18 @@ const mainboardShown = computed(() => board.value !== 'sideboard');
 const sideboardShown = computed(() => board.value !== 'mainboard');
 
 /**
- * Both boards shown and Fit are laid out together at one card size. Along the
- * axis they share, the mainboard's alignment places them as one group; across
- * it, each board sits at its own, as far as the Screen's edge.
+ * Both boards shown, and neither a list, are laid out together at one card
+ * size. Along the axis they share, the mainboard's alignment places them as
+ * one group; across it, each board sits at its own, as far as the Screen's edge.
  */
 const boardsPlacedTogether = computed(() =>
 	mainboardShown.value
 	&& sideboardShown.value
-	&& [resolvedBoards.value.mainboard, resolvedBoards.value.sideboard].every(layout => layout.cardSizing === 'fit' && layout.view !== 'list'));
+	&& [resolvedBoards.value.mainboard, resolvedBoards.value.sideboard].every(layout => layout.view !== 'list'));
 
 function alignmentDescription(key: BoardKey): string {
 	if (!boardsPlacedTogether.value)
-		return 'Where the cards sit when they don\'t fill the board\'s space. A Fixed grid places them across only.';
+		return 'Where the cards sit when they don\'t fill the board\'s space.';
 	const beside = resolvedBoards.value.sideboardPlacement === 'beside';
 	if (key === 'mainboard') {
 		return beside
@@ -233,13 +237,10 @@ const boardSections = computed<BoardSection[]>(() => {
 });
 
 // The mode-config PATCH replaces a board block wholesale, so every knob change
-// writes the complete resolved block back.
-function updateBoardLayout(key: BoardKey, patch: Partial<ResolvedSideboardLayout>) {
+// writes the complete resolved block back, an Auto value as its absent key.
+function updateBoardLayout(key: BoardKey, patch: Parameters<typeof patchedBoardLayout>[1]) {
 	updateConfig({
-		[key]: {
-			...resolvedBoards.value[key],
-			...patch,
-		},
+		[key]: patchedBoardLayout(resolvedBoards.value[key], patch),
 	});
 }
 
@@ -328,9 +329,9 @@ function boardSummary(section: BoardSection): string {
 		return 'Hidden';
 	return settingsSummary([
 		BOARD_VIEW_LABELS[section.view],
-		section.view !== 'list' && (section.layout.cardSizing === 'fixed' || section.view === 'stack'
-			? `${section.layout.cardWidth} px cards`
-			: 'Fit'),
+		section.view !== 'list' && cardLayoutSummary(section.view === 'stack'
+			? { maxCardSize: section.layout.maxCardSize }
+			: section.layout),
 	]);
 }
 
@@ -544,11 +545,12 @@ const badgesSummary = computed(() => {
 
 				<USeparator />
 
-				<ScreenModesDeckCardSizingLayoutFields
+				<ScreenCardGridLayoutFields
 					v-if="section.view !== 'list'"
 					:view="section.view"
 					:layout="section.layout"
 					:fields="boardFields"
+					:canvas="eventCanvas"
 					:show="{ alignment: true, stackReveal: section.view === 'stack' }"
 					:descriptions="{ alignment: alignmentDescription(section.key) }"
 					:grid-name="section.title"

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
 import Display from '~/components/Screen/Modes/Deck/MtgDisplay.vue';
 
-// The space the boards measure; 0 until they are laid out, when each board fits itself.
+// The space the boards measure; 0 until they are laid out, when their cards have no size yet.
 const measured = vi.hoisted(() => ({ width: 0, height: 0 }));
 vi.mock('@vueuse/core', async (importOriginal) => {
 	const { ref } = await import('vue');
@@ -53,11 +53,6 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	displayedDeckVersion,
 	pendingSwapVersion,
 	commitPendingDeck,
-	// The configured columns; `useDeckModeData`'s own test covers auto columns.
-	boardColumns: {
-		mainboard: computed(() => (mutableConfig.mainboard as { columns?: number } | undefined)?.columns ?? 4),
-		sideboard: computed(() => (mutableConfig.sideboard as { columns?: number } | undefined)?.columns ?? 4),
-	},
 }));
 
 const ScreenModeBaseStub = defineComponent({
@@ -80,14 +75,12 @@ const DeckCardStub = defineComponent({
 	props: {
 		showHighlanderPoints: { type: Boolean, required: false },
 		highlanderPointsPositionClass: { type: String, required: false },
-		sizing: { type: String, required: true },
 		card: { type: Object, required: true },
 		tag: { type: String, required: false },
-		width: { type: String, required: false },
 		quantityBadgeStyle: { type: Object, required: false },
 		highlanderPointsBadgeStyle: { type: Object, required: false },
 	},
-	template: '<div data-testid="deck-card" :data-sizing="sizing" :data-tag="tag" :data-name="card.name" :data-width="width" :data-quantity-size="quantityBadgeStyle?.fontSize" :data-points-size="highlanderPointsBadgeStyle?.fontSize" :data-show-highlander-points="String(showHighlanderPoints)" :data-point-position="highlanderPointsPositionClass" />',
+	template: '<div data-testid="deck-card" :data-tag="tag" :data-name="card.name" :data-quantity-size="quantityBadgeStyle?.fontSize" :data-points-size="highlanderPointsBadgeStyle?.fontSize" :data-show-highlander-points="String(showHighlanderPoints)" :data-point-position="highlanderPointsPositionClass" />',
 });
 
 function createCard(overrides: Partial<DeckListCardWithData> = {}): DeckListCardWithData {
@@ -245,105 +238,44 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.get('[data-testid="sideboard-grid"]').attributes('data-columns')).toBe('6');
 	});
 
-	// A Fit grid shares its board's height between its rows; a Fixed one may fit as many cards across as there is room for.
+	// A list is not laid out, so a grid beside or under one is laid out alone, in the space the list leaves it.
 	it.each([
-		{
-			layout: { view: 'grid', columns: 4, cardSizing: 'fit' },
-			sizing: 'fit',
-			columns: '4',
-			rows: '3',
-		},
-		{
-			layout: { view: 'grid', columns: 4, cardSizing: 'fixed' },
-			sizing: 'fixed',
-			columns: '4',
-			rows: undefined,
-		},
-		{
-			layout: {
-				view: 'grid',
-				columns: 4,
-				cardSizing: 'fixed',
-				autoColumns: true,
-			},
-			sizing: 'fixed',
-			columns: 'auto-fill',
-			rows: undefined,
-		},
-	] as const)('lays a $sizing mainboard grid out in $columns columns', async ({ layout, sizing, columns, rows }) => {
-		mutableConfig = { ...mutableConfig, board: 'mainboard', mainboard: layout };
-		mainboard.value = Array.from({ length: 9 }, (_, index) => createCard({ name: `Card ${index}` }));
+		{ placement: 'below', listGrow: 'flex-grow: 0', gridGrow: 'flex-grow: 1' },
+		{ placement: 'beside', listGrow: 'flex-grow: 2', gridGrow: 'flex-grow: 4' },
+	] as const)('lays a grid $placement a list out in the space the list leaves it', async ({ placement, listGrow, gridGrow }) => {
+		measured.width = 960;
+		measured.height = 480;
+		mutableConfig = {
+			...mutableConfig,
+			sideboardPlacement: placement,
+			mainboard: { view: 'list', listColumns: 2 },
+			sideboard: { view: 'grid', columns: 4 },
+		};
+		sideboard.value = Array.from({ length: 8 }, (_, index) => createCard({ name: `Side ${index}`, compartment: 'sideboard' }));
 
 		const wrapper = await mountComponent();
 
-		const grid = wrapper.get('[data-testid="mainboard-grid"]');
-		expect(grid.attributes('data-card-sizing')).toBe(sizing);
-		expect(grid.attributes('data-columns')).toBe(columns);
-		expect(grid.attributes('data-rows')).toBe(rows);
-		expect(grid.findAll('[data-testid="deck-card"]').map(card => card.attributes('data-sizing'))).toEqual(Array.from({ length: 9 }).fill(sizing));
-	});
-
-	it('shares the height between Fit boards stacked below each other by their rows, leaving a Fixed board its own', async () => {
-		mutableConfig = {
-			...mutableConfig,
-			sideboardPlacement: 'below',
-			mainboard: { view: 'grid', columns: 4, cardSizing: 'fit' },
-			sideboard: { view: 'grid', columns: 2, cardSizing: 'fit' },
-		};
-		mainboard.value = Array.from({ length: 9 }, (_, index) => createCard({ name: `Card ${index}` }));
-		sideboard.value = ['Force of Will', 'Flusterstorm'].map(name => createCard({ name, compartment: 'sideboard' }));
-
-		let wrapper = await mountComponent();
-		expect(wrapper.get('[data-testid="mainboard-section"]').attributes('style')).toContain('flex-grow: 3');
-		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style')).toContain('flex-grow: 1');
-
-		mutableConfig = {
-			...mutableConfig,
-			sideboard: { view: 'grid', columns: 2, cardSizing: 'fixed' },
-		};
-		wrapper = await mountComponent();
-		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style')).toContain('flex-grow: 0');
-	});
-
-	it('sizes beside boards proportionally to their column counts', async () => {
-		mutableConfig = {
-			...mutableConfig,
-			mainboard: { view: 'grid', columns: 4 },
-			sideboard: { view: 'grid', columns: 2 },
-		};
-		sideboard.value = [
-			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
-		];
-
-		const wrapper = await mountComponent();
-
-		expect(wrapper.get('[data-testid="mainboard-section"]').attributes('style')).toContain('flex-grow: 4');
-		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style')).toContain('flex-grow: 2');
-	});
-
-	it('keeps a beside stacked sideboard content-sized while the mainboard flexes', async () => {
-		sideboard.value = [
-			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
-		];
-
-		const wrapper = await mountComponent();
-
-		expect(wrapper.get('[data-testid="mainboard-section"]').attributes('style')).toContain('flex-grow:');
-		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style') ?? '').not.toContain('flex-grow:');
+		expect(wrapper.get('[data-testid="mainboard-section"]').attributes('style')).toContain(listGrow);
+		expect(wrapper.get('[data-testid="sideboard-section"]').attributes('style')).toContain(gridGrow);
+		const grid = wrapper.get('[data-testid="sideboard-grid"]');
+		expect(grid.attributes('data-columns')).toBe('4');
+		expect(Number.parseFloat((grid.get('.grid').element as HTMLElement).style.gridTemplateColumns.match(/, (.+)\)$/)![1]!)).toBeGreaterThan(0);
 	});
 
 	// The next card covers all of a stacked card but its board's stack-reveal slice; the last shows whole.
 	// The Screen's own sizes, not the Theme's, size each board and every badge, pill and chip (ADR-0054).
 	it('sizes its boards, badges, pill and chips from its config', async () => {
+		measured.width = 1920;
+		measured.height = 960;
 		mutableConfig = {
 			...mutableConfig,
 			mainboard: {
 				view: 'grid',
 				columns: 4,
-				cardWidth: 200,
+				maxCardSize: 120,
 				cardGap: 20,
 			},
-			sideboard: { view: 'stack', cardWidth: 100, stackReveal: 40 },
+			sideboard: { view: 'stack', stackReveal: 40 },
 			quantityBadgeSize: 21,
 			pointsBadgeSize: 22,
 			metaPillSize: 23,
@@ -353,15 +285,20 @@ describe('screenDeckDisplay', () => {
 
 		const wrapper = await mountComponent();
 
+		// The mainboard's max card size holds the whole deck, the stacked strip with it.
 		const grid = wrapper.get('[data-testid="mainboard-grid"]');
-		expect((grid.element as HTMLElement).style.gap).toBe('20px');
+		const gridStyle = (grid.get('.grid').element as HTMLElement).style;
+		expect(gridStyle.gridTemplateColumns).toBe('repeat(4, 120px)');
+		expect(gridStyle.gap).toBe('20px');
 		const mainCard = grid.get('[data-testid="deck-card"]');
-		expect(mainCard.attributes('data-width')).toBe('200px');
 		expect(mainCard.attributes('data-quantity-size')).toBe('21px');
 		expect(mainCard.attributes('data-points-size')).toBe('22px');
 		const strip = wrapper.get('[data-testid="sideboard-stack-column"]');
-		expect(strip.get('[data-testid="deck-card"]').attributes('data-width')).toBe('100px');
-		expect((strip.get('.stack-card').element as HTMLElement).style.height).toBe('40px');
+		expect(strip.findAll('.stack-card').map(card => [(card.element as HTMLElement).style.width, (card.element as HTMLElement).style.height]))
+			.toEqual([
+				['120px', '40px'],
+				['120px', ''],
+			]);
 		expect((wrapper.get('[data-testid="deck-meta-pill"]').element as HTMLElement).style.fontSize).toBe('23px');
 		expect((wrapper.get('[data-testid="highlander-pointed-card-chip"]').element as HTMLElement).style.fontSize).toBe('24px');
 	});
@@ -376,29 +313,6 @@ describe('screenDeckDisplay', () => {
 			'30px',
 			'',
 		]);
-	});
-
-	// A Fit strip is one mainboard column wide and fits its whole stack to the board's height.
-	it.each([
-		{ cardSizing: 'fit', sectionFlex: 'flex-grow: 1', cardSizingOfCards: 'fill' },
-		{ cardSizing: 'fixed', sectionFlex: undefined, cardSizingOfCards: 'fixed' },
-	] as const)('sizes a $cardSizing beside stack', async ({ cardSizing, sectionFlex, cardSizingOfCards }) => {
-		mutableConfig = {
-			...mutableConfig,
-			sideboard: { view: 'stack', cardSizing },
-		};
-		sideboard.value = ['Force of Will', 'Flusterstorm'].map(name => createCard({ name, compartment: 'sideboard' }));
-
-		const wrapper = await mountComponent();
-
-		const strip = wrapper.get('[data-testid="sideboard-stack-column"]');
-		expect(strip.attributes('data-card-sizing')).toBe(cardSizing);
-		const style = wrapper.get('[data-testid="sideboard-section"]').attributes('style') ?? '';
-		if (sectionFlex)
-			expect(style).toContain(sectionFlex);
-		else
-			expect(style).not.toContain('flex-grow:');
-		expect(strip.findAll('[data-testid="deck-card"]').map(card => card.attributes('data-sizing'))).toEqual([cardSizingOfCards, cardSizingOfCards]);
 	});
 
 	// A sideboard stacks only beside the mainboard; anywhere else its stack reads as a grid.
@@ -559,19 +473,17 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.findAll('[data-tag="Companion"]')).toHaveLength(0);
 	});
 
-	// Measured, Fit boards share one card size and are sized and placed as one group.
-	it('lays every Fit board out at one card size from the space it measures', async () => {
+	// Measured, the boards share one card size and are sized and placed as one group.
+	it('lays every board out at one card size from the space it measures', async () => {
 		measured.width = 1920;
 		measured.height = 960;
 		mutableConfig = {
 			...mutableConfig,
 			mainboard: {
 				view: 'grid',
-				cardSizing: 'fit',
-				autoColumns: true,
 				alignment: 'left',
 			},
-			sideboard: { view: 'stack', cardSizing: 'fit', alignment: 'bottom' },
+			sideboard: { view: 'stack', alignment: 'bottom' },
 		};
 		mainboard.value = Array.from({ length: 23 }, (_, index) => createCard({ name: `Card ${index}` }));
 		sideboard.value = Array.from({ length: 15 }, (_, index) => createCard({ name: `Side ${index}`, compartment: 'sideboard' }));
@@ -599,14 +511,10 @@ describe('screenDeckDisplay', () => {
 			sideboardPlacement: 'below',
 			mainboard: {
 				view: 'grid',
-				cardSizing: 'fit',
-				autoColumns: true,
 				alignment: 'center',
 			},
 			sideboard: {
 				view: 'grid',
-				cardSizing: 'fit',
-				autoColumns: true,
 				alignment: 'right',
 			},
 		};
@@ -659,16 +567,12 @@ describe('screenDeckDisplay', () => {
 			sideboardPlacement: placement,
 			mainboard: {
 				view: 'grid',
-				cardSizing: 'fit',
-				autoColumns: true,
 				alignment: 'top-left',
 			},
 			sideboard: {
 				view: placement === 'beside'
 					? 'stack'
 					: 'grid',
-				cardSizing: 'fit',
-				autoColumns: true,
 				alignment: sideboardAlignment,
 			},
 		};

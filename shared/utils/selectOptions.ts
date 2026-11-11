@@ -20,11 +20,6 @@ export const POSITION_FORMAT_SELECT_OPTIONS: { label: string; value: PositionFor
 	{ label: 'Number (1, 2, 3)', value: 'number' },
 ];
 
-export const CARD_SIZING_SELECT_OPTIONS: { label: string; value: CardSizing }[] = [
-	{ label: 'Fixed width', value: 'fixed' },
-	{ label: 'Fit to screen', value: 'fit' },
-];
-
 export const SIDEBOARD_PLACEMENT_SELECT_OPTIONS: { label: string; value: SideboardPlacement }[] = [
 	{ label: 'Beside the mainboard', value: 'beside' },
 	{ label: 'Below the mainboard', value: 'below' },
