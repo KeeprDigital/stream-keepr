@@ -107,7 +107,6 @@ import {
 import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
 import { graphicsSelectionKey, resolveGraphicsSelection } from '~/modules/graphics/selection';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
-import { OPACITY_INPUT } from '~/utils/opacityInput';
 import GraphicsGeometryFields from '../GeometryFields.vue';
 import GraphicsShapeGeometryFields from '../ShapeGeometryFields.vue';
 import GraphicsCompositorAnimation from './Animation.vue';
@@ -1378,11 +1377,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						@bind="token => bindThemeToken('defaultChildSurfaceStyle', token)"
 						@detach="detachThemeToken('defaultChildSurfaceStyle')"
 					/>
-					<GraphicsNumberField
+					<GraphicsOpacityField
 						v-if="selectedGroup.defaultChildSurfaceStyle"
 						label="Child fill opacity"
 						size="sm"
-						v-bind="OPACITY_INPUT"
 						:model-value="selectedGroup.defaultChildSurfaceStyle.fillOpacity"
 						aria-label="Child fill opacity"
 						@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fillOpacity: $event ?? 1 })"
@@ -1693,10 +1691,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 								@update:model-value="color => color && editItem(patchGraphicItem, { color })"
 							/>
 						</UFormField>
-						<GraphicsNumberField
+						<GraphicsOpacityField
 							label="Opacity"
 							size="sm"
-							v-bind="OPACITY_INPUT"
 							:model-value="selectedSocialNetworkIcon.opacity"
 							data-testid="social-network-icon-opacity"
 							aria-label="Social network icon opacity"
@@ -1913,7 +1910,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							</div>
 							<GraphicsTypographyFields
 								:typography="placeholderStyleFor(inputKey)"
-								inheritable
+								variant="placeholder"
 								size="xs"
 								test-id-prefix="graphic-placeholder-style"
 								@update="editItem(patchGraphicPlaceholderStyle, inputKey, $event)"

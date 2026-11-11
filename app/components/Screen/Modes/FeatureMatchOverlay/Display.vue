@@ -24,7 +24,7 @@ import { frameBorderLine, resolveFeatureMatchOverlayRenderModel } from '~/module
 import { featureMatchOverlaySelectionKey } from '~/modules/feature-match-overlay/selection';
 import { resolveFeatureMatchOverlayThemeValues } from '~/modules/feature-match-overlay/themeTokens';
 import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/feature-match-overlay/tokenValues';
-import { lockedLayers } from '~/modules/graphics/editor/layerLocks';
+import { lockedGraphicItems, lockedLayers } from '~/modules/graphics/editor/layerLocks';
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
@@ -352,9 +352,7 @@ function isPreviewTargetSelected(target: FeatureMatchOverlaySelectionTarget) {
  * to the layer beneath it, or to the canvas.
  */
 const locked = computed(() => lockedLayers(FEATURE_MATCH_LAYOUT_EDITOR_TREE, config.value.layout));
-const lockedItemIds = computed(() => locked.value.flatMap(layer => layer.type === 'item'
-	? [layer.itemId]
-	: []));
+const lockedItems = computed(() => lockedGraphicItems(FEATURE_MATCH_LAYOUT_EDITOR_TREE, config.value.layout));
 
 function isSourceLocked(itemId: string) {
 	return locked.value.some(layer => layer.type === 'source' && layer.itemId === itemId);
@@ -637,7 +635,7 @@ onBeforeUnmount(() => {
 			:item-guides="compositorRenderModel.itemGuides"
 			:safe-area-guides="compositorRenderModel.safeAreaGuides"
 			:selectable-canvas="showPreviewGuides"
-			:locked-item-ids="lockedItemIds"
+			:locked-items="lockedItems"
 			@select="selectCompositorPreviewTarget"
 		>
 			<template v-if="showPreviewGuides">

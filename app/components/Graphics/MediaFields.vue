@@ -3,7 +3,6 @@ import type { MediaFit } from '~~/shared/types/graphicItem';
 import type { MediaFieldsPatch, MediaFieldsValue } from '~/utils/mediaFields';
 import { MAX_GRAPHIC_MEDIA_PLAYBACK_RATE, MIN_GRAPHIC_MEDIA_PLAYBACK_RATE } from '~~/shared/types/graphics';
 import { MEDIA_FIT_OPTIONS } from '~/utils/mediaFields';
-import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
  * The one media fields control: Media Fit, opacity, focal position, playback
@@ -56,11 +55,10 @@ function updateFocal(axis: 'horizontal' | 'vertical', value: number | null | und
 				@update:model-value="emit('update', { fit: $event as MediaFit })"
 			/>
 		</UFormField>
-		<GraphicsNumberField
+		<GraphicsOpacityField
 			v-if="opacity"
 			label="Opacity"
 			:size="size"
-			v-bind="OPACITY_INPUT"
 			:model-value="media.opacity"
 			:disabled="disabled"
 			data-testid="media-opacity"

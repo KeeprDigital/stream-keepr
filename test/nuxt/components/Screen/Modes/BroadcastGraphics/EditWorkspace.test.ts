@@ -32,7 +32,34 @@ mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 const lowerThird: BroadcastGraphicConfig = { id: 'lower-third', name: 'Lower Third', items: [] };
 const slate: BroadcastGraphicConfig = { id: 'slate', name: 'Slate', items: [] };
 
-const PreviewStub = defineComponent({ template: '<div data-testid="preview" />' });
+/** Stands in for the preview, reporting the canvas handles the workspace hands it. */
+const PreviewStub = defineComponent({
+	props: {
+		selectionFrame: { type: Object, default: null },
+		selectionLabel: { type: String, default: '' },
+		lockedBoxes: {
+			type: Array,
+			default: () => [],
+		},
+	},
+	emits: [
+		'selectTarget',
+		'manipulate',
+		'rotate',
+		'gestureStart',
+		'gestureEnd',
+	],
+	setup(props) {
+		return () => h('div', {
+			'data-testid': 'preview',
+			'data-handles': props.selectionFrame
+				? JSON.stringify(props.selectionFrame.rect)
+				: 'none',
+			'data-label': props.selectionLabel,
+			'data-locked': String(props.lockedBoxes.length),
+		});
+	},
+});
 /** Stands in for the inspector, reporting the Event facts the workspace hands it. */
 const InspectorStub = defineComponent({
 	props: {
@@ -483,6 +510,118 @@ describe('broadcastGraphicsEditWorkspace', () => {
 			expect(wrapper.emitted('update:selectedTarget')!.at(-1)).toEqual([
 				{ type: 'graphic', graphicId: 'lower-third' },
 			]);
+		});
+	});
+
+	// Canvas handles (#1101): the preview moves what the editor has selected, as the editor may.
+	describe('the preview\'s canvas handles', () => {
+		const bed = shape('bed');
+		const graphics: BroadcastGraphicConfig[] = [
+			{
+				id: 'lower-third',
+				name: 'Lower Third',
+				items: [
+					text('name'),
+					bed,
+					shape('frame', { locked: true }),
+				],
+			},
+		];
+		const onBed = {
+			graphics,
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bed' },
+			selectedGraphicId: 'lower-third',
+		};
+		const preview = (wrapper: Awaited<ReturnType<typeof mountWorkspace>>) => wrapper.get('[data-testid="preview"]');
+
+		it.each([
+			{
+				when: 'it may author',
+				props: {},
+				live: () => createInitialBroadcastGraphicsLiveState(),
+				handles: JSON.stringify({
+					x: 10,
+					y: 20,
+					width: 300,
+					height: 100,
+				}),
+			},
+			{
+				when: 'it observes',
+				props: { writable: false },
+				live: () => createInitialBroadcastGraphicsLiveState(),
+				handles: 'none',
+			},
+			{
+				when: 'the graphic is on air',
+				props: {},
+				live: () => onAirWith({}, { graphicId: 'lower-third' }),
+				handles: 'none',
+			},
+			{
+				when: 'playout is unknown',
+				props: { playoutDisconnected: true },
+				live: () => createInitialBroadcastGraphicsLiveState(),
+				handles: 'none',
+			},
+		])('handles the selected item when $when: $handles', async ({ props, live, handles }) => {
+			mockLiveState.value = live();
+			const wrapper = await mountWorkspace({
+				...onBed,
+				...props,
+			});
+
+			expect(preview(wrapper).attributes('data-handles')).toBe(handles);
+			expect(preview(wrapper).attributes('data-label')).toBe('bed');
+		});
+
+		it('writes a canvas drag to the selected item, undone as one step', async () => {
+			const wrapper = await mountWorkspace(onBed);
+			const stub = wrapper.getComponent(PreviewStub);
+
+			stub.vm.$emit('gestureStart');
+			stub.vm.$emit('manipulate', {
+				x: 40,
+				y: 20,
+				width: 300,
+				height: 100,
+			}, 1);
+			await wrapper.setProps({ graphics: wrapper.emitted<[BroadcastGraphicConfig[]]>('update:graphics')!.at(-1)![0] });
+			stub.vm.$emit('manipulate', {
+				x: 90,
+				y: 60,
+				width: 300,
+				height: 100,
+			}, 1);
+			stub.vm.$emit('gestureEnd');
+			await flushPromises();
+			const moved = wrapper.emitted<[BroadcastGraphicConfig[]]>('update:graphics')!.at(-1)![0];
+			expect(moved[0]!.items.find(item => item.id === 'bed')).toMatchObject({ x: 90, y: 60 });
+
+			await wrapper.setProps({ graphics: moved });
+			await wrapper.get('[data-testid="editor-undo"]').trigger('click');
+			expect(wrapper.emitted('update:graphics')!.at(-1)).toEqual([graphics]);
+		});
+
+		it('adds an item to the selection with a ⌘-click in the preview, and handles both together', async () => {
+			const wrapper = await mountWorkspace(onBed);
+
+			wrapper.getComponent(PreviewStub).vm.$emit('selectTarget', { type: 'item', graphicId: 'lower-third', itemId: 'name' }, true);
+			await nextTick();
+
+			expect(wrapper.get('[data-testid="multi-layer-count"]').text()).toBe('2 layers');
+			expect(preview(wrapper).attributes('data-label')).toBe('2 layers');
+			expect(preview(wrapper).attributes('data-handles')).toBe(JSON.stringify({ x: 0, y: 0, width: 400, height: 120 }));
+		});
+
+		it('badges a selected locked item rather than handling it', async () => {
+			const wrapper = await mountWorkspace({
+				...onBed,
+				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'frame' },
+			});
+
+			expect(preview(wrapper).attributes('data-handles')).toBe('none');
+			expect(preview(wrapper).attributes('data-locked')).toBe('1');
 		});
 	});
 });

@@ -277,17 +277,17 @@ const updatePolicyOptions = [
 				/>
 			</UFormField>
 			<div class="grid grid-cols-2 gap-2">
-				<UFormField label="Dwell (seconds)" size="xs">
-					<UInputNumber
-						:model-value="projection.dwellMs / 1000"
-						:min="MIN_SOCIAL_PROFILE_DWELL_MS / 1000"
-						:max="MAX_SOCIAL_PROFILE_DWELL_MS / 1000"
-						:step="1"
-						:disabled="!canAuthor"
-						data-testid="social-profile-projection-dwell"
-						@update:model-value="patchProjection(projection.key, { dwellMs: ($event ?? 8) * 1000 })"
-					/>
-				</UFormField>
+				<GraphicsNumberField
+					label="Dwell (seconds)"
+					size="xs"
+					:model-value="projection.dwellMs / 1000"
+					:min="MIN_SOCIAL_PROFILE_DWELL_MS / 1000"
+					:max="MAX_SOCIAL_PROFILE_DWELL_MS / 1000"
+					:step="1"
+					:disabled="!canAuthor"
+					data-testid="social-profile-projection-dwell"
+					@update:model-value="patchProjection(projection.key, { dwellMs: ($event ?? 8) * 1000 })"
+				/>
 				<UFormField label="Transition" size="xs">
 					<USelect
 						:model-value="projection.transition"
@@ -299,17 +299,18 @@ const updatePolicyOptions = [
 					/>
 				</UFormField>
 			</div>
-			<UFormField v-if="projection.transition !== 'cut'" label="Transition duration (ms)" size="xs">
-				<UInputNumber
-					:model-value="projection.transitionDurationMs"
-					:min="MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS"
-					:max="MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS"
-					:step="1"
-					:disabled="!canAuthor"
-					data-testid="social-profile-projection-transition-duration"
-					@update:model-value="patchProjection(projection.key, { transitionDurationMs: $event ?? 250 })"
-				/>
-			</UFormField>
+			<GraphicsNumberField
+				v-if="projection.transition !== 'cut'"
+				label="Transition duration (ms)"
+				size="xs"
+				:model-value="projection.transitionDurationMs"
+				:min="MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS"
+				:max="MAX_SOCIAL_PROFILE_TRANSITION_DURATION_MS"
+				:step="1"
+				:disabled="!canAuthor"
+				data-testid="social-profile-projection-transition-duration"
+				@update:model-value="patchProjection(projection.key, { transitionDurationMs: $event ?? 250 })"
+			/>
 			<p class="text-xs text-muted" data-testid="social-profile-projection-group">
 				Presentation Group: {{ projection.presentationGroupId }}
 			</p>

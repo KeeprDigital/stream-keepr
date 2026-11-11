@@ -49,7 +49,7 @@ export const THEME_TOKEN_INPUTS = {
  */
 export const THEME_TOKEN_COMMITS_IN_STEPS = {
 	'color': false,
-	'dimension': false,
+	'dimension': true,
 	'typography': true,
 	'backgroundLayers': true,
 	'animationEffect': true,

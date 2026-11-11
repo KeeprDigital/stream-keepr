@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { LockedGraphicItem } from '~/modules/graphics/editor/layerLocks';
 import type { GraphicsItemGuide, GraphicsSafeAreaGuide } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { isSelectionToggle } from '~/modules/graphics/selection';
@@ -38,10 +39,11 @@ const props = defineProps<{
 	 */
 	selectableCanvas?: boolean;
 	/**
-	 * Graphic Items the host has locked against canvas edits (#747): their guides
-	 * are drawn but not offered, so a click falls through to what lies beneath.
+	 * Graphic Items the host has locked against canvas edits (#747), each named by
+	 * its composition: their guides are drawn but not offered, so a click falls
+	 * through to what lies beneath.
 	 */
-	lockedItemIds?: readonly string[];
+	lockedItems?: readonly LockedGraphicItem[];
 }>();
 
 const emit = defineEmits<{
@@ -50,7 +52,7 @@ const emit = defineEmits<{
 }>();
 
 function isLocked(guide: GraphicsItemGuide): boolean {
-	return props.lockedItemIds?.includes(guide.itemId) === true;
+	return props.lockedItems?.some(item => item.graphicId === guide.graphicId && item.itemId === guide.itemId) === true;
 }
 
 function selectItem(guide: GraphicsItemGuide, event?: MouseEvent | KeyboardEvent) {

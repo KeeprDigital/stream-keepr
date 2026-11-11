@@ -24,15 +24,10 @@ export interface ScreenModeHostDefinition {
 	foundationTokens: readonly FoundationTokenName[];
 }
 
-export interface ScreenModeOutputOption {
-	value: ScreenOutput;
-	label: string;
-	icon: string;
-}
-
 export interface ScreenModeConfigurationPolicy {
 	displayType: DisplayType;
-	outputOptions: ScreenModeOutputOption[];
+	/** The mode's own Screen Outputs, which the output hand-out offers by name. */
+	outputs: readonly ScreenOutput[];
 	/**
 	 * Whether the Screen configuration page gives this mode the full page width.
 	 * A graphics host embeds the compositor's tree, preview, and inspector side
@@ -66,8 +61,8 @@ const PLAIN_HOST_TOKENS = ['inset', 'alignment'] as const satisfies readonly Fou
 /**
  * The graphics Screen Outputs, in the order an editor names, previews and hands them
  * out. One list so a Screen Output looks the same wherever it is offered: the
- * preview's output switch shows these labels, and the Screen's "Open … output"
- * actions are named from them.
+ * preview's output switch shows these labels, and the output hand-out names its
+ * Open and Copy actions from them.
  */
 export const SCREEN_OUTPUT_OPTIONS = [
 	{ label: 'Overlay', value: 'overlay', icon: 'i-lucide-layers' },
@@ -75,12 +70,8 @@ export const SCREEN_OUTPUT_OPTIONS = [
 	{ label: 'Key', value: 'key', icon: 'i-lucide-contrast' },
 ] as const satisfies ReadonlyArray<{ label: string; value: ScreenOutput; icon: string }>;
 
-/** The "Open … output" actions every graphics host exposes. */
-const OPEN_SCREEN_OUTPUT_OPTIONS: ScreenModeOutputOption[] = SCREEN_OUTPUT_OPTIONS.map(option => ({
-	value: option.value,
-	label: `Open ${option.label.toLowerCase()} output`,
-	icon: option.icon,
-}));
+/** The Screen Outputs every graphics host hands out. */
+const GRAPHICS_HOST_OUTPUTS: readonly ScreenOutput[] = SCREEN_OUTPUT_OPTIONS.map(option => option.value);
 
 /**
  * How a Screen Mode is hosted.
@@ -116,8 +107,8 @@ export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeCo
 
 	return {
 		displayType: sharedDefinition.displayType,
-		outputOptions: graphicsHost
-			? OPEN_SCREEN_OUTPUT_OPTIONS
+		outputs: graphicsHost
+			? GRAPHICS_HOST_OUTPUTS
 			: [],
 		fullWidthConfiguration: Boolean(graphicsHost),
 	};

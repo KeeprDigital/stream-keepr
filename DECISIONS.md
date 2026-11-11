@@ -1956,7 +1956,7 @@ Accepted · 2026-11-03 · [#749](https://github.com/KeeprDigital/stream-keepr/is
 
 **Only a preview frame listens, and nothing writes.** A live Screen Output installs no listener for the run. The controls send a plan to the embedded frame and write no Screen configuration, so they need no Graphics Authoring Lease and work for a read-only observer.
 
-**The controls sit behind one control in the preview toolbar, closed on every visit ([#1070](https://github.com/KeeprDigital/stream-keepr/issues/1070)).** Both editors mount them in the shared preview panel's `animation` slot. Hiding them does not stop a run: they stay mounted, a loop keeps playing, and the one control is marked as playing so a moving preview is explained.
+**The controls sit behind one control in the preview toolbar, closed on every visit ([#1070](https://github.com/KeeprDigital/stream-keepr/issues/1070)).** The one preview shell both editors mount (`GraphicsEditorPreview`, [#1101](https://github.com/KeeprDigital/stream-keepr/issues/1101)) puts them in the shared preview panel's `animation` slot; the Feature Match Overlay adds its subject buttons beside them. Hiding them does not stop a run: they stay mounted, a loop keeps playing, and the one control is marked as playing so a moving preview is explained.
 
 ### Why
 
@@ -2072,7 +2072,7 @@ Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/is
 
 **A Layer Lock keeps a layer from canvas edits, and nothing else.** A locked layer is not moved, resized or rotated on the canvas and arrow nudges skip it; with several selected, the canvas moves only the unlocked ones. It stays selectable from the layer list, where it shows no canvas handles but a lock badge on its row and its canvas outline, and its property panel still edits it (E27). Delete, duplicate, hide, reorder (a drag in the layer list included), copy and paste, group and ungroup, and align and distribute are not canvas edits and still act on it.
 
-**A click on a locked layer in the preview falls through to the layer beneath it, or to the canvas (E27).** The preview frame reads the locks from the working layout the editor already pushes it, and draws their guides without offering them.
+**A click on a locked layer in the preview falls through to the layer beneath it, or to the canvas (E27).** The preview frame reads the locks from the working layout or stack the editor already pushes it, and draws their guides without offering them; a lock names its item within its own composition, since a Broadcast Graphic's item ids are unique per graphic only (#1101).
 
 **Locking a Graphic Group locks its children; a Source Item locks too (E28).** A child locked through its group cannot be unlocked on its own.
 
@@ -2709,7 +2709,7 @@ A clock should read its full duration when it starts and `0:00` when it ends. Ro
 
 ## ADR-0079: Settings surfaces are built from one of each shared primitive
 
-Accepted · 2026-11-11 · [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060), [#1074](https://github.com/KeeprDigital/stream-keepr/issues/1074)
+Accepted · 2026-11-11 · [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060), [#1074](https://github.com/KeeprDigital/stream-keepr/issues/1074) · Amended 2026-11-11: the graphics inspector and the Theme editor share one field control for each kind of value · [#1102](https://github.com/KeeprDigital/stream-keepr/issues/1102)
 
 A Screen settings page, a graphics inspector and the Feature Match Overlay's Frame and Source Item panels each had their own collapsible (`ScreenSettingsCard`, `GraphicsInspectorSection`, `FeatureMatchOverlayControlSection`), and shared settings components wrote the field row's layout classes, number inputs, subheadings and hints by hand, so the same control lined up differently from card to card.
 
@@ -2722,6 +2722,14 @@ A Screen settings page, a graphics inspector and the Feature Match Overlay's Fra
 - **`ScreenSettingsNumberField`** is the one number input. It owns the display scale (shown in displayed units, emitted in stored ones) and emits `null` when emptied. `GraphicsNumberField` wraps it to add the label drag.
 - **`ScreenSettingsToggle`** is the one toggle row, **`ScreenSettingsSubheading`** the one subheading (`ScreenSettingsGroup` is a subheading naming a `role="group"`), and **`ScreenSettingsHint`** the one hint.
 
+**The graphics inspector and the Theme editor share one field control for each kind of value** (#1102), under `app/components/Graphics/`. A Theme token's input is an adapter: it maps the token to the shared control's fields and back.
+
+- **`GraphicsTypographyFields`** is the one typography editor, by `variant`: a Graphic Item's base typography, a Graphic Placeholder Style, and a typography token, which has no size or style, spaces its letters in em and keeps its own bounds (`THEME_TYPOGRAPHY_BOUNDS`).
+- **`GraphicsCompositorSurfaceStyleFields`** is the one surface editor, for a Graphic Surface Style and a surface-style token. A host with its own colour picker fills its `color` slot.
+- **`GraphicsShapeGeometryFields`** is the one corner editor, for a Graphic Item's Shape Geometry, a shape-geometry token and a Source Item. In its `radii` form every corner is rounded, 0 being square, with no preset or slant: `SourceFramingStyleFields` reads a Source Item's stored radii as that geometry and writes each corner's own radius back, so what a Source Item stores does not change. It replaces the overlay's `BorderRadiusControl`.
+- **`GraphicsOpacityField`** is the one opacity control, 0 to 1 in steps of 0.05, wherever an inspector, a Theme token or the settings beside them edit an opacity. It replaces `UIOpacityInput` and the `OPACITY_INPUT` bounds each caller bound.
+- **`GraphicsNumberField`** is every other number they edit, a Theme dimension included.
+
 ### Why
 
 Every select, number field and toggle lines up the same way only if one component lays each out. One section also means a card and an inspector row cannot drift apart in how they summarise, toggle or remember.
@@ -2731,7 +2739,11 @@ Every select, number field and toggle lines up the same way only if one componen
 - A component under `app/components/Screen/` that is part of a settings surface writes no raw `UFormField`, no bare `UInputNumber` and no hand-written subheading or hint classes.
 - A new density or layout is a prop on the primitive, never a second component.
 - The primitives have no tests of their own beyond the open-and-remember rule of the section (`test/nuxt/components/Screen/SettingsSection.test.ts`); the seams that mount them cover them.
-- `ThemeDimensionTokenInput` and `UIOpacityInput` keep their own inputs: each is a value editor with its own unit and commit rule, not a settings number field. Event configuration pages and modals are outside this decision.
+- Event configuration pages and modals are outside this decision.
+- A bare `UInputNumber` under `app/components/Graphics/` or `app/components/Theme/` fails lint (`eslint.config.mjs`), so a new inspector or Theme field takes the shared number field.
+- A Theme dimension now steps and drags like every other number, so the Theme editor writes it once its edits pause, as it does a composite token, and an entry beyond its bounds is held at the bound rather than undone. A typography token's weight is a number stepping by 100 rather than a list.
+- A Source Item's corners are no longer set through the shared `borderRadius`: "All corners" writes each corner's own radius. A stored `borderRadius` still reads as the radius of every corner that names none.
+- The shared controls have no tests of their own; the Theme editor's page test and the inspector's, Source Item's and settings' tests cover them where they are mounted.
 
 ### Rejected alternatives
 
@@ -2775,7 +2787,7 @@ One action offered once: replacing a layout is placing a template. A preset was 
 
 ## ADR-0081: One graphics editor core, parameterised by the Host Contract's editor half
 
-Accepted · 2026-11-11 · [#1098](https://github.com/KeeprDigital/stream-keepr/issues/1098), part of [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060) · Amended 2026-11-11: Broadcast Graphics adopts it · [#1100](https://github.com/KeeprDigital/stream-keepr/issues/1100)
+Accepted · 2026-11-11 · [#1098](https://github.com/KeeprDigital/stream-keepr/issues/1098), part of [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060) · Amended 2026-11-11: Broadcast Graphics adopts it · [#1100](https://github.com/KeeprDigital/stream-keepr/issues/1100) · Amended 2026-11-11: one preview shell, with canvas handles in Broadcast Graphics · [#1101](https://github.com/KeeprDigital/stream-keepr/issues/1101)
 
 The Feature Match Overlay editor alone had undo, several selected, Layer Locks, grouping, alignment, the clipboard verbs and the keyboard, typed throughout on the Feature Match Layout. Broadcast Graphics is to adopt the same editor (#1100), not a copy of it.
 
@@ -2805,6 +2817,7 @@ The verbs and their rules (one undo step per verb, several selected moving toget
 - `useGraphicsEditor`'s `commit` takes a host's own write for a property panel edit that reaches the document by another path (the Feature Match Overlay's Frame and Source Item panels), and records it as one undoable step like any verb.
 - The test table `test/nuxt/composables/useGraphicsEditor.test.ts` runs every case against each host in `test/nuxt/helpers/graphicsEditorHosts.ts`; a new host adds a column there.
 - No realtime path changes. Both editors drop unsaved edits on losing the Graphics Authoring Lease the same way (ADR-0030).
+- **One preview shell serves both editors (#1101):** `GraphicsEditorPreview` (`app/components/Graphics/EditorPreview.vue`) owns the shared preview panel, the Screen Output frame, the ready handshake and sender-checked reports, focus release, the canvas handles and the Graphic Animation Preview control. A host supplies the messages its frame reads, any report in its own vocabulary (the Feature Match Overlay's Frame and Source Item selections), its run, its handles' selection and its toolbar controls. Broadcast Graphics gains canvas handles: none for an observer, during a placement, or over a graphic that may be on air. Its frame learns a ⌘-click toggle and the stack's Layer Locks in its authoring-preview branch only; several selected reach it as their Broadcast Graphic, and the handles outline each member. A live Screen Output's render path is unchanged: it draws no guide layer, so neither locks nor selections reach it.
 
 ### Rejected alternatives
 

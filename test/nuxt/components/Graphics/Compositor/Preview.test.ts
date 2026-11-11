@@ -4,11 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
 import Preview from '~/components/Graphics/Compositor/Preview.vue';
-import {
-	GRAPHICS_PREVIEW_READY_MESSAGE,
-	GRAPHICS_PREVIEW_SELECT_MESSAGE,
-	GRAPHICS_PREVIEW_STATE_MESSAGE,
-} from '~/modules/graphics/previewMessages';
+import { GRAPHICS_PREVIEW_SELECT_MESSAGE, GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
 
 enableAutoUnmount(afterEach);
 
@@ -183,34 +179,6 @@ describe('graphicsCompositorPreview', () => {
 		expect(projectedGraphics[0]!.socialProfileProjections![0]!.label).toBe('Talent profile');
 	});
 
-	it('embeds a Screen Output frame that asks for item guides but not safe areas by default', async () => {
-		const wrapper = await mountComponent();
-		const src = wrapper.get('iframe').attributes('src') ?? '';
-
-		expect(src).toContain('output=overlay');
-		expect(src).toContain('embed=preview');
-		expect(src).toContain('guides=1');
-		expect(src).not.toContain('safe=1');
-	});
-
-	it('asks the preview frame for advisory safe-area guides only when the author turns them on', async () => {
-		const wrapper = await mountComponent();
-
-		await wrapper.get('[data-testid="preview-safe-area-guides"]').trigger('click');
-		await nextTick();
-
-		expect(wrapper.get('iframe').attributes('src')).toContain('safe=1');
-	});
-
-	it('stops asking for item guides when the author turns them off', async () => {
-		const wrapper = await mountComponent();
-
-		await wrapper.get('[data-testid="preview-item-guides"]').trigger('click');
-		await nextTick();
-
-		expect(wrapper.get('iframe').attributes('src')).not.toContain('guides=1');
-	});
-
 	it('selects the Fill and Key Screen Outputs from the same stable Screen URL', async () => {
 		const wrapper = await mountComponent();
 
@@ -282,60 +250,15 @@ describe('graphicsCompositorPreview', () => {
 		expect((posted[0] as { state: { graphics: unknown[] } }).state.graphics).toHaveLength(1);
 	});
 
-	// The frame's `message` listener is installed when its app mounts, and this application renders
-	// on the client — so the iframe's `load` event, which the push above rides, fires before that…
-	it('pushes again when the frame reports that it is listening', async () => {
-		const wrapper = await mountComponent();
-		const frame = wrapper.get('iframe').element;
-		const posted: unknown[] = [];
-		Object.defineProperty(frame, 'contentWindow', {
-			configurable: true,
-			value: {
-				postMessage: (message: unknown) => posted.push(message),
-				self: true,
-			},
-		});
-
-		// No `load` at all: the frame speaks first, which is the case the handshake
-		// exists for.
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: frame.contentWindow,
-			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
-		}));
-		await nextTick();
-
-		expect(posted).toHaveLength(1);
-		expect(posted[0]).toMatchObject({ type: GRAPHICS_PREVIEW_STATE_MESSAGE });
-	});
-
-	it('answers no ready announced by a window it did not embed', async () => {
-		const wrapper = await mountComponent();
-		const frame = wrapper.get('iframe').element;
-		const posted: unknown[] = [];
-		Object.defineProperty(frame, 'contentWindow', {
-			configurable: true,
-			value: {
-				postMessage: (message: unknown) => posted.push(message),
-			},
-		});
-
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: window.location.origin,
-			source: window,
-			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
-		}));
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: 'https://elsewhere.test',
-			source: frame.contentWindow,
-			data: { type: GRAPHICS_PREVIEW_READY_MESSAGE },
-		}));
-		await nextTick();
-
-		expect(posted).toHaveLength(0);
-	});
-
-	it('accepts a canvas selection only from its own preview frame', async () => {
+	// The shell checks who sent a selection; this host hands it on, a ⌘-click as a toggle (#1101).
+	it.each([
+		['a click', {}, false],
+		[
+			'a ⌘-click',
+			{ toggle: true },
+			true,
+		],
+	])('hands its workspace %s in the preview', async (_, extra, toggle) => {
 		const wrapper = await mountComponent();
 		const frame = wrapper.get('iframe').element;
 		Object.defineProperty(frame, 'contentWindow', { configurable: true, value: window });
@@ -344,23 +267,13 @@ describe('graphicsCompositorPreview', () => {
 		window.dispatchEvent(new MessageEvent('message', {
 			origin: window.location.origin,
 			source: window,
-			data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target },
+			data: { type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target, ...extra },
 		}));
 		await nextTick();
 
-		expect(wrapper.emitted('selectTarget')?.[0]?.[0]).toEqual(target);
-
-		window.dispatchEvent(new MessageEvent('message', {
-			origin: 'https://elsewhere.test',
-			source: window,
-			data: {
-				type: GRAPHICS_PREVIEW_SELECT_MESSAGE,
-				target: { type: 'canvas' },
-			},
-		}));
-		await nextTick();
-
-		expect(wrapper.emitted('selectTarget')).toHaveLength(1);
+		expect(wrapper.emitted('selectTarget')).toEqual([
+			[target, toggle],
+		]);
 	});
 });
 

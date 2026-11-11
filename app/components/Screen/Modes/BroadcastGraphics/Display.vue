@@ -26,6 +26,7 @@ const {
 	outgoingSocialProfilePresentations,
 	isAuthoringPreview,
 	selectedTarget,
+	lockedItems,
 	publishSelection,
 	ready,
 } = useBroadcastGraphicsModeData(context);
@@ -146,6 +147,7 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 		:data-font-error="fontsFailed.toString()"
 		:data-export-font-sources="JSON.stringify(fontSources)"
 		:render="renderModel"
+		:locked-items="lockedItems"
 		@select="publishSelection"
 	>
 		<template v-if="backgroundPlan" #backdrop>

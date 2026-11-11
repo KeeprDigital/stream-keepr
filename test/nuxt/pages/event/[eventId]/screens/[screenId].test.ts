@@ -113,7 +113,7 @@ async function chooseMenuItem(page: VueWrapper, trigger: string, label: string) 
 	await flushPromises();
 }
 
-const OPEN_MENU = '[data-testid="open-output-menu"]';
+const OPEN_MENU = '[data-hand-out="open"]';
 const MORE_MENU = '[data-testid="screen-actions-menu"]';
 
 function makeScreen(id: number) {
@@ -345,8 +345,8 @@ describe('screen config page — degraded card data on connected outputs', () =>
 });
 
 /**
- * Wiring only: each hand-out control reaches `useScreenOutputAccessUrl`, whose own
- * suite owns fresh-per-hand-out capabilities, refusals and blocked pop-ups (#231).
+ * Wiring only: the shared hand-out owns its controls and their words, and
+ * `useScreenOutputAccessUrl` fresh-per-hand-out capabilities (#231, #1104).
  */
 describe('screen config page — handing out this Screen’s output', () => {
 	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
@@ -408,26 +408,10 @@ describe('screen config page — handing out this Screen’s output', () => {
 		expect(mockCopyToClipboard).toHaveBeenCalledWith(accessUrl('rotated-capability'), expect.anything());
 	});
 
-	it('opens the default output in a tab it points only once asset access is in hand', async () => {
-		const outputWindow = stubOutputWindow();
-		wrapper = await mountLoadedPage();
-		mockCapabilityResponse.value = 'rotated-capability';
-
-		await chooseMenuItem(wrapper, OPEN_MENU, 'Open output');
-
-		expect(window.open).toHaveBeenCalledWith('', '_blank');
-		expect(outputWindow.opener).toBeNull();
-		expect(outputWindow.location.href).toBe(accessUrl('rotated-capability'));
-		expect(outputWindow.close).not.toHaveBeenCalled();
-	});
-
-	// A Screen Mode's own outputs are handed out by a second function on this page.
 	describe('a Screen Mode’s own outputs', () => {
 		beforeEach(() => {
 			stubModePolicy({
-				outputOptions: [
-					{ label: 'Open fill output', icon: 'i-lucide-square', value: 'fill' },
-				],
+				outputs: ['fill'],
 			});
 		});
 
@@ -469,7 +453,7 @@ describe('screen config page — the Screen header', () => {
 		mockScreenStore.sendScreenCommand.mockClear();
 		modeSettings.resetBlocked = false;
 		resetConfig.mockClear();
-		stubModePolicy({ displayType: 'overlay', outputOptions: [] });
+		stubModePolicy({ displayType: 'overlay', outputs: [] });
 		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => ModeSettingsStub as never);
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue({ assetCapability: 'rotated-capability' });
@@ -501,12 +485,11 @@ describe('screen config page — the Screen header', () => {
 		return button;
 	}
 
-	it('offers Open, Copy output URL, Refresh and one menu at the top level, in that order', async () => {
+	it('offers the output hand-out, Refresh and one menu at the top level, in that order', async () => {
 		const page = await mountLoadedPage();
 
 		expect(page.findAll('[data-header-action]').map(action => action.attributes('data-header-action'))).toEqual([
-			'open',
-			'copy-output-url',
+			'hand-out',
 			'refresh',
 			'more',
 		]);
@@ -636,7 +619,7 @@ describe('screen config page — Editor Focus Mode', () => {
 		mockScreenStore.screens = [];
 		mockScreenStore.screenPresence = new Map();
 		focusMode.enabled.value = false;
-		stubModePolicy({ displayType: 'overlay', outputOptions: [] });
+		stubModePolicy({ displayType: 'overlay', outputs: [] });
 	});
 
 	afterEach(() => {
@@ -660,13 +643,13 @@ describe('screen config page — Editor Focus Mode', () => {
 		const page = await mountLoadedPage(GraphicsEditorStub);
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
-		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
+		expect(page.find('[data-testid="output-hand-out"]').exists()).toBe(true);
 		expect(page.find('[data-settings-card="Screen-wide look"]').exists()).toBe(true);
 
 		await page.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('true');
-		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(false);
+		expect(page.find('[data-testid="output-hand-out"]').exists()).toBe(false);
 		expect(page.find('[data-settings-card="Screen-wide look"]').exists()).toBe(false);
 		expect(page.find('[data-testid="mode-editor"]').exists()).toBe(true);
 		expect(page.get('[data-testid="focused-screen-name"]').text()).toBe('Screen 1');
@@ -678,7 +661,7 @@ describe('screen config page — Editor Focus Mode', () => {
 		const page = await mountLoadedPage(GraphicsEditorStub);
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('true');
-		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(false);
+		expect(page.find('[data-testid="output-hand-out"]').exists()).toBe(false);
 	});
 
 	it('exits Focus Mode from the same toggle', async () => {
@@ -688,7 +671,7 @@ describe('screen config page — Editor Focus Mode', () => {
 		await page.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
-		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
+		expect(page.find('[data-testid="output-hand-out"]').exists()).toBe(true);
 	});
 
 	it('ignores the remembered choice for a mode whose settings offer no Focus Mode', async () => {
@@ -696,7 +679,7 @@ describe('screen config page — Editor Focus Mode', () => {
 		const page = await mountLoadedPage(PlainSettingsStub);
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
-		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
+		expect(page.find('[data-testid="output-hand-out"]').exists()).toBe(true);
 		expect(page.find('[data-testid="focused-screen-name"]').exists()).toBe(false);
 	});
 });
@@ -716,7 +699,7 @@ describe('screen config page — Background & Placement, then the Screen-wide lo
 		pendingLoads = [];
 		route.params.screenId = '1';
 		mockScreenStore.screenPresence = new Map();
-		stubModePolicy({ displayType: 'overlay', outputOptions: [] });
+		stubModePolicy({ displayType: 'overlay', outputs: [] });
 		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => ModeSettingsStub as never);
 	});
 

@@ -117,9 +117,9 @@ describe('typography fields', () => {
 		expect(await enter(wrapper, 'Line height', null)).toEqual({ lineHeight: 1.15 });
 	});
 
-	describe('inheritable, for a Graphic Placeholder Style', () => {
+	describe('the placeholder variant, for a Graphic Placeholder Style', () => {
 		it('leaves out line height, which lays out the whole text block rather than one run', () => {
-			const wrapper = mountFields({ inheritable: true, typography: {} });
+			const wrapper = mountFields({ variant: 'placeholder', typography: {} });
 
 			expect(numberField(wrapper, 'Line height')).toBeUndefined();
 			expect(numberField(wrapper, 'Letter spacing')).toBeDefined();
@@ -128,7 +128,7 @@ describe('typography fields', () => {
 
 		it('returns a cleared field to the base typography rather than a value', async () => {
 			const wrapper = mountFields({
-				inheritable: true,
+				variant: 'placeholder',
 				typography: { fontSize: 24, letterSpacing: 2 },
 			});
 
@@ -138,7 +138,7 @@ describe('typography fields', () => {
 
 		it('offers "same as base" for style and case, and shows it for an unset one', async () => {
 			const wrapper = mountFields({
-				inheritable: true,
+				variant: 'placeholder',
 				typography: { textTransform: 'uppercase' },
 			});
 

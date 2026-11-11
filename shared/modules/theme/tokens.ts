@@ -144,6 +144,13 @@ export type ModeTokenDeclarations = Readonly<Record<string, ModeTokenDefinition>
  */
 export type StoredThemeTokens = Readonly<Record<string, unknown>>;
 
+/** What a typography token's numbers accept: its write schema's bounds, and the typography editor's. */
+export const THEME_TYPOGRAPHY_BOUNDS = {
+	weight: { min: 100, max: 900 },
+	lineHeight: { min: 0.5, max: 3 },
+	tracking: { min: -0.5, max: 1 },
+} as const;
+
 const typographySchema = z.object({
 	font: z.discriminatedUnion('kind', [
 		z.object({
@@ -155,9 +162,9 @@ const typographySchema = z.object({
 			reference: graphicAssetReferenceSchema,
 		}).strict(),
 	]),
-	weight: z.number().int().min(100).max(900),
-	lineHeight: z.number().min(0.5).max(3),
-	tracking: z.number().min(-0.5).max(1),
+	weight: z.number().int().min(THEME_TYPOGRAPHY_BOUNDS.weight.min).max(THEME_TYPOGRAPHY_BOUNDS.weight.max),
+	lineHeight: z.number().min(THEME_TYPOGRAPHY_BOUNDS.lineHeight.min).max(THEME_TYPOGRAPHY_BOUNDS.lineHeight.max),
+	tracking: z.number().min(THEME_TYPOGRAPHY_BOUNDS.tracking.min).max(THEME_TYPOGRAPHY_BOUNDS.tracking.max),
 	case: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES),
 }).strict();
 

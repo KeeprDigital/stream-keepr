@@ -34,7 +34,6 @@ import {
 	MIN_GRAPHIC_ANIMATION_REPEAT,
 } from '~~/shared/types/graphics';
 import { useGeometryUnit } from '~/composables/ui/useGeometryUnit';
-import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
  * The one Graphic Animation Recipe fields control, for a lifecycle phase's recipe
@@ -269,10 +268,9 @@ function testId(field: string) {
 			</div>
 
 			<div v-if="channel.key === 'fade' && recipe.fade" class="mt-2">
-				<GraphicsNumberField
+				<GraphicsOpacityField
 					label="Opacity at excursion"
 					size="xs"
-					v-bind="OPACITY_INPUT"
 					:model-value="recipe.fade.opacity"
 					:disabled="disabled"
 					:data-testid="testId('fade-opacity')"
@@ -306,14 +304,10 @@ function testId(field: string) {
 					/>
 				</UFormField>
 				<!-- The fixed distance: the one place the slide's length is entered. -->
-				<UFormField
-					v-if="recipe.slide.distanceMode === 'fixed'"
-					:label="slideReference ? 'Fixed distance' : 'Fixed distance (px)'"
-					:help="slideDistanceHelp"
-					size="xs"
-				>
-					<div class="flex items-center gap-2">
-						<UInputNumber
+				<div v-if="recipe.slide.distanceMode === 'fixed'" class="space-y-1">
+					<div class="flex items-end gap-2">
+						<GraphicsNumberField
+							:label="slideReference ? 'Fixed distance' : 'Fixed distance (px)'"
 							:model-value="shownSlideDistance(recipe.slide.distance)"
 							:min="0"
 							:max="slideDistanceMax"
@@ -330,7 +324,10 @@ function testId(field: string) {
 							v-model="geometryUnit"
 						/>
 					</div>
-				</UFormField>
+					<ScreenSettingsHint v-if="slideDistanceHelp" :data-testid="testId('slide-distance-help')">
+						{{ slideDistanceHelp }}
+					</ScreenSettingsHint>
+				</div>
 			</div>
 
 			<div v-if="channel.key === 'scale' && recipe.scale" class="mt-2 space-y-2">

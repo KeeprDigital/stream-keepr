@@ -1,14 +1,18 @@
 import type { BroadcastGraphicConfig, GraphicInputValue, SocialProfileProjectionValues } from '~~/shared/types/graphics';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
+import type { LockedGraphicItem } from '~/modules/graphics/editor/layerLocks';
 import type { GraphicsPreviewState } from '~/modules/graphics/previewMessages';
 import type { GraphicsAnimationProjection } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { parseBroadcastGraphicsBackgroundConfig } from '~~/shared/animationEffects';
+import { broadcastGraphicsEditorTree } from '~/modules/broadcast-graphics/editorHost';
 import { resolveGraphicAnimationPreview } from '~/modules/graphics/animationPreview';
+import { lockedGraphicItems } from '~/modules/graphics/editor/layerLocks';
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
 	isGraphicsPreviewStateMessage,
+	previewSelectMessage,
 	readGraphicsPreviewState,
 } from '~/modules/graphics/previewMessages';
 import { useGraphicAnimationPreviewClock } from './useGraphicAnimationPreviewClock';
@@ -26,6 +30,9 @@ import { useGraphicAnimationPreviewClock } from './useGraphicAnimationPreviewClo
  * pushes in, showing the Broadcast Graphic being authored without touching live
  * Screen state.
  */
+/** The editor's item tree, read for its locks only: no graphic is selected in a frame. */
+const PREVIEW_TREE = broadcastGraphicsEditorTree(() => null);
+
 export function useBroadcastGraphicsModeData(context: ScreenContext) {
 	const { eventId, isPreview, screen, sampleDataset } = context;
 	const storedConfig = useScreenModeConfig(context, 'broadcast-graphics');
@@ -155,6 +162,16 @@ export function useBroadcastGraphicsModeData(context: ScreenContext) {
 	const selectedTarget = computed<GraphicsSelectionTarget>(() =>
 		previewState.value?.selectedTarget ?? { type: 'canvas' },
 	);
+
+	/**
+	 * The Graphic Items of the working stack locked against canvas edits, whose
+	 * guides an authoring preview draws without offering (ADR-0063), so a click
+	 * falls through to what lies beneath. Read from the stack the editor pushed;
+	 * a live output has none, and draws no guide to hold one anyway.
+	 */
+	const lockedItems = computed<readonly LockedGraphicItem[]>(() => previewState.value
+		? lockedGraphicItems(PREVIEW_TREE, previewState.value.graphics)
+		: []);
 
 	/*
 	 * The live playout clock.
@@ -297,12 +314,17 @@ export function useBroadcastGraphicsModeData(context: ScreenContext) {
 		previewState.value = readGraphicsPreviewState(message.data.state);
 	}
 
-	/** Report a canvas selection back to the editor that embedded this preview. */
-	function publishSelection(target: GraphicsSelectionTarget) {
+	/**
+	 * Report a canvas selection back to the editor that embedded this preview. A
+	 * ⌘- or Ctrl-click asks it to add the item to its selection or take it out
+	 * (#1101); the editor then pushes what is marked back down, so this frame
+	 * marks nothing itself.
+	 */
+	function publishSelection(target: GraphicsSelectionTarget, toggle = false) {
 		if (!isPreview?.value || !import.meta.client)
 			return;
 
-		window.parent?.postMessage({ type: GRAPHICS_PREVIEW_SELECT_MESSAGE, target }, window.location.origin);
+		window.parent?.postMessage(previewSelectMessage(GRAPHICS_PREVIEW_SELECT_MESSAGE, target, toggle), window.location.origin);
 	}
 
 	// A preview has no Live Session of its own: it renders the working stack, so
@@ -375,6 +397,7 @@ export function useBroadcastGraphicsModeData(context: ScreenContext) {
 		outgoingSocialProfilePresentations,
 		isAuthoringPreview,
 		selectedTarget,
+		lockedItems,
 		publishSelection,
 	};
 }

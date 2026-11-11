@@ -21,7 +21,7 @@ function backgroundEmits(wrapper: Awaited<ReturnType<typeof mountCard>>): Emitte
 }
 
 async function setOpacity(wrapper: Awaited<ReturnType<typeof mountCard>>, value: string) {
-	const input = wrapper.get('[data-testid="broadcast-graphics-background-opacity"] input');
+	const input = wrapper.get('input[data-testid="broadcast-graphics-background-opacity"]');
 	await input.setValue(value);
 	await input.trigger('change');
 	await input.trigger('blur');

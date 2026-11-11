@@ -303,7 +303,7 @@ describe('screenModesBackgroundSettings', () => {
 		expect(lastLayersWrite().find(layer => layer.id === 'base')).toMatchObject({ enabled: false });
 		expect(lastLayersWrite().find(layer => layer.id === 'anim')).toMatchObject({ enabled: true });
 
-		await wrapper.find('[data-layer-id="base"] [data-testid="layer-opacity"] input').setValue('0.4');
+		await wrapper.find('[data-layer-id="base"] input[data-testid="layer-opacity"]').setValue('0.4');
 		expect(lastLayersWrite().find(layer => layer.id === 'base')).toMatchObject({ opacity: 0.4 });
 	});
 

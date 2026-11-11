@@ -1,28 +1,25 @@
 <script setup lang="ts">
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
-import type { ScreenOutput } from '~~/shared/types/screenConfig';
+import type { BroadcastGraphicConfig, GraphicRect } from '~~/shared/types/graphics';
+import type { EditorSelectionFrame } from '~/modules/graphics/editor/layerFrame';
 import type { GraphicsPreviewAnimationPlan } from '~/modules/graphics/previewMessages';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
 import { canonicalSocialProfileUrl, SUPPORTED_SOCIAL_NETWORK_BY_KEY, SUPPORTED_SOCIAL_NETWORKS } from '~~/shared/socialProfiles';
-import { screenOutputPath } from '~~/shared/utils/screenOutput';
-import {
-	GRAPHICS_PREVIEW_STATE_MESSAGE,
-	GRAPHICS_PREVIEW_THEME_MESSAGE,
-	isGraphicsPreviewReadyMessage,
-	isGraphicsPreviewSelectMessage,
-} from '~/modules/graphics/previewMessages';
+import { GRAPHICS_PREVIEW_STATE_MESSAGE, GRAPHICS_PREVIEW_THEME_MESSAGE } from '~/modules/graphics/previewMessages';
 import { graphicsSelectionGraphicId } from '~/modules/graphics/selection';
 
 /**
- * The Broadcast Graphics editor preview: the shared preview panel (output
- * selection, zoom, item guides, advisory action-safe and title-safe guides), plus
- * item selection, a preview background, and Graphic Animation Preview.
+ * The Broadcast Graphics editor preview: the shared editor preview shell
+ * (`GraphicsEditorPreview`: frame, guides, zoom, canvas handles, Graphic
+ * Animation Preview), plus this host's preview background and Social Profile
+ * samples.
  *
  * The preview is a real Screen Output frame, asked explicitly for its guides.
- * A live Screen Output is never asked, so no guide can reach one.
+ * A live Screen Output is never asked, so no guide can reach one. Several
+ * selected layers reach the frame as their Broadcast Graphic, which it marks;
+ * the canvas handles outline each of them (#1101).
  *
  * ## Graphic Animation Preview touches nothing live
  *
@@ -48,9 +45,24 @@ const props = defineProps<{
 	 * follow the Screen's Event's Theme, or absent to tell the frame nothing yet.
 	 */
 	previewThemeValues?: StoredThemeTokens | null;
+	/** Where the selected layers sit on the canvas, when this session may move them. */
+	selectionFrame?: EditorSelectionFrame | null;
+	selectionLabel?: string;
+	/** Where each selected locked layer sits on the canvas, badged as locked. */
+	lockedBoxes?: readonly GraphicRect[];
 }>();
 
-const emit = defineEmits<{ selectTarget: [target: GraphicsSelectionTarget] }>();
+const emit = defineEmits<{
+	/** `toggle` is a ⌘- or Ctrl-click: add the item to the selection, or take it out. */
+	selectTarget: [target: GraphicsSelectionTarget, toggle: boolean];
+	/** The selection moved or resized on the canvas; one `gesture` per drag. */
+	manipulate: [rect: GraphicRect, gesture: number];
+	/** Each frame of a canvas rotate drag, as the selected Graphic Item's new Graphic Rotation. */
+	rotate: [rotation: number, gesture: number];
+	/** A canvas drag began, and ended: the frames between are one edit. */
+	gestureStart: [];
+	gestureEnd: [];
+}>();
 
 type PreviewBackground = 'transparent' | 'black' | 'white' | 'green';
 const PREVIEW_BACKGROUND_OPTIONS: Array<{ label: string; value: PreviewBackground; color?: string }> = [
@@ -60,13 +72,9 @@ const PREVIEW_BACKGROUND_OPTIONS: Array<{ label: string; value: PreviewBackgroun
 	{ label: 'Green', value: 'green', color: '#00b140' },
 ];
 
-const previewOutput = ref<ScreenOutput>('overlay');
 const previewBackground = ref<PreviewBackground>('transparent');
 const previewBackgroundColor = computed(() =>
 	PREVIEW_BACKGROUND_OPTIONS.find(option => option.value === previewBackground.value)?.color);
-const itemGuides = ref(true);
-const safeAreaGuides = ref(false);
-const previewFrame = ref<HTMLIFrameElement | null>(null);
 
 /** The run the shared controls describe; null composes at the Graphic Resting State. */
 const animationPlan = ref<GraphicsPreviewAnimationPlan | null>(null);
@@ -157,85 +165,49 @@ const animationTarget = computed(() => previewGraphicId.value === null
 	? null
 	: { graphicId: previewGraphicId.value });
 
-const previewUrl = computed(() => screenOutputPath({
-	eventId: props.eventId,
-	screenSlug: props.screen.slug,
-	output: previewOutput.value,
-	embed: 'preview',
-	itemGuides: itemGuides.value,
-	safeAreaGuides: safeAreaGuides.value,
-}));
-
-function pushPreviewState() {
-	if (!import.meta.client || !previewFrame.value?.contentWindow)
-		return;
-
-	previewFrame.value.contentWindow.postMessage({
+/**
+ * What the frame is told: one preview state — the working stack, what is
+ * selected, the Social Profile samples and the run in play — and the Theme
+ * previewed under, once there is one to name.
+ */
+const previewMessages = computed(() => [
+	{
 		type: GRAPHICS_PREVIEW_STATE_MESSAGE,
 		state: {
-			graphics: JSON.parse(JSON.stringify(props.graphics)),
-			selectedTarget: { ...props.selectedTarget },
+			graphics: props.graphics,
+			selectedTarget: props.selectedTarget,
 			socialProfileValues: previewSocialProfileValues.value,
 			animation: animationPlan.value,
 		},
-	}, window.location.origin);
-	if (props.previewThemeValues !== undefined) {
-		previewFrame.value.contentWindow.postMessage({
-			type: GRAPHICS_PREVIEW_THEME_MESSAGE,
-			tokens: props.previewThemeValues && JSON.parse(JSON.stringify(props.previewThemeValues)),
-		}, window.location.origin);
-	}
-}
-
-function handlePreviewMessage(message: MessageEvent) {
-	const expected = {
-		origin: window.location.origin,
-		source: previewFrame.value?.contentWindow ?? null,
-	};
-
-	// The frame reporting that it can now be spoken to. The `@load` push below
-	// happens before the frame's own app has mounted as often as after it, and a
-	// push that lost that race left the preview holding the Screen's stored stack
-	// with nothing to say it had missed anything (#234).
-	if (isGraphicsPreviewReadyMessage(message, expected)) {
-		pushPreviewState();
-		return;
-	}
-
-	if (isGraphicsPreviewSelectMessage(message, expected))
-		emit('selectTarget', message.data.target);
-}
-
-onMounted(() => {
-	window.addEventListener('message', handlePreviewMessage);
-});
-
-onBeforeUnmount(() => {
-	window.removeEventListener('message', handlePreviewMessage);
-});
-
-watch(
-	() => [
-		props.graphics,
-		props.selectedTarget,
-		previewSocialProfileValues.value,
-		animationPlan.value,
-		props.previewThemeValues,
-	] as const,
-	() => pushPreviewState(),
-	{ deep: true },
-);
+	},
+	...(props.previewThemeValues === undefined
+		? []
+		: [
+				{ type: GRAPHICS_PREVIEW_THEME_MESSAGE, tokens: props.previewThemeValues },
+			]),
+]);
 </script>
 
 <template>
-	<GraphicsPreviewPanel
-		v-model:output="previewOutput"
-		v-model:item-guides="itemGuides"
-		v-model:safe-area-guides="safeAreaGuides"
+	<GraphicsEditorPreview
+		v-model:animation-plan="animationPlan"
+		:event-id="eventId"
+		:screen-slug="screen.slug"
 		:canvas-width="canvasWidth"
 		:canvas-height="canvasHeight"
+		title="Graphics compositor preview"
+		:messages="previewMessages"
+		:animation-target="animationTarget"
+		animation-hint="Select a Broadcast Graphic to preview its animation."
+		:selection-frame="selectionFrame"
+		:selection-label="selectionLabel"
+		:locked-boxes="lockedBoxes"
 		:background="previewBackgroundColor"
-		:animation-playing="animationPlan !== null"
+		@select="(target, toggle) => emit('selectTarget', target, toggle)"
+		@manipulate="(rect, gesture) => emit('manipulate', rect, gesture)"
+		@rotate="(rotation, gesture) => emit('rotate', rotation, gesture)"
+		@gesture-start="emit('gestureStart')"
+		@gesture-end="emit('gestureEnd')"
 	>
 		<template #controls>
 			<USelect
@@ -245,14 +217,6 @@ watch(
 				size="sm"
 				class="w-32"
 				aria-label="Preview background"
-			/>
-		</template>
-
-		<template #animation>
-			<GraphicsAnimationPreviewControls
-				:target="animationTarget"
-				hint="Select a Broadcast Graphic to preview its animation."
-				@update:plan="plan => { animationPlan = plan }"
 			/>
 		</template>
 
@@ -291,16 +255,5 @@ watch(
 				Samples affect this preview only and are never saved.
 			</p>
 		</div>
-
-		<template #viewport>
-			<iframe
-				ref="previewFrame"
-				:key="previewUrl"
-				:src="previewUrl"
-				class="absolute inset-0 size-full border-0"
-				title="Graphics compositor preview"
-				@load="pushPreviewState"
-			/>
-		</template>
-	</GraphicsPreviewPanel>
+	</GraphicsEditorPreview>
 </template>

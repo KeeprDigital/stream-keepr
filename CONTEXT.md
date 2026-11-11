@@ -285,6 +285,10 @@ An opaque, long-lived, revocable right that lets one Screen Output resolve only 
 A short text, about 16 characters, that names one Screen and proves the right to its Screen Output Asset Capability. It is not presented on reads: it is exchanged once for the capability, which then does everything a capability does. It is derived from what the capability is derived from, never stored, so regenerating the capability regenerates the link and the former link stops exchanging. No Session stands in for it.
 _Avoid_: short link, output token, output code, share link.
 
+**Output Hand-out**:
+The one place an operator is handed a Screen Output's URL: Open and Copy URL side by side, each carrying a Screen Output Asset Capability obtained at the moment of the hand-out, and refusing rather than handing out a URL without one. The Screen header, the Feature Match Overlay editor and the Program monitor each show the same one; a graphics host's own Screen Outputs are offered by name behind each control. The Screen's address printed beside it carries no capability and is not a hand-out.
+_Avoid_: Outputs popover, share button.
+
 ### Client and live-state infrastructure
 
 **Event Data**:
@@ -701,7 +705,7 @@ A context-gated Graphic Item that renders one Player's life total.
 A context-gated Graphic Item that renders one Player's game-win indicators.
 
 **Shape Geometry**:
-A parameterised rectangle with independently square, rounded, or cut corners and bounded left or right edge slant. Rectangle, rule, slanted-edge, and corner-cut presets initialise the same geometry rather than distinct types.
+A parameterised rectangle with independently square, rounded, or cut corners and bounded left or right edge slant. Rectangle, rule, slanted-edge, and corner-cut presets initialise the same geometry rather than distinct types. One corner editor edits it wherever it appears, and edits a Source Item's corner radii as rounded corners only.
 
 **Graphic Group**:
 A structural Graphic Item arranging direct context-available Graphic Items as a row, column, or canvas, optionally coordinating clipping or animation and supplying overridable local style defaults. Graphic Groups do not nest. A Graphic Item moved into or out of a group keeps where it is drawn, its geometry rebased between canvas and group space; a row or column group refuses a rotated item rather than straightening it.
@@ -839,7 +843,7 @@ _Avoid_: worst-case data, overflow data
 - A **Screen Output** reads everything it renders through its **Screen**, never through an operator's Event reads, and never changes live state by reading it (ADR-0022)
 - A **Program monitor** or preview without a capability renders everything but media, is admitted by its operator's **Session**, and reports its missing asset access so a control surface states the loss
 - **Screen Outputs** and authoring run on Chromium, the only engine transparent video is supported on; another browser may flatten its alpha, and nothing detects or refuses it (ADR-0020)
-- **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom and pan, item selection, guides, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items. Zoom and pan are view state: they never write, need no **Graphics Authoring Lease**, and start at Fit on every visit
+- **Broadcast Graphics Screen** and **Feature Match Overlay** previews are one preview shell: output selection, zoom and pan, item selection (a ⌘-click adds an item or takes it out), canvas handles for what the editor may move, guides that skip a locked layer, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items. Zoom and pan are view state: they never write, need no **Graphics Authoring Lease**, and start at Fit on every visit
 
 ### Theming
 

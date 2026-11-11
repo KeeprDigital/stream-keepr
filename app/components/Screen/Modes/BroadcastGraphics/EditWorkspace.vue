@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BroadcastGraphicsBackgroundConfig } from '~~/shared/animationEffects';
-import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, GraphicChannelConfig, GraphicRect } from '~~/shared/types/graphics';
 import type { GraphicsAuthoringLeaseStatus } from '~/composables/screen/useGraphicsAuthoringLease';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
@@ -18,8 +18,8 @@ import BroadcastGraphicsLayerList from './LayerList.vue';
 /**
  * The Edit workspace of a Broadcast Graphics Screen: the shared graphics editor
  * (#1100) — its layer list, undo, several selected, locks, grouping, alignment,
- * clipboard and keyboard — with the compositor's preview and inspector, over the
- * Screen's authored stack.
+ * clipboard and keyboard — with the compositor's preview, its canvas handles
+ * (#1101), and the inspector, over the Screen's authored stack.
  *
  * The whole workspace is the artifact one Graphics Authoring Lease covers, so
  * exactly one session authors it and every other session observes it. An observer
@@ -257,10 +257,14 @@ function selectGraphic(graphicId: string | null) {
 		: { type: 'canvas' });
 }
 
-/** A click in the preview selects what it hits alone. */
-function selectInPreview(target: GraphicsSelectionTarget) {
+/** A click in the preview selects what it hits alone; a ⌘- or Ctrl-click adds an item or takes it out. */
+function selectInPreview(target: GraphicsSelectionTarget, toggle = false) {
 	if (target.type === 'item') {
-		editor.select({ type: 'item', graphicId: target.graphicId, itemId: target.itemId });
+		const layer = { type: 'item', graphicId: target.graphicId, itemId: target.itemId } as const;
+		if (toggle)
+			editor.toggleSelect(layer);
+		else
+			editor.select(layer);
 		return;
 	}
 	editor.select(CANVAS_SELECTION);
@@ -277,6 +281,29 @@ const selectedRects = computed(() => layers.value.flatMap((layer) => {
 
 /** Whether the Broadcast Graphic the inspector shows may be on air, and so is not edited. */
 const selectedOnAir = computed(() => selectedGraphic.value !== null && !editor.mayEditComposition(selectedGraphic.value));
+
+/**
+ * Where the preview's canvas handles go (#1101), with the lines they snap to:
+ * none while this session may not move the selection, so neither handles nor
+ * snap guides show to an observer, during a placement, or over a graphic that
+ * may be on air.
+ */
+const selectionFrame = computed(() => canAuthor.value && !selectedOnAir.value
+	? editor.selectionFrame.value
+	: null);
+const selectionLabel = computed(() => severalSelected.value
+	? `${layers.value.length} layers`
+	: layers.value[0] && layerConfig(host.tree, props.graphics, layers.value[0])?.label);
+
+// A canvas drag is bracketed as one gesture, so it undoes as one step however
+// long it pauses; the key coalesces frames arriving outside one.
+function manipulate(rect: GraphicRect, gesture: number) {
+	editor.setSelectionRect(rect, { coalesce: `canvas:${gesture}` });
+}
+
+function rotate(rotation: number, gesture: number) {
+	editor.setRotation(editor.selection.value, rotation, { coalesce: `canvas:${gesture}` });
+}
 </script>
 
 <template>
@@ -424,7 +451,14 @@ const selectedOnAir = computed(() => selectedGraphic.value !== null && !editor.m
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:preview-theme-values="previewTheme.previewThemeValues.value"
+					:selection-frame="selectionFrame"
+					:selection-label="selectionLabel"
+					:locked-boxes="editor.lockedSelectionBoxes.value"
 					@select-target="selectInPreview"
+					@manipulate="manipulate"
+					@rotate="rotate"
+					@gesture-start="editor.beginGesture"
+					@gesture-end="editor.endGesture"
 				/>
 			</section>
 
