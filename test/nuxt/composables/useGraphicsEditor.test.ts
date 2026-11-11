@@ -31,7 +31,13 @@ function items(): GraphicItemConfig[] {
 
 function rect(editing: Editing, id: string) {
 	const item = findGraphicItem(editing.composition(), id)?.item;
-	return item && { x: item.x, y: item.y, width: item.width, height: item.height, visible: item.visible };
+	return item && {
+		x: item.x,
+		y: item.y,
+		width: item.width,
+		height: item.height,
+		visible: item.visible,
+	};
 }
 
 function topLevelIds(editing: Editing) {
@@ -58,20 +64,62 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 
 	describe('without the lease', () => {
 		it.each<[string, (editor: Editor, at: Editing['layer']) => void]>([
-			['edit', editor => editor.setLayersGeometry({ x: 5 })],
-			['add a Graphic Item', editor => editor.addItem('text')],
-			['remove', editor => editor.remove()],
-			['paste layers', editor => editor.paste(editor.copy()!)],
-			['paste a style', editor => editor.pasteStyle(copyGraphicStyle(host.hostId, shape('from')))],
-			['duplicate', editor => editor.duplicate()],
-			['reorder', (editor, at) => editor.moveToEdge(at('a'), 'front')],
-			['hide', editor => editor.toggleVisible()],
-			['lock', editor => editor.toggleLock()],
-			['rename', (editor, at) => editor.rename(at('a'), 'Renamed')],
-			['move on the canvas', (editor, at) => editor.setRect(at('a'), { x: 1, y: 2, width: 3, height: 4 })],
-			['nudge', editor => editor.nudge({ x: 1, y: 0 })],
-			['record a checkpoint', editor => editor.checkpoint()],
-			['align', editor => editor.align('right')],
+			[
+				'edit',
+				editor => editor.setLayersGeometry({ x: 5 }),
+			],
+			[
+				'add a Graphic Item',
+				editor => editor.addItem('text'),
+			],
+			[
+				'remove',
+				editor => editor.remove(),
+			],
+			[
+				'paste layers',
+				editor => editor.paste(editor.copy()!),
+			],
+			[
+				'paste a style',
+				editor => editor.pasteStyle(copyGraphicStyle(host.hostId, shape('from'))),
+			],
+			[
+				'duplicate',
+				editor => editor.duplicate(),
+			],
+			[
+				'reorder',
+				(editor, at) => editor.moveToEdge(at('a'), 'front'),
+			],
+			[
+				'hide',
+				editor => editor.toggleVisible(),
+			],
+			[
+				'lock',
+				editor => editor.toggleLock(),
+			],
+			[
+				'rename',
+				(editor, at) => editor.rename(at('a'), 'Renamed'),
+			],
+			[
+				'move on the canvas',
+				(editor, at) => editor.setRect(at('a'), { x: 1, y: 2, width: 3, height: 4 }),
+			],
+			[
+				'nudge',
+				editor => editor.nudge({ x: 1, y: 0 }),
+			],
+			[
+				'record a checkpoint',
+				editor => editor.checkpoint(),
+			],
+			[
+				'align',
+				editor => editor.align('right'),
+			],
 			[
 				'group',
 				(editor, at) => {
@@ -79,7 +127,10 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 					editor.group();
 				},
 			],
-			['ungroup', (editor, at) => editor.ungroup(at('g'))],
+			[
+				'ungroup',
+				(editor, at) => editor.ungroup(at('g')),
+			],
 		])('writes nothing on %s', async (_, verb) => {
 			const harness = editing(false);
 
@@ -155,9 +206,18 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 		// A template placement rewrites the stored document: an edit, undo or redo
 		// made meanwhile would write a whole document from before it over the placed one.
 		it.each<[string, (editor: Editor) => void]>([
-			['an edit', editor => editor.toggleVisible()],
-			['undo', editor => editor.undo()],
-			['redo', editor => editor.redo()],
+			[
+				'an edit',
+				editor => editor.toggleVisible(),
+			],
+			[
+				'undo',
+				editor => editor.undo(),
+			],
+			[
+				'redo',
+				editor => editor.redo(),
+			],
 		])('writes nothing on %s while the host holds the editor, and offers none', (_, verb) => {
 			const harness = editing();
 			harness.editor.toggleVisible();
@@ -195,8 +255,18 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 			[
 				'a canvas drag of the box they cover, over two frames of one gesture',
 				(editor) => {
-					editor.setSelectionRect({ x: 20, y: 5, width: 1390, height: 670 }, { coalesce: 'canvas:1' });
-					editor.setSelectionRect({ x: 24, y: 7, width: 1390, height: 670 }, { coalesce: 'canvas:1' });
+					editor.setSelectionRect({
+						x: 20,
+						y: 5,
+						width: 1390,
+						height: 670,
+					}, { coalesce: 'canvas:1' });
+					editor.setSelectionRect({
+						x: 24,
+						y: 7,
+						width: 1390,
+						height: 670,
+					}, { coalesce: 'canvas:1' });
 				},
 				{ x: 14, y: -3 },
 			],
@@ -221,10 +291,26 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 		});
 
 		it.each<[string, (editor: Editor) => void, (harness: Editing) => unknown]>([
-			['deletes every one', editor => editor.remove(), harness => SELECTED.map(id => rect(harness, id))],
-			['hides every one', editor => editor.toggleVisible(), harness => SELECTED.map(id => rect(harness, id)?.visible)],
-			['duplicates every one', editor => editor.duplicate(), harness => harness.composition().items.length],
-			['writes shared geometry to every one', editor => editor.setLayersGeometry({ x: 5, height: 60 }), harness => SELECTED.map(id => rect(harness, id))],
+			[
+				'deletes every one',
+				editor => editor.remove(),
+				harness => SELECTED.map(id => rect(harness, id)),
+			],
+			[
+				'hides every one',
+				editor => editor.toggleVisible(),
+				harness => SELECTED.map(id => rect(harness, id)?.visible),
+			],
+			[
+				'duplicates every one',
+				editor => editor.duplicate(),
+				harness => harness.composition().items.length,
+			],
+			[
+				'writes shared geometry to every one',
+				editor => editor.setLayersGeometry({ x: 5, height: 60 }),
+				harness => SELECTED.map(id => rect(harness, id)),
+			],
 		])('%s as one undo step', (_, verb, read) => {
 			const harness = severalSelected();
 			const before = read(harness);
@@ -267,7 +353,10 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 			harness.storeItems(harness.composition().items.filter(item => item.id !== 'b'));
 			await nextTick();
 
-			expect(harness.editor.layers.value).toEqual([harness.layer('a'), harness.layer('c')]);
+			expect(harness.editor.layers.value).toEqual([
+				harness.layer('a'),
+				harness.layer('c'),
+			]);
 		});
 
 		it('never holds a group with its own child', () => {
@@ -276,7 +365,9 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 
 			harness.editor.toggleSelect(harness.layer('g1'));
 
-			expect(harness.editor.layers.value).toEqual([harness.layer('g1')]);
+			expect(harness.editor.layers.value).toEqual([
+				harness.layer('g1'),
+			]);
 		});
 	});
 
@@ -304,14 +395,29 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 			const harness = editing();
 			storeLocked(harness, ['g']);
 
-			expect([harness.editor.isLocked(harness.layer('g1')), harness.editor.isLockedByItsGroup(harness.layer('g1'))]).toEqual([true, true]);
+			expect([
+				harness.editor.isLocked(harness.layer('g1')),
+				harness.editor.isLockedByItsGroup(harness.layer('g1')),
+			]).toEqual([true, true]);
 		});
 
 		it.each<[string, (editor: Editor, at: Editing['layer']) => void]>([
-			['an arrow nudge', editor => editor.nudge({ x: 5, y: 0 })],
-			['a canvas move', (editor, at) => editor.setRect(at('a'), { x: 1, y: 2, width: 3, height: 4 })],
-			['a canvas drag of the selection', editor => editor.setSelectionRect({ x: 1, y: 2, width: 3, height: 4 })],
-			['a canvas rotation', (editor, at) => editor.setRotation(at('a'), 45)],
+			[
+				'an arrow nudge',
+				editor => editor.nudge({ x: 5, y: 0 }),
+			],
+			[
+				'a canvas move',
+				(editor, at) => editor.setRect(at('a'), { x: 1, y: 2, width: 3, height: 4 }),
+			],
+			[
+				'a canvas drag of the selection',
+				editor => editor.setSelectionRect({ x: 1, y: 2, width: 3, height: 4 }),
+			],
+			[
+				'a canvas rotation',
+				(editor, at) => editor.setRotation(at('a'), 45),
+			],
 		])('leaves a locked layer alone on %s, offering the canvas nothing to move', (_, verb) => {
 			const harness = editing();
 			storeLocked(harness, ['a']);
@@ -347,7 +453,9 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 			expect(harness.writes).toHaveLength(1);
 			const created = harness.composition().items.find(item => !before.includes(item.id));
 			expect(created?.type === 'group' && created.children.map(child => child.id)).toEqual(['a', 'b']);
-			expect(harness.editor.layers.value).toEqual([harness.layer(created!.id)]);
+			expect(harness.editor.layers.value).toEqual([
+				harness.layer(created!.id),
+			]);
 			harness.editor.undo();
 			expect(topLevelIds(harness)).toEqual(before);
 		});
@@ -367,12 +475,18 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 		});
 
 		it.each<[string, (harness: Editing) => void]>([
-			['grouping layers already in a group', (harness) => {
-				harness.editor.select(harness.layer('g1'));
-				harness.editor.toggleSelect(harness.layer('g2'));
-				harness.editor.group();
-			}],
-			['ungrouping a layer that is not a group', harness => harness.editor.ungroup(harness.layer('a'))],
+			[
+				'grouping layers already in a group',
+				(harness) => {
+					harness.editor.select(harness.layer('g1'));
+					harness.editor.toggleSelect(harness.layer('g2'));
+					harness.editor.group();
+				},
+			],
+			[
+				'ungrouping a layer that is not a group',
+				harness => harness.editor.ungroup(harness.layer('a')),
+			],
 		])('writes nothing %s', (_, verb) => {
 			const harness = editing();
 
@@ -385,8 +499,16 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 	/** Align and distribute move the selected layers, each command one undo step (#919). */
 	describe('aligning and distributing', () => {
 		it.each<[string, (editor: Editor) => void, (harness: Editing) => unknown]>([
-			['aligns them to the bounds they cover', editor => editor.align('bottom'), harness => SELECTED.map(id => rect(harness, id)?.y)],
-			['distributes them', editor => editor.distribute('y'), harness => SELECTED.map(id => rect(harness, id)?.y)],
+			[
+				'aligns them to the bounds they cover',
+				editor => editor.align('bottom'),
+				harness => SELECTED.map(id => rect(harness, id)?.y),
+			],
+			[
+				'distributes them',
+				editor => editor.distribute('y'),
+				harness => SELECTED.map(id => rect(harness, id)?.y),
+			],
 		])('%s as one undo step', (_, verb, read) => {
 			const harness = severalSelected();
 			const before = read(harness);
@@ -418,17 +540,32 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 		});
 
 		it.each<[string, (harness: Editing) => void, [boolean, boolean]]>([
-			['none', harness => harness.editor.select({ type: 'canvas' }), [false, false]],
-			['one', () => {}, [true, false]],
-			['three', (harness) => {
-				harness.editor.toggleSelect(harness.layer('b'));
-				harness.editor.toggleSelect(harness.layer('c'));
-			}, [true, true]],
+			[
+				'none',
+				harness => harness.editor.select({ type: 'canvas' }),
+				[false, false],
+			],
+			[
+				'one',
+				() => {},
+				[true, false],
+			],
+			[
+				'three',
+				(harness) => {
+					harness.editor.toggleSelect(harness.layer('b'));
+					harness.editor.toggleSelect(harness.layer('c'));
+				},
+				[true, true],
+			],
 		])('offers align and distribute to %s selected', (_, selecting, offered) => {
 			const harness = editing();
 			selecting(harness);
 
-			expect([harness.editor.canAlign(), harness.editor.canDistribute()]).toEqual(offered);
+			expect([
+				harness.editor.canAlign(),
+				harness.editor.canDistribute(),
+			]).toEqual(offered);
 		});
 	});
 
@@ -451,10 +588,14 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 		});
 
 		it('pastes a style onto every selected Graphic Item it fits, as one undo step', () => {
-			const panel = surfaceStyle({ fill: { type: 'solid', color: '#ff0000' } });
+			const panel = surfaceStyle({
+				fill: { type: 'solid', color: '#ff0000' },
+			});
 			const harness = editing(true, [
 				text('from', { surfaceStyle: panel }),
-				shape('fits', { themeBindings: { surfaceStyle: 'panel' } }),
+				shape('fits', {
+					themeBindings: { surfaceStyle: 'panel' },
+				}),
 				media('does-not'),
 			]);
 			harness.editor.select(harness.layer('from'));
@@ -473,7 +614,12 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 			const harness = editing();
 			const copied = harness.editor.copy()!;
 
-			const refusal = harness.editor.paste({ ...copied, host: copied.host === 'broadcast-graphics' ? 'feature-match-overlay' : 'broadcast-graphics' });
+			const refusal = harness.editor.paste({
+				...copied,
+				host: copied.host === 'broadcast-graphics'
+					? 'feature-match-overlay'
+					: 'broadcast-graphics',
+			});
 
 			expect(refusal).toMatchObject({ reason: 'other-host' });
 			expect(harness.writes).toEqual([]);
@@ -498,13 +644,18 @@ describe('the shared graphics editor\'s Source Items on the Feature Match Overla
 		harness.editor.addHostLayer();
 
 		expect(harness.document().sources).toHaveLength(before + 1);
-		expect(harness.editor.layers.value).toEqual([{ type: 'source', itemId: harness.document().sources.at(-1)!.id }]);
+		expect(harness.editor.layers.value).toEqual([
+			{ type: 'source', itemId: harness.document().sources.at(-1)!.id },
+		]);
 		harness.editor.undo();
 		expect(harness.document().sources).toHaveLength(before);
 	});
 
 	it('moves a Source Item and a Graphic Item together on the canvas', () => {
-		const harness = featureMatchLayoutEditing({ writable: true, items: items() });
+		const harness = featureMatchLayoutEditing({
+			writable: true,
+			items: items(),
+		});
 		harness.editor.select(SOURCE);
 		harness.editor.toggleSelect({ type: 'item', itemId: 'a' });
 		const before = sourceAt(harness, 'main-source')!;
@@ -526,7 +677,10 @@ describe('the shared graphics editor\'s Source Items on the Feature Match Overla
 	});
 
 	it('refuses to group a selection holding a Source Item', () => {
-		const harness = featureMatchLayoutEditing({ writable: true, items: items() });
+		const harness = featureMatchLayoutEditing({
+			writable: true,
+			items: items(),
+		});
 		harness.editor.select({ type: 'item', itemId: 'a' });
 		harness.editor.toggleSelect({ type: 'item', itemId: 'b' });
 		harness.editor.toggleSelect(SOURCE);
@@ -543,11 +697,17 @@ describe('the shared graphics editor\'s Source Items on the Feature Match Overla
 
 		harness.editor.moveToEdge(SOURCE, 'front');
 
-		expect(harness.document().sources.map(source => source.id)).toEqual([...order.filter(id => id !== 'main-source'), 'main-source']);
+		expect(harness.document().sources.map(source => source.id)).toEqual([
+			...order.filter(id => id !== 'main-source'),
+			'main-source',
+		]);
 	});
 
 	it('copies and pastes a Source Item with the Graphic Items, selecting both copies', () => {
-		const harness = featureMatchLayoutEditing({ writable: true, items: items() });
+		const harness = featureMatchLayoutEditing({
+			writable: true,
+			items: items(),
+		});
 		harness.editor.select({ type: 'item', itemId: 'a' });
 		harness.editor.toggleSelect(OTHER_SOURCE);
 

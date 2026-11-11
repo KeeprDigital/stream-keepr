@@ -1,5 +1,5 @@
-import type { GraphicsEditorLayer, GraphicsEditorSelection, GraphicsEditorTree } from './host';
 import type { GraphicAnchorPoint, GraphicRect } from '~~/shared/types/graphics';
+import type { GraphicsEditorLayer, GraphicsEditorSelection, GraphicsEditorTree } from './host';
 import type { SnapLines } from '~/modules/graphics/canvasManipulation';
 import { unionBox } from '~/modules/graphics/canvasAlignment';
 import { canvasSnapLines, isTurned, rotatedBounds } from '~/modules/graphics/canvasManipulation';

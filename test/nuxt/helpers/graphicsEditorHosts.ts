@@ -56,7 +56,10 @@ export function featureMatchLayoutEditing(options: { writable: boolean; items?: 
 		updateConfig: (patch) => {
 			if (patch.layout)
 				writes.push(patch.layout);
-			config.value = { ...config.value, ...patch };
+			config.value = {
+				...config.value,
+				...patch,
+			};
 		},
 		canvasWidth: CANVAS.width,
 		canvasHeight: CANVAS.height,

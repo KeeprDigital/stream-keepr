@@ -67,7 +67,10 @@ export const FEATURE_MATCH_LAYOUT_EDITOR_TREE: GraphicsEditorTree<Layout, Layer>
 		label: 'Source Item',
 		create: (layout) => {
 			const result = layoutWriter.createSourceItem(layout);
-			return { document: result.layout, layer: sourceLayer(result.id) };
+			return {
+				document: result.layout,
+				layer: sourceLayer(result.id),
+			};
 		},
 		find: (layout, layer) => layout.sources.find(source => source.id === layer.itemId),
 		siblings: layout => layout.sources.map(source => sourceLayer(source.id)),

@@ -1,5 +1,5 @@
-import type { GraphicsEditorLayer, GraphicsEditorTree } from './host';
 import type { GraphicItemPlacement, GraphicItemPlacementRefusal } from '~~/shared/modules/graphics';
+import type { GraphicsEditorLayer, GraphicsEditorTree } from './host';
 import { findGraphicItem, graphicItemPlacementRefusal, placeGraphicItem } from '~~/shared/modules/graphics';
 import { isSameLayer } from './host';
 

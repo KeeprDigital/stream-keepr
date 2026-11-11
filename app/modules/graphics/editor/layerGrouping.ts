@@ -1,5 +1,5 @@
-import type { GraphicsEditorLayer, GraphicsEditorTree } from './host';
 import type { GraphicItemsGroupRefusal } from '~~/shared/modules/graphics';
+import type { GraphicsEditorLayer, GraphicsEditorTree } from './host';
 import { graphicItemsGroupRefusal } from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_GROUP_CHILDREN } from '~~/shared/types/graphics';
 

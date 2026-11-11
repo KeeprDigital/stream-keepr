@@ -1,5 +1,5 @@
-import type { GraphicsEditorLayer, GraphicsEditorTree } from './host';
 import type { GraphicGroupItemConfig, GraphicRect } from '~~/shared/types/graphics';
+import type { GraphicsEditorLayer, GraphicsEditorTree } from './host';
 import type { AlignEdge, BoxMove, DistributeAxis } from '~/modules/graphics/canvasAlignment';
 import { alignBoxes, distributeBoxes } from '~/modules/graphics/canvasAlignment';
 import { rotatedBounds } from '~/modules/graphics/canvasManipulation';

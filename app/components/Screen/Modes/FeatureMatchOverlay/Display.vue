@@ -16,7 +16,6 @@ import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFea
 import { useFeatureMatchOverlaySideboardRevealAnimation } from '~/composables/screen/useFeatureMatchOverlaySideboardRevealAnimation';
 import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
 import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~/modules/feature-match-overlay/editorHost';
-import { lockedLayers } from '~/modules/graphics/editor/layerLocks';
 import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE,
 	isFeatureMatchOverlayPreviewSelectedTargetMessage,
@@ -25,6 +24,7 @@ import { frameBorderLine, resolveFeatureMatchOverlayRenderModel } from '~/module
 import { featureMatchOverlaySelectionKey } from '~/modules/feature-match-overlay/selection';
 import { resolveFeatureMatchOverlayThemeValues } from '~/modules/feature-match-overlay/themeTokens';
 import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/feature-match-overlay/tokenValues';
+import { lockedLayers } from '~/modules/graphics/editor/layerLocks';
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
