@@ -423,6 +423,9 @@ const OUTPUT_CHANGES: { [K in MessageType]: (payload: MessagePayload<K>) => read
 	'output:modeDataChanged': () => NOTHING_AN_OUTPUT_SHOWS,
 };
 
+/** Every message type, for a caller applying the rule to whatever its channel carries. */
+export const OUTPUT_CHANGE_MESSAGE_TYPES = Object.keys(OUTPUT_CHANGES) as MessageType[];
+
 /**
  * The changes one Event message represents, with the ids it names; none for a
  * message carrying nothing an output shows.

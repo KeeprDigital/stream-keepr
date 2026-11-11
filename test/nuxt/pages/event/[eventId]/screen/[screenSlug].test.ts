@@ -77,6 +77,7 @@ vi.mock('~/composables/core/useRealtime', () => {
 		connectionState: 'connected',
 		onContinuityLost: () => () => {},
 		onceAttached: () => () => {},
+		onChannel: () => () => {},
 	};
 	return {
 		useRealtime: () => transport,
@@ -263,6 +264,15 @@ describe('screen output route', () => {
 		await mountOutputRoute('/event/42/screen/main');
 		expect(holder.presenceData).toEqual([
 			expect.objectContaining({ assetAccess: 'absent' }),
+		]);
+	});
+
+	// A control surface tells an output that follows its Screen's channel from one loaded before outputs did.
+	it('reports the realtime protocol it follows when it joins presence', async () => {
+		await mountOutputRoute(`/event/42/screen/main#asset-capability=${capability}`);
+
+		expect(holder.presenceData).toEqual([
+			expect.objectContaining({ protocol: 2 }),
 		]);
 	});
 

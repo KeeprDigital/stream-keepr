@@ -11,6 +11,7 @@ import { getOpGameData } from '~~/shared/utils/gameData';
 import { opDeckLayout } from '~~/shared/utils/opDeckLayout';
 import { playerDisplayName } from '~~/shared/utils/playerName';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 import { createGuardedSequence } from '~/utils/guardedSequence';
 import { preloadImages } from '~/utils/preloadImage';
 
@@ -100,7 +101,7 @@ interface OpDeckSourceRead {
  * Deck List, read once, and holds no Slot in the stores.
  */
 function useSlotSideSource(context: ScreenContext, config: ComputedRef<DeckModeConfig>): OpDeckSourceRead {
-	const { eventId, sampleDataset } = context;
+	const { sampleDataset } = context;
 	const outputReads = useScreenOutputReads(context);
 
 	const source = computed(() => {
@@ -114,6 +115,8 @@ function useSlotSideSource(context: ScreenContext, config: ComputedRef<DeckModeC
 	const slotRead = sampleDataset
 		? holdSampleSlot(context, slotId)
 		: useScreenFeatureMatchSlot<null>(context, {
+				mode: 'deck',
+				config: () => config.value,
 				slotId,
 				keep: () => null,
 				initialData: null,
@@ -143,7 +146,9 @@ function useSlotSideSource(context: ScreenContext, config: ComputedRef<DeckModeC
 	const sideDeckList = computed(() => seated.value?.deckList ?? null);
 
 	const deckRead = useScreenModeFreshness<DeckRead | null>({
-		eventId,
+		// A Deck List is never edited in place: its replacement has a new id, which
+		// the Slot announces, and the Slot's own read hears that.
+		hearing: useScreenModeHearing(context, 'deck', () => config.value, { follows: [] }),
 		source: () => {
 			const id = slotId();
 			const deckList = sideDeckList.value;
@@ -161,8 +166,6 @@ function useSlotSideSource(context: ScreenContext, config: ComputedRef<DeckModeC
 		},
 		initialData: null,
 		errorMessage: DECK_LOAD_FAILED,
-		// A Deck List is never edited in place: its replacement has a new id, which the Slot announces.
-		dependsOn: {},
 	});
 
 	return {
@@ -182,12 +185,6 @@ function deckListLeader(deckList: ScreenOutputOpPlayerDeckListResponse['deckList
 		: null;
 }
 
-function updatedAtStamp(updatedAt: Date | string | null | undefined): number | null {
-	return updatedAt == null
-		? null
-		: new Date(updatedAt).getTime();
-}
-
 /**
  * A Player's own Deck List (ADR-0074), read with the Player through the
  * Screen. Every Deck List write gives the Deck List a new id and rolls the
@@ -205,7 +202,7 @@ function usePlayerSource(context: ScreenContext, config: ComputedRef<DeckModeCon
 	};
 
 	const read = useScreenModeFreshness<ScreenOutputOpPlayerDeckListResponse | null>({
-		eventId: context.eventId,
+		hearing: useScreenModeHearing(context, 'deck', () => config.value),
 		source: () => {
 			const id = playerId();
 			return id !== null && outputReads.scopeKey.value
@@ -215,12 +212,6 @@ function usePlayerSource(context: ScreenContext, config: ComputedRef<DeckModeCon
 		read: () => outputReads.opPlayerDeckList(playerId()!),
 		initialData: null,
 		errorMessage: DECK_LOAD_FAILED,
-		dependsOn: {
-			'player:updated': ({ player }, held) =>
-				player.id === playerId() && updatedAtStamp(player.updatedAt) !== updatedAtStamp(held?.player.updatedAt),
-			// An import announces itself once rather than each Player it wrote.
-			'tcgplus:imported': true,
-		},
 	});
 
 	return {

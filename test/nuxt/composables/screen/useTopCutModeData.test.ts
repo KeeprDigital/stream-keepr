@@ -275,49 +275,6 @@ describe('useTopCutModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 		});
 
-		it.each([
-			[
-				'a result in a Round it does not show',
-				'match:updated',
-				{
-					match: { id: 500, roundId: 40 },
-				},
-			],
-			[
-				'a Round added to another Phase',
-				'round:created',
-				{
-					round: { id: 41, phaseId: 4 },
-				},
-			],
-			[
-				'a Player it does not seat renamed',
-				'player:updated',
-				{
-					player: { id: 50 },
-				},
-			],
-			[
-				'Match Results synced from Melee in a Round it does not show',
-				'melee:matchResultsSynced',
-				{
-					roundId: 40,
-					matchIds: [500],
-				},
-			],
-			[
-				'a Round it does not show re-paired from Melee',
-				'melee:pairingsSynced',
-				{ roundId: 40 },
-			],
-		])('does not re-read on %s', async (_, type, payload) => {
-			await following();
-			deliver(type, payload);
-			await flushPromises();
-
-			expect(mockFetch).not.toHaveBeenCalled();
-		});
-
 		// Seeds place the bracket whether or not they show. They come from Round
 		// Standings before the Phase, which a sync of any Round may store, and any
 		// Round or Phase edit may reorder.
@@ -385,28 +342,6 @@ describe('useTopCutModeData', () => {
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
-		});
-
-		it.each([
-			[
-				'Match Results synced in an earlier Round',
-				'melee:matchResultsSynced',
-				{
-					roundId: 20,
-					matchIds: [200],
-				},
-			],
-			[
-				'an earlier Round re-paired',
-				'melee:pairingsSynced',
-				{ roundId: 20 },
-			],
-		] as const)('does not re-read on %s', async (_, type, payload) => {
-			await following();
-			deliver(type, payload);
-			await flushPromises();
-
-			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
 		it.each(archetypeChanges)('does not re-read on %s while Archetypes are hidden', async (_, type, payload) => {

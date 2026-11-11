@@ -8,7 +8,10 @@ type FakeStore = Record<string, Mock>;
 /** A store whose every method is a resolving mock, so only the methods a test reads are named. */
 function fakeStore(state: Record<string, unknown> = {}): FakeStore {
 	return new Proxy(state, {
-		get: (target, key: string) => (target[key] ??= vi.fn().mockResolvedValue(undefined)),
+		// State set to null stays null: only a name never set is a method.
+		get: (target, key: string) => key in target
+			? target[key]
+			: (target[key] = vi.fn().mockResolvedValue(undefined)),
 	}) as FakeStore;
 }
 
@@ -34,6 +37,8 @@ describe('useEventRealtimeSession', () => {
 	};
 	const eventState = {
 		eventId: 12 as number | null,
+		// The Event whose room this client joins: none on a live rendering of a Screen.
+		roomEventId: 12 as number | null,
 		event: { id: 12 },
 	};
 	const eventStore = fakeStore(eventState);
@@ -57,7 +62,7 @@ describe('useEventRealtimeSession', () => {
 	};
 	const { usePlayerStore: playerStore, useMetagameStore: metagameStore, useFeatureMatchStore: featureMatchStore } = stores;
 
-	let watchCallback: ((eventId: number | null) => void) | undefined;
+	let watchCallback: ((room: string | null) => void) | undefined;
 	let tokenWaitCallback: ((waiting: boolean, wasWaiting: boolean) => void) | undefined;
 	let disposeCallback: (() => void) | undefined;
 
@@ -73,6 +78,7 @@ describe('useEventRealtimeSession', () => {
 	beforeEach(() => {
 		vi.resetModules();
 		eventState.eventId = 12;
+		eventState.roomEventId = 12;
 		watchCallback = undefined;
 		tokenWaitCallback = undefined;
 		disposeCallback = undefined;
@@ -108,12 +114,26 @@ describe('useEventRealtimeSession', () => {
 		await startSession();
 		expect(realtime.setRoom).toHaveBeenLastCalledWith('event:12');
 
-		watchCallback?.(34);
+		watchCallback?.('event:34');
 		expect(realtime.setRoom).toHaveBeenLastCalledWith('event:34');
 
 		disposeCallback?.();
 		expect(realtime.offRoom).toHaveBeenCalledWith('event-session');
 		expect(realtime.setRoom).toHaveBeenLastCalledWith(null);
+	});
+
+	// A Screen Output or Program monitor holds an Event context and joins no room:
+	// it follows only its Screen's own channel.
+	it('joins no room, and resyncs nothing, while this client has no room Event', async () => {
+		eventState.roomEventId = null;
+		await startSession();
+
+		expect(realtime.setRoom).toHaveBeenLastCalledWith(null);
+		const [resync, room] = useReconnectResync.mock.calls.at(-1)!;
+		expect(room()).toBeNull();
+		resync();
+		expect(eventDataResync.resync).not.toHaveBeenCalled();
+		expect(mockClearPlayerDeckCache).not.toHaveBeenCalled();
 	});
 
 	it('starts once per scope, and again after disposal', async () => {
@@ -265,9 +285,9 @@ describe('useEventRealtimeSession', () => {
 
 		it('reloads Assignments, Broadcast Deck Lists, Event Data and the Deck List cache on reconnect', async () => {
 			await startSession();
-			const [resync, eventId] = useReconnectResync.mock.calls[0]!;
+			const [resync, room] = useReconnectResync.mock.calls.at(-1)!;
 
-			expect(eventId()).toBe(12);
+			expect(room()).toBe('event:12');
 			resync();
 
 			expectFullResync();

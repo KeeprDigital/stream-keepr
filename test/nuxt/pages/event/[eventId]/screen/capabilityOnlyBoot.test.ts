@@ -3,18 +3,19 @@ import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockFeatureMatchState, createWireMockFeatureMatch } from '~~/test/helpers/fixtures';
 import { settleUntil, settleUntilStill } from '~~/test/helpers/settle';
 import { useRouter } from '#app';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
 import { screenModeSampleConfigs, useSampleScreenOutputReadRepository } from '~/modules/screen-mode/sampleDataset';
+import { SCREEN_OUTPUT_LOAD_RETRY_MS } from '~/modules/screen/displaySession';
 import ScreenOutputPage from '~/pages/event/[eventId]/screen/[screenSlug].vue';
+import { useBroadcastGraphicsLiveSessionStore } from '~/stores/broadcastGraphicsLiveSession';
 import { useCardStore } from '~/stores/card';
-import { useEventStore } from '~/stores/event';
 import { useFeatureMatchStore } from '~/stores/featureMatch';
 import { useFeatureMatchStateStore } from '~/stores/featureMatchState';
 import { usePlayerStore } from '~/stores/player';
-import { useScreenStore } from '~/stores/screen';
 import { resetAllEventStores } from '~/utils/eventStores';
 // The page loads each Screen Mode's Display on first use; loaded here, no
 // test's own time pays for transforming one.
@@ -73,9 +74,13 @@ vi.mock('~/composables/core/useRealtime', async () => {
 		connectionId: 'connection-1',
 		connectionState: 'connected',
 		tokenError: null,
+		/** The Event room the Realtime Event Session joined, or `null` while it is in none. */
+		room: null as string | null,
 		onRoom: () => {},
 		offRoom: () => {},
-		setRoom: () => {},
+		setRoom: (room: string | null) => {
+			transport.room = room;
+		},
 		onContinuityLost: continuity.onContinuityLost,
 		onceAttached: attaches.onceAttached,
 		onChannel: (channel: string, type: string, handler: Handler) => {
@@ -91,6 +96,14 @@ vi.mock('~/composables/core/useRealtime', async () => {
 		/** Signal a channel's attach; `detach` returns it to not yet attached. */
 		attach: attaches.attach,
 		detach: attaches.detach,
+		/** The channels something listens on now: a message handler, or a wait on its attach or continuity. */
+		listenedChannels: () => [
+			...new Set([
+				...[...handlers].filter(([, listening]) => listening.size > 0).map(([key]) => key.split('|')[0]!),
+				...continuity.watched(),
+				...attaches.awaited(),
+			]),
+		].sort(),
 		/** Deliver one message to whoever listens on its channel, as the transport would. */
 		deliver: (channel: string, type: string, message: Record<string, unknown>) => {
 			for (const handler of handlers.get(`${channel}|${type}`) ?? [])
@@ -236,10 +249,17 @@ const recordedLoss = {
 	opponentGameWins: 2,
 };
 
-/** The output's stand-in transport, with a hand to deliver Event messages and signal a reattach. */
+/** The channel a live rendering of the Screen follows: the Screen's own, and no other. */
+const SCREEN_CHANNEL = 'screen:42:7';
+/** Its Event's channel, which only an operator page or a preview hears. */
+const EVENT_CHANNEL = 'event:42';
+
+/** The output's stand-in transport, with a hand to deliver a channel's messages and signal a reattach. */
 function realtime() {
 	return tryUseRealtime() as unknown as {
 		connectionState: string;
+		room: string | null;
+		listenedChannels: () => string[];
 		reattach: (channel: string) => void;
 		attach: (channel: string) => void;
 		detach: (channel: string) => void;
@@ -255,6 +275,47 @@ const outputEvent = {
 	displayRecordSeparator: '-',
 	displayHideZeroDraws: true,
 	displayPositionFormat: 'ordinal',
+};
+
+/** A Screen Card as the Card read and `card:updated` carry it. */
+function spotlightCard(id: string, timeoutData: Record<string, unknown> | null = null) {
+	return {
+		id,
+		name: 'Lightning Bolt',
+		set: 'lea',
+		layout: 'normal',
+		imageData: {
+			front: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' },
+			back: null,
+		},
+		orientationData: {
+			flipable: false,
+			turnable: false,
+			rotateable: false,
+			counterRotateable: false,
+		},
+		displayData: {
+			flipped: false,
+			rotated: false,
+			counterRotated: false,
+			turnedOver: false,
+		},
+		timeoutData,
+	};
+}
+
+/** A Broadcast Graphics Live Session with nothing taken. */
+const nothingOnAir = {
+	id: 3,
+	eventId: 42,
+	screenId: 7,
+	status: 'active',
+	currentState: { playout: {}, inputs: {}, sources: {} },
+	recoveryFault: null,
+	sequence: 1,
+	endedAt: null,
+	createdAt: '2026-10-17T00:00:00.000Z',
+	updatedAt: '2026-10-17T00:00:00.000Z',
 };
 
 const mounted: { unmount: () => void; html: () => string }[] = [];
@@ -301,7 +362,7 @@ describe('a capability-only Screen Output', () => {
 		]);
 		resetAllEventStores();
 		realtime().connectionState = 'connected';
-		realtime().detach('event:42');
+		realtime().detach(SCREEN_CHANNEL);
 	});
 
 	afterEach(() => {
@@ -310,9 +371,9 @@ describe('a capability-only Screen Output', () => {
 		vi.useRealTimers();
 	});
 
-	it('shows a mode change published before its Event channel first attached, without a reload', async () => {
-		// The Event channel attaches only once the Event context names it, after the
-		// reads answered; a change published in between reached no listener (#727).
+	it('shows a mode change published before its Screen channel first attached, without a reload', async () => {
+		// Its Screen's channel attaches only once the Screen lookup names it, after
+		// that read answered; a change published in between reached no listener (#727).
 		const wrapper = await mountOutput(
 			`/event/42/screen/main#asset-capability=${capability}`,
 			text => text.includes('First Player'),
@@ -324,11 +385,230 @@ describe('a capability-only Screen Output', () => {
 				'player-history': { playerId: 11, headerText: 'Changed Header' },
 			},
 		});
-		realtime().attach('event:42');
+		realtime().attach(SCREEN_CHANNEL);
 		await settleUntil(() => wrapper.text().includes('Changed Header'));
 
 		expect(wrapper.text()).toContain('Changed Header');
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
+	});
+
+	// A live rendering follows its Screen's own channel and nothing of its Event's; a
+	// preview renders configuration the server has not been given, and stays in its Event's room.
+	it.each([
+		{
+			rendering: 'a Screen Output',
+			query: '',
+			room: null,
+			listens: [SCREEN_CHANNEL],
+		},
+		{
+			rendering: 'a Program monitor',
+			query: '?embed=monitor',
+			room: null,
+			listens: [SCREEN_CHANNEL],
+		},
+		{
+			rendering: 'an editor preview',
+			query: '?embed=preview',
+			room: EVENT_CHANNEL,
+			listens: [EVENT_CHANNEL],
+		},
+	])('$rendering joins the room $room and listens on $listens alone', async ({ query, room, listens }) => {
+		await mountOutput(
+			`/event/42/screen/main${query}#asset-capability=${capability}`,
+			text => text.includes('First Player'),
+		);
+		await settleOutput();
+
+		expect(realtime().room).toBe(room);
+		expect(realtime().listenedChannels()).toEqual(listens);
+	});
+
+	it('hears nothing its Event channel carries', async () => {
+		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', pendingResult));
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('Pending'),
+		);
+		const reads = api.requests.length;
+
+		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', recordedLoss));
+		realtime().deliver(EVENT_CHANNEL, 'match:updated', {
+			eventId: 42,
+			match: {
+				id: 1,
+				eventId: 42,
+				roundId: 31,
+				player1Id: 12,
+				player2Id: 11,
+				hasResult: true,
+			},
+		});
+		realtime().deliver(EVENT_CHANNEL, 'screen:updated', { eventId: 42, screenId: 7 });
+		realtime().deliver(EVENT_CHANNEL, 'event:deleted', { eventId: 42 });
+		await settleOutput();
+
+		expect(wrapper.text()).toContain('Pending');
+		expect(api.requests).toHaveLength(reads);
+		expect(useRouter().currentRoute.value.path).toBe('/event/42/screen/main');
+	});
+
+	it('keeps what it shows while a re-read its Screen channel asked for is in flight', async () => {
+		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', pendingResult));
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('Pending'),
+		);
+		const read = deferred<unknown>();
+		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => read.promise);
+		const reads = () => api.requests.filter(request => request.path.endsWith('/player-history')).length;
+		const before = reads();
+
+		realtime().deliver(SCREEN_CHANNEL, 'output:modeDataChanged', {
+			eventId: 42,
+			screenId: 7,
+			causes: ['match'],
+		});
+		await settleUntil(() => reads() === before + 1);
+		expect(wrapper.text()).toContain('First Player');
+		expect(wrapper.text()).toContain('Pending');
+
+		read.resolve(history('First Player', recordedLoss));
+		await settleUntil(() => wrapper.text().includes('LOSS'));
+		expect(wrapper.text()).toContain('LOSS');
+	});
+
+	it('reads nothing for a cause its mode does not follow', async () => {
+		await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('First Player'),
+		);
+		const reads = api.requests.length;
+
+		realtime().deliver(SCREEN_CHANNEL, 'output:modeDataChanged', {
+			eventId: 42,
+			screenId: 7,
+			causes: ['talent'],
+		});
+		await settleOutput();
+
+		expect(api.requests).toHaveLength(reads);
+	});
+
+	// A mode change is announced as `screen:updated` alone: the Screen re-read mounts the new mode, which reads.
+	it('shows the new mode\'s data after a mode change its Screen channel announced', async () => {
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('First Player'),
+		);
+
+		api.screen = screen({
+			stateVersion: 2,
+			currentMode: 'top-cards',
+			modeConfigs: {
+				'top-cards': { showRankBadges: true },
+			},
+		});
+		api.answers.set('/api/screen-output/events/42/screens/7/top-cards', () => topCards('Lightning Bolt'));
+		realtime().deliver(SCREEN_CHANNEL, 'screen:updated', { eventId: 42, screenId: 7 });
+		await settleUntil(() => wrapper.text().includes('Lightning Bolt'));
+
+		expect(wrapper.text()).toContain('Lightning Bolt');
+		expect(wrapper.text()).not.toContain('First Player');
+	});
+
+	it('goes blank where it is when its Screen is deleted, and stops listening', async () => {
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('First Player'),
+		);
+
+		realtime().deliver(SCREEN_CHANNEL, 'screen:deleted', { eventId: 42, screenId: 7 });
+		await settleUntil(() => !wrapper.text().includes('First Player'));
+
+		expect(wrapper.text()).toBe('');
+		expect(useRouter().currentRoute.value.path).toBe('/event/42/screen/main');
+		expect(realtime().listenedChannels().filter(channel => channel === EVENT_CHANNEL)).toEqual([]);
+	});
+
+	// A deleted Event's Screens are gone with it, so nothing tells the output: it holds
+	// what it shows through every read that now answers nothing.
+	it('holds what it shows where it is once its Event is gone', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		const wrapper = await mountOutput(
+			`/event/42/screen/main#asset-capability=${capability}`,
+			text => text.includes('First Player'),
+		);
+
+		api.answers.clear();
+		realtime().deliver(SCREEN_CHANNEL, 'output:eventContextChanged', { eventId: 42 });
+		realtime().reattach(SCREEN_CHANNEL);
+		await settleOutput();
+
+		expect(wrapper.text()).toContain('First Player');
+		expect(useRouter().currentRoute.value.path).toBe('/event/42/screen/main');
+	});
+
+	it('shows the Card its Screen channel carries, and hides it when cleared', async () => {
+		api.screen = screen({ currentMode: 'card', modeConfigs: {} });
+		api.answers.set('/api/screen-output/events/42/screens/7/card', () => ({ card: null, revision: 1 }));
+		const cardReads = () => api.requests.filter(request => request.path.endsWith('/screens/7/card')).length;
+		await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, () => cardReads() > 0);
+		await settleOutput();
+		const reads = cardReads();
+
+		realtime().deliver(SCREEN_CHANNEL, 'card:updated', {
+			eventId: 42,
+			screenId: 7,
+			revision: 2,
+			card: spotlightCard('announced-card'),
+		});
+		await settleUntil(() => useCardStore().activeCard !== null);
+		expect(useCardStore().activeCard?.id).toBe('announced-card');
+
+		realtime().deliver(SCREEN_CHANNEL, 'card:cleared', { eventId: 42, screenId: 7, revision: 3 });
+		await settleUntil(() => useCardStore().activeCard === null);
+
+		expect(useCardStore().activeCard).toBeNull();
+		expect(cardReads()).toBe(reads);
+	});
+
+	it('applies a Broadcast Graphics command its Screen channel forwards, and reloads on one ahead of the sequence it holds', async () => {
+		api.screen = screen({ currentMode: 'broadcast-graphics', modeConfigs: {} });
+		const liveSessionPath = '/api/screen-output/events/42/screens/7/broadcast-graphics/live-session';
+		api.answers.set(liveSessionPath, () => nothingOnAir);
+		const held = () => useBroadcastGraphicsLiveSessionStore().sessions.get(7)?.sequence;
+		const reads = () => api.requests.filter(request => request.path === liveSessionPath).length;
+		await mountOutput(`/event/42/screen/main#asset-capability=${capability}`, () => held() === 1);
+		await settleOutput();
+		const before = reads();
+
+		// The next sequence, carrying what it changed: applied with no read.
+		realtime().deliver(SCREEN_CHANNEL, 'broadcastGraphicsLiveSession:commandApplied', {
+			eventId: 42,
+			screenId: 7,
+			sessionId: 3,
+			sequence: 2,
+			commandType: 'Out',
+			change: {},
+		});
+		await settleUntil(() => held() === 2);
+		expect(reads()).toBe(before);
+
+		// Sequence 3 never arrived: 4 is a gap, which only the snapshot can close.
+		api.answers.set(liveSessionPath, () => ({ ...nothingOnAir, sequence: 4 }));
+		realtime().deliver(SCREEN_CHANNEL, 'broadcastGraphicsLiveSession:commandApplied', {
+			eventId: 42,
+			screenId: 7,
+			sessionId: 3,
+			sequence: 4,
+			commandType: 'Out',
+			change: {},
+		});
+		await settleUntil(() => held() === 4);
+
+		expect(reads()).toBe(before + 1);
 	});
 
 	it('boots, loads its mode data and stays off the sign-in page with no session', async () => {
@@ -356,7 +636,7 @@ describe('a capability-only Screen Output', () => {
 			},
 		});
 		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('Second Name'));
-		await useScreenStore().applyRemoteUpdated({ eventId: 42, screenId: 7 } as never);
+		realtime().deliver(SCREEN_CHANNEL, 'screen:updated', { eventId: 42, screenId: 7 });
 		await settleUntil(() => wrapper.text().includes('Changed Header'));
 
 		expect(wrapper.text()).toContain('Changed Header');
@@ -372,18 +652,12 @@ describe('a capability-only Screen Output', () => {
 		const screenReads = api.requests.filter(request => request.path === '/api/screen-output/events/42/screens/7').length;
 
 		// Another browser records the result: Event, Player and Screen configuration
-		// are unchanged, so nothing but the Match notification says to re-read.
+		// are unchanged, so nothing but its Screen channel naming the cause says to re-read.
 		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', recordedLoss));
-		realtime().deliver('event:42', 'match:updated', {
+		realtime().deliver(SCREEN_CHANNEL, 'output:modeDataChanged', {
 			eventId: 42,
-			match: {
-				id: 1,
-				eventId: 42,
-				roundId: 31,
-				player1Id: 12,
-				player2Id: 11,
-				hasResult: true,
-			},
+			screenId: 7,
+			causes: ['match'],
 		});
 		await settleUntil(() => wrapper.text().includes('LOSS'));
 
@@ -392,7 +666,7 @@ describe('a capability-only Screen Output', () => {
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 
-	it('shows a result missed while disconnected once its Event channel is attached again', async () => {
+	it('shows a result missed while disconnected once its Screen channel is attached again', async () => {
 		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', pendingResult));
 		const wrapper = await mountOutput(
 			`/event/42/screen/main#asset-capability=${capability}`,
@@ -407,7 +681,7 @@ describe('a capability-only Screen Output', () => {
 		api.answers.set('/api/screen-output/events/42/screens/7/player-history', () => history('First Player', recordedLoss));
 		api.answers.set('/api/screen-output/events/42/screens/slug/main', () => new Promise(() => {}));
 		realtime().connectionState = 'connected';
-		realtime().reattach('event:42');
+		realtime().reattach(SCREEN_CHANNEL);
 		await settleUntil(() => wrapper.text().includes('LOSS'));
 
 		expect(wrapper.text()).toContain('LOSS');
@@ -430,9 +704,10 @@ describe('a capability-only Screen Output', () => {
 		// Reviewed in another browser: no Player record, Screen configuration or
 		// roster changes, so only the aggregate's own invalidation says to re-read.
 		api.answers.set('/api/screen-output/events/42/screens/7/top-cards', () => topCards('Counterspell'));
-		realtime().deliver('event:42', 'playerDeck:reviewed', {
+		realtime().deliver(SCREEN_CHANNEL, 'output:modeDataChanged', {
 			eventId: 42,
-			deck: { id: 3, playerId: 11 },
+			screenId: 7,
+			causes: ['playerDeck'],
 		});
 		await settleUntil(() => wrapper.text().includes('Counterspell'));
 
@@ -455,12 +730,10 @@ describe('a capability-only Screen Output', () => {
 		);
 
 		api.answers.set('/api/screen-output/events/42/screens/7/metagame', () => metagame('Azorius Control'));
-		realtime().deliver('event:42', 'playerList:membersChanged', {
+		realtime().deliver(SCREEN_CHANNEL, 'output:modeDataChanged', {
 			eventId: 42,
-			listId: 5,
-			playerIds: [12],
-			action: 'added',
-			memberCount: 2,
+			screenId: 7,
+			causes: ['playerList'],
 		});
 		await settleUntil(() => wrapper.text().includes('Azorius Control'));
 
@@ -469,7 +742,7 @@ describe('a capability-only Screen Output', () => {
 		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 
-	it('shows a Metagame change missed while disconnected once its Event channel is attached again', async () => {
+	it('shows a Metagame change missed while disconnected once its Screen channel is attached again', async () => {
 		api.screen = screen({
 			currentMode: 'metagame',
 			modeConfigs: { metagame: {} },
@@ -485,7 +758,7 @@ describe('a capability-only Screen Output', () => {
 		api.answers.set('/api/screen-output/events/42/screens/7/metagame', () => metagame('Azorius Control'));
 		api.answers.set('/api/screen-output/events/42/screens/slug/main', () => new Promise(() => {}));
 		realtime().connectionState = 'connected';
-		realtime().reattach('event:42');
+		realtime().reattach(SCREEN_CHANNEL);
 		await settleUntil(() => wrapper.text().includes('Azorius Control'));
 
 		expect(wrapper.text()).toContain('Azorius Control');
@@ -502,32 +775,10 @@ describe('a capability-only Screen Output', () => {
 		api.screen = screen({ currentMode: 'card', modeConfigs: {} });
 		// The Card read answers the Card with its Card revision (#734).
 		api.answers.set('/api/screen-output/events/42/screens/7/card', () => ({
-			card: {
-				id: 'expiring-card',
-				name: 'Lightning Bolt',
-				set: 'lea',
-				layout: 'normal',
-				imageData: {
-					front: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' },
-					back: null,
-				},
-				orientationData: {
-					flipable: false,
-					turnable: false,
-					rotateable: false,
-					counterRotateable: false,
-				},
-				displayData: {
-					flipped: false,
-					rotated: false,
-					counterRotated: false,
-					turnedOver: false,
-				},
-				timeoutData: {
-					timeoutStartTimestamp: Date.now(),
-					timeoutDuration: cardTimeoutMs,
-				},
-			},
+			card: spotlightCard('expiring-card', {
+				timeoutStartTimestamp: Date.now(),
+				timeoutDuration: cardTimeoutMs,
+			}),
 			revision: 1,
 		}));
 
@@ -584,19 +835,6 @@ describe('a capability-only Screen Output', () => {
 				: []),
 		];
 	}
-
-	const nothingOnAir = {
-		id: 3,
-		eventId: 42,
-		screenId: 7,
-		status: 'active',
-		currentState: { playout: {}, inputs: {}, sources: {} },
-		recoveryFault: null,
-		sequence: 1,
-		endedAt: null,
-		createdAt: '2026-10-17T00:00:00.000Z',
-		updatedAt: '2026-10-17T00:00:00.000Z',
-	};
 
 	it.each([
 		[
@@ -702,9 +940,9 @@ describe('a capability-only Feature Match Overlay output', () => {
 		};
 	}
 
-	/** One `featureMatchSession:eventApplied`, handed to the store as the Event room would. */
+	/** One `featureMatchSession:eventApplied`, as the Screen's channel forwards it at the Event's sequence. */
 	function sessionEvent(announced: ReturnType<typeof session>) {
-		return useFeatureMatchStateStore().applyRemoteSessionEvent({
+		realtime().deliver(SCREEN_CHANNEL, 'featureMatchSession:eventApplied', {
 			eventId: 42,
 			slotId: 11,
 			sessionId: announced.id,
@@ -713,7 +951,7 @@ describe('a capability-only Feature Match Overlay output', () => {
 			sourceSnapshot: announced.sourceSnapshot,
 			currentState: announced.currentState,
 			timestamp: Date.now(),
-		} as never);
+		});
 	}
 
 	/** The Session state the Overlay renders from. */
@@ -739,7 +977,7 @@ describe('a capability-only Feature Match Overlay output', () => {
 		// find out what was missed.
 		api.answers.set('/api/screen-output/events/42/screens/slug/main', () => new Promise(() => {}));
 		realtime().connectionState = 'connected';
-		realtime().reattach('event:42');
+		realtime().reattach(SCREEN_CHANNEL);
 	}
 
 	/** A Slot read held open until the test answers it. */
@@ -776,7 +1014,7 @@ describe('a capability-only Feature Match Overlay output', () => {
 		]);
 		resetAllEventStores();
 		realtime().connectionState = 'connected';
-		realtime().detach('event:42');
+		realtime().detach(SCREEN_CHANNEL);
 	});
 
 	afterEach(() => {
@@ -799,7 +1037,7 @@ describe('a capability-only Feature Match Overlay output', () => {
 		expect(privateRequests()).toEqual([]);
 	});
 
-	it('shows the Session and Slot it missed while disconnected once its Event channel is attached again', async () => {
+	it('shows the Session and Slot it missed while disconnected once its Screen channel is attached again', async () => {
 		const wrapper = await mountOverlay();
 
 		// Published while suspended, so never delivered: the Slot was promoted to
@@ -809,6 +1047,43 @@ describe('a capability-only Feature Match Overlay output', () => {
 
 		expect(wrapper.text()).toContain('Life 13 · Round 4');
 		expect(held()).toEqual({ sessionId: 91, sequence: 6, lifeTotal: 13 });
+		expect(useFeatureMatchStore().featureMatches.map(slot => slot.matchId)).toEqual([301]);
+		expect(privateRequests()).toEqual([]);
+	});
+
+	it('applies the next Session event its Screen channel forwards, with no read', async () => {
+		const wrapper = await mountOverlay();
+		const slotReads = api.requests.filter(request => request.path === slotPath).length;
+
+		sessionEvent(session(90, 4, 18));
+		await settleUntil(() => wrapper.text().includes('Life 18'));
+
+		expect(held()).toEqual({ sessionId: 90, sequence: 4, lifeTotal: 18 });
+		expect(api.requests.filter(request => request.path === slotPath)).toHaveLength(slotReads);
+	});
+
+	// A Slot or seated Player change reaches the Screen as a cause: the Slot is read again through the Screen.
+	it.each([
+		{ cause: 'featureMatchSlot' },
+		{ cause: 'player' },
+	])('shows the Slot as re-read after a $cause change, holding what it shows until the read answers', async ({ cause }) => {
+		const wrapper = await mountOverlay();
+		const { read, answer } = heldOpenRead();
+		api.answers.set(slotPath, answer);
+
+		realtime().deliver(SCREEN_CHANNEL, 'output:modeDataChanged', {
+			eventId: 42,
+			screenId: 7,
+			causes: [cause],
+		});
+		await settleUntil(() => read.answer !== null);
+		expect(wrapper.text()).toContain('Life 20 · Round 3');
+
+		// Promoted to another Match meanwhile, opening a newer Session.
+		read.answer!(slotRead(session(91, 2, 14, 301), 301));
+		await settleUntil(() => wrapper.text().includes('Life 14 · Round 4'));
+
+		expect(wrapper.text()).toContain('Life 14 · Round 4');
 		expect(useFeatureMatchStore().featureMatches.map(slot => slot.matchId)).toEqual([301]);
 		expect(privateRequests()).toEqual([]);
 	});
@@ -888,13 +1163,9 @@ describe('a capability-only output\'s Theme', () => {
 			.find(Boolean);
 	}
 
-	/** One `theme:updated`, handed to the store as the Event room would. */
-	function announce(announced: ReturnType<typeof theme>) {
-		useEventStore().applyRemoteThemeUpdated({
-			eventId: 42,
-			timestamp: Date.now(),
-			theme: announced,
-		});
+	/** Its Screen's channel says the Event context changed: the Event, or its Theme's tokens. */
+	function announceContextChanged() {
+		realtime().deliver(SCREEN_CHANNEL, 'output:eventContextChanged', { eventId: 42 });
 	}
 
 	function eventReads() {
@@ -933,7 +1204,7 @@ describe('a capability-only output\'s Theme', () => {
 		]);
 		resetAllEventStores();
 		realtime().connectionState = 'connected';
-		realtime().detach('event:42');
+		realtime().detach(SCREEN_CHANNEL);
 	});
 
 	afterEach(() => {
@@ -956,51 +1227,81 @@ describe('a capability-only output\'s Theme', () => {
 		expect(titleColour(wrapper)).toBe('#ffffff');
 	});
 
-	it.each([
-		['applies a token write it hears, without a read', 4, 'rgb(2, 2, 2)'],
-		['ignores a token write older than the one it holds', 2, 'rgb(1, 1, 1)'],
-	])('%s', async (_case, revision, shown) => {
+	it('re-reads its Event context on a token write, holding the Theme it shows until the read answers', async () => {
 		const wrapper = await mountThemed();
 		const reads = eventReads();
+		const read = deferred<unknown>();
+		api.answers.set(eventPath, () => read.promise);
 
-		announce(theme('brand', revision, 'rgb(2, 2, 2)'));
-		await settleOutput();
-
-		expect(titleColour(wrapper)).toBe(shown);
-		expect(eventReads()).toBe(reads);
-	});
-
-	it('ignores a token write to a Theme its Event does not use', async () => {
-		const wrapper = await mountThemed();
-
-		announce(theme('elsewhere', 9, 'rgb(9, 9, 9)'));
-		await settleOutput();
-
+		announceContextChanged();
+		await settleUntil(() => eventReads() === reads + 1);
 		expect(titleColour(wrapper)).toBe('rgb(1, 1, 1)');
+
+		read.resolve(themedEvent(theme('brand', 4, 'rgb(2, 2, 2)')));
+		await settleUntil(() => titleColour(wrapper) === 'rgb(2, 2, 2)');
+
+		expect(titleColour(wrapper)).toBe('rgb(2, 2, 2)');
+		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 
 	it('re-reads its Event context when its Event switches Theme, and renders the new one', async () => {
 		const wrapper = await mountThemed();
 
 		api.answers.set(eventPath, () => themedEvent(theme('switched', 1, 'rgb(3, 3, 3)')));
-		useEventStore().applyRemoteUpdated({
-			eventId: 42,
-			timestamp: Date.now(),
-			event: { id: 42, themeId: 'switched' },
-		} as never);
+		announceContextChanged();
 		await settleUntil(() => titleColour(wrapper) === 'rgb(3, 3, 3)');
 
 		expect(titleColour(wrapper)).toBe('rgb(3, 3, 3)');
 	});
 
-	it('shows a token write missed while disconnected once its Event channel is attached again', async () => {
+	it('keeps the Theme it shows when the re-read fails, and reads again by itself', async () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const wrapper = await mountThemed();
+		vi.useFakeTimers({
+			toFake: ['setTimeout', 'clearTimeout'],
+			shouldAdvanceTime: true,
+		});
+		const reads = eventReads();
+		api.answers.set(eventPath, () => Promise.reject(new Error('unavailable')));
+
+		announceContextChanged();
+		await settleUntil(() => eventReads() === reads + 1);
+		await settleOutput();
+		expect(titleColour(wrapper)).toBe('rgb(1, 1, 1)');
+
+		api.answers.set(eventPath, () => themedEvent(theme('switched', 1, 'rgb(3, 3, 3)')));
+		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+		await settleUntil(() => titleColour(wrapper) === 'rgb(3, 3, 3)');
+
+		expect(titleColour(wrapper)).toBe('rgb(3, 3, 3)');
+	});
+
+	it('hears nothing its Event channel carries', async () => {
+		const wrapper = await mountThemed();
+		const reads = eventReads();
+
+		realtime().deliver(EVENT_CHANNEL, 'theme:updated', {
+			eventId: 42,
+			theme: theme('brand', 9, 'rgb(9, 9, 9)'),
+		});
+		realtime().deliver(EVENT_CHANNEL, 'event:updated', {
+			eventId: 42,
+			event: { id: 42, themeId: 'switched' },
+		});
+		await settleOutput();
+
+		expect(titleColour(wrapper)).toBe('rgb(1, 1, 1)');
+		expect(eventReads()).toBe(reads);
+	});
+
+	it('shows a token write missed while disconnected once its Screen channel is attached again', async () => {
 		const wrapper = await mountThemed();
 
 		realtime().connectionState = 'suspended';
 		await flushPromises();
 		api.answers.set(eventPath, () => themedEvent(theme('brand', 5, 'rgb(4, 4, 4)')));
 		realtime().connectionState = 'connected';
-		realtime().reattach('event:42');
+		realtime().reattach(SCREEN_CHANNEL);
 		await settleUntil(() => titleColour(wrapper) === 'rgb(4, 4, 4)');
 
 		expect(titleColour(wrapper)).toBe('rgb(4, 4, 4)');

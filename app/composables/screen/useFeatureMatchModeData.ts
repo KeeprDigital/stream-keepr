@@ -9,6 +9,8 @@ export function useFeatureMatchModeData(context: ScreenContext) {
 	 * else of the read.
 	 */
 	const { slot: match, state: matchState, loading, error, answered } = useScreenFeatureMatchSlot<null>(context, {
+		mode: 'feature-match',
+		config: () => config.value,
 		slotId: () => config.value.featureMatchId,
 		keep: () => null,
 		initialData: null,
