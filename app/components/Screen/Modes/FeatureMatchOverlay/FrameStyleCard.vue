@@ -138,6 +138,7 @@ const backgroundSummary = computed(() => {
 					label="Layer opacity"
 					:model-value="animation.opacity"
 					size="sm"
+					data-testid="frame-animation-opacity"
 					@update:model-value="updateAnimation({ opacity: Number($event) })"
 				/>
 
