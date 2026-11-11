@@ -7,8 +7,8 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, nextTick, ref } from 'vue';
 import { SCREEN_SETTINGS_CARDS } from '~~/shared/screenModeConfigs/fields';
-import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import { screenModeConfigContract, screenModeTokens } from '~~/shared/screenModes';
+import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import { GAME_VALUES } from '~~/shared/types/enums';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { layersPinningNoAsset } from '~~/test/helpers/backgroundLayers';
@@ -69,7 +69,11 @@ const loaded = {
 mockNuxtImport('usePlayerStore', () => () => ({
 	...loaded,
 	players: [
-		{ id: 5, name: 'Ada', gameData: { type: 'mtg', deckName: 'Mono Blue' } },
+		{
+			id: 5,
+			name: 'Ada',
+			gameData: { type: 'mtg', deckName: 'Mono Blue' },
+		},
 	],
 	loadPlayersByEventId: vi.fn(),
 }));
@@ -319,7 +323,15 @@ const NOT_FOR_GAME: Partial<Record<RenderedMode, Partial<Record<Game, readonly s
 		op: [
 			'board',
 			'sideboardPlacement',
-			...['view', 'columns', 'maxCardSize', 'cardGap', 'listColumns', 'alignment', 'stackReveal'].map(key => `sideboard.${key}`),
+			...[
+				'view',
+				'columns',
+				'maxCardSize',
+				'cardGap',
+				'listColumns',
+				'alignment',
+				'stackReveal',
+			].map(key => `sideboard.${key}`),
 			'showCompanion',
 			'showDeckStats',
 			'showDeckMetaPill',
@@ -518,14 +530,18 @@ describe('the generic settings renderer', () => {
 		},
 		{
 			mode: 'deck',
-			config: { sideboard: { view: 'grid' } },
+			config: {
+				sideboard: { view: 'grid' },
+			},
 			event: {},
 			field: 'sideboard.columns',
 			shown: false,
 		},
 		{
 			mode: 'deck',
-			config: { sideboard: { view: 'grid', columns: 3 } },
+			config: {
+				sideboard: { view: 'grid', columns: 3 },
+			},
 			event: {},
 			field: 'sideboard.columns',
 			shown: true,
@@ -539,7 +555,9 @@ describe('the generic settings renderer', () => {
 		},
 		{
 			mode: 'deck',
-			config: { deckSource: { type: 'broadcast', broadcastDeckListId: 23 } },
+			config: {
+				deckSource: { type: 'broadcast', broadcastDeckListId: 23 },
+			},
 			event: {},
 			field: 'showHighlanderTotal',
 			shown: false,
@@ -637,20 +655,39 @@ describe('the generic settings renderer', () => {
 	it('writes a set in the order its values run, whatever order they were picked in', async () => {
 		const [first, second] = SUPPORTED_SOCIAL_NETWORK_KEYS;
 		const wrapper = await mountPage('talent', {
-			config: { socialNetworks: [second] },
+			config: {
+				socialNetworks: [second],
+			},
 		});
 
 		await wrapper.get('[data-settings-field="socialNetworks"]').findAll('[role="checkbox"]')[0]!.trigger('click');
 
 		expect(writes).toEqual([
-			{ socialNetworks: [first, second] },
+			{
+				socialNetworks: [first, second],
+			},
 		]);
 	});
 
 	// A block is written whole, and its schema has no `null` inside: an emptied value is Auto, its key left out.
 	it.each([
-		{ path: 'mainboard.columns', block: 'mainboard', stored: { view: 'grid', columns: 4, maxCardSize: 144, alignment: 'top' }, written: { view: 'grid', maxCardSize: 144, alignment: 'top' } },
-		{ path: 'sideboard.cardGap', block: 'sideboard', stored: { view: 'grid', cardGap: 8, alignment: 'top' }, written: { view: 'grid', alignment: 'top' } },
+		{
+			path: 'mainboard.columns',
+			block: 'mainboard',
+			stored: {
+				view: 'grid',
+				columns: 4,
+				maxCardSize: 144,
+				alignment: 'top',
+			},
+			written: { view: 'grid', maxCardSize: 144, alignment: 'top' },
+		},
+		{
+			path: 'sideboard.cardGap',
+			block: 'sideboard',
+			stored: { view: 'grid', cardGap: 8, alignment: 'top' },
+			written: { view: 'grid', alignment: 'top' },
+		},
 	])('writes $path emptied as its whole block without it', async ({ path, block, stored, written }) => {
 		const wrapper = await mountPage('deck', {
 			config: { [block]: stored },
@@ -703,17 +740,31 @@ describe('the generic settings renderer', () => {
 		{
 			name: 'Deck List\'s Customise copies the mainboard\'s layout to the sideboard',
 			mode: 'deck',
-			config: { sideboard: { view: 'stack', stackReveal: 40 } },
+			config: {
+				sideboard: { view: 'stack', stackReveal: 40 },
+			},
 			slot: '[data-settings-section="sideboard"] [data-settings-group-slot="before:sideboard"]',
 			act: (row: DOMWrapper<Element>) => row.findAll('button').find(button => button.text() === 'Customise')!.trigger('click'),
 			written: {
-				sideboard: { view: 'stack', stackReveal: 40, listColumns: 2, alignment: 'center' },
+				sideboard: {
+					view: 'stack',
+					stackReveal: 40,
+					listColumns: 2,
+					alignment: 'center',
+				},
 			},
 		},
 		{
 			name: 'Deck List\'s Use mainboard\'s keeps only the sideboard\'s view and reveal',
 			mode: 'deck',
-			config: { sideboard: { view: 'stack', stackReveal: 40, columns: 3, alignment: 'top' } },
+			config: {
+				sideboard: {
+					view: 'stack',
+					stackReveal: 40,
+					columns: 3,
+					alignment: 'top',
+				},
+			},
 			slot: '[data-settings-section="sideboard"] [data-settings-group-slot="before:sideboard"]',
 			act: (row: DOMWrapper<Element>) => row.findAll('button').find(button => button.text() === 'Use mainboard\'s')!.trigger('click'),
 			written: {
@@ -727,7 +778,13 @@ describe('the generic settings renderer', () => {
 			slot: '[data-settings-card="live"] [data-settings-slot="manual-bracket"]',
 			act: (row: DOMWrapper<Element>) => row.get('[role="option"]').trigger('click'),
 			written: {
-				manualBracket: { size: 8, entrants: [{ playerId: 5 }], results: [] },
+				manualBracket: {
+					size: 8,
+					entrants: [
+						{ playerId: 5 },
+					],
+					results: [],
+				},
 			},
 		},
 		{
@@ -744,12 +801,16 @@ describe('the generic settings renderer', () => {
 			config: { selection: 'lineup' },
 			slot: '[data-settings-slot="talent-lineup"]',
 			act: (row: DOMWrapper<Element>) => row.get('select').setValue('8'),
-			written: { talentIds: [8] },
+			written: {
+				talentIds: [8],
+			},
 		},
 		{
 			name: 'Background\'s Reset to Theme',
 			mode: 'background',
-			config: { layers: layersPinningNoAsset().slice(0, 1) },
+			config: {
+				layers: layersPinningNoAsset().slice(0, 1),
+			},
 			slot: '[data-settings-card="background-placement"] [data-settings-slot="background-layers"]',
 			act: (row: DOMWrapper<Element>) => row.findAll('button').find(button => button.text() === 'Reset to Theme')!.trigger('click'),
 			written: { layers: [] },

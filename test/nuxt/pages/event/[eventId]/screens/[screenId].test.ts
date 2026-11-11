@@ -6,8 +6,8 @@ import { defineComponent, nextTick, reactive } from 'vue';
 import { UButtonStub, UDropdownMenuStub, UModalStub, UTooltipStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { ScreenSettingsCardStub } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import EditorFocusModeToggle from '~/components/Graphics/EditorFocusModeToggle.vue';
-import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 import ScreenModeSettings from '~/components/Screen/ModeSettings.vue';
+import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 import { getScreenModeConfigurationPolicy, getScreenModeSettingsComponent } from '~/modules/screen-mode';
 
 // The mode-settings module pulls in every mode's Display/Settings component

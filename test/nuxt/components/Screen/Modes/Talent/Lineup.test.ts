@@ -52,9 +52,18 @@ describe('a Talent lineup', () => {
 	});
 
 	it.each([
-		{ action: 'Move Caster up', talentIds: [CASTER, HOST, ANALYST] },
-		{ action: 'Move Caster down', talentIds: [HOST, ANALYST, CASTER] },
-		{ action: 'Remove Caster', talentIds: [HOST, ANALYST] },
+		{
+			action: 'Move Caster up',
+			talentIds: [CASTER, HOST, ANALYST],
+		},
+		{
+			action: 'Move Caster down',
+			talentIds: [HOST, ANALYST, CASTER],
+		},
+		{
+			action: 'Remove Caster',
+			talentIds: [HOST, ANALYST],
+		},
 	])('$action', async ({ action, talentIds }) => {
 		const wrapper = mountLineup([HOST, CASTER, ANALYST]);
 

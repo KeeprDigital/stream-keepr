@@ -15,7 +15,10 @@ function mountField(modelValue: number | undefined) {
 			entry: {
 				path: ['bracketSizeOverride'],
 				field: screenModeConfigContract('top-cut').fields.bracketSizeOverride,
-				context: { config: { bracketSource: 'phase' }, event: null },
+				context: {
+					config: { bracketSource: 'phase' },
+					event: null,
+				},
 			},
 			modelValue,
 		},

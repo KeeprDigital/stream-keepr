@@ -67,7 +67,9 @@ describe('a Deck List Screen\'s board toggles', () => {
 
 		expect(wrapper.emitted('update')).toEqual(written
 			? [
-					[{ board: written }],
+					[
+						{ board: written },
+					],
 				]
 			: undefined);
 	});
@@ -80,15 +82,32 @@ describe('a Deck List Screen\'s board toggles', () => {
 	});
 
 	it.each([
-		{ name: 'a Player\'s deck with no sideboard, sideboard shown', board: 'full', sideboard: false, hint: 'no sideboard cards' },
-		{ name: 'a Player\'s deck with no sideboard, sideboard hidden', board: 'mainboard', sideboard: false, hint: null },
-		{ name: 'a Player\'s deck with a sideboard', board: 'full', sideboard: true, hint: null },
+		{
+			name: 'a Player\'s deck with no sideboard, sideboard shown',
+			board: 'full',
+			sideboard: false,
+			hint: 'no sideboard cards',
+		},
+		{
+			name: 'a Player\'s deck with no sideboard, sideboard hidden',
+			board: 'mainboard',
+			sideboard: false,
+			hint: null,
+		},
+		{
+			name: 'a Player\'s deck with a sideboard',
+			board: 'full',
+			sideboard: true,
+			hint: null,
+		},
 	])('hints for $name: $hint', async ({ board, sideboard, hint }) => {
 		mockFetchDeck.mockResolvedValue({
 			cards: [
 				{ name: 'Mana Drain', quantity: 4, compartment: 'mainboard' },
 				...(sideboard
-					? [{ name: 'Pyroblast', quantity: 1, compartment: 'sideboard' }]
+					? [
+							{ name: 'Pyroblast', quantity: 1, compartment: 'sideboard' },
+						]
 					: []),
 			],
 		});
@@ -107,7 +126,12 @@ describe('a Deck List Screen\'s board toggles', () => {
 		{ mainboardQuantity: 0, sideboardQuantity: 0, hint: 'no cards, so the output shows only its header' },
 	])('hints for a Broadcast Deck List of $mainboardQuantity and $sideboardQuantity cards', async ({ mainboardQuantity, sideboardQuantity, hint }) => {
 		mockBroadcastDeckListStore.summaries = [
-			{ id: 23, name: 'Feature Table', mainboardQuantity, sideboardQuantity },
+			{
+				id: 23,
+				name: 'Feature Table',
+				mainboardQuantity,
+				sideboardQuantity,
+			},
 		];
 		const wrapper = await mountToggles({
 			board: 'full',

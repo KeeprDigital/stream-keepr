@@ -150,7 +150,10 @@ describe('the Deck Source picker on a Magic: The Gathering Event', () => {
 	});
 
 	it.each([
-		{ enabled: true, tabs: ['Player Deck', 'Broadcast Deck List'] },
+		{
+			enabled: true,
+			tabs: ['Player Deck', 'Broadcast Deck List'],
+		},
 		{ enabled: false, tabs: [] },
 	])('offers a tab per source while Broadcast Deck Lists are enabled: $enabled', async ({ enabled, tabs }) => {
 		mockEventStore.event.broadcastDeckListsEnabled = enabled;
