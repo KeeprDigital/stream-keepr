@@ -2,7 +2,7 @@
 import type { HeadToHeadPlayerSource } from '~~/shared/types/enums';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import { FOLLOWS_THE_THEME, headerSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { headerSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
@@ -36,21 +36,13 @@ const playerOptions = computed(() => [
 ]);
 
 // ── Closed card summaries ──
-const lookOf = (...groups: string[]) => lookSummary('head-to-head', props.screen.themeOverrides, groups);
 const playerDetailsSummary = computed(() => settingsSummary([
 	config.value.showPronouns && hasPronouns.value
 		? 'Pronouns shown'
 		: 'Pronouns hidden',
 	config.value.showDeckColors ? 'Deck colors shown' : 'Deck colors hidden',
-	lookOf('player-details'),
 ]));
-const earlierMatchesSummary = computed(() => settingsSummary([
-	lookOf('earlier-matches'),
-], FOLLOWS_THE_THEME));
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	lookOf('header'),
-]));
+const headerCardSummary = computed(() => headerSummary(config.value));
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
 useConsumedEventData(['featureMatchSlots', 'players']);
@@ -128,12 +120,6 @@ onMounted(async () => {
 				description="Show the mana colors of each Player's deck beside its name."
 				@update:model-value="updateConfig({ showDeckColors: $event === true })"
 			/>
-
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="player-details" />
-		</ScreenSettingsCard>
-
-		<ScreenSettingsCard id="head-to-head:earlier-matches" title="Earlier Matches" :summary="earlierMatchesSummary">
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="earlier-matches" />
 		</ScreenSettingsCard>
 
 		<ScreenHeaderSettingsCard
@@ -144,8 +130,6 @@ onMounted(async () => {
 			show-description="Show a title above the two Players."
 			auto-description="Leave empty for &quot;Head to Head&quot;."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 	</div>
 </template>

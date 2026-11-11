@@ -47,12 +47,9 @@ const { updateConfig } = rotation;
 // ── Closed card summaries ──
 const lookOf = (...groups: string[]) => lookSummary('pairings', props.screen.themeOverrides, groups);
 const tableSummary = computed(() => settingsSummary([
-	lookOf('table', 'result-badge'),
+	lookOf('result-badge'),
 ], FOLLOWS_THE_THEME));
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	lookOf('header'),
-]));
+const headerCardSummary = computed(() => headerSummary(config.value));
 const paginationCardSummary = computed(() => paginationSummary(rotation));
 </script>
 
@@ -69,8 +66,6 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard id="pairings:table" title="Table" :summary="tableSummary">
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="table" />
-
 			<ScreenSettingsGroup title="Result Badge">
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="result-badge" />
 			</ScreenSettingsGroup>
@@ -84,9 +79,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			show-description="Show the round name above the pairings."
 			auto-description="Leave empty for the round's name and pairings."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 
 		<ScreenPaginationSettingsCard
 			id="pairings:pagination"

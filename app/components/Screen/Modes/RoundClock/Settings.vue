@@ -51,7 +51,6 @@ const clockSummary = computed(() => {
 				description="Show the Round's name above its clock."
 				@update:model-value="updateConfig({ showRoundName: $event === true })"
 			/>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="round-name" />
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard

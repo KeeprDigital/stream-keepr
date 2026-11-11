@@ -133,10 +133,7 @@ const tableSummary = computed(() => settingsSummary([
 	columnsSummary(editorColumns.value),
 	lookOf('table'),
 ]));
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	lookOf('header'),
-]));
+const headerCardSummary = computed(() => headerSummary(config.value));
 const paginationCardSummary = computed(() => paginationSummary(rotation));
 </script>
 
@@ -279,9 +276,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			show-description="Show the standings header above the table."
 			auto-description="Leave empty for auto-generated header based on view mode."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 
 		<ScreenPaginationSettingsCard
 			id="standings:pagination"
