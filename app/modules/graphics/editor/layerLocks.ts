@@ -52,3 +52,25 @@ export function toggleLayerLocks<D, L extends GraphicsEditorLayer>(
 export function lockedLayers<D, L extends GraphicsEditorLayer>(tree: GraphicsEditorTree<D, L>, document: D): L[] {
 	return tree.order(document).filter(layer => isLayerLocked(tree, document, layer));
 }
+
+/** A Graphic Item named by its composition, as a preview frame's guides name it. */
+export interface LockedGraphicItem {
+	graphicId: string;
+	itemId: string;
+}
+
+/**
+ * Every locked Graphic Item, by composition and item id: the guides a preview
+ * frame draws without offering (ADR-0063). Item ids are unique per composition
+ * only, so a lock in one Broadcast Graphic never holds an item of another.
+ */
+export function lockedGraphicItems<D, L extends GraphicsEditorLayer>(tree: GraphicsEditorTree<D, L>, document: D): LockedGraphicItem[] {
+	return lockedLayers(tree, document).flatMap((layer) => {
+		const item = tree.item(document, layer);
+		return item
+			? [
+					{ graphicId: item.composition.id, itemId: item.itemId },
+				]
+			: [];
+	});
+}

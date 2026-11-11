@@ -1948,7 +1948,7 @@ Accepted · 2026-11-03 · [#749](https://github.com/KeeprDigital/stream-keepr/is
 
 **Only a preview frame listens, and nothing writes.** A live Screen Output installs no listener for the run. The controls send a plan to the embedded frame and write no Screen configuration, so they need no Graphics Authoring Lease and work for a read-only observer.
 
-**The controls sit behind one control in the preview toolbar, closed on every visit ([#1070](https://github.com/KeeprDigital/stream-keepr/issues/1070)).** Both editors mount them in the shared preview panel's `animation` slot. Hiding them does not stop a run: they stay mounted, a loop keeps playing, and the one control is marked as playing so a moving preview is explained.
+**The controls sit behind one control in the preview toolbar, closed on every visit ([#1070](https://github.com/KeeprDigital/stream-keepr/issues/1070)).** The one preview shell both editors mount (`GraphicsEditorPreview`, [#1101](https://github.com/KeeprDigital/stream-keepr/issues/1101)) puts them in the shared preview panel's `animation` slot; the Feature Match Overlay adds its subject buttons beside them. Hiding them does not stop a run: they stay mounted, a loop keeps playing, and the one control is marked as playing so a moving preview is explained.
 
 ### Why
 
@@ -2064,7 +2064,7 @@ Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/is
 
 **A Layer Lock keeps a layer from canvas edits, and nothing else.** A locked layer is not moved, resized or rotated on the canvas and arrow nudges skip it; with several selected, the canvas moves only the unlocked ones. It stays selectable from the layer list, where it shows no canvas handles but a lock badge on its row and its canvas outline, and its property panel still edits it (E27). Delete, duplicate, hide, reorder (a drag in the layer list included), copy and paste, group and ungroup, and align and distribute are not canvas edits and still act on it.
 
-**A click on a locked layer in the preview falls through to the layer beneath it, or to the canvas (E27).** The preview frame reads the locks from the working layout the editor already pushes it, and draws their guides without offering them.
+**A click on a locked layer in the preview falls through to the layer beneath it, or to the canvas (E27).** The preview frame reads the locks from the working layout or stack the editor already pushes it, and draws their guides without offering them; a lock names its item within its own composition, since a Broadcast Graphic's item ids are unique per graphic only (#1101).
 
 **Locking a Graphic Group locks its children; a Source Item locks too (E28).** A child locked through its group cannot be unlocked on its own.
 
@@ -2767,7 +2767,7 @@ One action offered once: replacing a layout is placing a template. A preset was 
 
 ## ADR-0081: One graphics editor core, parameterised by the Host Contract's editor half
 
-Accepted · 2026-11-11 · [#1098](https://github.com/KeeprDigital/stream-keepr/issues/1098), part of [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060) · Amended 2026-11-11: Broadcast Graphics adopts it · [#1100](https://github.com/KeeprDigital/stream-keepr/issues/1100)
+Accepted · 2026-11-11 · [#1098](https://github.com/KeeprDigital/stream-keepr/issues/1098), part of [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060) · Amended 2026-11-11: Broadcast Graphics adopts it · [#1100](https://github.com/KeeprDigital/stream-keepr/issues/1100) · Amended 2026-11-11: one preview shell, with canvas handles in Broadcast Graphics · [#1101](https://github.com/KeeprDigital/stream-keepr/issues/1101)
 
 The Feature Match Overlay editor alone had undo, several selected, Layer Locks, grouping, alignment, the clipboard verbs and the keyboard, typed throughout on the Feature Match Layout. Broadcast Graphics is to adopt the same editor (#1100), not a copy of it.
 
@@ -2797,6 +2797,7 @@ The verbs and their rules (one undo step per verb, several selected moving toget
 - `useGraphicsEditor`'s `commit` takes a host's own write for a property panel edit that reaches the document by another path (the Feature Match Overlay's Frame and Source Item panels), and records it as one undoable step like any verb.
 - The test table `test/nuxt/composables/useGraphicsEditor.test.ts` runs every case against each host in `test/nuxt/helpers/graphicsEditorHosts.ts`; a new host adds a column there.
 - No realtime path changes. Both editors drop unsaved edits on losing the Graphics Authoring Lease the same way (ADR-0030).
+- **One preview shell serves both editors (#1101):** `GraphicsEditorPreview` (`app/components/Graphics/EditorPreview.vue`) owns the shared preview panel, the Screen Output frame, the ready handshake and sender-checked reports, focus release, the canvas handles and the Graphic Animation Preview control. A host supplies the messages its frame reads, any report in its own vocabulary (the Feature Match Overlay's Frame and Source Item selections), its run, its handles' selection and its toolbar controls. Broadcast Graphics gains canvas handles: none for an observer, during a placement, or over a graphic that may be on air. Its frame learns a ⌘-click toggle and the stack's Layer Locks in its authoring-preview branch only; several selected reach it as their Broadcast Graphic, and the handles outline each member. A live Screen Output's render path is unchanged: it draws no guide layer, so neither locks nor selections reach it.
 
 ### Rejected alternatives
 
