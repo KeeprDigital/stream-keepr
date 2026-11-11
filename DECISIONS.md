@@ -2347,7 +2347,7 @@ All of a Screen's Mode Tokens sat in one flat Theme card above the mode's settin
 
 ### Consequences
 
-- `useScreenThemeOverrides` holds the Theme load, the resolution, and the per-token write and Clear for every card that renders rows. Cards mounting together share one in-flight read of the Event's Theme.
+- The Screen's page holds one instance of the Theme load, the resolution, and the per-token write and Clear (`provideScreenThemeOverrides`), and every card that renders rows reads it (`useScreenThemeOverrides`). The page reads the Event's Theme once, however many cards mount and whenever they mount, and a row rendered outside a Screen's page throws (#1076, replacing one instance per token group over a shared in-flight read).
 - Every mode's settings mount each group its Mode Tokens name (#971–#983). A group mounts nothing by registration: the page keeps no record of which groups are on it, and no card collects the tokens of a group that is not (#1065, replacing the mounted-group registration and residual placement this decision first shipped with).
 - A Mode Token whose group is hidden cannot be overridden from the page until its group shows. Its stored override still applies.
 - A One Piece Deck List has no control in the Deck Details, Pointed Cards or point badge groups, but its settings mount their Looks, so every Deck List Mode Token stays reachable there.
