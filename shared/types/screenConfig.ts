@@ -461,9 +461,8 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'broadcast-graphics': [],
 	'standings': [
 		'viewMode',
-		'topNCount',
-		'sliceStart',
-		'sliceEnd',
+		'rangeStart',
+		'rangeEnd',
 		'playerListId',
 		'revealCount',
 		'roundId',
