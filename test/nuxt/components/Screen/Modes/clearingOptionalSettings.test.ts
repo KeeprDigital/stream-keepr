@@ -146,7 +146,7 @@ async function mountEditor(editor: string) {
 				USelect: clearableStub(null),
 				USelectMenu: clearableStub(null),
 				UInputMenu: clearableStub(null),
-				UInputNumber: true,
+				UInputNumber: clearableStub(null),
 				USwitch: true,
 				UButton: true,
 				USeparator: true,
@@ -171,6 +171,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		{ viewMode: 'cards', scope: 'playerList' },
 		[
 			['Archetype filter', 'archetypeFilter', 'Rakdos Midrange'],
+			['Max width', 'maxWidth', 1200],
 			['Custom header text', 'headerText', 'Day 2 Metagame'],
 			['Player List', 'playerListId', 7],
 		],
@@ -191,6 +192,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		{ viewMode: 'watchlist' },
 		[
 			['Custom header text', 'headerText', 'Final Standings'],
+			['Max width', 'maxWidth', 1200],
 			['Player List', 'playerListId', 7],
 		],
 	],

@@ -1,16 +1,16 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import ThemeColorSourceField from '~/components/Theme/ColorSourceField.vue';
+import ThemeColorField from '~/components/Theme/ColorField.vue';
 
 // A composite token's own colour edits alpha and updates once its picker
 // closes, so a drag is one token write.
 
 enableAutoUnmount(afterEach);
 
-describe('a Theme colour source field', () => {
+describe('a composite token\'s colour field', () => {
 	it('updates its own colour once the picker closes, carrying its alpha', async () => {
-		const wrapper = mount(ThemeColorSourceField, {
+		const wrapper = mount(ThemeColorField, {
 			props: { value: '#112233', label: 'Fill colour', alpha: true },
 			global: { stubs: nuxtUiStubs },
 		});

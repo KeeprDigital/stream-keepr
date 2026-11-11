@@ -15,7 +15,7 @@ import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { isMetagameColumnOffered, isMetagameSortOffered } from '~~/shared/utils/metagame';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
-import { columnsSummary, FOLLOWS_THE_THEME, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { columnsSummary, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -151,16 +151,10 @@ const tableSummary = computed(() => settingsSummary([
 	columnsSummary(activeColumns.value),
 	look('table'),
 ]));
-const chartSummary = computed(() => settingsSummary([
-	look('chart'),
-], FOLLOWS_THE_THEME));
-const sizeAndSurfaceSummary = computed(() => settingsSummary([
-	look('size-and-surface'),
-], FOLLOWS_THE_THEME));
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	look('header'),
-]));
+const sizeSummary = computed(() => config.value.maxWidth === undefined
+	? 'Auto width'
+	: `Up to ${config.value.maxWidth} px wide`);
+const headerCardSummary = computed(() => headerSummary(config.value));
 const paginationCardSummary = computed(() => paginationSummary(rotation));
 </script>
 
@@ -245,7 +239,6 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			v-else
 			id="metagame:chart"
 			title="Chart"
-			:summary="chartSummary"
 		>
 			<ScreenSettingsField
 				label="Pinned Chart Series"
@@ -259,17 +252,21 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 					Pin on the Metagame page
 				</NuxtLink>
 			</ScreenSettingsField>
-
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="chart" />
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection
-			id="metagame:size-and-surface"
-			title="Size & Surface"
-			subtitle="How wide the table or chart runs, and what it sits on."
-			:summary="sizeAndSurfaceSummary"
+			id="metagame:size"
+			title="Size"
+			:summary="sizeSummary"
 		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="size-and-surface" />
+			<ScreenConfigField
+				:field="fields.maxWidth"
+				:model-value="config.maxWidth"
+				description="The widest the table or chart runs, centred. Leave empty to fill the Screen."
+				placeholder="Auto"
+				nullable
+				@update:model-value="updateConfig({ maxWidth: $event })"
+			/>
 		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
@@ -280,9 +277,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			show-description="Show the metagame title above the table."
 			auto-description="Leave empty for an auto-generated title."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 
 		<ScreenPaginationSettingsCard
 			v-if="config.viewMode !== 'chart'"

@@ -144,7 +144,7 @@ describe('screenHeadToHeadSettings', () => {
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ player1Id: null });
 	});
 
-	// The Players binding, then one card per element, each Mode Token in its group's Look (ADR-0072).
+	// The Players binding, then one card per element; the mode declares no Mode Token, so no card holds a Look.
 	it('lays out its cards in order', async () => {
 		const wrapper = await mountComponent();
 
@@ -159,19 +159,13 @@ describe('screenHeadToHeadSettings', () => {
 				id: 'head-to-head:player-details',
 				title: 'Player Details',
 				collapsible: true,
-				groups: ['player-details'],
-			},
-			{
-				id: 'head-to-head:earlier-matches',
-				title: 'Earlier Matches',
-				collapsible: true,
-				groups: ['earlier-matches'],
+				groups: [],
 			},
 			{
 				id: 'head-to-head:header',
 				title: 'Header',
 				collapsible: true,
-				groups: ['header'],
+				groups: [],
 			},
 		]);
 	});
@@ -183,20 +177,15 @@ describe('screenHeadToHeadSettings', () => {
 			{},
 			{
 				'head-to-head:player-details': 'Pronouns shown · Deck colors shown',
-				'head-to-head:earlier-matches': 'Follows the Theme',
 				'head-to-head:header': 'Auto title',
 			},
 		],
 		[
-			'hidden details and overridden tokens',
+			'hidden details, and a former Mode Token still stored',
 			{ showPronouns: false, showDeckColors: false, showHeader: false },
+			{ 'head-to-head.surface': '#000000' },
 			{
-				'head-to-head.name-typography': { family: 'Inter' },
-				'head-to-head.surface': '#000000',
-			},
-			{
-				'head-to-head:player-details': 'Pronouns hidden · Deck colors hidden · 1 Screen Theme Override',
-				'head-to-head:earlier-matches': '1 Screen Theme Override',
+				'head-to-head:player-details': 'Pronouns hidden · Deck colors hidden',
 				'head-to-head:header': 'Hidden',
 			},
 		],

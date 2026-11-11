@@ -134,7 +134,7 @@ const badgesSummary = computed(() => settingsSummary([
 
 			<USeparator />
 
-			<ScreenCardGridLayoutFields
+			<ScreenModesDeckCardSizingLayoutFields
 				:layout="layout"
 				:fields="layoutFields"
 				:show="{ alignment: true }"

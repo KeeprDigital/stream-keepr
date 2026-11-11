@@ -433,7 +433,7 @@ const badgesSummary = computed(() => {
 
 				<USeparator />
 
-				<ScreenCardGridLayoutFields
+				<ScreenModesDeckCardSizingLayoutFields
 					v-if="section.view !== 'list'"
 					:view="section.view"
 					:layout="section.layout"

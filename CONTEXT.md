@@ -219,7 +219,7 @@ A Screen Mode showing a Round's name and the time left in it, projected from the
 _Avoid_: round timer (the Feature Match Session clock is a Match's, not a Round's).
 
 **Page Rotation**:
-The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
+The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field, which holds a number of rows or, where the mode allows, is absent for Auto: every row on one page. An edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Top Cut Bracket**:
@@ -270,8 +270,12 @@ _Avoid_: Beauty when naming product concepts.
 A Screen Output that renders the final composed opacity as a grayscale alpha matte.
 _Avoid_: Black-and-white export, chroma key.
 
+**Card Layout**:
+How a card grid on a Most Played Cards Screen lays out its cards: columns, max card size and gap, each a number or Auto. The cards always fit the space the grid is given, so none leave the Event Canvas. Auto columns are the count at which the cards are largest, a max card size is the widest a card may be, and an Auto gap follows the card's size (ADR-0054).
+_Avoid_: Fit, Fixed width, auto columns, card width.
+
 **Card Sizing**:
-How a card grid on a Most Played Cards or Deck List Screen sizes its cards. Fixed width: each card takes the grid's own card width, and the grid may run off the Event Canvas. Fit to screen: every card on the page takes the largest size at which all of them fit the space the grid is given, so none overflow. Either may take auto columns, chosen from the card count and the Event Canvas (ADR-0054).
+How a card grid on a Deck List Screen sizes its cards; a Most Played Cards Screen has a Card Layout in its place. Fixed width: each card takes the grid's own card width, and the grid may run off the Event Canvas. Fit to screen: every card on the page takes the largest size at which all of them fit the space the grid is given, so none overflow. Either may take auto columns, chosen from the card count and the Event Canvas (ADR-0054).
 _Avoid_: dynamic card size, card size presets.
 
 **Program monitor**:
@@ -384,10 +388,10 @@ One named value a Screen may consume from its Theme, such as a colour, font, or 
 _Avoid_: variable, style entry
 
 **Foundation Token**:
-A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr. A Screen Mode's display reads one directly for its shared chrome, as the Metagame chart reads the chart series.
+A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr. A Screen Mode's display reads one directly for its shared chrome: its type from `heading` and `body`, its title, surface, text and dividers from the colour of that role, as the Metagame chart reads the chart series.
 
 **Mode Token**:
-A Theme Token a Screen Mode Definition declares for its own rendering, such as a Standings row's surface. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. Where no Foundation Token fills its role, such as a badge shadow's colour or Card Spotlight's zoom, it defaults to a literal; a composite literal's colours still name Foundation Tokens where they can, as the Feature Match Overlay Frame's fill names `surface`.
+A Theme Token a Screen Mode Definition declares for an element of its rendering that has no Foundation role, such as Standings' Position Change climb colour or a Pairings result badge's colours. A mode whose every element has a Foundation role declares none, as Head-to-Head does. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. Where no Foundation Token fills its role, such as a badge shadow's colour or Card Spotlight's zoom, it defaults to a literal; a composite default's colours still name Foundation Tokens where they can, as the Feature Match Overlay Frame's fill names `surface`. Only its default names a token: a value set for it is a literal.
 _Avoid_: component token
 
 **Screen Theme Override**:
@@ -774,12 +778,12 @@ An author's lock on one layer of a Feature Match Layout or a Broadcast Graphic, 
 _Avoid_: Frozen layer, pinned layer
 
 **Feature Match Overlay Preset**:
-A built-in starting point that initializes a Feature Match Layout.
-_Avoid_: Template when referring to the whole layout preset.
+Former term. The built-in starting layouts are built-in **Feature Match Layout Templates** now, and a Screen records none of them.
+_Avoid_: Preset for a built-in layout; say built-in Feature Match Layout Template.
 
 **Feature Match Layout Template**:
-A user-created reusable Feature Match Layout that can be copied into a Screen's Feature Match Overlay configuration. It carries no Feature Match Slot assignment, and placing one replaces the Screen's whole layout as an unlinked copy.
-_Avoid_: Preset when referring to user-owned reusable layouts.
+A reusable Feature Match Layout that can be copied into a Screen's Feature Match Overlay configuration: one an author saved, one a Template Package installed, or a built-in one the application ships. It carries no Feature Match Slot assignment, and placing one replaces the Screen's whole layout as an unlinked copy. A built-in one is marked as such, is placed like any other, and cannot be revised, removed or exported.
+_Avoid_: Preset
 
 **Feature Match Layout Host Vocabulary**:
 The terms a Feature Match Layout uses whose meaning the installation supplies: Source Roles and Feature Match tokens a Graphic Text Template binds. Each is closed and pinned by the layout format version, so a package naming an unimplemented term is refused. The Frame's Animation Effect was one until it became a Mode Token; its identity is still recognised.
@@ -846,8 +850,10 @@ _Avoid_: worst-case data, overflow data
 - An **Event** uses exactly one **Theme**; an Event that chose none uses the **Default Theme**, which ships with Stream Keepr and cannot be edited or deleted
 - A **Theme** in use by any **Event** cannot be deleted, and the refusal names those Events
 - A **Theme** stores only the **Theme Tokens** it sets; every other token reads its shipped default
-- A **Foundation Token** holds a value, in which a fill's, surface's or background colour layer's colour may name a colour **Foundation Token**; a **Mode Token** holds a value or names a **Foundation Token** of its type; nothing names a **Mode Token**, and a colour names nothing, so every token resolves in at most two steps
-- A **Screen** resolves each **Theme Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every **Mode Token** and **Graphic Item** on that Screen that names it
+- A value a **Theme** or a **Screen Theme Override** stores for a **Theme Token** never names another token: it is a literal, and so is every colour inside a fill, a surface or a background colour layer
+- Only a shipped default names a token: a **Mode Token**'s default may name a **Foundation Token** of its type, and a colour inside a composite default may name a colour **Foundation Token**; nothing names a **Mode Token**, and a colour's default names nothing
+- A stored value that names a token, written before values were literals, still reads as the literal it resolves to, and the next edit of its token stores that literal
+- A **Screen** resolves each **Theme Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every default and **Graphic Item** on that Screen that names it
 - A **Screen Theme Override** of another mode's **Mode Token** is kept while the **Screen** shows a different **Screen Mode**, and applies again on its return
 - A **Graphic Item** property either names a whole **Foundation Token** of its type or holds its own value; detaching copies the token's resolved value in
 - A typography **Theme Token** carries no size; the consuming **Graphic Item** or **Mode Token** owns it
@@ -1005,5 +1011,5 @@ _Avoid_: worst-case data, overflow data
 - A **Feature Match Overlay** renders exactly one **Feature Match Layout** for exactly one **Feature Match Slot**
 - A **Feature Match Layout** has exactly one **Feature Match Overlay Frame** and one or more **Graphic Items**
 - A **Source Item** may cut through the **Feature Match Overlay Frame**
-- A **Feature Match Overlay Preset** initializes a **Feature Match Layout**; a **Feature Match Layout Template** stores a reusable one
+- A **Feature Match Layout Template** stores a reusable **Feature Match Layout**; a built-in one ships with the application and is stored nowhere
 - A **Feature Match Layout** declares its **Feature Match Layout Host Vocabulary** to a **Template Package** and never carries an Event identity

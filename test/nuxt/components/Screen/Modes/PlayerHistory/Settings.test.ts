@@ -122,13 +122,13 @@ describe('screenPlayerHistorySettings', () => {
 				id: 'player-history:table',
 				title: 'Table',
 				collapsible: true,
-				groups: ['table', 'outcome-badge'],
+				groups: ['outcome-badge'],
 			},
 			{
 				id: 'player-history:header',
 				title: 'Header',
 				collapsible: true,
-				groups: ['header'],
+				groups: [],
 			},
 			{
 				id: 'player-history:pagination',

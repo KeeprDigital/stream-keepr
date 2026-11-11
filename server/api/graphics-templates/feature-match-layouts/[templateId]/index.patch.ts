@@ -13,6 +13,7 @@ import {
 import { requireUserId } from '~~/server/utils/auth';
 import {
 	assertFeatureMatchLayoutTemplateReferencesSelectable,
+	refuseBuiltInFeatureMatchLayoutTemplate,
 	refuseInstalledFeatureMatchLayoutTemplateWrite,
 } from '~~/server/utils/featureMatchLayoutTemplateWrites';
 import { graphicsTemplateReferenceConflict } from '~~/server/utils/graphicsTemplateReferences';
@@ -32,6 +33,7 @@ import { readJsonPayloadLimited } from '~~/server/utils/payloadLimits';
 export default defineEventHandler(async (event) => {
 	await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(event, featureMatchLayoutTemplateParamsSchema.parse);
+	refuseBuiltInFeatureMatchLayoutTemplate(templateId, 'revised');
 	await requireGraphicsTemplateWritable(event, templateId);
 
 	const body = updateFeatureMatchLayoutTemplateSchema.parse(

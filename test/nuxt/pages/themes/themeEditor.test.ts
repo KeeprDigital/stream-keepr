@@ -148,7 +148,7 @@ describe('the Theme editor', () => {
 		['a Foundation colour', 'accent', 'Default: #0077a3'],
 		['a Foundation dimension', 'inset', 'Default: 0px'],
 		['the Screen alignment', 'alignment', 'Default: center center'],
-		['a Mode Token following a Foundation Token', 'standings.row-divider', 'Default: follows Divider'],
+		['a Mode Token following a Foundation Token', 'top-cut.position-border', 'Default: follows Divider'],
 		['the background', 'background', 'Default: no layers'],
 		['the Animation Effect', 'animation-effect', 'Default: Fog'],
 		['the logo', 'logo', 'Default: none'],
@@ -176,7 +176,7 @@ describe('the Theme editor', () => {
 		],
 		[
 			'a Mode Token\'s own colour, keeping the alpha it follows',
-			'standings.row-divider',
+			'top-cut.position-border',
 			'hue',
 			'#00ff00',
 			'rgba(0, 255, 0, 0.12)',
@@ -198,11 +198,11 @@ describe('the Theme editor', () => {
 	});
 
 	it('repaints its preview once a write lands', async () => {
-		answerWrite = () => theme(2, { 'standings.surface': 'rgb(0, 255, 0)' });
+		answerWrite = () => theme(2, { surface: 'rgb(0, 255, 0)' });
 		const wrapper = await mountEditor({ preview: true });
 		await settleUntil(() => wrapper.find('.standings-table').exists());
 
-		await commitColour(wrapper, 'standings.surface', 'hue', '#00ff00');
+		await commitColour(wrapper, 'surface', 'hue', '#00ff00');
 
 		expect(getComputedStyle(wrapper.get('.standings-table').element).backgroundColor).toBe('rgb(0, 255, 0)');
 	});
@@ -219,23 +219,6 @@ describe('the Theme editor', () => {
 				'alignment',
 				{
 					value: { horizontal: 'left', vertical: 'center' },
-				},
-			],
-		]);
-	});
-
-	it('points a Mode Token at another Foundation Token of its type', async () => {
-		const wrapper = await mountEditor();
-
-		await part(wrapper, 'standings.row-divider', 'source').setValue('accent');
-		await flushPromises();
-
-		expect(writes()).toEqual([
-			[
-				'PUT',
-				'standings.row-divider',
-				{
-					value: { token: 'accent' },
 				},
 			],
 		]);
@@ -261,17 +244,17 @@ describe('the Theme editor', () => {
 		const older = deferred<ThemeResponse>();
 		const answers = [
 			() => older.promise,
-			() => theme(3, { 'accent': '#ff0000', 'standings.surface': '#000000' }),
+			() => theme(3, { 'accent': '#ff0000', 'standings.rise': '#000000' }),
 		];
 		answerWrite = () => answers.shift()!();
 		const wrapper = await mountEditor();
 
 		await commitColour(wrapper, 'accent', 'hue', '#ff0000');
-		await commitColour(wrapper, 'standings.surface', 'hue', '#111111');
+		await commitColour(wrapper, 'standings.rise', 'hue', '#111111');
 		older.resolve(theme(2, { accent: '#ff0000' }));
 		await flushPromises();
 
-		expect(field(wrapper, 'standings.surface').attributes('data-token-state')).toBe('set');
+		expect(field(wrapper, 'standings.rise').attributes('data-token-state')).toBe('set');
 	});
 
 	it('writes the background once its edits pause, as the whole stack', async () => {
@@ -305,47 +288,94 @@ describe('the Theme editor', () => {
 		expect(field(wrapper, 'background').attributes('data-token-state')).toBe('set');
 	});
 
-	// A background colour layer follows a colour Foundation Token or holds its own colour.
+	// A value stored before writes were literal-only may name another token, and a
+	// shipped default still does: the editor edits it resolved, so the next edit
+	// writes literals.
 	it.each([
 		{
-			case: 'keeps a colour layer following a token through an edit to the stack',
-			stored: { token: 'accent' },
-			edit: (editor: ReturnType<typeof part>) => editor.get('[data-testid="add-layer"]').trigger('click'),
-			written: [
-				{ token: 'accent' },
-				'#000000',
-			],
-		},
-		{
-			case: 'points a colour layer at a token',
-			stored: '#123456',
-			edit: (editor: ReturnType<typeof part>) => editor.get('[data-token-part="colour-source"]').setValue('token:accent'),
-			written: [
-				{ token: 'accent' },
-			],
-		},
-	])('$case', async ({ stored, edit, written }) => {
-		storedTokens = {
-			background: [
+			case: 'a stored background colour layer naming the accent',
+			token: 'background',
+			stored: [
 				{
 					id: 'wash',
 					type: 'color',
-					color: stored,
+					color: { token: 'accent' },
 					enabled: true,
 					opacity: 1,
 				},
 			],
+			edit: (wrapper: VueWrapper) => part(wrapper, 'background', 'background-layers').get('[data-testid="add-layer"]').trigger('click'),
+			written: [
+				{
+					id: 'wash',
+					type: 'color',
+					color: '#aa0000',
+					enabled: true,
+					opacity: 1,
+				},
+				{
+					id: expect.any(String),
+					type: 'color',
+					color: '#000000',
+					enabled: true,
+					opacity: 1,
+				},
+			],
+		},
+		{
+			case: 'a stored surface whose fill and outline name colour tokens',
+			token: 'panel',
+			stored: {
+				fill: {
+					type: 'solid',
+					color: { token: 'accent' },
+				},
+				fillOpacity: 0.5,
+				outline: {
+					color: { token: 'text-primary' },
+					width: 2,
+				},
+			},
+			edit: (wrapper: VueWrapper) => field(wrapper, 'panel').get('[data-testid="theme-surface-outline"]').trigger('click'),
+			written: {
+				fill: { type: 'solid', color: '#aa0000' },
+				fillOpacity: 0.5,
+			},
+		},
+		{
+			case: 'an unset fill, whose default names the accent',
+			token: 'accent-fill',
+			stored: undefined,
+			edit: (wrapper: VueWrapper) => field(wrapper, 'accent-fill').get('[data-testid="theme-fill-kind"]').setValue('linear-gradient'),
+			written: {
+				type: 'linear-gradient',
+				angle: expect.any(Number),
+				stops: [
+					expect.objectContaining({ color: '#aa0000' }),
+					expect.objectContaining({ color: 'rgba(255, 255, 255, 0.06)' }),
+				],
+			},
+		},
+	])('writes $case back as literals on its next edit', async ({ token, stored, edit, written }) => {
+		storedTokens = {
+			accent: '#aa0000',
+			...(stored === undefined
+				? {}
+				: { [token]: stored }),
 		};
 		const wrapper = await mountEditor();
 		fakeDraftClock();
 
-		await edit(part(wrapper, 'background', 'background-layers'));
+		await edit(wrapper);
 		await pauseEdits();
 
-		expect(writes()).toHaveLength(1);
-		const [[, token, body]] = writes() as [[string, string, { value: Array<{ color: unknown }> }]];
-		expect(token).toBe('background');
-		expect(body.value.map(layer => layer.color)).toEqual(written);
+		expect(writes()).toEqual([
+			[
+				'PUT',
+				token,
+				{ value: written },
+			],
+		]);
 	});
 
 	it('offers a Theme\'s media layers the whole library', async () => {

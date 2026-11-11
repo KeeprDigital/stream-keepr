@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import type { ThemeTokenValue } from '~~/shared/modules/theme';
 import type { ThemeResponse } from '~~/shared/types/theme';
-import { FOUNDATION_TOKENS, readTokenLiteral, resolveThemeTokens } from '~~/shared/modules/theme';
+import { FOUNDATION_TOKENS, resolveFoundationTokens, resolveThemeTokens } from '~~/shared/modules/theme';
 import { THEMED_SCREEN_MODE_TOKENS, themeTokenDefinition } from '~~/shared/themeTokens';
 
 definePageMeta({
@@ -106,11 +105,15 @@ function clearToken(token: string) {
 
 const stored = computed(() => theme.value?.tokens ?? {});
 
-const foundationTokens = computed(() => Object.entries(FOUNDATION_TOKENS).map(([token, definition]) => ({
-	name: token,
-	token: themeTokenDefinition(token)!,
-	resolved: (readTokenLiteral(definition, stored.value[token]) ?? definition.default) as ThemeTokenValue,
-})));
+// Each token as the Theme resolves it, every colour a literal: what its field edits and an edit writes.
+const foundationTokens = computed(() => {
+	const values = resolveFoundationTokens({ vocabulary: FOUNDATION_TOKENS, theme: stored.value, overrides: {} });
+	return Object.keys(FOUNDATION_TOKENS).map(token => ({
+		name: token,
+		token: themeTokenDefinition(token)!,
+		resolved: values[token]!,
+	}));
+});
 
 const modeGroups = computed(() => THEMED_SCREEN_MODE_TOKENS.map((group) => {
 	const { values } = resolveThemeTokens({

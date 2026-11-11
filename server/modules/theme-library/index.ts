@@ -16,10 +16,6 @@ interface TokenWriteParams {
 	originConnectionId?: string;
 }
 
-function isReference(value: unknown): value is { token: string } {
-	return typeof value === 'object' && value !== null && 'token' in value;
-}
-
 function themeNotFound(): never {
 	throw createError({
 		statusCode: 404,
@@ -110,9 +106,7 @@ export function themeLibraryModule() {
 		// A former token: accepted, with nothing to store, version or announce.
 		if (write.dropped)
 			return await get(themeId);
-		const references = isReference(write.value)
-			? []
-			: themeTokenValueGraphicAssetReferences(themeTokenDefinition(token)!.definition.type, write.value, token);
+		const references = themeTokenValueGraphicAssetReferences(themeTokenDefinition(token)!.definition.type, write.value, token);
 		if (references.length > 0)
 			await assertGraphicsTemplateReferencesSelectable(graphicsAssets(), references, 'Theme');
 		let written: DbTheme | undefined;

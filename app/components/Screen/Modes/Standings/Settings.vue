@@ -119,10 +119,7 @@ const tableSummary = computed(() => settingsSummary([
 	columnsSummary(editorColumns.value),
 	lookOf('table'),
 ]));
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	lookOf('header'),
-]));
+const headerCardSummary = computed(() => headerSummary(config.value));
 const paginationCardSummary = computed(() => paginationSummary(rotation));
 </script>
 
@@ -237,6 +234,15 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 				@update:model-value="updateConfig({ showArchetypeColors: $event === true })"
 			/>
 
+			<ScreenConfigField
+				:field="fields.maxWidth"
+				:model-value="config.maxWidth"
+				description="The widest the table runs, centred. Leave empty to fill the Screen."
+				placeholder="Auto"
+				nullable
+				@update:model-value="updateConfig({ maxWidth: $event })"
+			/>
+
 			<UAlert
 				v-if="warnsPositionChangeHasNoData"
 				data-testid="position-change-no-data"
@@ -258,9 +264,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			show-description="Show the standings header above the table."
 			auto-description="Leave empty for auto-generated header based on view mode."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 
 		<ScreenPaginationSettingsCard
 			id="standings:pagination"

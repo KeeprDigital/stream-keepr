@@ -2,7 +2,7 @@
 import type { HeadToHeadPlayerSource } from '~~/shared/types/enums';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import { FOLLOWS_THE_THEME, headerSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { headerSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 
 const props = defineProps<{
 	screen: Screen;
@@ -28,21 +28,13 @@ const sourceOptions: { label: string; value: HeadToHeadPlayerSource }[] = [
 ];
 
 // ── Closed card summaries ──
-const lookOf = (...groups: string[]) => lookSummary('head-to-head', props.screen.themeOverrides, groups);
 const playerDetailsSummary = computed(() => settingsSummary([
 	config.value.showPronouns && hasPronouns.value
 		? 'Pronouns shown'
 		: 'Pronouns hidden',
 	config.value.showDeckColors ? 'Deck colors shown' : 'Deck colors hidden',
-	lookOf('player-details'),
 ]));
-const earlierMatchesSummary = computed(() => settingsSummary([
-	lookOf('earlier-matches'),
-], FOLLOWS_THE_THEME));
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	lookOf('header'),
-]));
+const headerCardSummary = computed(() => headerSummary(config.value));
 </script>
 
 <template>
@@ -98,12 +90,6 @@ const headerCardSummary = computed(() => settingsSummary([
 				description="Show the mana colors of each Player's deck beside its name."
 				@update:model-value="updateConfig({ showDeckColors: $event === true })"
 			/>
-
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="player-details" />
-		</ScreenSettingsSection>
-
-		<ScreenSettingsSection id="head-to-head:earlier-matches" title="Earlier Matches" :summary="earlierMatchesSummary">
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="earlier-matches" />
 		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
@@ -114,8 +100,6 @@ const headerCardSummary = computed(() => settingsSummary([
 			show-description="Show a title above the two Players."
 			auto-description="Leave empty for &quot;Head to Head&quot;."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 	</div>
 </template>

@@ -24,16 +24,20 @@ import {
  * Graphic Surface Style, Shape Geometry and Graphic Animation Recipe. Each has
  * the shape of the Graphic Item property it fills, so a binding paints it whole.
  *
- * A colour inside a fill or surface names a colour Foundation Token or holds a
- * literal, so changing the accent once reaches every surface using it. It
- * resolves through the same precedence as the token itself
- * (`resolveThemeTokens`); after resolution every colour is a literal.
+ * A colour inside a stored fill or surface is a literal: a write admits nothing
+ * else. A shipped default may name a colour Foundation Token instead, so
+ * changing the accent reaches every surface nobody has set, and a value stored
+ * before writes were literal-only may too. Either reads through the token's own
+ * precedence (`resolveThemeTokens`); after resolution every colour is a literal.
  */
 
-/** A colour inside a composite token: a colour Foundation Token it names, or a literal. */
+/**
+ * A colour inside a composite token as a default declares it, or as a read
+ * meets it: a literal, or a colour Foundation Token it names.
+ */
 export type ThemeColor = string | ThemeTokenReference;
 
-/** A Graphic Fill whose colours are `C`: references as stored, literals once resolved. */
+/** A Graphic Fill whose colours are `C`: as a default declares them, or literals once resolved or written. */
 export type ThemeFill<C = ThemeColor>
 	= | { type: 'solid'; color: C }
 		| { type: 'linear-gradient'; angle: number; stops: Array<{ color: C; position: number; opacity: number }> };
@@ -59,6 +63,7 @@ export type ThemeCompositeTokenType = keyof ThemeCompositeValueTypes;
 const finite = z.number().finite();
 const unit = finite.min(0).max(1);
 export const literalColorSchema = z.string().min(1).max(500);
+/** A composite colour as a read accepts it: the literal a write stores, or the former stored reference. */
 export const themeColorSchema = z.union([
 	literalColorSchema,
 	z.object({
@@ -79,27 +84,31 @@ export function linearGradientFillSchema<C extends z.ZodType>(colorSchema: C) {
 	}).strict();
 }
 
-const themeFillSchema = z.discriminatedUnion('type', [
-	z.object({
-		type: z.literal('solid'),
-		color: themeColorSchema,
-	}).strict(),
-	linearGradientFillSchema(themeColorSchema),
-]);
+function fillSchema<C extends z.ZodType>(colorSchema: C) {
+	return z.discriminatedUnion('type', [
+		z.object({
+			type: z.literal('solid'),
+			color: colorSchema,
+		}).strict(),
+		linearGradientFillSchema(colorSchema),
+	]);
+}
 
-const themeSurfaceStyleSchema = z.object({
-	fill: themeFillSchema,
-	fillOpacity: unit,
-	outline: z.object({
-		color: themeColorSchema,
-		width: finite.min(0).max(500),
-	}).strict().optional(),
-	glow: z.object({
-		color: themeColorSchema,
-		size: finite.min(0).max(500),
-		opacity: unit,
-	}).strict().optional(),
-}).strict();
+function surfaceStyleSchema<C extends z.ZodType>(colorSchema: C) {
+	return z.object({
+		fill: fillSchema(colorSchema),
+		fillOpacity: unit,
+		outline: z.object({
+			color: colorSchema,
+			width: finite.min(0).max(500),
+		}).strict().optional(),
+		glow: z.object({
+			color: colorSchema,
+			size: finite.min(0).max(500),
+			opacity: unit,
+		}).strict().optional(),
+	}).strict();
+}
 
 const shapeCornerSchema = z.object({
 	treatment: z.enum(SHAPE_CORNER_TREATMENT_VALUES),
@@ -135,13 +144,26 @@ const themeAnimationRecipeSchema = z.object({
 	}).strict().optional(),
 }).strict();
 
-/** The literals a composite token of `type` holds, with its colours as stored. */
-export const THEME_COMPOSITE_VALUE_SCHEMAS: { [T in ThemeCompositeTokenType]: z.ZodType } = {
-	'fill': themeFillSchema,
-	'surface-style': themeSurfaceStyleSchema,
-	'shape-geometry': themeShapeGeometrySchema,
-	'animation-recipe': themeAnimationRecipeSchema,
-};
+type CompositeSchemas = { [T in ThemeCompositeTokenType]: z.ZodType };
+
+function compositeSchemas(colorSchema: z.ZodType): CompositeSchemas {
+	return {
+		'fill': fillSchema(colorSchema),
+		'surface-style': surfaceStyleSchema(colorSchema),
+		'shape-geometry': themeShapeGeometrySchema,
+		'animation-recipe': themeAnimationRecipeSchema,
+	};
+}
+
+/** What a write may store for a composite token of `type`: every colour a literal. */
+export const THEME_COMPOSITE_VALUE_SCHEMAS = compositeSchemas(literalColorSchema);
+
+/**
+ * What a read accepts for a composite token of `type`: what a write stores,
+ * and a colour naming a colour Foundation Token, as a value stored before
+ * writes were literal-only may.
+ */
+export const STORED_THEME_COMPOSITE_VALUE_SCHEMAS = compositeSchemas(themeColorSchema);
 
 export function isThemeCompositeTokenType(type: string): type is ThemeCompositeTokenType {
 	return Object.hasOwn(THEME_COMPOSITE_VALUE_SCHEMAS, type);
@@ -200,23 +222,6 @@ function mapBackground<C, D>(layers: ThemeBackgroundLayer<C>[], map: (color: C) 
 		mapped.push({ ...layer, color });
 	}
 	return mapped;
-}
-
-/** Every colour Foundation Token a composite value names. */
-export function themeCompositeColorReferences(type: string, value: unknown): string[] {
-	const names: string[] = [];
-	const collect = (color: ThemeColor) => {
-		if (typeof color !== 'string')
-			names.push(color.token);
-		return color;
-	};
-	if (type === 'fill')
-		mapFill(value as ThemeFill, collect);
-	else if (type === 'surface-style')
-		mapSurface(value as ThemeSurfaceStyle, collect);
-	else if (type === 'backgroundLayers')
-		mapBackground(value as ThemeBackgroundLayer[], collect);
-	return names;
 }
 
 /**

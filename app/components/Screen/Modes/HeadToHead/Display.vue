@@ -1,48 +1,48 @@
 <script setup lang="ts">
 import type { ScreenOutputHeadToHeadEarlierMatch } from '~~/shared/types/screenOutputReads';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle } from '~/modules/screen-mode';
 
 const { config, error, ready, isEmpty, firstMeeting, headerText, player1, player2, earlierMatches, formatRecord } = useHeadToHeadModeData(useScreenContext());
 
 const primaryTextStyle = {
-	color: modeTokenVar('head-to-head', 'primary-text'),
+	color: foundationTokenVar('text-primary'),
 };
 const secondaryTextStyle = {
-	color: modeTokenVar('head-to-head', 'secondary-text'),
+	color: foundationTokenVar('text-secondary'),
 };
 const titleStyle = {
-	...modeTypographyStyle('head-to-head', 'title-typography'),
-	color: modeTokenVar('head-to-head', 'title-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-primary'),
 };
 const titleDividerStyle = {
-	borderBottomColor: modeTokenVar('head-to-head', 'title-divider'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 const nameStyle = {
-	...modeTypographyStyle('head-to-head', 'name-typography'),
+	...foundationTypographyStyle('heading'),
 	...primaryTextStyle,
 };
 const labelStyle = {
-	...modeTypographyStyle('head-to-head', 'label-typography'),
+	...foundationTypographyStyle('heading'),
 	...secondaryTextStyle,
 };
 /** Over the shared header row's own face, colour and rule. */
 const listTitleStyle = {
 	...labelStyle,
-	borderBottomColor: modeTokenVar('head-to-head', 'row-divider'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 /** On each row too, over the shared row chrome's own line height. */
 const rowStyle = {
-	...modeTypographyStyle('head-to-head', 'row-typography'),
-	borderBottomColor: modeTokenVar('head-to-head', 'row-divider'),
+	...foundationTypographyStyle('body'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 const surfaceStyle = {
-	backgroundColor: modeTokenVar('head-to-head', 'surface'),
+	backgroundColor: foundationTokenVar('surface'),
 };
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = {
-	...modeTypographyStyle('head-to-head', 'row-typography'),
-	color: modeTokenVar('head-to-head', 'primary-text'),
+	...foundationTypographyStyle('body'),
+	color: foundationTokenVar('text-primary'),
 };
 
 const players = computed(() => [player1.value, player2.value]);
