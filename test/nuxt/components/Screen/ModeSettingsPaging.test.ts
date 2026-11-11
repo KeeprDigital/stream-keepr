@@ -3,18 +3,18 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { reactive, ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
-import { UInputStub, USelectStub, USwitchStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
-import Settings from '~/components/Screen/Modes/Pairings/Settings.vue';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import ScreenModeSettings from '~/components/Screen/ModeSettings.vue';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
 enableAutoUnmount(afterEach);
 
-// The Pagination card's page count is the one the Screen Output renders: the Round's Matches as the
-// Screen reads them, followed as the Screen follows them (Screen Mode Data Freshness), not a count…
+// A paginated mode's page selection counts the pages its Screen Output renders: the rows as the
+// Screen reads them, followed as the Screen follows them (Screen Mode Data Freshness), not a count
+// from config (#780). Shown on Pairings, whose rows are a Round's Matches.
 
 const savedConfig = {
 	roundId: 31,
@@ -123,42 +123,28 @@ function pairingsOf(count: number) {
 	};
 }
 
-const UButtonStub = defineComponent({
-	props: {
-		label: { type: String, required: false },
-		disabled: { type: Boolean, required: false },
-	},
-	emits: ['click'],
-	template: '<button type="button" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
-});
-
-function screenOn(roundId: number | undefined, themeOverrides: Record<string, unknown> = {}) {
+function screenOn(roundId: number | undefined) {
 	return {
 		id: 1,
 		currentMode: 'pairings',
-		themeOverrides,
+		themeOverrides: {},
 		modeConfigs: {
 			pairings: { ...savedConfig, roundId },
 		},
 	} as unknown as Screen;
 }
 
-async function mountSettings(roundId: number | undefined = savedConfig.roundId, themeOverrides: Record<string, unknown> = {}) {
-	const wrapper = mount(Settings, {
+async function mountSettings(roundId: number | undefined = savedConfig.roundId) {
+	const wrapper = mount(ScreenModeSettings, {
 		props: {
-			screen: screenOn(roundId, themeOverrides),
+			screen: screenOn(roundId),
 			eventId: 1,
 		},
 		global: {
 			stubs: {
-				...screenSettingsLayoutStubs,
-				UFormField: { template: '<div><slot /></div>' },
-				USelect: USelectStub,
-				USwitch: USwitchStub,
-				UInput: UInputStub,
-				UInputNumber: true,
-				USeparator: true,
-				UButton: UButtonStub,
+				...nuxtUiStubs,
+				// A Look reads the page's Screen Theme Overrides, which this suite is not about.
+				ScreenSettingsLook: true,
 			},
 		},
 	});
@@ -166,7 +152,9 @@ async function mountSettings(roundId: number | undefined = savedConfig.roundId, 
 	return wrapper;
 }
 
-describe('screenModesPairingsSettings', () => {
+const pageSelection = (wrapper: Awaited<ReturnType<typeof mountSettings>>) => wrapper.get('[role="group"][aria-label="Page selection"]');
+
+describe('a paginated mode\'s page selection', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockFetch.mockReset();
@@ -175,128 +163,22 @@ describe('screenModesPairingsSettings', () => {
 		channelHandlers.clear();
 	});
 
-	afterEach(() => {
-		vi.restoreAllMocks();
-	});
-
-	it('offers each Round as "Phase · Round", after the placeholder', async () => {
-		mockFetch.mockResolvedValue(pairingsOf(1));
-		const wrapper = await mountSettings();
-
-		expect(wrapper.findAll('select option').map(option => option.text())).toEqual([
-			'Select a round…',
-			'Swiss · Round 4',
-			'Top Cut · Round 1',
-		]);
-	});
-
-	type Wrapper = Awaited<ReturnType<typeof mountSettings>>;
-	it.each([
-		{
-			name: 'turns the header off',
-			act: (w: Wrapper) => w.get('[data-config-field="showHeader"] [role="switch"]').trigger('click'),
-			patch: { showHeader: false },
-		},
-		{
-			name: 'sets the custom header',
-			act: (w: Wrapper) => w.get('[data-config-field="headerText"] input').setValue('Top 8'),
-			patch: { headerText: 'Top 8' },
-		},
-		{
-			name: 'clears the custom header as a deletion',
-			act: (w: Wrapper) => w.get('[data-config-field="headerText"] input').setValue(''),
-			patch: { headerText: null },
-		},
-	])('$name through its contract field', async ({ act, patch }) => {
-		mockFetch.mockResolvedValue(pairingsOf(1));
-		mockConfig.value = { ...savedConfig, headerText: 'Round 4' };
-		const wrapper = await mountSettings();
-		await act(wrapper);
-
-		expect(mockUpdateConfig).toHaveBeenCalledWith(patch);
-	});
-
-	// Data, then one card per element, each Mode Token in its group's Look (ADR-0072).
-	it('lays out its cards in order', async () => {
-		mockFetch.mockResolvedValue(pairingsOf(1));
-		const wrapper = await mountSettings();
-
-		expect(settingsLayout(wrapper)).toEqual([
-			{
-				id: 'pairings:data',
-				title: 'Source',
-				collapsible: false,
-				groups: [],
-			},
-			{
-				id: 'pairings:table',
-				title: 'Table',
-				collapsible: true,
-				groups: ['result-badge'],
-			},
-			{
-				id: 'pairings:header',
-				title: 'Header',
-				collapsible: true,
-				groups: [],
-			},
-			{
-				id: 'pairings:pagination',
-				title: 'Pagination',
-				collapsible: true,
-				groups: [],
-			},
-		]);
-	});
-
-	it.each([
-		[
-			'no override',
-			{},
-			{},
-			{
-				'pairings:table': 'Follows the Theme',
-				'pairings:header': 'Auto title',
-				'pairings:pagination': '8 per page · Manual paging',
-			},
-		],
-		[
-			'a hidden header and overridden result badge tokens',
-			{ showHeader: false },
-			{ 'pairings.result-reported': '#00ff00', 'pairings.result-bye': '#ffaa00' },
-			{
-				'pairings:table': '2 Screen Theme Overrides',
-				'pairings:header': 'Hidden',
-				'pairings:pagination': '8 per page · Manual paging',
-			},
-		],
-	])('summarises each closed card with %s', async (_case, edits, themeOverrides, summaries) => {
-		mockFetch.mockResolvedValue(pairingsOf(1));
-		mockConfig.value = {
-			...savedConfig,
-			...edits,
-		};
-		const wrapper = await mountSettings(savedConfig.roundId, themeOverrides);
-
-		expect(settingsSummaries(wrapper)).toEqual(summaries);
-	});
-
-	it('picks a Round, back on page 1', async () => {
-		mockFetch.mockResolvedValue(pairingsOf(1));
-		const wrapper = await mountSettings();
-
-		await wrapper.get('[data-settings-card="pairings:data"] select').setValue('41');
-
-		expect(mockUpdateConfig).toHaveBeenCalledWith({ roundId: 41, currentPage: 1 });
-	});
-
-	it('counts pages from the pairings the Screen reads for the Round', async () => {
+	it('sits in the Live card, counting pages from the rows the Screen reads', async () => {
 		mockFetch.mockResolvedValue(pairingsOf(10));
 
 		const wrapper = await mountSettings();
 
 		expect(mockFetch).toHaveBeenCalledWith('/api/screen-output/events/1/screens/1/pairings', expect.anything());
-		expect(wrapper.text()).toContain('Page 1 of 2');
+		expect(wrapper.get('[data-settings-card="live"]').text()).toContain('Page 1 of 2');
+	});
+
+	it('picks a Round back on page 1', async () => {
+		mockFetch.mockResolvedValue(pairingsOf(1));
+		const wrapper = await mountSettings();
+
+		await wrapper.get('[data-settings-field="roundId"] select').setValue('41');
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ roundId: 41, currentPage: 1 });
 	});
 
 	it.each([
@@ -318,22 +200,21 @@ describe('screenModesPairingsSettings', () => {
 		const read = deferred<ReturnType<typeof pairingsOf>>();
 		mockFetch.mockReturnValue(read.promise);
 		const wrapper = await select();
-		const pageSelection = () => wrapper.get('[role="group"][aria-label="Page selection"]');
 
-		expect(pageSelection().attributes('aria-busy')).toBe('true');
-		expect(pageSelection().text()).toContain('Counting pages…');
+		expect(pageSelection(wrapper).attributes('aria-busy')).toBe('true');
+		expect(pageSelection(wrapper).text()).toContain('Counting pages…');
 
 		read.resolve(pairingsOf(10));
 		await flushPromises();
 
-		expect(pageSelection().attributes('aria-busy')).toBe('false');
-		expect(pageSelection().text()).toContain('Page 1 of 2');
+		expect(pageSelection(wrapper).attributes('aria-busy')).toBe('false');
+		expect(pageSelection(wrapper).text()).toContain('Page 1 of 2');
 	});
 
-	it('follows Matches added to the Round after it was selected, as the Screen does', async () => {
+	it('follows rows added after the Round was selected, as the Screen does', async () => {
 		mockFetch.mockResolvedValue(pairingsOf(8));
 		const wrapper = await mountSettings();
-		expect(wrapper.text()).toContain('Page 1 of 1');
+		expect(pageSelection(wrapper).text()).toContain('Page 1 of 1');
 
 		mockFetch.mockResolvedValue(pairingsOf(17));
 		deliver('match:created', {
@@ -341,24 +222,21 @@ describe('screenModesPairingsSettings', () => {
 		});
 		await flushPromises();
 
-		expect(wrapper.text()).toContain('Page 1 of 3');
+		expect(pageSelection(wrapper).text()).toContain('Page 1 of 3');
 	});
 
 	it('reads the newly selected Round once the selection is saved, as the Screen does', async () => {
 		mockFetch.mockResolvedValue(pairingsOf(10));
 		const wrapper = await mountSettings();
-		expect(wrapper.text()).toContain('Page 1 of 2');
+		expect(pageSelection(wrapper).text()).toContain('Page 1 of 2');
 
 		// The store shows the edit at once, but the server reads the Round it holds
 		// until the save lands, so the editor waits for it.
 		mockSaving.value = true;
 		await wrapper.setProps({
 			screen: {
-				id: 1,
-				modeConfigs: {
-					pairings: { ...savedConfig, roundId: 32 },
-				},
-			} as unknown as Screen,
+				...screenOn(32),
+			},
 		});
 		await flushPromises();
 		expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -368,7 +246,7 @@ describe('screenModesPairingsSettings', () => {
 		await flushPromises();
 
 		expect(mockFetch).toHaveBeenCalledTimes(2);
-		expect(wrapper.text()).toContain('Page 1 of 3');
+		expect(pageSelection(wrapper).text()).toContain('Page 1 of 3');
 	});
 
 	it('selects no page beyond the last one the Screen renders', async () => {
@@ -376,8 +254,17 @@ describe('screenModesPairingsSettings', () => {
 		mockConfig.value = { ...savedConfig, currentPage: 2 };
 		const wrapper = await mountSettings();
 
-		await wrapper.findAll('button').find(button => button.text() === 'Next')!.trigger('click');
+		await pageSelection(wrapper).findAll('button').find(button => button.text() === 'Next')!.trigger('click');
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ currentPage: 1 });
+	});
+
+	it('turns auto-page on in the Live card, anchoring the rotation now', async () => {
+		mockFetch.mockResolvedValue(pairingsOf(10));
+		const wrapper = await mountSettings();
+
+		await wrapper.get('[data-settings-card="live"] [data-settings-field="autoPageEnabled"] [role="switch"]').trigger('click');
+
+		expect(mockUpdateConfig).toHaveBeenCalledWith({ autoPageEnabled: true, rotationAnchor: 1_000_000 });
 	});
 });
