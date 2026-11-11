@@ -81,6 +81,7 @@ mockNuxtImport('useGraphicsAuthoringLease', () => (options: { endpoint: () => st
 		status: ref('ready'),
 		writable: mockLeaseWritable,
 		heldByAnotherSession: computed(() => !mockLeaseWritable.value),
+		lost: computed(() => !mockLeaseWritable.value),
 		holderName: computed(() => mockLeaseWritable.value ? null : 'Marcus Angel'),
 		canTakeOver: computed(() => !mockLeaseWritable.value),
 		refresh: vi.fn(),
@@ -142,7 +143,7 @@ const CompositorInspectorStub = defineComponent({
 
 const MultiLayerInspectorStub = defineComponent({
 	props: {
-		layers: { type: Array, required: true },
+		rects: { type: Array, required: true },
 		writable: { type: Boolean, required: false },
 		groupRefusal: { type: String, required: false },
 	},
@@ -152,7 +153,7 @@ const MultiLayerInspectorStub = defineComponent({
 		'align',
 		'distribute',
 	],
-	template: '<div data-testid="multi-layer-inspector" :data-layers="JSON.stringify(layers)" :data-writable="String(writable)" :data-group-refusal="groupRefusal" />',
+	template: '<div data-testid="multi-layer-inspector" :data-rects="JSON.stringify(rects)" :data-writable="String(writable)" :data-group-refusal="groupRefusal" />',
 });
 
 const TemplateLibraryStub = defineComponent({
@@ -229,7 +230,7 @@ const SETTINGS_STUBS = {
 	FeatureMatchOverlayLayerInspector: LayerInspectorStub,
 	FeatureMatchOverlayLayerList: LayerListStub,
 	FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
-	FeatureMatchOverlayMultiLayerInspector: MultiLayerInspectorStub,
+	GraphicsMultiLayerInspector: MultiLayerInspectorStub,
 	FeatureMatchOverlayPreviewOutputAside: PreviewOutputAsideStub,
 	// The Feature Match Layout Template library reads the installation's
 	// library on mount. It has its own suite; here it is only a neighbour of
@@ -482,10 +483,6 @@ describe('featureMatchOverlaySettings', () => {
 	// #740: ⌘-click in the preview builds a selection of several, and every verb takes all of it.
 	describe('several layers', () => {
 		const ITEM_ID = 'player1-game-wins';
-		const SELECTED = [
-			{ type: 'source', itemId: 'main-source' },
-			{ type: 'item', itemId: ITEM_ID },
-		];
 
 		async function mountWithTwo() {
 			const wrapper = await mountComponent();
@@ -507,7 +504,7 @@ describe('featureMatchOverlaySettings', () => {
 		it('shows the multi-layer panel, and no single layer as selected in the preview', async () => {
 			const wrapper = await mountWithTwo();
 
-			expect(JSON.parse(wrapper.get('[data-testid="multi-layer-inspector"]').attributes('data-layers')!)).toEqual(SELECTED);
+			expect(JSON.parse(wrapper.get('[data-testid="multi-layer-inspector"]').attributes('data-rects')!)).toMatchObject(positions());
 			expect(wrapper.find('[data-testid="layer-inspector"]').exists()).toBe(false);
 			expect(wrapper.find('[data-testid="compositor-inspector"]').exists()).toBe(false);
 			expect(previewSelectedTarget(wrapper)).toEqual({ type: 'canvas' });

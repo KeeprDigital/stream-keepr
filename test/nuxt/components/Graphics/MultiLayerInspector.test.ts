@@ -1,4 +1,3 @@
-import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
 import type { LayerGroupRefusal } from '~/modules/graphics/editor/layerGrouping';
 import { mount } from '@vue/test-utils';
@@ -6,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
-import MultiLayerInspector from '~/components/Screen/Modes/FeatureMatchOverlay/MultiLayerInspector.vue';
+import MultiLayerInspector from '~/components/Graphics/MultiLayerInspector.vue';
+import { editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
 
 /**
  * The property panel with several layers selected (#740): how many, and
@@ -26,11 +26,10 @@ function mountPanel({
 	canAlign = true,
 	canDistribute = true,
 } = {}) {
-	const layout: FeatureMatchLayoutConfig = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG).layout;
+	const { layout } = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 	return mount(MultiLayerInspector, {
 		props: {
-			layout,
-			layers,
+			rects: layers.map(layer => editorSelectionLayer(layout, layer)!),
 			writable,
 			groupRefusal,
 			canAlign,
@@ -44,7 +43,7 @@ function field(wrapper: ReturnType<typeof mountPanel>, axis: string) {
 	return wrapper.get<HTMLInputElement>(`[data-testid="multi-layer-${axis}"]`);
 }
 
-describe('featureMatchOverlayMultiLayerInspector', () => {
+describe('graphicsMultiLayerInspector', () => {
 	it('names how many layers are selected', () => {
 		expect(mountPanel().get('[data-testid="multi-layer-count"]').text()).toBe('3 layers');
 	});

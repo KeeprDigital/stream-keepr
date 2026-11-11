@@ -607,30 +607,18 @@ describe('graphicsCompositorInspector', () => {
 		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
 	});
 
-	it('hides a Graphic Item without removing it from the Graphic Layer Order', async () => {
-		const wrapper = await mountComponent({
-			graphics: stack([shapeItem]),
-			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
-		});
-
-		await wrapper.get('[data-testid="graphic-item-visible"]').trigger('click');
-
-		expect(emittedGraphics(wrapper)[0]?.items).toHaveLength(1);
-		expect(emittedGraphics(wrapper)[0]?.items[0]?.visible).toBe(false);
-	});
-
-	// Each action once (#1069): the Feature Match Overlay hides a layer from its layer row; Broadcast Graphics has no layer row yet (#1100).
+	// Each action once (#1069, #1100): both hosts hide a layer from its layer row, not here.
 	it.each([
-		['Broadcast Graphics', BROADCAST_GRAPHICS_HOST_CONTRACT, true],
-		['the Feature Match Overlay', FEATURE_MATCH_OVERLAY_HOST_CONTRACT, false],
-	])('offers the Visible switch in %s: %s', async (_host, contract, offered) => {
+		['Broadcast Graphics', BROADCAST_GRAPHICS_HOST_CONTRACT],
+		['the Feature Match Overlay', FEATURE_MATCH_OVERLAY_HOST_CONTRACT],
+	])('offers no Visible switch in %s', async (_host, contract) => {
 		const wrapper = await mountComponent({
 			graphics: stack([shapeItem]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
 			contract,
 		});
 
-		expect(wrapper.find('[data-testid="graphic-item-visible"]').exists()).toBe(offered);
+		expect(wrapper.find('[data-testid="graphic-item-visible"]').exists()).toBe(false);
 	});
 
 	it('explains a selection the Screen stack no longer carries', async () => {
@@ -1298,7 +1286,7 @@ describe('graphicsCompositorInspector', () => {
 				.toContain('outside that projection\'s Presentation Group');
 		});
 
-		it('edits colour and opacity independently of the shared geometry and visibility controls', async () => {
+		it('edits colour and opacity independently of the shared geometry controls', async () => {
 			const wrapper = await selectedIcon();
 
 			colorPicker(wrapper, 'social-network-icon-color').vm.$emit('update:modelValue', '#ffcc00');
@@ -1312,7 +1300,6 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ color: '#ffcc00', opacity: 0.4 });
 
-			expect(wrapper.find('[data-testid="graphic-item-visible"]').exists()).toBe(true);
 			expect(wrapper.find('[data-testid="graphic-item-rotation"]').exists()).toBe(true);
 		});
 	});

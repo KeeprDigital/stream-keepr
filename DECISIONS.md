@@ -845,7 +845,7 @@ The close, open and receipt-forgetting sequence was written by hand in three pla
 
 ## ADR-0030: A Graphics Authoring Lease is decided by the Screen write module and fenced at the commit
 
-Accepted · 2026-10-20 · [#607](https://github.com/KeeprDigital/stream-keepr/issues/607) · Amended 2026-11-03: the Feature Match Layout is leased and fenced too · [#738](https://github.com/KeeprDigital/stream-keepr/issues/738)
+Accepted · 2026-10-20 · [#607](https://github.com/KeeprDigital/stream-keepr/issues/607) · Amended 2026-11-03: the Feature Match Layout is leased and fenced too · [#738](https://github.com/KeeprDigital/stream-keepr/issues/738) · Amended 2026-11-11: both editors drop unsaved edits on losing the lease the same way · [#1100](https://github.com/KeeprDigital/stream-keepr/issues/1100)
 
 ### Decision
 
@@ -857,7 +857,7 @@ Accepted · 2026-10-20 · [#607](https://github.com/KeeprDigital/stream-keepr/is
 
 **Live Control stays outside the lease.** Live Session commands, live state reset, Screen commands, Card writes, Screen mode changes, and choosing a Feature Match Overlay's Feature Match Slot are not admitted by it.
 
-**Both Screen editors take the lease on opening their Edit workspace.** The Broadcast Graphics editor asks while its Edit workspace is open. The Feature Match Overlay editor is all Edit workspace, so it asks as soon as it opens. Without the lease each editor is read-only and offers a take-over. The Feature Match Overlay editor's one write funnel writes nothing, and losing the lease clears its undo history.
+**Both Screen editors take the lease on opening their Edit workspace.** The Broadcast Graphics editor asks while its Edit workspace is open. The Feature Match Overlay editor is all Edit workspace, so it asks as soon as it opens. Without the lease each editor is read-only and offers a take-over. Both are the shared graphics editor (ADR-0081), whose one write funnel writes nothing without the lease, and losing the lease clears its undo history.
 
 ### Why
 
@@ -871,9 +871,9 @@ The lease was only checked at two routes. The generic Screen write reached the s
 - Broadcast Graphic Template and Feature Match Layout Template placement are both admitted inside the mode configuration write, after the template is read, and fenced at its commit. A non-holder placing a missing template now gets its 404 before the lease's 409. Nothing is written either way. Feature Match Layout placement lost its separate check at the route (#738).
 - A display reset of a Feature Match Overlay Screen writes the default `layout`, so it is lease-gated. It is the only reset the Screen has (ADR-0080). The Screen page disables Reset mode settings for a Session observing another's lease, and the server refuses it anyway. A Broadcast Graphics reset never touches the stack, which is an authored stack, and is gated as before.
 - Nothing else writes a Feature Match Layout. A Theme or Screen Theme Override write changes look, never a Screen's mode configuration, so neither is refused (ADR-0049). Creating a Screen is not an update, and saving a layout as a Feature Match Layout Template only reads it. The Feature Match Layout Template library's own writes are library writes, not Screen writes. The editor offers them only to the Screen's holder, as the Broadcast Graphics editor does with its library.
-- A Feature Match Overlay layout save that was pending when its author lost the lease is refused at the fence with the lease's 409. The editor drops its unsaved layout and clears its undo history, so the new holder's changes show and cannot be undone over.
-- The Broadcast Graphics editor drops its unsaved stack, Graphic Channels and Broadcast Graphics Background once another Session holds the lease, for the same reason (#1026). It keeps them while the lease is merely not held, as after its Edit workspace closes, because the fence refuses nothing then and a pending save still lands.
-- A lease request that gets no answer is not a lost lease (#1026). The server keeps the holder's lease until its deadline, so the holder's editor stays writable until then and asks again every few seconds. It turns read-only, and the Feature Match Overlay editor drops its unsaved layout and undo history, only once the deadline passes unanswered or the server answers that another Session holds the lease. The editor counts the deadline on its own clock from when it sent the granted request, so it never outlasts the server's whatever the two clocks say. The fence still refuses a write if another Session took over in between.
+- A save that was pending when its author lost the lease to another Session is refused at the fence with the lease's 409. Both editors react to losing the lease, to another Session or to its deadline, the same way (#1100): the Feature Match Overlay editor drops its unsaved layout, the Broadcast Graphics editor its unsaved stack, Graphic Channels and Broadcast Graphics Background (#1026), and each clears its undo history, so the next holder's changes show and cannot be undone over. `useGraphicsAuthoringLease`'s `lost` is that signal.
+- An editor keeps its unsaved edits while the lease is merely not held, as after the Broadcast Graphics Edit workspace closes, because the fence refuses nothing then and a pending save still lands.
+- A lease request that gets no answer is not a lost lease (#1026). The server keeps the holder's lease until its deadline, so the holder's editor stays writable until then and asks again every few seconds. It turns read-only, and both editors drop their unsaved edits and undo history, only once the deadline passes unanswered or the server answers that another Session holds the lease. A lapsed lease drops them even though the fence might still admit the save, since nothing tells the editor that no other Session took it in between (#1100). The editor counts the deadline on its own clock from when it sent the granted request, so it never outlasts the server's whatever the two clocks say. The fence still refuses a write if another Session took over in between.
 - A lease granted to an editor that has since closed, stopped authoring or opened another artifact is released at once rather than left to lapse (#1026). An editor applies only the answer to its newest request, and asks nothing behind a takeover that is still awaiting its answer.
 - The Feature Match Overlay canvas size is not leased, though #738 decided it should be in Feature Match Overlay mode (E2). Since ADR-0051 there is no per-Screen canvas, and the Event Canvas stays unleased in every mode, so nothing is leased for it. That decision applies again only if a per-Screen canvas comes back.
 - Deleting a Screen is not lease-gated. It removes the Screen rather than editing its workspace, and its lease lapses at the holder's next missed heartbeat.
@@ -2050,7 +2050,7 @@ The sample is typical, so overflow shows up on show day rather than while author
 
 ## ADR-0063: A Layer Lock is stored on the layer, and the canvas clicks through it
 
-Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/issues/747) · Amended 2026-11-04: the lock moved from this browser's storage onto the layer · [#943](https://github.com/KeeprDigital/stream-keepr/issues/943) · Amended 2026-11-11: a Broadcast Graphic may hold one · [#1075](https://github.com/KeeprDigital/stream-keepr/issues/1075). Records E27 and E28 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
+Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/issues/747) · Amended 2026-11-04: the lock moved from this browser's storage onto the layer · [#943](https://github.com/KeeprDigital/stream-keepr/issues/943) · Amended 2026-11-11: a Broadcast Graphic may hold one · [#1075](https://github.com/KeeprDigital/stream-keepr/issues/1075), and its editor honours it · [#1100](https://github.com/KeeprDigital/stream-keepr/issues/1100). Records E27 and E28 from [#783](https://github.com/KeeprDigital/stream-keepr/issues/783).
 
 ### Decision
 
@@ -2060,7 +2060,7 @@ Accepted · 2026-11-04 · [#747](https://github.com/KeeprDigital/stream-keepr/is
 
 **Locking a Graphic Group locks its children; a Source Item locks too (E28).** A child locked through its group cannot be unlocked on its own.
 
-**A Layer Lock is the layer's own optional `locked` field, in the Feature Match Layout (#943) or the Broadcast Graphic (#1075).** A Graphic Item, a Graphic Group child and a Source Item each carry one; unlocking drops the field, and a layer stored without it is unlocked, so no stored layout, Broadcast Graphic or Template Package needs migrating. Locking is a layout edit through the editor's one write funnel: one undo step, written only by the Graphics Authoring Lease holder (ADR-0030), and seen by every session of the Screen. The field is shared Graphic Item vocabulary and both graphics hosts store it. A Broadcast Graphic refused one until #1075, while no Broadcast Graphics editor showed or lifted a lock; it stores one now so that the editor the two hosts share (#1060) can set it, and until that editor reads it a lock stored on a Broadcast Graphic holds nothing.
+**A Layer Lock is the layer's own optional `locked` field, in the Feature Match Layout (#943) or the Broadcast Graphic (#1075).** A Graphic Item, a Graphic Group child and a Source Item each carry one; unlocking drops the field, and a layer stored without it is unlocked, so no stored layout, Broadcast Graphic or Template Package needs migrating. Locking is a layout edit through the editor's one write funnel: one undo step, written only by the Graphics Authoring Lease holder (ADR-0030), and seen by every session of the Screen. The field is shared Graphic Item vocabulary and both graphics hosts store it. A Broadcast Graphic refused one until #1075, while no Broadcast Graphics editor showed or lifted a lock; the shared graphics editor (ADR-0081) shows, sets and lifts it in both since #1100.
 
 **A lock travels with the layout or the graphic and stays with the original.** Saving a Feature Match Layout Template keeps it, and placing one or installing its Template Package (`.sklayout`) keeps it; a Broadcast Graphic Template and its Template Package (`.skgraphic`) keep it the same way. A duplicate or a pasted copy arrives unlocked, a Graphic Group's children too, since a copy lands somewhere new to be placed. Ungrouping a locked Graphic Group bakes its lock into each child, as it bakes in the group's hiding (ADR-0065); grouping leaves each member's own lock, and the new group starts unlocked.
 
@@ -2092,7 +2092,7 @@ Accepted · 2026-11-04 · [#746](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**The clipboard is this browser's storage, not the system clipboard (E23).** ⌘C copies the selected layers and ⌘⌥C one Graphic Item's style, in the Feature Match Overlay and Broadcast Graphics editors alike, so ⌘V and ⌘⌥V paste them on another Screen of another Event in the same browser. The rules live in `app/modules/graphics/clipboard.ts`. Copying is not a write, so an observer may copy; pasting is a write through each editor's lease-gated funnel (ADR-0030).
+**The clipboard is this browser's storage, not the system clipboard (E23).** ⌘C copies the selected layers and ⌘⌥C one Graphic Item's style, in the Feature Match Overlay and Broadcast Graphics editors alike (several layers in both since #1100, all of one Broadcast Graphic), so ⌘V and ⌘⌥V paste them on another Screen of another Event in the same browser. The rules live in `app/modules/graphics/clipboard.ts`. Copying is not a write, so an observer may copy; pasting is a write through each editor's lease-gated funnel (ADR-0030).
 
 **A paste stays within its host (E24).** Feature Match Layout to Feature Match Layout, Broadcast Graphic to Broadcast Graphic, for layers and styles alike. The other host refuses with a reason.
 
@@ -2759,7 +2759,7 @@ One action offered once: replacing a layout is placing a template. A preset was 
 
 ## ADR-0081: One graphics editor core, parameterised by the Host Contract's editor half
 
-Accepted · 2026-11-11 · [#1098](https://github.com/KeeprDigital/stream-keepr/issues/1098), part of [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060)
+Accepted · 2026-11-11 · [#1098](https://github.com/KeeprDigital/stream-keepr/issues/1098), part of [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060) · Amended 2026-11-11: Broadcast Graphics adopts it · [#1100](https://github.com/KeeprDigital/stream-keepr/issues/1100)
 
 The Feature Match Overlay editor alone had undo, several selected, Layer Locks, grouping, alignment, the clipboard verbs and the keyboard, typed throughout on the Feature Match Layout. Broadcast Graphics is to adopt the same editor (#1100), not a copy of it.
 
@@ -2767,9 +2767,9 @@ The Feature Match Overlay editor alone had undo, several selected, Layer Locks, 
 
 **The editor core is shared graphics code: `useGraphicsEditor` (`app/composables/useGraphicsEditor.ts`), its pure rules under `app/modules/graphics/editor/` (edit history, layer selection, layer frame, locks, grouping, alignment, drag), and `useGraphicsEditorKeyboard` with `GRAPHICS_EDITOR_SHORTCUTS`.** A host supplies a `GraphicsEditorHostContract` (`app/modules/graphics/editor/host.ts`), the editor half of the Host Contract, in three parts:
 
-- **Item tree contents** (`tree`): the layers in list order, a stable key per layer, which composition a Graphic Item layer sits in, where a new or pasted item goes, what each layer snaps to, the clipboard's copy and paste under the host's caps, and the writes of any layer kind the host owns (`owned`: the Feature Match Overlay's Source Items). The editor writes Graphic Items itself through the shared authoring operations, so a host never re-implements them.
-- **Document written** (`document`): `read` and `write` of one document. One undo step is one whole document.
-- **Forbidden edits** (`forbidden`): `writable` (the Graphics Authoring Lease, ADR-0030), `held` (the host is rewriting the document, as a template placement does), and `composition` (a composition no verb may write now, for Broadcast Graphics a graphic on air).
+- **Item tree contents** (`tree`): the layers in list order, a stable key per layer, every composition it holds, which composition a Graphic Item layer sits in, where a new or pasted item goes, what each layer snaps to, the clipboard's copy and paste under the host's caps, and the writes of any layer kind the host owns (`owned`: the Feature Match Overlay's Source Items). The editor writes Graphic Items itself through the shared authoring operations, so a host never re-implements them.
+- **Document written** (`document`): `read` and `write` of one document, and optionally what an undo carries over from the current one (`restore`). One undo step is one whole document.
+- **Forbidden edits** (`forbidden`): `writable` (the Graphics Authoring Lease, ADR-0030), `held` (the host is rewriting the document, as a template placement does), and `composition` (a composition no write may change now, for Broadcast Graphics a graphic on air).
 
 **The editor half lives app-side, beside the shared half rather than on it.** It carries functions and reads Vue state; `shared/modules/graphics/hostContract.ts` stays the plain declaration the compositor and the server read, and the editor reads `tree.host` from it.
 
@@ -2781,10 +2781,14 @@ The verbs and their rules (one undo step per verb, several selected moving toget
 
 ### Consequences
 
-- A Broadcast Graphics host (#1100) supplies its own tree (several compositions, a Broadcast Graphic as a top-level row), document (`graphics`) and `forbidden.composition` from on-air ids; no editor verb changes.
+- The Broadcast Graphics host (`app/modules/broadcast-graphics/editorHost.ts`, #1100) supplies its own tree (several compositions, each Broadcast Graphic a top-level row of the shared layer list with its items nested), document (`graphics`) and `forbidden.composition` from on-air ids. Its Edit workspace's StackTree and reorder controls are gone; the layer list (`app/components/Graphics/LayerList.vue`) and the several-layers panel (`app/components/Graphics/MultiLayerInspector.vue`) serve both hosts.
+- **A Broadcast Graphic on air is not edited (#1100).** The editor refuses any write that changes or removes a forbidden composition, whichever verb or panel makes it, and undo and redo restore everything but it. While playout cannot be known (the realtime connection is down), every Broadcast Graphic counts as on air. This reverses the earlier allowance, under which an Edit-workspace change to an on-air graphic reached program at once: an operator now takes it off air, or edits a copy. It is client-side only; the server does not refuse it, and Live Control stays outside it.
+- **Undo covers the item tree only (#1100).** A Broadcast Graphic's Graphic Channel and the Broadcast Graphics Background are set beside the stack, outside undo; a restored stack keeps each graphic's channel as it is now (`document.restore`).
+- Several selected layers always sit in one composition, so align, group and paste act within one Broadcast Graphic.
+- A host may keep a layer from being removed on its own (`tree.removal`): a Social Profile Projection's Presentation Group goes only with its projection, from the inspector.
 - `useGraphicsEditor`'s `commit` takes a host's own write for a property panel edit that reaches the document by another path (the Feature Match Overlay's Frame and Source Item panels), and records it as one undoable step like any verb.
 - The test table `test/nuxt/composables/useGraphicsEditor.test.ts` runs every case against each host in `test/nuxt/helpers/graphicsEditorHosts.ts`; a new host adds a column there.
-- The Graphics Authoring Lease and every realtime path are unchanged.
+- No realtime path changes. Both editors drop unsaved edits on losing the Graphics Authoring Lease the same way (ADR-0030).
 
 ### Rejected alternatives
 
