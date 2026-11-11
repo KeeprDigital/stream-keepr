@@ -285,6 +285,10 @@ An opaque, long-lived, revocable right that lets one Screen Output resolve only 
 A short text, about 16 characters, that names one Screen and proves the right to its Screen Output Asset Capability. It is not presented on reads: it is exchanged once for the capability, which then does everything a capability does. It is derived from what the capability is derived from, never stored, so regenerating the capability regenerates the link and the former link stops exchanging. No Session stands in for it.
 _Avoid_: short link, output token, output code, share link.
 
+**Output Hand-out**:
+The one place an operator is handed a Screen Output's URL: Open and Copy URL side by side, each carrying a Screen Output Asset Capability obtained at the moment of the hand-out, and refusing rather than handing out a URL without one. The Screen header, the Feature Match Overlay editor and the Program monitor each show the same one; a graphics host's own Screen Outputs are offered by name behind each control. The Screen's address printed beside it carries no capability and is not a hand-out.
+_Avoid_: Outputs popover, share button.
+
 ### Client and live-state infrastructure
 
 **Event Data**:
