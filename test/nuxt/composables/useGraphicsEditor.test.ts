@@ -4,7 +4,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { findGraphicItem } from '~~/shared/modules/graphics';
 import { group, media, shape, surfaceStyle, text } from '~~/test/helpers/graphicsComposition';
-import { featureMatchLayoutEditing, GRAPHICS_EDITOR_HOSTS } from '~~/test/nuxt/helpers/graphicsEditorHosts';
+import {
+	broadcastGraphicsEditing,
+	EDITED_GRAPHIC_ID,
+	featureMatchLayoutEditing,
+	GRAPHICS_EDITOR_HOSTS,
+	OTHER_GRAPHIC_ID,
+} from '~~/test/nuxt/helpers/graphicsEditorHosts';
 import { copyGraphicStyle } from '~/modules/graphics/clipboard';
 
 /**
@@ -29,7 +35,7 @@ function items(): GraphicItemConfig[] {
 	];
 }
 
-function rect(editing: Editing, id: string) {
+function rect(editing: Pick<Editing, 'composition'>, id: string) {
 	const item = findGraphicItem(editing.composition(), id)?.item;
 	return item && {
 		x: item.x,
@@ -714,5 +720,88 @@ describe('the shared graphics editor\'s Source Items on the Feature Match Overla
 		expect(harness.editor.paste(harness.editor.copy()!)).toBeNull();
 
 		expect(harness.editor.layers.value.map(layer => layer.type)).toEqual(['item', 'source']);
+	});
+});
+
+/** Broadcast Graphics' own rules: several Broadcast Graphics, one of them perhaps on air. */
+describe('the shared graphics editor\'s Broadcast Graphics', () => {
+	function editing() {
+		const harness = broadcastGraphicsEditing({
+			writable: true,
+			items: items(),
+		});
+		harness.editor.select(harness.layer('a'));
+		return harness;
+	}
+
+	const SLATE_ITEM = { type: 'item', graphicId: OTHER_GRAPHIC_ID, itemId: 's' } as const;
+
+	// An edit to a graphic on a program output would reach program at once.
+	it('refuses an edit to a Broadcast Graphic on air, and its undo leaves it as it is', () => {
+		const harness = editing();
+		harness.editor.toggleVisible();
+		harness.editor.nudge({ x: 5, y: 0 });
+		harness.onAir.value = new Set([EDITED_GRAPHIC_ID]);
+		const onAir = harness.graphic(EDITED_GRAPHIC_ID);
+		const writes = harness.writes.length;
+
+		harness.editor.nudge({ x: 5, y: 0 });
+		harness.editor.edit(harness.document().map(graphic => graphic.id === EDITED_GRAPHIC_ID
+			? { ...graphic, name: 'Renamed' }
+			: graphic));
+		expect(harness.writes).toHaveLength(writes);
+
+		harness.editor.select(SLATE_ITEM);
+		harness.editor.toggleVisible();
+		harness.editor.undo();
+		harness.editor.undo();
+		expect(harness.graphic(EDITED_GRAPHIC_ID)).toEqual(onAir);
+		expect(findGraphicItem(harness.graphic(OTHER_GRAPHIC_ID), 's')?.item.visible).toBe(true);
+	});
+
+	// Undo covers the item tree; a Graphic Channel assignment is made outside it.
+	it('keeps the Graphic Channel each graphic is in now through an undo', () => {
+		const harness = editing();
+		harness.editor.toggleVisible();
+		harness.channels.value = [
+			{ id: 'thirds', name: 'Lower thirds' },
+		];
+		harness.graphics.value = harness.graphics.value.map(graphic => ({ ...graphic, channelId: 'thirds' }));
+
+		harness.editor.undo();
+
+		expect(rect(harness, 'a')?.visible).toBe(true);
+		expect(harness.document().map(graphic => graphic.channelId)).toEqual(['thirds', 'thirds']);
+	});
+
+	// Align, group and paste act within one composition.
+	it.each<[string, (harness: ReturnType<typeof editing>) => void]>([
+		[
+			'⌘-click',
+			harness => harness.editor.toggleSelect(SLATE_ITEM),
+		],
+		[
+			'Shift-click',
+			harness => harness.editor.extendSelect(SLATE_ITEM),
+		],
+	])('selects layers of one Broadcast Graphic at a time on %s', (_, selecting) => {
+		const harness = editing();
+
+		selecting(harness);
+
+		expect(harness.editor.layers.value).toEqual([SLATE_ITEM]);
+	});
+
+	it('adds a Graphic Item to the selected Broadcast Graphic when no layer is selected', () => {
+		const harness = editing();
+		harness.editor.select({ type: 'canvas' });
+		harness.selectedGraphicId.value = OTHER_GRAPHIC_ID;
+
+		harness.editor.addItem('shape');
+
+		expect(harness.graphic(OTHER_GRAPHIC_ID).items.map(item => item.type)).toEqual(['text', 'shape']);
+		expect(harness.editor.layers.value).toEqual([
+			{ type: 'item', graphicId: OTHER_GRAPHIC_ID, itemId: harness.graphic(OTHER_GRAPHIC_ID).items[1]!.id },
+		]);
 	});
 });

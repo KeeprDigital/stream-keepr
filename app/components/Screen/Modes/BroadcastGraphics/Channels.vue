@@ -13,7 +13,7 @@ import { randomUuid } from '~~/shared/utils/uuid';
  *
  * A Graphic Channel is a playout lane rather than a container: it is declared here
  * with its Graphic Channel Handoff Policy, and each Broadcast Graphic joins the one
- * lane it runs in. That is why this sits beside the compositor's stack tree instead
+ * lane it runs in. That is why this sits beside the editor's layer list instead
  * of inside it — joining a lane changes nothing about a design or about Graphic Layer
  * Order, and a graphic must be able to leave a channel without its composition
  * moving. There it is a section that starts closed and says how many lanes the

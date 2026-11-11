@@ -652,7 +652,7 @@ The vocabulary every Operational Queue action reports in: completed, already-in-
 The Graphic Item, geometry, styling, grouping, animation, definition, and rendering vocabulary used by both Broadcast Graphics and Feature Match Overlay, unifying their composition model without merging their Screen Modes, live context, or template artifacts.
 
 **Host Contract**:
-The declaration a graphics Screen Mode supplies when embedding the shared compositor and the shared graphics editor: available context kinds, top-level host extras and canvas rules for the compositor; and for the editor, what its item tree holds, which document its edits write, and which edits are forbidden (no Graphics Authoring Lease, a placement in flight, a composition that may not be written now). Capability outside it stays host-owned.
+The declaration a graphics Screen Mode supplies when embedding the shared compositor and the shared graphics editor: available context kinds, top-level host extras and canvas rules for the compositor; and for the editor, what its item tree holds, which document its edits write, and which edits are forbidden (no Graphics Authoring Lease, a placement in flight, a composition that may not be written now, such as a Broadcast Graphic on air, which undo and redo also leave as it is). Capability outside it stays host-owned.
 
 **Graphic Item**:
 A visual part within a Broadcast Graphic or Feature Match Layout, such as text, media, or a shape. Items are edited individually but never taken on or off air independently of their composition; an item whose live data is empty renders nothing while remaining on air.
@@ -874,6 +874,7 @@ _Avoid_: worst-case data, overflow data
 - An empty **Broadcast Graphics Screen** is transparent in its **Overlay Output** and black in its **Fill Output** and **Key Output**
 - A **Broadcast Graphic Template** initializes a copy of a **Broadcast Graphic** on a **Broadcast Graphics Screen**
 - A **Broadcast Graphic** contains one or more **Graphic Items**
+- A **Broadcast Graphic** that is on a program output, or may be while playout cannot be known, is not edited in the Edit workspace, and undo leaves it as it is; **Live Control** still acts on it
 
 ### Shared Graphics Foundation
 

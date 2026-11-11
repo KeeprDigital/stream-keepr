@@ -701,7 +701,7 @@ describe('featureMatchOverlayLayerList', () => {
 
 		expect(editor.selection.value).toEqual({ type: 'item', itemId: 'back' });
 		expect(wrapper.find('[data-testid="layer-rename"]').exists()).toBe(false);
-		expect(wrapper.findAll('[data-testid="feature-match-layer-list"] button:not([disabled])')
+		expect(wrapper.findAll('[data-testid="layer-list"] button:not([disabled])')
 			.map(button => button.attributes('data-testid'))
 			.filter(id => id !== 'layer-select' && id !== 'layer-canvas')).toEqual([]);
 	});
