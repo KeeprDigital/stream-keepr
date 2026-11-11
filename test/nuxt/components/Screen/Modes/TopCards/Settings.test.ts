@@ -42,7 +42,7 @@ const defaultConfig = {
 	columns: undefined,
 	maxCardSize: undefined,
 	cardGap: undefined,
-	cardsPerPage: 60,
+	cardsPerPage: undefined as number | undefined,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 	showHeader: true,
@@ -598,51 +598,70 @@ describe('screenTopCardsSettings', () => {
 		});
 	});
 
-	// Paging is the ranking split into pages: on while a page holds fewer cards than the ranking.
+	// Cards per page is Auto, one page of every card, or a number; a page smaller than the ranking pages it.
 	describe('paging', () => {
 		it.each([
-			{ limit: 10, cardsPerPage: 60, paged: false },
-			{ limit: 10, cardsPerPage: 10, paged: false },
-			{ limit: 12, cardsPerPage: 4, paged: true },
-		])('splits $limit cards at $cardsPerPage a page: $paged', async ({ limit, cardsPerPage, paged }) => {
+			{
+				limit: 10,
+				cardsPerPage: undefined,
+				pages: false,
+				shown: '',
+				summary: 'Top 10 · One page',
+			},
+			{
+				limit: 10,
+				cardsPerPage: 10,
+				pages: false,
+				shown: '10',
+				summary: 'Top 10 · One page',
+			},
+			{
+				limit: 10,
+				cardsPerPage: 60,
+				pages: false,
+				shown: '60',
+				summary: 'Top 10 · One page',
+			},
+			{
+				limit: 12,
+				cardsPerPage: 4,
+				pages: true,
+				shown: '4',
+				summary: 'Top 12 · 4 per page',
+			},
+		])('$limit cards at $cardsPerPage a page offer the rotation: $pages', async ({ limit, cardsPerPage, pages, shown, summary }) => {
 			mockConfig.value = { ...mockConfig.value, limit, cardsPerPage };
 			mockFetch.mockResolvedValue(ranking(limit));
 
 			const wrapper = await mountComponent();
 
-			expect(toggle(wrapper, 'Split into pages').attributes('aria-pressed')).toBe(String(paged));
-			expect(wrapper.findAll('[data-testid="form-field"]').some(field => field.text().includes('Cards per page'))).toBe(paged);
-			expect(wrapper.text().includes('Automatic Paging')).toBe(paged);
-		});
-
-		// On splits the ranking in two; off stores the most a page holds, so any card count stays one page.
-		it.each([
-			{ cardsPerPage: 60, cardsPerPageWritten: 5 },
-			{ cardsPerPage: 4, cardsPerPageWritten: 60 },
-		])('toggles paging from $cardsPerPage a page to $cardsPerPageWritten', async ({ cardsPerPage, cardsPerPageWritten }) => {
-			mockConfig.value = { ...mockConfig.value, limit: 10, cardsPerPage };
-			const wrapper = await mountComponent();
-
-			await toggle(wrapper, 'Split into pages').trigger('click');
-
-			expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({ cardsPerPage: cardsPerPageWritten }));
+			expect(configControl(wrapper, UInputNumberStub, 'cardsPerPage')!.text()).toBe(shown);
+			expect(wrapper.text().includes('Automatic Paging')).toBe(pages);
+			expect(settingsSummaries(wrapper)['top-cards:ranking-and-pages']).toBe(summary);
+			expect(wrapper.text()).not.toContain('Split into pages');
 		});
 
 		it.each([
-			{ limit: 1, enabled: false },
-			{ limit: 2, enabled: true },
-		])('offers paging to a ranking of $limit: $enabled', async ({ limit, enabled }) => {
-			mockConfig.value = { ...mockConfig.value, limit };
+			{ name: 'a number', emitted: 5, cardsPerPage: 5 },
+			{ name: 'Auto, by emptying it', emitted: null, cardsPerPage: null },
+		])('writes $name, returning to page 1', async ({ emitted, cardsPerPage }) => {
+			mockConfig.value = {
+				...mockConfig.value,
+				limit: 12,
+				cardsPerPage: 4,
+				currentPage: 2,
+			};
 			const wrapper = await mountComponent();
 
-			expect(toggle(wrapper, 'Split into pages').attributes('aria-disabled')).toBe(String(!enabled));
+			configControl(wrapper, UInputNumberStub, 'cardsPerPage')!.vm.$emit('update:modelValue', emitted);
+
+			expect(mockUpdateConfig).toHaveBeenCalledWith({ cardsPerPage, currentPage: 1 });
 		});
 
-		it('caps a page below the ranking, so paging stays on', async () => {
-			mockConfig.value = { ...mockConfig.value, limit: 12, cardsPerPage: 4 };
+		it('shows an unset page size as Auto', async () => {
 			const wrapper = await mountComponent();
 
-			expect(numberInput(wrapper, 'Cards per page').attributes('data-max')).toBe('11');
+			expect(configControl(wrapper, UInputNumberStub, 'cardsPerPage')!.attributes('placeholder')).toBe('Auto');
 		});
 	});
 

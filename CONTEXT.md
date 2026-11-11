@@ -219,7 +219,7 @@ A Screen Mode showing a Round's name and the time left in it, projected from the
 _Avoid_: round timer (the Feature Match Session clock is a Match's, not a Round's).
 
 **Page Rotation**:
-The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
+The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field, which holds a number of rows or, where the mode allows, is absent for Auto: every row on one page. An edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Top Cut Bracket**:
