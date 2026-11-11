@@ -1922,6 +1922,8 @@ Accepted · 2026-11-03 · [#749](https://github.com/KeeprDigital/stream-keepr/is
 
 **Only a preview frame listens, and nothing writes.** A live Screen Output installs no listener for the run. The controls send a plan to the embedded frame and write no Screen configuration, so they need no Graphics Authoring Lease and work for a read-only observer.
 
+**The controls sit behind one control in the preview toolbar, closed on every visit ([#1070](https://github.com/KeeprDigital/stream-keepr/issues/1070)).** Both editors mount them in the shared preview panel's `animation` slot. Hiding them does not stop a run: they stay mounted, a loop keeps playing, and the one control is marked as playing so a moving preview is explained.
+
 ### Why
 
 The two editors author the same Graphic Item recipes, and a Feature Match Layout has no lifecycle on air of its own, so the composition run is the only place an author sees an enter, on-screen and exit together. The item run answers "what does this recipe do?" without the rest of the layout moving.
@@ -1931,7 +1933,7 @@ The two editors author the same Graphic Item recipes, and a Feature Match Layout
 - Broadcast Graphics still previews a whole Broadcast Graphic; its frame ignores an `itemId`.
 - During a one-item run in a preview backed by a real Feature Match Slot, a sideboard reveal on another Deck List Graphic Item snaps rather than plays, because its recipes are isolated away. A live output is unaffected.
 - A frame that reloads mid-run (an output or guide switch) is handed the same run and plays it from the start.
-- `test/unit/app/modules/graphicsAnimationPreview.test.ts` holds the timing and isolation rules; the Feature Match Overlay Display and preview aside tests hold the wiring.
+- `test/unit/app/modules/graphicsAnimationPreview.test.ts` holds the timing and isolation rules; the Feature Match Overlay Display and preview aside tests hold the wiring; the preview panel test holds the one control.
 
 ### Rejected alternatives
 

@@ -235,6 +235,7 @@ watch(
 		:canvas-width="canvasWidth"
 		:canvas-height="canvasHeight"
 		:background="previewBackgroundColor"
+		:animation-playing="animationPlan !== null"
 	>
 		<template #controls>
 			<USelect
@@ -247,11 +248,13 @@ watch(
 			/>
 		</template>
 
-		<GraphicsAnimationPreviewControls
-			:target="animationTarget"
-			hint="Select a Broadcast Graphic to preview its animation."
-			@update:plan="plan => { animationPlan = plan }"
-		/>
+		<template #animation>
+			<GraphicsAnimationPreviewControls
+				:target="animationTarget"
+				hint="Select a Broadcast Graphic to preview its animation."
+				@update:plan="plan => { animationPlan = plan }"
+			/>
+		</template>
 
 		<div
 			v-if="socialProfileSampleRows.length > 0"
