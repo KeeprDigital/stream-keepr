@@ -2065,7 +2065,7 @@ Frame bars and backgrounds sit under everything and were dragged by accident. Cl
 - A row or column child, or a rotated group's child, has no box of its own on the canvas, so locked it is badged on its row only.
 - A `.sklayout` package carrying a lock is refused by an installation built before #943, on its strict schema; the Feature Match Layout format version is unchanged, since no term changed meaning. A `.skgraphic` package carrying one is refused the same way by an installation built before #1075, which refuses a Layer Lock on a Broadcast Graphic.
 - Locks set in browser storage under #747 (`editor-featureMatchLayoutLocks:<screenId>`) are not imported and no longer read. #747 was never released, a browser's private lock should not silently become every operator's, and an import would make a write on opening that the author did not ask for.
-- `app/modules/feature-match-overlay/layerLocks.ts` holds the lock rules. `withoutLayerLock` in `shared/modules/graphics/authoring.ts` is how every copy drops one: `cloneGraphicItem` for Graphic Items, and a Source Item's duplicate and paste. `ungroupGraphicGroup` bakes a group's lock in, and `editorLayersFrame` leaves locked layers out of what the canvas moves.
+- `app/modules/graphics/editor/layerLocks.ts` holds the lock rules, for every host of the shared graphics editor (ADR-0081). `withoutLayerLock` in `shared/modules/graphics/authoring.ts` is how every copy drops one: `cloneGraphicItem` for Graphic Items, and a Source Item's duplicate and paste. `ungroupGraphicGroup` bakes a group's lock in, and `editorLayersFrame` leaves locked layers out of what the canvas moves.
 
 ### Rejected alternatives
 
@@ -2743,3 +2743,37 @@ One action offered once: replacing a layout is placing a template. A preset was 
 - **Seeding the built-ins as rows of the authored store.** They would be revisable and removable per installation, and an application update could not change one without a migration.
 - **Keeping `presetId` as provenance.** A placed template records no origin either, and a field only sometimes true is worse than none.
 - **Warning on every template.** Only a built-in states the canvas it was drawn for.
+
+## ADR-0081: One graphics editor core, parameterised by the Host Contract's editor half
+
+Accepted · 2026-11-11 · [#1098](https://github.com/KeeprDigital/stream-keepr/issues/1098), part of [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060)
+
+The Feature Match Overlay editor alone had undo, several selected, Layer Locks, grouping, alignment, the clipboard verbs and the keyboard, typed throughout on the Feature Match Layout. Broadcast Graphics is to adopt the same editor (#1100), not a copy of it.
+
+### Decision
+
+**The editor core is shared graphics code: `useGraphicsEditor` (`app/composables/useGraphicsEditor.ts`), its pure rules under `app/modules/graphics/editor/` (edit history, layer selection, layer frame, locks, grouping, alignment, drag), and `useGraphicsEditorKeyboard` with `GRAPHICS_EDITOR_SHORTCUTS`.** A host supplies a `GraphicsEditorHostContract` (`app/modules/graphics/editor/host.ts`), the editor half of the Host Contract, in three parts:
+
+- **Item tree contents** (`tree`): the layers in list order, a stable key per layer, which composition a Graphic Item layer sits in, where a new or pasted item goes, what each layer snaps to, the clipboard's copy and paste under the host's caps, and the writes of any layer kind the host owns (`owned`: the Feature Match Overlay's Source Items). The editor writes Graphic Items itself through the shared authoring operations, so a host never re-implements them.
+- **Document written** (`document`): `read` and `write` of one document. One undo step is one whole document.
+- **Forbidden edits** (`forbidden`): `writable` (the Graphics Authoring Lease, ADR-0030), `held` (the host is rewriting the document, as a template placement does), and `composition` (a composition no verb may write now, for Broadcast Graphics a graphic on air).
+
+**The editor half lives app-side, beside the shared half rather than on it.** It carries functions and reads Vue state; `shared/modules/graphics/hostContract.ts` stays the plain declaration the compositor and the server read, and the editor reads `tree.host` from it.
+
+**The Feature Match Overlay is the first host** (`app/modules/feature-match-overlay/editorHost.ts`), with behaviour unchanged: its document is the layout, its owned layers are the Source Items, and nothing in it is forbidden beyond the lease and a placement in flight.
+
+### Why
+
+The verbs and their rules (one undo step per verb, several selected moving together, locks the canvas leaves alone, a group never selected with its own child) are the same for both hosts; only what the tree holds and where it is written differ. Asking the host for those, rather than branching on the host inside the editor, keeps a third host to one contract.
+
+### Consequences
+
+- A Broadcast Graphics host (#1100) supplies its own tree (several compositions, a Broadcast Graphic as a top-level row), document (`graphics`) and `forbidden.composition` from on-air ids; no editor verb changes.
+- `useGraphicsEditor`'s `commit` takes a host's own write for a property panel edit that reaches the document by another path (the Feature Match Overlay's Frame and Source Item panels), and records it as one undoable step like any verb.
+- The test table `test/nuxt/composables/useGraphicsEditor.test.ts` runs every case against each host in `test/nuxt/helpers/graphicsEditorHosts.ts`; a new host adds a column there.
+- The Graphics Authoring Lease and every realtime path are unchanged.
+
+### Rejected alternatives
+
+- **Putting the editor fields on `GraphicsHostContract` in `shared/`.** They are closures over Vue state and the client clipboard, which the server never reads.
+- **A per-host editor wrapping a shared one.** Each verb would gain a host branch, and a third host would edit every verb.
