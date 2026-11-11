@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DeckListCardWithData } from '~/types/card/deckList';
-import { modeTokenVar } from '~/modules/screen-mode';
+import { foundationTokenVar, modeTokenVar } from '~/modules/screen-mode';
 
 const props = defineProps<{
 	card: DeckListCardWithData;
@@ -35,7 +35,7 @@ const cardStyle = computed(() => props.sizing === 'fixed'
 	: { width: '100%' });
 
 const placeholderStyle = {
-	backgroundColor: modeTokenVar('deck', 'card-placeholder'),
+	backgroundColor: foundationTokenVar('surface-raised'),
 };
 
 function getCardImageUrl(card: DeckListCardWithData): string | null {

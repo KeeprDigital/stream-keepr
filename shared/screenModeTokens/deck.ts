@@ -1,7 +1,7 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 
 /** The Deck List settings groups its Mode Tokens may name (ADR-0072). */
-export type DeckSettingsGroup = 'header' | 'deck-details' | 'pointed-cards' | 'card-look' | 'quantity-badge' | 'points-badge';
+export type DeckSettingsGroup = 'deck-details' | 'pointed-cards' | 'quantity-badge' | 'points-badge';
 
 /**
  * How the Deck List Screen Mode looks: its Mode Tokens, by name within the mode.
@@ -10,36 +10,6 @@ export type DeckSettingsGroup = 'header' | 'deck-details' | 'pointed-cards' | 'c
  * stack reveal, and a small sideboard stack can sit beside a medium grid.
  */
 export const deckModeTokens = {
-	'title-typography': {
-		type: 'typography',
-		label: 'Deck name and board label type',
-		settingsGroup: 'header',
-		default: { token: 'heading' },
-	},
-	'body-typography': {
-		type: 'typography',
-		label: 'Body type',
-		settingsGroup: 'card-look',
-		default: { token: 'body' },
-	},
-	'primary-text': {
-		type: 'color',
-		label: 'Deck name, board label and card name text',
-		settingsGroup: 'header',
-		default: { token: 'text-primary' },
-	},
-	'secondary-text': {
-		type: 'color',
-		label: 'Player name, quantity and card type text',
-		settingsGroup: 'header',
-		default: { token: 'text-secondary' },
-	},
-	'card-placeholder': {
-		type: 'color',
-		label: 'Card without an image',
-		settingsGroup: 'card-look',
-		default: { token: 'surface-raised' },
-	},
 	'quantity-badge-text': {
 		type: 'color',
 		label: 'Quantity badge text',
@@ -112,10 +82,18 @@ export const deckModeTokens = {
 		settingsGroup: 'pointed-cards',
 		default: { token: 'text-primary' },
 	},
-	'badge-shadow': {
-		type: 'color',
-		label: 'Point badge shadow',
-		settingsGroup: 'points-badge',
-		default: { token: 'shadow' },
-	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition<DeckSettingsGroup>>>;
+
+/**
+ * The Mode Tokens Deck List once declared: its type, shared chrome, placeholder
+ * surface and badge shadow, which only repeated the Foundation Tokens its display now
+ * reads directly.
+ */
+export const deckFormerModeTokens = [
+	'title-typography',
+	'body-typography',
+	'primary-text',
+	'secondary-text',
+	'card-placeholder',
+	'badge-shadow',
+] as const;

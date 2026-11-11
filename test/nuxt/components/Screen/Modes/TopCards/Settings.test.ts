@@ -225,16 +225,11 @@ describe('screenTopCardsSettings', () => {
 	it.each([
 		{
 			pointsSystem: '7ph',
-			badgeGroups: [
-				'rank-badge',
-				'stat-badge',
-				'points-badge',
-				'card-badges',
-			],
+			badgeGroups: ['rank-badge', 'stat-badge', 'points-badge'],
 		},
 		{
 			pointsSystem: null,
-			badgeGroups: ['rank-badge', 'stat-badge', 'card-badges'],
+			badgeGroups: ['rank-badge', 'stat-badge'],
 		},
 	])('lays out its cards, each holding its Look, with points system $pointsSystem', async ({ pointsSystem, badgeGroups }) => {
 		mockEventStore.event = { pointsSystem, game: 'mtg' };
@@ -257,19 +252,19 @@ describe('screenTopCardsSettings', () => {
 				id: 'top-cards:ranking-and-pages',
 				title: 'Ranking & Pages',
 				collapsible: true,
-				groups: ['ranking-and-pages'],
+				groups: [],
 			},
 			{
 				id: 'top-cards:layout',
 				title: 'Layout',
 				collapsible: true,
-				groups: ['layout'],
+				groups: [],
 			},
 			{
 				id: 'top-cards:header',
 				title: 'Header',
 				collapsible: true,
-				groups: ['header'],
+				groups: [],
 			},
 			{
 				id: 'top-cards:card-badges',
@@ -305,7 +300,7 @@ describe('screenTopCardsSettings', () => {
 	])('counts the Card Badges overrides it shows with points system $pointsSystem', async ({ pointsSystem, summary }) => {
 		mockEventStore.event = { pointsSystem, game: 'mtg' };
 		const wrapper = await mountComponent({
-			'top-cards.badge-shadow': '#000000',
+			'top-cards.rank-badge-surface': '#000000',
 			'top-cards.points-badge-surface': '#ff0000',
 		});
 

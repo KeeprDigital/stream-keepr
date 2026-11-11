@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { OpDeckCard } from '~~/shared/utils/opDeckLayout';
-import { modeTokenVar } from '~/modules/screen-mode';
+import { foundationTokenVar } from '~/modules/screen-mode';
 
 /** One One Piece Card Game card of a Deck List Screen, as printed, with its quantity badge. */
 const props = defineProps<{
@@ -19,7 +19,7 @@ const cardStyle = computed(() => props.sizing === 'fixed'
 	: { width: '100%' });
 
 const placeholderStyle = {
-	backgroundColor: modeTokenVar('deck', 'card-placeholder'),
+	backgroundColor: foundationTokenVar('surface-raised'),
 };
 </script>
 

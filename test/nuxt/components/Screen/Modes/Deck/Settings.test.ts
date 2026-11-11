@@ -321,7 +321,7 @@ describe('screenDeckSettings', () => {
 				id: 'deck:header',
 				title: 'Header',
 				collapsible: true,
-				groups: ['header'],
+				groups: [],
 			},
 			{
 				id: 'deck:deck-details',
@@ -340,12 +340,6 @@ describe('screenDeckSettings', () => {
 				title: 'Sideboard',
 				collapsible: true,
 				groups: [],
-			},
-			{
-				id: 'deck:card-look',
-				title: 'Card Look',
-				collapsible: true,
-				groups: ['card-look'],
 			},
 			{
 				id: 'deck:card-badges',
@@ -370,7 +364,6 @@ describe('screenDeckSettings', () => {
 			'deck:deck-details': 'Shown',
 			'deck:mainboard': 'Grid · 144 px cards',
 			'deck:sideboard': 'Hidden',
-			'deck:card-look': 'Follows the Theme',
 			'deck:card-badges': 'Quantity, Point badges',
 		});
 	});
@@ -905,7 +898,7 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 				id: 'deck:header',
 				title: 'Header',
 				collapsible: true,
-				groups: ['header'],
+				groups: [],
 			},
 			{
 				id: 'deck:deck-details',
@@ -918,12 +911,6 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 				title: 'Mainboard',
 				collapsible: true,
 				groups: [],
-			},
-			{
-				id: 'deck:card-look',
-				title: 'Card Look',
-				collapsible: true,
-				groups: ['card-look'],
 			},
 			{
 				id: 'deck:card-badges',

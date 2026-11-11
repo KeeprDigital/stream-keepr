@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { OpDeckGroup } from '~~/shared/utils/opDeckLayout';
 import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
 /**
@@ -24,17 +24,17 @@ const {
 } = useOpDeckModeData(context);
 
 const primaryTextStyle = {
-	color: modeTokenVar('deck', 'primary-text'),
+	color: foundationTokenVar('text-primary'),
 };
 const secondaryTextStyle = {
-	color: modeTokenVar('deck', 'secondary-text'),
+	color: foundationTokenVar('text-secondary'),
 };
 const titleStyle = {
-	...modeTypographyStyle('deck', 'title-typography'),
+	...foundationTypographyStyle('heading'),
 	...primaryTextStyle,
 };
 const displayStyle = {
-	...modeTypographyStyle('deck', 'body-typography'),
+	...foundationTypographyStyle('body'),
 	...primaryTextStyle,
 };
 

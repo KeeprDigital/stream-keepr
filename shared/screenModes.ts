@@ -34,9 +34,9 @@ import { isColumnVisible } from './screenModeConfigs/subShapes';
 import { talentModeConfigContract, talentScreenTalentIds } from './screenModeConfigs/talent';
 import { topCardsModeConfigContract } from './screenModeConfigs/topCards';
 import { topCutModeConfigContract } from './screenModeConfigs/topCut';
-import { archetypeSpotlightModeTokens } from './screenModeTokens/archetypeSpotlight';
+import { archetypeSpotlightFormerModeTokens, archetypeSpotlightModeTokens } from './screenModeTokens/archetypeSpotlight';
 import { cardModeTokens } from './screenModeTokens/card';
-import { deckModeTokens } from './screenModeTokens/deck';
+import { deckFormerModeTokens, deckModeTokens } from './screenModeTokens/deck';
 import { featureMatchOverlayModeTokens } from './screenModeTokens/featureMatchOverlay';
 import { headToHeadFormerModeTokens } from './screenModeTokens/headToHead';
 import { metagameFormerModeTokens, metagameModeTokens } from './screenModeTokens/metagame';
@@ -45,7 +45,7 @@ import { playerHistoryFormerModeTokens, playerHistoryModeTokens } from './screen
 import { roundClockFormerModeTokens, roundClockModeTokens } from './screenModeTokens/roundClock';
 import { standingsFormerModeTokens, standingsModeTokens } from './screenModeTokens/standings';
 import { talentModeTokens } from './screenModeTokens/talent';
-import { topCardsModeTokens } from './screenModeTokens/topCards';
+import { topCardsFormerModeTokens, topCardsModeTokens } from './screenModeTokens/topCards';
 import { topCutModeTokens } from './screenModeTokens/topCut';
 import { SCREEN_MODE_VALUES } from './types/enums';
 
@@ -307,6 +307,7 @@ const SCREEN_MODE_DEFINITIONS = {
 			featureMatchSession: deckSourceSlot,
 		},
 		modeTokens: deckModeTokens,
+		formerModeTokens: deckFormerModeTokens,
 	},
 	'standings': {
 		label: 'Standings',
@@ -445,6 +446,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		outputFollows: METAGAME_OUTPUT_FOLLOWS,
 		pageRotation: { pageSize: 'cardsPerPage' },
 		modeTokens: topCardsModeTokens,
+		formerModeTokens: topCardsFormerModeTokens,
 	},
 	'player-history': {
 		label: 'Player History',
@@ -503,6 +505,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		outputFollows: METAGAME_OUTPUT_FOLLOWS,
 		pageRotation: { pageSize: 'rowsPerPage' },
 		modeTokens: archetypeSpotlightModeTokens,
+		formerModeTokens: archetypeSpotlightFormerModeTokens,
 	},
 	'head-to-head': {
 		label: 'Head-to-Head',

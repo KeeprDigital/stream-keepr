@@ -154,7 +154,6 @@ const rankingSummary = computed(() => settingsSummary([
 	paged.value
 		? `${config.value.cardsPerPage} per page`
 		: 'One page',
-	look('ranking-and-pages'),
 ]));
 const layoutSummary = computed(() => {
 	const { columns, maxCardSize, cardGap } = config.value;
@@ -165,17 +164,11 @@ const layoutSummary = computed(() => {
 		maxCardSize !== undefined && `Max ${maxCardSize} px`,
 		cardGap !== undefined && `${cardGap} px gap`,
 	].filter(Boolean);
-	return settingsSummary([
-		...(set.length > 0
-			? set
-			: ['Auto']),
-		look('layout'),
-	]);
+	return settingsSummary(set.length > 0
+		? set
+		: ['Auto']);
 });
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	look('header'),
-]));
+const headerCardSummary = computed(() => headerSummary(config.value));
 const badgesSummary = computed(() => {
 	const shown = [
 		config.value.showRankBadges && 'Rank',
@@ -188,7 +181,7 @@ const badgesSummary = computed(() => {
 				? 'badge'
 				: 'badges'}`
 			: 'No badges',
-		look('card-badges', 'rank-badge', 'stat-badge', ...(showsPointsBadges.value
+		look('rank-badge', 'stat-badge', ...(showsPointsBadges.value
 			? ['points-badge']
 			: [])),
 	]);
@@ -271,8 +264,6 @@ const badgesSummary = computed(() => {
 					:counting="!rowsAnswered"
 				/>
 			</template>
-
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="ranking-and-pages" />
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection id="top-cards:layout" title="Layout" :summary="layoutSummary">
@@ -283,8 +274,6 @@ const badgesSummary = computed(() => {
 				:canvas="eventCanvas"
 				@update="updateConfig($event)"
 			/>
-
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="layout" />
 		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
@@ -295,9 +284,7 @@ const badgesSummary = computed(() => {
 			show-description="Show the title above the card grid."
 			auto-description="Leave empty for an auto-generated title."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 
 		<ScreenSettingsSection id="top-cards:card-badges" title="Card Badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
@@ -360,8 +347,6 @@ const badgesSummary = computed(() => {
 					</template>
 				</ScreenCardBadgeFields>
 			</template>
-
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="card-badges" />
 		</ScreenSettingsSection>
 	</div>
 </template>

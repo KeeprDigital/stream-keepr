@@ -393,6 +393,41 @@ describe('a Theme Token write', () => {
 				'clock-typography',
 			],
 		],
+		// The card modes' too, with their placeholder surface and badge shadow (#1078).
+		[
+			'deck',
+			[
+				'title-typography',
+				'body-typography',
+				'primary-text',
+				'secondary-text',
+				'card-placeholder',
+				'badge-shadow',
+			],
+		],
+		[
+			'top-cards',
+			[
+				'title-typography',
+				'title-text',
+				'name-typography',
+				'name-text',
+				'card-placeholder-surface',
+				'badge-typography',
+				'badge-shadow',
+				'page-indicator-text',
+			],
+		],
+		[
+			'archetype-spotlight',
+			[
+				...SHARED_CHROME,
+				'headline-typography',
+				'label-typography',
+				'card-placeholder-surface',
+				'badge-shadow',
+			],
+		],
 	])('accepts each typography and shared chrome token %s once declared, and drops it', (mode, tokens) => {
 		expect(tokens.map(token => parseThemeTokenWrite(`${mode}.${token}`, '#ff0000'))).toEqual(tokens.map(() => ({ ok: true, dropped: true })));
 	});

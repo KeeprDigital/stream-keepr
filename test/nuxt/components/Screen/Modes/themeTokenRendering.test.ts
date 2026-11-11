@@ -94,20 +94,8 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'profile-text': { selector: '.talent-profile', property: 'color' },
 	},
 	'archetype-spotlight': {
-		'title-typography': { selector: '.spotlight-header h2' },
-		'title-text': { selector: '.spotlight-header h2', property: 'color' },
-		'title-divider': { selector: '.spotlight-header', property: 'borderBottomColor' },
-		'headline-typography': { selector: '.spotlight-name' },
-		'label-typography': { selector: '.stat-label' },
-		'surface': { selector: '.spotlight-pilots', property: 'backgroundColor' },
-		'row-typography': { selector: '.pilot-name' },
-		'row-divider': { selector: '.pilot-row', property: 'borderBottomColor' },
-		'primary-text': { selector: '.pilot-name', property: 'color' },
-		'secondary-text': { selector: '.stat-label', property: 'color' },
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
 		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
-		'card-placeholder-surface': { selector: '.mtg-card', property: 'backgroundColor' },
-		'badge-shadow': { selector: '[data-testid="top-cards-stat-badge"]', property: 'boxShadow' },
 	},
 	'top-cut': {
 		'title-typography': { selector: '.broadcast-table-title h2' },
@@ -131,20 +119,12 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'row-motion': { selector: '.metagame-row', motionProperties: '--metagame-row' },
 	},
 	'top-cards': {
-		'title-typography': { selector: '.top-cards-title h2' },
-		'title-text': { selector: '.top-cards-title h2', property: 'color' },
-		'name-typography': { selector: '.top-cards-display' },
-		'name-text': { selector: '.top-cards-display', property: 'color' },
-		'card-placeholder-surface': { selector: '.mtg-card', property: 'backgroundColor' },
-		'badge-typography': { selector: '[data-testid="top-cards-stat-badge"]' },
-		'badge-shadow': { selector: '[data-testid="top-cards-rank-badge"]', property: 'boxShadow' },
 		'rank-badge-surface': { selector: '[data-testid="top-cards-rank-badge"]', property: 'backgroundColor' },
 		'rank-badge-text': { selector: '[data-testid="top-cards-rank-badge"]', property: 'color' },
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
 		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
 		'points-badge-surface': { selector: '[data-testid="top-cards-points-badge"]', property: 'backgroundColor' },
 		'points-badge-text': { selector: '[data-testid="top-cards-points-badge"]', property: 'color' },
-		'page-indicator-text': { selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
 	},
 	'card': {
 		motion: { selector: '.card-image-wrapper' },
@@ -157,11 +137,6 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'source-surface': { selector: '[data-graphic-item-id="main-source"]', property: 'borderTopColor' },
 	},
 	'deck': {
-		'title-typography': { selector: '.deck-header h2' },
-		'body-typography': { selector: '.deck-header p' },
-		'primary-text': { selector: '.deck-header h2', property: 'color' },
-		'secondary-text': { selector: '.deck-header p', property: 'color' },
-		'card-placeholder': { selector: '.mtg-card', property: 'backgroundColor' },
 		'quantity-badge-text': { selector: '.quantity-badge', property: 'color' },
 		'quantity-badge-surface': { selector: '.quantity-badge', property: 'backgroundColor' },
 		'points-badge-text': { selector: '[data-testid="highlander-card-badge"]', property: 'color' },
@@ -174,7 +149,6 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'pointed-card-surface': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'backgroundColor' },
 		'pointed-card-accent': { selector: '[data-testid="highlander-pointed-card-chip"] span', property: 'color' },
 		'pointed-card-border': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'borderColor' },
-		'badge-shadow': { selector: '[data-testid="highlander-card-badge"]', property: 'boxShadow' },
 	},
 };
 
@@ -254,6 +228,38 @@ const FOUNDATION_CHROME: Partial<Record<ScreenMode, Record<string, ChromeProbe>>
 			property: 'borderLeftColor',
 			config: { viewMode: 'chart' },
 		},
+	},
+	'archetype-spotlight': {
+		'title-typography': { token: 'heading', selector: '.spotlight-header h2' },
+		'title-text': { token: 'text-primary', selector: '.spotlight-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.spotlight-header', property: 'borderBottomColor' },
+		'headline-typography': { token: 'heading', selector: '.spotlight-name' },
+		'label-typography': { token: 'heading', selector: '.stat-label' },
+		'surface': { token: 'surface', selector: '.spotlight-pilots', property: 'backgroundColor' },
+		'row-typography': { token: 'body', selector: '.pilot-name' },
+		'row-divider': { token: 'divider', selector: '.pilot-row', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.pilot-name', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.stat-label', property: 'color' },
+		'card-placeholder-surface': { token: 'surface-raised', selector: '.mtg-card', property: 'backgroundColor' },
+		'badge-shadow': { token: 'shadow', selector: '[data-testid="top-cards-stat-badge"]', property: 'boxShadow' },
+	},
+	'top-cards': {
+		'title-typography': { token: 'heading', selector: '.top-cards-title h2' },
+		'title-text': { token: 'text-primary', selector: '.top-cards-title h2', property: 'color' },
+		'name-typography': { token: 'body', selector: '.top-cards-display' },
+		'name-text': { token: 'text-primary', selector: '.top-cards-display', property: 'color' },
+		'card-placeholder-surface': { token: 'surface-raised', selector: '.mtg-card', property: 'backgroundColor' },
+		'badge-typography': { token: 'heading', selector: '[data-testid="top-cards-stat-badge"]' },
+		'badge-shadow': { token: 'shadow', selector: '[data-testid="top-cards-rank-badge"]', property: 'boxShadow' },
+		'page-indicator-text': { token: 'text-secondary', selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
+	},
+	'deck': {
+		'title-typography': { token: 'heading', selector: '.deck-header h2' },
+		'body-typography': { token: 'body', selector: '.deck-header p' },
+		'primary-text': { token: 'text-primary', selector: '.deck-header h2', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.deck-header p', property: 'color' },
+		'card-placeholder': { token: 'surface-raised', selector: '.mtg-card', property: 'backgroundColor' },
+		'badge-shadow': { token: 'shadow', selector: '[data-testid="highlander-card-badge"]', property: 'boxShadow' },
 	},
 };
 
@@ -1122,17 +1128,6 @@ describe('a light Theme', () => {
 		expect(textOnPrimaryText()).toEqual(new Set(BADGED_MODES.includes(mode)
 			? [LIGHT['text-inverse']]
 			: []));
-	});
-});
-
-// Every badge's shadow reads the one `shadow` Foundation Token, so a Theme sets it once.
-describe('a Theme\'s shadow', () => {
-	it.each(['top-cards', 'deck', 'archetype-spotlight'] as const)('lifts the %s badges', async (mode) => {
-		const probe = THEMED_DISPLAYS[mode]!['badge-shadow']!;
-		await mountMode(mode, { shadow: 'rgb(1, 2, 3)' }, { config: probe.config });
-		await shown(probe);
-
-		expect(painted(probe, 'color')).toBe('rgb(1, 2, 3)');
 	});
 });
 
