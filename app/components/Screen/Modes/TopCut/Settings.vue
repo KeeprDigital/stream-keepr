@@ -24,7 +24,6 @@ defineExpose({ resetConfig, saving });
 // Each control's label, read from the mode's config contract (#498).
 const fields = screenModeConfigContract('top-cut').fields;
 
-const phaseStore = usePhaseStore();
 const playerStore = usePlayerStore();
 const eventStore = useEventStore();
 
@@ -44,33 +43,17 @@ const sourceOptions: { label: string; value: TopCutBracketSource }[] = [
 	{ label: 'Entered by hand', value: 'manual' },
 ];
 
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['phases', 'players']);
+// The Players a Manual Bracket's Seeds pick from, re-read on Reconnect Resync (#610).
+useConsumedEventData(['players']);
 
 onMounted(async () => {
-	if (!props.eventId)
-		return;
-	await Promise.all([
-		phaseStore.isLoaded || !offersPhases.value
-			? undefined
-			: phaseStore.loadPhasesByEventId(props.eventId),
-		playerStore.isLoaded
-			? undefined
-			: playerStore.loadPlayersByEventId(props.eventId),
-	]);
+	if (props.eventId && !playerStore.isLoaded)
+		await playerStore.loadPlayersByEventId(props.eventId);
 });
 
 function updateManualBracket(manualBracket: ManualBracket) {
 	updateConfig({ manualBracket });
 }
-
-// Nothing marks a Phase as a top cut, so every Phase of the Event is offered (#752).
-const phaseOptions = computed(() => [
-	{ label: 'Select a phase…', value: null },
-	...[...phaseStore.phases]
-		.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
-		.map(phase => ({ label: phase.name, value: phase.id })),
-]);
 
 // Unset, the first Round sizes the bracket; a set size only enlarges it (#906).
 const sizeOptions = [
@@ -117,18 +100,13 @@ const headerCardSummary = computed(() => headerSummary(config.value));
 			/>
 
 			<template v-else>
-				<ScreenSettingsField
-					label="Phase"
+				<ScreenPhaseField
 					name="phaseId"
+					:model-value="config.phaseId"
+					:event-id="eventId"
 					description="The bracket shows this Phase's Rounds in order, its first Round placed by each Player's Seed."
-				>
-					<USelect
-						:model-value="config.phaseId ?? null"
-						:items="phaseOptions"
-						class="w-64"
-						@update:model-value="updateConfig({ phaseId: $event ?? null })"
-					/>
-				</ScreenSettingsField>
+					@update:model-value="updateConfig({ phaseId: $event })"
+				/>
 
 				<ScreenSettingsField
 					label="Bracket size"

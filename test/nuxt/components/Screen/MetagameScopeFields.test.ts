@@ -1,6 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import MetagameScopeFields from '~/components/Screen/MetagameScopeFields.vue';
@@ -9,12 +9,17 @@ import MetagameScopeFields from '~/components/Screen/MetagameScopeFields.vue';
 // the scopes its mode's contract holds, the field its current scope reads, and the archetype filter…
 
 const mockPlayerListStore = {
+	isLoaded: true,
+	loadByEventId: vi.fn(),
 	lists: [
 		{ id: 7, name: 'Feature Table', memberCount: 4 },
 	] as Array<{ id: number; name: string; memberCount: number }>,
 };
 
 mockNuxtImport('usePlayerListStore', () => () => mockPlayerListStore);
+vi.mock('~/modules/event-data/resync', () => ({
+	useConsumedEventData: vi.fn(),
+}));
 
 const UFormFieldStub = defineComponent({
 	props: {
@@ -53,7 +58,7 @@ const spotlightFields = screenModeConfigContract('archetype-spotlight').fields;
 
 function mountFields(props: Record<string, unknown>) {
 	return mount(MetagameScopeFields, {
-		props: { description: 'Which players to include.', ...props } as any,
+		props: { description: 'Which players to include.', eventId: 1, ...props } as any,
 		global: {
 			stubs: {
 				UFormField: UFormFieldStub,
@@ -155,9 +160,9 @@ describe('screenMetagameScopeFields', () => {
 			config: { ...baseConfig, scope: 'playerList', playerListId: 7 },
 			fields: spotlightFields,
 		});
-		const picker = field(wrapper, 'Select list')!.getComponent(USelectStub);
+		const picker = field(wrapper, 'Player List')!.getComponent(USelectStub);
 
-		expect(picker.text()).toBe('Select a list...|Feature Table (4)');
+		expect(picker.text()).toBe('Select a list…|Feature Table (4)');
 		picker.vm.$emit('update:modelValue', 7);
 		picker.vm.$emit('update:modelValue', null);
 		expect(wrapper.emitted('update')).toEqual([

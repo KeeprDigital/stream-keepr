@@ -4,14 +4,12 @@ import type { Screen } from '~/types';
 import { getCounterTypeConfigs, getFeatureMatchStateTracking, getGameConfig, getPlayerIdentityLabel } from '~~/shared/config/games';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
 	screen: Screen;
 	eventId: number;
 }>();
 
-const featureMatchStore = useFeatureMatchStore();
 const featureMatchStateStore = useFeatureMatchStateStore();
 const eventStore = useEventStore();
 
@@ -230,16 +228,6 @@ function writeToggle(key: ToggleKey, value: unknown) {
 	updateConfig({ [key]: value === true } as Partial<Record<ToggleKey, boolean>>);
 }
 
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['featureMatchSlots']);
-
-// Load matches on mount
-onMounted(async () => {
-	if (props.eventId) {
-		await featureMatchStore.loadFeatureMatchesByEventId(props.eventId);
-	}
-});
-
 // Initialize match state when match is selected
 async function handleMatchChange(matchId: number | null) {
 	updateConfig({ featureMatchId: matchId });
@@ -253,14 +241,13 @@ async function handleMatchChange(matchId: number | null) {
 <template>
 	<div class="flex flex-col gap-6">
 		<ScreenSettingsSection title="Feature Match Slot" :collapsible="false">
-			<ScreenSettingsField label="Feature Match Slot" description="The Slot whose Match this Screen controls.">
-				<ScreenFeatureMatchSelect
-					:model-value="config.featureMatchId"
-					placeholder="Select a slot…"
-					detailed
-					@update:model-value="handleMatchChange($event)"
-				/>
-			</ScreenSettingsField>
+			<ScreenFeatureMatchSlotField
+				:model-value="config.featureMatchId"
+				:event-id="eventId"
+				description="The Slot whose Match this Screen controls."
+				detailed
+				@update:model-value="handleMatchChange($event)"
+			/>
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection

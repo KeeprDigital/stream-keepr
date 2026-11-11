@@ -5,7 +5,6 @@ import type { Screen } from '~/types';
 import { isColumnVisible, withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { columnsSummary, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
-import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -25,18 +24,6 @@ defineExpose({ resetConfig, saving });
 // Each control's label and bounds, read from the mode's config contract (#498).
 // Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
 const fields = screenModeConfigContract('standings').fields;
-
-// ── Stores ──
-// The Round picker loads its own Rounds and Phases; the watchlist's Player List picker reads this store.
-const playerListStore = usePlayerListStore();
-
-// What the Player List picker reads, re-read on Reconnect Resync (#610).
-useConsumedEventData(['playerLists']);
-
-onMounted(async () => {
-	if (props.eventId && !playerListStore.isLoaded)
-		await playerListStore.loadByEventId(props.eventId);
-});
 
 // ── View Mode Options ──
 const viewModeOptions: { label: string; value: StandingsViewMode }[] = [
@@ -173,6 +160,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			<ScreenPlayerListField
 				v-else-if="config.viewMode === 'watchlist'"
 				:model-value="config.playerListId"
+				:event-id="eventId"
 				description="Show standings for players in this list."
 				@update:model-value="updateConfig({ playerListId: $event })"
 			/>

@@ -6,7 +6,6 @@ import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { useGraphicsEditor } from '~/composables/useGraphicsEditor';
 import { useGraphicsEditorKeyboard } from '~/composables/useGraphicsEditorKeyboard';
-import { useConsumedEventData } from '~/modules/event-data/resync';
 import { featureMatchLayoutEditorHost } from '~/modules/feature-match-overlay/editorHost';
 import {
 	compositorSelectionTarget,
@@ -33,7 +32,6 @@ const props = defineProps<{ screen: Screen; eventId: number }>();
 const previewEventStore = useEventStore();
 const previewTheme = useGraphicsPreviewTheme(() => previewEventStore.event?.themeId);
 
-const featureMatchStore = useFeatureMatchStore();
 const screenStore = useScreenStore();
 const eventStore = useEventStore();
 
@@ -92,14 +90,6 @@ defineExpose({
 	saving,
 });
 
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['featureMatchSlots']);
-
-onMounted(async () => {
-	await featureMatchStore.loadFeatureMatchesByEventId(props.eventId);
-});
-
-const matchOptions = useFeatureMatchMenuItems();
 /** The overlay is authored in its Event's canvas, set in Event Presentation Settings (ADR-0051). */
 const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
 const canvasWidth = computed(() => eventCanvas.value.width);
@@ -236,16 +226,14 @@ useGraphicsEditorKeyboard(editor, 'feature-match-overlay', {
 
 		<section class="rounded-lg border border-default/70 bg-default p-3" data-testid="overlay-toolbar">
 			<div class="flex flex-wrap items-end gap-3">
-				<UFormField label="Feature Match Slot" size="sm" class="min-w-56 flex-1">
-					<USelect
-						:model-value="config.featureMatchId ?? undefined"
-						:items="matchOptions"
-						value-key="value"
-						placeholder="Select a slot..."
-						class="w-full"
-						@update:model-value="updateConfig({ featureMatchId: $event })"
-					/>
-				</UFormField>
+				<ScreenFeatureMatchSlotField
+					:model-value="config.featureMatchId"
+					:event-id="eventId"
+					stacked
+					size="sm"
+					class="min-w-56 flex-1"
+					@update:model-value="updateConfig({ featureMatchId: $event })"
+				/>
 
 				<div class="ml-auto flex items-center gap-1">
 					<GraphicsSaveState

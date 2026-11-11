@@ -2,6 +2,7 @@
 import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
 import type { MetagameScope } from '~~/shared/types/enums';
 import { getMetagameRules } from '~~/shared/config/games';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 
 /**
  * The settings fields of a Metagame Scope (#777), shared by every mode reading
@@ -12,7 +13,7 @@ import { getMetagameRules } from '~~/shared/config/games';
  * naming it, a cleared Player List or filter as the `null` that deletes it
  * (ADR-0041); the editor writes it.
  */
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
 	config: {
 		scope: MetagameScope;
 		topN: number;
@@ -29,6 +30,8 @@ withDefaults(defineProps<{
 	};
 	/** What the scope decides for this mode. */
 	description: string;
+	/** The Event whose Player Lists decide whether the Player List scope is offered. */
+	eventId: number;
 	/** Whether the archetype filter applies to what the mode shows now, where it holds one. */
 	showArchetypeFilter?: boolean;
 }>(), { showArchetypeFilter: true });
@@ -45,6 +48,14 @@ const emit = defineEmits<{
 
 const playerListStore = usePlayerListStore();
 const eventStore = useEventStore();
+
+// The Player List scope is offered only to an Event holding a list, so the lists load with the scope, not its picker.
+useConsumedEventData(['playerLists']);
+
+onMounted(async () => {
+	if (props.eventId && !playerListStore.isLoaded)
+		await playerListStore.loadByEventId(props.eventId);
+});
 
 const scopeOptions = computed(() => {
 	const options: { label: string; value: MetagameScope }[] = [
@@ -105,6 +116,7 @@ const scopeOptions = computed(() => {
 	<ScreenPlayerListField
 		v-if="config.scope === 'playerList'"
 		:model-value="config.playerListId"
+		:event-id="eventId"
 		description="Include players from this list only."
 		@update:model-value="emit('update', { playerListId: $event })"
 	/>
