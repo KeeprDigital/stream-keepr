@@ -212,16 +212,23 @@ export function fieldValue(entry: SettingsPageField): unknown {
 }
 
 /**
- * The patch writing `value` to a field: its own key, or its block rewritten
- * whole with it, `null` deleting it there as at the top level (ADR-0041).
+ * The patch writing `value` to a field: its own key, `null` deleting it
+ * (ADR-0041), or its block rewritten whole with it. A block's schema takes no
+ * `null`, so an emptied field of a block, Auto, is left out of it, as is any
+ * key the block holds empty.
  */
 export function fieldPatch(entry: SettingsPageField, value: unknown): Record<string, unknown> {
 	const [key, inner] = entry.path;
-	return inner === undefined
-		? { [key!]: value }
-		: {
-				[key!]: { ...entry.context.block, [inner]: value },
-			};
+	if (inner === undefined) {
+		return {
+			[key!]: value,
+		};
+	}
+	const block = Object.entries({ ...entry.context.block, [inner]: value })
+		.filter(([, held]) => held !== null && held !== undefined);
+	return {
+		[key!]: Object.fromEntries(block),
+	};
 }
 
 /** "Show deck names" read as "Deck names": what a closed card's summary lists of a toggle that is on. */

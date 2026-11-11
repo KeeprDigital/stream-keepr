@@ -12,7 +12,7 @@ import {
 } from '../types/enums';
 import { NINE_POINT_VALUES } from '../utils/ninePoints';
 import { defineScreenModeConfigContract } from './contract';
-import { editorField, screenModeConfigFields } from './fields';
+import { editorField } from './fields';
 import { cardBadgeSizeField, cardLayoutShape, DEFAULT_CARD_LAYOUT } from './subShapes';
 
 const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
@@ -136,10 +136,6 @@ function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<
 
 const mainboardLayoutConfigSchema = z.object(mainboardLayoutShape).strict();
 const sideboardLayoutConfigSchema = z.object(sideboardLayoutShape).strict();
-
-/** The editor fields of each board's layout block. */
-export const DECK_MAINBOARD_LAYOUT_FIELDS = screenModeConfigFields(mainboardLayoutShape);
-export const DECK_SIDEBOARD_LAYOUT_FIELDS = screenModeConfigFields(sideboardLayoutShape);
 
 type MainboardLayout = z.output<typeof mainboardLayoutConfigSchema>;
 type SideboardLayout = z.output<typeof sideboardLayoutConfigSchema>;

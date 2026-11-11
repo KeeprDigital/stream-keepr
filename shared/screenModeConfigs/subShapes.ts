@@ -2,8 +2,9 @@ import type { BoardSelection, MetagameScope } from '../types/enums';
 import type { ScreenSettingsContext } from './fields';
 import { z } from 'zod';
 import { getFeatureMatchStateTracking, getMetagameRules } from '../config/games';
-import { EVENT_CANVAS_SIDE_BOUNDS } from '../eventCanvas';
+import { EVENT_CANVAS_SIDE_BOUNDS, eventCanvasOf } from '../eventCanvas';
 import { METAGAME_SCOPE_VALUES } from '../types/enums';
+import { CARD_ASPECT } from '../utils/cardGrid';
 import { editorField } from './fields';
 
 /** What each Metagame Scope is called on its select. */
@@ -192,16 +193,29 @@ export const pageRotationPageSize = editorField(z.number().int().min(1).max(100)
 /** A list board's rows show in columns; a Card Layout lays out a grid. */
 const showsCardGrid = ({ block }: ScreenSettingsContext) => block?.view !== 'list';
 
+/** The widest card the Screen's Event Canvas holds whole, at a card's aspect. */
+function largestCardOnCanvas({ event }: ScreenSettingsContext): number {
+	const canvas = eventCanvasOf(event);
+	return Math.floor(Math.min(canvas.width, canvas.height * CARD_ASPECT));
+}
+
 /**
  * A card grid's Card Layout (ADR-0054): each value a number, or Auto while
  * absent. Columns run to `mostCards`, the most cards the grid can hold; a max
  * card size to the largest side an Event Canvas may have; the gap bound is the
- * one every card grid shares. An editor narrows each to its content: the
- * grid's card count, and its Event's canvas. `group` is the Screen Settings
- * Group of the Content card the grid's settings sit in; each shows for a grid
- * whose layout is `editable`, as a sideboard following the mainboard's is not.
+ * one every card grid shares. Its editor narrows each to the content: columns
+ * to `mostColumns`, the cards the Screen shows, where the mode knows it, and
+ * a max card size to the largest card its Event's canvas holds. `group` is the
+ * Screen Settings Group of the Content card the grid's settings sit in; each
+ * shows for a grid whose layout is `editable`, as a sideboard following the
+ * mainboard's is not.
  */
-export function cardLayoutShape(mostCards: number, group: string, editable: (context: ScreenSettingsContext) => boolean = () => true) {
+export function cardLayoutShape(
+	mostCards: number,
+	group: string,
+	editable: (context: ScreenSettingsContext) => boolean = () => true,
+	mostColumns?: (context: ScreenSettingsContext) => number | undefined,
+) {
 	const place = {
 		card: 'content',
 		group,
@@ -209,12 +223,13 @@ export function cardLayoutShape(mostCards: number, group: string, editable: (con
 		showWhen: (context: ScreenSettingsContext) => showsCardGrid(context) && editable(context),
 	} as const;
 	return {
-		columns: editorField(z.number().int().min(1).max(mostCards).optional(), { ...place, label: 'Columns' }),
+		columns: editorField(z.number().int().min(1).max(mostCards).optional(), { ...place, label: 'Columns', maxFor: mostColumns }),
 		/** The widest a card may be, in Event Canvas px. */
 		maxCardSize: editorField(z.number().int().min(48).max(EVENT_CANVAS_SIDE_BOUNDS.max).optional(), {
 			...place,
 			label: 'Max card size',
 			description: 'The widest a card may be, in px.',
+			maxFor: largestCardOnCanvas,
 		}),
 		cardGap: editorField(z.number().int().min(0).max(100).optional(), { ...place, label: 'Card gap' }),
 	};

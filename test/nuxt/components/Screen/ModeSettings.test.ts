@@ -8,8 +8,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, nextTick, ref } from 'vue';
 import { SCREEN_SETTINGS_CARDS } from '~~/shared/screenModeConfigs/fields';
 import { screenModeConfigContract, screenModeTokens } from '~~/shared/screenModes';
+import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import { GAME_VALUES } from '~~/shared/types/enums';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { layersPinningNoAsset } from '~~/test/helpers/backgroundLayers';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 import { nuxtUiStubs, UFormFieldBesideStub, UInputMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
@@ -33,6 +35,9 @@ mockNuxtImport('$fetch', () => mockFetch);
 
 const config = ref<Record<string, any>>({});
 const writes: Record<string, unknown>[] = [];
+const { resetConfig } = vi.hoisted(() => ({
+	resetConfig: vi.fn(),
+}));
 
 mockNuxtImport('useModeConfigUpdate', () => () => ({
 	config: computed(() => config.value),
@@ -46,7 +51,7 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 			...patch,
 		};
 	},
-	resetConfig: vi.fn(),
+	resetConfig,
 	retry: vi.fn(),
 }));
 mockNuxtImport('useServerTime', () => () => ({
@@ -64,7 +69,11 @@ const loaded = {
 mockNuxtImport('usePlayerStore', () => () => ({
 	...loaded,
 	players: [
-		{ id: 5, name: 'Ada' },
+		{
+			id: 5,
+			name: 'Ada',
+			gameData: { type: 'mtg', deckName: 'Mono Blue' },
+		},
 	],
 	loadPlayersByEventId: vi.fn(),
 }));
@@ -108,6 +117,18 @@ mockNuxtImport('useFeatureMatchStore', () => () => ({
 mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([
 	{ label: 'Table 1', value: 4 },
 ]));
+mockNuxtImport('useFeatureMatchStateStore', () => () => ({
+	...loaded,
+	featureMatchSessions: new Map(),
+	sessionIdBySlotId: new Map(),
+}));
+mockNuxtImport('useBroadcastDeckListStore', () => () => ({
+	summaries: [],
+	loadCollection: vi.fn(),
+}));
+mockNuxtImport('usePlayerDeckCache', () => () => ({
+	fetchDeck: vi.fn(async () => null),
+}));
 
 /** A Mode Token row, named by its token. */
 const ThemeTokenFieldStub = defineComponent({
@@ -118,7 +139,10 @@ const ThemeTokenFieldStub = defineComponent({
 });
 
 /** An Event offering everything a Screen Mode can show. */
-const EVERY_FEATURE: Partial<DbEvent> = {
+const EVERY_FEATURE: Partial<DbEvent> & { talents?: unknown[] } = {
+	talents: [
+		{ id: 8, name: 'Kim' },
+	],
 	pronounsEnabled: true,
 	standingsEnabled: true,
 	lgsEnabled: true,
@@ -127,7 +151,11 @@ const EVERY_FEATURE: Partial<DbEvent> = {
 	featureMatchDefaultExtraTurnsEnabled: true,
 	featureMatchDefaultMulliganTrackingEnabled: true,
 	pointsSystem: '7ph',
+	broadcastDeckListsEnabled: true,
 };
+
+/** What the mounted settings hand the page: its reset, and whether a write is in flight. */
+const exposed = ref<{ resetConfig: () => void; saving: boolean } | null>(null);
 
 interface PageOptions {
 	game?: Game;
@@ -150,10 +178,11 @@ async function mountPage(mode: ScreenMode, { game = 'mtg', config: variant = {},
 		...variant,
 	});
 	writes.length = 0;
-	// The mode's own page: the renderer, or the component wrapping it to fill a bespoke slot, loaded before it mounts.
-	const settings = getScreenModeSettingsComponent(mode)!;
-	await (settings as { __asyncLoader?: () => Promise<unknown> }).__asyncLoader?.();
-	const Page = screenSettingsPage(screen, () => h(settings, {
+	// The mode's settings as the page mounts them: the renderer, or the mode's own wrapping of it.
+	const Settings = getScreenModeSettingsComponent(mode)!;
+	await (Settings as { __asyncLoader?: () => Promise<unknown> }).__asyncLoader?.();
+	const Page = screenSettingsPage(screen, () => h(Settings, {
+		ref: exposed,
 		screen: screen(),
 		eventId: 1,
 	}));
@@ -171,6 +200,9 @@ async function mountPage(mode: ScreenMode, { game = 'mtg', config: variant = {},
 	await flushPromises();
 	return wrapper;
 }
+
+/** A slot's row of the page, as `wrapper.get` finds it. */
+type SlotRow = Omit<DOMWrapper<Element>, 'exists'>;
 
 // ── Reading the page ──
 
@@ -208,10 +240,10 @@ async function edit(row: Omit<DOMWrapper<Element>, 'exists'>) {
 	const option = row.find('[role="option"]');
 	if (option.exists())
 		return option.trigger('click');
-	const point = row.find('[role="radio"][aria-checked="false"]');
-	if (point.exists())
+	const point = row.findAll('[role="radio"]').find(found => found.attributes('aria-checked') !== 'true' && found.attributes('disabled') === undefined);
+	if (point)
 		return point.trigger('click');
-	const toggle = row.find('[role="switch"]');
+	const toggle = row.find('[role="switch"], [role="checkbox"]');
 	if (toggle.exists())
 		return toggle.trigger('click');
 	const select = row.find('select');
@@ -285,6 +317,27 @@ const VARIANTS = {
 		// Kept while on, so a Screen whose Event lost its points system can turn them off.
 		{ scope: 'playerList', pointedOnly: true, showPointsBadges: true },
 	],
+	'talent': [
+		{},
+		{ selection: 'lineup', rotateSocialProfiles: true, showHeader: true },
+	],
+	'top-cut': [
+		{},
+		{ bracketSource: 'manual' },
+	],
+	'background': [{}],
+	// Each board in each view: a grid mainboard and a stacked sideboard following it;
+	// a list mainboard and a customised grid sideboard; a customised list sideboard (#1091).
+	'deck': [
+		{ showDeckStats: true },
+		{
+			mainboard: { view: 'list' },
+			sideboard: { view: 'grid', alignment: 'center' },
+		},
+		{
+			sideboard: { view: 'list', alignment: 'center' },
+		},
+	],
 } as const satisfies Partial<Record<ScreenMode, readonly Record<string, unknown>[]>>;
 
 type RenderedMode = keyof typeof VARIANTS;
@@ -308,6 +361,39 @@ const NOT_FOR_GAME: Partial<Record<RenderedMode, Partial<Record<Game, readonly s
 	},
 	'top-cards': {
 		op: ['board'],
+	},
+	// One Piece holds no Phases, so its bracket is always the Manual Bracket, and only its Players have Nicknames.
+	'top-cut': {
+		mtg: ['playerNameShown'],
+		op: ['bracketSource', 'phaseId', 'bracketSizeOverride'],
+	},
+	// A One Piece Deck List has a Leader and a mainboard only: no sideboard, companion, details row or points.
+	'deck': {
+		mtg: ['showCostCurve'],
+		op: [
+			'board',
+			'sideboardPlacement',
+			...[
+				'view',
+				'columns',
+				'maxCardSize',
+				'cardGap',
+				'listColumns',
+				'alignment',
+				'stackReveal',
+			].map(key => `sideboard.${key}`),
+			'showCompanion',
+			'showDeckStats',
+			'showDeckMetaPill',
+			'showHighlanderTotal',
+			'showHighlanderPointedCards',
+			'showHighlanderPoints',
+			'highlanderPointsPosition',
+			'companionTagPosition',
+			'pointsBadgeSize',
+			'metaPillSize',
+			'pointedCardSize',
+		],
 	},
 };
 
@@ -441,6 +527,89 @@ describe('the generic settings renderer', () => {
 			config: {},
 			event: { featureMatchDefaultMulliganTrackingEnabled: false },
 			field: 'showMulliganInfo',
+			shown: false,
+		},
+		{
+			mode: 'talent',
+			config: { selection: 'one' },
+			event: {},
+			field: 'talentIds',
+			shown: false,
+		},
+		{
+			mode: 'talent',
+			config: { selection: 'lineup' },
+			event: {},
+			field: 'talentId',
+			shown: false,
+		},
+		{
+			mode: 'talent',
+			config: { rotateSocialProfiles: false },
+			event: {},
+			field: 'socialProfileDwellMs',
+			shown: false,
+		},
+		{
+			mode: 'top-cut',
+			config: { bracketSource: 'phase' },
+			event: {},
+			field: 'manualBracket',
+			shown: false,
+		},
+		{
+			mode: 'top-cut',
+			config: { bracketSource: 'phase' },
+			event: { game: 'op' },
+			field: 'manualBracket',
+			shown: true,
+		},
+		{
+			mode: 'deck',
+			config: { board: 'mainboard' },
+			event: {},
+			field: 'sideboard.view',
+			shown: false,
+		},
+		{
+			mode: 'deck',
+			config: { board: 'sideboard' },
+			event: {},
+			field: 'mainboard.view',
+			shown: false,
+		},
+		{
+			mode: 'deck',
+			config: {
+				sideboard: { view: 'grid' },
+			},
+			event: {},
+			field: 'sideboard.columns',
+			shown: false,
+		},
+		{
+			mode: 'deck',
+			config: {
+				sideboard: { view: 'grid', columns: 3 },
+			},
+			event: {},
+			field: 'sideboard.columns',
+			shown: true,
+		},
+		{
+			mode: 'deck',
+			config: {},
+			event: { pointsSystem: null },
+			field: 'showHighlanderPoints',
+			shown: false,
+		},
+		{
+			mode: 'deck',
+			config: {
+				deckSource: { type: 'broadcast', broadcastDeckListId: 23 },
+			},
+			event: {},
+			field: 'showHighlanderTotal',
 			shown: false,
 		},
 	] as { mode: RenderedMode; config: Record<string, unknown>; event: Partial<DbEvent>; field: string; shown: boolean }[])(
@@ -581,6 +750,181 @@ describe('the generic settings renderer', () => {
 			},
 		]);
 	});
+
+	it('writes a set in the order its values run, whatever order they were picked in', async () => {
+		const [first, second] = SUPPORTED_SOCIAL_NETWORK_KEYS;
+		const wrapper = await mountPage('talent', {
+			config: {
+				socialNetworks: [second],
+			},
+		});
+
+		await wrapper.get('[data-settings-field="socialNetworks"]').findAll('[role="checkbox"]')[0]!.trigger('click');
+
+		expect(writes).toEqual([
+			{
+				socialNetworks: [first, second],
+			},
+		]);
+	});
+
+	// A block is written whole, and its schema has no `null` inside: an emptied value is Auto, its key left out.
+	it.each([
+		{
+			path: 'mainboard.columns',
+			block: 'mainboard',
+			stored: {
+				view: 'grid',
+				columns: 4,
+				maxCardSize: 144,
+				alignment: 'top',
+			},
+			written: { view: 'grid', maxCardSize: 144, alignment: 'top' },
+		},
+		{
+			path: 'sideboard.cardGap',
+			block: 'sideboard',
+			stored: { view: 'grid', cardGap: 8, alignment: 'top' },
+			written: { view: 'grid', alignment: 'top' },
+		},
+	])('writes $path emptied as its whole block without it', async ({ path, block, stored, written }) => {
+		const wrapper = await mountPage('deck', {
+			config: { [block]: stored },
+		});
+
+		await wrapper.get(`[data-settings-field="${path}"] input[type="number"]`).setValue('');
+
+		expect(writes).toEqual([
+			{ [block]: written },
+		]);
+		expect(screenModeConfigContract('deck').schema.partial().safeParse(writes[0]).success).toBe(true);
+	});
+
+	it('bounds a max card size by the largest card the Screen\'s Event Canvas holds', async () => {
+		const wrapper = await mountPage('deck', {
+			event: { canvasWidth: 1280, canvasHeight: 720 } as Partial<DbEvent>,
+		});
+
+		// 720 px tall at a card's 61:85 aspect.
+		expect(wrapper.get('[data-settings-field="mainboard.maxCardSize"] input[type="number"]').attributes('max')).toBe('516');
+	});
+
+	it('offers a badge position every point but the centre, which a badge cannot take', async () => {
+		const wrapper = await mountPage('deck');
+		const points = wrapper.get('[data-settings-field="quantityPosition"]').findAll('[role="radio"]');
+
+		expect(points.filter(point => point.attributes('disabled') !== undefined).map(point => point.attributes('data-point'))).toEqual(['center']);
+	});
+
+	it.each(RENDERED_MODES)('hands the page the %s settings\' reset and saving state', async (mode) => {
+		await mountPage(mode);
+		resetConfig.mockClear();
+
+		exposed.value!.resetConfig();
+
+		expect(resetConfig).toHaveBeenCalledOnce();
+		expect(exposed.value!.saving).toBe(false);
+	});
+
+	// A mode's own widget mounts in the slot its fields name, or heading its group, and writes through the page.
+	it.each([
+		{
+			name: 'Deck List\'s board toggles hide the mainboard',
+			mode: 'deck',
+			config: {},
+			slot: '[data-settings-slot="board-toggles"]',
+			act: (row: SlotRow) => row.findAll('[role="switch"]')[0]!.trigger('click'),
+			written: { board: 'sideboard' },
+		},
+		{
+			name: 'Deck List\'s Customise copies the mainboard\'s layout to the sideboard',
+			mode: 'deck',
+			config: {
+				sideboard: { view: 'stack', stackReveal: 40 },
+			},
+			slot: '[data-settings-section="sideboard"] [data-settings-group-slot="before:sideboard"]',
+			act: (row: SlotRow) => row.findAll('button').find(button => button.text() === 'Customise')!.trigger('click'),
+			written: {
+				sideboard: {
+					view: 'stack',
+					stackReveal: 40,
+					listColumns: 2,
+					alignment: 'center',
+				},
+			},
+		},
+		{
+			name: 'Deck List\'s Use mainboard\'s keeps only the sideboard\'s view and reveal',
+			mode: 'deck',
+			config: {
+				sideboard: {
+					view: 'stack',
+					stackReveal: 40,
+					columns: 3,
+					alignment: 'top',
+				},
+			},
+			slot: '[data-settings-section="sideboard"] [data-settings-group-slot="before:sideboard"]',
+			act: (row: SlotRow) => row.findAll('button').find(button => button.text() === 'Use mainboard\'s')!.trigger('click'),
+			written: {
+				sideboard: { view: 'stack', stackReveal: 40 },
+			},
+		},
+		{
+			name: 'Top Cut Bracket\'s Manual Bracket editor seats a Player',
+			mode: 'top-cut',
+			config: { bracketSource: 'manual' },
+			slot: '[data-settings-card="live"] [data-settings-slot="manual-bracket"]',
+			act: (row: SlotRow) => row.get('[role="option"]').trigger('click'),
+			written: {
+				manualBracket: {
+					size: 8,
+					entrants: [
+						{ playerId: 5 },
+					],
+					results: [],
+				},
+			},
+		},
+		{
+			name: 'Top Cut Bracket\'s bracket size',
+			mode: 'top-cut',
+			config: {},
+			slot: '[data-settings-slot="bracket-size"]',
+			act: (row: SlotRow) => row.get('select').setValue('16'),
+			written: { bracketSizeOverride: 16 },
+		},
+		{
+			name: 'Talent\'s lineup adds a Talent',
+			mode: 'talent',
+			config: { selection: 'lineup' },
+			slot: '[data-settings-slot="talent-lineup"]',
+			act: (row: SlotRow) => row.get('select').setValue('8'),
+			written: {
+				talentIds: [8],
+			},
+		},
+		{
+			name: 'Background\'s Reset to Theme',
+			mode: 'background',
+			config: {
+				layers: layersPinningNoAsset().slice(0, 1),
+			},
+			slot: '[data-settings-card="background-placement"] [data-settings-slot="background-layers"]',
+			act: (row: SlotRow) => row.findAll('button').find(button => button.text() === 'Reset to Theme')!.trigger('click'),
+			written: { layers: [] },
+		},
+	] as { name: string; mode: RenderedMode; config: Record<string, unknown>; slot: string; act: (row: SlotRow) => Promise<unknown>; written: Record<string, unknown> }[])(
+		'$name in one write',
+		async ({ mode, config: variant, slot, act, written }) => {
+			const wrapper = await mountPage(mode, { config: variant });
+
+			await act(wrapper.get(slot));
+			await flushPromises();
+
+			expect(writes).toEqual([written]);
+		},
+	);
 
 	it('draws no card a mode gives nothing to show', async () => {
 		const wrapper = await mountPage('card');

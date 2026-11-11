@@ -57,7 +57,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard
 	// following its layout; a customised Sideboard shows its own layout fields (#1091).
 	'deck': {
-		editor: 'Deck',
+		editor: RENDERER,
 		variants: [
 			{},
 			{
@@ -138,7 +138,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	},
 	// The one-Talent and lineup pickers are Event References; rotating shows its dwell, and the header its text.
 	'talent': {
-		editor: 'Talent',
+		editor: RENDERER,
 		variants: [
 			{},
 			{ selection: 'lineup', rotateSocialProfiles: true, showHeader: true },
@@ -146,7 +146,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	},
 	// A One Piece Card Game Event also offers showing Players by Nickname (ADR-0077).
 	'top-cut': {
-		editor: 'TopCut',
+		editor: RENDERER,
 		variants: [{}],
 		opVariants: [{}],
 	},

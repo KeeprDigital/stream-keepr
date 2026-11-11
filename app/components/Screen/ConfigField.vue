@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="Value extends string | number | boolean">
 import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
+import { NINE_POINT_VALUES } from '~~/shared/utils/ninePoints';
 
 /**
  * One Screen Mode config field, rendered from its contract metadata (ADR-0037):
@@ -50,6 +51,11 @@ const selectItems = computed(() => props.items
 
 // `USelect` infers its value type from its items, which a generic `Value` defeats.
 const selectValue = computed(() => (props.modelValue ?? null) as never);
+
+/** A position's points its field does not allow, such as a badge's centre: offered, but not to be picked. */
+const disabledPoints = computed(() => props.field.values
+	? NINE_POINT_VALUES.filter(point => !props.field.values!.includes(point))
+	: []);
 
 const numberMax = computed(() => {
 	const own = props.field.max;
@@ -139,6 +145,7 @@ function updateText(value: unknown) {
 			v-else-if="field.control === 'position'"
 			:aria-label="field.label"
 			:model-value="selectValue"
+			:disabled-points="disabledPoints"
 			@update:model-value="updateValue($event)"
 		/>
 		<UIColorPicker
