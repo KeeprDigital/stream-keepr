@@ -26,6 +26,7 @@ const mockPreviewSafeAreas = ref(false);
 const mockScreen = ref<Screen | null>(null);
 const mockAssetCapability = ref<string | undefined>(undefined);
 const mockEventCanvas = ref({ width: 1920, height: 1080 });
+const mockThemeTokens = ref<Record<string, unknown>>({});
 
 mockNuxtImport('useScreenContext', () => () => ({
 	screen: mockScreen,
@@ -38,6 +39,7 @@ mockNuxtImport('useScreenContext', () => () => ({
 	previewSafeAreas: mockPreviewSafeAreas,
 	assetCapability: mockAssetCapability,
 	eventCanvas: mockEventCanvas,
+	themeTokens: mockThemeTokens,
 }));
 
 // Every capability-session exchange a live Screen Output makes, so a test can prove media content
@@ -340,6 +342,7 @@ describe('broadcastGraphicsDisplay', () => {
 		mockLoadSession.value = () => {};
 		mockSessionReaders.clear();
 		mockAssetCapability.value = undefined;
+		mockThemeTokens.value = {};
 		capabilitySessionRequests.length = 0;
 		vi.stubGlobal('fetch', vi.fn(async (input: string) => {
 			capabilitySessionRequests.push(String(input));
@@ -960,9 +963,12 @@ describe('broadcastGraphicsDisplay', () => {
 			expect(capabilitySessionRequests).toEqual(['/api/screen-output/screens/1/asset-capability-session']);
 		});
 
-		// A bound item's picture is the Screen's resolved logo, its override here (#831).
-		it('resolves a media item bound to the logo from the Screen\'s own override, through its capability', async () => {
+		// A bound item's picture is the Theme's logo (#831), which no Screen overrides: one stored before is read by nothing.
+		it('resolves a media item bound to the logo from its Theme, never a stored override, through its capability', async () => {
 			mockAssetCapability.value = 'capability-token';
+			mockThemeTokens.value = {
+				logo: { kind: 'image', assetId: 'logo-asset', revisionId: 'logo-revision' },
+			};
 			mockScreen.value = {
 				...screenWithStack([
 					withMedia({
@@ -970,7 +976,7 @@ describe('broadcastGraphicsDisplay', () => {
 					}),
 				]),
 				themeOverrides: {
-					logo: { kind: 'image', assetId: 'logo-asset', revisionId: 'logo-revision' },
+					logo: { kind: 'image', assetId: 'overridden-asset', revisionId: 'overridden-revision' },
 				},
 			} as never;
 			mockOnAirGraphicIds.value = ['lower-third'];

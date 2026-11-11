@@ -1181,7 +1181,8 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(panelFill(wrapper)).toBe(panel);
 		});
 
-		it('restyles them from the Screen\'s own override of the accent over its Theme\'s', async () => {
+		// A Screen takes the accent from its Theme alone; an override stored before is read by nothing.
+		it('restyles them from its Theme\'s accent, never a stored override of it', async () => {
 			mockTheme.value = { accent: '#123456' };
 			mockScreen.value = {
 				themeOverrides: { accent: '#654321' },
@@ -1189,8 +1190,8 @@ describe('featureMatchOverlayDisplay', () => {
 
 			const wrapper = await mountComponent();
 
-			expect(frameStroke(wrapper)).toBe('#654321');
-			expect(panelFill(wrapper)).toBe('#654321');
+			expect(frameStroke(wrapper)).toBe('#123456');
+			expect(panelFill(wrapper)).toBe('#123456');
 		});
 
 		// The override is in the form stored before writes were literal-only: its colour names the Theme's accent.

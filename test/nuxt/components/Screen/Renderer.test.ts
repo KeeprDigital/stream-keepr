@@ -241,7 +241,8 @@ describe('screenRenderer', () => {
 		expect(paintedLayerIds(wrapper)).toBe('theme-wash');
 	});
 
-	it('paints the Screen\'s override of the Theme background', () => {
+	// A Screen's background has two sources, its own stack and its Theme's; a stored override is read by nothing.
+	it('paints the Theme background, never a stored override of it', () => {
 		themeTokens.value = {
 			background: [themeLayer],
 		};
@@ -254,7 +255,7 @@ describe('screenRenderer', () => {
 			},
 		});
 
-		expect(paintedLayerIds(mountRenderer())).toBe('override-wash');
+		expect(paintedLayerIds(mountRenderer())).toBe('theme-wash');
 	});
 
 	describe('rendering readiness', () => {
