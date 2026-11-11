@@ -1,0 +1,244 @@
+<script setup lang="ts">
+import type { ScreenSettingsCard, ScreenSettingsContext } from '~~/shared/screenModeConfigs/fields';
+import type { ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
+import type { ScreenModeSettingsSlotProps, SettingsPageCard, SettingsPageField } from '~/modules/screen-mode/settingsPage';
+import type { Screen } from '~/types';
+import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
+import { screenModeConfigContract } from '~~/shared/screenModes';
+import { FOLLOWS_THE_THEME, headerSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
+import { PAGED_MODE_DATA } from '~/modules/screen-mode/pagedModeData';
+import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
+import { cardFieldsSummary, fieldDescription, fieldLabel, fieldOptions, fieldPatch, isPageRotationMode, settingsPageCards } from '~/modules/screen-mode/settingsPage';
+
+/**
+ * The generic settings renderer (#1060, #1094): a Screen Mode's settings page
+ * drawn from its config contract and its Mode Token declarations, so a mode
+ * writes no settings component for its plain fields.
+ *
+ * Its cards run in one fixed order (Live, Source, Content, Header, Paging,
+ * Background & Placement), a card holding nothing is not drawn, and each
+ * card ends with its Look (`ScreenSettingsLook`). A field or group whose
+ * condition is false for the Screen is not rendered. Every edit writes the
+ * patch naming its field; on a paginated mode it goes through the Page
+ * Rotation's writes (ADR-0039), and a Source edit returns to page 1.
+ *
+ * A field no plain control can edit names a slot (`slot` on its editor
+ * description), and its widget mounts as the renderer's slot of that name,
+ * once per card, where the first field naming it sits. The slot is given
+ * `fields` (the shown fields naming it, with their paths and context),
+ * `config` and `context` as the page reads them, `update(patch)`, which
+ * writes through the same path as every field, and `rotation`, a paginated
+ * mode's Page Rotation writes. The renderer fills `page-rotation` (manual
+ * page selection) and `columns` (a column list per field) itself; a mode
+ * with another slot gets a component of its own that wraps the renderer,
+ * fills that slot, and passes on the renderer's exposed `resetConfig` and
+ * `saving`.
+ *
+ * The mode is the Screen's at setup: the page remounts it on a mode change.
+ */
+const props = defineProps<{
+	screen: Screen;
+	eventId: number;
+}>();
+
+defineSlots<Record<string, (props: ScreenModeSettingsSlotProps) => unknown>>();
+
+const mode = props.screen.currentMode;
+const contract = screenModeConfigContract(mode);
+
+const eventStore = useEventStore();
+const playerListStore = usePlayerListStore();
+
+const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigUpdate(
+	() => props.eventId,
+	() => props.screen.id,
+	mode,
+);
+
+defineExpose({ resetConfig, saving });
+
+const configRecord = computed(() => config.value as Readonly<Record<string, any>>);
+
+// A paginated mode counts its pages from the rows its Screen Output renders,
+// read as that output reads them (#780), and writes through its rotation.
+function usePaging() {
+	if (!isPageRotationMode(mode))
+		return undefined;
+	const data = useEditedScreenModeData(
+		{
+			screen: () => props.screen,
+			eventId: () => props.eventId,
+			saving: () => saving.value,
+		},
+		PAGED_MODE_DATA[mode],
+	);
+	const rotation = useRotationConfigWrites({
+		mode,
+		config: config as never,
+		rowCount: data.rowCount,
+		saveConfig: saveConfig as never,
+	});
+	return { data, rotation };
+}
+const paged = usePaging();
+
+const context = computed<ScreenSettingsContext>(() => ({
+	config: configRecord.value,
+	event: eventStore.event,
+	hasPlayerLists: playerListStore.lists.length > 0,
+}));
+
+const cards = computed(() => settingsPageCards(mode, context.value));
+
+/** Writes a patch of the mode's config: through the Page Rotation on a paginated mode, which restarts it on a shape change. */
+function update(patch: Record<string, unknown>) {
+	if (!paged) {
+		saveConfig(patch as ScreenModeConfigPatch<typeof mode>);
+		return;
+	}
+	const { autoPageEnabled, ...rest } = patch;
+	if (typeof autoPageEnabled === 'boolean')
+		paged.rotation.setAutoPageEnabled(autoPageEnabled);
+	if (Object.keys(rest).length > 0)
+		paged.rotation.updateConfig(rest as never);
+}
+
+/** Writes one field's new value; a Source edit on a paginated mode shows page 1 of what it now reads. */
+function updateField(entry: SettingsPageField, value: unknown) {
+	const patch = fieldPatch(entry, value);
+	update(paged && entry.field.card === 'source'
+		? { ...patch, currentPage: 1 }
+		: patch);
+}
+
+// ── The renderer's own slots ──
+
+function columnLabels(entry: SettingsPageField): Record<string, string> {
+	return Object.fromEntries((fieldOptions(entry) ?? []).map(option => [option.value, option.label]));
+}
+
+/** A column list as the Screen holds it, with any column added since it was stored offered hidden. */
+function columnsOf(entry: SettingsPageField): { key: string; visible: boolean }[] {
+	const defaults = (contract.defaults as Record<string, unknown>)[entry.field.key];
+	const stored = configRecord.value[entry.field.key];
+	return withEveryColumn(
+		Array.isArray(stored)
+			? stored
+			: [],
+		Array.isArray(defaults)
+			? defaults
+			: [],
+	);
+}
+
+// ── Closed card summaries ──
+
+/** Live and Source hold what an operator reaches for during a show, so they stay open. */
+const COLLAPSIBLE: ReadonlySet<ScreenSettingsCard> = new Set([
+	'content',
+	'header',
+	'paging',
+	'background-placement',
+]);
+
+function summaryOf(card: SettingsPageCard): string | undefined {
+	if (card.card === 'header' && 'showHeader' in contract.fields)
+		return headerSummary(configRecord.value as { showHeader: boolean; headerText?: string | null });
+	if (card.card === 'paging' && paged)
+		return paginationSummary(paged.rotation);
+	return settingsSummary(cardFieldsSummary(card), card.sections.length === 0
+		? FOLLOWS_THE_THEME
+		: undefined) || undefined;
+}
+
+function slotFieldKeys(fields: readonly SettingsPageField[]): string {
+	return fields.map(entry => entry.path.join('.')).join(' ');
+}
+
+function headingId(card: ScreenSettingsCard, group: string): string {
+	return `${mode}-${card}-${group}-heading`;
+}
+</script>
+
+<template>
+	<div class="flex flex-col gap-6">
+		<div v-for="card in cards" :key="card.card" :data-settings-card="card.card">
+			<ScreenSettingsSection
+				:id="`${mode}:${card.card}`"
+				:title="card.title"
+				:collapsible="COLLAPSIBLE.has(card.card)"
+				:summary="summaryOf(card)"
+			>
+				<!-- A group's fields under its heading, split from what precedes them, as `ScreenSettingsGroup` draws one. -->
+				<section
+					v-for="(section, index) in card.sections"
+					:key="section.group?.id ?? 'ungrouped'"
+					:role="section.group ? 'group' : undefined"
+					:aria-labelledby="section.group ? headingId(card.card, section.group.id) : undefined"
+					:data-settings-section="section.group?.id"
+					class="flex flex-col gap-4"
+				>
+					<template v-if="section.group">
+						<USeparator v-if="index > 0" />
+						<ScreenSettingsSubheading :id="headingId(card.card, section.group.id)">
+							{{ section.group.title }}
+						</ScreenSettingsSubheading>
+					</template>
+					<template v-for="row in section.rows" :key="row.key">
+						<div v-if="row.kind === 'field'" :data-settings-field="row.key">
+							<ScreenModeSettingsField
+								:entry="row.entry"
+								:event-id="eventId"
+								@update="updateField(row.entry, $event)"
+							/>
+						</div>
+						<div
+							v-else
+							:data-settings-slot="row.slot"
+							:data-settings-fields="slotFieldKeys(row.fields)"
+						>
+							<slot
+								:name="row.slot"
+								:fields="row.fields"
+								:config="configRecord"
+								:context="context"
+								:update="update"
+								:rotation="paged?.rotation"
+							>
+								<ScreenPageSelection
+									v-if="row.slot === 'page-rotation' && paged"
+									:rotation="paged.rotation"
+									:loading="paged.data.loading.value"
+									:counting="!paged.data.answered.value"
+								/>
+								<template v-else-if="row.slot === 'columns'">
+									<ScreenSettingsField
+										v-for="entry in row.fields"
+										:key="entry.path.join('.')"
+										:label="fieldLabel(entry)"
+										:description="fieldDescription(entry)"
+										stacked
+									>
+										<ScreenColumnVisibilityList
+											:columns="columnsOf(entry)"
+											:labels="columnLabels(entry)"
+											@update="updateField(entry, $event)"
+										/>
+									</ScreenSettingsField>
+								</template>
+							</slot>
+						</div>
+					</template>
+				</section>
+
+				<ScreenSettingsLook
+					v-if="card.looks.length > 0"
+					:id="`${mode}:${card.card}:look`"
+					:event-id="eventId"
+					:looks="card.looks"
+				/>
+			</ScreenSettingsSection>
+		</div>
+	</div>
+</template>
