@@ -55,11 +55,13 @@ const editLease = useGraphicsAuthoringLease({
 const { writable } = editLease;
 
 /**
- * Losing the lease drops this session's unsaved layout. The server refuses it now,
- * and kept on screen it would hide the new holder's changes, then be built on.
+ * Losing the lease, to another Session or to its deadline, drops this session's
+ * unsaved layout, as the Broadcast Graphics editor does (#1100). The fence may
+ * refuse it, and kept on screen it would hide the next holder's changes, then be
+ * built on.
  */
-watch(writable, (isWritable) => {
-	if (!isWritable)
+watch(editLease.lost, (lost) => {
+	if (lost)
 		discard(['layout']);
 });
 

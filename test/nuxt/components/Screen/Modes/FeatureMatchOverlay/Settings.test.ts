@@ -81,6 +81,7 @@ mockNuxtImport('useGraphicsAuthoringLease', () => (options: { endpoint: () => st
 		status: ref('ready'),
 		writable: mockLeaseWritable,
 		heldByAnotherSession: computed(() => !mockLeaseWritable.value),
+		lost: computed(() => !mockLeaseWritable.value),
 		holderName: computed(() => mockLeaseWritable.value ? null : 'Marcus Angel'),
 		canTakeOver: computed(() => !mockLeaseWritable.value),
 		refresh: vi.fn(),

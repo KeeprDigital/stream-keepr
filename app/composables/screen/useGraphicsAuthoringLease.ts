@@ -57,6 +57,14 @@ export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOpti
 	const heldByAnotherSession = computed(() => lease.value?.heldByAnotherSession ?? false);
 	const canTakeOver = computed(() => status.value === 'ready' && heldByAnotherSession.value);
 	/**
+	 * Whether this session cannot hold the lease, rather than merely not holding it:
+	 * another Session holds it, or the deadline passed unanswered. An editor drops
+	 * its unsaved edits then (#1100), since the fence may refuse them and kept on
+	 * screen they would hide the next holder's. Closing the artifact for authoring
+	 * loses nothing, so a save still pending then is left to land.
+	 */
+	const lost = computed(() => heldByAnotherSession.value || status.value === 'error');
+	/**
 	 * Who is holding it, where the server could resolve their session to a person
 	 * (#398). Read from the last answer rather than remembered: a holder can be
 	 * displaced between heartbeats, and a stale name beside a live lease would say
@@ -222,6 +230,7 @@ export function useGraphicsAuthoringLease(options: UseGraphicsAuthoringLeaseOpti
 		status,
 		writable,
 		heldByAnotherSession,
+		lost,
 		holderName,
 		canTakeOver,
 		refresh: ask,
