@@ -95,9 +95,10 @@ export function storedThemeTokenGraphicAssetReferences(
 /**
  * The Graphic Asset Revisions a Screen's resolved Theme Tokens supply, which
  * its Screen Output Asset Capability admits: every Foundation Token, which any
- * Screen may consume, and the Mode Tokens of the mode it shows, each from its
- * override, else its Theme, else its default. A value an override shadows, and
- * a dormant override of another mode's Mode Token, supply nothing.
+ * Screen may consume, from its override, else its Theme, else its default, and
+ * the Mode Tokens of the mode it shows, from its override, else its default. A
+ * value an override shadows, a Mode Token its Theme stored before, and a
+ * dormant override of another mode's Mode Token supply nothing.
  */
 export function screenThemeGraphicAssetReferences(
 	mode: ScreenMode,

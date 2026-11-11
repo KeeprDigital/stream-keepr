@@ -127,16 +127,16 @@ describe('the Theme library', () => {
 		const theme = await create('Tokens');
 
 		await set(theme.id, 'accent', '#ff0000');
-		await set(theme.id, 'standings.rise', '#00ff00');
+		await set(theme.id, 'divider', '#00ff00');
 		await set(theme.id, 'accent', 'rgba(0, 0, 255, 0.5)');
 		expect(await storedTokens(theme.id)).toEqual({
-			'accent': 'rgba(0, 0, 255, 0.5)',
-			'standings.rise': '#00ff00',
+			accent: 'rgba(0, 0, 255, 0.5)',
+			divider: '#00ff00',
 		});
 
 		const cleared = await clear(theme.id, 'accent');
 		expect(cleared.tokens).toEqual({
-			'standings.rise': '#00ff00',
+			divider: '#00ff00',
 		});
 		expect(await storedTokens(theme.id)).toEqual(cleared.tokens);
 	});
@@ -254,14 +254,19 @@ describe('a Theme\'s announcements', () => {
 		expect(published).toEqual([]);
 	});
 
-	it('accepts a write of a former token and drops it, so nothing is stored, versioned or announced', async () => {
-		const theme = await create('Former');
-		const event = await createEvent('Former Event');
+	// A Theme stores Foundation Tokens only: a Mode Token is set per Screen.
+	it.each([
+		['a former token', 'metagame.chart-series-1', '#ff0000'],
+		['a Mode Token', 'standings.rise', '#ff0000'],
+		['a Mode Token given a value it could never hold', 'standings.rise', 12],
+	])('accepts a write of %s and drops it, so nothing is stored, versioned or announced', async (_case, token, value) => {
+		const theme = await create('Dropped');
+		const event = await createEvent('Dropped Event');
 		await select(event, theme.id);
 		const written = await set(theme.id, 'accent', '#123456');
 		published.length = 0;
 
-		const answered = await set(theme.id, 'metagame.chart-series-1', '#ff0000');
+		const answered = await set(theme.id, token, value);
 
 		expect(answered).toMatchObject({
 			revision: written.revision,
@@ -269,6 +274,30 @@ describe('a Theme\'s announcements', () => {
 		});
 		expect(await storedTokens(theme.id)).toEqual({ accent: '#123456' });
 		expect(published).toEqual([]);
+	});
+
+	// A Mode Token stored before a Theme held Foundation Tokens only is read by nothing, but can still be cleared.
+	it('clears a Mode Token a Theme stored before, and announces it', async () => {
+		const theme = await create('Stored Mode Token');
+		const event = await createEvent('Stored Mode Token Event');
+		await select(event, theme.id);
+		await db.update(schema.themes)
+			.set({
+				tokens: { 'accent': '#123456', 'standings.rise': '#00ff00' },
+			})
+			.where(eq(schema.themes.id, theme.id));
+		published.length = 0;
+
+		const cleared = await clear(theme.id, 'standings.rise');
+
+		expect(cleared.tokens).toEqual({ accent: '#123456' });
+		expect(announcedThemes()).toEqual([
+			{
+				eventId: event,
+				revision: cleared.revision,
+				tokens: { accent: '#123456' },
+			},
+		]);
 	});
 
 	it('announces a Theme switch to its Event as an Event update', async () => {
