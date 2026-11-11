@@ -103,14 +103,13 @@ describe('a Deck List board storing a Card Sizing', () => {
 			},
 		},
 	])('a PATCH $name', ({ patch, patched }) => {
-		const stored = {
-			deck: {
-				mainboard: { cardSizing: 'fixed', cardWidth: 200 },
-			},
+		// As an earlier contract stored it, which the current config type does not admit.
+		const stored: Record<string, unknown> = {
+			mainboard: { cardSizing: 'fixed', cardWidth: 200 },
 		};
 		const parsed = modeConfigPatchSchemaMap.deck.parse(patch) as Record<string, unknown>;
 
-		expect(parseModeConfigPatchResult(stored, 'deck', parsed)).toEqual({ deck: patched });
+		expect(parseModeConfigPatchResult({ deck: stored }, 'deck', parsed)).toEqual({ deck: patched });
 	});
 });
 
