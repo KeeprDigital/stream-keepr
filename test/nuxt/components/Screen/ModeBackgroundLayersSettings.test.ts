@@ -3,10 +3,10 @@ import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, ref } from 'vue';
+import { computed, defineComponent, h, ref } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import { ScreenSettingsCardStub } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { screenSettingsPage, ScreenSettingsCardStub } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import Settings from '~/components/Screen/ModeBackgroundLayersSettings.vue';
 
 // Background & Placement: a plain overlay mode's own Background Layer stack,
@@ -32,12 +32,12 @@ const EditorStub = defineComponent({
 });
 
 function mountComponent(themeOverrides: StoredThemeTokens = {}) {
-	return mount(Settings, {
-		props: {
-			screen: createMockScreen({ currentMode: 'metagame', themeOverrides }) as never,
-			eventId: 7,
-			mode: 'metagame' as const,
-		},
+	const screen = createMockScreen({ currentMode: 'metagame', themeOverrides }) as never;
+	return mount(screenSettingsPage(() => screen, () => h(Settings, {
+		screen,
+		eventId: 7,
+		mode: 'metagame',
+	})), {
 		global: {
 			stubs: {
 				...nuxtUiStubs,

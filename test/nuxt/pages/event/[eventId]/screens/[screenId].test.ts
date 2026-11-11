@@ -25,7 +25,9 @@ const route = reactive({
 });
 
 const mockEventStore = reactive({
-	event: { id: 1 },
+	event: { id: 1 } as { id: number; themeId?: string },
+	eventTheme: null,
+	holdEventTheme: vi.fn(),
 });
 
 interface PendingLoad {
@@ -722,10 +724,15 @@ describe('screen config page — Background & Placement, then the Screen-wide lo
 		wrapper?.unmount();
 		wrapper = null;
 		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => null);
+		mockEventStore.event = { id: 1 };
 	});
 
-	// Each card's own open rule is tested at its home; this shows the page wires the Screen to both.
-	it('orders the cards after the mode\'s settings, each opening on what it holds', async () => {
+	// Each card's own open rule is tested at its home; this shows the page wires the Screen to both,
+	// and holds the one Screen Theme Override instance both read the Event's Theme through.
+	it('orders the cards after the mode\'s settings, each opening on what it holds, over one read of the Event\'s Theme', async () => {
+		mockEventStore.event = { id: 1, themeId: 'brand' };
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({ id: 'brand', name: 'Brand', tokens: {}, revision: 1 });
 		const themeOverrides = { inset: 40 };
 		const screen = {
 			...makeScreen(1),
@@ -748,5 +755,6 @@ describe('screen config page — Background & Placement, then the Screen-wide lo
 		expect(cards.slice(1).map(card => card.attributes('data-default-open'))).toEqual(['true', 'false']);
 		expect(wrapper.findAll('[data-token="inset"]')).toHaveLength(1);
 		expect(wrapper.findAll('[data-token="alignment"]')).toHaveLength(1);
+		expect(mockApiFetch.mock.calls.filter(([path]) => path === '/api/themes/brand')).toHaveLength(1);
 	});
 });

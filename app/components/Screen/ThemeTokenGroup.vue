@@ -17,7 +17,6 @@ const names = computed(() => placeScreenThemeTokens(props.screen.currentMode).gr
 
 <template>
 	<ScreenThemeTokenRows
-		:screen="screen"
 		:event-id="eventId"
 		heading="Look"
 		:names="names"

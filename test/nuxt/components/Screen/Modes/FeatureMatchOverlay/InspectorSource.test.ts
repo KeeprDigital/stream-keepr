@@ -3,10 +3,10 @@ import type { FeatureMatchOverlayAnchorValue, FeatureMatchOverlayModeConfig, Fea
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, nextTick } from 'vue';
+import { defineComponent, h, nextTick } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import { fakeScreenThemeNetwork, overrideWrites, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import InspectorSource from '~/components/Screen/Modes/FeatureMatchOverlay/InspectorSource.vue';
 
 /**
@@ -69,16 +69,15 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue, themeOverride
 	const updateConfig = vi.fn();
 	const screen = seedThemedScreen('feature-match-overlay', themeOverrides);
 
-	const wrapper = mount(InspectorSource, {
-		props: {
-			config,
-			updateConfig,
-			screen: screen(),
-			eventId: 1,
-			screenWidth: 1920,
-			screenHeight: 1080,
-			item,
-		},
+	const wrapper = mount(screenSettingsPage(screen, () => h(InspectorSource, {
+		config,
+		updateConfig,
+		screen: screen(),
+		eventId: 1,
+		screenWidth: 1920,
+		screenHeight: 1080,
+		item,
+	})), {
 		global: {
 			stubs: {
 				FeatureMatchOverlayControlSection: ControlSectionStub,
