@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { BorderFieldsValue, BorderGlowEdit, GlowFieldsValue } from '~/types/borderGlow';
-import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
  * The one border and glow fields control, for a Graphic Surface Style's
@@ -146,10 +145,9 @@ function editGlow(patch: Partial<GlowFieldsValue> | null) {
 				:aria-label="ariaLabel('Glow size')"
 				@update:model-value="editGlow({ size: $event ?? 0 })"
 			/>
-			<GraphicsNumberField
+			<GraphicsOpacityField
 				label="Glow opacity"
 				:size="size"
-				v-bind="OPACITY_INPUT"
 				:model-value="glow.opacity"
 				:disabled="disabled"
 				:aria-label="ariaLabel('Glow opacity')"

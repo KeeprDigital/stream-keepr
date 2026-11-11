@@ -6,7 +6,6 @@ import type { Screen } from '~/types';
 import { parseFrameAnimationConfig } from '~~/shared/animationEffects';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
 import { MEDIA_FIT_OPTIONS } from '~/utils/mediaFields';
-import { OPACITY_INPUT } from '~/utils/opacityInput';
 import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
 
 /**
@@ -74,9 +73,8 @@ const backgroundSummary = computed(() => {
 			:summary="backgroundSummary"
 		>
 			<div class="space-y-3">
-				<GraphicsNumberField
+				<GraphicsOpacityField
 					label="Opacity"
-					v-bind="OPACITY_INPUT"
 					:model-value="config.layout.frame.opacity"
 					size="sm"
 					data-testid="frame-opacity"
@@ -135,10 +133,9 @@ const backgroundSummary = computed(() => {
 					@update:model-value="updateAnimation({ enabled: $event })"
 				/>
 
-				<GraphicsNumberField
+				<GraphicsOpacityField
 					v-if="animation.enabled"
 					label="Layer opacity"
-					v-bind="OPACITY_INPUT"
 					:model-value="animation.opacity"
 					size="sm"
 					@update:model-value="updateAnimation({ opacity: Number($event) })"

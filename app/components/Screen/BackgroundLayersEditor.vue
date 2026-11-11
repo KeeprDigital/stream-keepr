@@ -214,14 +214,12 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 						:model-value="layer.enabled"
 						@update:model-value="patchLayer(layer.id, { enabled: $event })"
 					/>
-					<ScreenSettingsField label="Opacity" data-testid="layer-opacity" stacked>
-						<UIOpacityInput
-							:model-value="layer.opacity"
-							size="sm"
-							class="w-full"
-							@update:model-value="patchLayer(layer.id, { opacity: $event ?? 1 })"
-						/>
-					</ScreenSettingsField>
+					<GraphicsOpacityField
+						label="Opacity"
+						:model-value="layer.opacity"
+						data-testid="layer-opacity"
+						@update:model-value="patchLayer(layer.id, { opacity: $event ?? 1 })"
+					/>
 				</div>
 
 				<ScreenSettingsField v-if="layer.type === 'color'" label="Colour" stacked>

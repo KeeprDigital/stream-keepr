@@ -2,7 +2,6 @@
 import type { GraphicFillEdit } from '~~/shared/modules/graphics';
 import type { GraphicFill, GraphicFillKind } from '~~/shared/types/graphics';
 import { MAX_GRAPHIC_FILL_STOPS, MIN_GRAPHIC_FILL_STOPS } from '~~/shared/types/graphics';
-import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
  * The one Graphic Fill fields control, for a Graphic Item's own fill (through a
@@ -156,10 +155,9 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 					:aria-label="ariaLabel(`Stop ${index + 1} position`)"
 					@update:model-value="editStop(index, { position: $event ?? 0 })"
 				/>
-				<GraphicsNumberField
+				<GraphicsOpacityField
 					label="Opacity"
 					:size="size"
-					v-bind="OPACITY_INPUT"
 					:model-value="stop.opacity"
 					:disabled="disabled"
 					:aria-label="ariaLabel(`Stop ${index + 1} opacity`)"

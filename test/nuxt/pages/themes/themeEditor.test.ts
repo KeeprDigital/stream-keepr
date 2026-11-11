@@ -3,12 +3,13 @@ import type { ThemeResponse } from '~~/shared/types/theme';
 import type { ColorPickerPart } from '~~/test/nuxt/helpers/colorPicker';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { settleUntil } from '~~/test/helpers/settle';
 import { editColorPicker } from '~~/test/nuxt/helpers/colorPicker';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import { THEME_TOKEN_DRAFT_COMMIT_MS } from '~/modules/theme-editor/draft';
 import ThemeEditor from '~/pages/themes/[themeId].vue';
 
@@ -114,6 +115,8 @@ async function mountEditor({ preview = false } = {}) {
 
 const field = (wrapper: VueWrapper, token: string) => wrapper.get(`[data-token="${token}"]`);
 const part = (wrapper: VueWrapper, token: string, name: string) => field(wrapper, token).get(`[data-token-part="${name}"]`);
+/** A typography token's field, in the typography editor the graphics inspector shares. */
+const typography = (wrapper: VueWrapper, token: string, name: string) => field(wrapper, token).get(`[data-testid="theme-typography-${name}"]`);
 
 /** A colour token commits once its picker closes. */
 async function commitColour(wrapper: VueWrapper, token: string, control: ColorPickerPart, value: string) {
@@ -397,7 +400,7 @@ describe('the Theme editor', () => {
 					width: 2,
 				},
 			},
-			edit: (wrapper: VueWrapper) => field(wrapper, 'panel').get('[data-testid="theme-surface-outline"]').trigger('click'),
+			edit: (wrapper: VueWrapper) => field(wrapper, 'panel').get('[data-testid="theme-surface-graphic-outline-enabled"]').trigger('click'),
 			written: {
 				fill: { type: 'solid', color: '#aa0000' },
 				fillOpacity: 0.5,
@@ -526,17 +529,17 @@ describe('the Theme editor', () => {
 		const wrapper = await mountEditor();
 		fakeDraftClock();
 
-		await part(wrapper, 'heading', 'weight').setValue('400');
+		await typography(wrapper, 'heading', 'weight').setValue('400');
 		await pauseEdits();
-		await part(wrapper, 'heading', 'case').setValue('lowercase');
+		await typography(wrapper, 'heading', 'case').setValue('lowercase');
 		await pauseEdits();
-		await part(wrapper, 'heading', 'case').setValue('capitalize');
+		await typography(wrapper, 'heading', 'case').setValue('capitalize');
 		await pauseEdits();
 
 		expect(writes().map(([, , body]) => body.value)).toEqual([
 			expect.objectContaining({ weight: 400, case: 'uppercase' }),
 		]);
-		expect((part(wrapper, 'heading', 'weight').element as unknown as HTMLSelectElement).value).toBe('400');
+		expect((typography(wrapper, 'heading', 'weight').element as HTMLInputElement).value).toBe('400');
 
 		first.resolve(theme(2, { heading: writes()[0]![2].value }));
 		await flushPromises();
@@ -552,8 +555,8 @@ describe('the Theme editor', () => {
 		const wrapper = await mountEditor();
 		fakeDraftClock();
 
-		await part(wrapper, 'heading', 'case').setValue('lowercase');
-		await part(wrapper, 'heading', 'weight').setValue('400');
+		await typography(wrapper, 'heading', 'case').setValue('lowercase');
+		await typography(wrapper, 'heading', 'weight').setValue('400');
 		await pauseEdits();
 
 		expect(writes().map(([, , body]) => body.value)).toEqual([
@@ -588,5 +591,102 @@ describe('the Theme editor', () => {
 
 		expect(writes()).toHaveLength(1);
 		expect(horizontal()).toBe('center');
+	});
+
+	// A Theme's typography, number, opacity, surface and corner fields are the graphics inspector's own.
+	describe('fields shared with the graphics inspector', () => {
+		beforeAll(stubPointerCapture);
+
+		it('offers a typography token no size or style: its consumer owns them', async () => {
+			const wrapper = await mountEditor();
+
+			expect(field(wrapper, 'heading').find('[data-testid="theme-typography-size"]').exists()).toBe(false);
+			expect(field(wrapper, 'heading').find('[data-testid="theme-typography-font-style"]').exists()).toBe(false);
+		});
+
+		it.each([
+			{
+				case: 'a letter spacing, in em',
+				control: (wrapper: VueWrapper) => typography(wrapper, 'heading', 'letter-spacing'),
+				entered: '0.2',
+				token: 'heading',
+				written: expect.objectContaining({ tracking: 0.2 }),
+			},
+			{
+				case: 'a letter spacing above its bound, at the bound',
+				control: (wrapper: VueWrapper) => typography(wrapper, 'heading', 'letter-spacing'),
+				entered: '2',
+				token: 'heading',
+				written: expect.objectContaining({ tracking: 1 }),
+			},
+			{
+				case: 'a letter spacing below its bound, at the bound',
+				control: (wrapper: VueWrapper) => typography(wrapper, 'heading', 'letter-spacing'),
+				entered: '-2',
+				token: 'heading',
+				written: expect.objectContaining({ tracking: -0.5 }),
+			},
+			{
+				case: 'a line height below its bound, at the bound',
+				control: (wrapper: VueWrapper) => typography(wrapper, 'body', 'line-height'),
+				entered: '0.1',
+				token: 'body',
+				written: expect.objectContaining({ lineHeight: 0.5 }),
+			},
+			{
+				case: 'a dimension',
+				control: (wrapper: VueWrapper) => field(wrapper, 'inset').get('input'),
+				entered: '24',
+				token: 'inset',
+				written: 24,
+			},
+			{
+				case: 'a dimension above its bound, at the bound',
+				control: (wrapper: VueWrapper) => field(wrapper, 'inset').get('input'),
+				entered: '900',
+				token: 'inset',
+				written: 480,
+			},
+			{
+				case: 'a surface\'s fill opacity',
+				control: (wrapper: VueWrapper) => field(wrapper, 'panel').get('input[aria-label="Panel fill opacity"]'),
+				entered: '0.5',
+				token: 'panel',
+				written: expect.objectContaining({ fillOpacity: 0.5 }),
+			},
+		])('writes $case', async ({ control, entered, token, written }) => {
+			const wrapper = await mountEditor();
+			fakeDraftClock();
+
+			await control(wrapper).setValue(entered);
+			await pauseEdits();
+
+			expect(writes()).toEqual([
+				[
+					'PUT',
+					token,
+					{ value: written },
+				],
+			]);
+		});
+
+		it('writes a dimension dragged by its label, once the drag pauses', async () => {
+			const wrapper = await mountEditor();
+			fakeDraftClock();
+			const label = field(wrapper, 'inset').get('[data-number-scrub]');
+
+			await label.trigger('pointerdown', { button: 0, pointerId: 1, clientX: 0 });
+			await label.trigger('pointermove', { pointerId: 1, clientX: 20 });
+			await label.trigger('pointerup', { pointerId: 1 });
+			await pauseEdits();
+
+			expect(writes()).toEqual([
+				[
+					'PUT',
+					'inset',
+					{ value: 10 },
+				],
+			]);
+		});
 	});
 });
