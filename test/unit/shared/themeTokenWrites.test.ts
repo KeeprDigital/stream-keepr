@@ -428,6 +428,38 @@ describe('a Theme Token write', () => {
 				'badge-shadow',
 			],
 		],
+		// Top Cut Bracket's, with a settled Bracket Position's border and the rule between its entrants (#1079).
+		[
+			'top-cut',
+			[
+				'title-typography',
+				'title-text',
+				'title-divider',
+				'round-name-typography',
+				'round-name-text',
+				'entrant-typography',
+				'primary-text',
+				'secondary-text',
+				'position-border',
+				'entrant-divider',
+				'champion-typography',
+			],
+		],
+		[
+			'talent',
+			[
+				'title-typography',
+				'title-text',
+				'title-divider',
+				'surface',
+				'accent',
+				'name-typography',
+				'name-text',
+				'detail-typography',
+				'role-text',
+				'profile-text',
+			],
+		],
 	])('accepts each typography and shared chrome token %s once declared, and drops it', (mode, tokens) => {
 		expect(tokens.map(token => parseThemeTokenWrite(`${mode}.${token}`, '#ff0000'))).toEqual(tokens.map(() => ({ ok: true, dropped: true })));
 	});

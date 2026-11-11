@@ -71,7 +71,6 @@ const entrantsSummary = computed(() => settingsSummary([
 			? 'By Nickname'
 			: 'By name'
 		: null,
-	lookOf('entrants'),
 ]));
 const bracketSummary = computed(() => settingsSummary([
 	lookOf('bracket'),
@@ -79,10 +78,7 @@ const bracketSummary = computed(() => settingsSummary([
 const championSummary = computed(() => settingsSummary([
 	lookOf('champion'),
 ], FOLLOWS_THE_THEME));
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	lookOf('header'),
-]));
+const headerCardSummary = computed(() => headerSummary(config.value));
 </script>
 
 <template>
@@ -150,8 +146,6 @@ const headerCardSummary = computed(() => settingsSummary([
 				description="Show each Player's archetype under their name, or their Deck List's deck name; blank when they have neither."
 				@update:model-value="updateConfig({ showArchetypes: $event === true })"
 			/>
-
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="entrants" />
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection id="top-cut:bracket" title="Bracket" :summary="bracketSummary">
@@ -170,8 +164,6 @@ const headerCardSummary = computed(() => settingsSummary([
 			show-description="Show a title above the bracket."
 			auto-description="Leave empty for the Phase's name."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 	</div>
 </template>

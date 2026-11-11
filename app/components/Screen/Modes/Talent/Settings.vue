@@ -203,7 +203,6 @@ const socialProfilesSummary = computed(() => {
 				description="Show each Talent's role, such as Host, below their name."
 				@update:model-value="updateConfig({ showRole: $event === true })"
 			/>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="layout" />
 		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
@@ -214,9 +213,7 @@ const socialProfilesSummary = computed(() => {
 			show-description="Show a title above the Talent."
 			:auto-description="`Leave empty for &quot;${TALENT_SCREEN_AUTO_HEADER_TEXT}&quot;.`"
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 
 		<ScreenSettingsSection id="talent:social-profiles" title="Social Profiles" :summary="socialProfilesSummary">
 			<ScreenSettingsField label="Networks" description="The Social Profiles shown, in this order.">
@@ -243,7 +240,6 @@ const socialProfilesSummary = computed(() => {
 				description="How long each Social Profile shows before the next."
 				@update:model-value="updateConfig({ socialProfileDwellMs: Number($event) })"
 			/>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="social-profiles" />
 		</ScreenSettingsSection>
 	</div>
 </template>

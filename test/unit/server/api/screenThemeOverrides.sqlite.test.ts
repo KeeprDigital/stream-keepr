@@ -140,16 +140,6 @@ describe('screen Theme Overrides', () => {
 		await expectOverrideStored('standings', token, value);
 	});
 
-	it('sets a typography Foundation Token on a Screen whose mode declares a typography Mode Token', async () => {
-		await expectOverrideStored('top-cut', 'heading', {
-			font: { kind: 'application', fontId: 'mplantin' },
-			weight: 400,
-			lineHeight: 1.2,
-			tracking: 0,
-			case: 'none',
-		});
-	});
-
 	// A graphics host's Graphic Items may bind any such Foundation Token (#831).
 	it.each([
 		[
@@ -163,6 +153,18 @@ describe('screen Theme Overrides', () => {
 			'feature-match-overlay',
 			'text-primary',
 			'#00ff00',
+		],
+		[
+			'a Broadcast Graphics Screen, its heading type',
+			'broadcast-graphics',
+			'heading',
+			{
+				font: { kind: 'application', fontId: 'mplantin' },
+				weight: 400,
+				lineHeight: 1.2,
+				tracking: 0,
+				case: 'none',
+			},
 		],
 		[
 			'a Feature Match Overlay Screen, its Frame surface',

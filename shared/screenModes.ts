@@ -44,9 +44,9 @@ import { pairingsFormerModeTokens, pairingsModeTokens } from './screenModeTokens
 import { playerHistoryFormerModeTokens, playerHistoryModeTokens } from './screenModeTokens/playerHistory';
 import { roundClockFormerModeTokens, roundClockModeTokens } from './screenModeTokens/roundClock';
 import { standingsFormerModeTokens, standingsModeTokens } from './screenModeTokens/standings';
-import { talentModeTokens } from './screenModeTokens/talent';
+import { talentFormerModeTokens } from './screenModeTokens/talent';
 import { topCardsFormerModeTokens, topCardsModeTokens } from './screenModeTokens/topCards';
-import { topCutModeTokens } from './screenModeTokens/topCut';
+import { topCutFormerModeTokens, topCutModeTokens } from './screenModeTokens/topCut';
 import { SCREEN_MODE_VALUES } from './types/enums';
 
 /**
@@ -370,6 +370,7 @@ const SCREEN_MODE_DEFINITIONS = {
 			roundStandings: followsTopCutPhase,
 		},
 		modeTokens: topCutModeTokens,
+		formerModeTokens: topCutFormerModeTokens,
 	},
 	'feature-match': {
 		label: 'Feature Match Controls',
@@ -574,7 +575,8 @@ const SCREEN_MODE_DEFINITIONS = {
 				return talentIds.length > 0 && { talentIds };
 			},
 		},
-		modeTokens: talentModeTokens,
+		themePreview: true,
+		formerModeTokens: talentFormerModeTokens,
 	},
 } as const satisfies Record<ScreenMode, ScreenModeDefinition>;
 
