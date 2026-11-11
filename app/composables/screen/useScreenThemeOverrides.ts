@@ -6,7 +6,7 @@ import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, resolveFoundationToken, resolv
 import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
 import { screenModeTokens } from '~~/shared/screenModes';
 import { themeTokenDefinition } from '~~/shared/themeTokens';
-import { screenBackgroundLayers } from '~/modules/screen-mode';
+import { screenBackgroundLayers } from '~/modules/screen-mode/modeTokens';
 
 /** One Theme Token as a Screen's settings page shows it. */
 export interface ScreenThemeTokenEntry {

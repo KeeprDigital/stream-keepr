@@ -33,7 +33,10 @@ const WASH: BackgroundLayer = {
 	opacity: 0.6,
 	color: '#0b1020',
 };
-const THEME_STACK: BackgroundLayer[] = [WASH, assetImageLayer('plate')];
+const THEME_STACK: BackgroundLayer[] = [
+	WASH,
+	assetImageLayer('plate'),
+];
 
 let network: ReturnType<typeof fakeScreenThemeNetwork>;
 
@@ -66,20 +69,37 @@ describe('a Screen\'s background source', () => {
 			'the Theme\'s stack, read-only, while the Screen holds none',
 			[],
 			THEME_STACK,
-			{ source: 'theme', themeLayers: ['color', 'image'], editor: null, actions: ['Customise for this Screen'] },
+			{
+				source: 'theme',
+				themeLayers: ['color', 'image'],
+				editor: null,
+				actions: ['Customise for this Screen'],
+			},
 		],
 		[
 			'the Screen\'s own stack, editable, while it holds one',
-			[assetImageLayer('own')],
+			[
+				assetImageLayer('own'),
+			],
 			THEME_STACK,
-			{ source: 'screen', themeLayers: [], editor: 'own', actions: ['Reset to Theme'] },
+			{
+				source: 'screen',
+				themeLayers: [],
+				editor: 'own',
+				actions: ['Reset to Theme'],
+			},
 		],
 		// Nothing to copy: the Screen starts its own stack from the editor.
 		[
 			'an empty editor while neither holds a layer',
 			[],
 			[],
-			{ source: 'theme', themeLayers: [], editor: '', actions: [] },
+			{
+				source: 'theme',
+				themeLayers: [],
+				editor: '',
+				actions: [],
+			},
 		],
 	])('shows %s', async (_case, own, themeStack, expected) => {
 		const { wrapper } = await mountSource(own, themeStack);
@@ -115,7 +135,9 @@ describe('a Screen\'s background source', () => {
 		],
 		[
 			'Reset to Theme writes the empty stack',
-			[assetImageLayer('own')],
+			[
+				assetImageLayer('own'),
+			],
 			'Reset to Theme',
 			[],
 		],
