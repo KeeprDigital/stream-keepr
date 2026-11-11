@@ -2,12 +2,13 @@ import type { FeatureMatchLayoutEditorLayer } from '~~/app/modules/feature-match
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
+import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~~/app/modules/feature-match-overlay/editorHost';
 import {
 	isLayerLocked,
 	isLockedByGroup,
 	lockedLayers,
 	toggleLayerLocks,
-} from '~~/app/modules/feature-match-overlay/layerLocks';
+} from '~~/app/modules/graphics/editor/layerLocks';
 import { addGraphicGroupChild, addGraphicItem, flattenGraphicItems } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { withLayersLocked } from '~~/test/helpers/featureMatchLayoutDocument';
@@ -90,7 +91,7 @@ describe('feature match layout layer locks', () => {
 			false,
 		],
 	])('reads %s as locked: %s → %s', (_, locked, id, expected) => {
-		expect(isLayerLocked(layout(locked), layer(id))).toBe(expected);
+		expect(isLayerLocked(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout(locked), layer(id))).toBe(expected);
 	});
 
 	it.each<[string, string[], string, boolean]>([
@@ -113,7 +114,7 @@ describe('feature match layout layer locks', () => {
 			false,
 		],
 	])('says whether %s is locked by its group', (_, locked, id, byGroup) => {
-		expect(isLockedByGroup(layout(locked), layer(id))).toBe(byGroup);
+		expect(isLockedByGroup(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout(locked), layer(id))).toBe(byGroup);
 	});
 
 	it.each<[string, string[], string[], Record<string, unknown>]>([
@@ -154,19 +155,19 @@ describe('feature match layout layer locks', () => {
 			{ g1: true },
 		],
 	])('%s', (_, locked, ids, expected) => {
-		expect(storedLocks(toggleLayerLocks(layout(locked), ids.map(layer)))).toEqual(expected);
+		expect(storedLocks(toggleLayerLocks(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout(locked), ids.map(layer)))).toEqual(expected);
 	});
 
 	it('writes nothing toggling a child locked only through its group', () => {
 		const locked = layout(['g']);
 
-		expect(toggleLayerLocks(locked, [
+		expect(toggleLayerLocks(FEATURE_MATCH_LAYOUT_EDITOR_TREE, locked, [
 			layer('g1'),
 		])).toBe(locked);
 	});
 
 	it('lists every locked layer of the layout, a locked group\'s children included', () => {
-		expect(lockedLayers(layout(['g', 's1']))).toEqual([
+		expect(lockedLayers(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout(['g', 's1']))).toEqual([
 			layer('g'),
 			layer('g1'),
 			layer('g2'),

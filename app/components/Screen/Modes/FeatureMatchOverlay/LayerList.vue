@@ -3,9 +3,9 @@ import type { DropdownMenuItem } from '@nuxt/ui';
 import type { GraphicItemPlacementRefusal } from '~~/shared/modules/graphics';
 import type { GraphicItemConfig, GraphicItemKind } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
-import type { FeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
+import type { FeatureMatchLayoutEditor } from '~/modules/feature-match-overlay/editorHost';
 import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
-import type { LayerDrop } from '~/modules/feature-match-overlay/layerDrag';
+import type { LayerDrop } from '~/modules/graphics/editor/layerDrag';
 import { FEATURE_MATCH_SOURCE_ITEM_ICON } from '~~/shared/featureMatchSourceItems';
 import {
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
@@ -14,10 +14,11 @@ import {
 	graphicItemIcon,
 	graphicItemKindLabel,
 } from '~~/shared/modules/graphics';
+import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~/modules/feature-match-overlay/editorHost';
 import { editorSelectionKey } from '~/modules/feature-match-overlay/editorSelection';
-import { layerDropAt, layerGroupMoves } from '~/modules/feature-match-overlay/layerDrag';
-import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/layerGrouping';
-import { isLayerSelected } from '~/modules/feature-match-overlay/layerSelection';
+import { layerDropAt, layerGroupMoves } from '~/modules/graphics/editor/layerDrag';
+import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/graphics/editor/layerGrouping';
+import { isLayerSelected } from '~/modules/graphics/editor/layerSelection';
 import { isSelectionToggle } from '~/modules/graphics/selection';
 
 /**
@@ -142,7 +143,7 @@ const severalSelected = computed(() => props.editor.layers.value.length > 1);
 const canvasSelected = computed(() => props.editor.layers.value.length === 0);
 
 function isSelected(row: LayerRow) {
-	return isLayerSelected(props.editor.layers.value, row.target);
+	return isLayerSelected(FEATURE_MATCH_LAYOUT_EDITOR_TREE, props.editor.layers.value, row.target);
 }
 
 /** A plain click selects the row alone; Shift selects a run, and ⌘ or Ctrl adds or takes out one. */
@@ -168,7 +169,7 @@ const addMenu = computed<DropdownMenuItem[][]>(() => {
 			{
 				label: 'Source Item',
 				icon: FEATURE_MATCH_SOURCE_ITEM_ICON,
-				onSelect: () => props.editor.addSource(),
+				onSelect: () => props.editor.addHostLayer(),
 			},
 		],
 	];
@@ -204,7 +205,7 @@ const REFUSALS: Record<GraphicItemPlacementRefusal, string> = {
 
 /** "Move to group": the keyboard's way into or out of a Graphic Group (#741). */
 function moveToGroupMenu(row: LayerRow): DropdownMenuItem[][] {
-	const moves = layerGroupMoves(props.layout, row.target);
+	const moves = layerGroupMoves(FEATURE_MATCH_LAYOUT_EDITOR_TREE, props.layout, row.target);
 	if (moves.length === 0)
 		return [];
 	return [
@@ -468,7 +469,7 @@ const LAYER_DRAG_TYPE = 'application/x-stream-keepr-layer';
 /** The row being dragged, alone: v1 drags a single row. */
 const dragged = shallowRef<LayerRow | null>(null);
 /** Where the row would land, as the last dragover found it. */
-const drop = shallowRef<LayerDrop | null>(null);
+const drop = shallowRef<LayerDrop<FeatureMatchLayoutEditorLayer> | null>(null);
 
 function startDrag(event: DragEvent, row: LayerRow) {
 	if (!writable.value || renaming.value?.key === row.key) {
@@ -493,7 +494,7 @@ function dragOver(event: DragEvent, row: LayerRow) {
 	const fraction = box.height > 0
 		? (event.clientY - box.top) / box.height
 		: 0;
-	drop.value = layerDropAt(props.layout, from.target, row.target, fraction);
+	drop.value = layerDropAt(FEATURE_MATCH_LAYOUT_EDITOR_TREE, props.layout, from.target, row.target, fraction);
 	if (drop.value && !drop.value.refusal) {
 		event.preventDefault();
 		if (event.dataTransfer)
@@ -545,7 +546,7 @@ const dropRefusal = computed(() => drop.value?.refusal
  * the layer in, and a line reaching out to the group's own indent below its last
  * child. Red where the drop is refused. Whole class names, for Tailwind to find.
  */
-const DROP_INDICATOR_CLASSES: Record<LayerDrop['edge'], { open: string; refused: string }> = {
+const DROP_INDICATOR_CLASSES: Record<LayerDrop<FeatureMatchLayoutEditorLayer>['edge'], { open: string; refused: string }> = {
 	'top': {
 		open: 'shadow-[inset_0_2px_0_var(--ui-primary)]',
 		refused: 'shadow-[inset_0_2px_0_var(--ui-error)]',

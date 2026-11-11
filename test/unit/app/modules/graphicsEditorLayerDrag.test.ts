@@ -1,10 +1,10 @@
 import type { FeatureMatchLayoutEditorLayer } from '~~/app/modules/feature-match-overlay/editorSelection';
-import type { LayerDrop, LayerPlace } from '~~/app/modules/feature-match-overlay/layerDrag';
+import type { LayerDrop, LayerPlace } from '~~/app/modules/graphics/editor/layerDrag';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
-import { dropLayer, layerDropAt, layerGroupMoves } from '~~/app/modules/feature-match-overlay/layerDrag';
-import { layerOrder } from '~~/app/modules/feature-match-overlay/layerSelection';
+import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~~/app/modules/feature-match-overlay/editorHost';
+import { dropLayer, layerDropAt, layerGroupMoves } from '~~/app/modules/graphics/editor/layerDrag';
 import { addGraphicGroupChild, addGraphicItem, findGraphicItem, patchGraphicItem } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
@@ -47,7 +47,7 @@ function layer(id: string): FeatureMatchLayoutEditorLayer {
 }
 
 function order(next: FeatureMatchLayoutConfig) {
-	return layerOrder(next).map(entry => entry.itemId);
+	return FEATURE_MATCH_LAYOUT_EDITOR_TREE.order(next).map(entry => entry.itemId);
 }
 
 function parentOf(next: FeatureMatchLayoutConfig, id: string) {
@@ -56,7 +56,7 @@ function parentOf(next: FeatureMatchLayoutConfig, id: string) {
 
 describe('feature match layout layer drag', () => {
 	// The row's upper part puts it in front, the lower part behind; a group's lower part takes it in.
-	it.each<[string, string, string, number, Pick<LayerDrop, 'row' | 'edge' | 'place'> | null]>([
+	it.each<[string, string, string, number, Pick<LayerDrop<FeatureMatchLayoutEditorLayer>, 'row' | 'edge' | 'place'> | null]>([
 		[
 			'a row\'s upper half puts it in front',
 			'top',
@@ -202,7 +202,7 @@ describe('feature match layout layer drag', () => {
 			null,
 		],
 	])('%s', (_case, dragged, over, fraction, expected) => {
-		const drop = layerDropAt(LAYOUT, layer(dragged), layer(over), fraction);
+		const drop = layerDropAt(FEATURE_MATCH_LAYOUT_EDITOR_TREE, LAYOUT, layer(dragged), layer(over), fraction);
 
 		if (expected)
 			expect(drop).toMatchObject({ ...expected, refusal: null });
@@ -212,7 +212,7 @@ describe('feature match layout layer drag', () => {
 
 	const SOURCE_ITEMS = ['s1', 's2'];
 
-	it.each<[string, string, LayerPlace, string[], string[], Record<string, string | null>]>([
+	it.each<[string, string, LayerPlace<FeatureMatchLayoutEditorLayer>, string[], string[], Record<string, string | null>]>([
 		[
 			'into a group, at its front',
 			'top',
@@ -266,7 +266,7 @@ describe('feature match layout layer drag', () => {
 			{},
 		],
 	])('drops a row %s', (_case, dragged, place, items, sources, parents) => {
-		const next = dropLayer(LAYOUT, layer(dragged), place);
+		const next = dropLayer(FEATURE_MATCH_LAYOUT_EDITOR_TREE, LAYOUT, layer(dragged), place);
 
 		expect(order(next).filter(id => !id.startsWith('s'))).toEqual(items);
 		expect(next.sources.map(source => source.id)).toEqual(sources);
@@ -281,11 +281,11 @@ describe('feature match layout layer drag', () => {
 	])('refuses a rotated item dropped on %s at %s, with its reason', (over, fraction) => {
 		const rotated = layout({ topRotation: 15 });
 
-		expect(layerDropAt(rotated, layer('top'), layer(over), fraction)?.refusal).toBe('rotated-into-arranged-group');
-		expect(dropLayer(rotated, layer('top'), { kind: 'into', groupId: 'a' })).toBe(rotated);
+		expect(layerDropAt(FEATURE_MATCH_LAYOUT_EDITOR_TREE, rotated, layer('top'), layer(over), fraction)?.refusal).toBe('rotated-into-arranged-group');
+		expect(dropLayer(FEATURE_MATCH_LAYOUT_EDITOR_TREE, rotated, layer('top'), { kind: 'into', groupId: 'a' })).toBe(rotated);
 	});
 
-	it.each<[string, string, LayerPlace]>([
+	it.each<[string, string, LayerPlace<FeatureMatchLayoutEditorLayer>]>([
 		[
 			'a Graphic Item',
 			'top',
@@ -303,11 +303,11 @@ describe('feature match layout layer drag', () => {
 			},
 		],
 	])('answers the same layout when %s is dropped where it already is', (_case, dragged, place) => {
-		expect(dropLayer(LAYOUT, layer(dragged), place)).toBe(LAYOUT);
+		expect(dropLayer(FEATURE_MATCH_LAYOUT_EDITOR_TREE, LAYOUT, layer(dragged), place)).toBe(LAYOUT);
 	});
 
 	// Groups are labelled in the order they were added: `b` Group 1, `a` Group 2, `e` Group 3.
-	it.each<[string, string, { topRotation?: number }, Array<[string, LayerPlace, string | null]>]>([
+	it.each<[string, string, { topRotation?: number }, Array<[string, LayerPlace<FeatureMatchLayoutEditorLayer>, string | null]>]>([
 		[
 			'a child: out of its group in front of it, then every other group front to back',
 			'a1',
@@ -363,6 +363,6 @@ describe('feature match layout layer drag', () => {
 		],
 		['a Source Item: nothing', 's1', {}, []],
 	])('offers "Move to group" for %s', (_case, id, options, moves) => {
-		expect(layerGroupMoves(layout(options), layer(id))).toEqual(moves.map(([label, place, refusal]) => ({ label, place, refusal })));
+		expect(layerGroupMoves(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout(options), layer(id))).toEqual(moves.map(([label, place, refusal]) => ({ label, place, refusal })));
 	});
 });

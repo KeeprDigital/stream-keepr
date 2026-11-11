@@ -6,7 +6,8 @@ import { defineComponent, ref } from 'vue';
 import { addGraphicGroupChild, addGraphicItem, findGraphicItem, patchGraphicItem } from '~~/shared/modules/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import LayerList from '~/components/Screen/Modes/FeatureMatchOverlay/LayerList.vue';
-import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
+import { useGraphicsEditor } from '~/composables/useGraphicsEditor';
+import { featureMatchLayoutEditorHost } from '~/modules/feature-match-overlay/editorHost';
 
 /**
  * The Feature Match Layout's one layer list: Graphic Items, then Source Items,
@@ -66,13 +67,13 @@ async function mountList({ writable = true } = {}) {
 			...patch,
 		};
 	};
-	const editor = useFeatureMatchLayoutEditor({
+	const editor = useGraphicsEditor(featureMatchLayoutEditorHost({
 		config,
 		updateConfig,
 		canvasWidth: 1920,
 		canvasHeight: 1080,
 		writable,
-	});
+	}));
 	const wrapper = mount(LayerList, {
 		props: {
 			layout: config.value.layout,

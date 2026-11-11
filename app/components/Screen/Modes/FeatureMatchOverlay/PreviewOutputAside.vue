@@ -2,7 +2,7 @@
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import type { EditorSelectionFrame } from '~/modules/feature-match-overlay/editorSelection';
+import type { EditorSelectionFrame } from '~/modules/graphics/editor/layerFrame';
 import type { GraphicsPreviewAnimationPlan } from '~/modules/graphics/previewMessages';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
