@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useElementSize } from '@vueuse/core';
-import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { cardBadgeTextSize, DECK_AUTO_BADGE_RATIOS } from '~~/shared/utils/cardBadgeSize';
 import { CARD_ASPECT } from '~~/shared/utils/cardGrid';
 import { solveDeckGroups } from '~~/shared/utils/deckLayout';
 import { ninePointPlacement } from '~~/shared/utils/ninePoints';
@@ -102,7 +103,7 @@ const costCurveMax = computed(() => Math.max(1, ...costCurve.value.map(bucket =>
 const quantityPositionClass = computed(() =>
 	CARD_BADGE_POSITION_CLASSES[config.value.quantityPosition ?? DEFAULT_QUANTITY_POSITION]);
 const quantityBadgeStyle = computed(() => ({
-	fontSize: `${config.value.quantityBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.quantityBadgeSize}px`,
+	fontSize: `${cardBadgeTextSize(config.value.quantityBadgeSize, solved.value.cardWidth, DECK_AUTO_BADGE_RATIOS.quantityBadgeSize)}px`,
 	width: '1.75em',
 	height: '1.75em',
 	color: modeTokenVar('deck', 'quantity-badge-text'),

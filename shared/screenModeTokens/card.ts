@@ -6,7 +6,8 @@ export type CardSettingsGroup = 'card';
 /** How the Card Spotlight Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const cardModeTokens = {
 	// How the card enters and, reversed, leaves: the zoom and fade it shipped with.
-	// A recipe with no channel cuts. A Theme may point it at a motion Foundation Token.
+	// A recipe with no channel cuts. Its quicker pace matches no Foundation
+	// motion, so it keeps its own.
 	motion: {
 		type: 'animation-recipe',
 		label: 'Card enter and exit',
