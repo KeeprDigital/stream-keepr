@@ -41,6 +41,7 @@ const placeholderStyle = {
 			</div>
 			<div
 				v-if="showQuantity && card.quantity > 1"
+				data-testid="op-deck-quantity-badge"
 				class="absolute font-bold rounded-full flex items-center justify-center"
 				:class="quantityPositionClass"
 				:style="quantityBadgeStyle"

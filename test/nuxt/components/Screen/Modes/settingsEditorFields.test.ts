@@ -312,6 +312,8 @@ const stubs = {
 		setup: (_, { slots }) => () => h('section', slots.default?.()),
 	}),
 	ScreenSettingsToggle: controlStub('toggle', props => !props.modelValue),
+	// A bare switch, as a card badge's row shows it, named by its field.
+	USwitch: controlStub('toggle', props => !props.modelValue),
 	UFormField: UFormFieldStub,
 	UInputNumber: controlStub('number', props => (Number(props.modelValue) || 0) + 1),
 	USelect: controlStub('select', differentItem),
