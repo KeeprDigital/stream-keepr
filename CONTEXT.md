@@ -774,12 +774,12 @@ An author's lock on one layer of a Feature Match Layout or a Broadcast Graphic, 
 _Avoid_: Frozen layer, pinned layer
 
 **Feature Match Overlay Preset**:
-A built-in starting point that initializes a Feature Match Layout.
-_Avoid_: Template when referring to the whole layout preset.
+Former term. The built-in starting layouts are built-in **Feature Match Layout Templates** now, and a Screen records none of them.
+_Avoid_: Preset for a built-in layout; say built-in Feature Match Layout Template.
 
 **Feature Match Layout Template**:
-A user-created reusable Feature Match Layout that can be copied into a Screen's Feature Match Overlay configuration. It carries no Feature Match Slot assignment, and placing one replaces the Screen's whole layout as an unlinked copy.
-_Avoid_: Preset when referring to user-owned reusable layouts.
+A reusable Feature Match Layout that can be copied into a Screen's Feature Match Overlay configuration: one an author saved, one a Template Package installed, or a built-in one the application ships. It carries no Feature Match Slot assignment, and placing one replaces the Screen's whole layout as an unlinked copy. A built-in one is marked as such, is placed like any other, and cannot be revised, removed or exported.
+_Avoid_: Preset
 
 **Feature Match Layout Host Vocabulary**:
 The terms a Feature Match Layout uses whose meaning the installation supplies: Source Roles and Feature Match tokens a Graphic Text Template binds. Each is closed and pinned by the layout format version, so a package naming an unimplemented term is refused. The Frame's Animation Effect was one until it became a Mode Token; its identity is still recognised.
@@ -1005,5 +1005,5 @@ _Avoid_: worst-case data, overflow data
 - A **Feature Match Overlay** renders exactly one **Feature Match Layout** for exactly one **Feature Match Slot**
 - A **Feature Match Layout** has exactly one **Feature Match Overlay Frame** and one or more **Graphic Items**
 - A **Source Item** may cut through the **Feature Match Overlay Frame**
-- A **Feature Match Overlay Preset** initializes a **Feature Match Layout**; a **Feature Match Layout Template** stores a reusable one
+- A **Feature Match Layout Template** stores a reusable **Feature Match Layout**; a built-in one ships with the application and is stored nowhere
 - A **Feature Match Layout** declares its **Feature Match Layout Host Vocabulary** to a **Template Package** and never carries an Event identity

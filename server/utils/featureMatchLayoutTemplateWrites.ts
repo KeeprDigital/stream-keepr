@@ -1,7 +1,10 @@
 import type { H3Event } from 'h3';
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
-import { findFeatureMatchLayoutTemplateLibraryEntry } from '~~/server/modules/feature-match-layout-template-library';
+import {
+	findBuiltInFeatureMatchLayoutTemplate,
+	findFeatureMatchLayoutTemplateLibraryEntry,
+} from '~~/server/modules/feature-match-layout-template-library';
 import { assertGraphicsTemplateReferencesSelectable } from '~~/server/utils/graphicsTemplateReferences';
 import { featureMatchLayoutGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
@@ -19,6 +22,28 @@ export async function assertFeatureMatchLayoutTemplateReferencesSelectable(
 		featureMatchLayoutGraphicAssetReferences(document),
 		'Feature Match Layout Template',
 	);
+}
+
+/**
+ * Refuse to revise, remove or export a built-in Feature Match Layout Template.
+ *
+ * A built-in is stored nowhere, so there is no record to revise or remove, and it
+ * ships with every installation, so a Template Package of one would install a
+ * second copy of a layout the receiver already has. Asked before anything else a
+ * route does, so the refusal never depends on what the stores happen to hold.
+ */
+export function refuseBuiltInFeatureMatchLayoutTemplate(
+	templateId: string,
+	action: 'revised' | 'removed' | 'exported',
+): void {
+	const builtIn = findBuiltInFeatureMatchLayoutTemplate(templateId);
+	if (!builtIn)
+		return;
+	throw createError({
+		statusCode: 409,
+		statusMessage: 'Conflict',
+		message: `Feature Match Layout Template "${builtIn.name}" is built in and cannot be ${action}. Place it on a Screen and save the placed layout to get a design this installation owns.`,
+	});
 }
 
 /**

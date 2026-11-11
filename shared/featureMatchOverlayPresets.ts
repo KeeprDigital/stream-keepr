@@ -29,10 +29,11 @@ import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, graphicThemeOwnerS
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from './screenGraphicsDefaults';
 
 /**
- * The built-in Feature Match Overlay Presets, recreated on the Shared Graphics
- * Foundation.
+ * The built-in Feature Match Layout Templates, which the Templates library lists
+ * beside the saved and installed ones (ADR-0079). They were the Feature Match
+ * Overlay Presets, and this module keeps that name for them.
  *
- * A preset initialises a whole Feature Match Layout: the host-owned Frame and
+ * Each is a whole Feature Match Layout: the host-owned Frame and
  * Source Items, and the shared Graphic Item tree. Nothing is carried over from a
  * legacy widget list, because there is none — the database is wiped before ship
  * and nothing is migrated.
@@ -171,7 +172,6 @@ function playerLifePill(side: PlayerSide, prefix: string, rect: { x: number; y: 
 
 function leftStackedPlayerCamsConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'> {
 	return {
-		presetId: 'left-stacked-player-cams',
 		layout: {
 			frame: {
 				opacity: 1,
@@ -420,7 +420,6 @@ function fullTableConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'
 	});
 
 	return {
-		presetId: 'full-table',
 		layout: {
 			...base.layout,
 			sources,
@@ -643,7 +642,6 @@ function neonPlayerBarChildren() {
 
 function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'> {
 	return {
-		presetId: 'neon-feature-match',
 		layout: {
 			frame: {
 				opacity: 1,
@@ -928,24 +926,3 @@ export const FEATURE_MATCH_OVERLAY_PRESETS: FeatureMatchOverlayPreset[] = [
 		config: themeBoundConfig(neonFeatureMatchConfig()),
 	},
 ];
-
-function getFeatureMatchOverlayPreset(id: FeatureMatchOverlayPresetId): FeatureMatchOverlayPreset {
-	return FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === id) ?? FEATURE_MATCH_OVERLAY_PRESETS[0]!;
-}
-
-/**
- * A Feature Match Overlay Preset initialises a Feature Match Layout.
- *
- * The whole layout: the Frame, the host-owned Source Items, and the shared item
- * tree. Nothing is carried across any more — a preset owns every part of the
- * layout, so applying one replaces the design and nothing else. Only the selected
- * Feature Match Slot survives, because it says what the Screen is pointing at
- * rather than what it looks like.
- */
-export function applyFeatureMatchOverlayPreset(current: FeatureMatchOverlayModeConfig, presetId: FeatureMatchOverlayPresetId): FeatureMatchOverlayModeConfig {
-	return {
-		...structuredClone(getFeatureMatchOverlayPreset(presetId).config),
-		featureMatchId: current.featureMatchId,
-		presetId,
-	};
-}
