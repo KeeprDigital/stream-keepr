@@ -164,7 +164,7 @@ async function mountPage(stubOverrides: Record<string, unknown> = {}) {
 				USeparator: true,
 				UModal: UModalStub,
 				UAlert: true,
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsCardStub,
 				ScreenThemeTokensSettings: ThemeTokensSettingsStub,
 				...stubOverrides,
 			},

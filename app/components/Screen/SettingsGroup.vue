@@ -17,9 +17,9 @@ const headingId = useId();
 		class="group/settings-group flex flex-col gap-4"
 	>
 		<USeparator class="group-first/settings-group:hidden" />
-		<h4 :id="headingId" class="text-xs font-semibold uppercase tracking-wider text-muted">
+		<ScreenSettingsSubheading :id="headingId">
 			{{ title }}
-		</h4>
+		</ScreenSettingsSubheading>
 		<slot />
 	</section>
 </template>

@@ -131,7 +131,7 @@ async function mountLibrary(props: Record<string, unknown> = {}) {
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsCardStub,
 				UIEmptyState: UIEmptyStateStub,
 				UAlert: UAlertStub,
 				UIcon: UIconStub,

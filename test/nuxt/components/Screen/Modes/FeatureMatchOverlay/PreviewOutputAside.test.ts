@@ -46,7 +46,7 @@ function mountAside(props: {
 				...nuxtUiStubs,
 				// Its popovers open by default here, so every hand-out control is on screen.
 				UPopover: { template: '<div><slot /><slot name="content" /></div>' },
-				ScreenSettingsCard: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
+				ScreenSettingsSection: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
 				GraphicsCanvasManipulationOverlay: true,
 			},
 		},

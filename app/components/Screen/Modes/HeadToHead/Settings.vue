@@ -69,7 +69,7 @@ onMounted(async () => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="head-to-head:players" title="Players" :collapsible="false">
+		<ScreenSettingsSection id="head-to-head:players" title="Players" :collapsible="false">
 			<ScreenConfigField
 				:field="fields.playerSource"
 				:model-value="config.playerSource"
@@ -111,9 +111,9 @@ onMounted(async () => {
 					/>
 				</ScreenSettingsField>
 			</template>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="head-to-head:player-details" title="Player Details" :summary="playerDetailsSummary">
+		<ScreenSettingsSection id="head-to-head:player-details" title="Player Details" :summary="playerDetailsSummary">
 			<ScreenConfigField
 				:field="fields.showPronouns"
 				:model-value="config.showPronouns"
@@ -130,11 +130,11 @@ onMounted(async () => {
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="player-details" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="head-to-head:earlier-matches" title="Earlier Matches" :summary="earlierMatchesSummary">
+		<ScreenSettingsSection id="head-to-head:earlier-matches" title="Earlier Matches" :summary="earlierMatchesSummary">
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="earlier-matches" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
 			id="head-to-head:header"

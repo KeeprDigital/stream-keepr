@@ -41,7 +41,7 @@ const cardSummary = computed(() => settingsSummary([
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="card:feature-match-slot" title="Feature Match Slot" :collapsible="false">
+		<ScreenSettingsSection id="card:feature-match-slot" title="Feature Match Slot" :collapsible="false">
 			<ScreenSettingsField
 				label="Feature Match Slot"
 				description="Optionally link a Slot, whose Deck Lists then load on the card search page."
@@ -57,9 +57,9 @@ const cardSummary = computed(() => settingsSummary([
 			<p v-if="!hasMatchBinding" class="text-sm text-muted">
 				No match linked. Cards can still be pushed to this screen from the card search page.
 			</p>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="card:card" title="Card" :summary="cardSummary">
+		<ScreenSettingsSection id="card:card" title="Card" :summary="cardSummary">
 			<ScreenConfigField
 				:field="fields.cardWidth"
 				:model-value="config.cardWidth"
@@ -68,6 +68,6 @@ const cardSummary = computed(() => settingsSummary([
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="card" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 	</div>
 </template>

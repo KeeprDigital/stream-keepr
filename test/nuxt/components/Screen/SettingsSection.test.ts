@@ -2,12 +2,12 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { h } from 'vue';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import SettingsCard from '~/components/Screen/SettingsCard.vue';
+import SettingsSection from '~/components/Screen/SettingsSection.vue';
 
 enableAutoUnmount(afterEach);
 
 function mountCard(props: Record<string, unknown> = {}) {
-	return mount(SettingsCard, {
+	return mount(SettingsSection, {
 		props: { title: 'Card Badges', ...props },
 		slots: {
 			default: () => h('input', { 'data-testid': 'field' }),
@@ -21,7 +21,7 @@ function toggle(wrapper: ReturnType<typeof mountCard>) {
 	return wrapper.find('button[aria-expanded]');
 }
 
-describe('screenSettingsCard', () => {
+describe('screenSettingsSection, as a page card', () => {
 	beforeEach(() => {
 		localStorage.clear();
 	});
@@ -132,7 +132,7 @@ describe('screenSettingsCard', () => {
 	});
 
 	it('shows a summary slot in the closed header', async () => {
-		const wrapper = mount(SettingsCard, {
+		const wrapper = mount(SettingsSection, {
 			props: { title: 'Card Badges', defaultOpen: false },
 			slots: {
 				summary: () => h('span', 'Rarity on'),
@@ -161,5 +161,93 @@ describe('screenSettingsCard', () => {
 
 		await toggle(wrapper).trigger('click');
 		expect(toggle(wrapper).attributes('aria-expanded')).toBe('true');
+	});
+});
+
+/** The row density: one section of a property panel, remembered by section id rather than per item. */
+describe('screenSettingsSection, as an inspector row', () => {
+	beforeEach(() => {
+		localStorage.clear();
+	});
+
+	function mountRow(props: { id?: string; defaultOpen?: boolean; summary?: string } = {}) {
+		return mount(SettingsSection, {
+			props: {
+				density: 'row',
+				id: props.id ?? 'typography',
+				title: 'Text style',
+				summary: props.summary,
+				defaultOpen: props.defaultOpen,
+			},
+			slots: {
+				default: () => h('input', { 'data-testid': 'field' }),
+			},
+			global: {
+				stubs: { UIcon: true },
+			},
+		});
+	}
+
+	// A closed row hides its body rather than unmounting it.
+	function shown(wrapper: ReturnType<typeof mountRow>, id = 'typography') {
+		return !(wrapper.get(`[data-testid="inspector-section-${id}"]`).attributes('style') ?? '').includes('display: none');
+	}
+
+	it('starts closed, showing its summary, and opens over it', async () => {
+		const wrapper = mountRow({ summary: '30px · 800' });
+		await flushPromises();
+		expect(shown(wrapper)).toBe(false);
+		expect(wrapper.text()).toContain('30px · 800');
+		expect(wrapper.get('button').attributes('aria-expanded')).toBe('false');
+
+		await wrapper.get('[data-testid="inspector-section-typography-toggle"]').trigger('click');
+
+		expect(shown(wrapper)).toBe(true);
+		expect(wrapper.text()).not.toContain('30px · 800');
+		expect(wrapper.get('button').attributes('aria-expanded')).toBe('true');
+	});
+
+	it('remembers an opened section for the next item that shows it', async () => {
+		const first = mountRow();
+		await flushPromises();
+		await first.get('[data-testid="inspector-section-typography-toggle"]').trigger('click');
+		first.unmount();
+
+		const next = mountRow();
+		await flushPromises();
+
+		expect(shown(next)).toBe(true);
+	});
+
+	it('starts open where its host asks', async () => {
+		const wrapper = mountRow({ id: 'layout', defaultOpen: true });
+		await flushPromises();
+
+		expect(shown(wrapper, 'layout')).toBe(true);
+	});
+
+	// The defaults changed, so what a browser remembered under them is not carried over.
+	it('ignores open state remembered before sections started closed', async () => {
+		localStorage.setItem('editor-inspectorSections', JSON.stringify({ typography: true }));
+
+		const wrapper = mountRow();
+		await flushPromises();
+
+		expect(shown(wrapper)).toBe(false);
+	});
+
+	it('keeps what a page card of the same id remembers apart', async () => {
+		const row = mountRow();
+		await flushPromises();
+		await row.get('[data-testid="inspector-section-typography-toggle"]').trigger('click');
+		row.unmount();
+
+		const card = mount(SettingsSection, {
+			props: { title: 'Text style', id: 'typography', defaultOpen: false },
+			global: { stubs: nuxtUiStubs },
+		});
+		await flushPromises();
+
+		expect(card.get('button[aria-expanded]').attributes('aria-expanded')).toBe('false');
 	});
 });

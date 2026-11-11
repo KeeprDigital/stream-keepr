@@ -84,7 +84,7 @@ async function mountComponent(overrides: Partial<{
 		global: {
 			stubs: {
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
-				FeatureMatchOverlayControlSection: ControlSectionStub,
+				ScreenSettingsSection: ControlSectionStub,
 				FeatureMatchOverlayFrameStyleCard: defineComponent({ template: '<div data-testid="frame-style-card" />' }),
 				GraphicsGeometryFields: GeometryFieldsStub,
 				FeatureMatchOverlaySourceFramingStyleFields: defineComponent({

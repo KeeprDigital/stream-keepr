@@ -58,7 +58,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="pairings:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="pairings:data" title="Data" :collapsible="false">
 			<ScreenRoundField
 				:model-value="config.roundId"
 				null-label="Select a round…"
@@ -66,15 +66,15 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 				:event-id="eventId"
 				@update:model-value="updateConfig({ roundId: $event, currentPage: 1 })"
 			/>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard id="pairings:table" title="Table" :summary="tableSummary">
+		<ScreenSettingsSection id="pairings:table" title="Table" :summary="tableSummary">
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="table" />
 
 			<ScreenSettingsGroup title="Result Badge">
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="result-badge" />
 			</ScreenSettingsGroup>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
 			id="pairings:header"

@@ -5,7 +5,6 @@ import type { Screen } from '~/types';
 import GraphicsGeometryFields from '~/components/Graphics/GeometryFields.vue';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import { appearanceSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
-import FeatureMatchOverlayControlSection from './ControlSection.vue';
 import FeatureMatchOverlaySourceFramingStyleFields from './SourceFramingStyleFields.vue';
 
 const props = defineProps<{
@@ -33,7 +32,9 @@ const SOURCE_ROLE_OPTIONS = [
 
 <template>
 	<div class="min-w-0">
-		<FeatureMatchOverlayControlSection
+		<ScreenSettingsSection
+			id="feature-match-overlay-details"
+			density="row"
 			title="Details"
 			:summary="item.label"
 		>
@@ -45,9 +46,11 @@ const SOURCE_ROLE_OPTIONS = [
 					@update:model-value="editor.updateSource(item.id, { label: String($event) })"
 				/>
 			</UFormField>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection
+		<ScreenSettingsSection
+			id="feature-match-overlay-bounds"
+			density="row"
 			title="Bounds"
 			:summary="rectSummary(item)"
 			default-open
@@ -60,9 +63,11 @@ const SOURCE_ROLE_OPTIONS = [
 				@update:anchor="anchor => editor.updateSource(item.id, { anchor })"
 				@update="patch => editor.updateSource(item.id, patch)"
 			/>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection
+		<ScreenSettingsSection
+			id="feature-match-overlay-content"
+			density="row"
 			title="Content"
 			:summary="item.sourceRole || 'Video source'"
 			default-open
@@ -91,9 +96,11 @@ const SOURCE_ROLE_OPTIONS = [
 					/>
 				</UFormField>
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection
+		<ScreenSettingsSection
+			id="feature-match-overlay-appearance"
+			density="row"
 			title="Appearance"
 			:summary="appearanceSummary(item.framingStyle)"
 		>
@@ -105,6 +112,6 @@ const SOURCE_ROLE_OPTIONS = [
 				<!-- Every Source Item shares this Look, so it writes a Screen Theme Override, not this item. -->
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="source-appearance" />
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 	</div>
 </template>

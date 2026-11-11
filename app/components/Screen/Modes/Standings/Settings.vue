@@ -141,7 +141,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="standings:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="standings:data" title="Data" :collapsible="false">
 			<ScreenRoundField
 				:model-value="config.roundId"
 				null-label="Current standings"
@@ -196,9 +196,9 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 				/>
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="data" />
 			</template>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			v-if="config.viewMode === 'reveal'"
 			id="standings:reveal-controls"
 			title="Reveal Controls"
@@ -227,9 +227,9 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 					{{ revealProgress }}
 				</UBadge>
 			</div>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			id="standings:table"
 			title="Table"
 			subtitle="Drag to reorder, toggle to show/hide."
@@ -260,7 +260,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			/>
 
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="table" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard
 			id="standings:header"

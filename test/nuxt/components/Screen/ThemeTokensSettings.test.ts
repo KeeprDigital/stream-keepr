@@ -33,7 +33,7 @@ async function mountSection(mode: ScreenMode, themeOverrides: StoredThemeTokens 
 		eventId: 1,
 	})), {
 		global: {
-			stubs: { ...nuxtUiStubs, ScreenSettingsCard: ScreenSettingsCardStub },
+			stubs: { ...nuxtUiStubs, ScreenSettingsSection: ScreenSettingsCardStub },
 		},
 	});
 	await flushPromises();

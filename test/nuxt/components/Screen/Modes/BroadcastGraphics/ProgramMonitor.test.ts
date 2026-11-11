@@ -65,7 +65,7 @@ const UAlertStub = defineComponent({
 });
 
 const ScreenSettingsCardStub = defineComponent({
-	name: 'ScreenSettingsCard',
+	name: 'ScreenSettingsSection',
 	props: {
 		title: { type: String, required: false },
 		collapsible: { type: Boolean, default: true },
@@ -114,7 +114,7 @@ async function mountComponent(
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsCardStub,
 				UFieldGroup: UFieldGroupStub,
 				USelect: USelectStub,
 				UButton: UButtonStub,

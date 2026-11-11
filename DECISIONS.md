@@ -2342,7 +2342,7 @@ Accepted · 2026-11-04 · [#955](https://github.com/KeeprDigital/stream-keepr/is
 
 The coverage test places each mode's tokens and fails if one is placed twice or not at all, or if a Mode Token lands outside a group.
 
-**The page ends with Background & Placement, then Screen-wide look.** The order is the Screen info card, the mode's settings, Background & Placement, then the Screen-wide look. Both closing cards start closed unless something in them is set or overridden: a Background Layer or a host token's override, or an override of a Foundation Token the Screen-wide look lists. Data and live-action cards stay open and are not collapsible. Each collapsible card remembers its open state per browser by `mode:card` id (`ScreenSettingsCard`, #964). Editor Focus Mode hides both closing cards, as it hid the Theme card. A group's Look is part of the mode's settings, so it shows in Editor Focus Mode: the Feature Match Overlay's Frame and Source Item rows show there, in the inspector section of the layer they style (#982).
+**The page ends with Background & Placement, then Screen-wide look.** The order is the Screen info card, the mode's settings, Background & Placement, then the Screen-wide look. Both closing cards start closed unless something in them is set or overridden: a Background Layer or a host token's override, or an override of a Foundation Token the Screen-wide look lists. Data and live-action cards stay open and are not collapsible. Each collapsible card remembers its open state per browser by `mode:card` id (`ScreenSettingsSection`, #964). Editor Focus Mode hides both closing cards, as it hid the Theme card. A group's Look is part of the mode's settings, so it shows in Editor Focus Mode: the Feature Match Overlay's Frame and Source Item rows show there, in the inspector section of the layer they style (#982).
 
 **Only where a row renders changes.** A row still writes a Screen Theme Override (`PATCH …/theme-overrides`) and shows Theme against Overridden (ADR-0049). It never becomes mode config (ADR-0051). A display reset still leaves every override in place, whichever card shows it.
 
@@ -2677,3 +2677,34 @@ A clock should read its full duration when it starts and `0:00` when it ends. Ro
 
 - **Rounding to the nearest second.** The clock would read `0:00` with half a second left, and change digit half a second off every other clock.
 - **Rounding overtime up as well.** It would skip `0:00` and read `0:01` the instant after the end.
+
+## ADR-0079: Settings surfaces are built from one of each shared primitive
+
+Accepted · 2026-11-11 · [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060), [#1074](https://github.com/KeeprDigital/stream-keepr/issues/1074)
+
+A Screen settings page, a graphics inspector and the Feature Match Overlay's Frame and Source Item panels each had their own collapsible (`ScreenSettingsCard`, `GraphicsInspectorSection`, `FeatureMatchOverlayControlSection`), and shared settings components wrote the field row's layout classes, number inputs, subheadings and hints by hand, so the same control lined up differently from card to card.
+
+### Decision
+
+**There is one of each settings primitive, under `app/components/Screen/Settings*.vue`, and a settings surface is composed from them.**
+
+- **`ScreenSettingsSection`** is the one collapsible section, in two densities. `card` (the default) is a card of a settings page: it starts open and unmounts a closed body. `row` is a row of a property panel: it starts closed, its whole header toggles it, and a closed body stays mounted, hidden. With an `id` it remembers its open state per browser, each density under its own storage key, so what browsers already remember carries over.
+- **`ScreenSettingsField`** is the one field row: label and description beside the control, or `stacked` above it for a narrow panel or a wide control.
+- **`ScreenSettingsNumberField`** is the one number input. It owns the display scale (shown in displayed units, emitted in stored ones) and emits `null` when emptied. `GraphicsNumberField` wraps it to add the label drag.
+- **`ScreenSettingsToggle`** is the one toggle row, **`ScreenSettingsSubheading`** the one subheading (`ScreenSettingsGroup` is a subheading naming a `role="group"`), and **`ScreenSettingsHint`** the one hint.
+
+### Why
+
+Every select, number field and toggle lines up the same way only if one component lays each out. One section also means a card and an inspector row cannot drift apart in how they summarise, toggle or remember.
+
+### Consequences
+
+- A component under `app/components/Screen/` that is part of a settings surface writes no raw `UFormField`, no bare `UInputNumber` and no hand-written subheading or hint classes.
+- A new density or layout is a prop on the primitive, never a second component.
+- The primitives have no tests of their own beyond the open-and-remember rule of the section (`test/nuxt/components/Screen/SettingsSection.test.ts`); the seams that mount them cover them.
+- `ThemeDimensionTokenInput` and `UIOpacityInput` keep their own inputs: each is a value editor with its own unit and commit rule, not a settings number field. Event configuration pages and modals are outside this decision.
+
+### Rejected alternatives
+
+- **Keeping three collapsibles behind one shared composable.** They already shared `useRememberedOpenState` and still differed in header, summary and defaults.
+- **One storage key for both densities.** It would forget every browser's remembered state, and a card and a row could collide on an id.
