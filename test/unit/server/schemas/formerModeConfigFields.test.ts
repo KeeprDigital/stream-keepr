@@ -83,6 +83,14 @@ describe.each([
 		kept: { revealCount: 4 },
 		patch: { revealCount: 6 },
 	},
+	// A built-in Feature Match Layout Template is placed like any other; nothing records which.
+	{
+		mode: 'feature-match-overlay' as const,
+		formerFields: ['presetId'],
+		former: { presetId: 'full-table' },
+		kept: { featureMatchId: 4 },
+		patch: { featureMatchId: 5 },
+	},
 ])('a $mode Screen storing its dropped $formerFields', ({ mode, formerFields, former, kept, patch }) => {
 	const stored = {
 		[mode]: {

@@ -3,6 +3,7 @@ import { requireGraphicsTemplateWritable } from '~~/server/modules/graphics-auth
 import { featureMatchLayoutTemplateParamsSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
 import { featureMatchLayoutTemplateService } from '~~/server/services/featureMatchLayoutTemplate';
 import { requireUserId } from '~~/server/utils/auth';
+import { refuseBuiltInFeatureMatchLayoutTemplate } from '~~/server/utils/featureMatchLayoutTemplateWrites';
 import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
 
 /**
@@ -16,10 +17,13 @@ import { rethrowGraphicsAssetApiError } from '~~/server/utils/graphicsAssetApi';
  * A layout a Template Package installed is removed through the Graphics Asset
  * Library, which owns its record: its references are released with it, and
  * retrying the installation that published it reinstalls it (ADR-0068).
+ *
+ * A built-in layout is not removed at all: it is no record of this installation's.
  */
 export default defineEventHandler(async (event) => {
 	const userId = await requireUserId(event);
 	const { templateId } = await getValidatedRouterParams(event, featureMatchLayoutTemplateParamsSchema.parse);
+	refuseBuiltInFeatureMatchLayoutTemplate(templateId, 'removed');
 	await requireGraphicsTemplateWritable(event, templateId);
 
 	if (!await featureMatchLayoutTemplateService().remove(templateId)) {

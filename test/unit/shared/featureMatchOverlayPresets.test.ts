@@ -1,10 +1,10 @@
 import type { GraphicGroupChildConfig, GraphicItemConfig } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
-import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
+import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { FEATURE_MATCH_TOKEN_KEYS } from '~~/shared/featureMatchTokenCatalogue';
-import { getGraphicItemDefinition, parseGraphicTextTemplate } from '~~/shared/modules/graphics';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { parseGraphicTextTemplate } from '~~/shared/modules/graphics';
+import { featureMatchLayoutGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
 
 function everyPresetItem(): Array<GraphicItemConfig | GraphicGroupChildConfig> {
 	return FEATURE_MATCH_OVERLAY_PRESETS.flatMap(preset => preset.config.layout.composition.items.flatMap(item =>
@@ -14,45 +14,15 @@ function everyPresetItem(): Array<GraphicItemConfig | GraphicGroupChildConfig> {
 }
 
 describe('feature match overlay presets', () => {
-	it('preserves the selected Feature Match Slot when applying a preset', () => {
-		const config = { ...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, featureMatchId: 42 };
-
-		const result = applyFeatureMatchOverlayPreset(config, 'full-table');
-
-		expect(result.featureMatchId).toBe(42);
-		expect(result.presetId).toBe('full-table');
-	});
-
-	it('replaces the whole layout rather than carrying authored items across', () => {
-		const authored = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		authored.layout.composition.items = [
-			getGraphicItemDefinition('clock').createDefault({
-				id: 'my-clock',
-				label: 'My Clock',
-				canvasWidth: 1920,
-				canvasHeight: 1080,
-			}),
-		];
-		authored.layout.sources = [];
-
-		const result = applyFeatureMatchOverlayPreset(authored, 'full-table');
-
-		expect(result.layout.composition.items.map(item => item.id)).not.toContain('my-clock');
-		expect(result.layout.sources).not.toEqual([]);
-	});
-
 	it('gives every preset the one stable Feature Match Layout composition id', () => {
 		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS)
 			expect(preset.config.layout.composition.id).toBe(FEATURE_MATCH_LAYOUT_COMPOSITION_ID);
 	});
 
-	it('hands out copies, so applying a preset twice cannot share nested objects', () => {
-		const first = applyFeatureMatchOverlayPreset(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, 'neon-feature-match');
-		const second = applyFeatureMatchOverlayPreset(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, 'neon-feature-match');
-
-		first.layout.composition.items[0]!.label = 'Renamed';
-
-		expect(second.layout.composition.items[0]!.label).not.toBe('Renamed');
+	// A built-in is on every installation, so it can depend on no Graphic Asset of one.
+	it('pins no Graphic Asset Revision', () => {
+		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS)
+			expect(featureMatchLayoutGraphicAssetReferences(preset.config.layout), preset.id).toEqual([]);
 	});
 
 	it('keeps every Graphic Item id unique within a preset, including group children', () => {
