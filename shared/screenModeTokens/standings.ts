@@ -1,4 +1,5 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import { rowMotionModeToken } from './rowMotion';
 
 /** The Standings settings groups its Mode Tokens may name (ADR-0072). */
 export type StandingsSettingsGroup = 'data' | 'table';
@@ -17,21 +18,10 @@ export const standingsModeTokens = {
 		settingsGroup: 'table',
 		default: { token: 'negative' },
 	},
-	// How a row enters, leaves back to, and moves, each row an eighth of the
-	// duration after the one above. A recipe with no channel cuts.
-	'row-motion': {
-		type: 'animation-recipe',
-		label: 'Row enter and exit',
-		settingsGroup: 'table',
-		default: {
-			duration: 400,
-			easing: 'ease-out',
-			delay: 0,
-			fade: { opacity: 0 },
-			slide: { direction: 'west', distanceMode: 'fixed', distance: 20 },
-		},
-	},
-	// The `reveal` view mode's rows, in place of `row-motion`: a rise for the reveal.
+	// The row motion Metagame shares.
+	'row-motion': rowMotionModeToken,
+	// The `reveal` view mode's rows, in place of `row-motion`: a slower rise for
+	// the reveal. Its pace matches no Foundation motion, so it keeps its own.
 	'reveal-motion': {
 		type: 'animation-recipe',
 		label: 'Revealed row enter and exit',

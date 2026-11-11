@@ -1,4 +1,5 @@
 import type { FoundationTokenName, FoundationTokenVocabulary, ModeTokenDeclarations, StoredThemeTokens } from '~~/shared/modules/theme';
+import type { ScreenMode } from '~~/shared/types/enums';
 import { describe, expect, it } from 'vitest';
 import { FOUNDATION_TOKENS, resolveFoundationTokens, resolveThemeCompositeColors, resolveThemeTokens } from '~~/shared/modules/theme';
 import { SCREEN_MODES, screenModeTokens } from '~~/shared/screenModes';
@@ -434,6 +435,9 @@ describe('the shipped vocabulary and Mode Token declarations', () => {
 		});
 
 		for (const [name, { type, default: declared }] of Object.entries(modeTokens)) {
+			// A motion that follows a Foundation motion is pinned below, by its shipped value.
+			if (typeof declared === 'object' && declared !== null && 'movement' in declared)
+				continue;
 			// A literal composite's colours read as the colour Foundation Tokens they name.
 			const expected = typeof declared === 'object' && declared !== null && 'token' in declared
 				? FOUNDATION_TOKENS[declared.token as FoundationTokenName].default
@@ -460,5 +464,90 @@ describe('the shipped vocabulary and Mode Token declarations', () => {
 
 		for (const [name, definition] of Object.entries(FOUNDATION_TOKENS))
 			expect(values[name], name).toEqual(withColorDefaults(definition.default));
+	});
+});
+
+describe('a motion Mode Token', () => {
+	const ROW_MOTION = {
+		duration: 400,
+		easing: 'ease-out',
+		delay: 0,
+		fade: { opacity: 0 },
+		slide: { direction: 'west', distanceMode: 'fixed', distance: 20 },
+	};
+	const REVEAL_MOTION = {
+		duration: 600,
+		easing: 'ease-out',
+		delay: 0,
+		fade: { opacity: 0 },
+		slide: { direction: 'south', distanceMode: 'fixed', distance: 20 },
+		scale: { factor: 0.95, origin: 'center' },
+	};
+	const CARD_MOTION = {
+		duration: 200,
+		easing: 'ease-in-out',
+		delay: 0,
+		fade: { opacity: 0 },
+		scale: { factor: 0.7, origin: 'center' },
+	};
+	const THEME_ENTER = {
+		duration: 900,
+		easing: 'back-out',
+		delay: 50,
+		scale: { factor: 0.5, origin: 'center' },
+	};
+	const SCREEN_ENTER = { duration: 250, easing: 'linear', delay: 0 };
+
+	function motion(name: string, theme: StoredThemeTokens = {}, overrides: StoredThemeTokens = {}) {
+		return resolveThemeTokens({
+			vocabulary: FOUNDATION_TOKENS,
+			modeTokens: screenModeTokens(name.split('.')[0] as ScreenMode),
+			theme,
+			overrides,
+		}).values[name];
+	}
+
+	it.each([
+		['standings.row-motion', ROW_MOTION],
+		['metagame.row-motion', ROW_MOTION],
+		['standings.reveal-motion', REVEAL_MOTION],
+		['card.motion', CARD_MOTION],
+	])('reads %s under the Default Theme as it shipped', (name, shipped) => {
+		expect(motion(name)).toEqual(shipped);
+	});
+
+	// The shared row motion takes the enter motion's timing and keeps its own movement.
+	it.each([
+		['standings.row-motion', 'the Theme\'s', {}, THEME_ENTER],
+		['metagame.row-motion', 'the Theme\'s', {}, THEME_ENTER],
+		['standings.row-motion', 'the Screen\'s', { 'motion-enter': SCREEN_ENTER }, SCREEN_ENTER],
+		['metagame.row-motion', 'the Screen\'s', { 'motion-enter': SCREEN_ENTER }, SCREEN_ENTER],
+	])('times %s by %s enter motion', (name, _, overrides, enter) => {
+		expect(motion(name, { 'motion-enter': THEME_ENTER }, overrides)).toEqual({
+			duration: enter.duration,
+			easing: enter.easing,
+			delay: enter.delay,
+			fade: { opacity: 0 },
+			slide: { direction: 'west', distanceMode: 'fixed', distance: 20 },
+		});
+	});
+
+	// So a Screen lists, and may override, the enter motion its rows follow.
+	it.each(['standings', 'metagame'] as const)('has a %s Screen consume the enter motion its row motion follows', (mode) => {
+		const { consumed } = resolveThemeTokens({ vocabulary: FOUNDATION_TOKENS, modeTokens: screenModeTokens(mode), theme: {}, overrides: {} });
+		expect(consumed).toContain('motion-enter');
+	});
+
+	it.each(['standings.row-motion', 'metagame.row-motion'])('reads %s\'s own override over the enter motion', (name) => {
+		expect(motion(name, { 'motion-enter': THEME_ENTER }, { [name]: CARD_MOTION })).toEqual(CARD_MOTION);
+	});
+
+	// Their timing matches no Foundation motion, so each keeps the literal it shipped with.
+	it.each([
+		['standings.reveal-motion', REVEAL_MOTION],
+		['card.motion', CARD_MOTION],
+	])('keeps %s as shipped whatever the Theme\'s motions', (name, shipped) => {
+		const theme = { 'motion-enter': THEME_ENTER, 'motion-update': THEME_ENTER, 'motion-exit': THEME_ENTER };
+		expect(motion(name, theme)).toEqual(shipped);
 	});
 });

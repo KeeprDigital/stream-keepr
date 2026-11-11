@@ -4,9 +4,11 @@ import type {
 	ModeTokenDeclarations,
 	ModeTokenDefinition,
 	StoredThemeTokens,
+	ThemeMotionFollow,
 	ThemeTokenReference,
 	ThemeTokenValue,
 } from './tokens';
+import type { GraphicAnimationRecipe } from '../../types/graphics';
 import { resolveThemeCompositeColors } from './composites';
 import { readTokenLiteral } from './tokens';
 
@@ -43,6 +45,14 @@ function isReference(value: unknown): value is ThemeTokenReference {
 		&& value !== null
 		&& Object.keys(value).length === 1
 		&& typeof (value as { token?: unknown }).token === 'string';
+}
+
+function isMotionFollow(value: unknown): value is ThemeMotionFollow {
+	return typeof value === 'object'
+		&& value !== null
+		&& Object.keys(value).length === 2
+		&& typeof (value as { token?: unknown }).token === 'string'
+		&& typeof (value as { movement?: unknown }).movement === 'object';
 }
 
 /** The first of `stored`, most preferred first, that `read` can read. */
@@ -108,6 +118,10 @@ export function resolveFoundationTokens(input: Omit<ResolveThemeTokensInput, 'mo
  *   reaches every default naming it. Nothing names a Mode Token, so this is one
  *   derivation and cannot cycle; a colour a composite default names adds one
  *   more (`foundationResolver`).
+ * - A motion default may instead follow a motion Foundation Token: the same
+ *   derivation for its timing, its movement its own (`ThemeMotionFollow`).
+ *   The Screen consumes the Foundation Token it follows, as one a default
+ *   names.
  * - A value stored before writes were literal-only may name a Foundation Token
  *   as a default does, whole or as a composite's colour. It reads the same
  *   way, to its literal, until its token is next written.
@@ -124,6 +138,15 @@ export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThem
 
 	/** A Mode Token's value as one source holds it, or undefined when it holds none it can read. */
 	function readModeToken(definition: ModeTokenDefinition, stored: unknown): ThemeTokenValue | undefined {
+		if (isMotionFollow(stored)) {
+			const followed = readModeToken(definition, { token: stored.token }) as GraphicAnimationRecipe | undefined;
+			return followed && readLiteral(definition, {
+				duration: followed.duration,
+				easing: followed.easing,
+				delay: followed.delay,
+				...stored.movement,
+			});
+		}
 		if (!isReference(stored))
 			return readLiteral(definition, stored);
 		if (vocabulary[stored.token]?.type !== definition.type)
@@ -137,7 +160,7 @@ export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThem
 		values[name] = firstReadable([overrides[name], theme[name], definition.default], stored => readModeToken(definition, stored))!;
 
 	const namedByDefaults = new Set([
-		...Object.values(modeTokens).flatMap(({ default: fallback }) => isReference(fallback)
+		...Object.values(modeTokens).flatMap(({ default: fallback }) => isReference(fallback) || isMotionFollow(fallback)
 			? [fallback.token]
 			: []),
 		...hostTokens,
