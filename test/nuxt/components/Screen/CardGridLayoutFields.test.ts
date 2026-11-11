@@ -1,8 +1,8 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import { screenModeConfigContract } from '~~/shared/screenModes';
 import { screenModeConfigFields } from '~~/shared/screenModeConfigs/fields';
 import { cardLayoutShape } from '~~/shared/screenModeConfigs/subShapes';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import { nuxtUiStubs, UFormFieldBesideStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import CardGridLayoutFields from '~/components/Screen/CardGridLayoutFields.vue';
 
@@ -14,8 +14,20 @@ const topCards = screenModeConfigContract('top-cards').fields;
 /** A board's layout block view: the Card Layout beside an alignment and a stack reveal. */
 const board = {
 	...screenModeConfigFields(cardLayoutShape(100)),
-	alignment: { key: 'alignment', label: 'Alignment', control: 'select', displayScale: 1 },
-	stackReveal: { key: 'stackReveal', label: 'Stack Reveal', control: 'number', min: 4, max: 240, displayScale: 1 },
+	alignment: {
+		key: 'alignment',
+		label: 'Alignment',
+		control: 'select',
+		displayScale: 1,
+	},
+	stackReveal: {
+		key: 'stackReveal',
+		label: 'Stack Reveal',
+		control: 'number',
+		min: 4,
+		max: 240,
+		displayScale: 1,
+	},
 } as const;
 
 const layout = {
@@ -50,23 +62,44 @@ describe('screenCardGridLayoutFields', () => {
 		},
 		{
 			name: 'alignment where shown',
-			props: { show: { alignment: true } },
-			keys: ['alignment', 'maxCardSize', 'columns', 'cardGap'],
+			props: {
+				show: { alignment: true },
+			},
+			keys: [
+				'alignment',
+				'maxCardSize',
+				'columns',
+				'cardGap',
+			],
 		},
 		{
 			name: 'stack reveal where shown',
-			props: { show: { stackReveal: true } },
-			keys: ['maxCardSize', 'stackReveal', 'columns', 'cardGap'],
+			props: {
+				show: { stackReveal: true },
+			},
+			keys: [
+				'maxCardSize',
+				'stackReveal',
+				'columns',
+				'cardGap',
+			],
 		},
 		{
 			name: 'a mode\'s flat grid fields, which hold no alignment',
-			props: { fields: topCards, layout: {}, show: { alignment: true } },
+			props: {
+				fields: topCards,
+				layout: {},
+				show: { alignment: true },
+			},
 			keys: ['maxCardSize', 'columns', 'cardGap'],
 		},
 		// A stack is one column of overlapping cards, so it has no columns or gap.
 		{
 			name: 'a stack',
-			props: { view: 'stack', show: { alignment: true, stackReveal: true } },
+			props: {
+				view: 'stack',
+				show: { alignment: true, stackReveal: true },
+			},
 			keys: ['alignment', 'maxCardSize', 'stackReveal'],
 		},
 	])('renders $name', ({ props, keys }) => {
@@ -75,8 +108,16 @@ describe('screenCardGridLayoutFields', () => {
 
 	// Auto is the absent value: an empty field under an "Auto" placeholder.
 	it.each([
-		{ name: 'Auto', layout: {}, shown: ['', '', ''] },
-		{ name: 'set', layout, shown: ['144', '4', '8'] },
+		{
+			name: 'Auto',
+			layout: {},
+			shown: ['', '', ''],
+		},
+		{
+			name: 'set',
+			layout,
+			shown: ['144', '4', '8'],
+		},
 	])('shows each $name value', ({ layout, shown }) => {
 		const wrapper = mountFields({ layout });
 		const inputs = ['maxCardSize', 'columns', 'cardGap'].map(key => input(wrapper, key));
@@ -91,25 +132,45 @@ describe('screenCardGridLayoutFields', () => {
 		{
 			name: 'its fields alone',
 			props: {},
-			bounds: { maxCardSize: [48, 7680], columns: [1, 100], cardGap: [0, 100] },
+			bounds: {
+				maxCardSize: [48, 7680],
+				columns: [1, 100],
+				cardGap: [0, 100],
+			},
 		},
 		{
 			name: 'its card count and Event Canvas',
-			props: { cardCount: 10, canvas: { width: 1920, height: 1080 } },
-			bounds: { maxCardSize: [48, 775], columns: [1, 10], cardGap: [0, 100] },
+			props: {
+				cardCount: 10,
+				canvas: { width: 1920, height: 1080 },
+			},
+			bounds: {
+				maxCardSize: [48, 775],
+				columns: [1, 10],
+				cardGap: [0, 100],
+			},
 		},
 		{
 			name: 'a canvas narrower than its tallest card',
-			props: { canvas: { width: 400, height: 1080 } },
-			bounds: { maxCardSize: [48, 400], columns: [1, 100], cardGap: [0, 100] },
+			props: {
+				canvas: { width: 400, height: 1080 },
+			},
+			bounds: {
+				maxCardSize: [48, 400],
+				columns: [1, 100],
+				cardGap: [0, 100],
+			},
 		},
 	])('bounds each number by $name', ({ props, bounds }) => {
 		const wrapper = mountFields(props);
 
-		expect(Object.fromEntries(Object.keys(bounds).map(key => [key, [
-			Number(input(wrapper, key).attributes('min')),
-			Number(input(wrapper, key).attributes('max')),
-		]]))).toEqual(bounds);
+		expect(Object.fromEntries(Object.keys(bounds).map(key => [
+			key,
+			[
+				Number(input(wrapper, key).attributes('min')),
+				Number(input(wrapper, key).attributes('max')),
+			],
+		]))).toEqual(bounds);
 	});
 
 	it.each([

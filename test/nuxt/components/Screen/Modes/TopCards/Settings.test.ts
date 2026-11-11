@@ -161,15 +161,6 @@ const UInputNumberStub = defineComponent({
 	template: '<div data-testid="u-input-number" :data-max="max" :aria-disabled="disabled">{{ modelValue }}</div>',
 });
 
-/** The control under the form field or toggle labelled `label`. */
-function control<T>(wrapper: Awaited<ReturnType<typeof mountComponent>>, label: string, stub: T) {
-	const field = wrapper.findAll('[data-testid="form-field"], [data-testid="settings-toggle"]').find(item => item.text().includes(label));
-	expect(field, label).toBeDefined();
-	return field!.findComponent(stub as any).exists()
-		? field!.getComponent(stub as any)
-		: field!;
-}
-
 /** The `stub` control of the contract field `key`, if rendered. */
 function configControl<T>(wrapper: Awaited<ReturnType<typeof mountComponent>>, stub: T, key: string) {
 	const field = wrapper.find(`[data-config-field="${key}"]`);
@@ -562,8 +553,14 @@ describe('screenTopCardsSettings', () => {
 	// count. The fields' own rules are tested at `ScreenCardGridLayoutFields`.
 	describe('card layout', () => {
 		it.each([
-			{ label: 'Columns', patch: { columns: null } },
-			{ label: 'Max card size', patch: { maxCardSize: 200 } },
+			{
+				label: 'Columns',
+				patch: { columns: null },
+			},
+			{
+				label: 'Max card size',
+				patch: { maxCardSize: 200 },
+			},
 		])('writes $label as $patch', async ({ label, patch }) => {
 			const wrapper = await mountComponent();
 
@@ -582,10 +579,19 @@ describe('screenTopCardsSettings', () => {
 
 		it.each([
 			{ layout: {}, summary: 'Auto' },
-			{ layout: { columns: 1 }, summary: '1 column' },
-			{ layout: { columns: 5, maxCardSize: 200, cardGap: 0 }, summary: '5 columns · Max 200 px · 0 px gap' },
+			{
+				layout: { columns: 1 },
+				summary: '1 column',
+			},
+			{
+				layout: { columns: 5, maxCardSize: 200, cardGap: 0 },
+				summary: '5 columns · Max 200 px · 0 px gap',
+			},
 		])('summarises $layout as $summary', async ({ layout, summary }) => {
-			mockConfig.value = { ...mockConfig.value, ...layout };
+			mockConfig.value = {
+				...mockConfig.value,
+				...layout,
+			};
 			const wrapper = await mountComponent();
 
 			expect(settingsSummaries(wrapper)['top-cards:layout']).toBe(summary);

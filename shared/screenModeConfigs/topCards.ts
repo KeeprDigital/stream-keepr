@@ -37,9 +37,9 @@ function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<
 	const autoColumns = fragment.autoColumns === true;
 	if (!fixed && !autoColumns)
 		return fragment;
-	const { columns, ...upgraded } = fragment;
-	if (!autoColumns && columns !== undefined)
-		upgraded.columns = columns;
+	const upgraded: Record<string, unknown> = { ...fragment };
+	if (autoColumns)
+		delete upgraded.columns;
 	if (fixed && !('maxCardSize' in fragment))
 		upgraded.maxCardSize = fragment.cardWidth ?? FORMER_DEFAULT_CARD_WIDTH;
 	return upgraded;

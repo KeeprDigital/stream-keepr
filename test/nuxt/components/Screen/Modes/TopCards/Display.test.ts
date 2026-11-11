@@ -247,7 +247,10 @@ describe('screenTopCardsDisplay', () => {
 			gap: 0,
 		},
 	])('lays the grid out as its Card Layout solves: $name', async ({ layout, size, columns, rows, cardWidth, gap }) => {
-		config.value = { ...config.value, ...layout };
+		config.value = {
+			...config.value,
+			...layout,
+		};
 		pageCapacity.value = 5;
 		[measured.width, measured.height] = size as [number, number];
 

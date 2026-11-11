@@ -45,7 +45,12 @@ describe('a Most Played Cards Screen storing a Card Sizing', () => {
 		},
 		{
 			name: 'Fixed auto columns keep the max card size and choose the columns',
-			stored: { cardSizing: 'fixed', cardWidth: 96, autoColumns: true, columns: 7 },
+			stored: {
+				cardSizing: 'fixed',
+				cardWidth: 96,
+				autoColumns: true,
+				columns: 7,
+			},
 			reads: { maxCardSize: 96 },
 		},
 	])('$name', ({ stored, reads }) => {
@@ -62,20 +67,22 @@ describe('a Most Played Cards Screen storing a Card Sizing', () => {
 		{
 			name: 'of another field keeps the max card size',
 			patch: { limit: 12 },
-			patched: { maxCardSize: 200, limit: 12 },
+			patched: { showHeader: false, maxCardSize: 200, limit: 12 },
 		},
 		{
 			name: 'clearing the max card size is not undone by the stored width',
 			patch: { maxCardSize: null },
-			patched: {},
+			patched: { showHeader: false },
 		},
 		{
 			name: 'of the max card size replaces the stored width',
 			patch: { maxCardSize: 300 },
-			patched: { maxCardSize: 300 },
+			patched: { showHeader: false, maxCardSize: 300 },
 		},
 	])('a PATCH $name', ({ patch, patched }) => {
-		const stored = { 'top-cards': { cardSizing: 'fixed', cardWidth: 200 } };
+		const stored = {
+			'top-cards': { cardSizing: 'fixed', cardWidth: 200, showHeader: false },
+		};
 		const parsed = modeConfigPatchSchemaMap['top-cards'].parse(patch) as Record<string, unknown>;
 
 		expect(parseModeConfigPatchResult(stored, 'top-cards', parsed)).toEqual({ 'top-cards': patched });
