@@ -6,6 +6,7 @@ import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, resolveFoundationToken, resolv
 import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
 import { screenModeTokens } from '~~/shared/screenModes';
 import { themeTokenDefinition } from '~~/shared/themeTokens';
+import { screenBackgroundLayers } from '~/modules/screen-mode';
 
 /** One Theme Token as a Screen's settings page shows it. */
 export interface ScreenThemeTokenEntry {
@@ -136,8 +137,12 @@ function createScreenThemeOverrides(screen: MaybeRefOrGetter<Screen | null | und
 		}
 	}
 
+	/** The Theme's `background` stack as it resolves, every colour a literal: what a Screen holding no stack of its own paints. */
+	const themeBackground = computed(() => screenBackgroundLayers(undefined, theme.value));
+
 	return {
 		themeName: readonly(themeName),
+		themeBackground,
 		themeError: readonly(themeError),
 		overrides,
 		entry,

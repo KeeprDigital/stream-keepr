@@ -6,9 +6,10 @@ import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 
 /**
  * The Background & Placement card a plain overlay mode gets on the Screen
- * configuration page: that mode's own `backgroundLayers` stack, then the
- * Screen inset and alignment its host places it by, as Screen Theme Overrides
- * (ADR-0051, ADR-0072). It starts closed unless it holds a layer or an override.
+ * configuration page: that mode's own `backgroundLayers` stack, or the Theme's
+ * while it holds none (ADR-0016), then the Screen inset and alignment its host
+ * places it by, as Screen Theme Overrides (ADR-0051, ADR-0072). It starts
+ * closed unless it holds a layer or an override.
  *
  * `mode` is captured once at setup — the configuration composable binds to it —
  * so the owner remounts this component (keyed by mode) when the Screen's mode
@@ -47,7 +48,7 @@ function writeLayers(nextLayers: BackgroundLayer[]) {
 		subtitle="Layers behind this mode's content, and where the content sits in the Event Canvas."
 		:default-open="holdsSomething"
 	>
-		<ScreenBackgroundLayersEditor
+		<ScreenBackgroundSource
 			:layers="layers"
 			:event-id="eventId"
 			@update:layers="writeLayers"
