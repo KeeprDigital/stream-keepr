@@ -1,4 +1,5 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import { rowMotionModeToken } from './rowMotion';
 
 /** The Metagame settings groups its Mode Tokens may name (ADR-0072). */
 export type MetagameSettingsGroup = 'table';
@@ -8,21 +9,8 @@ export type MetagameSettingsGroup = 'table';
  * Every bar is named, so identity never rests on its colour alone.
  */
 export const metagameModeTokens = {
-	// How a row enters, leaves back to, and moves, each row an eighth of the
-	// duration after the one above, and how a chart bar grows on its timing.
-	// A recipe with no channel cuts.
-	'row-motion': {
-		type: 'animation-recipe',
-		label: 'Row enter and exit',
-		settingsGroup: 'table',
-		default: {
-			duration: 400,
-			easing: 'ease-out',
-			delay: 0,
-			fade: { opacity: 0 },
-			slide: { direction: 'west', distanceMode: 'fixed', distance: 20 },
-		},
-	},
+	// The row motion Standings shares; a chart bar also grows on its timing.
+	'row-motion': rowMotionModeToken,
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition<MetagameSettingsGroup>>>;
 
 /**

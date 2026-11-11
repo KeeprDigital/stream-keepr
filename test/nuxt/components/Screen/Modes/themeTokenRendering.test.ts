@@ -8,7 +8,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
-import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
+import { FOUNDATION_TOKENS, resolveThemeTokens } from '~~/shared/modules/theme';
 import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
 import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
@@ -1067,10 +1067,14 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, sample));
 	});
 
-	it.each(tokens)('paints $name as the Default Theme ships it when its Event has no Theme', async ({ definition, probe }) => {
-		const shipped = typeof definition.default === 'object' && definition.default !== null && 'token' in definition.default
-			? FOUNDATION_TOKENS[definition.default.token].default
-			: definition.default;
+	// What each default resolves to under the Default Theme is pinned where it resolves.
+	it.each(tokens)('paints $name as the Default Theme ships it when its Event has no Theme', async ({ name, definition, probe }) => {
+		const shipped = resolveThemeTokens({
+			vocabulary: FOUNDATION_TOKENS,
+			modeTokens: declared,
+			theme: {},
+			overrides: {},
+		}).values[name]!;
 		await mountMode(mode, undefined, { config: probe.config });
 		await shown(probe);
 

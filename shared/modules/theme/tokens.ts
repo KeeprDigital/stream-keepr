@@ -108,9 +108,21 @@ export interface ThemeTokenReference<Name extends string = string> {
 	token: Name;
 }
 
-/** A Mode Token's default: a Foundation Token it names, or a literal. */
+/**
+ * A motion Mode Token's default that follows a motion Foundation Token: its
+ * timing (duration, easing, delay) from the Foundation Token as the Screen
+ * resolves it, its movement (fade, slide, scale, reveal) its own, so the
+ * mode keeps the way it moves while the Theme sets the pace.
+ */
+export interface ThemeMotionFollow<Name extends string = string> {
+	token: Name;
+	movement: Omit<ThemeTokenValueTypes['animation-recipe'], 'duration' | 'easing' | 'delay'>;
+}
+
+/** A Mode Token's default: a Foundation Token it names or, for motion, follows, or a literal. */
 export type ModeTokenValue<T extends ThemeTokenType = ThemeTokenType, Name extends string = string>
 	= | ThemeTokenReference<Name>
+		| (T extends 'animation-recipe' ? ThemeMotionFollow<Name> : never)
 		| ThemeTokenValueTypes[T];
 
 /**
