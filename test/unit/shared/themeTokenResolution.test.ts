@@ -6,7 +6,7 @@ import { SCREEN_MODES, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
 // The one home of Theme Token resolution (ADR-0049): a Mode Token reads its override, else its
-// default; a Foundation Token its override, else the Theme, else its default.
+// default; a Foundation Token the Theme, else its default, over which only a host token reads its override.
 
 const body = {
 	font: { kind: 'application', fontId: 'inter' },
@@ -95,10 +95,10 @@ describe('resolveThemeTokens', () => {
 			'rgb(3, 0, 0)',
 		],
 		[
-			'its Foundation Token\'s override, over the Theme',
+			'its Foundation Token\'s Theme value, never a Screen\'s override of it',
 			{ accent: 'rgb(3, 0, 0)' },
 			{ accent: 'rgb(4, 0, 0)' },
-			'rgb(4, 0, 0)',
+			'rgb(3, 0, 0)',
 		],
 		[
 			'another Foundation Token the override names',
@@ -174,6 +174,12 @@ describe('resolveThemeTokens', () => {
 			'another mode\'s Mode Token, overridden on this Screen',
 			{},
 			{ 'other.title': 'rgb(9, 0, 0)' },
+		],
+		// A Screen takes a Foundation Token from its Theme unless its host consumes the token itself.
+		[
+			'a Foundation Token overridden on this Screen',
+			{},
+			{ accent: 'rgb(9, 0, 0)', inset: 30 },
 		],
 	])('drops %s', (_, theme, overrides) => {
 		const resolved = resolve(theme, overrides);
@@ -265,7 +271,7 @@ describe('resolveThemeTokens', () => {
 		expect(Object.keys(resolved.values)).toEqual(DECLARED_CONSUMPTION);
 	});
 
-	it('also consumes, in vocabulary order and once, each Foundation Token its host consumes itself', () => {
+	it('also consumes, in vocabulary order and once, each Foundation Token its host consumes itself, reading its override', () => {
 		const resolved = resolveThemeTokens({
 			vocabulary,
 			modeTokens,
@@ -346,10 +352,10 @@ describe('a composite Foundation Token naming a colour', () => {
 			'rgb(3, 0, 0)',
 		],
 		[
-			'the colour\'s override, over the Theme',
+			'the colour\'s Theme value, never a Screen\'s override of it',
 			{ accent: 'rgb(3, 0, 0)' },
 			{ accent: 'rgb(4, 0, 0)' },
-			'rgb(4, 0, 0)',
+			'rgb(3, 0, 0)',
 		],
 	])('reads it as %s', (_, theme, overrides, expected) => {
 		expect(panel(theme, overrides).fill.stops[0].color).toBe(expected);
@@ -399,9 +405,9 @@ describe('a composite Foundation Token naming a colour', () => {
 	it.each([
 		['the Theme value', {}, 'rgb(3, 0, 0)'],
 		[
-			'the override, over the Theme',
-			{ accent: 'rgb(4, 0, 0)' },
-			'rgb(4, 0, 0)',
+			'the Theme value, never a Screen\'s override of the accent or the background',
+			{ accent: 'rgb(4, 0, 0)', background: [] },
+			'rgb(3, 0, 0)',
 		],
 	])('reads a background colour layer naming the accent as %s', (_, overrides, expected) => {
 		const theme = {
@@ -525,43 +531,22 @@ describe('a motion Mode Token', () => {
 		expect(motion(name)).toEqual(shipped);
 	});
 
-	// The shared row motion takes the enter motion's timing and keeps its own movement.
+	// The shared row motion takes the Theme's enter motion's timing and keeps its own movement.
 	it.each([
-		[
-			'standings.row-motion',
-			'the Theme\'s',
-			{},
-			THEME_ENTER,
-		],
-		[
-			'metagame.row-motion',
-			'the Theme\'s',
-			{},
-			THEME_ENTER,
-		],
-		[
-			'standings.row-motion',
-			'the Screen\'s',
-			{ 'motion-enter': SCREEN_ENTER },
-			SCREEN_ENTER,
-		],
-		[
-			'metagame.row-motion',
-			'the Screen\'s',
-			{ 'motion-enter': SCREEN_ENTER },
-			SCREEN_ENTER,
-		],
-	])('times %s by %s enter motion', (name, _, overrides, enter) => {
+		['standings.row-motion', 'with nothing overridden', {}],
+		['metagame.row-motion', 'with nothing overridden', {}],
+		['standings.row-motion', 'over a Screen\'s override of the enter motion', { 'motion-enter': SCREEN_ENTER }],
+		['metagame.row-motion', 'over a Screen\'s override of the enter motion', { 'motion-enter': SCREEN_ENTER }],
+	])('times %s by the Theme\'s enter motion %s', (name, _, overrides) => {
 		expect(motion(name, { 'motion-enter': THEME_ENTER }, overrides)).toEqual({
-			duration: enter.duration,
-			easing: enter.easing,
-			delay: enter.delay,
+			duration: THEME_ENTER.duration,
+			easing: THEME_ENTER.easing,
+			delay: THEME_ENTER.delay,
 			fade: { opacity: 0 },
 			slide: { direction: 'west', distanceMode: 'fixed', distance: 20 },
 		});
 	});
 
-	// So a Screen lists, and may override, the enter motion its rows follow.
 	it.each(['standings', 'metagame'] as const)('has a %s Screen consume the enter motion its row motion follows', (mode) => {
 		const { consumed } = resolveThemeTokens({
 			vocabulary: FOUNDATION_TOKENS,

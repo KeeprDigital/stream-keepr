@@ -58,7 +58,7 @@ const modeBackgroundLayers = computed<BackgroundLayer[]>(() => {
 	if (!screenModeSupportsBackgroundLayers(props.mode))
 		return [];
 	const modeConfigs = (screen.value?.modeConfigs ?? {}) as ModeConfigsMap;
-	return screenBackgroundLayers(modeConfigs[props.mode]?.backgroundLayers, themeTokens?.value ?? DEFAULT_THEME_TOKENS, screen.value?.themeOverrides ?? {});
+	return screenBackgroundLayers(modeConfigs[props.mode]?.backgroundLayers, themeTokens?.value ?? DEFAULT_THEME_TOKENS);
 });
 
 /**

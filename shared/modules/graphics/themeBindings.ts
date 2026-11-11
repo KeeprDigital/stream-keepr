@@ -66,12 +66,15 @@ const ANIMATION_SLOT_PHASES: Partial<Record<GraphicThemeSlot, GraphicAnimationPh
 	'animation.exit': 'exit',
 };
 
-/** A Screen's resolved Foundation Tokens, from its Theme's stored values and its overrides. */
-export function resolveGraphicThemeTokens(theme?: StoredThemeTokens, overrides?: StoredThemeTokens): GraphicThemeTokens {
+/**
+ * The Foundation Tokens a Screen's Graphic Items bind, from its Theme's stored
+ * values alone: no Screen overrides a Foundation Token a Graphic Item binds.
+ */
+export function resolveGraphicThemeTokens(theme?: StoredThemeTokens): GraphicThemeTokens {
 	return resolveFoundationTokens({
 		vocabulary: FOUNDATION_TOKENS,
 		theme: theme ?? DEFAULT_THEME_TOKENS,
-		overrides: overrides ?? {},
+		overrides: {},
 	});
 }
 

@@ -1019,12 +1019,13 @@ describe.each(GRAPHICS_HOSTS)('the %s display', (mode) => {
 		expect(boundColor()).toBe(FOUNDATION_TOKENS['text-primary'].default);
 	});
 
-	it('paints it from the Screen\'s own override of its Foundation Token, over the Theme', async () => {
+	// A Screen cannot swap the Foundation Tokens its Graphic Items bind; one stored before is read by nothing.
+	it('paints it from the Theme, never a Screen\'s stored override of its Foundation Token', async () => {
 		await mountMode(mode, { 'text-primary': 'rgb(12, 34, 56)' }, {
 			themeOverrides: { 'text-primary': 'rgb(65, 43, 21)' },
 		});
 
-		expect(boundColor()).toBe('rgb(65, 43, 21)');
+		expect(boundColor()).toBe('rgb(12, 34, 56)');
 	});
 });
 
@@ -1232,14 +1233,11 @@ describe('a Foundation Token a Mode Token\'s default names', () => {
 describe('a Screen Theme Override', () => {
 	const dividers = [FOUNDATION_CHROME.standings!['title-divider']!, FOUNDATION_CHROME.standings!['row-divider']!];
 
-	it('paints over the Theme wherever its Foundation Token is read, and the Theme again once cleared', async () => {
+	// A Screen takes its Foundation chrome from the Theme alone; one stored before is read by nothing.
+	it('of a Foundation Token is dormant: the display paints the Theme\'s value wherever it is read', async () => {
 		await mountMode('standings', { divider: 'rgb(1, 2, 3)' }, {
 			themeOverrides: { divider: 'rgb(4, 5, 6)' },
 		});
-		expect(dividers.map(probe => painted(probe, 'color'))).toEqual(['rgb(4, 5, 6)', 'rgb(4, 5, 6)']);
-
-		screen.value = { ...screen.value, themeOverrides: {} };
-		await flushPromises();
 
 		expect(dividers.map(probe => painted(probe, 'color'))).toEqual(['rgb(1, 2, 3)', 'rgb(1, 2, 3)']);
 	});
@@ -1324,5 +1322,14 @@ describe('the Screen inset and alignment', () => {
 		await mountMode(mode, LAYOUT);
 
 		expect(placement()).toEqual({ padding: '40px', justifyItems: 'end', alignItems: 'end' });
+	});
+
+	// The two Foundation Tokens a Screen may override.
+	it('places a Screen by its own override of the inset and alignment, over the Theme', async () => {
+		await mountMode('standings', LAYOUT, {
+			themeOverrides: { inset: 12, alignment: { horizontal: 'left', vertical: 'top' } },
+		});
+
+		expect(placement()).toEqual({ padding: '12px', justifyItems: 'start', alignItems: 'start' });
 	});
 });

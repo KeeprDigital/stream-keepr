@@ -34,8 +34,8 @@ provideScreenThemeOverrides(screen, eventId);
 /**
  * Editor Focus Mode (#744): while a graphics editor's Edit workspace offers it
  * and it is on, the editor gets the page. The layout drops the app sidebar and
- * this page drops the Screen-level cards around the editor — the header,
- * Background & Placement and the Screen-wide look — keeping the save failure,
+ * this page drops the Screen-level cards around the editor — the header and
+ * Background & Placement — keeping the save failure,
  * the way back to Screens, and the Screen's name in the navbar.
  */
 const { active: editorFocus } = useEditorFocusMode();
@@ -599,14 +599,6 @@ async function sendCommand(command: ScreenCommand) {
 					:screen="screen"
 					:event-id="eventId"
 					:mode="backgroundLayersMode"
-				/>
-
-				<!-- Screen-wide look: the Foundation Tokens the Screen may override -->
-				<ScreenThemeTokensSettings
-					v-if="!editorFocus"
-					:key="screen.currentMode"
-					:screen="screen"
-					:event-id="eventId"
 				/>
 			</div>
 		</UContainer>
