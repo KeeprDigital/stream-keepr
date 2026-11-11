@@ -34,15 +34,16 @@ import { FEATURE_MATCH_TOKEN_CATALOGUE } from '../../featureMatchTokenCatalogue'
  *   instead. Making it one field rather than two makes the invalid combination
  *   unrepresentable: a host cannot be in host-token mode without a catalogue, and
  *   cannot author Graphic Inputs while in it.
- * - **Instant-apply write semantics is not a field.** It would have no reader.
- *   Both hosts already write through the same instant path — Broadcast Graphics
- *   through `updateGraphics()` in its Settings component and Feature Match Overlay
- *   through `useModeConfigUpdate`'s `updateConfig` — and nothing in the compositor
- *   stages, batches, or defers a write. A flag declaring what is already true by
- *   construction is exactly the unread field this seam was reduced to avoid. What
- *   Broadcast Graphics stages is Graphic Inputs for an Update Graphic acceptance,
- *   which is live state rather than authoring, and `textValues` already says which
- *   host has them.
+ * - **Write semantics are not a field here.** The compositor never writes. The
+ *   shared graphics editor does, and it reads where its edits go, what its item
+ *   tree holds and which edits are forbidden from the Host Contract's editor half,
+ *   `GraphicsEditorHostContract` in `app/modules/graphics/editor/host.ts`
+ *   (ADR-0081). That half carries closures over a Screen's live editing state, so
+ *   it lives app-side and reads this declaration as its `tree.host`, rather than
+ *   adding fields here that the server would never read. Both hosts write
+ *   instantly; what Broadcast Graphics stages is Graphic Inputs for an Update
+ *   Graphic acceptance, which is live state rather than authoring, and
+ *   `textValues` already says which host has them.
  *
  * Channels and staged playout need no field for the same reason: they live in the
  * Live workspace, which a Feature Match Overlay never renders. The compositor has

@@ -2,7 +2,8 @@ import type { AlignEdge } from '~~/app/modules/graphics/canvasAlignment';
 import type { GraphicGroupItemConfig, ShapeGraphicItemConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
-import { alignLayers, canAlignLayers, canDistributeLayers, distributeLayers } from '~~/app/modules/feature-match-overlay/layerAlignment';
+import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~~/app/modules/feature-match-overlay/editorHost';
+import { alignLayers, canAlignLayers, canDistributeLayers, distributeLayers } from '~~/app/modules/graphics/editor/layerAlignment';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { group, shape } from '~~/test/helpers/graphicsComposition';
 
@@ -183,7 +184,7 @@ describe('feature match layout layer alignment', () => {
 			],
 		],
 	])('aligns %s', (_, variant, layers, edge, moved) => {
-		expect(alignLayers(layoutOf(variant), layers, CANVAS, edge)).toEqual(moved);
+		expect(alignLayers(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layoutOf(variant), layers, CANVAS, edge)).toEqual(moved);
 	});
 
 	it.each<[string, Variant, readonly { type: 'source' | 'item'; itemId: string }[], 'x' | 'y', unknown[]]>([
@@ -215,7 +216,7 @@ describe('feature match layout layer alignment', () => {
 			[],
 		],
 	])('distributes %s', (_, variant, layers, axis, moved) => {
-		expect(distributeLayers(layoutOf(variant), layers, axis)).toEqual(moved);
+		expect(distributeLayers(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layoutOf(variant), layers, axis)).toEqual(moved);
 	});
 
 	const ROW = {
@@ -286,8 +287,8 @@ describe('feature match layout layer alignment', () => {
 		const layout = layoutOf(variant);
 
 		expect([
-			canAlignLayers(layout, layers),
-			canDistributeLayers(layout, layers),
+			canAlignLayers(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, layers),
+			canDistributeLayers(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout, layers),
 		]).toEqual([aligns, distributes]);
 	});
 });

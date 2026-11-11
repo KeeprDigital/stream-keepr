@@ -1,6 +1,7 @@
 import type { FeatureMatchLayoutEditorLayer } from '~~/app/modules/feature-match-overlay/editorSelection';
 import { describe, expect, it } from 'vitest';
-import { layerGroupRefusal } from '~~/app/modules/feature-match-overlay/layerGrouping';
+import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~~/app/modules/feature-match-overlay/editorHost';
+import { layerGroupRefusal } from '~~/app/modules/graphics/editor/layerGrouping';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 
 /**
@@ -61,6 +62,6 @@ describe('layerGroupRefusal', () => {
 			'group-child',
 		],
 	] as const)('answers %s', (_case, layers, refusal) => {
-		expect(layerGroupRefusal(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout, layers)).toBe(refusal);
+		expect(layerGroupRefusal(FEATURE_MATCH_LAYOUT_EDITOR_TREE, DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout, layers)).toBe(refusal);
 	});
 });
