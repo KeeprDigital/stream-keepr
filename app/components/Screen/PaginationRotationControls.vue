@@ -31,7 +31,7 @@ const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.load
 
 <template>
 	<ScreenSettingsSubheading>
-		Automatic Paging
+		Automatic paging
 	</ScreenSettingsSubheading>
 
 	<ScreenSettingsToggle

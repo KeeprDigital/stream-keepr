@@ -28,13 +28,13 @@ describe('a closed Screen settings card\'s summary', () => {
 	it.each([
 		[
 			'no override',
-			['data'],
+			['reveal'],
 			{},
 			null,
 		],
 		[
 			'an override of another group\'s token',
-			['data'],
+			['reveal'],
 			{ 'standings.rise': '#000000' },
 			null,
 		],
@@ -46,7 +46,7 @@ describe('a closed Screen settings card\'s summary', () => {
 		],
 		[
 			'overrides across the groups it renders',
-			['table', 'data'],
+			['table', 'reveal'],
 			{
 				'standings.rise': '#000000',
 				'standings.reveal-motion': { duration: 100 },

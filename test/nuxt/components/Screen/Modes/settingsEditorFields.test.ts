@@ -5,9 +5,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, inject, nextTick, provide, ref } from 'vue';
-import { z } from 'zod';
-import { screenModeConfigFields, unwrapOptionalField } from '~~/shared/screenModeConfigs/fields';
-import { SCREEN_MODES, screenModeConfigContract } from '~~/shared/screenModes';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { DEFAULT_DECK_BOARD_LAYOUT, getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 
@@ -22,18 +20,14 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 };
 
 // Fields a scalar control writes without being that field's own control, and why.
-// A bespoke control counts as rendering its field.
+// A bespoke control counts as rendering its field. A field its contract gives a
+// named slot, such as Deck's board toggles, is that slot's widget's.
 const BESPOKE_CONTROLS: Record<string, string> = {
-	// Each board's own show toggle writes the one board selection both share.
-	'deck.board': 'the Mainboard and Sideboard show toggles',
 	// A Card Layout's bounds follow its content (ADR-0054), tested at `ScreenCardGridLayoutFields`.
 	'top-cards.columns': 'a column count kept to the card count',
 	'top-cards.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',
 	'deck.mainboard.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',
 	'deck.sideboard.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',
-	// Numeric sizes and an unset choice, which a string select field cannot hold; both
-	// the editor and the contract read them from TOP_CUT_BRACKET_SIZES.
-	'top-cut.bracketSizeOverride': 'the Bracket size select',
 };
 
 // Values a contract's select field allows that its editor does not offer.
@@ -321,7 +315,7 @@ const stubs = {
 	UInputNumber: controlStub('number', props => (Number(props.modelValue) || 0) + 1),
 	USelect: controlStub('select', differentItem),
 	UISegmentedTabs: controlStub('select', differentItem),
-	UINinePointPicker: controlStub('select', props => (props.modelValue === 'bottom-left'
+	UINinePointPicker: controlStub('position', props => (props.modelValue === 'bottom-left'
 		? 'bottom-right'
 		: 'bottom-left')),
 	UIColorPicker: controlStub('color', () => '#010203'),
@@ -366,20 +360,36 @@ function writtenPath(before: Record<string, unknown>, patch: Record<string, unkn
 	return [key];
 }
 
-/** Every editor field of a mode's contract, nested blocks included, by path. */
+/** The controls this guard drives: one value each. A set, a picker, a block or a slot's widget is tested where it lives. */
+const SCALAR_CONTROLS: ReadonlySet<ScreenModeConfigField['control']> = new Set([
+	'number',
+	'toggle',
+	'select',
+	'position',
+	'color',
+	'text',
+]);
+
+/** Every scalar editor field of a mode's contract, nested blocks included, by path. */
 function contractEditorFields(mode: ScreenMode): Map<string, ScreenModeConfigField> {
-	const contract = screenModeConfigContract(mode);
-	const fields = new Map<string, ScreenModeConfigField>(
-		Object.entries(contract.fields as Record<string, ScreenModeConfigField>),
-	);
-	for (const [key, field] of Object.entries(contract.shape)) {
-		const inner = unwrapOptionalField(field as z.ZodType);
-		if (inner instanceof z.ZodObject) {
-			for (const [innerKey, innerField] of Object.entries(screenModeConfigFields(inner.shape)))
-				fields.set(`${key}.${innerKey}`, innerField as ScreenModeConfigField);
+	const fields = new Map<string, ScreenModeConfigField>();
+	const visit = (views: Readonly<Record<string, ScreenModeConfigField>>, path: string[]) => {
+		for (const field of Object.values(views)) {
+			if (field.fields)
+				visit(field.fields, [...path, field.key]);
+			else if (SCALAR_CONTROLS.has(field.control))
+				fields.set([...path, field.key].join('.'), field);
 		}
-	}
+	};
+	visit(screenModeConfigContract(mode).fields as Record<string, ScreenModeConfigField>, []);
 	return fields;
+}
+
+/** A mode's fields a bespoke widget edits: its Event References and named slots. */
+function bespokeFields(mode: ScreenMode): Set<string> {
+	return new Set(Object.values(screenModeConfigContract(mode).fields as Record<string, ScreenModeConfigField>)
+		.filter(field => field.control === 'reference' || field.control === 'slot')
+		.map(field => field.key));
 }
 
 function numberAttr(value: string | undefined): number | undefined {
@@ -410,7 +420,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 	});
 
 	if (reason) {
-		it(`declares no editor field, since ${reason}`, () => {
+		it(`declares no scalar editor field, since ${reason}`, () => {
 			expect(contractEditorFields(mode).size).toBe(0);
 		});
 		return;
@@ -420,7 +430,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 
 	it('renders every scalar control from its contract field, and every editor field', async () => {
 		const fields = contractEditorFields(mode);
-		const eventReferences = new Set(Object.keys(SCREEN_MODES[mode].eventReferences));
+		const bespoke = bespokeFields(mode);
 		const rendered = new Set<string>();
 
 		const variants = [
@@ -454,9 +464,9 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 				if (!patch)
 					continue; // not a write of this mode's config, such as a Screen's alignment
 
-				const path = writtenPath(initial, patch, eventReferences);
-				if (path.length === 1 && eventReferences.has(path[0]!))
-					continue; // an Event Reference picker stays bespoke (ADR-0038)
+				const path = writtenPath(initial, patch, bespoke);
+				if (path.length === 1 && bespoke.has(path[0]!))
+					continue; // an Event Reference's picker or a named slot's widget (ADR-0038, #1093)
 
 				const key = path.join('.');
 				if (BESPOKE_CONTROLS[`${mode}.${key}`]) {

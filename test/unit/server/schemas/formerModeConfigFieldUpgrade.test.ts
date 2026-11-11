@@ -11,6 +11,7 @@ vi.mock('~~/shared/screenModeConfigs/roundClock', async (importOriginal) => {
 	const { roundClockModeConfigContract: actual } = await importOriginal<typeof import('~~/shared/screenModeConfigs/roundClock')>();
 	return {
 		roundClockModeConfigContract: defineScreenModeConfigContract(actual.shape, actual.defaults, {
+			groups: actual.groups,
 			formerFields: ['limitMinutes'],
 			upgradeFormerFields: fragment => 'limitMinutes' in fragment && !('countUpLimitMinutes' in fragment)
 				? { ...fragment, countUpLimitMinutes: fragment.limitMinutes }

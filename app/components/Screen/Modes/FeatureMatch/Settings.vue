@@ -81,7 +81,7 @@ defineExpose({ resetConfig, saving });
 
 const NO_COUNTER_TYPES = 'No counter types available for this game.';
 
-type ToggleKey = Exclude<keyof typeof fields, 'leftSidePlayer'>;
+type ToggleKey = Exclude<keyof typeof fields, 'leftSidePlayer' | 'featureMatchId'>;
 
 /** One toggle of a card: its contract field, and the feature gate the Event and Card Game put on it. */
 interface ToggleSetting {
@@ -97,6 +97,7 @@ function toggleSetting(key: ToggleKey, setting: Omit<ToggleSetting, 'key' | 'fie
 }
 
 const playerInfo = computed(() => [
+	toggleSetting('showNames', { description: 'Show each player\'s name.' }),
 	toggleSetting('showPronouns', {
 		description: 'Show player pronouns next to their name.',
 		enabled: hasPronouns.value,
@@ -109,7 +110,7 @@ const playerInfo = computed(() => [
 		// The contract labels it for Magic; each Card Game names its own player identity.
 		field: {
 			...fields.showDeckNames,
-			label: fields.showDeckNames.label.replace('Deck', identityLabel.value),
+			label: fields.showDeckNames.label.replace('deck', identityLabel.value.toLowerCase()),
 		},
 	},
 	toggleSetting('showRecords', {
@@ -184,7 +185,10 @@ function isOn(setting: ToggleSetting): boolean {
 
 /** The labels of the toggles that are on, `Show` dropped: a closed card's summary. */
 function onLabels(settings: ToggleSetting[]): string[] {
-	return settings.filter(isOn).map(setting => setting.field.label.replace(/^Show /, ''));
+	return settings.filter(isOn).map((setting) => {
+		const shown = setting.field.label.replace(/^Show /, '');
+		return shown.charAt(0).toUpperCase() + shown.slice(1);
+	});
 }
 
 const MATCH_DISPLAY_CARD = 'feature-match:match-display';
@@ -211,13 +215,13 @@ function toggleCard(card: Omit<ToggleCard, 'summary'>, none: string, ...extra: s
 const toggleCards = computed(() => {
 	const leftSide = leftSidePlayerItems.value.find(item => item.value === config.value.leftSidePlayer);
 	return [
-		toggleCard({ id: 'feature-match:player-info', title: 'Player Info', settings: playerInfo.value }, 'Nothing shown'),
+		toggleCard({ id: 'feature-match:player-info', title: 'Player info', settings: playerInfo.value }, 'Nothing shown'),
 		// Match Display ends with the left side select, so its summary does too.
-		toggleCard({ id: MATCH_DISPLAY_CARD, title: 'Match Display', settings: matchDisplay.value }, 'Nothing shown', `${fields.leftSidePlayer.label}: ${leftSide?.label}`),
-		toggleCard({ id: 'feature-match:game-state', title: 'Game State', settings: gameState.value }, 'Nothing shown'),
+		toggleCard({ id: MATCH_DISPLAY_CARD, title: 'Match display', settings: matchDisplay.value }, 'Nothing shown', `${fields.leftSidePlayer.label}: ${leftSide?.label}`),
+		toggleCard({ id: 'feature-match:game-state', title: 'Game state', settings: gameState.value }, 'Nothing shown'),
 		toggleCard({
 			id: 'feature-match:control-permissions',
-			title: 'Control Permissions',
+			title: 'Control permissions',
 			subtitle: 'Controls that players can use from the match screen. Disabled controls are still visible as read-only information.',
 			settings: controlPermissions.value,
 		}, 'None allowed'),
@@ -240,7 +244,7 @@ async function handleMatchChange(matchId: number | null) {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsSection title="Feature Match Slot" :collapsible="false">
+		<ScreenSettingsSection title="Source" :collapsible="false">
 			<ScreenFeatureMatchSlotField
 				:model-value="config.featureMatchId"
 				:event-id="eventId"

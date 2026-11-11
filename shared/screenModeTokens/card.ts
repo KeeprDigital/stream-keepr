@@ -1,7 +1,9 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { cardModeConfigContract } from '../screenModeConfigs/card';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
 
-/** The Card Spotlight settings groups its Mode Tokens may name (ADR-0072). */
-export type CardSettingsGroup = 'card';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type CardSettingsGroup = ScreenSettingsGroupOf<typeof cardModeConfigContract>;
 
 /** How the Card Spotlight Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const cardModeTokens = {

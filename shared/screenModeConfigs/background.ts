@@ -13,7 +13,11 @@ import { defineScreenModeConfigContract, serverValidatedField } from './contract
  * fresh Background Screen starts empty, black until configured.
  */
 export const backgroundModeConfigContract = defineScreenModeConfigContract({
-	layers: serverValidatedField<BackgroundLayer[]>(),
+	layers: serverValidatedField<BackgroundLayer[]>({
+		label: 'Background Layers',
+		card: 'background-placement',
+		slot: 'background-layers',
+	}),
 }, {
 	layers: [],
 }, {

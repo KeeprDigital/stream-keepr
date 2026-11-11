@@ -1,7 +1,9 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { topCardsModeConfigContract } from '../screenModeConfigs/topCards';
 
-/** The Most Played Cards settings groups its Mode Tokens may name (ADR-0072). */
-export type TopCardsSettingsGroup = 'rank-badge' | 'stat-badge' | 'points-badge';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type TopCardsSettingsGroup = ScreenSettingsGroupOf<typeof topCardsModeConfigContract>;
 
 /**
  * How the Most Played Cards Screen Mode looks: its Mode Tokens, by name within

@@ -1,9 +1,9 @@
 import type { PageRotationDeclaration } from './modules/page-rotation';
 import type { ThemeTokenType } from './modules/theme/tokens';
 import type { AnyDeclaredModeTokenDefinition } from './modules/theme/vocabulary';
-import type { ManualBracket } from './modules/top-cut-bracket/manual';
-import type { ScreenModeConfigContract, ScreenModeConfigOf } from './screenModeConfigs/contract';
-import type { DeckModeConfig, DeckSource } from './screenModeConfigs/deck';
+import type { ScreenModeConfigContract, ScreenModeConfigOf, ScreenSettingsGroupOf } from './screenModeConfigs/contract';
+import type { DeckModeConfig } from './screenModeConfigs/deck';
+import type { EventReferenceKind, EventReferenceValues, ScreenModeEventReferences } from './screenModeConfigs/eventReferences';
 import type { FeatureMatchModeConfig } from './screenModeConfigs/featureMatch';
 import type { FeatureMatchOverlayModeConfig } from './screenModeConfigs/featureMatchOverlay';
 import type { HeadToHeadModeConfig } from './screenModeConfigs/headToHead';
@@ -49,33 +49,7 @@ import { topCardsFormerModeTokens, topCardsModeTokens } from './screenModeTokens
 import { topCutFormerModeTokens, topCutModeTokens } from './screenModeTokens/topCut';
 import { SCREEN_MODE_VALUES } from './types/enums';
 
-/**
- * What a field declared as each kind of Event Reference holds. A kind is what
- * the field names: a Phase, a Round, a Player, a Player List, a Feature Match
- * Slot, an Archetype or a Talent by id, a Talent lineup as an ordered list of
- * Talent ids, a whole Deck Source, which names a Player or a Broadcast Deck
- * List, or a whole Manual Bracket, whose entrants may each name a Player.
- */
-interface EventReferenceValues {
-	phase: EntityIdField;
-	round: EntityIdField;
-	player: EntityIdField;
-	playerList: EntityIdField;
-	featureMatchSlot: EntityIdField;
-	archetype: EntityIdField;
-	talent: EntityIdField;
-	talentLineup: readonly number[] | undefined;
-	deckSource: DeckSource | undefined;
-	manualBracket: ManualBracket | undefined;
-}
-
-/** A field naming one entity by id, or none. */
-type EntityIdField = number | null | undefined;
-
-export type EventReferenceKind = keyof EventReferenceValues;
-
-/** A mode's Event References: each config field naming something in the Screen's Event, and what it names. */
-export type ScreenModeEventReferences = Readonly<Record<string, EventReferenceKind>>;
+export type { EventReferenceKind, ScreenModeEventReferences } from './screenModeConfigs/eventReferences';
 
 export interface ScreenModeDefinition {
 	label: string;
@@ -129,10 +103,11 @@ export interface ScreenModeDefinition {
 	 * that must belong to the Screen's Event, and what each names. `{}` declares
 	 * none. Every mode declares it, so a new mode cannot skip the question.
 	 *
-	 * Declared here and nowhere else. The Screen write path derives its Event
+	 * Read from its config contract (`config.eventReferences`), where each field
+	 * names its own kind (`reference`, #1093), so the field, its picker and its
+	 * check have one declaration. The Screen write path derives its Event
 	 * checks from it (`validateScreenModeConfigReferences`), and each field must
-	 * be one of the mode's config fields holding what its kind names, or the
-	 * definitions fail to compile (ADR-0038).
+	 * hold what its kind names, or the definitions fail to compile (ADR-0038).
 	 */
 	eventReferences: ScreenModeEventReferences;
 	/**
@@ -269,7 +244,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		description: 'Full-screen layered background',
 		cardGames: SCREEN_MODE_CARD_GAMES.background,
 		config: backgroundModeConfigContract,
-		eventReferences: {},
+		eventReferences: backgroundModeConfigContract.eventReferences,
 		outputFollows: {},
 	},
 	'card': {
@@ -280,7 +255,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES.card,
 		backgroundLayers: true,
 		config: cardModeConfigContract,
-		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		eventReferences: cardModeConfigContract.eventReferences,
 		// Its Card arrives on the Card's own messages; `featureMatchId` only helps its operator pick one.
 		outputFollows: { screenCard: true },
 		modeTokens: cardModeTokens,
@@ -293,7 +268,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES.deck,
 		backgroundLayers: true,
 		config: deckModeConfigContract,
-		eventReferences: { deckSource: 'deckSource' },
+		eventReferences: deckModeConfigContract.eventReferences,
 		outputFollows: {
 			player: deckSourcePlayer,
 			playerDeck: deckSourcePlayer,
@@ -317,7 +292,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES.standings,
 		backgroundLayers: true,
 		config: standingsModeConfigContract,
-		eventReferences: { roundId: 'round', playerListId: 'playerList' },
+		eventReferences: standingsModeConfigContract.eventReferences,
 		outputFollows: {
 			player: true,
 			roundStandings: true,
@@ -349,7 +324,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES['top-cut'],
 		backgroundLayers: true,
 		config: topCutModeConfigContract,
-		eventReferences: { phaseId: 'phase', manualBracket: 'manualBracket' },
+		eventReferences: topCutModeConfigContract.eventReferences,
 		outputFollows: {
 			// A Manual Bracket names its Players. Over-approximation: a Phase's
 			// bracket seats whoever its Matches do, which only its read knows,
@@ -379,7 +354,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		description: 'Live feature match controls',
 		cardGames: SCREEN_MODE_CARD_GAMES['feature-match'],
 		config: featureMatchModeConfigContract,
-		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		eventReferences: featureMatchModeConfigContract.eventReferences,
 		outputFollows: {
 			featureMatchSlot: (config: FeatureMatchModeConfig) => namedSlot(config.featureMatchId),
 			featureMatchSession: (config: FeatureMatchModeConfig) => namedSlot(config.featureMatchId),
@@ -393,7 +368,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES['feature-match-overlay'],
 		graphicsHost: true,
 		config: featureMatchOverlayModeConfigContract,
-		eventReferences: { featureMatchId: 'featureMatchSlot' },
+		eventReferences: featureMatchOverlayModeConfigContract.eventReferences,
 		outputFollows: {
 			featureMatchSlot: (config: FeatureMatchOverlayModeConfig) => namedSlot(config.featureMatchId),
 			featureMatchSession: (config: FeatureMatchOverlayModeConfig) => namedSlot(config.featureMatchId),
@@ -417,7 +392,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		graphicsHost: true,
 		themePreview: true,
 		config: broadcastGraphicsModeConfigContract,
-		eventReferences: {},
+		eventReferences: broadcastGraphicsModeConfigContract.eventReferences,
 		// Its Graphic Input Bindings are resolved into its Live Session, which is all it reads.
 		outputFollows: { broadcastGraphicsLiveSession: true },
 	},
@@ -429,7 +404,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES.metagame,
 		backgroundLayers: true,
 		config: metagameModeConfigContract,
-		eventReferences: { playerListId: 'playerList' },
+		eventReferences: metagameModeConfigContract.eventReferences,
 		outputFollows: METAGAME_OUTPUT_FOLLOWS,
 		pageRotation: { pageSize: 'pageSize' },
 		modeTokens: metagameModeTokens,
@@ -443,7 +418,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES['top-cards'],
 		backgroundLayers: true,
 		config: topCardsModeConfigContract,
-		eventReferences: { playerListId: 'playerList' },
+		eventReferences: topCardsModeConfigContract.eventReferences,
 		outputFollows: METAGAME_OUTPUT_FOLLOWS,
 		pageRotation: { pageSize: 'cardsPerPage' },
 		modeTokens: topCardsModeTokens,
@@ -457,7 +432,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES['player-history'],
 		backgroundLayers: true,
 		config: playerHistoryModeConfigContract,
-		eventReferences: { playerId: 'player' },
+		eventReferences: playerHistoryModeConfigContract.eventReferences,
 		// Over-approximation throughout: its rows hold opponents, Matches since
 		// re-seated, their Rounds and the opponents' Archetypes, which only its read knows.
 		outputFollows: {
@@ -480,7 +455,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES.pairings,
 		backgroundLayers: true,
 		config: pairingsModeConfigContract,
-		eventReferences: { roundId: 'round' },
+		eventReferences: pairingsModeConfigContract.eventReferences,
 		outputFollows: {
 			round: (config: PairingsModeConfig) => config.roundId != null && {
 				roundIds: [config.roundId],
@@ -502,7 +477,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES['archetype-spotlight'],
 		backgroundLayers: true,
 		config: archetypeSpotlightModeConfigContract,
-		eventReferences: { archetypeId: 'archetype', playerListId: 'playerList' },
+		eventReferences: archetypeSpotlightModeConfigContract.eventReferences,
 		outputFollows: METAGAME_OUTPUT_FOLLOWS,
 		pageRotation: { pageSize: 'rowsPerPage' },
 		modeTokens: archetypeSpotlightModeTokens,
@@ -516,7 +491,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES['head-to-head'],
 		backgroundLayers: true,
 		config: headToHeadModeConfigContract,
-		eventReferences: { featureMatchId: 'featureMatchSlot', player1Id: 'player', player2Id: 'player' },
+		eventReferences: headToHeadModeConfigContract.eventReferences,
 		outputFollows: {
 			featureMatchSlot: headToHeadSlot,
 			featureMatchSession: headToHeadSlot,
@@ -548,7 +523,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES['round-clock'],
 		backgroundLayers: true,
 		config: roundClockModeConfigContract,
-		eventReferences: { roundId: 'round' },
+		eventReferences: roundClockModeConfigContract.eventReferences,
 		outputFollows: {
 			round: (config: RoundClockModeConfig) => config.roundId == null || {
 				roundIds: [config.roundId],
@@ -568,7 +543,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		cardGames: SCREEN_MODE_CARD_GAMES.talent,
 		backgroundLayers: true,
 		config: talentModeConfigContract,
-		eventReferences: { talentId: 'talent', talentIds: 'talentLineup' },
+		eventReferences: talentModeConfigContract.eventReferences,
 		outputFollows: {
 			talent: (config: TalentModeConfig) => {
 				const talentIds = talentScreenTalentIds(config);
@@ -634,6 +609,27 @@ type MisdeclaredOutputFollows = {
  * Exported only so the check is not an unused binding.
  */
 export const OUTPUT_FOLLOWS_FIT_THEIR_CONFIG: [MisdeclaredOutputFollows] extends [never] ? true : MisdeclaredOutputFollows = true;
+
+type ModeTokensOfMode<M extends ScreenMode> = typeof SCREEN_MODE_DEFINITIONS[M] extends { modeTokens: infer Tokens } ? Tokens : Record<never, never>;
+
+/**
+ * Each Mode Token naming a Screen Settings Group its mode's contract does not
+ * declare, as `mode.token` (ADR-0072).
+ */
+type MisplacedModeToken = {
+	[M in ScreenMode]: {
+		[T in keyof ModeTokensOfMode<M> & string]: ModeTokensOfMode<M>[T] extends { settingsGroup: ScreenSettingsGroupOf<typeof SCREEN_MODE_DEFINITIONS[M]['config']> }
+			? never
+			: `${M}.${T}`;
+	}[keyof ModeTokensOfMode<M> & string];
+}[ScreenMode];
+
+/**
+ * Fails to compile when a Mode Token names a group its mode's contract does
+ * not declare; the error's `MisplacedModeToken` resolves to each offending
+ * `mode.token`. Exported only so the check is not an unused binding.
+ */
+export const MODE_TOKEN_GROUPS_FIT_THEIR_CONTRACT: [MisplacedModeToken] extends [never] ? true : MisplacedModeToken = true;
 
 /** The Screen Modes whose definition declares a Page Rotation. */
 export type PageRotationMode = {
