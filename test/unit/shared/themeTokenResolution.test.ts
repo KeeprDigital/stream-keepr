@@ -535,8 +535,16 @@ describe('a motion Mode Token', () => {
 	it.each([
 		['standings.row-motion', 'with nothing overridden', {}],
 		['metagame.row-motion', 'with nothing overridden', {}],
-		['standings.row-motion', 'over a Screen\'s override of the enter motion', { 'motion-enter': SCREEN_ENTER }],
-		['metagame.row-motion', 'over a Screen\'s override of the enter motion', { 'motion-enter': SCREEN_ENTER }],
+		[
+			'standings.row-motion',
+			'over a Screen\'s override of the enter motion',
+			{ 'motion-enter': SCREEN_ENTER },
+		],
+		[
+			'metagame.row-motion',
+			'over a Screen\'s override of the enter motion',
+			{ 'motion-enter': SCREEN_ENTER },
+		],
 	])('times %s by the Theme\'s enter motion %s', (name, _, overrides) => {
 		expect(motion(name, { 'motion-enter': THEME_ENTER }, overrides)).toEqual({
 			duration: THEME_ENTER.duration,

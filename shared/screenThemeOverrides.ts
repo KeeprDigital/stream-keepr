@@ -34,7 +34,10 @@ export function placeScreenThemeTokens(mode: ScreenMode): ScreenThemeTokenPlacem
 	const groups: Record<string, string[]> = {};
 	for (const [name, definition] of Object.entries(screenModeTokens(mode)))
 		(groups[definition.settingsGroup] ??= []).push(name);
-	return { groups, placement: screenModeHostTokens(mode) };
+	return {
+		groups,
+		placement: screenModeHostTokens(mode),
+	};
 }
 
 /**

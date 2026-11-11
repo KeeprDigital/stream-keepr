@@ -1327,7 +1327,10 @@ describe('the Screen inset and alignment', () => {
 	// The two Foundation Tokens a Screen may override.
 	it('places a Screen by its own override of the inset and alignment, over the Theme', async () => {
 		await mountMode('standings', LAYOUT, {
-			themeOverrides: { inset: 12, alignment: { horizontal: 'left', vertical: 'top' } },
+			themeOverrides: {
+				inset: 12,
+				alignment: { horizontal: 'left', vertical: 'top' },
+			},
 		});
 
 		expect(placement()).toEqual({ padding: '12px', justifyItems: 'start', alignItems: 'start' });

@@ -39,7 +39,12 @@ export function screenModeThemeTokenStyle(mode: ScreenMode, theme: StoredThemeTo
 		hostTokens,
 	});
 	return themeTokenCssProperties({
-		...resolveFoundationTokens({ vocabulary: FOUNDATION_TOKENS, theme, overrides, hostTokens }),
+		...resolveFoundationTokens({
+			vocabulary: FOUNDATION_TOKENS,
+			theme,
+			overrides,
+			hostTokens,
+		}),
 		...Object.fromEntries(Object.keys(modeTokens).map(name => [name, values[name]])),
 	});
 }
@@ -118,7 +123,12 @@ export function screenBackgroundLayers(own: BackgroundLayer[] | undefined, theme
  * inside the inset reads it here too.
  */
 export function screenLayoutTokens(theme: StoredThemeTokens, overrides: StoredThemeTokens): { inset: number; alignment: ThemeAlignment } {
-	const input = { vocabulary: FOUNDATION_TOKENS, theme, overrides, hostTokens: PLAIN_HOST_TOKENS };
+	const input = {
+		vocabulary: FOUNDATION_TOKENS,
+		theme,
+		overrides,
+		hostTokens: PLAIN_HOST_TOKENS,
+	};
 	return {
 		inset: resolveFoundationToken(input, 'inset') as number,
 		alignment: resolveFoundationToken(input, 'alignment') as ThemeAlignment,

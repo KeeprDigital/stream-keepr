@@ -222,7 +222,9 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 			});
 		}
 		else {
-			await overrideOn('feature-match-overlay', { [token]: value() });
+			await overrideOn('feature-match-overlay', {
+				[token]: value(),
+			});
 		}
 		const named = owner === 'theme'
 			? { kind: 'theme', id: themeId, name: 'Brand' }
@@ -266,7 +268,9 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 		[
 			'clearing the override',
 			async () => {
-				await overrideOn('feature-match-overlay', { 'feature-match-overlay.frame-media': { kind: 'image', ...logo } });
+				await overrideOn('feature-match-overlay', {
+					'feature-match-overlay.frame-media': { kind: 'image', ...logo },
+				});
 				await overrideOn('feature-match-overlay', { 'feature-match-overlay.frame-media': null });
 			},
 		],
@@ -437,12 +441,29 @@ describe('a Screen Output\'s capability over its Theme\'s content', () => {
 
 	// A Screen takes these from its Theme alone; one stored before is read by nothing.
 	it.each([
-		['a plain mode\'s background', 'top-cut', 'background', (revision: Revision) => libraryImageLayer(revision)],
-		['a graphics host\'s logo', 'broadcast-graphics', 'logo', (revision: Revision) => ({ kind: 'image', ...revision })],
+		[
+			'a plain mode\'s background',
+			'top-cut',
+			'background',
+			(revision: Revision) => libraryImageLayer(revision),
+		],
+		[
+			'a graphics host\'s logo',
+			'broadcast-graphics',
+			'logo',
+			(revision: Revision) => ({ kind: 'image', ...revision }),
+		],
 	])('resolves the Theme\'s content for %s, never a stored override of it', async (_case, mode, token, value) => {
-		await call(setToken, { themeId, token }, { value: value(plate) });
+		await call(setToken, { themeId, token }, {
+			value: value(plate),
+		});
 		await db.update(schema.screens)
-			.set({ currentMode: mode as never, themeOverrides: { [token]: value(logo) } })
+			.set({
+				currentMode: mode as never,
+				themeOverrides: {
+					[token]: value(logo),
+				},
+			})
 			.where(eq(schema.screens.id, screenId));
 		await db.insert(graphicAssetReferences).values({
 			id: 'stored-foundation-override',

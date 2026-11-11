@@ -128,8 +128,18 @@ afterAll(async () => {
 describe('screen Theme Overrides', () => {
 	// A Screen overrides its own mode's Mode Tokens, and a plain mode's host its placement.
 	it.each([
-		['its own Mode Token, as a literal', 'standings', 'standings.rise', '#ff0000'],
-		['the Screen inset, which a plain mode\'s host consumes', 'standings', 'inset', 24],
+		[
+			'its own Mode Token, as a literal',
+			'standings',
+			'standings.rise',
+			'#ff0000',
+		],
+		[
+			'the Screen inset, which a plain mode\'s host consumes',
+			'standings',
+			'inset',
+			24,
+		],
 		[
 			'the Screen alignment, which a plain mode\'s host consumes',
 			'standings',
@@ -247,17 +257,72 @@ describe('screen Theme Overrides', () => {
 	];
 	// A Screen takes every other Foundation Token from its Theme, and a former token from nowhere (ADR-0049).
 	it.each([
-		['a Foundation Token, on a plain mode', 'standings', 'accent', '#00ff00'],
-		['a Foundation Token a Mode Token\'s default names', 'standings', 'positive', '#00ff00'],
-		['the background, on a plain mode', 'standings', 'background', background],
-		['the background, on the Background Screen', 'background', 'background', background],
-		['the Screen inset, on a Screen rendered edge to edge', 'background', 'inset', 12],
-		['a Foundation Token a Graphic Item binds, on a graphics host', 'broadcast-graphics', 'accent', '#00ff00'],
-		['the logo, on a graphics host', 'broadcast-graphics', 'logo', null],
-		['a Foundation Token, in a mode that declares no Mode Tokens', 'card', 'accent', '#00ff00'],
-		['a former token, set on a Screen of its mode', 'metagame', 'metagame.chart-series-1', '#ff0000'],
-		['a former token, cleared on a Screen of its mode', 'metagame', 'metagame.chart-series-1', null],
-		['a former token, set on a Screen of another mode', 'standings', 'metagame.chart-series-1', '#ff0000'],
+		[
+			'a Foundation Token, on a plain mode',
+			'standings',
+			'accent',
+			'#00ff00',
+		],
+		[
+			'a Foundation Token a Mode Token\'s default names',
+			'standings',
+			'positive',
+			'#00ff00',
+		],
+		[
+			'the background, on a plain mode',
+			'standings',
+			'background',
+			background,
+		],
+		[
+			'the background, on the Background Screen',
+			'background',
+			'background',
+			background,
+		],
+		[
+			'the Screen inset, on a Screen rendered edge to edge',
+			'background',
+			'inset',
+			12,
+		],
+		[
+			'a Foundation Token a Graphic Item binds, on a graphics host',
+			'broadcast-graphics',
+			'accent',
+			'#00ff00',
+		],
+		[
+			'the logo, on a graphics host',
+			'broadcast-graphics',
+			'logo',
+			null,
+		],
+		[
+			'a Foundation Token, in a mode that declares no Mode Tokens',
+			'card',
+			'accent',
+			'#00ff00',
+		],
+		[
+			'a former token, set on a Screen of its mode',
+			'metagame',
+			'metagame.chart-series-1',
+			'#ff0000',
+		],
+		[
+			'a former token, cleared on a Screen of its mode',
+			'metagame',
+			'metagame.chart-series-1',
+			null,
+		],
+		[
+			'a former token, set on a Screen of another mode',
+			'standings',
+			'metagame.chart-series-1',
+			'#ff0000',
+		],
 	])('accepts %s and drops it, so nothing is stored, versioned or announced', async (_case, mode, token, value) => {
 		const screenId = await createScreen(mode as ScreenMode, 'main');
 		const before = await storedVersion(screenId);
