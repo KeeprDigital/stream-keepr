@@ -146,7 +146,12 @@ const MultiLayerInspectorStub = defineComponent({
 		writable: { type: Boolean, required: false },
 		groupRefusal: { type: String, required: false },
 	},
-	emits: ['update', 'group'],
+	emits: [
+		'update',
+		'group',
+		'align',
+		'distribute',
+	],
 	template: '<div data-testid="multi-layer-inspector" :data-layers="JSON.stringify(layers)" :data-writable="String(writable)" :data-group-refusal="groupRefusal" />',
 });
 
@@ -567,7 +572,8 @@ describe('featureMatchOverlaySettings', () => {
 		it('aligns them from the property panel', async () => {
 			const wrapper = await mountWithTwo();
 
-			await wrapper.get('[data-testid="layer-align-controls"] button[aria-label="Align top"]').trigger('click');
+			wrapper.getComponent(MultiLayerInspectorStub).vm.$emit('align', 'top');
+			await nextTick();
 
 			expect(positions().map(position => position?.y)).toEqual([90, 90]);
 		});
