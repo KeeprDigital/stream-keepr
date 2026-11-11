@@ -290,7 +290,7 @@ describe('the Standings settings layout', () => {
 			[
 				{
 					...DATA,
-					groups: ['data'],
+					groups: ['reveal'],
 				},
 				{
 					id: 'standings:reveal-controls',

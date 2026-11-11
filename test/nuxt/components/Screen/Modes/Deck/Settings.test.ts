@@ -543,7 +543,7 @@ describe('screenDeckSettings', () => {
 		await flushPromises();
 
 		const details = card(wrapper, 'Deck details');
-		expect(details.find('[data-label="Details Text Size"]').exists()).toBe(shown);
+		expect(details.find('[data-label="Details text size"]').exists()).toBe(shown);
 		expect(details.find('[data-label="Show as a pill"]').exists()).toBe(shown);
 	});
 
@@ -642,14 +642,14 @@ describe('screenDeckSettings', () => {
 		const mainboardSection = card(wrapper, 'Mainboard');
 		expect(mainboardSection.find('[data-label="Columns"]').exists()).toBe(true);
 		expect(mainboardSection.find('[data-label="Max card size"]').exists()).toBe(true);
-		expect(mainboardSection.find('[data-label="List Columns"]').exists()).toBe(false);
+		expect(mainboardSection.find('[data-label="List columns"]').exists()).toBe(false);
 
 		// A stack's cards overlap in one column, so it has no columns or gap.
 		const sideboardSection = card(wrapper, 'Sideboard');
 		expect(sideboardSection.find('[data-label="Columns"]').exists()).toBe(false);
 		expect(sideboardSection.find('[data-label="Card gap"]').exists()).toBe(false);
 		expect(sideboardSection.find('[data-label="Max card size"]').exists()).toBe(true);
-		expect(sideboardSection.find('[data-label="List Columns"]').exists()).toBe(false);
+		expect(sideboardSection.find('[data-label="List columns"]').exists()).toBe(false);
 	});
 
 	// The block is written whole, so a value left Auto is its absent key.
@@ -760,7 +760,7 @@ describe('screenDeckSettings', () => {
 		{
 			name: 'a following sideboard\'s stack reveal stays following',
 			sideboard: { view: 'stack' },
-			edit: (sideboard: ReturnType<typeof boardCard>) => sideboard.get('[data-label="Stack Reveal"]').getComponent(UInputNumberStub).vm.$emit('update:modelValue', 60),
+			edit: (sideboard: ReturnType<typeof boardCard>) => sideboard.get('[data-label="Stack reveal"]').getComponent(UInputNumberStub).vm.$emit('update:modelValue', 60),
 			written: { view: 'stack', stackReveal: 60 },
 		},
 	])('$name', async ({ sideboard, edit, written }) => {
@@ -1029,7 +1029,7 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 
 		await wrapper.get('[data-testid="source-tabs"] [data-value="player"]').trigger('click');
 		await wrapper.get('[data-testid="deck-source-player"] [role="combobox"]').setValue(search);
-		const options = card(wrapper, 'Source').findAll('[role="option"]');
+		const options = card(wrapper, 'Deck Source').findAll('[role="option"]');
 		expect(options.map(option => option.text())).toEqual(['zoro_main']);
 		await options[0]!.trigger('click');
 

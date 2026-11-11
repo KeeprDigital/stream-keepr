@@ -428,7 +428,7 @@ describe('screenMetagameSettings', () => {
 					'Archetype',
 					'Count',
 					'Share',
-					'Colors',
+					'Colours',
 				],
 			],
 			[
