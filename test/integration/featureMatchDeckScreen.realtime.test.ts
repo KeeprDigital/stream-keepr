@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
 import { $fetch, anonymousFetch } from './client';
 import { commandId, getFeatureMatchSlot, requireActiveSession, sendFeatureMatchCommand } from './featureMatchSessionHelpers';
-import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
+import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './realtimeKey';
 
 // A Deck List Screen showing an OP Slot side reads its Deck List by
 // capability alone, follows the player the Session seats there (ADR-0058),

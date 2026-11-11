@@ -3,7 +3,7 @@ import Ably from 'ably';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
 import { $fetch } from './client';
-import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
+import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './realtimeKey';
 
 // A Feature Match Deck List pasted on a One Piece Slot side (ADR-0057): a
 // replacement during a Session reaches its snapshot and its followers.
