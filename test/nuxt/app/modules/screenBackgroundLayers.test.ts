@@ -54,16 +54,6 @@ describe('the Background Layer stack a Screen paints', () => {
 			[],
 		],
 	])('is %s', (_case, own, theme, painted) => {
-		expect(screenBackgroundLayers(own, theme, {}).map(layer => layer.id)).toEqual(painted);
-	});
-
-	it('takes a Screen Theme Override of the background before its Theme\'s', () => {
-		const painted = screenBackgroundLayers(undefined, { background: themeStack }, {
-			background: [
-				colorLayer('override'),
-			],
-		});
-
-		expect(painted.map(layer => layer.id)).toEqual(['override']);
+		expect(screenBackgroundLayers(own, theme).map(layer => layer.id)).toEqual(painted);
 	});
 });

@@ -108,14 +108,12 @@ const selection = computed<AnimationEffectSelection>(() => ({
 			/>
 
 			<template v-if="background.enabled">
-				<ScreenSettingsField label="Opacity" stacked data-testid="broadcast-graphics-background-opacity">
-					<UIOpacityInput
-						:model-value="background.opacity"
-						size="sm"
-						class="w-full"
-						@update:model-value="updateEnabledOrOpacity({ opacity: Number($event) })"
-					/>
-				</ScreenSettingsField>
+				<GraphicsOpacityField
+					label="Opacity"
+					:model-value="background.opacity"
+					data-testid="broadcast-graphics-background-opacity"
+					@update:model-value="updateEnabledOrOpacity({ opacity: Number($event) })"
+				/>
 
 				<ScreenAnimationEffectFields
 					:selection="selection"

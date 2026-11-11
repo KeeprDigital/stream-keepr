@@ -126,48 +126,28 @@ afterAll(async () => {
 });
 
 describe('screen Theme Overrides', () => {
+	// A Screen overrides its own mode's Mode Tokens, and a plain mode's host its placement.
 	it.each([
-		['its own Mode Token, as a literal', 'standings.rise', '#ff0000'],
-		['a Foundation Token a Mode Token\'s default names', 'positive', 'rgba(0, 0, 0, 0.5)'],
-		['a Foundation Token no default names, which a Mode Token could follow', 'accent', '#00ff00'],
-		['the Screen inset, which its host consumes', 'inset', 24],
 		[
-			'the Screen alignment, which its host consumes',
+			'its own Mode Token, as a literal',
+			'standings',
+			'standings.rise',
+			'#ff0000',
+		],
+		[
+			'the Screen inset, which a plain mode\'s host consumes',
+			'standings',
+			'inset',
+			24,
+		],
+		[
+			'the Screen alignment, which a plain mode\'s host consumes',
+			'standings',
 			'alignment',
 			{ horizontal: 'left', vertical: 'top' },
 		],
-	])('sets %s, stores it on that Screen alone, and announces that Screen', async (_case, token, value) => {
-		await expectOverrideStored('standings', token, value);
-	});
-
-	// A graphics host's Graphic Items may bind any such Foundation Token (#831).
-	it.each([
 		[
-			'a Broadcast Graphics Screen',
-			'broadcast-graphics',
-			'accent',
-			'#00ff00',
-		],
-		[
-			'a Feature Match Overlay Screen',
-			'feature-match-overlay',
-			'text-primary',
-			'#00ff00',
-		],
-		[
-			'a Broadcast Graphics Screen, its heading type',
-			'broadcast-graphics',
-			'heading',
-			{
-				font: { kind: 'application', fontId: 'mplantin' },
-				weight: 400,
-				lineHeight: 1.2,
-				tracking: 0,
-				case: 'none',
-			},
-		],
-		[
-			'a Feature Match Overlay Screen, its Frame surface',
+			'a graphics host\'s own Mode Token',
 			'feature-match-overlay',
 			'feature-match-overlay.frame-surface',
 			{
@@ -175,13 +155,9 @@ describe('screen Theme Overrides', () => {
 				fillOpacity: 1,
 			},
 		],
-	])('sets a token a graphics host consumes on %s', async (_case, mode, token, value) => {
-		await expectOverrideStored(mode as ScreenMode, token, value);
-	});
-
-	async function expectOverrideStored(mode: ScreenMode, token: string, value: unknown) {
-		const screenId = await createScreen(mode, 'main');
-		const otherId = await createScreen(mode, 'side');
+	])('sets %s, stores it on that Screen alone, and announces that Screen', async (_case, mode, token, value) => {
+		const screenId = await createScreen(mode as ScreenMode, 'main');
+		const otherId = await createScreen(mode as ScreenMode, 'side');
 
 		const answered = await override(screenId, { [token]: value });
 
@@ -189,47 +165,14 @@ describe('screen Theme Overrides', () => {
 		expect(await storedOverrides(screenId)).toEqual({ [token]: value });
 		expect(await storedOverrides(otherId)).toEqual({});
 		expect(announcedScreens()).toEqual([screenId]);
-	}
-
-	// `background` is consumed by the Screen host, not a Mode Token.
-	const background = [
-		{
-			id: 'wash',
-			type: 'color',
-			color: '#101010',
-			enabled: true,
-			opacity: 1,
-		},
-	];
-	it.each([
-		[
-			'the Background Screen',
-			'background',
-			{ background },
-		],
-		[
-			'a mode declaring a Background Layer stack',
-			'standings',
-			{ background },
-		],
-		['a graphics host, which paints no Background Layer stack', 'broadcast-graphics', 'unconsumable-token'],
-	])('answers %s overriding the background', async (_case, mode, answer) => {
-		const screenId = await createScreen(mode as ScreenMode, 'main');
-
-		const outcome = await override(screenId, { background }).then(
-			screen => screen.themeOverrides,
-			(error: { data?: { code?: string } }) => error.data?.code,
-		);
-
-		expect(outcome).toEqual(answer);
 	});
 
 	it('clears one override, keeping the rest, so the cleared token reads the Theme again', async () => {
 		const screenId = await createScreen('standings', 'main');
-		await override(screenId, { 'accent': '#00ff00', 'standings.fall': '#000000' });
+		await override(screenId, { 'inset': 24, 'standings.fall': '#000000' });
 		published.length = 0;
 
-		const answered = await override(screenId, { accent: null });
+		const answered = await override(screenId, { inset: null });
 
 		expect(answered.themeOverrides).toEqual({ 'standings.fall': '#000000' });
 		expect(await storedOverrides(screenId)).toEqual({ 'standings.fall': '#000000' });
@@ -238,38 +181,17 @@ describe('screen Theme Overrides', () => {
 
 	it.each([
 		[
-			'a token of a type its mode declares none of',
-			'standings',
-			'animation-effect',
-			{ effect: 'fog' },
-			'unconsumable-token',
-		],
-		[
-			'the Screen inset, on a Screen rendered edge to edge',
-			'background',
-			'inset',
-			12,
-			'unconsumable-token',
-		],
-		[
-			'any token, in a mode that declares no Mode Tokens',
-			'card',
-			'accent',
-			'#00ff00',
-			'unconsumable-token',
-		],
-		[
-			'a token no Graphic Item binds, on a graphics host',
-			'broadcast-graphics',
-			'inset',
-			12,
-			'unconsumable-token',
-		],
-		[
 			'a clear, in a mode that cannot consume the token',
 			'card',
 			'standings.rise',
 			null,
+			'unconsumable-token',
+		],
+		[
+			'another mode\'s Mode Token',
+			'standings',
+			'pairings.result-bye',
+			'#00ff00',
 			'unconsumable-token',
 		],
 		[
@@ -318,22 +240,94 @@ describe('screen Theme Overrides', () => {
 		const screenId = await createScreen('standings', 'main');
 
 		expect(await refusal(override(screenId, {
-			'accent': '#00ff00',
-			'animation-effect': { effect: 'fog' },
+			'standings.rise': '#00ff00',
+			'pairings.result-bye': '#00ff00',
 		}))).toEqual({ statusCode: 400, code: 'unconsumable-token' });
 		expect(await storedOverrides(screenId)).toEqual({});
 	});
 
-	// A former token is accepted wherever it is named and never stored (ADR-0049).
+	const background = [
+		{
+			id: 'wash',
+			type: 'color',
+			color: '#101010',
+			enabled: true,
+			opacity: 1,
+		},
+	];
+	// A Screen takes every other Foundation Token from its Theme, and a former token from nowhere (ADR-0049).
 	it.each([
-		['set on a Screen of its mode', 'metagame', '#ff0000'],
-		['cleared on a Screen of its mode', 'metagame', null],
-		['set on a Screen of another mode', 'standings', '#ff0000'],
-	])('accepts a former token %s and drops it, so nothing is stored, versioned or announced', async (_case, mode, value) => {
+		[
+			'a Foundation Token, on a plain mode',
+			'standings',
+			'accent',
+			'#00ff00',
+		],
+		[
+			'a Foundation Token a Mode Token\'s default names',
+			'standings',
+			'positive',
+			'#00ff00',
+		],
+		[
+			'the background, on a plain mode',
+			'standings',
+			'background',
+			background,
+		],
+		[
+			'the background, on the Background Screen',
+			'background',
+			'background',
+			background,
+		],
+		[
+			'the Screen inset, on a Screen rendered edge to edge',
+			'background',
+			'inset',
+			12,
+		],
+		[
+			'a Foundation Token a Graphic Item binds, on a graphics host',
+			'broadcast-graphics',
+			'accent',
+			'#00ff00',
+		],
+		[
+			'the logo, on a graphics host',
+			'broadcast-graphics',
+			'logo',
+			null,
+		],
+		[
+			'a Foundation Token, in a mode that declares no Mode Tokens',
+			'card',
+			'accent',
+			'#00ff00',
+		],
+		[
+			'a former token, set on a Screen of its mode',
+			'metagame',
+			'metagame.chart-series-1',
+			'#ff0000',
+		],
+		[
+			'a former token, cleared on a Screen of its mode',
+			'metagame',
+			'metagame.chart-series-1',
+			null,
+		],
+		[
+			'a former token, set on a Screen of another mode',
+			'standings',
+			'metagame.chart-series-1',
+			'#ff0000',
+		],
+	])('accepts %s and drops it, so nothing is stored, versioned or announced', async (_case, mode, token, value) => {
 		const screenId = await createScreen(mode as ScreenMode, 'main');
 		const before = await storedVersion(screenId);
 
-		const answered = await override(screenId, { 'metagame.chart-series-1': value });
+		const answered = await override(screenId, { [token]: value });
 
 		expect(answered).toMatchObject({ id: screenId, themeOverrides: {}, stateVersion: before });
 		expect(await storedOverrides(screenId)).toEqual({});
@@ -341,11 +335,12 @@ describe('screen Theme Overrides', () => {
 		expect(published).toEqual([]);
 	});
 
-	it('stores the rest of a write naming a former token', async () => {
+	it('stores the rest of a write naming dropped tokens', async () => {
 		const screenId = await createScreen('standings', 'main');
 
 		const answered = await override(screenId, {
 			'standings.row-divider': '#ff0000',
+			'accent': '#ff0000',
 			'standings.rise': '#00ff00',
 		});
 

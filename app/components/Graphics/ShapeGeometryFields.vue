@@ -5,8 +5,8 @@ import { SHAPE_GEOMETRY_PRESETS } from '~~/shared/modules/graphics';
 import { MAX_SHAPE_GEOMETRY_PX } from '~~/shared/types/graphics';
 
 /**
- * The one Shape Geometry fields control, for a Graphic Item in the compositor
- * Inspector and for a Theme's Shape Geometry token.
+ * The one corner editor, for a Graphic Item in the compositor Inspector, a
+ * Theme's Shape Geometry token, and a Feature Match Overlay Source Item.
  *
  * Laid out the way the shape is: a starting preset, then the four corners where
  * they sit — each a square, rounded, or cut treatment and, while not square, a
@@ -19,11 +19,13 @@ import { MAX_SHAPE_GEOMETRY_PX } from '~~/shared/types/graphics';
  * depends on bounds only the host knows — the item's own, a win box's, or none
  * at all for a Theme token — and a preset may also propose a height.
  *
- * `BorderRadiusControl` is not this: a Feature Match Overlay border radius has
- * neither cut corners nor slants.
+ * `radii` edits a shape that stores only a radius per corner, as a Source Item
+ * does: every corner is rounded, 0 being square, so it offers no treatment, no
+ * preset and no slant, and always asks for each corner's size.
  */
 const props = withDefaults(defineProps<{
 	geometry: ShapeGeometry;
+	radii?: boolean;
 	disabled?: boolean;
 	size?: 'xs' | 'sm';
 }>(), { size: 'sm' });
@@ -83,7 +85,7 @@ function updateCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 
 <template>
 	<div class="space-y-3">
-		<div>
+		<div v-if="!radii">
 			<p class="mb-1 text-xs font-medium text-muted">
 				Start from
 			</p>
@@ -132,6 +134,7 @@ function updateCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 					<div class="flex items-center justify-between gap-1">
 						<span class="truncate text-[0.6875rem] text-muted">{{ corner.label }}</span>
 						<div
+							v-if="!radii"
 							class="flex shrink-0"
 							role="group"
 							:aria-label="`${corner.label} corner`"
@@ -154,13 +157,13 @@ function updateCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 							/>
 						</div>
 					</div>
-					<UInputNumber
-						v-if="geometry[corner.key].treatment !== 'square'"
+					<GraphicsNumberField
+						v-if="radii || geometry[corner.key].treatment !== 'square'"
+						:label="radii ? 'Radius' : 'Size'"
 						:model-value="geometry[corner.key].size"
 						:min="0"
 						:max="MAX_SHAPE_GEOMETRY_PX"
 						:size="size"
-						class="w-full"
 						:disabled="disabled"
 						:aria-label="`${corner.label} size`"
 						@update:model-value="updateCorner(corner.key, { size: $event ?? 0 })"
@@ -169,7 +172,7 @@ function updateCorner(corner: ShapeCornerKey, fields: Partial<ShapeCorner>) {
 			</div>
 		</div>
 
-		<div>
+		<div v-if="!radii">
 			<p class="mb-1 text-xs font-medium text-muted">
 				Edge slant
 			</p>

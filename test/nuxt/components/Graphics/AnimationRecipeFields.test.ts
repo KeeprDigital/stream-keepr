@@ -62,7 +62,7 @@ const global = {
 				label: { type: String, required: false },
 				help: { type: String, required: false },
 			},
-			template: '<div><label>{{ label }}</label><slot /><p v-if="help" class="help">{{ help }}</p></div>',
+			template: '<div><label><slot name="label">{{ label }}</slot></label><slot /><p v-if="help">{{ help }}</p></div>',
 		}),
 		UFieldGroup: defineComponent({ template: '<div><slot /></div>' }),
 		UButton: UButtonStub,
@@ -252,7 +252,7 @@ describe('graphic animation recipe fields', () => {
 		}
 
 		function help(wrapper: Wrapper) {
-			return wrapper.findAll('.help').map(entry => entry.text());
+			return wrapper.findAll('[data-testid="recipe-slide-distance-help"]').map(entry => entry.text());
 		}
 
 		beforeEach(() => {

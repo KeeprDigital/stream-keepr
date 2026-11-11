@@ -7,11 +7,10 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 import { media } from '~~/test/helpers/graphicsComposition';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
-import NumberField from '~/components/Graphics/NumberField.vue';
+import OpacityField from '~/components/Graphics/OpacityField.vue';
 import PreviewOutputAside from '~/components/Screen/Modes/FeatureMatchOverlay/PreviewOutputAside.vue';
 import Settings from '~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
-import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 enableAutoUnmount(afterEach);
 
@@ -668,15 +667,13 @@ describe('featureMatchOverlaySettings', () => {
 	describe('number field scrubs', () => {
 		/** A property panel holding one real number field: the Frame's opacity. */
 		const FrameOpacityPanelStub = defineComponent({
-			components: { GraphicsNumberField: NumberField },
+			components: { GraphicsOpacityField: OpacityField },
 			props: {
 				config: { type: Object, required: true },
 				updateConfig: { type: Function, required: true },
 			},
-			setup: () => ({ OPACITY_INPUT }),
-			template: `<GraphicsNumberField
+			template: `<GraphicsOpacityField
 				label="Opacity"
-				v-bind="OPACITY_INPUT"
 				:model-value="config.layout.frame.opacity"
 				@update:model-value="opacity => updateConfig({ layout: { ...config.layout, frame: { ...config.layout.frame, opacity } } })"
 			/>`,
