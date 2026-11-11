@@ -1,3 +1,4 @@
+import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import { mapScreenToResponse } from '~~/server/mappers/screen';
 import { modeConfigPatchSchemaMap, modeConfigsMapSchema, parseModeConfigPatchResult } from '~~/server/schemas/api/screen';
@@ -62,16 +63,16 @@ describe('a Standings Screen storing a Top N count or a slice pair', () => {
 			reads: { viewMode: 'range', rangeStart: 3, rangeEnd: 5 },
 		},
 	])('$name', ({ stored, reads }) => {
-		const modeConfigs = { standings: stored };
+		// Storage holds what an earlier contract wrote, which the current type refuses.
+		const modeConfigs = { standings: stored } as ModeConfigsMap;
 
 		expect(resolveScreenModeConfig(modeConfigs, 'standings')).toMatchObject(reads);
 		expect(mapScreenToResponse(createMockScreen({ modeConfigs })).modeConfigs).toEqual({ standings: reads });
 		expect(JSON.parse(JSON.stringify(modeConfigsMapSchema.parse(modeConfigs)))).toEqual({ standings: reads });
 	});
 
-	const storedTopN = {
-		standings: { viewMode: 'topN', topNCount: 12, showHeader: false },
-	};
+	const topNFragment: Record<string, unknown> = { viewMode: 'topN', topNCount: 12, showHeader: false };
+	const storedTopN = { standings: topNFragment } as ModeConfigsMap;
 
 	it.each([
 		{
