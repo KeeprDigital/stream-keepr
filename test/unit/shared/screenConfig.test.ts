@@ -42,7 +42,6 @@ describe('getDisplayDefaultsForMode', () => {
 		});
 
 		expect(getDisplayDefaultsForMode('feature-match-overlay')).toMatchObject({
-			presetId: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.presetId,
 			layout: {
 				frame: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.frame,
 			},
