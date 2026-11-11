@@ -46,9 +46,6 @@ const open = computed({
 });
 const bodyId = useId();
 
-// A Screen Settings Group held inside stays held while the card is collapsed.
-provideScreenSettingsCardScope();
-
 function toggleOpen() {
 	if (props.collapsible)
 		open.value = !open.value;

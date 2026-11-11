@@ -2,7 +2,6 @@ import type { ScreenModeConfigOf } from './contract';
 import { z } from 'zod';
 import {
 	REVEAL_ORDER_VALUES,
-	REVEAL_TRIGGER_VALUES,
 	STANDINGS_COLUMN_KEY_VALUES,
 	STANDINGS_VIEW_MODE_VALUES,
 } from '../types/enums';
@@ -36,8 +35,6 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	// Reveal mode
 	revealCount: editorField(z.number().int().min(1).max(64), { label: 'Players to reveal' }),
 	revealOrder: editorField(z.enum(REVEAL_ORDER_VALUES), { label: 'Reveal order' }),
-	revealTrigger: z.enum(REVEAL_TRIGGER_VALUES),
-	revealIntervalMs: z.number().int().min(1000).max(30000),
 	revealedCount: z.number().int().nonnegative().max(64),
 
 	// Pagination
@@ -62,14 +59,18 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	playerListId: undefined,
 	revealCount: 8,
 	revealOrder: 'bottomUp',
-	revealTrigger: 'manual',
-	revealIntervalMs: 5000,
 	revealedCount: 0,
 	rowsPerPage: 8,
 	...DEFAULT_PAGE_ROTATION,
 }, {
 	// The table's width and its rows' motion are the mode's Mode Tokens (#851).
-	formerFields: ['maxTableWidth', 'animateEntries'],
+	// Reveal's trigger and interval were never read (#1064): the operator's `revealedCount` advances it.
+	formerFields: [
+		'maxTableWidth',
+		'animateEntries',
+		'revealTrigger',
+		'revealIntervalMs',
+	],
 });
 
 export type StandingsModeConfig = ScreenModeConfigOf<typeof standingsModeConfigContract>;

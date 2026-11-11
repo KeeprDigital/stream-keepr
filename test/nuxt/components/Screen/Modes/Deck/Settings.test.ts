@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
+import { deckModeTokens } from '~~/shared/screenModeTokens/deck';
 import { opSlotSide } from '~~/test/helpers/opCards';
 import { UInputMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
@@ -884,11 +885,16 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 		mockPlayerStore.players = MTG_PLAYERS;
 	});
 
-	it('picks a Feature Match Slot side as the Deck Source, and offers nothing MTG-only', async () => {
+	// Every Deck List Mode Token's group has a Look here too: nothing else on the page would show its override.
+	it('picks a Feature Match Slot side as the Deck Source, and offers no MTG-only control', async () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		expect(settingsLayout(wrapper)).toEqual([
+		const layout = settingsLayout(wrapper);
+		expect(layout.flatMap(card => card.groups).sort()).toEqual([
+			...new Set(Object.values(deckModeTokens).map(token => token.settingsGroup)),
+		].sort());
+		expect(layout).toEqual([
 			{
 				id: 'deck:deck-source',
 				title: 'Deck Source',
@@ -900,6 +906,12 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 				title: 'Header',
 				collapsible: true,
 				groups: ['header'],
+			},
+			{
+				id: 'deck:deck-details',
+				title: 'Deck Details',
+				collapsible: true,
+				groups: ['deck-details', 'pointed-cards'],
 			},
 			{
 				id: 'deck:mainboard',
@@ -917,9 +929,11 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 				id: 'deck:card-badges',
 				title: 'Card Badges',
 				collapsible: true,
-				groups: ['quantity-badge'],
+				groups: ['quantity-badge', 'points-badge'],
 			},
 		]);
+		expect(wrapper.find('[data-config-field="showDeckStats"]').exists()).toBe(false);
+		expect(wrapper.find('[data-config-field="showHighlanderPoints"]').exists()).toBe(false);
 		await wrapper.get('[data-testid="deck-source-slot"] [data-value="11"]').trigger('click');
 		await wrapper.get('[data-testid="deck-source-side"] [data-value="player2"]').trigger('click');
 		expect(mockUpdateConfig.mock.calls.map(([patch]) => patch.deckSource)).toEqual([

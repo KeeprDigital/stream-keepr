@@ -33,8 +33,10 @@ const PassThroughStub = defineComponent({
 const ControlSectionStub = defineComponent({
 	props: {
 		title: { type: String, required: false },
+		summary: { type: String, required: false },
+		defaultOpen: { type: Boolean, default: false },
 	},
-	template: '<section :data-section="title"><slot /></section>',
+	template: '<section :data-section="title" :data-summary="summary" :data-default-open="String(defaultOpen)"><slot /></section>',
 });
 
 const UInputNumberStub = defineComponent({
@@ -224,5 +226,23 @@ describe('feature Match Overlay Source Item appearance: the Source Item surface'
 		await flushPromises();
 
 		expect(overrideWrites(mockApiFetch)).toEqual([written]);
+	});
+});
+
+describe('feature Match Overlay Source Item sections', () => {
+	// Bounds (its position and size) and Content start open; the rest start closed behind a summary.
+	it.each([
+		['Details', 'false', 'Main Match Source'],
+		['Bounds', 'true', '401'],
+		['Content', 'true', undefined],
+		['Appearance', 'false', undefined],
+	])('%s starts open: %s', async (section, open, summary) => {
+		const { wrapper } = await mountBounds('top-left');
+		const found = wrapper.get(`[data-section="${section}"]`);
+
+		expect(found.attributes('data-default-open')).toBe(open);
+		expect(found.attributes('data-summary')).toBeTruthy();
+		if (summary)
+			expect(found.attributes('data-summary')).toContain(summary);
 	});
 });

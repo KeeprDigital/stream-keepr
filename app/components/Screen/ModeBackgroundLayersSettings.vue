@@ -31,7 +31,7 @@ const { config, saving, updateConfig } = useModeConfigUpdate(
 defineExpose({ saving });
 
 const layers = computed<BackgroundLayer[]>(() => config.value.backgroundLayers ?? []);
-const placementTokens = computed(() => placeScreenThemeTokens(props.screen.currentMode, []).placement);
+const placementTokens = computed(() => placeScreenThemeTokens(props.screen.currentMode).placement);
 const holdsSomething = computed(() => layers.value.length > 0
 	|| placementTokens.value.some(name => props.screen.themeOverrides?.[name] !== undefined));
 

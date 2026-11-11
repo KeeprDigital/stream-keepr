@@ -2,29 +2,22 @@
 import type { Screen } from '~/types';
 import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 
-// A Screen's residual "Screen-wide look" card (ADR-0072): its Foundation
-// Tokens (and, on a graphics host, every Foundation Token its Graphic Items
-// may bind), then each Mode Token whose settings group no mounted
-// `ScreenThemeTokenGroup` renders, so a token renders here until its group is
-// mounted and never disappears or doubles. The host's own `inset` and
-// `alignment` sit in Background & Placement instead. It starts closed unless
-// it holds an override, and remembers per browser once toggled.
+// A Screen's "Screen-wide look" card (ADR-0072): its Foundation Tokens (and,
+// on a graphics host, every Foundation Token its Graphic Items may bind). A
+// Mode Token sits in its group's Look, and the host's own `inset` and
+// `alignment` in Background & Placement. It starts closed unless it holds an
+// override, and remembers per browser once toggled.
 
 const props = defineProps<{
 	screen: Screen;
 	eventId: number;
 }>();
 
-const mountedGroups = useScreenSettingsGroups()?.mounted;
 const overrides = useScreenThemeOverrides(() => props.screen, () => props.eventId);
 
-const placement = computed(() => placeScreenThemeTokens(props.screen.currentMode, mountedGroups?.value ?? []).screenWide);
-const sections = computed(() => [
-	{ label: 'This mode', names: placement.value.modeTokens },
-	{ label: 'Foundation', names: placement.value.foundationTokens },
-].filter(section => section.names.length > 0));
+const names = computed(() => placeScreenThemeTokens(props.screen.currentMode).foundationTokens);
 
-const overridden = computed(() => sections.value.some(section => section.names.some(name => props.screen.themeOverrides?.[name] !== undefined)));
+const overridden = computed(() => names.value.some(name => props.screen.themeOverrides?.[name] !== undefined));
 
 const subtitle = computed(() => overrides.themeName.value
 	? `Inherits from ${overrides.themeName.value}. An override applies to this Screen only.`
@@ -33,7 +26,7 @@ const subtitle = computed(() => overrides.themeName.value
 
 <template>
 	<ScreenSettingsCard
-		v-if="sections.length"
+		v-if="names.length"
 		:id="`${screen.currentMode}:screen-wide-look`"
 		title="Screen-wide look"
 		:subtitle="subtitle"
@@ -49,12 +42,10 @@ const subtitle = computed(() => overrides.themeName.value
 			description="Inherited values are shown as the Default Theme ships them."
 		/>
 		<ScreenThemeTokenRows
-			v-for="section in sections"
-			:key="section.label"
 			:screen="screen"
 			:event-id="eventId"
-			:heading="section.label"
-			:names="section.names"
+			heading="Foundation"
+			:names="names"
 			:compact="false"
 		/>
 	</ScreenSettingsCard>

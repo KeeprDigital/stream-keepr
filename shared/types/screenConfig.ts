@@ -509,14 +509,14 @@ export function resolveScreenModeConfig<T extends ScreenMode>(
 	};
 }
 
-/** One mode's stored fragment as its contract reads it: without its former fields, and within its bounds (`readStored`, #498, #752). */
+/** One mode's stored fragment as its contract reads it: its former fields upgraded or dropped, and within its bounds (`readStored`, #498, #752, #1071). */
 function readStoredModeConfig<T extends ScreenMode>(mode: T, stored: Partial<ModeConfigTypeMap[T]>): Partial<ModeConfigTypeMap[T]> {
 	return MODE_CONFIG_CONTRACTS[mode].readStored(stored as Record<string, unknown>) as Partial<ModeConfigTypeMap[T]>;
 }
 
 /**
  * Stored mode configurations as every reader reads them: each mode's fragment
- * without its contract's former fields (#752), and with every number outside
+ * with its contract's former fields upgraded or dropped (#752, #1071), and with every number outside
  * its contract's bounds pulled to the nearest bound.
  * A bound tightened after a Screen stored a value outside it reads as that bound,
  * never as the default, and the read is never refused (#498). The server applies
@@ -575,11 +575,14 @@ export function mergeScreenModeConfig<M extends ScreenMode>(
 	mode: M,
 	partialConfig: Record<string, unknown>,
 ): ModeConfigsMap {
-	const currentModeConfig = currentConfigs[mode] ?? {};
+	const contract = MODE_CONFIG_CONTRACTS[mode];
+	// The stored fragment is upgraded before the patch lands on it, so a former
+	// field it maps to a current one is kept as that field, and the patch wins.
+	const currentModeConfig = contract.upgradeStored(currentConfigs[mode] ?? {});
 	// A write of a mode's config also drops what its contract no longer holds (#752).
 	return {
 		...currentConfigs,
-		[mode]: MODE_CONFIG_CONTRACTS[mode].withoutFormerFields(stripNullConfigKeys({
+		[mode]: contract.upgradeStored(stripNullConfigKeys({
 			...currentModeConfig,
 			...partialConfig,
 		})),

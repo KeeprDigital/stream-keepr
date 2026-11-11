@@ -203,10 +203,13 @@ export function maximalBroadcastGraphicDocument(
 	};
 	headline.surfaceStyle = maximalSurfaceStyle();
 	headline.rotation = -2;
+	// Layer Locks travel with the graphic (ADR-0063).
+	headline.locked = true;
 
 	// Main-axis sizing exists only on a Graphic Group child, so it can only be
 	// covered here.
 	child.sizing = { mode: 'fill', size: 240, weight: 2 };
+	child.locked = true;
 	child.surfaceStyle = maximalSurfaceStyle();
 
 	countdown.surfaceStyle = maximalSurfaceStyle();

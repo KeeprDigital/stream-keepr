@@ -2,8 +2,8 @@
 import type { Screen } from '~/types';
 
 // Theme Tokens under a subheading, each writing its own Screen Theme Override:
-// a Screen Settings Group's Look, Background & Placement's host tokens, or a
-// section of the Screen-wide look. Nothing renders for no tokens.
+// a Screen Settings Group's Look, Background & Placement's host tokens, or the
+// Screen-wide look's Foundation Tokens. Nothing renders for no tokens.
 
 const props = withDefaults(defineProps<{
 	screen: Screen;
