@@ -224,23 +224,6 @@ describe('the Theme editor', () => {
 		]);
 	});
 
-	it('points a Mode Token at another Foundation Token of its type', async () => {
-		const wrapper = await mountEditor();
-
-		await part(wrapper, 'standings.row-divider', 'source').setValue('accent');
-		await flushPromises();
-
-		expect(writes()).toEqual([
-			[
-				'PUT',
-				'standings.row-divider',
-				{
-					value: { token: 'accent' },
-				},
-			],
-		]);
-	});
-
 	it('resets a set token by clearing it', async () => {
 		mockApiFetch.mockImplementation(async (url: string, init?: { method?: string }) => init?.method
 			? theme(3)
@@ -305,47 +288,94 @@ describe('the Theme editor', () => {
 		expect(field(wrapper, 'background').attributes('data-token-state')).toBe('set');
 	});
 
-	// A background colour layer follows a colour Foundation Token or holds its own colour.
+	// A value stored before writes were literal-only may name another token, and a
+	// shipped default still does: the editor edits it resolved, so the next edit
+	// writes literals.
 	it.each([
 		{
-			case: 'keeps a colour layer following a token through an edit to the stack',
-			stored: { token: 'accent' },
-			edit: (editor: ReturnType<typeof part>) => editor.get('[data-testid="add-layer"]').trigger('click'),
-			written: [
-				{ token: 'accent' },
-				'#000000',
-			],
-		},
-		{
-			case: 'points a colour layer at a token',
-			stored: '#123456',
-			edit: (editor: ReturnType<typeof part>) => editor.get('[data-token-part="colour-source"]').setValue('token:accent'),
-			written: [
-				{ token: 'accent' },
-			],
-		},
-	])('$case', async ({ stored, edit, written }) => {
-		storedTokens = {
-			background: [
+			case: 'a stored background colour layer naming the accent',
+			token: 'background',
+			stored: [
 				{
 					id: 'wash',
 					type: 'color',
-					color: stored,
+					color: { token: 'accent' },
 					enabled: true,
 					opacity: 1,
 				},
 			],
+			edit: (wrapper: VueWrapper) => part(wrapper, 'background', 'background-layers').get('[data-testid="add-layer"]').trigger('click'),
+			written: [
+				{
+					id: 'wash',
+					type: 'color',
+					color: '#aa0000',
+					enabled: true,
+					opacity: 1,
+				},
+				{
+					id: expect.any(String),
+					type: 'color',
+					color: '#000000',
+					enabled: true,
+					opacity: 1,
+				},
+			],
+		},
+		{
+			case: 'a stored surface whose fill and outline name colour tokens',
+			token: 'panel',
+			stored: {
+				fill: {
+					type: 'solid',
+					color: { token: 'accent' },
+				},
+				fillOpacity: 0.5,
+				outline: {
+					color: { token: 'text-primary' },
+					width: 2,
+				},
+			},
+			edit: (wrapper: VueWrapper) => field(wrapper, 'panel').get('[data-testid="theme-surface-outline"]').trigger('click'),
+			written: {
+				fill: { type: 'solid', color: '#aa0000' },
+				fillOpacity: 0.5,
+			},
+		},
+		{
+			case: 'an unset fill, whose default names the accent',
+			token: 'accent-fill',
+			stored: undefined,
+			edit: (wrapper: VueWrapper) => field(wrapper, 'accent-fill').get('[data-testid="theme-fill-kind"]').setValue('linear-gradient'),
+			written: {
+				type: 'linear-gradient',
+				angle: expect.any(Number),
+				stops: [
+					expect.objectContaining({ color: '#aa0000' }),
+					expect.objectContaining({ color: 'rgba(255, 255, 255, 0.06)' }),
+				],
+			},
+		},
+	])('writes $case back as literals on its next edit', async ({ token, stored, edit, written }) => {
+		storedTokens = {
+			accent: '#aa0000',
+			...(stored === undefined
+				? {}
+				: { [token]: stored }),
 		};
 		const wrapper = await mountEditor();
 		fakeDraftClock();
 
-		await edit(part(wrapper, 'background', 'background-layers'));
+		await edit(wrapper);
 		await pauseEdits();
 
-		expect(writes()).toHaveLength(1);
-		const [[, token, body]] = writes() as [[string, string, { value: Array<{ color: unknown }> }]];
-		expect(token).toBe('background');
-		expect(body.value.map(layer => layer.color)).toEqual(written);
+		expect(writes()).toEqual([
+			[
+				'PUT',
+				token,
+				{ value: written },
+			],
+		]);
 	});
 
 	it('offers a Theme\'s media layers the whole library', async () => {

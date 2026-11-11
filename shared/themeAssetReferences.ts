@@ -73,8 +73,9 @@ export function themeTokenValueGraphicAssetReferences(
 
 /**
  * Every Graphic Asset Revision a stored token map pins: a Theme's, or a
- * Screen's overrides. Slots are `<prefix><token name>…`. A token that names a
- * Foundation Token, or that no longer reads as its type, pins nothing.
+ * Screen's overrides. Slots are `<prefix><token name>…`. A token stored
+ * naming a Foundation Token, as one written before values were literals may,
+ * or one that no longer reads as its type, pins nothing.
  */
 export function storedThemeTokenGraphicAssetReferences(
 	tokens: StoredThemeTokens,

@@ -15,10 +15,10 @@ import { linearGradientFillSchema, literalColorSchema, themeColorSchema } from '
  * Graphic Asset Reference its owner indexes, whether that is a Screen or a
  * Theme (ADR-0050).
  *
- * The token's colour layer may name a colour Foundation Token, as a fill's
- * colour may (#831), so a Theme's backdrop follows its palette. Once resolved
- * every colour is a literal, and the stack is a Screen's. A gradient layer's
- * stops hold literal colours in both.
+ * Both store literal colours. A `background` stored before writes were
+ * literal-only may hold a colour layer naming a colour Foundation Token, which
+ * a read still resolves (`storedThemeBackgroundLayerStackSchema`); once
+ * resolved the stack is a Screen's.
  */
 export type ThemeBackgroundLayer<C = ThemeColor>
 	= | Exclude<BackgroundLayer, ColorBackgroundLayer>
@@ -183,5 +183,5 @@ function layerStackSchema<C extends z.ZodType>(colorSchema: C) {
 
 export const backgroundLayerStackSchema = layerStackSchema(literalColorSchema);
 
-/** The `background` token's stack: a colour layer may name a colour Foundation Token. */
-export const themeBackgroundLayerStackSchema = layerStackSchema(themeColorSchema);
+/** The `background` token's stack as a read accepts it: a colour layer may still name a colour Foundation Token. */
+export const storedThemeBackgroundLayerStackSchema = layerStackSchema(themeColorSchema);

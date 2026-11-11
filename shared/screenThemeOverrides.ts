@@ -2,7 +2,7 @@
 // store (ADR-0049). It sits beside `themeTokens.ts`, whose Theme write rules a
 // Screen Theme Override shares.
 
-import type { ThemeTokenReference, ThemeTokenType, ThemeTokenValue } from './modules/theme/tokens';
+import type { ThemeTokenType, ThemeTokenValue } from './modules/theme/tokens';
 import type { FoundationTokenName } from './modules/theme/vocabulary';
 import type { ScreenMode } from './types/enums';
 import { GRAPHIC_THEME_SLOT_TOKEN_TYPES } from './modules/graphics/themeBindings';
@@ -94,9 +94,7 @@ export function placeScreenThemeTokens(mode: ScreenMode): ScreenThemeTokenPlacem
 /**
  * Whether a Screen in `mode` can consume `name`: one of the mode's own Mode
  * Tokens, a Foundation Token its host consumes itself, or a Foundation Token
- * one of its Mode Tokens could follow. A Mode Token may be pointed at any
- * Foundation Token of its type, so that is every Foundation Token of a type
- * the mode declares, not only those its defaults name. A graphics host's
+ * of a type the mode declares, not only those its defaults name. A graphics host's
  * Graphic Items may bind any Foundation Token a binding slot takes, so it
  * consumes those too (#831). The `background` stack is consumed by the Screen
  * host rather than a Mode Token, on the Background Screen and every mode
@@ -119,7 +117,7 @@ export function screenModeCanConsume(mode: ScreenMode, name: string): boolean {
 }
 
 export type ScreenThemeOverrideWrite
-	= | { ok: true; dropped?: false; value: ThemeTokenValue | ThemeTokenReference | null }
+	= | { ok: true; dropped?: false; value: ThemeTokenValue | null }
 		| { ok: true; dropped: true }
 		| { ok: false; refusal: ScreenThemeOverrideRefusal };
 

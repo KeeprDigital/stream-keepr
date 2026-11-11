@@ -128,11 +128,6 @@ afterAll(async () => {
 describe('screen Theme Overrides', () => {
 	it.each([
 		['its own Mode Token, as a literal', 'standings.row-divider', '#ff0000'],
-		[
-			'its own Mode Token, following another Foundation Token of its type',
-			'standings.row-divider',
-			{ token: 'accent' },
-		],
 		['a Foundation Token a Mode Token\'s default names', 'divider', 'rgba(0, 0, 0, 0.5)'],
 		['a Foundation Token no default names, which a Mode Token could follow', 'accent', '#00ff00'],
 		['the Screen inset, which its host consumes', 'inset', 24],
@@ -175,10 +170,7 @@ describe('screen Theme Overrides', () => {
 			'feature-match-overlay',
 			'feature-match-overlay.frame-surface',
 			{
-				fill: {
-					type: 'solid',
-					color: { token: 'accent' },
-				},
+				fill: { type: 'solid', color: '#00ff00' },
 				fillOpacity: 1,
 			},
 		],
@@ -294,17 +286,23 @@ describe('screen Theme Overrides', () => {
 			'invalid-value',
 		],
 		[
-			'a Mode Token following a Foundation Token of another type',
+			'a Mode Token naming a Foundation Token of its type',
 			'standings',
-			'standings.row-divider',
-			{ token: 'heading' },
+			'standings.rise',
+			{ token: 'accent' },
 			'invalid-value',
 		],
 		[
-			'a Foundation Token following another',
-			'standings',
-			'accent',
-			{ token: 'divider' },
+			'a surface whose colour names a colour Foundation Token',
+			'feature-match-overlay',
+			'feature-match-overlay.frame-surface',
+			{
+				fill: {
+					type: 'solid',
+					color: { token: 'accent' },
+				},
+				fillOpacity: 1,
+			},
 			'invalid-value',
 		],
 	])('refuses %s, storing and announcing nothing', async (_case, mode, token, value, code) => {

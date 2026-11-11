@@ -8,6 +8,8 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import InspectorSource from '~/components/Screen/Modes/FeatureMatchOverlay/InspectorSource.vue';
+import SurfaceStyleTokenInput from '~/components/Theme/SurfaceStyleTokenInput.vue';
+import { THEME_TOKEN_DRAFT_COMMIT_MS } from '~/modules/theme-editor/draft';
 
 /**
  * A Source Item's Bounds section, with the real geometry fields and editor: what
@@ -22,8 +24,19 @@ mockNuxtImport('$fetch', () => mockApiFetch);
 
 enableAutoUnmount(afterEach);
 
+/** A surface as a Screen Theme Override holds it: every colour a literal. */
+const SURFACE = {
+	fill: { type: 'solid', color: '#101010' },
+	fillOpacity: 1,
+	outline: { color: '#ff0000', width: 4 },
+} as const;
+
 beforeEach(() => {
 	fakeScreenThemeNetwork(mockApiFetch, 'feature-match-overlay');
+});
+
+afterEach(() => {
+	vi.useRealTimers();
 });
 
 const PassThroughStub = defineComponent({
@@ -203,25 +216,26 @@ describe('feature Match Overlay Source Item appearance: the Source Item surface'
 		[
 			'writes',
 			{},
-			{
-				'feature-match-overlay.source-surface': { token: 'panel' },
-			},
+			{ 'feature-match-overlay.source-surface': SURFACE },
 		],
 		[
 			'clears',
-			{
-				'feature-match-overlay.source-surface': { token: 'panel' },
-			},
+			{ 'feature-match-overlay.source-surface': SURFACE },
 			{ 'feature-match-overlay.source-surface': null },
 		],
 	] as const)('%s its Screen Theme Override', async (action, stored, written) => {
 		const { wrapper } = await mountBounds('top-left', stored);
+		// A surface commits once its edits pause.
+		vi.useFakeTimers({
+			toFake: ['setTimeout', 'clearTimeout'],
+		});
 		const row = wrapper.get('[data-token="feature-match-overlay.source-surface"]');
 
 		if (action === 'clears')
 			await row.findAll('button').find(button => button.text() === 'Clear')!.trigger('click');
 		else
-			await row.get('[data-token-part="source"]').setValue('panel');
+			wrapper.getComponent(SurfaceStyleTokenInput).vm.$emit('commit', SURFACE);
+		await vi.advanceTimersByTimeAsync(THEME_TOKEN_DRAFT_COMMIT_MS);
 		await flushPromises();
 
 		expect(overrideWrites(mockApiFetch)).toEqual([written]);
