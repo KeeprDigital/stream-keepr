@@ -240,6 +240,7 @@ function headingId(card: ScreenSettingsCard, group: string): string {
 								:context="context"
 								:update="update"
 								:rotation="paged?.rotation"
+								:data="paged?.data"
 							/>
 						</div>
 					</template>
