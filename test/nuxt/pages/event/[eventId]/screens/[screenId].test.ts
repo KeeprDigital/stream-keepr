@@ -410,7 +410,9 @@ describe('screen config page — handing out this Screen’s output', () => {
 
 	describe('a Screen Mode’s own outputs', () => {
 		beforeEach(() => {
-			stubModePolicy({ outputs: ['fill'] });
+			stubModePolicy({
+				outputs: ['fill'],
+			});
 		});
 
 		it('opens the chosen output with asset access obtained at the hand-out', async () => {

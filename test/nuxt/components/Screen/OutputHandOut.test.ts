@@ -57,7 +57,10 @@ async function handOut(wrapper: VueWrapper, control: 'open' | 'copy', item?: str
 beforeEach(() => {
 	vi.clearAllMocks();
 	apiFetch.mockResolvedValue({ assetCapability: capability });
-	vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+	vi.stubGlobal('navigator', {
+		...navigator,
+		clipboard: { writeText },
+	});
 });
 
 afterEach(() => {
@@ -68,9 +71,24 @@ afterEach(() => {
 // this one owns which output each control hands out and the words for each outcome.
 describe('a Screen Output hand-out', () => {
 	it.each([
-		['the output, with no outputs of its own', undefined, undefined, 'overlay'],
-		['a chosen output', ['overlay', 'fill', 'key'] as ScreenOutput[], 'Open key output', 'key'],
-		['the output from the menu', ['overlay', 'fill', 'key'] as ScreenOutput[], 'Open output', 'overlay'],
+		[
+			'the output, with no outputs of its own',
+			undefined,
+			undefined,
+			'overlay',
+		],
+		[
+			'a chosen output',
+			['overlay', 'fill', 'key'] as ScreenOutput[],
+			'Open key output',
+			'key',
+		],
+		[
+			'the output from the menu',
+			['overlay', 'fill', 'key'] as ScreenOutput[],
+			'Open output',
+			'overlay',
+		],
 	])('opens %s in a tab it points once asset access is in hand', async (_, outputs, item, output) => {
 		const outputWindow = stubOutputWindow();
 		const wrapper = mountHandOut({ outputs });
@@ -84,9 +102,27 @@ describe('a Screen Output hand-out', () => {
 	});
 
 	it.each([
-		['the output, with no outputs of its own', undefined, undefined, 'overlay', 'Output URL copied'],
-		['a chosen output', ['overlay', 'fill', 'key'] as ScreenOutput[], 'Copy fill output URL', 'fill', 'Fill output URL copied'],
-		['the output from the menu', ['overlay', 'fill', 'key'] as ScreenOutput[], 'Copy output URL', 'overlay', 'Output URL copied'],
+		[
+			'the output, with no outputs of its own',
+			undefined,
+			undefined,
+			'overlay',
+			'Output URL copied',
+		],
+		[
+			'a chosen output',
+			['overlay', 'fill', 'key'] as ScreenOutput[],
+			'Copy fill output URL',
+			'fill',
+			'Fill output URL copied',
+		],
+		[
+			'the output from the menu',
+			['overlay', 'fill', 'key'] as ScreenOutput[],
+			'Copy output URL',
+			'overlay',
+			'Output URL copied',
+		],
 	])('copies %s with asset access, and says what it carries', async (_, outputs, item, output, title) => {
 		const wrapper = mountHandOut({ outputs });
 
@@ -154,7 +190,10 @@ describe('a Screen Output hand-out', () => {
 
 	it.each([
 		['no outputs of its own', undefined],
-		['outputs of its own', ['overlay', 'fill', 'key'] as ScreenOutput[]],
+		[
+			'outputs of its own',
+			['overlay', 'fill', 'key'] as ScreenOutput[],
+		],
 	])('hands nothing out, and says why, while disabled, with %s', async (_, outputs) => {
 		stubOutputWindow();
 		const wrapper = mountHandOut({ outputs, disabled: true, disabledReason: 'A pinned revision is missing.' });

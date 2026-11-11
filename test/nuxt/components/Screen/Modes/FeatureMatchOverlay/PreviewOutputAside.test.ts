@@ -160,7 +160,10 @@ describe('feature Match Overlay preview aside — output hand-outs', () => {
 		const controls = ['[data-hand-out="open"]', '[data-hand-out="copy"]', '[data-testid="download-output"]']
 			.map(selector => wrapper.get(selector));
 
-		expect(controls.map(control => [control.attributes('disabled'), control.attributes('title')]))
+		expect(controls.map(control => [
+			control.attributes('disabled'),
+			control.attributes('title'),
+		]))
 			.toEqual(Array.from({ length: 3 }, () => ['', 'A pinned revision is missing.']));
 	});
 });

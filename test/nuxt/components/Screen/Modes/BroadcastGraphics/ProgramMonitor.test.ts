@@ -49,7 +49,9 @@ const { mockApiFetch } = vi.hoisted(() => ({
 
 mockNuxtImport('$fetch', () => mockApiFetch);
 
-mockNuxtImport('useToast', () => () => ({ add: vi.fn() }));
+mockNuxtImport('useToast', () => () => ({
+	add: vi.fn(),
+}));
 
 const UAlertStub = defineComponent({
 	props: {

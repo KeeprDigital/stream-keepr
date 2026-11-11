@@ -79,7 +79,9 @@ async function copyOutputUrl(output?: ScreenOutput) {
 	if (props.disabled)
 		return;
 	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions(output)), {
-		successTitle: output ? `${outputLabel(output)} output URL copied` : 'Output URL copied',
+		successTitle: output
+			? `${outputLabel(output)} output URL copied`
+			: 'Output URL copied',
 		successDescription: 'It carries asset access, so the output resolves this Screen\'s media.',
 		nothingToCopyTitle: 'Nothing copied',
 		nothingToCopyDescription: 'Asset access for this Screen could not be obtained, so the URL would have opened an output without its media. Try again.',
@@ -95,7 +97,13 @@ function menu(
 	handOut: (output?: ScreenOutput) => Promise<void>,
 ): DropdownMenuItem[][] {
 	return [
-		[{ label: first, icon, onSelect: () => void handOut() }],
+		[
+			{
+				label: first,
+				icon,
+				onSelect: () => void handOut(),
+			},
+		],
 		(props.outputs ?? []).map(output => ({
 			label: each(outputLabel(output).toLowerCase()),
 			icon: SCREEN_OUTPUT_OPTIONS.find(option => option.value === output)!.icon,
