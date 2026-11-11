@@ -105,11 +105,14 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 	insetY: inset,
 });
 
-const contentStyle = {
+// Centred, and no wider than the config's max width; Auto fills the Screen.
+const contentStyle = computed(() => ({
 	width: '100%',
-	maxWidth: modeTokenVar('standings', 'max-width'),
+	maxWidth: config.value.maxWidth === undefined
+		? undefined
+		: `${config.value.maxWidth}px`,
 	marginInline: 'auto',
-};
+}));
 
 /**
  * Rows enter from their motion Mode Token's excursion, leave back to it and

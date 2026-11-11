@@ -1,39 +1,31 @@
 <script setup lang="ts">
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
 import { useElementSize } from '@vueuse/core';
-import { fitColumns } from '~~/shared/utils/cardGrid';
+import { solveCardGrid } from '~~/shared/utils/cardGrid';
 import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
 import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
 const { config, error, ready, isEmpty, headerText, pageEntries, currentPage, totalPages, pageCapacity } = useTopCardsModeData(useScreenContext());
 
-// ── Columns, from the space the grid really has ──
-// Pages hold cards, not rows (ADR-0054), so the Screen chooses its columns from
-// the space it measures: Fit auto columns are the count at which a full page's
-// cards are largest; Fixed auto columns are as many as fit across.
+// ── The Card Layout, from the space the grid really has ──
+// Pages hold cards, not rows (ADR-0054), so the Screen solves its grid from the
+// space it measures: the largest card at which a full page fits, in its set
+// columns or the count that uses the space best, no wider than its max card
+// size. A short last page is laid out as a full one, so it keeps its card size.
 
 const gridElement = ref(null);
 const { width: gridWidth, height: gridHeight } = useElementSize(gridElement);
 
-const columns = computed<number | 'auto-fill'>(() => {
-	if (!config.value.autoColumns)
-		return config.value.columns;
-	if (config.value.cardSizing === 'fixed')
-		return 'auto-fill';
-	if (!gridWidth.value || !gridHeight.value)
-		return config.value.columns;
-	return fitColumns({
-		count: pageCapacity.value,
-		width: gridWidth.value,
-		height: gridHeight.value,
-		gap: config.value.cardGap,
-	});
-});
-
-/** A full page's rows, so a short last page keeps the same card size. */
-const rows = computed(() => Math.ceil(pageCapacity.value / (typeof columns.value === 'number'
-	? columns.value
-	: 1)));
+const grid = computed(() => solveCardGrid({
+	count: pageCapacity.value,
+	width: gridWidth.value,
+	height: gridHeight.value,
+	columns: config.value.columns,
+	maxCardWidth: config.value.maxCardSize,
+	gap: config.value.cardGap,
+}));
+const cardGap = computed(() => `${grid.value.gap}px`);
+const cardWidth = computed(() => `${grid.value.cardWidth}px`);
 
 /** Set on the root, so a card without an image takes it. */
 const displayStyle = {
@@ -49,10 +41,6 @@ const pageIndicatorStyle = {
 	...modeTypographyStyle('top-cards', 'name-typography'),
 	color: modeTokenVar('top-cards', 'page-indicator-text'),
 };
-
-// Its sizes are its own config, in Event Canvas px (ADR-0054).
-const cardGap = computed(() => `${config.value.cardGap}px`);
-const cardWidth = computed(() => `${config.value.cardWidth}px`);
 
 /** A badge lifts off the card's art on a soft shadow. */
 const badgeStyle = {
@@ -128,9 +116,8 @@ function pointsText(entry: CardBreakdownEntry): string | null {
 			<ScreenCardGrid
 				ref="gridElement"
 				class="top-cards-grid"
-				:sizing="config.cardSizing"
-				:columns="columns"
-				:rows="rows"
+				:columns="grid.columns"
+				:rows="grid.rows"
 				:card-width="cardWidth"
 				:gap="cardGap"
 				data-testid="top-cards-grid"
@@ -140,8 +127,7 @@ function pointsText(entry: CardBreakdownEntry): string | null {
 					:key="entry.id"
 					:entry="entry"
 					:rank="rank"
-					:width="cardWidth"
-					:sizing="config.cardSizing"
+					sizing="fill"
 					:show-name="false"
 					:show-rank="config.showRankBadges"
 					:rank-badge-class="rankBadgeClass"

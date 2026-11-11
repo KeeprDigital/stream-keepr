@@ -7,6 +7,7 @@ import type {
 import type { MetagameCardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
 import { getFeatureMatchStateTracking } from '~~/shared/config/games';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { getMetagameCardTypeBuckets } from '~~/shared/utils/metagame';
 import { headerSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
@@ -76,24 +77,18 @@ const rotation = useRotationConfigWrites({
 });
 const { updateConfig } = rotation;
 
-// Paging is the ranking split into pages: on while a page holds fewer cards
-// than the ranking does. Off stores the most a page can hold, so the ranking
-// stays one page whatever its card count becomes.
-const paged = computed(() => config.value.cardsPerPage < config.value.limit);
+// The ranking pages while a page holds fewer cards than it ranks. Auto, an
+// absent page size, is one page of every card, as is a page of at least the
+// ranking; the rotation has nothing to turn then, so its controls are hidden.
+const paged = computed(() => config.value.cardsPerPage !== undefined && config.value.cardsPerPage < config.value.limit);
 
 /** The page count is the one the Screen renders, from the cards it reads. */
 const pageSizeDescription = computed(() => {
 	const pages = rotation.totalPages.value;
-	return `Cards on each page, laid out in as many columns as the Screen fits: ${pages} ${pages === 1
+	return `Cards on each page, however many columns the Screen lays them out in. Empty is Auto: every card on one page. This Screen has ${pages} ${pages === 1
 		? 'page'
 		: 'pages'}.`;
 });
-
-function setPaged(enabled: boolean) {
-	rotation.setPageSize(enabled
-		? Math.ceil(config.value.limit / 2)
-		: fields.cardsPerPage.max!);
-}
 
 const boardOptions = [
 	{ label: 'Full Deck', value: 'full' },
@@ -131,19 +126,13 @@ const lockedTypes = computed<MetagameCardTypeBucket[]>(() => config.value.pointe
 	? ['Land']
 	: []);
 
+// The Card Layout: each value a number, or Auto while absent (ADR-0054).
 const gridLayout = computed(() => ({
-	cardSizing: config.value.cardSizing,
-	cardWidth: config.value.cardWidth,
-	cardGap: config.value.cardGap,
-	autoColumns: config.value.autoColumns,
 	columns: config.value.columns,
+	maxCardSize: config.value.maxCardSize,
+	cardGap: config.value.cardGap,
 }));
-
-const layoutDescriptions = {
-	cardSizing: 'Fit shrinks the cards until every one on the page fits the screen; Fixed takes the card width below and may run off the screen.',
-	autoColumns: 'Choose the columns from the space the cards have on the Screen.',
-	columns: 'Number of cards per row.',
-};
+const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
 
 /** For a closed card's summary: how many Screen Theme Overrides the Looks of mounted `groups` hold. */
 function look(...groups: string[]) {
@@ -167,15 +156,22 @@ const rankingSummary = computed(() => settingsSummary([
 		: 'One page',
 	look('ranking-and-pages'),
 ]));
-const layoutSummary = computed(() => settingsSummary([
-	config.value.cardSizing === 'fixed'
-		? `Fixed ${config.value.cardWidth} px`
-		: 'Fit',
-	config.value.autoColumns
-		? 'Auto columns'
-		: `${config.value.columns} columns`,
-	look('layout'),
-]));
+const layoutSummary = computed(() => {
+	const { columns, maxCardSize, cardGap } = config.value;
+	const set = [
+		columns !== undefined && `${columns} ${columns === 1
+			? 'column'
+			: 'columns'}`,
+		maxCardSize !== undefined && `Max ${maxCardSize} px`,
+		cardGap !== undefined && `${cardGap} px gap`,
+	].filter(Boolean);
+	return settingsSummary([
+		...(set.length > 0
+			? set
+			: ['Auto']),
+		look('layout'),
+	]);
+});
 const headerCardSummary = computed(() => settingsSummary([
 	headerSummary(config.value),
 	look('header'),
@@ -256,24 +252,16 @@ const badgesSummary = computed(() => {
 				@update:model-value="$event !== null && updateConfig({ limit: Number($event), currentPage: 1 })"
 			/>
 
-			<ScreenSettingsToggle
-				label="Split into pages"
-				description="Show the cards a page at a time; off, every card is on one page."
-				:model-value="paged"
-				:enabled="config.limit > 1"
-				disabled-description="A ranking of one card is one page."
-				@update:model-value="setPaged($event === true)"
+			<ScreenConfigField
+				:field="fields.cardsPerPage"
+				:model-value="config.cardsPerPage"
+				nullable
+				placeholder="Auto"
+				:description="pageSizeDescription"
+				@update:model-value="rotation.setPageSize($event === null ? null : Number($event))"
 			/>
 
 			<template v-if="paged">
-				<ScreenConfigField
-					:field="fields.cardsPerPage"
-					:model-value="config.cardsPerPage"
-					:max="config.limit - 1"
-					:description="pageSizeDescription"
-					@update:model-value="$event !== null && rotation.setPageSize(Number($event))"
-				/>
-
 				<USeparator />
 
 				<ScreenPaginationRotationControls
@@ -291,7 +279,8 @@ const badgesSummary = computed(() => {
 			<ScreenCardGridLayoutFields
 				:layout="gridLayout"
 				:fields="fields"
-				:descriptions="layoutDescriptions"
+				:card-count="config.limit"
+				:canvas="eventCanvas"
 				@update="updateConfig($event)"
 			/>
 

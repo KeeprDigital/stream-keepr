@@ -642,12 +642,15 @@ export function screenModePageRotation(mode: PageRotationMode): PageRotationDecl
 
 /**
  * Each mode whose Page Rotation declaration and config disagree: a declaring
- * mode whose config lacks the shared rotation fields or a numeric page size
- * field, or a mode carrying a rotation field without declaring a Page Rotation.
+ * mode whose config lacks the shared rotation fields or a page size field
+ * holding a number (optional where the mode pages by Auto), or a mode carrying
+ * a rotation field without declaring a Page Rotation.
  */
 type MisdeclaredPageRotation = {
 	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { pageRotation: { pageSize: infer PageSize extends string } }
-		? ConfigOfMode<M> extends PageRotationConfig & Record<PageSize, number> ? never : M
+		? PageSize extends keyof ConfigOfMode<M>
+			? ConfigOfMode<M> extends PageRotationConfig & Partial<Record<PageSize, number>> ? never : M
+			: M
 		: Extract<keyof ConfigOfMode<M>, keyof PageRotationConfig> extends never ? never : M;
 }[ScreenMode];
 

@@ -237,10 +237,10 @@ describe('screenMetagameSettings', () => {
 				groups: [...groups],
 			},
 			{
-				id: 'metagame:size-and-surface',
-				title: 'Size & Surface',
+				id: 'metagame:size',
+				title: 'Size',
 				collapsible: true,
-				groups: ['size-and-surface'],
+				groups: [],
 			},
 			{
 				id: 'metagame:header',
@@ -271,10 +271,21 @@ describe('screenMetagameSettings', () => {
 
 		expect(settingsSummaries(wrapper)).toEqual({
 			'metagame:table': '4 of 7 columns shown',
-			'metagame:size-and-surface': 'Follows the Theme',
+			'metagame:size': 'Auto width',
 			'metagame:header': '“Day 2”',
 			'metagame:pagination': '10 per page · Manual paging',
 		});
+	});
+
+	it('summarises a set max width on its closed card', async () => {
+		mockConfig.value = {
+			...structuredClone(defaultConfig),
+			maxWidth: 1200,
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		expect(settingsSummaries(wrapper)).toMatchObject({ 'metagame:size': 'Up to 1200 px wide' });
 	});
 
 	it('links the chart to the Metagame page, where an Archetype pins its series', async () => {

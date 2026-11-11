@@ -26,7 +26,7 @@ import Renderer from '~/components/Screen/Renderer.vue';
 // Foundation Tokens, and a plain mode's host insets and aligns it by the Theme
 // (ADR-0049, ADR-0051).
 
-type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize' | 'maxWidth';
+type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize';
 
 /** Where a display paints one Mode Token: an element, and for a colour the property it sets. */
 interface Probe {
@@ -48,7 +48,6 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 	'standings': {
 		'rise': { selector: '[data-position-change="up"]', property: 'color' },
 		'fall': { selector: '[data-position-change="down"]', property: 'color' },
-		'max-width': { selector: '[data-testid="standings-content"]', property: 'maxWidth' },
 		'row-motion': { selector: '.standings-row', motionProperties: '--standings-row' },
 		'reveal-motion': {
 			selector: '.standings-row',
@@ -129,7 +128,6 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'champion-border': { selector: '.bracket-champion-name', property: 'borderTopColor' },
 	},
 	'metagame': {
-		'max-width': { selector: '[data-testid="metagame-content"]', property: 'maxWidth' },
 		'row-motion': { selector: '.metagame-row', motionProperties: '--metagame-row' },
 	},
 	'top-cards': {
@@ -687,7 +685,6 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 	return {
 		config: computed(() => ({
 			columns: 5,
-			cardSizing: 'fit',
 			showHeader: true,
 			showRankBadges: true,
 			rankBadgePosition: 'top-left',
@@ -1058,10 +1055,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 		return;
 
 	it.each(tokens)('paints $name from the Theme', async ({ name, definition, probe }) => {
-		// A dimension sample sits within the token's bounds, which a stored value outside reads clamped to.
-		const sample = definition.type === 'dimension' && definition.bounds
-			? Math.min(definition.bounds.max, Math.max(definition.bounds.min + 1, SAMPLES.dimension))
-			: SAMPLES[definition.type];
+		const sample = SAMPLES[definition.type];
 		await mountMode(mode, { [name]: sample }, { config: probe.config });
 		await shown(probe);
 

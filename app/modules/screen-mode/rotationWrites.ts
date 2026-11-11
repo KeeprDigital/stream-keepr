@@ -4,7 +4,7 @@ import type { PageRotationConfig } from '~~/shared/screenModeConfigs/subShapes';
 import type { PageRotationMode } from '~~/shared/screenModes';
 import type { ModeConfigTypeMap, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import { computed } from 'vue';
-import { pageRotationEdit, restartedRotationAnchor, rotationAnchorForPage, rotationPageSize } from '~~/shared/modules/page-rotation';
+import { pageRotationEdit, restartedRotationAnchor, rotationAnchorForPage, rotationPageCount, rotationPageSize } from '~~/shared/modules/page-rotation';
 import { screenModeConfigContract, screenModePageRotation } from '~~/shared/screenModes';
 import { useProjectedRotationPage } from './pagination';
 
@@ -39,12 +39,12 @@ export interface PageRotationControls {
 	readonly fields: PageRotationFields;
 	/** The rotation's own fields, as the mode's config holds them. */
 	readonly rotationConfig: ComputedRef<PageRotationConfig>;
-	/** How many rows a page holds, read from the field the mode declares. */
-	readonly pageSize: ComputedRef<number>;
+	/** How many rows a page holds, read from the field the mode declares; undefined is Auto, one page of every row. */
+	readonly pageSize: ComputedRef<number | undefined>;
 	readonly currentPage: ComputedRef<number>;
 	readonly totalPages: ComputedRef<number>;
-	/** Writes the declared page size field; a shape change, so the rotation restarts from page 1. */
-	setPageSize: (size: number) => void;
+	/** Writes the declared page size field, `null` returning it to Auto; a shape change, so the rotation restarts from page 1. */
+	setPageSize: (size: number | null) => void;
 	/** Writes the page duration; a shape change, so a running rotation restarts from page 1. */
 	setPageDurationMs: (ms: number) => void;
 	setAutoPageEnabled: (enabled: boolean) => void;
@@ -90,7 +90,7 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 
 	const pageSize = computed(() => rotationPageSize(declaration, options.config.value));
 
-	const totalPages = computed(() => Math.max(1, Math.ceil(options.rowCount.value / pageSize.value)));
+	const totalPages = computed(() => rotationPageCount(options.rowCount.value, pageSize.value));
 
 	const rotationPage = useProjectedRotationPage({
 		autoPageEnabled: computed(() => rotation.value.autoPageEnabled),
@@ -110,7 +110,7 @@ export function useRotationConfigWrites<M extends PageRotationMode>(
 
 	// Each a patch of the mode's config, by the field names its declaration and
 	// the shared rotation fields give it.
-	function setPageSize(size: number) {
+	function setPageSize(size: number | null) {
 		updateConfig({ [declaration.pageSize]: size } as ScreenModeConfigPatch<M>);
 	}
 
