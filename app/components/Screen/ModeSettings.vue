@@ -6,6 +6,7 @@ import type { Screen } from '~/types';
 import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { FOLLOWS_THE_THEME, headerSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { PAGED_MODE_DATA } from '~/modules/screen-mode/pagedModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -33,7 +34,10 @@ import { cardFieldsSummary, fieldDescription, fieldLabel, fieldOptions, fieldPat
  * page selection) and `columns` (a column list per field) itself; a mode
  * with another slot gets a component of its own that wraps the renderer,
  * fills that slot, and passes on the renderer's exposed `resetConfig` and
- * `saving`.
+ * `saving`. Such a component may also fill `after:<group>` (`after:<card>`
+ * for a card's ungrouped fields), drawn at the end of that section while it
+ * shows, for a widget editing no field, such as a read-only Event setting.
+ * Every slot is also given `data`, a paginated mode's data as read.
  *
  * The mode is the Screen's at setup: the page remounts it on a mode change.
  */
@@ -49,6 +53,17 @@ const contract = screenModeConfigContract(mode);
 
 const eventStore = useEventStore();
 const playerListStore = usePlayerListStore();
+
+// Whether the Event holds a Player List decides what a mode naming one offers, such as its Metagame Scope.
+const namesPlayerList = Object.values(contract.fields as Record<string, { reference?: string }>)
+	.some(field => field.reference === 'playerList');
+if (namesPlayerList) {
+	useConsumedEventData(['playerLists']);
+	onMounted(async () => {
+		if (props.eventId && !playerListStore.isLoaded)
+			await playerListStore.loadByEventId(props.eventId);
+	});
+}
 
 const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
@@ -104,9 +119,12 @@ function update(patch: Record<string, unknown>) {
 		paged.rotation.updateConfig(rest as never);
 }
 
-/** Writes one field's new value; a Source edit on a paginated mode shows page 1 of what it now reads. */
+/** Writes one field's new value, and what it writes with it; a Source edit on a paginated mode shows page 1 of what it now reads. */
 function updateField(entry: SettingsPageField, value: unknown) {
-	const patch = fieldPatch(entry, value);
+	const patch = {
+		...fieldPatch(entry, value),
+		...entry.field.writesWith?.(value, entry.context),
+	};
 	update(paged && entry.field.card === 'source'
 		? { ...patch, currentPage: 1 }
 		: patch);
@@ -119,7 +137,7 @@ function columnLabels(entry: SettingsPageField): Record<string, string> {
 }
 
 /** A column list as the Screen holds it, with any column added since it was stored offered hidden. */
-function columnsOf(entry: SettingsPageField): { key: string; visible: boolean }[] {
+function heldColumns(entry: SettingsPageField): { key: string; visible: boolean }[] {
 	const defaults = (contract.defaults as Record<string, unknown>)[entry.field.key];
 	const stored = configRecord.value[entry.field.key];
 	return withEveryColumn(
@@ -130,6 +148,23 @@ function columnsOf(entry: SettingsPageField): { key: string; visible: boolean }[
 			? defaults
 			: [],
 	);
+}
+
+/** Whether a column list offers `key`: every column, or where its field labels columns, those labelled for this Screen, such as the ones its Card Game reads. */
+function offersColumn(entry: SettingsPageField, key: string): boolean {
+	return !entry.field.options || key in columnLabels(entry);
+}
+
+function columnsOf(entry: SettingsPageField): { key: string; visible: boolean }[] {
+	return heldColumns(entry).filter(column => offersColumn(entry, column.key));
+}
+
+/** Writes an edited column list, the columns it does not offer kept after it as stored. */
+function updateColumns(entry: SettingsPageField, offered: { key: string; visible: boolean }[]) {
+	updateField(entry, [
+		...offered,
+		...heldColumns(entry).filter(column => !offersColumn(entry, column.key)),
+	]);
 }
 
 // ── Closed card summaries ──
@@ -154,6 +189,11 @@ function summaryOf(card: SettingsPageCard): string | undefined {
 
 function slotFieldKeys(fields: readonly SettingsPageField[]): string {
 	return fields.map(entry => entry.path.join('.')).join(' ');
+}
+
+/** The slot drawn at the end of a card's section: after its group, or after the card's ungrouped fields. */
+function afterSlot(card: ScreenSettingsCard, group: string | undefined): string {
+	return `after:${group ?? card}`;
 }
 
 function headingId(card: ScreenSettingsCard, group: string): string {
@@ -205,6 +245,7 @@ function headingId(card: ScreenSettingsCard, group: string): string {
 								:context="context"
 								:update="update"
 								:rotation="paged?.rotation"
+								:data="paged?.data"
 							>
 								<ScreenPageSelection
 									v-if="row.slot === 'page-rotation' && paged"
@@ -223,13 +264,23 @@ function headingId(card: ScreenSettingsCard, group: string): string {
 										<ScreenColumnVisibilityList
 											:columns="columnsOf(entry)"
 											:labels="columnLabels(entry)"
-											@update="updateField(entry, $event)"
+											@update="updateColumns(entry, $event)"
 										/>
 									</ScreenSettingsField>
 								</template>
 							</slot>
 						</div>
 					</template>
+					<slot
+						v-if="$slots[afterSlot(card.card, section.group?.id)]"
+						:name="afterSlot(card.card, section.group?.id)"
+						:fields="[]"
+						:config="configRecord"
+						:context="context"
+						:update="update"
+						:rotation="paged?.rotation"
+						:data="paged?.data"
+					/>
 				</section>
 
 				<ScreenSettingsLook

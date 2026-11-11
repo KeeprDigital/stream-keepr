@@ -139,6 +139,7 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 		showWhen: context => pagesTable(context) && context.config.autoPageEnabled === true,
 	}),
 	currentPage: withEditorMeta(pageRotationShape.currentPage, { showWhen: pagesTable }),
+	rotationAnchor: withEditorMeta(pageRotationShape.rotationAnchor, { showWhen: pagesTable }),
 
 	// Visibility toggles
 	...headerConfigShape({

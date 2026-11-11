@@ -56,6 +56,10 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 			watchlist: 'Watchlist',
 			reveal: 'Reveal',
 		},
+		// Entering the reveal starts it over: no Player revealed yet.
+		writesWith: value => value === 'reveal'
+			? { revealedCount: 0 }
+			: undefined,
 	}),
 
 	// Column configuration (ordered array — order = display order)

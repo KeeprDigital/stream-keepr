@@ -9,7 +9,7 @@ import {
 } from '../types/enums';
 import { METAGAME_CARD_TYPE_BUCKETS } from '../utils/metagame';
 import { defineScreenModeConfigContract } from './contract';
-import { editorField } from './fields';
+import { editorField, withEditorMeta } from './fields';
 import {
 	BOARD_SELECTION_LABELS,
 	cardBadgeSizeField,
@@ -42,6 +42,9 @@ function badge(group: string) {
 }
 
 const showsStatBadge = ({ config }: ScreenSettingsContext) => config.statBadge !== 'none';
+
+/** The ranking pages while a page holds fewer cards than it ranks; Auto, or a page of every card, is one page with nothing to turn. */
+const pagesRanking = ({ config }: ScreenSettingsContext) => typeof config.cardsPerPage === 'number' && config.cardsPerPage < config.limit;
 
 /**
  * The Card Layout a Card Sizing meant (ADR-0054): a Fixed width is the max card
@@ -114,7 +117,9 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		label: 'Card types',
 		card: 'source',
 		slot: 'card-type-filter',
-		description: 'The card types the ranking may include; ranking pointed cards keeps nonbasic lands in.',
+		description: ({ event }) => event?.game === 'op'
+			? 'The card types the ranking may include; Leaders never are.'
+			: 'The card types the ranking may include; basic lands never are, and ranking pointed cards keeps nonbasic lands in.',
 	}),
 	/** Only cards the Event's points system points, applied server-side before `limit`. */
 	pointedOnly: editorField(z.boolean(), {
@@ -136,6 +141,12 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		description: 'However many columns the Screen lays them out in. Auto shows every card on one page.',
 	}),
 	...pageRotationShape,
+	autoPageEnabled: withEditorMeta(pageRotationShape.autoPageEnabled, { showWhen: pagesRanking }),
+	autoPageIntervalMs: withEditorMeta(pageRotationShape.autoPageIntervalMs, {
+		showWhen: context => pagesRanking(context) && context.config.autoPageEnabled === true,
+	}),
+	currentPage: withEditorMeta(pageRotationShape.currentPage, { showWhen: pagesRanking }),
+	rotationAnchor: withEditorMeta(pageRotationShape.rotationAnchor, { showWhen: pagesRanking }),
 
 	// Header
 	...headerConfigShape({
