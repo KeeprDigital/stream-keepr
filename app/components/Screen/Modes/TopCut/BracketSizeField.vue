@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TopCutBracketSize } from '~~/shared/modules/top-cut-bracket';
 import type { SettingsPageField } from '~/modules/screen-mode/settingsPage';
 import { TOP_CUT_BRACKET_SIZES } from '~~/shared/screenModeConfigs/topCut';
 import { fieldDescription, fieldLabel } from '~/modules/screen-mode/settingsPage';
@@ -11,11 +12,11 @@ import { fieldDescription, fieldLabel } from '~/modules/screen-mode/settingsPage
  */
 defineProps<{
 	entry: SettingsPageField;
-	modelValue: number | null | undefined;
+	modelValue: TopCutBracketSize | null | undefined;
 }>();
 
 const emit = defineEmits<{
-	'update:modelValue': [size: number | null];
+	'update:modelValue': [size: TopCutBracketSize | null];
 }>();
 
 const sizeOptions = [

@@ -192,6 +192,9 @@ async function mountPage(mode: ScreenMode, { game = 'mtg', config: variant = {},
 	return wrapper;
 }
 
+/** A slot's row of the page, as `wrapper.get` finds it. */
+type SlotRow = Omit<DOMWrapper<Element>, 'exists'>;
+
 // ── Reading the page ──
 
 /** Every field a contract declares, a nested block's by its path. */
@@ -734,7 +737,7 @@ describe('the generic settings renderer', () => {
 			mode: 'deck',
 			config: {},
 			slot: '[data-settings-slot="board-toggles"]',
-			act: (row: DOMWrapper<Element>) => row.findAll('[role="switch"]')[0]!.trigger('click'),
+			act: (row: SlotRow) => row.findAll('[role="switch"]')[0]!.trigger('click'),
 			written: { board: 'sideboard' },
 		},
 		{
@@ -744,7 +747,7 @@ describe('the generic settings renderer', () => {
 				sideboard: { view: 'stack', stackReveal: 40 },
 			},
 			slot: '[data-settings-section="sideboard"] [data-settings-group-slot="before:sideboard"]',
-			act: (row: DOMWrapper<Element>) => row.findAll('button').find(button => button.text() === 'Customise')!.trigger('click'),
+			act: (row: SlotRow) => row.findAll('button').find(button => button.text() === 'Customise')!.trigger('click'),
 			written: {
 				sideboard: {
 					view: 'stack',
@@ -766,7 +769,7 @@ describe('the generic settings renderer', () => {
 				},
 			},
 			slot: '[data-settings-section="sideboard"] [data-settings-group-slot="before:sideboard"]',
-			act: (row: DOMWrapper<Element>) => row.findAll('button').find(button => button.text() === 'Use mainboard\'s')!.trigger('click'),
+			act: (row: SlotRow) => row.findAll('button').find(button => button.text() === 'Use mainboard\'s')!.trigger('click'),
 			written: {
 				sideboard: { view: 'stack', stackReveal: 40 },
 			},
@@ -776,7 +779,7 @@ describe('the generic settings renderer', () => {
 			mode: 'top-cut',
 			config: { bracketSource: 'manual' },
 			slot: '[data-settings-card="live"] [data-settings-slot="manual-bracket"]',
-			act: (row: DOMWrapper<Element>) => row.get('[role="option"]').trigger('click'),
+			act: (row: SlotRow) => row.get('[role="option"]').trigger('click'),
 			written: {
 				manualBracket: {
 					size: 8,
@@ -792,7 +795,7 @@ describe('the generic settings renderer', () => {
 			mode: 'top-cut',
 			config: {},
 			slot: '[data-settings-slot="bracket-size"]',
-			act: (row: DOMWrapper<Element>) => row.get('select').setValue('16'),
+			act: (row: SlotRow) => row.get('select').setValue('16'),
 			written: { bracketSizeOverride: 16 },
 		},
 		{
@@ -800,7 +803,7 @@ describe('the generic settings renderer', () => {
 			mode: 'talent',
 			config: { selection: 'lineup' },
 			slot: '[data-settings-slot="talent-lineup"]',
-			act: (row: DOMWrapper<Element>) => row.get('select').setValue('8'),
+			act: (row: SlotRow) => row.get('select').setValue('8'),
 			written: {
 				talentIds: [8],
 			},
@@ -812,10 +815,10 @@ describe('the generic settings renderer', () => {
 				layers: layersPinningNoAsset().slice(0, 1),
 			},
 			slot: '[data-settings-card="background-placement"] [data-settings-slot="background-layers"]',
-			act: (row: DOMWrapper<Element>) => row.findAll('button').find(button => button.text() === 'Reset to Theme')!.trigger('click'),
+			act: (row: SlotRow) => row.findAll('button').find(button => button.text() === 'Reset to Theme')!.trigger('click'),
 			written: { layers: [] },
 		},
-	] as { name: string; mode: RenderedMode; config: Record<string, unknown>; slot: string; act: (row: DOMWrapper<Element>) => Promise<unknown>; written: Record<string, unknown> }[])(
+	] as { name: string; mode: RenderedMode; config: Record<string, unknown>; slot: string; act: (row: SlotRow) => Promise<unknown>; written: Record<string, unknown> }[])(
 		'$name in one write',
 		async ({ mode, config: variant, slot, act, written }) => {
 			const wrapper = await mountPage(mode, { config: variant });
