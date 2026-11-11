@@ -9,7 +9,7 @@ import { solveDeckLayout } from '~~/shared/utils/deckLayout';
 import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
 import { ninePointPlacement } from '~~/shared/utils/ninePoints';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
 const {
@@ -32,18 +32,18 @@ const {
 } = useDeckModeData(useScreenContext());
 
 const primaryTextStyle = {
-	color: modeTokenVar('deck', 'primary-text'),
+	color: foundationTokenVar('text-primary'),
 };
 const secondaryTextStyle = {
-	color: modeTokenVar('deck', 'secondary-text'),
+	color: foundationTokenVar('text-secondary'),
 };
 const titleStyle = {
-	...modeTypographyStyle('deck', 'title-typography'),
+	...foundationTypographyStyle('heading'),
 	...primaryTextStyle,
 };
 /** Set on the root, so everything else reads as body text. */
 const displayStyle = {
-	...modeTypographyStyle('deck', 'body-typography'),
+	...foundationTypographyStyle('body'),
 	...primaryTextStyle,
 };
 
@@ -419,11 +419,11 @@ const highlanderPointBadgeStyle = computed(() => ({
 /** A point badge lifts off a card's art on a soft shadow, and off a list row on a slighter one. */
 const highlanderCardBadgeStyle = computed(() => ({
 	...highlanderPointBadgeStyle.value,
-	boxShadow: `0 4px 6px -1px ${modeTokenVar('deck', 'badge-shadow')}`,
+	boxShadow: `0 4px 6px -1px ${foundationTokenVar('shadow')}`,
 }));
 const highlanderListBadgeStyle = computed(() => ({
 	...highlanderPointBadgeStyle.value,
-	boxShadow: `0 1px 3px 0 ${modeTokenVar('deck', 'badge-shadow')}`,
+	boxShadow: `0 1px 3px 0 ${foundationTokenVar('shadow')}`,
 }));
 
 /** The deck details row's text size applies with or without its pill. */

@@ -73,7 +73,7 @@ describe('the Archetype Spotlight settings editor', () => {
 				id: 'archetype-spotlight:data',
 				title: 'Data',
 				collapsible: false,
-				groups: ['data'],
+				groups: [],
 			},
 			{
 				id: 'archetype-spotlight:top-cards',
@@ -85,13 +85,13 @@ describe('the Archetype Spotlight settings editor', () => {
 				id: 'archetype-spotlight:pilots',
 				title: 'Pilots',
 				collapsible: true,
-				groups: ['pilots'],
+				groups: [],
 			},
 			{
 				id: 'archetype-spotlight:header',
 				title: 'Header',
 				collapsible: true,
-				groups: ['header'],
+				groups: [],
 			},
 		]);
 		expect(settingsSummaries(wrapper)).toEqual({

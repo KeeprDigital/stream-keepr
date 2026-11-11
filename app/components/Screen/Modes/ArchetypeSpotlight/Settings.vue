@@ -91,14 +91,8 @@ const topCardsSummary = computed(() => settingsSummary([
 	hasSideboard.value && boardOptions.find(option => option.value === config.value.board)?.label,
 	look('top-cards'),
 ]));
-const pilotsSummary = computed(() => settingsSummary([
-	paginationSummary(rotation),
-	look('pilots'),
-]));
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	look('header'),
-]));
+const pilotsSummary = computed(() => paginationSummary(rotation));
+const headerCardSummary = computed(() => headerSummary(config.value));
 </script>
 
 <template>
@@ -123,8 +117,6 @@ const headerCardSummary = computed(() => settingsSummary([
 			/>
 
 			<ScreenConversionTargetField v-if="readsStandings" :event-id="eventId" />
-
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="data" />
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection id="archetype-spotlight:top-cards" title="Top Cards" :summary="topCardsSummary">
@@ -166,9 +158,7 @@ const headerCardSummary = computed(() => settingsSummary([
 			auto-page-description="Automatically cycle through pages of pilots."
 			:loading="loadingPilots"
 			:counting="!rowsAnswered"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="pilots" />
-		</ScreenPaginationSettingsCard>
+		/>
 
 		<ScreenHeaderSettingsCard
 			id="archetype-spotlight:header"
@@ -178,8 +168,6 @@ const headerCardSummary = computed(() => settingsSummary([
 			show-description="Show the title above the spotlight."
 			auto-description="Leave empty for the archetype's name and scope."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 	</div>
 </template>
