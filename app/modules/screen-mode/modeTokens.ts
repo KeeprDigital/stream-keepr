@@ -13,6 +13,7 @@ import {
 	themeTokenVar,
 	themeTypographyStyle,
 } from '~~/shared/modules/theme';
+import { PLAIN_HOST_TOKENS, screenModeHostTokens } from '~~/shared/screenModeDefinitions';
 import { screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
 import { themeTokenValueGraphicAssetReferences } from '~~/shared/themeAssetReferences';
 
@@ -21,21 +22,29 @@ const FOUNDATION_TYPOGRAPHY_TOKENS = ['heading', 'body'] as const satisfies read
 
 /**
  * The custom properties a Screen host sets for its mode's display: every
- * Foundation Token and each of the mode's Mode Tokens, resolved from the
- * Screen's overrides, its Event's Theme and the defaults. A display reads the
- * Theme's shared chrome from the Foundation Tokens and only what is its own
- * from its Mode Tokens; a token no property can carry sets none.
+ * Foundation Token, from its Event's Theme (a host token from the Screen's
+ * override first), and each of the mode's Mode Tokens, from the Screen's
+ * override, else its default. A display reads the Theme's shared chrome from
+ * the Foundation Tokens and only what is its own from its Mode Tokens; a token
+ * no property can carry sets none.
  */
 export function screenModeThemeTokenStyle(mode: ScreenMode, theme: StoredThemeTokens, overrides: StoredThemeTokens): Record<string, string> {
 	const modeTokens = screenModeTokens(mode);
+	const hostTokens = screenModeHostTokens(mode);
 	const { values } = resolveThemeTokens({
 		vocabulary: FOUNDATION_TOKENS,
 		modeTokens,
 		theme,
 		overrides,
+		hostTokens,
 	});
 	return themeTokenCssProperties({
-		...resolveFoundationTokens({ vocabulary: FOUNDATION_TOKENS, theme, overrides }),
+		...resolveFoundationTokens({
+			vocabulary: FOUNDATION_TOKENS,
+			theme,
+			overrides,
+			hostTokens,
+		}),
 		...Object.fromEntries(Object.keys(modeTokens).map(name => [name, values[name]])),
 	});
 }
@@ -95,16 +104,16 @@ export function modeMotionVars<M extends ThemedScreenMode>(mode: M, token: Scree
 }
 
 /**
- * The Background Layer stack a Screen paints: its own when it has one, else
- * its Theme's `background` Foundation Token. The Background Screen's `layers`
- * and a plain overlay mode's `backgroundLayers` both follow it; an empty own
- * stack is no stack, so the Theme's shows.
+ * The Background Layer stack a Screen paints, from one of two sources: its own
+ * when it has one, else its Theme's `background` Foundation Token. The
+ * Background Screen's `layers` and a plain overlay mode's `backgroundLayers`
+ * both follow it; an empty own stack is no stack, so the Theme's shows.
  */
-export function screenBackgroundLayers(own: BackgroundLayer[] | undefined, theme: StoredThemeTokens, overrides: StoredThemeTokens): BackgroundLayer[] {
+export function screenBackgroundLayers(own: BackgroundLayer[] | undefined, theme: StoredThemeTokens): BackgroundLayer[] {
 	if (own?.length)
 		return own;
 	// Resolved, so every colour layer holds a literal.
-	return resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme, overrides }, 'background') as ThemeBackgroundLayer<string>[];
+	return resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme, overrides: {} }, 'background') as ThemeBackgroundLayer<string>[];
 }
 
 /**
@@ -114,7 +123,12 @@ export function screenBackgroundLayers(own: BackgroundLayer[] | undefined, theme
  * inside the inset reads it here too.
  */
 export function screenLayoutTokens(theme: StoredThemeTokens, overrides: StoredThemeTokens): { inset: number; alignment: ThemeAlignment } {
-	const input = { vocabulary: FOUNDATION_TOKENS, theme, overrides };
+	const input = {
+		vocabulary: FOUNDATION_TOKENS,
+		theme,
+		overrides,
+		hostTokens: PLAIN_HOST_TOKENS,
+	};
 	return {
 		inset: resolveFoundationToken(input, 'inset') as number,
 		alignment: resolveFoundationToken(input, 'alignment') as ThemeAlignment,

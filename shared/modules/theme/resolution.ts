@@ -19,11 +19,12 @@ export interface ResolveThemeTokensInput {
 	modeTokens: ModeTokenDeclarations;
 	/** The Event's Theme's stored values; the Default Theme stores none. Only its Foundation Tokens are read. */
 	theme: StoredThemeTokens;
-	/** The Screen's Screen Theme Overrides. */
+	/** The Screen's Screen Theme Overrides. Only its Mode Tokens and host tokens are read. */
 	overrides: StoredThemeTokens;
 	/**
 	 * Foundation Tokens the Screen's host consumes itself rather than through a
-	 * Mode Token, such as a plain mode's `inset` and `alignment`. None when left out.
+	 * Mode Token, such as a plain mode's `inset` and `alignment`: the only
+	 * Foundation Tokens a Screen may override. None when left out.
 	 */
 	hostTokens?: readonly string[];
 }
@@ -66,12 +67,13 @@ function firstReadable(stored: readonly unknown[], read: (value: unknown) => The
 }
 
 /**
- * How one Screen reads Foundation Tokens: override, else Theme, else default.
- * A colour a composite default names (a fill's or a surface's) is read the
- * same way, so a colour override reaches every composite naming it. A colour
- * holds a literal only, so this adds at most one step and cannot cycle.
+ * How one Screen reads Foundation Tokens: Theme, else default, and over both
+ * the Screen's override of a token its host consumes itself. Any other
+ * Foundation override is dormant. A colour a composite default names (a fill's
+ * or a surface's) is read the same way. A colour holds a literal only, so this
+ * adds at most one step and cannot cycle.
  */
-function foundationResolver({ vocabulary, theme, overrides }: Omit<ResolveThemeTokensInput, 'modeTokens'>) {
+function foundationResolver({ vocabulary, theme, overrides, hostTokens = [] }: Omit<ResolveThemeTokensInput, 'modeTokens'>) {
 	function resolveColor(name: string): string | undefined {
 		return vocabulary[name]?.type === 'color'
 			? resolveFoundation(name) as string
@@ -88,7 +90,10 @@ function foundationResolver({ vocabulary, theme, overrides }: Omit<ResolveThemeT
 
 	function resolveFoundation(name: string): ThemeTokenValue {
 		const definition = vocabulary[name]!;
-		return firstReadable([overrides[name], theme[name], definition.default], stored => readLiteral(definition, stored))!;
+		const override = hostTokens.includes(name)
+			? overrides[name]
+			: undefined;
+		return firstReadable([override, theme[name], definition.default], stored => readLiteral(definition, stored))!;
 	}
 
 	return { resolveFoundation, readLiteral };
@@ -97,7 +102,8 @@ function foundationResolver({ vocabulary, theme, overrides }: Omit<ResolveThemeT
 /**
  * Every Foundation Token a Screen resolves, by name. A graphics host's Graphic
  * Items bind to these, since any of them may name any Foundation Token of its
- * type. Resolved by the same rules as `resolveThemeTokens`.
+ * type. Resolved by the same rules as `resolveThemeTokens`, so from the Theme
+ * alone but for the host tokens named.
  */
 export function resolveFoundationTokens(input: Omit<ResolveThemeTokensInput, 'modeTokens'>): Readonly<Record<string, ThemeTokenValue>> {
 	const { resolveFoundation } = foundationResolver(input);
@@ -113,11 +119,11 @@ export function resolveFoundationTokens(input: Omit<ResolveThemeTokensInput, 'mo
  *
  * - A Mode Token reads from the Screen Theme Override, else its shipped
  *   default: a Theme stores Foundation Tokens only, and a Mode Token one stored
- *   before is never read. A Foundation Token reads from the override, else the
- *   Theme, else its default.
+ *   before is never read. A Foundation Token reads from the Theme, else its
+ *   default; only one the Screen's host consumes itself (`hostTokens`) reads
+ *   the override first.
  * - A stored value is a literal, read in one step. A default may name a
- *   Foundation Token, read by the same precedence, so a Foundation override
- *   reaches every default naming it. Nothing names a Mode Token, so this is one
+ *   Foundation Token, read by the same precedence. Nothing names a Mode Token, so this is one
  *   derivation and cannot cycle; a colour a composite default names adds one
  *   more (`foundationResolver`).
  * - A motion default may instead follow a motion Foundation Token: the same
@@ -131,8 +137,8 @@ export function resolveFoundationTokens(input: Omit<ResolveThemeTokensInput, 'mo
  *   (a former token) is dropped, a number outside a tightened bound reads as
  *   the nearest bound, and a value of the wrong type, or naming no same-type
  *   Foundation Token, is ignored in favour of the next source.
- * - An override of a Mode Token another mode declares stays dormant: only
- *   this mode's Mode Tokens are read.
+ * - An override of a Mode Token another mode declares, or of a Foundation
+ *   Token the host does not consume itself, stays dormant: nothing reads it.
  */
 export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThemeTokens {
 	const { vocabulary, modeTokens, overrides, hostTokens = [] } = input;
@@ -181,10 +187,9 @@ export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThem
 }
 
 /**
- * One Foundation Token a Screen host consumes itself rather than through a
- * Mode Token, such as the `background` stack: its Screen Theme Override, else
- * its Theme's value, else its shipped default, read as `resolveThemeTokens`
- * reads every Foundation Token.
+ * One Foundation Token, such as the `background` stack a Screen paints where
+ * it holds none of its own, read as `resolveThemeTokens` reads every
+ * Foundation Token.
  */
 export function resolveFoundationToken(input: Omit<ResolveThemeTokensInput, 'modeTokens'>, name: string): ThemeTokenValue {
 	return foundationResolver(input).resolveFoundation(name);

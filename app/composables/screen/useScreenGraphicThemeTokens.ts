@@ -8,14 +8,15 @@ import { isGraphicsPreviewThemeMessage } from '~/modules/graphics/previewMessage
 export interface ScreenThemeSources {
 	/** Its Event's Theme's stored values, or the Theme an editor previews under. */
 	theme: StoredThemeTokens;
-	/** Its Screen's own Screen Theme Overrides. */
+	/** Its Screen's own Screen Theme Overrides, of its mode's Mode Tokens. */
 	overrides: StoredThemeTokens;
 }
 
 /**
  * The Theme a graphics host renders under: its Event's Theme as the Screen
- * context holds it, with its Screen's own Screen Theme Overrides over it, so a
- * Theme edit, a Theme switch or an override restyles it on air.
+ * context holds it, with its Screen's own overrides of its mode's Mode Tokens,
+ * so a Theme edit, a Theme switch or an override restyles it on air. Its
+ * Graphic Items bind the Theme's Foundation Tokens alone.
  *
  * An editor's embedded preview may be told to preview under another Theme
  * (`GRAPHICS_PREVIEW_THEME_MESSAGE`). Only a preview listens: a live Screen
@@ -46,5 +47,5 @@ export function useScreenThemeSources(): ComputedRef<ScreenThemeSources> {
 
 /** The Foundation Tokens a graphics host's bound Graphic Items paint from. */
 export function useScreenGraphicThemeTokens(sources: ComputedRef<ScreenThemeSources> = useScreenThemeSources()): ComputedRef<GraphicThemeTokens> {
-	return computed(() => resolveGraphicThemeTokens(sources.value.theme, sources.value.overrides));
+	return computed(() => resolveGraphicThemeTokens(sources.value.theme));
 }

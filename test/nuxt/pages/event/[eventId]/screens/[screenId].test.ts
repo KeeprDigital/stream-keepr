@@ -81,11 +81,6 @@ const UContainerStub = defineComponent({
 	template: '<div><slot /></div>',
 });
 
-/** The Screen-wide look, which loads its Event's Theme; here it only has to be on the page or not. */
-const ThemeTokensSettingsStub = defineComponent({
-	template: '<div data-settings-card="Screen-wide look" />',
-});
-
 /** The empty state's title, so a test can tell "not found" from the Screen's own cards. */
 const EmptyStateStub = defineComponent({
 	props: {
@@ -165,7 +160,6 @@ async function mountPage(stubOverrides: Record<string, unknown> = {}) {
 				UModal: UModalStub,
 				UAlert: true,
 				ScreenSettingsSection: ScreenSettingsCardStub,
-				ScreenThemeTokensSettings: ThemeTokensSettingsStub,
 				...stubOverrides,
 			},
 		},
@@ -661,13 +655,11 @@ describe('screen config page — Editor Focus Mode', () => {
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
 		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
-		expect(page.find('[data-settings-card="Screen-wide look"]').exists()).toBe(true);
 
 		await page.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('true');
 		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(false);
-		expect(page.find('[data-settings-card="Screen-wide look"]').exists()).toBe(false);
 		expect(page.find('[data-testid="mode-editor"]').exists()).toBe(true);
 		expect(page.get('[data-testid="focused-screen-name"]').text()).toBe('Screen 1');
 		expect(page.text()).toContain('Back to Screens');
@@ -702,10 +694,11 @@ describe('screen config page — Editor Focus Mode', () => {
 });
 
 /**
- * A plain overlay mode's page ends with Background & Placement, then the
- * Screen-wide look, each closed unless it holds a layer or an override (#970).
+ * A plain overlay mode's page ends with Background & Placement, closed unless
+ * it holds a layer or an override (#970). No card lists the Foundation Tokens a
+ * Screen takes from its Theme alone.
  */
-describe('screen config page — Background & Placement, then the Screen-wide look', () => {
+describe('screen config page — Background & Placement last', () => {
 	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
 
 	const ModeSettingsStub = defineComponent({
@@ -727,9 +720,9 @@ describe('screen config page — Background & Placement, then the Screen-wide lo
 		mockEventStore.event = { id: 1 };
 	});
 
-	// Each card's own open rule is tested at its home; this shows the page wires the Screen to both,
-	// and holds the one Screen Theme Override instance both read the Event's Theme through.
-	it('orders the cards after the mode\'s settings, each opening on what it holds, over one read of the Event\'s Theme', async () => {
+	// The card's own open rule is tested at its home; this shows the page wires the Screen to it,
+	// and holds the one Screen Theme Override instance it reads the Event's Theme through.
+	it('ends with Background & Placement, opening on what it holds, over one read of the Event\'s Theme', async () => {
 		mockEventStore.event = { id: 1, themeId: 'brand' };
 		mockApiFetch.mockReset();
 		mockApiFetch.mockResolvedValue({
@@ -746,7 +739,7 @@ describe('screen config page — Background & Placement, then the Screen-wide lo
 			themeOverrides,
 		};
 		mockScreenStore.screens = [screen];
-		wrapper = await mountPage({ ScreenThemeTokensSettings: false });
+		wrapper = await mountPage();
 		await flushPromises();
 		resolveLoad(1, screen);
 		await flushPromises();
@@ -755,9 +748,8 @@ describe('screen config page — Background & Placement, then the Screen-wide lo
 		expect(cards.map(card => card.attributes('data-settings-card'))).toEqual([
 			'Mode settings',
 			'Background & Placement',
-			'Screen-wide look',
 		]);
-		expect(cards.slice(1).map(card => card.attributes('data-default-open'))).toEqual(['true', 'false']);
+		expect(cards[1]!.attributes('data-default-open')).toBe('true');
 		expect(wrapper.findAll('[data-token="inset"]')).toHaveLength(1);
 		expect(wrapper.findAll('[data-token="alignment"]')).toHaveLength(1);
 		expect(mockApiFetch.mock.calls.filter(([path]) => path === '/api/themes/brand')).toHaveLength(1);

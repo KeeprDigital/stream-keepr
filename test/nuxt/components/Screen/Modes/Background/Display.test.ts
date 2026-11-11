@@ -271,7 +271,8 @@ describe('screenModesBackgroundDisplay', () => {
 		expect(wrapper.findAll('.background-layer-stack__layer').map(rendered => rendered.attributes('data-layer-id'))).toEqual(['theme-wash']);
 	});
 
-	it('paints the Screen\'s override of its Theme\'s background', async () => {
+	// Its background has two sources, its own stack and its Theme's; one overridden before is read by nothing.
+	it('paints its Theme\'s background, never a stored override of it', async () => {
 		themeTokens.value = {
 			background: [
 				layer({ id: 'theme-wash', type: 'color', color: '#203040' }),
@@ -287,6 +288,6 @@ describe('screenModesBackgroundDisplay', () => {
 
 		const wrapper = await mountComponent();
 
-		expect(wrapper.findAll('.background-layer-stack__layer').map(rendered => rendered.attributes('data-layer-id'))).toEqual(['override-wash']);
+		expect(wrapper.findAll('.background-layer-stack__layer').map(rendered => rendered.attributes('data-layer-id'))).toEqual(['theme-wash']);
 	});
 });

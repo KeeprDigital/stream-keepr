@@ -61,7 +61,7 @@ export interface ScreenModeSelectOption {
 }
 
 /** What a plain overlay mode's host consumes: it insets and aligns the mode's content. */
-const PLAIN_HOST_TOKENS = ['inset', 'alignment'] as const satisfies readonly FoundationTokenName[];
+export const PLAIN_HOST_TOKENS = ['inset', 'alignment'] as const satisfies readonly FoundationTokenName[];
 
 /**
  * The graphics Screen Outputs, in the order an editor names, previews and hands them
