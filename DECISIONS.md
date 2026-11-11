@@ -1734,7 +1734,7 @@ Some modes held program and others did not. The Deck List preloaded its card art
 
 ## ADR-0054: Cards always fit the Event Canvas, laid out by a Card Layout
 
-Accepted · 2026-10-28 · Amended 2026-11-11: Card Sizing, Fixed width or Fit to screen, gave way to the Card Layout, and nothing leaves the Event Canvas · [#1087](https://github.com/KeeprDigital/stream-keepr/issues/1087), [#1088](https://github.com/KeeprDigital/stream-keepr/issues/1088), [#1089](https://github.com/KeeprDigital/stream-keepr/issues/1089)
+Accepted · 2026-10-28 · Amended 2026-11-11: Card Sizing, Fixed width or Fit to screen, gave way to the Card Layout, and nothing leaves the Event Canvas; the sideboard takes the mainboard's layout unless customised · [#1087](https://github.com/KeeprDigital/stream-keepr/issues/1087), [#1088](https://github.com/KeeprDigital/stream-keepr/issues/1088), [#1089](https://github.com/KeeprDigital/stream-keepr/issues/1089), [#1091](https://github.com/KeeprDigital/stream-keepr/issues/1091)
 
 ### Decision
 
@@ -1768,6 +1768,12 @@ Accepted · 2026-10-28 · Amended 2026-11-11: Card Sizing, Fixed width or Fit to
 - **The companion alone:** with no sideboard shown, the companion is laid out as a one-card sideboard grid, in the sideboard's place.
 - **Measured, not guessed:** a board's heading and a Most Played Cards name label are measured from hidden copies, as their Theme types them, by layout height (`useLayoutHeight`), which the Screen's scale leaves alone. The gap between boards is set from the value the layout reads.
 - **Placement:** boards laid out together are sized exactly and fill the space they share. Across the axis they share, each board sits at its own `alignment`, as far as the Screen's edge, a sideboard's heading with it. Along it they sit together at the mainboard's `alignment`, so the space they leave is shared out around them. A sideboard aligned away from the mainboard (bottom below it, right beside it) goes to that far edge instead.
+
+**The sideboard takes the mainboard's layout unless customised** (#1091), so an operator sets a Deck up once.
+
+- **What it takes:** the mainboard's layout values: its Card Layout, list columns and alignment. Card badges are the Deck's, so both boards already share them. The sideboard's view and its stack reveal stay its own, so the strip beside the mainboard and its reveal are unchanged.
+- **Customised is stored, not flagged:** a sideboard block naming a layout value is its own, completed from the board defaults; one naming none, or none stored, follows the mainboard (`resolveDeckBoards`, `sideboardCustomised`). Settings' Customise writes the mainboard's values as the sideboard's whole block, alignment and list columns always among them, so a customised layout of all Auto values is still its own. "Use mainboard's" writes back only the view and reveal.
+- **Stored blocks stay customised:** every block an editor wrote names its alignment and list columns, so a Screen that stored a sideboard layout keeps it. Only a sideboard never written, or reset, follows the mainboard. The display reset writes the sideboard's own defaults alone, a stack with a 30 px reveal.
 
 **A One Piece Card Game Deck List's groups are laid out together** (`solveDeckGroups`). Character, Event and Stage sit one under the other beside the Leader, at one column count, so their cards line up, and one card size, the largest at which every group, its heading and the gaps between them fit. They sit together at the Mainboard's alignment. The Leader fits a fixed share of the Screen.
 

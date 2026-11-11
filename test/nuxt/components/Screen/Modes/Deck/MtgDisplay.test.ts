@@ -221,11 +221,23 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.find('[data-testid="sideboard-list"]').exists()).toBe(false);
 	});
 
-	it('gives each board its own grid columns at board: full', async () => {
+	// A sideboard naming no layout value of its own takes the mainboard's (#1091).
+	it.each([
+		{
+			name: 'its own',
+			sideboardLayout: { view: 'grid', columns: 6 },
+			sideboardColumns: '6',
+		},
+		{
+			name: 'the mainboard\'s, uncustomised',
+			sideboardLayout: { view: 'grid' },
+			sideboardColumns: '4',
+		},
+	])('gives the sideboard grid $name columns at board: full', async ({ sideboardLayout, sideboardColumns }) => {
 		mutableConfig = {
 			...mutableConfig,
 			mainboard: { view: 'grid', columns: 4 },
-			sideboard: { view: 'grid', columns: 6 },
+			sideboard: sideboardLayout,
 			sideboardPlacement: 'below',
 		};
 		sideboard.value = [
@@ -235,7 +247,7 @@ describe('screenDeckDisplay', () => {
 		const wrapper = await mountComponent();
 
 		expect(wrapper.get('[data-testid="mainboard-grid"]').attributes('data-columns')).toBe('4');
-		expect(wrapper.get('[data-testid="sideboard-grid"]').attributes('data-columns')).toBe('6');
+		expect(wrapper.get('[data-testid="sideboard-grid"]').attributes('data-columns')).toBe(sideboardColumns);
 	});
 
 	// A list is not laid out, so a grid beside or under one is laid out alone, in the space the list leaves it.
