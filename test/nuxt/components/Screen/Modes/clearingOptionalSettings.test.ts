@@ -125,11 +125,23 @@ afterEach(() => {
 	mounted = null;
 });
 
-async function mountEditor(editor: string) {
-	const { default: Settings } = await import(`../../../../../app/components/Screen/Modes/${editor}/Settings.vue`);
+/** The modes whose page the generic settings renderer draws (#1094). */
+const RENDERED: ReadonlySet<ScreenMode> = new Set([
+	'round-clock',
+	'pairings',
+	'card',
+	'player-history',
+	'head-to-head',
+	'feature-match',
+]);
+
+async function mountEditor(editor: string, mode: ScreenMode) {
+	const { default: Settings } = RENDERED.has(mode)
+		? await import('~/components/Screen/ModeSettings.vue')
+		: await import(`../../../../../app/components/Screen/Modes/${editor}/Settings.vue`);
 	const wrapper = mount(Settings, {
 		props: {
-			screen: { id: 1 } as Screen,
+			screen: { id: 1, currentMode: mode } as Screen,
 			eventId: 1,
 		},
 		global: {
@@ -154,6 +166,7 @@ async function mountEditor(editor: string) {
 				UBadge: true,
 				// A group's Look writes Screen Theme Overrides, never config (ADR-0072).
 				ScreenThemeTokenGroup: true,
+				ScreenSettingsLook: true,
 			},
 		},
 	});
@@ -283,7 +296,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 			...variant,
 			[field]: storedValue,
 		};
-		await mountEditor(editor);
+		await mountEditor(editor, mode);
 
 		const clear = clearers.get(label);
 		expect(clear, `no "${label}" control rendered`).toBeDefined();

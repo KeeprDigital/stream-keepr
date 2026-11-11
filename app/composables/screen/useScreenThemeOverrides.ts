@@ -119,20 +119,26 @@ function createScreenThemeOverrides(screen: MaybeRefOrGetter<Screen | null | und
 	/** Tokens with a write out, so a control does not take a second edit over it. */
 	const writing = ref(new Set<string>());
 
-	async function write(name: string, value: unknown) {
+	/** Writes `tokens` in one override write, each name held in `writing` until it settles. */
+	async function write(tokens: Readonly<Record<string, unknown>>) {
 		const edited = toValue(screen);
-		if (!edited)
+		const names = Object.keys(tokens);
+		if (!edited || names.length === 0)
 			return;
-		writing.value = new Set([...writing.value, name]);
+		writing.value = new Set([
+			...writing.value,
+			...names,
+		]);
 		try {
-			await runRequest(() => screenStore.updateThemeOverrides(toValue(eventId), edited.id, { [name]: value }), {
+			await runRequest(() => screenStore.updateThemeOverrides(toValue(eventId), edited.id, { ...tokens }), {
 				success: false,
 				error: failure => ({ title: 'Could not save the override', description: failure.message, color: 'error' }),
 			});
 		}
 		finally {
 			const remaining = new Set(writing.value);
-			remaining.delete(name);
+			for (const name of names)
+				remaining.delete(name);
 			writing.value = remaining;
 		}
 	}
@@ -147,9 +153,13 @@ function createScreenThemeOverrides(screen: MaybeRefOrGetter<Screen | null | und
 		overrides,
 		entry,
 		writing: readonly(writing),
-		set: write,
+		set: (name: string, value: unknown) => write({ [name]: value }),
 		/** Clear the override, returning the Screen to what the token inherits. */
-		clear: (name: string) => write(name, null),
+		clear: (name: string) => write({ [name]: null }),
+		/** Clear every one of `names` the Screen overrides, in one write: a Look's clear action. */
+		clearAll: (names: readonly string[]) => write(Object.fromEntries(names
+			.filter(name => overrides.value[name] !== undefined)
+			.map(name => [name, null]))),
 	};
 }
 

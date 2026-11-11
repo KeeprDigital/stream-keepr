@@ -472,6 +472,7 @@ async function sendCommand(command: ScreenCommand) {
 				<component
 					:is="modeSettingsComponent"
 					v-if="modeSettingsComponent"
+					:key="screen.currentMode"
 					ref="modeControlsRef"
 					:screen="screen"
 					:event-id="eventId"

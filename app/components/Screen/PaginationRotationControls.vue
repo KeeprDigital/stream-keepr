@@ -24,9 +24,6 @@ const props = defineProps<{
 const fields = computed(() => props.rotation.fields);
 const autoPageEnabled = computed(() => props.rotation.rotationConfig.value.autoPageEnabled);
 const intervalMs = computed(() => props.rotation.rotationConfig.value.autoPageIntervalMs);
-const currentPage = computed(() => props.rotation.currentPage.value);
-const totalPages = computed(() => props.rotation.totalPages.value);
-const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.loading || props.counting);
 </script>
 
 <template>
@@ -61,29 +58,5 @@ const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.load
 		Manual Page Controls
 	</ScreenSettingsSubheading>
 
-	<div
-		role="group"
-		aria-label="Page selection"
-		:aria-busy="counting"
-		class="flex items-center justify-center gap-2 max-sm:flex-wrap"
-	>
-		<UButton
-			label="Previous"
-			icon="i-lucide-chevron-left"
-			variant="outline"
-			:disabled="pageSelectionDisabled"
-			@click="rotation.adminPrevPage()"
-		/>
-		<span class="text-sm text-muted min-w-24 text-center">
-			<template v-if="counting">Counting pages…</template>
-			<template v-else>Page {{ currentPage }} of {{ totalPages }}</template>
-		</span>
-		<UButton
-			label="Next"
-			trailing-icon="i-lucide-chevron-right"
-			variant="outline"
-			:disabled="pageSelectionDisabled"
-			@click="rotation.adminNextPage()"
-		/>
-	</div>
+	<ScreenPageSelection :rotation="rotation" :loading="loading" :counting="counting" />
 </template>
