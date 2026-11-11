@@ -12,7 +12,7 @@ import {
 import { NINE_POINT_VALUES } from '../utils/ninePoints';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField, screenModeConfigFields } from './fields';
-import { cardLayoutShape, DEFAULT_CARD_LAYOUT } from './subShapes';
+import { cardBadgeSizeField, cardLayoutShape, DEFAULT_CARD_LAYOUT } from './subShapes';
 
 const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
 
@@ -155,10 +155,8 @@ export function patchedBoardLayout<Layout extends ResolvedDeckBoardLayout>(
 const DEFAULT_BOARD: BoardSelection = 'full';
 const DEFAULT_SIDEBOARD_PLACEMENT: SideboardPlacement = 'beside';
 
-/** Each badge's, pill's and chip's text size in px until an operator sets it; each sizes itself around its own. */
+/** The details pill's and pointed card chip's text size in px until an operator sets it; each sizes itself around its own. */
 export const DEFAULT_DECK_TEXT_SIZES = {
-	quantityBadgeSize: 16,
-	pointsBadgeSize: 14,
 	metaPillSize: 16,
 	pointedCardSize: 14,
 } as const;
@@ -221,9 +219,9 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	/** Where the companion's tag sits on its card: a corner puts the tag's own edge there. */
 	companionTagPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
 
-	// Text sizes in px; each badge, pill and chip sizes itself around its own (ADR-0054).
-	quantityBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
-	pointsBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
+	// Text sizes; each badge, pill and chip sizes itself around its own (ADR-0054). A badge's is Auto while absent.
+	quantityBadgeSize: cardBadgeSizeField,
+	pointsBadgeSize: cardBadgeSizeField,
 	metaPillSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Details Text Size' }),
 	pointedCardSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Pointed Card Text Size' }),
 }, {
@@ -247,6 +245,9 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	quantityPosition: DEFAULT_QUANTITY_POSITION,
 	companionTagPosition: DEFAULT_COMPANION_TAG_POSITION,
 	...DEFAULT_DECK_TEXT_SIZES,
+	// Auto: each badge follows its card's width (ADR-0054). Named, so a display reset returns it to Auto.
+	quantityBadgeSize: undefined,
+	pointsBadgeSize: undefined,
 }, {
 	formerFields: [
 		// Their colours are the mode's Mode Tokens (#824).

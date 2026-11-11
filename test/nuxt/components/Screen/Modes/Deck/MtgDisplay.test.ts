@@ -303,6 +303,32 @@ describe('screenDeckDisplay', () => {
 		expect((wrapper.get('[data-testid="highlander-pointed-card-chip"]').element as HTMLElement).style.fontSize).toBe('24px');
 	});
 
+	// An Auto badge follows its board's solved card width: today's 16 px quantity and 14 px point
+	// badges on the former default 144 px card. A list row has no card, so it keeps that 14 px.
+	it.each([
+		{ maxCardSize: 144, quantity: '16px', points: '14px' },
+		{ maxCardSize: 72, quantity: '8px', points: '7px' },
+	])('sizes Auto badges on a $maxCardSize px card', async ({ maxCardSize, quantity, points }) => {
+		[measured.width, measured.height] = [1920, 960];
+		mutableConfig = {
+			...mutableConfig,
+			mainboard: { view: 'grid', columns: 4, maxCardSize },
+			sideboard: { view: 'list' },
+		};
+		sideboard.value = [
+			createCard({ name: 'Force of Will', compartment: 'sideboard' }),
+		];
+
+		const wrapper = await mountComponent();
+
+		const card = wrapper.get('[data-testid="mainboard-grid"] [data-testid="deck-card"]');
+		expect([
+			card.attributes('data-quantity-size'),
+			card.attributes('data-points-size'),
+		]).toEqual([quantity, points]);
+		expect((wrapper.get('[data-testid="highlander-list-badge"]').element as HTMLElement).style.fontSize).toBe('14px');
+	});
+
 	it('shows each card but the last of the beside stack by its reveal', async () => {
 		sideboard.value = ['Force of Will', 'Flusterstorm', 'Pyroblast'].map(name => createCard({ name, compartment: 'sideboard' }));
 

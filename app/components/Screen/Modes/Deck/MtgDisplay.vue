@@ -5,6 +5,7 @@ import type { DeckLayoutGridBoard, DeckLayoutStackBoard, SolvedGridBoard, Solved
 import type { DeckListCardWithData } from '~/types/card/deckList';
 import { useElementSize } from '@vueuse/core';
 import { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { cardBadgeTextSize, DECK_AUTO_BADGE_RATIOS } from '~~/shared/utils/cardBadgeSize';
 import { solveDeckLayout } from '~~/shared/utils/deckLayout';
 import { formatHighlanderPointedCardNote, formatHighlanderPointsLabel } from '~~/shared/utils/highlander';
 import { getCardTypeDisplayLabel } from '~~/shared/utils/metagame';
@@ -461,29 +462,43 @@ function textSize(key: keyof typeof DEFAULT_DECK_TEXT_SIZES): string {
 	return `${config.value[key] ?? DEFAULT_DECK_TEXT_SIZES[key]}px`;
 }
 
-const quantityBadgeStyle = computed(() => ({
-	fontSize: textSize('quantityBadgeSize'),
-	width: '1.75em',
-	height: '1.75em',
-	color: modeTokenVar('deck', 'quantity-badge-text'),
-	backgroundColor: modeTokenVar('deck', 'quantity-badge-surface'),
-}));
+/** A badge's text size in px on a card `cardWidth` wide: the Screen's, or Auto's share of that width. */
+function badgeTextSize(key: keyof typeof DECK_AUTO_BADGE_RATIOS, cardWidth: number): string {
+	return `${cardBadgeTextSize(config.value[key], cardWidth, DECK_AUTO_BADGE_RATIOS[key])}px`;
+}
 
-const highlanderPointBadgeStyle = computed(() => ({
-	fontSize: textSize('pointsBadgeSize'),
-	minWidth: '2em',
-	padding: '0.3em 0.7em',
-	color: modeTokenVar('deck', 'points-badge-text'),
-	backgroundColor: modeTokenVar('deck', 'points-badge-surface'),
-}));
+/** A list row has no card: an Auto point badge there takes its size on the former default 144 px card. */
+const LIST_BADGE_CARD_WIDTH = 144;
+
+function quantityBadgeStyle(cardWidth: number) {
+	return {
+		fontSize: badgeTextSize('quantityBadgeSize', cardWidth),
+		width: '1.75em',
+		height: '1.75em',
+		color: modeTokenVar('deck', 'quantity-badge-text'),
+		backgroundColor: modeTokenVar('deck', 'quantity-badge-surface'),
+	};
+}
+
+function highlanderPointBadgeStyle(cardWidth: number) {
+	return {
+		fontSize: badgeTextSize('pointsBadgeSize', cardWidth),
+		minWidth: '2em',
+		padding: '0.3em 0.7em',
+		color: modeTokenVar('deck', 'points-badge-text'),
+		backgroundColor: modeTokenVar('deck', 'points-badge-surface'),
+	};
+}
 
 /** A point badge lifts off a card's art on a soft shadow, and off a list row on a slighter one. */
-const highlanderCardBadgeStyle = computed(() => ({
-	...highlanderPointBadgeStyle.value,
-	boxShadow: `0 4px 6px -1px ${foundationTokenVar('shadow')}`,
-}));
+function highlanderCardBadgeStyle(cardWidth: number) {
+	return {
+		...highlanderPointBadgeStyle(cardWidth),
+		boxShadow: `0 4px 6px -1px ${foundationTokenVar('shadow')}`,
+	};
+}
 const highlanderListBadgeStyle = computed(() => ({
-	...highlanderPointBadgeStyle.value,
+	...highlanderPointBadgeStyle(LIST_BADGE_CARD_WIDTH),
 	boxShadow: `0 1px 3px 0 ${foundationTokenVar('shadow')}`,
 }));
 
@@ -535,14 +550,23 @@ const highlanderPointedCardAccentStyle = {
 
 const showQuantities = computed(() => config.value.showQuantities ?? false);
 
+/** A board's card badges, sized to its solved card width; until it is measured, its cards have no size. */
+function boardBadgeProps(key: BoardKey) {
+	const cardWidth = solvedBoards.value[key]?.cardWidth ?? 0;
+	return {
+		showQuantity: showQuantities.value,
+		showHighlanderPoints: showHighlanderPoints.value,
+		quantityPositionClass: quantityPositionClass.value,
+		quantityBadgeStyle: quantityBadgeStyle(cardWidth),
+		highlanderPointsPositionClass: highlanderPointsPositionClass.value,
+		highlanderPointsBadgeStyle: highlanderCardBadgeStyle(cardWidth),
+		tagPositionClass: companionTagPositionClass.value,
+	};
+}
+
 const cardBadgeProps = computed(() => ({
-	showQuantity: showQuantities.value,
-	showHighlanderPoints: showHighlanderPoints.value,
-	quantityPositionClass: quantityPositionClass.value,
-	quantityBadgeStyle: quantityBadgeStyle.value,
-	highlanderPointsPositionClass: highlanderPointsPositionClass.value,
-	highlanderPointsBadgeStyle: highlanderCardBadgeStyle.value,
-	tagPositionClass: companionTagPositionClass.value,
+	mainboard: boardBadgeProps('mainboard'),
+	sideboard: boardBadgeProps('sideboard'),
 }));
 
 /** The strip places its stack at its board's alignment, or from its start once the stack overflows. */
@@ -685,8 +709,8 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 										:key="`${section.name}-${index}`"
 										:card="card"
 										:tag="card === shownCompanion ? 'Companion' : undefined"
-										v-bind="cardBadgeProps"
-										:show-quantity="section.name !== 'companion' && cardBadgeProps.showQuantity"
+										v-bind="cardBadgeProps[section.key]"
+										:show-quantity="section.name !== 'companion' && showQuantities"
 									/>
 								</ScreenCardGrid>
 
@@ -706,7 +730,7 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 										<ScreenModesDeckCard
 											:card="card"
 											:tag="card === shownCompanion ? 'Companion' : undefined"
-											v-bind="cardBadgeProps"
+											v-bind="cardBadgeProps[section.key]"
 										/>
 									</div>
 								</div>

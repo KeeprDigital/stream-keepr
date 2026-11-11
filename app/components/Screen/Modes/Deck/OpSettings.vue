@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { DeckModeConfig } from '~~/shared/types/screenConfig';
+import type { DeckModeConfig, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { DECK_MAINBOARD_LAYOUT_FIELDS, patchedBoardLayout } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
-import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { cardLayoutSummary, FOLLOWS_THE_THEME, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 
 /**
@@ -20,7 +20,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-	update: [patch: Partial<DeckModeConfig>];
+	update: [patch: ScreenModeConfigPatch<'deck'>];
 }>();
 
 const eventStore = useEventStore();
@@ -142,20 +142,28 @@ const badgesSummary = computed(() => settingsSummary([
 		<ScreenSettingsSection id="deck:card-badges" title="Card Badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
 				title="Quantity Badge"
+				description="On cards with multiple copies."
 				:shown="!!config.showQuantities"
 				:shown-field="fields.showQuantities"
-				shown-description="Show quantity badges on cards with multiple copies."
 				:position="config.quantityPosition ?? DEFAULT_QUANTITY_POSITION"
 				:position-field="fields.quantityPosition"
-				:text-size="config.quantityBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.quantityBadgeSize"
+				:size="config.quantityBadgeSize"
 				:size-field="fields.quantityBadgeSize"
 				@update="emit('update', $event)"
-			>
-				<template #look>
-					<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="quantity-badge" />
-				</template>
-			</ScreenCardBadgeFields>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="points-badge" />
+			/>
+
+			<ScreenThemeTokenGroup
+				:screen="screen"
+				:event-id="eventId"
+				group="quantity-badge"
+				heading="Quantity badge look"
+			/>
+			<ScreenThemeTokenGroup
+				:screen="screen"
+				:event-id="eventId"
+				group="points-badge"
+				heading="Point badge look"
+			/>
 		</ScreenSettingsSection>
 	</div>
 </template>
