@@ -1237,9 +1237,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</div>
 
 		<ScreenSettingsSection
-			density="row"
 			v-if="selectedItem"
 			id="layout"
+			density="row"
 			title="Position and size"
 			icon="i-lucide-move"
 			default-open
@@ -1307,9 +1307,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection
-			density="row"
 			v-if="selectedGroup"
 			id="group"
+			density="row"
 			title="Group layout"
 			icon="i-lucide-group"
 			:summary="groupSummary"
@@ -1410,9 +1410,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection
-			density="row"
 			v-if="hasContentSection"
 			id="content"
+			density="row"
 			:title="contentTitle"
 			icon="i-lucide-file-text"
 			default-open
@@ -1772,9 +1772,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection
-			density="row"
 			v-if="selectedTypography || selectedTextOverflow"
 			id="typography"
+			density="row"
 			title="Text style"
 			icon="i-lucide-type"
 			:summary="typographySummary"
@@ -1966,9 +1966,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection
-			density="row"
 			v-if="selectedShapeGeometry"
 			id="shape"
+			density="row"
 			:title="geometryTitle"
 			icon="i-lucide-shapes"
 			:summary="shapeSummary"
@@ -1993,9 +1993,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection
-			density="row"
 			v-if="hasSurfaceSection"
 			id="surface"
+			density="row"
 			title="Fill and outline"
 			icon="i-lucide-paint-bucket"
 			:summary="surfaceSummary"
@@ -2083,9 +2083,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection
-			density="row"
 			v-if="selection.kind === 'graphic' || selection.kind === 'item'"
 			id="animation"
+			density="row"
 			title="Animation"
 			icon="i-lucide-wand-sparkles"
 			:summary="animationSummary"

@@ -241,7 +241,12 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 		</div>
 
 		<div class="flex items-end gap-2">
-			<ScreenSettingsField label="Add layer" data-testid="add-layer-type" class="grow" stacked>
+			<ScreenSettingsField
+				label="Add layer"
+				data-testid="add-layer-type"
+				class="grow"
+				stacked
+			>
 				<USelect
 					:model-value="addLayerType"
 					:items="addLayerOptions"

@@ -67,7 +67,12 @@ const backgroundSummary = computed(() => {
 
 <template>
 	<div class="min-w-0">
-		<ScreenSettingsSection density="row" id="feature-match-overlay-background" title="Background" :summary="backgroundSummary">
+		<ScreenSettingsSection
+			id="feature-match-overlay-background"
+			density="row"
+			title="Background"
+			:summary="backgroundSummary"
+		>
 			<div class="space-y-3">
 				<GraphicsNumberField
 					label="Opacity"
@@ -101,7 +106,12 @@ const backgroundSummary = computed(() => {
 			</div>
 		</ScreenSettingsSection>
 
-		<ScreenSettingsSection density="row" id="feature-match-overlay-video" title="Video" :summary="mediaBackground.enabled ? 'On' : 'Off'">
+		<ScreenSettingsSection
+			id="feature-match-overlay-video"
+			density="row"
+			title="Video"
+			:summary="mediaBackground.enabled ? 'On' : 'Off'"
+		>
 			<div class="space-y-4">
 				<ScreenMediaBackgroundFields
 					:media="mediaBackground"
@@ -112,7 +122,12 @@ const backgroundSummary = computed(() => {
 			</div>
 		</ScreenSettingsSection>
 
-		<ScreenSettingsSection density="row" id="feature-match-overlay-animation" title="Animation" :summary="animation.enabled ? `opacity ${animation.opacity}` : 'Off'">
+		<ScreenSettingsSection
+			id="feature-match-overlay-animation"
+			density="row"
+			title="Animation"
+			:summary="animation.enabled ? `opacity ${animation.opacity}` : 'Off'"
+		>
 			<div class="space-y-4">
 				<ScreenSettingsToggle
 					label="Animation"
@@ -133,7 +148,12 @@ const backgroundSummary = computed(() => {
 			</div>
 		</ScreenSettingsSection>
 
-		<ScreenSettingsSection density="row" id="feature-match-overlay-surface" title="Surface" summary="Fill, border and glow">
+		<ScreenSettingsSection
+			id="feature-match-overlay-surface"
+			density="row"
+			title="Surface"
+			summary="Fill, border and glow"
+		>
 			<div class="space-y-4">
 				<FeatureMatchOverlayBorderSidesControl
 					label="Frame border sides"

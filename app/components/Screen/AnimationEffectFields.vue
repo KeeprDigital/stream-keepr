@@ -96,8 +96,8 @@ function updateParam(field: AnimationEffectParamField, value: AnimationEffectPar
 					@update:model-value="updateParam(field, $event)"
 				/>
 				<ScreenSettingsField
-					stacked
 					v-else
+					stacked
 					:label="field.label"
 				>
 					<UIColorPicker

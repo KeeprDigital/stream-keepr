@@ -85,7 +85,12 @@ function clearAsset(next: GraphicAssetReference | undefined) {
 		/>
 	</ScreenSettingsField>
 
-	<ScreenSettingsField v-if="kind === 'url'" label="Remote Media URL" :error="urlRefusal" stacked>
+	<ScreenSettingsField
+		v-if="kind === 'url'"
+		label="Remote Media URL"
+		:error="urlRefusal"
+		stacked
+	>
 		<UInput
 			:model-value="url"
 			:placeholder="assetKind === 'silent-video' ? 'https://example.com/background.webm' : 'https://example.com/background.png'"
