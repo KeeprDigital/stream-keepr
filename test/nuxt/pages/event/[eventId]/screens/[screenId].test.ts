@@ -7,6 +7,7 @@ import { UButtonStub, UDropdownMenuStub, UModalStub, UTooltipStub } from '~~/tes
 import { ScreenSettingsCardStub } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import EditorFocusModeToggle from '~/components/Graphics/EditorFocusModeToggle.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
+import ScreenModeSettings from '~/components/Screen/ModeSettings.vue';
 import { getScreenModeConfigurationPolicy, getScreenModeSettingsComponent } from '~/modules/screen-mode';
 
 // The mode-settings module pulls in every mode's Display/Settings component
@@ -681,7 +682,7 @@ describe('screen config page — Editor Focus Mode', () => {
  * it holds a layer or an override (#970). No card lists the Foundation Tokens a
  * Screen takes from its Theme alone.
  */
-describe('screen config page — Background & Placement last', () => {
+describe('screen config page — live actions first, Background & Placement last', () => {
 	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
 
 	const ModeSettingsStub = defineComponent({
@@ -736,5 +737,37 @@ describe('screen config page — Background & Placement last', () => {
 		expect(wrapper.findAll('[data-token="inset"]')).toHaveLength(1);
 		expect(wrapper.findAll('[data-token="alignment"]')).toHaveLength(1);
 		expect(mockApiFetch.mock.calls.filter(([path]) => path === '/api/themes/brand')).toHaveLength(1);
+	});
+
+	// The cards' order is the renderer's to test; this shows the page adds no card before
+	// the mode's Live card, and none, such as a Screen-wide look, after Background & Placement.
+	it('opens on the mode\'s live actions and closes on Background & Placement', async () => {
+		mockEventStore.event = { id: 1, themeId: 'brand' };
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({
+			id: 'brand',
+			name: 'Brand',
+			tokens: {},
+			revision: 1,
+		});
+		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => ScreenModeSettings as never);
+		const screen = {
+			...makeScreen(1),
+			currentMode: 'top-cut',
+			modeConfigs: {
+				'top-cut': { bracketSource: 'manual' },
+			},
+			themeOverrides: {},
+		};
+		mockScreenStore.screens = [screen];
+		wrapper = await mountPage();
+		await flushPromises();
+		resolveLoad(1, screen);
+		await flushPromises();
+
+		const titles = wrapper.findAll('section[data-settings-card]').map(card => card.attributes('data-settings-card'));
+		expect(titles[0]).toBe('Live');
+		expect(titles.at(-1)).toBe('Background & Placement');
+		expect(titles.filter(title => title === 'Background & Placement')).toHaveLength(1);
 	});
 });

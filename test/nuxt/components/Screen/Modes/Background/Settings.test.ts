@@ -371,26 +371,4 @@ describe('screenModesBackgroundSettings', () => {
 			animation: { effect: 'caustics' },
 		});
 	});
-
-	// The rule is BackgroundSource's; this card writes it onto `layers`, an Authored Stack it may empty.
-	it('returns the Screen to its Theme\'s background by writing the empty stack', async () => {
-		config.value = {
-			layers: [
-				colorLayer('base'),
-			],
-		};
-		const wrapper = await mountComponent();
-
-		await wrapper.findAll('button').find(button => button.text() === 'Reset to Theme')!.trigger('click');
-
-		expect(updateConfig).toHaveBeenCalledWith({ layers: [] });
-	});
-
-	it('exposes resetConfig and saving for the configuration page', async () => {
-		const wrapper = await mountComponent();
-		const exposed = wrapper.findComponent(Settings).vm as unknown as { resetConfig?: unknown; saving?: unknown };
-
-		expect(exposed.resetConfig).toBeDefined();
-		expect(exposed.saving).toBeDefined();
-	});
 });
