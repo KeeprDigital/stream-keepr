@@ -249,3 +249,26 @@ describe.each(uses)('graphic fill fields for $name', (use) => {
 		expect(wrapper.get('[data-testid="graphic-fill-add-stop"]').attributes('disabled')).toBeDefined();
 	});
 });
+
+// A host whose fill is always a gradient, as a gradient Background Layer's is, offers no kind.
+describe('graphic fill fields for a host that fixes the kind', () => {
+	it.each([
+		['offers the kind by default', {}, true],
+		[
+			'offers no kind once the host fixes it',
+			{ fixedKind: true },
+			false,
+		],
+	])('%s', (_, props, offered) => {
+		const wrapper = mount(FillFields, {
+			global,
+			props: {
+				fill: gradientOf(['#123456', '#abcdef']),
+				...props,
+			},
+		});
+
+		expect(wrapper.find('[data-testid="graphic-fill-kind"]').exists()).toBe(offered);
+		expect(wrapper.findAll('[data-testid="graphic-fill-stop"]')).toHaveLength(2);
+	});
+});

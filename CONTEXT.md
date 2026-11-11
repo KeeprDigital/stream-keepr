@@ -199,7 +199,7 @@ A Screen Mode rendering an ordered stack of Background Layers (ADR-0016).
 _Avoid_: Idle screen, empty state
 
 **Background Layer**:
-One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent. A Screen whose stack is empty paints its Theme's `background` Foundation Token, a stack of the same layers.
+One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent. A Screen whose stack is empty paints its Theme's `background` Foundation Token, a stack of the same layers. A gradient layer holds a Graphic Fill gradient, edited with the one fill control; one stored earlier as a CSS gradient string paints as stored until an edit replaces it.
 _Avoid_: background type, media background (when meaning a layer)
 
 **Screen Media Source**:
@@ -710,7 +710,7 @@ A structural Graphic Item arranging direct context-available Graphic Items as a 
 The shared visual treatment for the Graphic Items that paint a surface (Text, Shape, Graphic Group, Clock, Player Life, and Game Wins, which paints its win boxes with two more): fill, fill opacity, a uniform outline around the Shape Geometry, and glow. An independently styled edge is a separate Shape Graphic Item from the rule preset.
 
 **Graphic Fill**:
-A solid colour or a linear gradient with an angle and two to four positioned stops with opacity. Complex surfaces are Media Graphic Items.
+A solid colour or a linear gradient with an angle and two to four positioned stops with opacity. Complex surfaces are Media Graphic Items. A gradient Background Layer holds the gradient form.
 _Avoid_: Raw CSS gradient
 
 **Graphic Layer Order**:

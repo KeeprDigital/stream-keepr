@@ -9,7 +9,6 @@ import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const defaultConfig = {
 	viewMode: 'all' as string,
-	topNCount: 8,
 	columns: [
 		{ key: 'position', visible: true },
 		{ key: 'name', visible: true },
@@ -25,8 +24,8 @@ const defaultConfig = {
 	autoPageIntervalMs: 5000,
 	rotationAnchor: undefined as number | undefined,
 	headerText: '',
-	sliceStart: 1,
-	sliceEnd: 16,
+	rangeStart: 1,
+	rangeEnd: 16,
 	revealCount: 8,
 	revealedCount: 0,
 	revealOrder: 'bottomUp' as string,
@@ -219,13 +218,13 @@ describe('useStandingsModeData', () => {
 				],
 			],
 			[
-				'topN',
-				{ topNCount: 3 },
+				'a range from the top',
+				{ viewMode: 'range', rangeStart: 1, rangeEnd: 3 },
 				['Alice', 'Bob', 'Charlie'],
 			],
 			[
-				'slice',
-				{ sliceStart: 3, sliceEnd: 5 },
+				'a range further down',
+				{ viewMode: 'range', rangeStart: 3, rangeEnd: 5 },
 				['Charlie', 'Diana', 'Ethan'],
 			],
 			[
@@ -273,8 +272,8 @@ describe('useStandingsModeData', () => {
 			expect(displayRows.value.map(row => row.id)).toEqual([4, 5, 7, 9]);
 		});
 
-		it('leaves Players without a position out of a slice', async () => {
-			Object.assign(mutableConfig, { viewMode: 'slice', sliceStart: 1, sliceEnd: 10 });
+		it('leaves Players without a position out of a range', async () => {
+			Object.assign(mutableConfig, { viewMode: 'range', rangeStart: 1, rangeEnd: 10 });
 			serverPlayers = [
 				...players,
 				createMockPlayer({ id: 99, name: 'NoPos', position: null }),
@@ -331,14 +330,14 @@ describe('useStandingsModeData', () => {
 				'Standings',
 			],
 			[
-				'the count for topN',
-				{ viewMode: 'topN', topNCount: 16 },
+				'the count for a range from the top',
+				{ viewMode: 'range', rangeStart: 1, rangeEnd: 16 },
 				{},
 				'Top 16 Standings',
 			],
 			[
-				'the range for a slice',
-				{ viewMode: 'slice', sliceStart: 9, sliceEnd: 16 },
+				'both ends for a range further down',
+				{ viewMode: 'range', rangeStart: 9, rangeEnd: 16 },
 				{},
 				'Standings (9-16)',
 			],
@@ -771,16 +770,16 @@ describe('useStandingsModeData', () => {
 				],
 			],
 			[
-				'topN',
-				{ topNCount: 2 },
+				'range',
+				{ rangeStart: 1, rangeEnd: 2 },
 				[
 					['Charlie', '▲3'],
 					['Alice', '▼1'],
 				],
 			],
 			[
-				'slice',
-				{ sliceStart: 2, sliceEnd: 3 },
+				'range',
+				{ rangeStart: 2, rangeEnd: 3 },
 				[
 					['Alice', '▼1'],
 					['Bob', '–'],

@@ -66,20 +66,25 @@ export const themeColorSchema = z.union([
 	}).strict(),
 ]);
 
+/** The gradient form of a Graphic Fill, its stops' colours validated by `colorSchema`. */
+export function linearGradientFillSchema<C extends z.ZodType>(colorSchema: C) {
+	return z.object({
+		type: z.literal('linear-gradient'),
+		angle: finite.min(-360).max(360),
+		stops: z.array(z.object({
+			color: colorSchema,
+			position: unit,
+			opacity: unit,
+		}).strict()).min(MIN_GRAPHIC_FILL_STOPS).max(MAX_GRAPHIC_FILL_STOPS),
+	}).strict();
+}
+
 const themeFillSchema = z.discriminatedUnion('type', [
 	z.object({
 		type: z.literal('solid'),
 		color: themeColorSchema,
 	}).strict(),
-	z.object({
-		type: z.literal('linear-gradient'),
-		angle: finite.min(-360).max(360),
-		stops: z.array(z.object({
-			color: themeColorSchema,
-			position: unit,
-			opacity: unit,
-		}).strict()).min(MIN_GRAPHIC_FILL_STOPS).max(MAX_GRAPHIC_FILL_STOPS),
-	}).strict(),
+	linearGradientFillSchema(themeColorSchema),
 ]);
 
 const themeSurfaceStyleSchema = z.object({

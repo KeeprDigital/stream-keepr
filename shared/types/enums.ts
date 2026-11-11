@@ -123,8 +123,7 @@ export const METAGAME_CARD_COLUMN_KEY_VALUES = [
 ] as const;
 export const STANDINGS_VIEW_MODE_VALUES = [
 	'all',
-	'topN',
-	'slice',
+	'range',
 	'watchlist',
 	'reveal',
 ] as const;

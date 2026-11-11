@@ -233,6 +233,9 @@ export type GraphicFill
 	=	| { type: 'solid'; color: string }
 		| { type: 'linear-gradient'; angle: number; stops: GraphicFillStop[] };
 
+/** The gradient form of a Graphic Fill, which a gradient Background Layer holds. */
+export type GraphicLinearGradientFill = Extract<GraphicFill, { type: 'linear-gradient' }>;
+
 /** A uniform outline drawn inside a surface's own Shape Geometry. */
 export interface GraphicOutline {
 	color: string;

@@ -6,7 +6,7 @@ import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 /**
  * The one Graphic Fill fields control, for a Graphic Item's own fill (through a
- * Graphic Surface Style) and a Theme's fill token.
+ * Graphic Surface Style), a Theme's fill token and a gradient Background Layer.
  *
  * It is presentational: it shows a Graphic Fill and reports each change as a
  * `GraphicFillEdit`, leaving the host to apply it, so every host gets the same
@@ -19,6 +19,8 @@ const props = withDefaults(defineProps<{
 	fill: GraphicFill;
 	disabled?: boolean;
 	size?: 'xs' | 'sm';
+	/** The host's fill is always the kind it shows, so the kind is not offered. */
+	fixedKind?: boolean;
 	/** Qualifies accessible names where one form shows several surfaces. */
 	ariaLabelPrefix?: string;
 	/** Prefixes every test id: `<prefix>-kind`, `<prefix>-color`, `<prefix>-stop`… */
@@ -70,7 +72,7 @@ function editStop(index: number, patch: Extract<GraphicFillEdit, { kind: 'gradie
 
 <template>
 	<div class="space-y-2">
-		<UFormField label="Graphic Fill" :size="size">
+		<UFormField v-if="!fixedKind" label="Graphic Fill" :size="size">
 			<USelect
 				:model-value="fill.type"
 				:items="FILL_KIND_OPTIONS"
