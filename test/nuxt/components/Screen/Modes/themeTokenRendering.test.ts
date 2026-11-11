@@ -1069,7 +1069,12 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 
 	// What each default resolves to under the Default Theme is pinned where it resolves.
 	it.each(tokens)('paints $name as the Default Theme ships it when its Event has no Theme', async ({ name, definition, probe }) => {
-		const shipped = resolveThemeTokens({ vocabulary: FOUNDATION_TOKENS, modeTokens: declared, theme: {}, overrides: {} }).values[name]!;
+		const shipped = resolveThemeTokens({
+			vocabulary: FOUNDATION_TOKENS,
+			modeTokens: declared,
+			theme: {},
+			overrides: {},
+		}).values[name]!;
 		await mountMode(mode, undefined, { config: probe.config });
 		await shown(probe);
 

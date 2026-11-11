@@ -1,3 +1,4 @@
+import type { GraphicAnimationRecipe } from '../../types/graphics';
 import type {
 	FoundationTokenDefinition,
 	FoundationTokenVocabulary,
@@ -8,7 +9,6 @@ import type {
 	ThemeTokenReference,
 	ThemeTokenValue,
 } from './tokens';
-import type { GraphicAnimationRecipe } from '../../types/graphics';
 import { resolveThemeCompositeColors } from './composites';
 import { readTokenLiteral } from './tokens';
 

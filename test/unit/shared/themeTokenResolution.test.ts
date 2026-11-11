@@ -518,10 +518,30 @@ describe('a motion Mode Token', () => {
 
 	// The shared row motion takes the enter motion's timing and keeps its own movement.
 	it.each([
-		['standings.row-motion', 'the Theme\'s', {}, THEME_ENTER],
-		['metagame.row-motion', 'the Theme\'s', {}, THEME_ENTER],
-		['standings.row-motion', 'the Screen\'s', { 'motion-enter': SCREEN_ENTER }, SCREEN_ENTER],
-		['metagame.row-motion', 'the Screen\'s', { 'motion-enter': SCREEN_ENTER }, SCREEN_ENTER],
+		[
+			'standings.row-motion',
+			'the Theme\'s',
+			{},
+			THEME_ENTER,
+		],
+		[
+			'metagame.row-motion',
+			'the Theme\'s',
+			{},
+			THEME_ENTER,
+		],
+		[
+			'standings.row-motion',
+			'the Screen\'s',
+			{ 'motion-enter': SCREEN_ENTER },
+			SCREEN_ENTER,
+		],
+		[
+			'metagame.row-motion',
+			'the Screen\'s',
+			{ 'motion-enter': SCREEN_ENTER },
+			SCREEN_ENTER,
+		],
 	])('times %s by %s enter motion', (name, _, overrides, enter) => {
 		expect(motion(name, { 'motion-enter': THEME_ENTER }, overrides)).toEqual({
 			duration: enter.duration,
@@ -534,7 +554,12 @@ describe('a motion Mode Token', () => {
 
 	// So a Screen lists, and may override, the enter motion its rows follow.
 	it.each(['standings', 'metagame'] as const)('has a %s Screen consume the enter motion its row motion follows', (mode) => {
-		const { consumed } = resolveThemeTokens({ vocabulary: FOUNDATION_TOKENS, modeTokens: screenModeTokens(mode), theme: {}, overrides: {} });
+		const { consumed } = resolveThemeTokens({
+			vocabulary: FOUNDATION_TOKENS,
+			modeTokens: screenModeTokens(mode),
+			theme: {},
+			overrides: {},
+		});
 		expect(consumed).toContain('motion-enter');
 	});
 
