@@ -67,6 +67,19 @@ describe.each([
 		kept: { archetypeId: 3 },
 		patch: { archetypeId: 4 },
 	},
+	// Reveal advances by the operator's `revealedCount` alone; nothing read these.
+	{
+		mode: 'standings' as const,
+		formerFields: [
+			'maxTableWidth',
+			'animateEntries',
+			'revealTrigger',
+			'revealIntervalMs',
+		],
+		former: { revealTrigger: 'auto', revealIntervalMs: 5000 },
+		kept: { revealCount: 4 },
+		patch: { revealCount: 6 },
+	},
 ])('a $mode Screen storing its dropped $formerFields', ({ mode, formerFields, former, kept, patch }) => {
 	const stored = {
 		[mode]: {
@@ -109,7 +122,10 @@ describe.each([
 	});
 
 	it('is still refused as a field of any other mode', () => {
-		expect(modeConfigPatchSchemaMap.standings.safeParse(former).success).toBe(false);
+		const otherMode = mode === 'standings'
+			? 'top-cut'
+			: 'standings';
+		expect(modeConfigPatchSchemaMap[otherMode].safeParse(former).success).toBe(false);
 	});
 });
 

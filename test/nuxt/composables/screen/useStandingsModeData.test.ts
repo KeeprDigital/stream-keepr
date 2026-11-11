@@ -30,7 +30,6 @@ const defaultConfig = {
 	revealCount: 8,
 	revealedCount: 0,
 	revealOrder: 'bottomUp' as string,
-	revealTrigger: 'manual',
 	playerListId: null as number | null,
 };
 
