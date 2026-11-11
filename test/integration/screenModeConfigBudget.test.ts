@@ -284,7 +284,6 @@ describe('mode configuration byte total', () => {
 			},
 			'feature-match-overlay': {
 				featureMatchId: null,
-				presetId: 'full-table',
 				layout: fatOverlayLayout(),
 			},
 		};

@@ -266,7 +266,6 @@ describe('feature Match Layout Template library', () => {
 		// it is the one a placement carrying a whole configuration would overwrite.
 		expect(before.featureMatchId).toBe(otherSlotId);
 		expect(after.featureMatchId).toBe(otherSlotId);
-		expect(after.presetId).toEqual(before.presetId);
 	});
 
 	/**

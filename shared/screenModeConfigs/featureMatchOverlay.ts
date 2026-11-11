@@ -3,22 +3,20 @@ import { z } from 'zod';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../featureMatchOverlayPresets';
 import { defineScreenModeConfigContract, serverValidatedField } from './contract';
 
-const FEATURE_MATCH_OVERLAY_PRESET_ID_VALUES = ['full-table', 'left-stacked-player-cams', 'neon-feature-match'] as const;
-
-export type FeatureMatchOverlayPresetId = typeof FEATURE_MATCH_OVERLAY_PRESET_ID_VALUES[number];
+/** The built-in Feature Match Layout Templates, by the id each has always had. */
+export type FeatureMatchOverlayPresetId = 'full-table' | 'left-stacked-player-cams' | 'neon-feature-match';
 
 /**
- * The Feature Match Overlay's fields: one Feature Match Layout, the Feature Match
- * Slot it renders, and the preset it was initialised from.
+ * The Feature Match Overlay's fields: one Feature Match Layout and the Feature
+ * Match Slot it renders.
  *
  * The layout's schema is large and reaches server-only Graphic Asset ids and the
  * Graphic Item caps, so the server supplies it, the same schema a Feature Match
  * Layout Template's document is proven against. It is not an authored stack: a
- * display reset restores a preset, and `null` reads as the default layout again.
+ * display reset restores the default layout, and `null` reads as it again.
  */
 const featureMatchOverlayModeConfigShape = {
 	featureMatchId: z.number().int().positive().nullable(),
-	presetId: z.enum(FEATURE_MATCH_OVERLAY_PRESET_ID_VALUES),
 	layout: serverValidatedField<FeatureMatchLayoutConfig>(),
 };
 
@@ -31,10 +29,17 @@ export type FeatureMatchOverlayModeConfig = z.input<z.ZodObject<typeof featureMa
 
 /**
  * The Feature Match Overlay Screen Mode's config contract. Its defaults are the
- * `left-stacked-player-cams` preset with no Feature Match Slot selected, which the
- * presets module owns.
+ * `left-stacked-player-cams` built-in layout with no Feature Match Slot selected,
+ * which the presets module owns.
+ *
+ * `presetId` named the preset a layout was initialised from. The presets are
+ * built-in Feature Match Layout Templates now, placed like any other, and nothing
+ * records which one a layout came from.
  */
 export const featureMatchOverlayModeConfigContract = defineScreenModeConfigContract(
 	featureMatchOverlayModeConfigShape,
 	DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
+	{
+		formerFields: ['presetId'],
+	},
 );

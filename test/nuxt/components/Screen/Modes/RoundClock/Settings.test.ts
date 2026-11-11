@@ -77,7 +77,7 @@ describe('screenRoundClockSettings', () => {
 				title: 'Round Name',
 				id: 'round-clock:round-name',
 				collapsible: true,
-				looks: ['round-name'],
+				looks: [],
 			},
 			{
 				title: 'Clock',

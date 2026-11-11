@@ -69,17 +69,17 @@ describe('useScreenThemeOverrides', () => {
 		],
 		[
 			'a Mode Token following its default',
-			{ divider: '#123456' },
-			'standings.row-divider',
-			{ token: 'divider' },
+			{ positive: '#123456' },
+			'standings.rise',
+			{ token: 'positive' },
 			'#123456',
 		],
 		[
 			'a Mode Token the Theme points elsewhere',
 			{
-				'standings.row-divider': { token: 'accent' },
+				'standings.rise': { token: 'accent' },
 			},
-			'standings.row-divider',
+			'standings.rise',
 			{ token: 'accent' },
 			FOUNDATION_TOKENS.accent.default,
 		],

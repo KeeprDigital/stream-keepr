@@ -30,7 +30,7 @@ const defaultConfig = {
 	excludedCardTypes: ['Land'] as string[],
 	pointedOnly: false,
 	columns: undefined as number | undefined,
-	cardsPerPage: 60,
+	cardsPerPage: undefined as number | undefined,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 	currentPage: undefined as number | undefined,
@@ -209,11 +209,12 @@ describe('useTopCardsModeData', () => {
 			});
 			mutableConfig.columns = 1;
 
-			const { pageEntries, totalPages } = makeTopCardsModeData();
+			const { pageEntries, totalPages, pageCapacity } = makeTopCardsModeData();
 			await flushPromises();
 
 			expect(totalPages.value).toBe(1);
 			expect(pageEntries.value).toHaveLength(12);
+			expect(pageCapacity.value).toBe(12);
 			expect(shown(pageEntries.value).at(-1)).toBe('12:Card 12');
 		});
 

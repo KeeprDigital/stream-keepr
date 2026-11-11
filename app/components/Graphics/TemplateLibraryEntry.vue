@@ -18,6 +18,8 @@ const props = defineProps<{
 	revision: number;
 	/** Whether this installation authored the entry, rather than a Template Package. */
 	authored: boolean;
+	/** Whether the application ships the entry, rather than this installation holding it. */
+	builtIn?: boolean;
 	icon: string;
 	/** This library's prefix for its per-entry test ids. */
 	testId: string;
@@ -69,7 +71,10 @@ function onDescriptionChanged(event: Event) {
 				</p>
 				<p class="mt-0.5 truncate text-xs text-muted">
 					<slot name="meta" /> · revision {{ revision }}<span
-						v-if="!authored"
+						v-if="builtIn"
+						:data-testid="`${testId}-built-in`"
+					> · built-in</span><span
+						v-else-if="!authored"
 						:data-testid="`${testId}-imported`"
 					> · imported</span>
 				</p>

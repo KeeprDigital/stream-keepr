@@ -35,6 +35,8 @@ export interface GraphicsTemplateSummary {
 	 * this library never writes one.
 	 */
 	authored: boolean;
+	/** Whether the application ships the entry: browsed and placed, never written. */
+	builtIn?: boolean;
 }
 
 /** The library reads and writes a graphics Template repository already offers. */

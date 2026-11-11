@@ -38,12 +38,12 @@ import { archetypeSpotlightModeTokens } from './screenModeTokens/archetypeSpotli
 import { cardModeTokens } from './screenModeTokens/card';
 import { deckModeTokens } from './screenModeTokens/deck';
 import { featureMatchOverlayModeTokens } from './screenModeTokens/featureMatchOverlay';
-import { headToHeadModeTokens } from './screenModeTokens/headToHead';
+import { headToHeadFormerModeTokens } from './screenModeTokens/headToHead';
 import { metagameFormerModeTokens, metagameModeTokens } from './screenModeTokens/metagame';
-import { pairingsModeTokens } from './screenModeTokens/pairings';
-import { playerHistoryModeTokens } from './screenModeTokens/playerHistory';
-import { roundClockModeTokens } from './screenModeTokens/roundClock';
-import { standingsModeTokens } from './screenModeTokens/standings';
+import { pairingsFormerModeTokens, pairingsModeTokens } from './screenModeTokens/pairings';
+import { playerHistoryFormerModeTokens, playerHistoryModeTokens } from './screenModeTokens/playerHistory';
+import { roundClockFormerModeTokens, roundClockModeTokens } from './screenModeTokens/roundClock';
+import { standingsFormerModeTokens, standingsModeTokens } from './screenModeTokens/standings';
 import { talentModeTokens } from './screenModeTokens/talent';
 import { topCardsModeTokens } from './screenModeTokens/topCards';
 import { topCutModeTokens } from './screenModeTokens/topCut';
@@ -98,7 +98,7 @@ export interface ScreenModeDefinition {
 	/**
 	 * A Theme preview shows the mode though it declares no Mode Tokens: a
 	 * graphics host whose Graphic Items bind Foundation Tokens instead, shown
-	 * composing its sample graphic.
+	 * composing its sample graphic, or a display reading Foundation Tokens alone.
 	 */
 	themePreview?: true;
 	/**
@@ -338,6 +338,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		},
 		pageRotation: { pageSize: 'rowsPerPage' },
 		modeTokens: standingsModeTokens,
+		formerModeTokens: standingsFormerModeTokens,
 	},
 	'top-cut': {
 		label: 'Top Cut Bracket',
@@ -466,6 +467,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		},
 		pageRotation: { pageSize: 'rowsPerPage' },
 		modeTokens: playerHistoryModeTokens,
+		formerModeTokens: playerHistoryFormerModeTokens,
 	},
 	'pairings': {
 		label: 'Pairings',
@@ -487,6 +489,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		},
 		pageRotation: { pageSize: 'rowsPerPage' },
 		modeTokens: pairingsModeTokens,
+		formerModeTokens: pairingsFormerModeTokens,
 	},
 	'archetype-spotlight': {
 		label: 'Archetype Spotlight',
@@ -530,7 +533,8 @@ const SCREEN_MODE_DEFINITIONS = {
 			playerDeck: selectsHeadToHead,
 			roundStandings: selectsHeadToHead,
 		},
-		modeTokens: headToHeadModeTokens,
+		themePreview: true,
+		formerModeTokens: headToHeadFormerModeTokens,
 	},
 	'round-clock': {
 		label: 'Round Clock',
@@ -549,6 +553,7 @@ const SCREEN_MODE_DEFINITIONS = {
 			phase: followsCurrentRound,
 		},
 		modeTokens: roundClockModeTokens,
+		formerModeTokens: roundClockFormerModeTokens,
 	},
 	// Talent needs no results or Deck Lists, so ADR-0057 leaves it to every Card Game.
 	'talent': {
@@ -637,12 +642,15 @@ export function screenModePageRotation(mode: PageRotationMode): PageRotationDecl
 
 /**
  * Each mode whose Page Rotation declaration and config disagree: a declaring
- * mode whose config lacks the shared rotation fields or a numeric page size
- * field, or a mode carrying a rotation field without declaring a Page Rotation.
+ * mode whose config lacks the shared rotation fields or a page size field
+ * holding a number (optional where the mode pages by Auto), or a mode carrying
+ * a rotation field without declaring a Page Rotation.
  */
 type MisdeclaredPageRotation = {
 	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { pageRotation: { pageSize: infer PageSize extends string } }
-		? ConfigOfMode<M> extends PageRotationConfig & Record<PageSize, number> ? never : M
+		? PageSize extends keyof ConfigOfMode<M>
+			? ConfigOfMode<M> extends PageRotationConfig & Partial<Record<PageSize, number>> ? never : M
+			: M
 		: Extract<keyof ConfigOfMode<M>, keyof PageRotationConfig> extends never ? never : M;
 }[ScreenMode];
 
@@ -665,7 +673,7 @@ export type ThemedScreenMode = {
 
 /**
  * The Screen Modes a Theme preview shows, in Screen Mode order: each mode
- * declaring Mode Tokens, and each graphics host declaring a Theme preview.
+ * declaring Mode Tokens, and each mode declaring a Theme preview without any.
  */
 export const THEME_PREVIEW_SCREEN_MODES: readonly ScreenMode[] = SCREEN_MODE_VALUES.filter(mode =>
 	SCREEN_MODES[mode].modeTokens || SCREEN_MODES[mode].themePreview);

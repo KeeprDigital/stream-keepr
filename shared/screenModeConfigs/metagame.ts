@@ -9,7 +9,7 @@ import {
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
-import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, headerConfigShape, metagameArchetypeFilterField, metagameScopeShape, pageRotationPageSize, pageRotationShape } from './subShapes';
+import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, headerConfigShape, metagameArchetypeFilterField, metagameScopeShape, pageRotationPageSize, pageRotationShape, tableMaxWidthField } from './subShapes';
 
 /** The Metagame Screen Mode's config contract: its shape, type, and defaults. */
 export const metagameModeConfigContract = defineScreenModeConfigContract({
@@ -31,6 +31,9 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	// Display limits
 	limit: editorField(z.number().int().min(1).max(500), { label: 'Card limit' }),
 	archetypeLimit: editorField(z.number().int().min(1).max(500).nullable().optional(), { label: 'Top archetypes' }),
+
+	// The widest the table or chart runs, centred, in Event Canvas pixels. Absent is Auto: it fills its Screen.
+	maxWidth: tableMaxWidthField,
 
 	// Pagination
 	pageSize: pageRotationPageSize,
@@ -66,11 +69,13 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	],
 	limit: 50,
 	archetypeLimit: null,
+	maxWidth: undefined,
 	pageSize: 10,
 	...DEFAULT_PAGE_ROTATION,
 	...DEFAULT_HEADER_CONFIG,
 }, {
-	// The table's width and its rows' motion are the mode's Mode Tokens (#851).
+	// The rows' motion is the mode's Mode Token (#851). The width the table once held
+	// as `maxTableWidth` is not read back: its `maxWidth` starts at Auto (#1081).
 	// The Conversion Target is the Event's (ADR-0061).
 	formerFields: [
 		'maxTableWidth',

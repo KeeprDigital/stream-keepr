@@ -312,45 +312,48 @@ useEventListener(import.meta.client
 				</GraphicsCompositorStackTree>
 
 				<!--
-					The Broadcast Graphic Template library lives in the Edit workspace and
-					nowhere else: saving and placing designs is authoring, and the Live
-					workspace deliberately has no route to either.
+					Beside the stack, each a section that starts closed and says what it
+					holds in one line, so the stack is what an author sees.
 				-->
-				<GraphicsBroadcastGraphicTemplateLibrary
-					v-model:placing="placing"
-					class="mt-4 block"
-					:event-id="eventId"
-					:screen-id="screen.id"
-					:selected-graphic="selectedGraphic"
-					:writable="holdsLease"
-					:flush-edits="flushEdits"
-					@placed="selectPlacedGraphic"
-				/>
+				<div class="mt-4 border-t border-default/70">
+					<!--
+						Graphic Channels sit beside the stack rather than in it: a lane decides
+						which graphics replace each other on air, and never what composites over
+						what.
+					-->
+					<ScreenModesBroadcastGraphicsChannels
+						:graphics="graphics"
+						:channels="channels"
+						:writable="canAuthor"
+						@update:channels="emit('update:channels', $event)"
+					/>
 
-				<!--
-					Graphic Channels sit beside the stack rather than in it: a lane decides
-					which graphics replace each other on air, and never what composites over
-					what.
-				-->
-				<ScreenModesBroadcastGraphicsChannels
-					class="mt-4 block"
-					:graphics="graphics"
-					:channels="channels"
-					:writable="canAuthor"
-					@update:channels="emit('update:channels', $event)"
-				/>
+					<!--
+						The background sits beside the stack for the same reason the channels do:
+						it is a Screen-level decision about the show, and changes nothing about
+						any design or about Graphic Layer Order.
+					-->
+					<ScreenModesBroadcastGraphicsBackground
+						:background="background"
+						:writable="canAuthor"
+						@update:background="emit('update:background', $event)"
+					/>
 
-				<!--
-					The background sits beside the stack for the same reason the channels do:
-					it is a Screen-level decision about the show, and changes nothing about
-					any design or about Graphic Layer Order.
-				-->
-				<ScreenModesBroadcastGraphicsBackground
-					class="mt-4 block"
-					:background="background"
-					:writable="canAuthor"
-					@update:background="emit('update:background', $event)"
-				/>
+					<!--
+						The Broadcast Graphic Template library lives in the Edit workspace and
+						nowhere else: saving and placing designs is authoring, and the Live
+						workspace deliberately has no route to either.
+					-->
+					<GraphicsBroadcastGraphicTemplateLibrary
+						v-model:placing="placing"
+						:event-id="eventId"
+						:screen-id="screen.id"
+						:selected-graphic="selectedGraphic"
+						:writable="holdsLease"
+						:flush-edits="flushEdits"
+						@placed="selectPlacedGraphic"
+					/>
+				</div>
 			</section>
 
 			<section class="min-w-0 xl:sticky xl:top-4">

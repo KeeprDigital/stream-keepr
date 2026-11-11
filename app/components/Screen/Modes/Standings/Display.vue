@@ -2,7 +2,7 @@
 import type { StandingsColumnKey } from '~~/shared/types/enums';
 import type { Player } from '~/types';
 import { getMtgGameData } from '~~/shared/utils/gameData';
-import { modeMotionVars, modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeMotionVars, modeTokenVar } from '~/modules/screen-mode';
 
 const {
 	config,
@@ -20,25 +20,25 @@ const {
 const inset = useScreenInset();
 
 const primaryTextStyle = {
-	color: modeTokenVar('standings', 'primary-text'),
+	color: foundationTokenVar('text-primary'),
 };
 const secondaryTextStyle = {
-	color: modeTokenVar('standings', 'secondary-text'),
+	color: foundationTokenVar('text-secondary'),
 };
 const titleStyle = {
-	...modeTypographyStyle('standings', 'title-typography'),
-	color: modeTokenVar('standings', 'title-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-primary'),
 };
 const titleDividerStyle = {
-	borderBottomColor: modeTokenVar('standings', 'title-divider'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 /** On each row too, over the shared row chrome's own line height. */
 const rowStyle = {
-	...modeTypographyStyle('standings', 'row-typography'),
-	borderBottomColor: modeTokenVar('standings', 'row-divider'),
+	...foundationTypographyStyle('body'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 const surfaceStyle = {
-	backgroundColor: modeTokenVar('standings', 'surface'),
+	backgroundColor: foundationTokenVar('surface'),
 };
 
 const isRevealMode = computed(() => config.value.viewMode === 'reveal');
@@ -105,11 +105,14 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 	insetY: inset,
 });
 
-const contentStyle = {
+// Centred, and no wider than the config's max width; Auto fills the Screen.
+const contentStyle = computed(() => ({
 	width: '100%',
-	maxWidth: modeTokenVar('standings', 'max-width'),
+	maxWidth: config.value.maxWidth === undefined
+		? undefined
+		: `${config.value.maxWidth}px`,
 	marginInline: 'auto',
-};
+}));
 
 /**
  * Rows enter from their motion Mode Token's excursion, leave back to it and
@@ -133,8 +136,8 @@ const rowMotionStyle = computed(() => {
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = {
-	...modeTypographyStyle('standings', 'row-typography'),
-	color: modeTokenVar('standings', 'primary-text'),
+	...foundationTypographyStyle('body'),
+	color: foundationTokenVar('text-primary'),
 };
 </script>
 

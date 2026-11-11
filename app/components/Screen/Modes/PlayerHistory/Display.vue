@@ -2,7 +2,7 @@
 import type { PlayerHistoryColumnKey } from '~~/shared/types/enums';
 import type { PlayerMatchHistoryEntry } from '~/composables/screen/usePlayerHistoryModeData';
 import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 
 const { config, error, ready, isEmpty, headerText, pageData, pageSize, player, formatOutcome } = usePlayerHistoryModeData(useScreenContext());
 
@@ -26,30 +26,30 @@ const gridStyle = computed(() => ({
 }));
 
 const primaryTextStyle = {
-	color: modeTokenVar('player-history', 'primary-text'),
+	color: foundationTokenVar('text-primary'),
 };
 const secondaryTextStyle = {
-	color: modeTokenVar('player-history', 'secondary-text'),
+	color: foundationTokenVar('text-secondary'),
 };
 const titleStyle = {
-	...modeTypographyStyle('player-history', 'title-typography'),
-	color: modeTokenVar('player-history', 'title-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-primary'),
 };
 const titleDividerStyle = {
-	borderBottomColor: modeTokenVar('player-history', 'title-divider'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 /** Over the shared subtitle's own face. */
 const subtitleStyle = {
-	...modeTypographyStyle('player-history', 'row-typography'),
+	...foundationTypographyStyle('body'),
 	...secondaryTextStyle,
 };
 /** On each row too, over the shared row chrome's own line height. */
 const rowStyle = {
-	...modeTypographyStyle('player-history', 'row-typography'),
-	borderBottomColor: modeTokenVar('player-history', 'row-divider'),
+	...foundationTypographyStyle('body'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 const surfaceStyle = {
-	backgroundColor: modeTokenVar('player-history', 'surface'),
+	backgroundColor: foundationTokenVar('surface'),
 };
 
 const outcomeColors: Record<PlayerMatchHistoryEntry['outcome'], string> = {
@@ -62,7 +62,7 @@ const outcomeColors: Record<PlayerMatchHistoryEntry['outcome'], string> = {
 
 function outcomeStyle(outcome: PlayerMatchHistoryEntry['outcome']) {
 	return {
-		...modeTypographyStyle('player-history', 'outcome-typography'),
+		...foundationTypographyStyle('heading'),
 		color: outcomeColors[outcome],
 	};
 }
@@ -78,8 +78,8 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = computed(() => ({
 	...rowLayoutStyle.value,
-	...modeTypographyStyle('player-history', 'row-typography'),
-	color: modeTokenVar('player-history', 'primary-text'),
+	...foundationTypographyStyle('body'),
+	color: foundationTokenVar('text-primary'),
 }));
 
 /** Its Game Score; an unreported Match reads Pending unless the Outcome column already says so. */

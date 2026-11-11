@@ -45,15 +45,15 @@ describe('a Theme Token write', () => {
 		['a Foundation dimension at its lower bound', 'inset', 0],
 		['a Foundation dimension at its upper bound', 'inset', insetMax],
 		['a Foundation typography', 'heading', typography],
-		['a Mode Token literal', 'standings.row-divider', '#ff0000'],
+		['a Mode Token literal', 'standings.rise', '#ff0000'],
 		[
 			'a Mode Token naming a same-type Foundation Token',
-			'standings.row-divider',
+			'standings.rise',
 			{ token: 'accent' },
 		],
 		[
 			'a typography Mode Token naming a typography Foundation Token',
-			'standings.title-typography',
+			'talent.name-typography',
 			{ token: 'body' },
 		],
 		[
@@ -262,19 +262,19 @@ describe('a Theme Token write', () => {
 		],
 		[
 			'a Mode Token naming a Foundation Token of another type',
-			'standings.row-divider',
+			'standings.rise',
 			{ token: 'heading' },
 			'invalid-value',
 		],
 		[
 			'a Mode Token naming a Mode Token',
-			'standings.row-divider',
-			{ token: 'standings.title-divider' },
+			'standings.rise',
+			{ token: 'standings.fall' },
 			'invalid-value',
 		],
 		[
 			'a Mode Token naming no token',
-			'standings.row-divider',
+			'standings.rise',
 			{ token: 'nonsense' },
 			'invalid-value',
 		],
@@ -358,5 +358,58 @@ describe('a Theme Token write', () => {
 		['a value it could never hold', 'metagame.chart-series-8', 12],
 	])('accepts a former token given %s, and drops it', (_case, name, value) => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, dropped: true });
+	});
+
+	// A table's max width is its mode's config (#1081).
+	it.each(['standings.max-width', 'metagame.max-width'])('accepts %s, once a Mode Token, and drops it', (name) => {
+		expect(parseThemeTokenWrite(name, 1200)).toEqual({ ok: true, dropped: true });
+	});
+
+	// The table modes' type and shared chrome read Foundation Tokens (#1077).
+	const SHARED_CHROME = [
+		'surface',
+		'title-typography',
+		'title-text',
+		'title-divider',
+		'row-typography',
+		'row-divider',
+		'primary-text',
+		'secondary-text',
+	];
+	it.each([
+		['standings', SHARED_CHROME],
+		[
+			'metagame',
+			[
+				...SHARED_CHROME,
+				'header-typography',
+				'header-text',
+				'header-divider',
+				'chart-baseline',
+			],
+		],
+		[
+			'pairings',
+			[...SHARED_CHROME, 'result-typography'],
+		],
+		[
+			'player-history',
+			[...SHARED_CHROME, 'outcome-typography'],
+		],
+		[
+			'head-to-head',
+			[...SHARED_CHROME, 'name-typography', 'label-typography'],
+		],
+		[
+			'round-clock',
+			[
+				'surface',
+				'round-name-typography',
+				'round-name-text',
+				'clock-typography',
+			],
+		],
+	])('accepts each typography and shared chrome token %s once declared, and drops it', (mode, tokens) => {
+		expect(tokens.map(token => parseThemeTokenWrite(`${mode}.${token}`, '#ff0000'))).toEqual(tokens.map(() => ({ ok: true, dropped: true })));
 	});
 });

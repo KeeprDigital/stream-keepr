@@ -136,7 +136,7 @@ async function chooseImportFile(wrapper: { get: (selector: string) => any }) {
 	await flushPromises();
 }
 
-async function mountLibrary(props: Record<string, unknown> = {}) {
+async function mountLibrary(props: Record<string, unknown> = {}, stubs: Record<string, unknown> = {}) {
 	const wrapper = mount(TemplateLibrary, {
 		props: {
 			eventId: 7,
@@ -155,6 +155,7 @@ async function mountLibrary(props: Record<string, unknown> = {}) {
 				UButton: UButtonStub,
 				UInput: UInputStub,
 				UFormField: UFormFieldStub,
+				...stubs,
 			},
 		},
 	});
@@ -491,5 +492,46 @@ describe('graphicsBroadcastGraphicTemplateLibrary', () => {
 		await flushPromises();
 
 		expect(mockRemove).toHaveBeenCalledWith('installed-1');
+	});
+
+	// Beside the stack the section is closed, saying what it holds in one line.
+	it.each([
+		{ holds: 'an empty library', templates: [], summary: 'None' },
+		{
+			holds: 'one template',
+			templates: [
+				summary(),
+			],
+			summary: '1 template',
+		},
+		{
+			holds: 'several templates',
+			templates: [
+				summary(),
+				summary({ id: 'template-2', name: 'Slate' }),
+			],
+			summary: '2 templates',
+		},
+	])('starts closed, summarising $holds', async ({ templates, summary: expected }) => {
+		localStorage.clear();
+		mockList.mockResolvedValue(templates);
+		const wrapper = await mountLibrary({}, { ScreenSettingsSection: false });
+
+		const toggle = wrapper.get('[data-testid="template-library"] button[aria-expanded]');
+		expect(toggle.attributes('aria-expanded')).toBe('false');
+		expect(toggle.text()).toContain('Templates');
+		expect(toggle.text()).toContain(expected);
+	});
+
+	// A closed section keeps the library working: a placement under way is not stranded.
+	it('still places a template while its section is closed', async () => {
+		localStorage.clear();
+		const wrapper = await mountLibrary({}, { ScreenSettingsSection: false });
+
+		await wrapper.get('[data-testid="template-place"]').trigger('click');
+		await flushPromises();
+
+		expect(wrapper.emitted('placed')?.at(-1)).toEqual(['placed-copy']);
+		expect(wrapper.emitted('update:placing')?.at(-1)).toEqual([false]);
 	});
 });

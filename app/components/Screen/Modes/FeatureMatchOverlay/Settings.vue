@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { GraphicRect } from '~~/shared/types/graphics';
-import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { useEventListener } from '@vueuse/core';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
-import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
 import { hasTextSelection, useGraphicsClipboard } from '~/composables/useGraphicsClipboard';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -62,7 +61,7 @@ const { writable } = editLease;
  */
 watch(writable, (isWritable) => {
 	if (!isWritable)
-		discard(['layout', 'presetId']);
+		discard(['layout']);
 });
 
 /**
@@ -102,18 +101,10 @@ onMounted(async () => {
 });
 
 const matchOptions = useFeatureMatchMenuItems();
-const presetOptions = FEATURE_MATCH_OVERLAY_PRESETS.map(preset => ({ label: preset.label, value: preset.id, description: preset.description }));
 /** The overlay is authored in its Event's canvas, set in Event Presentation Settings (ADR-0051). */
 const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
 const canvasWidth = computed(() => eventCanvas.value.width);
 const canvasHeight = computed(() => eventCanvas.value.height);
-const selectedPreset = computed(() => FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === config.value.presetId));
-const aspectMismatch = computed(() => {
-	if (!selectedPreset.value)
-		return false;
-	const actual = canvasWidth.value / canvasHeight.value;
-	return Math.abs(actual - selectedPreset.value.aspectRatio) > 0.05;
-});
 
 /* ────────────────────────────────────────────────
  * The editor: one selection of layers, one history
@@ -215,32 +206,6 @@ provide(NUMBER_SCRUB_GESTURE, {
 /* ────────────────────────────────────────────────
  * Whole-layout actions
  * ──────────────────────────────────────────────── */
-
-/** A whole-layout replacement awaiting confirmation: a different preset, or the current one again. */
-const pendingPreset = ref<{ id: FeatureMatchOverlayPresetId; reset: boolean } | null>(null);
-
-const showPresetConfirm = computed({
-	get: () => pendingPreset.value !== null,
-	set: (value: boolean) => {
-		if (!value)
-			pendingPreset.value = null;
-	},
-});
-
-function askToApplyPreset(id: FeatureMatchOverlayPresetId) {
-	if (!canAuthor.value)
-		return;
-	pendingPreset.value = { id, reset: id === config.value.presetId };
-}
-
-function applyPreset() {
-	const pending = pendingPreset.value;
-	if (!pending)
-		return;
-	editor.edit(applyFeatureMatchOverlayPreset(config.value, pending.id));
-	editor.select(CANVAS_SELECTION);
-	pendingPreset.value = null;
-}
 
 const templatesOpen = ref(false);
 
@@ -398,7 +363,7 @@ async function pasteStyle() {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-	if (event.defaultPrevented || isTypingTarget(event.target) || pendingPreset.value || templatesOpen.value)
+	if (event.defaultPrevented || isTypingTarget(event.target) || templatesOpen.value)
 		return;
 
 	const mod = event.metaKey || event.ctrlKey;
@@ -504,30 +469,6 @@ useEventListener(import.meta.client
 						@update:model-value="updateConfig({ featureMatchId: $event })"
 					/>
 				</UFormField>
-				<UFormField label="Preset" size="sm" class="min-w-64 flex-1">
-					<UFieldGroup class="w-full">
-						<USelect
-							:model-value="config.presetId"
-							:items="presetOptions"
-							value-key="value"
-							class="min-w-0 flex-1"
-							:disabled="!canAuthor"
-							@update:model-value="askToApplyPreset($event)"
-						/>
-						<UButton
-							size="sm"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-rotate-ccw"
-							:disabled="!canAuthor"
-							data-testid="reset-preset"
-							title="Reset the layout to this preset"
-							@click="askToApplyPreset(config.presetId)"
-						>
-							Reset
-						</UButton>
-					</UFieldGroup>
-				</UFormField>
 
 				<div class="ml-auto flex items-center gap-1">
 					<GraphicsSaveState
@@ -602,15 +543,6 @@ useEventListener(import.meta.client
 				</div>
 			</div>
 
-			<UAlert
-				v-if="aspectMismatch"
-				class="mt-3"
-				color="warning"
-				variant="soft"
-				icon="i-lucide-triangle-alert"
-				title="Preset aspect ratio mismatch"
-				description="This preset was designed for 16:9. You can still use it, but geometry may need adjustment."
-			/>
 			<UAlert
 				v-if="assetPublicationBlocked"
 				data-testid="graphic-asset-publication-block"
@@ -719,7 +651,7 @@ useEventListener(import.meta.client
 		<!--
 			The installation's reusable Feature Match Layouts. They act on the whole
 			layout — saving copies this Screen's layout out, placing replaces it — so
-			they open from the toolbar beside the preset rather than from the layer list.
+			they open from the toolbar rather than from the layer list.
 
 			Writable while this session holds the Graphics Authoring Lease; an observer
 			still browses the library. Its place and save land this editor's unsaved
@@ -733,33 +665,12 @@ useEventListener(import.meta.client
 					:screen-id="screen.id"
 					:writable="writable"
 					:flush-edits="flush"
+					:canvas-aspect-ratio="canvasWidth / canvasHeight"
 					bare
 					@placing="editor.checkpoint()"
 					@placed="templatePlaced"
 				/>
 			</template>
 		</USlideover>
-
-		<UModal v-model:open="showPresetConfirm">
-			<template #content>
-				<div class="p-6 space-y-4">
-					<h3 class="text-lg font-semibold">
-						{{ pendingPreset?.reset ? 'Reset to preset?' : 'Apply preset?' }}
-					</h3>
-					<p class="text-sm text-muted">
-						This replaces the Frame, every Source Item, and every Graphic Item with the preset's,
-						keeping the selected Feature Match Slot. You can undo it.
-					</p>
-					<div class="flex justify-end gap-2">
-						<UButton variant="soft" color="neutral" @click="() => { pendingPreset = null }">
-							Cancel
-						</UButton>
-						<UButton color="primary" data-testid="confirm-preset" @click="applyPreset">
-							{{ pendingPreset?.reset ? 'Reset' : 'Apply' }}
-						</UButton>
-					</div>
-				</div>
-			</template>
-		</UModal>
 	</div>
 </template>

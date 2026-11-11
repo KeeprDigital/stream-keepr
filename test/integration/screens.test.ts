@@ -97,7 +97,7 @@ describe('screens API', () => {
 			'standings': { viewMode: 'all' },
 			'top-cut': { showHeader: false },
 			'feature-match': { showClock: false },
-			'feature-match-overlay': { presetId: 'full-table' },
+			'feature-match-overlay': {},
 			'broadcast-graphics': {
 				channels: [
 					{ id: 'lower-thirds', name: 'Lower Thirds' },
