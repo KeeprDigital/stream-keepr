@@ -8,7 +8,7 @@ import { h } from 'vue';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { standingsModeTokens } from '~~/shared/screenModeTokens/standings';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, ScreenSettingsCardStub, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { fakeScreenThemeNetwork, overrideWrites, ScreenSettingsCardStub, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import ThemeTokensSettings from '~/components/Screen/ThemeTokensSettings.vue';
 
 // The Screen-wide look holds the Foundation Tokens the Screen may override,

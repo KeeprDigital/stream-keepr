@@ -732,7 +732,12 @@ describe('screen config page — Background & Placement, then the Screen-wide lo
 	it('orders the cards after the mode\'s settings, each opening on what it holds, over one read of the Event\'s Theme', async () => {
 		mockEventStore.event = { id: 1, themeId: 'brand' };
 		mockApiFetch.mockReset();
-		mockApiFetch.mockResolvedValue({ id: 'brand', name: 'Brand', tokens: {}, revision: 1 });
+		mockApiFetch.mockResolvedValue({
+			id: 'brand',
+			name: 'Brand',
+			tokens: {},
+			revision: 1,
+		});
 		const themeOverrides = { inset: 40 };
 		const screen = {
 			...makeScreen(1),

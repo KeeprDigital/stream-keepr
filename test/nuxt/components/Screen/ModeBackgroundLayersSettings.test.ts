@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, ref } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import { screenSettingsPage, ScreenSettingsCardStub } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { ScreenSettingsCardStub, screenSettingsPage } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import Settings from '~/components/Screen/ModeBackgroundLayersSettings.vue';
 
 // Background & Placement: a plain overlay mode's own Background Layer stack,

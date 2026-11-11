@@ -143,7 +143,12 @@ describe('useScreenThemeOverrides', () => {
 		await flushPromises();
 		expect(handed[1]!.writing.value.has('divider')).toBe(true);
 
-		answer.resolve(createWireMockScreen({ id: 1, currentMode: 'standings', themeOverrides: { divider: '#ff0000' }, stateVersion: 1 }) as unknown as Screen);
+		answer.resolve(createWireMockScreen({
+			id: 1,
+			currentMode: 'standings',
+			themeOverrides: { divider: '#ff0000' },
+			stateVersion: 1,
+		}) as unknown as Screen);
 		await flushPromises();
 		expect(handed[1]!.writing.value.has('divider')).toBe(false);
 	});
