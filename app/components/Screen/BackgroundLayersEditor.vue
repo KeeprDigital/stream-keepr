@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { AnimationEffectSelection } from '~~/shared/animationEffects';
+import type { GraphicFillEdit } from '~~/shared/modules/graphics';
+import type { GraphicLinearGradientFill } from '~~/shared/types/graphics';
 import type { BackgroundLayer, BackgroundLayerType, ScreenMediaSource } from '~~/shared/types/screenConfig';
 import type { MediaFieldsPatch } from '~/utils/mediaFields';
+import { applyGraphicFillEdit } from '~~/shared/modules/graphics';
 import { BACKGROUND_LAYER_TYPE_VALUES } from '~~/shared/types/screenConfig';
 import { randomUuid } from '~~/shared/utils/uuid';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
@@ -13,7 +16,9 @@ import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
  * `update:layers` to its own configuration write — the editor never saves.
  * Without an `eventId`, as in the Theme editor, media layers take a Remote
  * Media URL only. Its `color` slot replaces a colour layer's picker, given the
- * layer's colour and the `update` that writes a new one.
+ * layer's colour and the `update` that writes a new one. A gradient layer is
+ * edited with the one Graphic Fill control, held to the gradient kind; a CSS
+ * gradient string stored before the layer held a fill is shown, and replaced.
  */
 const props = defineProps<{
 	layers: BackgroundLayer[];
@@ -47,6 +52,18 @@ function writeLayers(nextLayers: BackgroundLayer[]) {
 	emit('update:layers', nextLayers);
 }
 
+/** What a new gradient layer starts on, and what replaces a stored CSS gradient string. */
+function startingGradient(): GraphicLinearGradientFill {
+	return {
+		type: 'linear-gradient',
+		angle: 180,
+		stops: [
+			{ color: '#0f172a', position: 0, opacity: 1 },
+			{ color: '#020617', position: 1, opacity: 1 },
+		],
+	};
+}
+
 /** A new layer's starting values, per type. A new animation layer starts on fog. */
 function newLayer(type: BackgroundLayerType): BackgroundLayer {
 	const base = {
@@ -58,7 +75,11 @@ function newLayer(type: BackgroundLayerType): BackgroundLayer {
 		case 'color':
 			return { ...base, type, color: '#000000' };
 		case 'gradient':
-			return { ...base, type, gradient: 'linear-gradient(180deg, #0f172a 0%, #020617 100%)' };
+			return {
+				...base,
+				type,
+				gradient: startingGradient(),
+			};
 		case 'image':
 			return {
 				...base,
@@ -117,6 +138,13 @@ function patchLayer(id: string, updates: Partial<BackgroundLayer>) {
 				} as BackgroundLayer
 			: layer,
 	));
+}
+
+/** The fill control never changes kind here, so the edited fill is still a gradient. */
+function editGradient(id: string, gradient: GraphicLinearGradientFill, edit: GraphicFillEdit) {
+	const next = applyGraphicFillEdit(gradient, edit);
+	if (next.type === 'linear-gradient')
+		patchLayer(id, { gradient: next });
 }
 
 /** A media layer's fit and playback; its opacity is the layer's own, edited above. */
@@ -206,15 +234,30 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 					</slot>
 				</UFormField>
 
-				<UFormField v-if="layer.type === 'gradient'" label="CSS gradient">
-					<UInput
-						:model-value="layer.gradient"
-						placeholder="linear-gradient(180deg, #0f172a 0%, #020617 100%)"
-						size="sm"
-						class="w-full"
-						@update:model-value="patchLayer(layer.id, { gradient: String($event) })"
+				<template v-if="layer.type === 'gradient'">
+					<div v-if="typeof layer.gradient === 'string'" class="space-y-2">
+						<p class="text-xs text-muted">
+							This layer holds a CSS gradient from an earlier version. It paints as stored until you replace it.
+						</p>
+						<code data-testid="stored-css-gradient" class="block break-all text-xs">{{ layer.gradient }}</code>
+						<UButton
+							data-testid="replace-stored-gradient"
+							label="Replace with a gradient"
+							icon="i-lucide-replace"
+							variant="soft"
+							size="xs"
+							@click="patchLayer(layer.id, { gradient: startingGradient() })"
+						/>
+					</div>
+					<GraphicsFillFields
+						v-else
+						:fill="layer.gradient"
+						fixed-kind
+						aria-label-prefix="Gradient"
+						test-id-prefix="background-gradient"
+						@edit="editGradient(layer.id, layer.gradient, $event)"
 					/>
-				</UFormField>
+				</template>
 
 				<template v-if="layer.type === 'image' || layer.type === 'video'">
 					<ScreenMediaSourceField
