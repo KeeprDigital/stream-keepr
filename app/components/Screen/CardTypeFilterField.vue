@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<{
 	locked?: MetagameCardTypeBucket[];
 	/** The Event's Card Game, whose card types the chips name. */
 	game?: Game;
-	description: string;
+	description?: string;
 	/** Each chip's test id is this prefix and its type. */
 	testIdPrefix: string;
 }>(), {
