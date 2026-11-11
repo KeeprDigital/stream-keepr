@@ -3,8 +3,9 @@ import type { FeatureMatchLayoutConfig } from './screenConfig';
 /**
  * The Feature Match Layout Template library artifact.
  *
- * A Feature Match Layout Template is a user-created reusable Feature Match Layout
- * that an author copies into any Screen's Feature Match Overlay configuration. It
+ * A Feature Match Layout Template is a reusable Feature Match Layout, saved by an
+ * author, installed from a Template Package, or built in, that an author copies
+ * into any Screen's Feature Match Overlay configuration. It
  * is never live Screen state: it carries no Feature Match Slot assignment, no
  * session clock, and no Player — a Source Item declares a Source Role and a Graphic
  * Text Template binds a Feature Match token, and both resolve against whatever Slot
@@ -53,6 +54,16 @@ export interface FeatureMatchLayoutTemplateSummary {
 	 * browsed, placed, exported, and removed here, never revised (ADR-0068).
 	 */
 	authored: boolean;
+	/**
+	 * Present, and true, only on a built-in entry: one the application ships. It is
+	 * browsed and placed, and never revised, removed or exported.
+	 */
+	builtIn?: true;
+	/**
+	 * The canvas aspect ratio (width over height) the layout was drawn for. Only a
+	 * built-in states one: a saved or installed layout carries no canvas size.
+	 */
+	aspectRatio?: number;
 	/** Graphic Items in the saved composition, Graphic Group children included. */
 	itemCount: number;
 	/** Host-owned Source Items the layout frames. */

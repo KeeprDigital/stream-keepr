@@ -69,12 +69,9 @@ const { updateConfig } = rotation;
 const lookOf = (...groups: string[]) => lookSummary('player-history', props.screen.themeOverrides, groups);
 const tableSummary = computed(() => settingsSummary([
 	columnsSummary(columns.value),
-	lookOf('table', 'outcome-badge'),
+	lookOf('outcome-badge'),
 ]));
-const headerCardSummary = computed(() => settingsSummary([
-	headerSummary(config.value),
-	lookOf('header'),
-]));
+const headerCardSummary = computed(() => headerSummary(config.value));
 const paginationCardSummary = computed(() => paginationSummary(rotation));
 
 // What the pickers below load, re-read on Reconnect Resync (#610).
@@ -115,8 +112,6 @@ onMounted(async () => {
 				@update="updateConfig({ columns: $event })"
 			/>
 
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="table" />
-
 			<ScreenSettingsGroup title="Outcome Badge">
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="outcome-badge" />
 			</ScreenSettingsGroup>
@@ -130,9 +125,7 @@ onMounted(async () => {
 			show-description="Show the player name and record above the match history."
 			auto-description="Leave empty for the player's name and match history."
 			@update="updateConfig($event)"
-		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="header" />
-		</ScreenHeaderSettingsCard>
+		/>
 
 		<ScreenPaginationSettingsCard
 			id="player-history:pagination"

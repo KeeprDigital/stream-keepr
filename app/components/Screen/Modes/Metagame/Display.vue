@@ -8,7 +8,7 @@ import type {
 	CardBreakdownEntry,
 } from '~~/shared/types/metagame';
 import { getCardTypeDisplayLabel, isMetagameColumnOffered } from '~~/shared/utils/metagame';
-import { modeMotionVars, modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeMotionVars, modeTokenVar } from '~/modules/screen-mode';
 
 interface TableColumnDefinition<Key extends string> {
 	key: Key;
@@ -33,35 +33,35 @@ const {
 } = useMetagameModeData(useScreenContext());
 
 const primaryTextStyle = {
-	color: modeTokenVar('metagame', 'primary-text'),
+	color: foundationTokenVar('text-primary'),
 };
 const secondaryTextStyle = {
-	color: modeTokenVar('metagame', 'secondary-text'),
+	color: foundationTokenVar('text-secondary'),
 };
 const titleStyle = {
-	...modeTypographyStyle('metagame', 'title-typography'),
-	color: modeTokenVar('metagame', 'title-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-primary'),
 };
 const titleDividerStyle = {
-	borderBottomColor: modeTokenVar('metagame', 'title-divider'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 const surfaceStyle = {
-	backgroundColor: modeTokenVar('metagame', 'surface'),
+	backgroundColor: foundationTokenVar('surface'),
 };
 /** Over the shared header row chrome's own face, colour and rule. */
 const headerRowStyle = {
-	...modeTypographyStyle('metagame', 'header-typography'),
-	color: modeTokenVar('metagame', 'header-text'),
-	borderBottomColor: modeTokenVar('metagame', 'header-divider'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-secondary'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 /** On each row too, over the shared row chrome's own line height. */
 const rowStyle = {
-	...modeTypographyStyle('metagame', 'row-typography'),
-	borderBottomColor: modeTokenVar('metagame', 'row-divider'),
+	...foundationTypographyStyle('body'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 /** Over the shared page indicator's own face. */
 const pageIndicatorStyle = {
-	...modeTypographyStyle('metagame', 'row-typography'),
+	...foundationTypographyStyle('body'),
 	...secondaryTextStyle,
 };
 
@@ -239,7 +239,7 @@ const rowMotionStyle = {
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = {
-	...modeTypographyStyle('metagame', 'row-typography'),
+	...foundationTypographyStyle('body'),
 	...primaryTextStyle,
 };
 

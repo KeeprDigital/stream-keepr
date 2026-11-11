@@ -186,7 +186,7 @@ describe('template Package export through the API boundary', () => {
 		});
 		await $fetch(`/api/events/${eventId}/screens/${fragmentScreen.id}/config/feature-match-overlay`, {
 			method: 'PATCH',
-			body: { presetId: 'full-table' },
+			body: {},
 		});
 
 		const response = await fetch(

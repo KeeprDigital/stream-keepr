@@ -127,13 +127,13 @@ afterAll(async () => {
 
 describe('screen Theme Overrides', () => {
 	it.each([
-		['its own Mode Token, as a literal', 'standings.row-divider', '#ff0000'],
+		['its own Mode Token, as a literal', 'standings.rise', '#ff0000'],
 		[
 			'its own Mode Token, following another Foundation Token of its type',
-			'standings.row-divider',
+			'standings.rise',
 			{ token: 'accent' },
 		],
-		['a Foundation Token a Mode Token\'s default names', 'divider', 'rgba(0, 0, 0, 0.5)'],
+		['a Foundation Token a Mode Token\'s default names', 'positive', 'rgba(0, 0, 0, 0.5)'],
 		['a Foundation Token no default names, which a Mode Token could follow', 'accent', '#00ff00'],
 		['the Screen inset, which its host consumes', 'inset', 24],
 		[
@@ -141,19 +141,18 @@ describe('screen Theme Overrides', () => {
 			'alignment',
 			{ horizontal: 'left', vertical: 'top' },
 		],
-		[
-			'a typography Foundation Token',
-			'heading',
-			{
-				font: { kind: 'application', fontId: 'mplantin' },
-				weight: 400,
-				lineHeight: 1.2,
-				tracking: 0,
-				case: 'none',
-			},
-		],
 	])('sets %s, stores it on that Screen alone, and announces that Screen', async (_case, token, value) => {
 		await expectOverrideStored('standings', token, value);
+	});
+
+	it('sets a typography Foundation Token on a Screen whose mode declares a typography Mode Token', async () => {
+		await expectOverrideStored('top-cut', 'heading', {
+			font: { kind: 'application', fontId: 'mplantin' },
+			weight: 400,
+			lineHeight: 1.2,
+			tracking: 0,
+			case: 'none',
+		});
 	});
 
 	// A graphics host's Graphic Items may bind any such Foundation Token (#831).
@@ -233,13 +232,13 @@ describe('screen Theme Overrides', () => {
 
 	it('clears one override, keeping the rest, so the cleared token reads the Theme again', async () => {
 		const screenId = await createScreen('standings', 'main');
-		await override(screenId, { 'accent': '#00ff00', 'standings.surface': '#000000' });
+		await override(screenId, { 'accent': '#00ff00', 'standings.fall': '#000000' });
 		published.length = 0;
 
 		const answered = await override(screenId, { accent: null });
 
-		expect(answered.themeOverrides).toEqual({ 'standings.surface': '#000000' });
-		expect(await storedOverrides(screenId)).toEqual({ 'standings.surface': '#000000' });
+		expect(answered.themeOverrides).toEqual({ 'standings.fall': '#000000' });
+		expect(await storedOverrides(screenId)).toEqual({ 'standings.fall': '#000000' });
 		expect(announcedScreens()).toEqual([screenId]);
 	});
 
@@ -275,7 +274,7 @@ describe('screen Theme Overrides', () => {
 		[
 			'a clear, in a mode that cannot consume the token',
 			'card',
-			'standings.row-divider',
+			'standings.rise',
 			null,
 			'unconsumable-token',
 		],
@@ -289,14 +288,14 @@ describe('screen Theme Overrides', () => {
 		[
 			'a value of the wrong type',
 			'standings',
-			'standings.row-divider',
+			'standings.rise',
 			12,
 			'invalid-value',
 		],
 		[
 			'a Mode Token following a Foundation Token of another type',
 			'standings',
-			'standings.row-divider',
+			'standings.rise',
 			{ token: 'heading' },
 			'invalid-value',
 		],
@@ -343,15 +342,15 @@ describe('screen Theme Overrides', () => {
 	});
 
 	it('stores the rest of a write naming a former token', async () => {
-		const screenId = await createScreen('metagame', 'main');
+		const screenId = await createScreen('standings', 'main');
 
 		const answered = await override(screenId, {
-			'metagame.chart-other': '#ff0000',
-			'metagame.chart-baseline': '#00ff00',
+			'standings.row-divider': '#ff0000',
+			'standings.rise': '#00ff00',
 		});
 
-		expect(answered.themeOverrides).toEqual({ 'metagame.chart-baseline': '#00ff00' });
-		expect(await storedOverrides(screenId)).toEqual({ 'metagame.chart-baseline': '#00ff00' });
+		expect(answered.themeOverrides).toEqual({ 'standings.rise': '#00ff00' });
+		expect(await storedOverrides(screenId)).toEqual({ 'standings.rise': '#00ff00' });
 		expect(announcedScreens()).toEqual([screenId]);
 	});
 
@@ -364,17 +363,17 @@ describe('screen Theme Overrides', () => {
 
 	it('keeps an override of a mode\'s Mode Token while the Screen shows another mode, and carries it again on return', async () => {
 		const screenId = await createScreen('standings', 'main');
-		await override(screenId, { 'standings.row-divider': '#ff0000' });
+		await override(screenId, { 'standings.rise': '#ff0000' });
 
 		await switchMode(screenId, 'card');
-		expect(await storedOverrides(screenId)).toEqual({ 'standings.row-divider': '#ff0000' });
-		expect(await refusal(override(screenId, { 'standings.row-divider': '#00ff00' }))).toEqual({ statusCode: 400, code: 'unconsumable-token' });
+		expect(await storedOverrides(screenId)).toEqual({ 'standings.rise': '#ff0000' });
+		expect(await refusal(override(screenId, { 'standings.rise': '#00ff00' }))).toEqual({ statusCode: 400, code: 'unconsumable-token' });
 
 		await switchMode(screenId, 'standings');
 		const read: ScreenResponse = await call(readOutputScreen, { id: eventId, screenId });
 		expect(read).toMatchObject({
 			currentMode: 'standings',
-			themeOverrides: { 'standings.row-divider': '#ff0000' },
+			themeOverrides: { 'standings.rise': '#ff0000' },
 		});
 	});
 

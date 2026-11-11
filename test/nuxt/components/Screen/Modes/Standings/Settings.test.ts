@@ -261,7 +261,7 @@ const HEADER = {
 	id: 'standings:header',
 	title: 'Header',
 	collapsible: true,
-	groups: ['header'],
+	groups: [],
 };
 const PAGINATION = {
 	id: 'standings:pagination',
@@ -377,7 +377,7 @@ describe('the Standings settings layout', () => {
 		[
 			'a custom header and overridden table tokens',
 			{ headerText: 'Final Standings', autoPageEnabled: true },
-			{ 'standings.surface': '#000000', 'standings.rise': '#00ff00' },
+			{ 'standings.fall': '#ff0000', 'standings.rise': '#00ff00' },
 			{
 				'standings:table': '4 of 6 columns shown · 2 Screen Theme Overrides',
 				'standings:header': '“Final Standings”',

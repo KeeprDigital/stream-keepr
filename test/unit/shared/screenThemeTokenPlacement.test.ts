@@ -50,11 +50,12 @@ describe('where a Screen settings page renders each Theme Token', () => {
 	});
 
 	it('places a Mode Token in the group it names, in declaration order', () => {
-		const placed = placeScreenThemeTokens('standings');
+		const placed = placeScreenThemeTokens('pairings');
 
-		expect(placed.groups.header).toEqual(['standings.title-typography', 'standings.title-text', 'standings.title-divider']);
-		expect(placed.groups.data).toEqual(['standings.reveal-motion']);
-		expect(placed.foundationTokens).toContain('divider');
+		expect(placed.groups).toEqual({
+			'result-badge': ['pairings.result-reported', 'pairings.result-pending', 'pairings.result-bye'],
+		});
+		expect(placed.foundationTokens).toContain('caution');
 	});
 
 	it.each([
