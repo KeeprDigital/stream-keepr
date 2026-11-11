@@ -34,6 +34,9 @@ const BESPOKE_CONTROLS: Record<string, string> = {
 const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 };
 
+/** A mode whose page the generic settings renderer draws from its contract (#1094). */
+const RENDERER = 'ModeSettings';
+
 /** Each mode's editor, and the config variants that between them render every scalar control. */
 /** An editor variant shown for a One Piece Card Game Event, whose editor may differ (ADR-0057). */
 interface EditorVariants {
@@ -44,11 +47,11 @@ interface EditorVariants {
 
 const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	'feature-match': {
-		editor: 'FeatureMatch',
+		editor: RENDERER,
 		variants: [{}],
 	},
 	'card': {
-		editor: 'Card',
+		editor: RENDERER,
 		variants: [{}],
 	},
 	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard
@@ -106,13 +109,13 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 		],
 	},
 	'player-history': {
-		editor: 'PlayerHistory',
+		editor: RENDERER,
 		variants: [
 			{ autoPageEnabled: true },
 		],
 	},
 	'pairings': {
-		editor: 'Pairings',
+		editor: RENDERER,
 		variants: [
 			{ autoPageEnabled: true },
 		],
@@ -127,7 +130,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	},
 	// The Slot binding and the two Player pickers: both are Event References, so only the source, show toggles and header are scalar.
 	'head-to-head': {
-		editor: 'HeadToHead',
+		editor: RENDERER,
 		variants: [
 			{},
 			{ playerSource: 'players' },
@@ -149,7 +152,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	},
 	// Its Round picker is an Event Reference; counting up after the end shows its limit.
 	'round-clock': {
-		editor: 'RoundClock',
+		editor: RENDERER,
 		variants: [
 			{},
 			{ countUpAfterEnd: true },
@@ -237,8 +240,18 @@ mockNuxtImport('useBroadcastDeckListStore', () => () => ({
 	summaries: [],
 	loadCollection: vi.fn(),
 }));
-// A points system, so the Deck editor offers its card point settings.
-const editorEvent = { id: 1, game: 'mtg', pointsSystem: '7ph' };
+// A points system, so the Deck editor offers its card point settings, and every
+// Feature Match Controls feature, so its page shows each toggle.
+const editorEvent = {
+	id: 1,
+	game: 'mtg',
+	pointsSystem: '7ph',
+	lgsEnabled: true,
+	tableNumberEnabled: true,
+	featureMatchDefaultTurnTrackingEnabled: true,
+	featureMatchDefaultExtraTurnsEnabled: true,
+	featureMatchDefaultMulliganTrackingEnabled: true,
+};
 mockNuxtImport('useEventStore', () => () => ({
 	event: editorEvent,
 	$reset: vi.fn(),
@@ -329,6 +342,7 @@ const stubs = {
 	MtgManaColorDisplay: true,
 	// A group's Look writes Screen Theme Overrides, never config (ADR-0072).
 	ScreenThemeTokenGroup: true,
+	ScreenSettingsLook: true,
 };
 
 // ── Reading which contract field a control wrote ──
@@ -398,11 +412,13 @@ function numberAttr(value: string | undefined): number | undefined {
 		: Number(value);
 }
 
-async function mountEditor(editor: string) {
-	const { default: Settings } = await import(`../../../../../app/components/Screen/Modes/${editor}/Settings.vue`);
+async function mountEditor(editor: string, mode: ScreenMode) {
+	const { default: Settings } = editor === RENDERER
+		? await import('~/components/Screen/ModeSettings.vue')
+		: await import(`../../../../../app/components/Screen/Modes/${editor}/Settings.vue`);
 	const wrapper = mount(Settings, {
 		props: {
-			screen: { id: 1 } as Screen,
+			screen: { id: 1, currentMode: mode } as Screen,
 			eventId: 1,
 		},
 		global: { stubs },
@@ -444,7 +460,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 				...variant,
 			} as Record<string, unknown>;
 			config.value = structuredClone(initial);
-			const wrapper = await mountEditor(entry.editor);
+			const wrapper = await mountEditor(entry.editor, mode);
 			const count = wrapper.findAll('[data-guard-control]').length;
 
 			// A declared field rendered by `ScreenConfigField` is found by its key.

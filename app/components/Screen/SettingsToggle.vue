@@ -1,55 +1,26 @@
 <script setup lang="ts">
-const props = withDefaults(defineProps<{
+/**
+ * The one toggle row of a settings surface. A toggle that cannot have an effect
+ * is not rendered (#1060), so it is never shown disabled. Unset reads as on.
+ */
+defineProps<{
 	label: string;
 	description?: string;
-	/** Description shown when the toggle is disabled via the `enabled` prop. */
-	disabledDescription?: string;
-	/**
-	 * Feature gate — when `false`, the toggle is disabled and the description
-	 * swaps to `disabledDescription`. The emitted value is also gated so the
-	 * bound config never becomes `true` while the feature is off.
-	 */
-	enabled?: boolean;
-}>(), {
-	enabled: undefined,
-});
+}>();
 
 const model = defineModel<boolean | undefined>({ required: true });
-
-const isFeatureGated = computed(() => props.enabled !== undefined);
-const isDisabled = computed(() => isFeatureGated.value && !props.enabled);
-
-const resolvedDescription = computed(() => {
-	if (isDisabled.value && props.disabledDescription) {
-		return props.disabledDescription;
-	}
-	return props.description;
-});
-
-const resolvedValue = computed(() => {
-	if (isDisabled.value)
-		return false;
-	return model.value ?? true;
-});
-
-function onUpdate(value: boolean) {
-	if (isDisabled.value)
-		return;
-	model.value = value;
-}
 </script>
 
 <template>
 	<div>
 		<ScreenSettingsField
 			:label="label"
-			:description="resolvedDescription"
+			:description="description"
 			align="center"
 		>
 			<USwitch
-				:model-value="resolvedValue"
-				:disabled="isDisabled"
-				@update:model-value="onUpdate"
+				:model-value="model ?? true"
+				@update:model-value="model = $event"
 			/>
 		</ScreenSettingsField>
 		<div v-if="$slots.default" class="mt-3">
