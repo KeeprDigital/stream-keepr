@@ -131,6 +131,7 @@ function updateText(value: unknown) {
 			:max="numberMax"
 			:step="field.step"
 			:display-scale="field.displayScale"
+			:placeholder="placeholder"
 			@update:model-value="updateNumber($event)"
 		/>
 		<USelect

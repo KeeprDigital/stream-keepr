@@ -7,6 +7,7 @@ import type {
 import type { MetagameCardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
 import { getFeatureMatchStateTracking } from '~~/shared/config/games';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { getMetagameCardTypeBuckets } from '~~/shared/utils/metagame';
 import { headerSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
@@ -131,19 +132,13 @@ const lockedTypes = computed<MetagameCardTypeBucket[]>(() => config.value.pointe
 	? ['Land']
 	: []);
 
+// The Card Layout: each value a number, or Auto while absent (ADR-0054).
 const gridLayout = computed(() => ({
-	cardSizing: config.value.cardSizing,
-	cardWidth: config.value.cardWidth,
-	cardGap: config.value.cardGap,
-	autoColumns: config.value.autoColumns,
 	columns: config.value.columns,
+	maxCardSize: config.value.maxCardSize,
+	cardGap: config.value.cardGap,
 }));
-
-const layoutDescriptions = {
-	cardSizing: 'Fit shrinks the cards until every one on the page fits the screen; Fixed takes the card width below and may run off the screen.',
-	autoColumns: 'Choose the columns from the space the cards have on the Screen.',
-	columns: 'Number of cards per row.',
-};
+const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
 
 /** For a closed card's summary: how many Screen Theme Overrides the Looks of mounted `groups` hold. */
 function look(...groups: string[]) {
@@ -166,14 +161,19 @@ const rankingSummary = computed(() => settingsSummary([
 		? `${config.value.cardsPerPage} per page`
 		: 'One page',
 ]));
-const layoutSummary = computed(() => settingsSummary([
-	config.value.cardSizing === 'fixed'
-		? `Fixed ${config.value.cardWidth} px`
-		: 'Fit',
-	config.value.autoColumns
-		? 'Auto columns'
-		: `${config.value.columns} columns`,
-]));
+const layoutSummary = computed(() => {
+	const { columns, maxCardSize, cardGap } = config.value;
+	const set = [
+		columns !== undefined && `${columns} ${columns === 1
+			? 'column'
+			: 'columns'}`,
+		maxCardSize !== undefined && `Max ${maxCardSize} px`,
+		cardGap !== undefined && `${cardGap} px gap`,
+	].filter(Boolean);
+	return settingsSummary(set.length > 0
+		? set
+		: ['Auto']);
+});
 const headerCardSummary = computed(() => headerSummary(config.value));
 const badgesSummary = computed(() => {
 	const shown = [
@@ -284,7 +284,8 @@ const badgesSummary = computed(() => {
 			<ScreenCardGridLayoutFields
 				:layout="gridLayout"
 				:fields="fields"
-				:descriptions="layoutDescriptions"
+				:card-count="config.limit"
+				:canvas="eventCanvas"
 				@update="updateConfig($event)"
 			/>
 		</ScreenSettingsSection>

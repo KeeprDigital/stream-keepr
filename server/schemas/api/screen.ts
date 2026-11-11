@@ -1571,7 +1571,7 @@ export const modeConfigsMapSchema = withModeConfigsMapRules(
  *
  * A mode configuration is legitimately incomplete in storage: PATCH writes
  * fragments and readers complete them from `getDefaultConfigForMode`, so a Screen
- * can hold `{ 'feature-match-overlay': { layout } }` with no `presetId` and be
+ * can hold `{ 'feature-match-overlay': { layout } }` with no `featureMatchId` and be
  * entirely valid. Re-checking each mode against its full schema would therefore
  * reject ordinary edits, which is why this deliberately checks the map's own rules
  * and leaves each mode's shape to the patch schema that validated the fragment.

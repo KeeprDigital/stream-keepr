@@ -216,7 +216,6 @@ describe('parseModeConfigPatchResult', () => {
 			},
 			'feature-match-overlay': {
 				featureMatchId: null,
-				presetId: 'full-table' as const,
 				layout: fatOverlayLayout(),
 			},
 		};

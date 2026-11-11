@@ -31,6 +31,9 @@ describe.each([
 			'rowsPerPage',
 			'badgeSize',
 			'showCardNames',
+			'cardSizing',
+			'cardWidth',
+			'autoColumns',
 		],
 		former: {
 			rankBadgeTextColor: '#ffffff',
@@ -43,6 +46,9 @@ describe.each([
 			rowsPerPage: 2,
 			badgeSize: 14,
 			showCardNames: true,
+			cardSizing: 'fit',
+			cardWidth: 200,
+			autoColumns: false,
 		},
 		kept: { limit: 12 },
 		patch: { limit: 15 },
@@ -82,6 +88,14 @@ describe.each([
 		former: { revealTrigger: 'auto', revealIntervalMs: 5000 },
 		kept: { revealCount: 4 },
 		patch: { revealCount: 6 },
+	},
+	// A built-in Feature Match Layout Template is placed like any other; nothing records which.
+	{
+		mode: 'feature-match-overlay' as const,
+		formerFields: ['presetId'],
+		former: { presetId: 'full-table' },
+		kept: { featureMatchId: 4 },
+		patch: { featureMatchId: 5 },
 	},
 ])('a $mode Screen storing its dropped $formerFields', ({ mode, formerFields, former, kept, patch }) => {
 	const stored = {

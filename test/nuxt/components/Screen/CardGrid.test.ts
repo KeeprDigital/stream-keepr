@@ -6,7 +6,7 @@ enableAutoUnmount(afterEach);
 
 type CardGridProps = InstanceType<typeof CardGrid>['$props'];
 
-function mountGrid(props: Omit<CardGridProps, 'cardWidth' | 'gap'>) {
+function mountGrid(props: Omit<CardGridProps, 'cardWidth' | 'gap'> & Partial<Pick<CardGridProps, 'cardWidth' | 'gap'>>) {
 	return mount(CardGrid, {
 		props: {
 			cardWidth: '160px',
@@ -18,6 +18,26 @@ function mountGrid(props: Omit<CardGridProps, 'cardWidth' | 'gap'>) {
 }
 
 describe('screenCardGrid', () => {
+	// Its host solves the Card Layout; the grid lays out exactly what it is given.
+	it('lays out the columns, card width and gap its host solved, at its alignment', () => {
+		const wrapper = mountGrid({
+			columns: 4,
+			rows: 3,
+			cardWidth: '150px',
+			gap: '9px',
+			alignment: 'bottom-left',
+		});
+
+		expect(wrapper.attributes('data-columns')).toBe('4');
+		expect(wrapper.attributes('data-rows')).toBe('3');
+		expect((wrapper.element as HTMLElement).style.placeContent).toBe('end start');
+		const grid = wrapper.get('.grid').element as HTMLElement;
+		expect(grid.style.gridTemplateColumns).toBe('repeat(4, 150px)');
+		expect(grid.style.gap).toBe('9px');
+		expect(wrapper.find('[data-testid="card"]').exists()).toBe(true);
+	});
+
+	// The former Card Sizing, as a Deck List board still passes it.
 	// Fixed sizes its tracks to the cards; auto-fill fits as many card widths as there is room for.
 	it.each([
 		{ columns: 5, templateColumns: 'repeat(5, max-content)' },
