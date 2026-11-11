@@ -2701,7 +2701,7 @@ A clock should read its full duration when it starts and `0:00` when it ends. Ro
 
 ## ADR-0079: Settings surfaces are built from one of each shared primitive
 
-Accepted · 2026-11-11 · [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060), [#1074](https://github.com/KeeprDigital/stream-keepr/issues/1074)
+Accepted · 2026-11-11 · [#1060](https://github.com/KeeprDigital/stream-keepr/issues/1060), [#1074](https://github.com/KeeprDigital/stream-keepr/issues/1074) · Amended 2026-11-11: the graphics inspector and the Theme editor share one field control for each kind of value · [#1102](https://github.com/KeeprDigital/stream-keepr/issues/1102)
 
 A Screen settings page, a graphics inspector and the Feature Match Overlay's Frame and Source Item panels each had their own collapsible (`ScreenSettingsCard`, `GraphicsInspectorSection`, `FeatureMatchOverlayControlSection`), and shared settings components wrote the field row's layout classes, number inputs, subheadings and hints by hand, so the same control lined up differently from card to card.
 
@@ -2714,6 +2714,14 @@ A Screen settings page, a graphics inspector and the Feature Match Overlay's Fra
 - **`ScreenSettingsNumberField`** is the one number input. It owns the display scale (shown in displayed units, emitted in stored ones) and emits `null` when emptied. `GraphicsNumberField` wraps it to add the label drag.
 - **`ScreenSettingsToggle`** is the one toggle row, **`ScreenSettingsSubheading`** the one subheading (`ScreenSettingsGroup` is a subheading naming a `role="group"`), and **`ScreenSettingsHint`** the one hint.
 
+**The graphics inspector and the Theme editor share one field control for each kind of value** (#1102), under `app/components/Graphics/`. A Theme token's input is an adapter: it maps the token to the shared control's fields and back.
+
+- **`GraphicsTypographyFields`** is the one typography editor, by `variant`: a Graphic Item's base typography, a Graphic Placeholder Style, and a typography token, which has no size or style, spaces its letters in em and keeps its own bounds (`THEME_TYPOGRAPHY_BOUNDS`).
+- **`GraphicsCompositorSurfaceStyleFields`** is the one surface editor, for a Graphic Surface Style and a surface-style token. A host with its own colour picker fills its `color` slot.
+- **`GraphicsShapeGeometryFields`** is the one corner editor, for a Graphic Item's Shape Geometry, a shape-geometry token and a Source Item. In its `radii` form every corner is rounded, 0 being square, with no preset or slant: `SourceFramingStyleFields` reads a Source Item's stored radii as that geometry and writes each corner's own radius back, so what a Source Item stores does not change. It replaces the overlay's `BorderRadiusControl`.
+- **`GraphicsOpacityField`** is the one opacity control, 0 to 1 in steps of 0.05, wherever an inspector, a Theme token or the settings beside them edit an opacity. It replaces `UIOpacityInput` and the `OPACITY_INPUT` bounds each caller bound.
+- **`GraphicsNumberField`** is every other number they edit, a Theme dimension included.
+
 ### Why
 
 Every select, number field and toggle lines up the same way only if one component lays each out. One section also means a card and an inspector row cannot drift apart in how they summarise, toggle or remember.
@@ -2723,7 +2731,11 @@ Every select, number field and toggle lines up the same way only if one componen
 - A component under `app/components/Screen/` that is part of a settings surface writes no raw `UFormField`, no bare `UInputNumber` and no hand-written subheading or hint classes.
 - A new density or layout is a prop on the primitive, never a second component.
 - The primitives have no tests of their own beyond the open-and-remember rule of the section (`test/nuxt/components/Screen/SettingsSection.test.ts`); the seams that mount them cover them.
-- `ThemeDimensionTokenInput` and `UIOpacityInput` keep their own inputs: each is a value editor with its own unit and commit rule, not a settings number field. Event configuration pages and modals are outside this decision.
+- Event configuration pages and modals are outside this decision.
+- A bare `UInputNumber` under `app/components/Graphics/` or `app/components/Theme/` fails lint (`eslint.config.mjs`), so a new inspector or Theme field takes the shared number field.
+- A Theme dimension now steps and drags like every other number, so the Theme editor writes it once its edits pause, as it does a composite token, and an entry beyond its bounds is held at the bound rather than undone. A typography token's weight is a number stepping by 100 rather than a list.
+- A Source Item's corners are no longer set through the shared `borderRadius`: "All corners" writes each corner's own radius. A stored `borderRadius` still reads as the radius of every corner that names none.
+- The shared controls have no tests of their own; the Theme editor's page test and the inspector's, Source Item's and settings' tests cover them where they are mounted.
 
 ### Rejected alternatives
 

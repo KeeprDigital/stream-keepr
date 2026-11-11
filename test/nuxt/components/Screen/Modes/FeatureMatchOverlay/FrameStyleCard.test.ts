@@ -134,7 +134,6 @@ async function mountComponent(options: Partial<{
 				ScreenSettingsSection: ControlSectionStub,
 				USwitch: USwitchStub,
 				UButton: defineComponent({ template: '<button type="button"><slot /></button>' }),
-				UIOpacityInput: defineComponent({ template: '<input />' }),
 				UBadge: defineComponent({
 					props: {
 						label: { type: String, required: false },

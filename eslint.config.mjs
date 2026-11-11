@@ -41,6 +41,14 @@ const pageSizeFieldSyntax = [
 	{ selector: 'MemberExpression[property.name=/^(?:pageSize|\\w+PerPage)$/]:matches([object.name=\'config\'], [object.property.name=/^(?:value|config)$/])', message: pageSizeFieldMessage },
 	{ selector: 'VariableDeclarator:not([init.callee.name=/^use\\w+ModeData$/]) > ObjectPattern > Property[key.name=/^(?:pageSize|\\w+PerPage)$/]', message: pageSizeFieldMessage },
 ];
+// #1102: the graphics inspector and the Theme editor share one number field (GraphicsNumberField,
+// which GraphicsOpacityField and every shared field control build on).
+const sharedFieldTemplateSyntax = [
+	'DebuggerStatement',
+	'LabeledStatement',
+	'WithStatement',
+	{ selector: 'VElement[rawName=/^(?:UInputNumber|u-input-number)$/]', message: 'Use GraphicsNumberField (or GraphicsOpacityField), the one number field the inspector and the Theme editor share.' },
+];
 const compositorPanelSyntax = [
 	{ selector: 'CallExpression[callee.name=\'emit\'][arguments.0.value=\'update:graphics\']:not(CallExpression[callee.name=\'useCompositorEditing\'] CallExpression)', message: 'Commit the stack only through useCompositorEditing.' },
 	{ selector: 'Identifier[name=\'replaceBroadcastGraphic\']', message: 'Stack replacement belongs to the compositor editing module.' },
@@ -242,11 +250,18 @@ export default withNuxt(
 		},
 	},
 	{
+		files: ['app/components/Graphics/**/*.vue', 'app/components/Theme/**/*.vue'],
+		rules: {
+			'vue/no-restricted-syntax': ['error', ...sharedFieldTemplateSyntax],
+		},
+	},
+	{
 		files: ['app/components/Graphics/Compositor/**/*.vue'],
 		rules: {
 			'no-restricted-syntax': ['error', ...compositorPanelSyntax],
 			'vue/no-restricted-syntax': [
 				'error',
+				...sharedFieldTemplateSyntax,
 				{
 					selector: 'CallExpression[callee.name=/^\\$?emit$/][arguments.0.value=\'update:graphics\'][arguments.1.name!=\'$event\']',
 					message: 'A template may only forward a child\'s update:graphics $event unchanged.',
