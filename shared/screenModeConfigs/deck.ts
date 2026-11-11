@@ -128,19 +128,42 @@ export const DEFAULT_DECK_BOARD_LAYOUT: ResolvedMainboardLayout = {
 	alignment: 'center',
 };
 
-const DEFAULT_SIDEBOARD_LAYOUT: ResolvedSideboardLayout = {
-	...DEFAULT_DECK_BOARD_LAYOUT,
+/** The sideboard's own fields: it never takes these from the mainboard (#1091). */
+type SideboardOwnFields = Pick<ResolvedSideboardLayout, 'view' | 'stackReveal'>;
+
+const DEFAULT_SIDEBOARD_OWN_FIELDS: SideboardOwnFields = {
 	view: 'stack',
 	// About the former 15% of a medium card's height.
 	stackReveal: 30,
 };
+
+const DEFAULT_SIDEBOARD_LAYOUT: ResolvedSideboardLayout = {
+	...DEFAULT_DECK_BOARD_LAYOUT,
+	...DEFAULT_SIDEBOARD_OWN_FIELDS,
+};
+
+/**
+ * Whether a stored sideboard block holds a layout of its own: it names a
+ * layout value, not only its view and reveal. A block an editor writes whole
+ * always names its alignment and list columns, so a layout of all Auto Card
+ * Layout values is still its own.
+ */
+function sideboardStoresOwnLayout(block: Partial<SideboardLayout> | undefined): boolean {
+	return Object.entries(block ?? {})
+		.some(([key, value]) => key !== 'view' && key !== 'stackReveal' && value !== undefined);
+}
+
+/** A resolved sideboard's own view and reveal, as a sideboard following the mainboard stores them. */
+export function sideboardOwnFields(sideboard: ResolvedSideboardLayout): SideboardOwnFields {
+	return { view: sideboard.view, stackReveal: sideboard.stackReveal };
+}
 
 /**
  * A board's layout block with an editor's `patch` applied, as its next write
  * stores it whole: a Card Layout value patched to `null` is Auto, so its key
  * is left out.
  */
-export function patchedBoardLayout<Layout extends ResolvedDeckBoardLayout>(
+export function patchedBoardLayout<Layout extends Partial<ResolvedSideboardLayout>>(
 	layout: Layout,
 	patch: { [Key in keyof ResolvedSideboardLayout]?: ResolvedSideboardLayout[Key] | null },
 ): Layout {
@@ -229,7 +252,8 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	board: DEFAULT_BOARD,
 	sideboardPlacement: DEFAULT_SIDEBOARD_PLACEMENT,
 	mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT },
-	sideboard: { ...DEFAULT_SIDEBOARD_LAYOUT },
+	// Its own fields alone: it follows the mainboard's layout until customised (#1091).
+	sideboard: { ...DEFAULT_SIDEBOARD_OWN_FIELDS },
 	showQuantities: true,
 	showPlayerName: true,
 	showDeckName: true,
@@ -281,6 +305,8 @@ export interface ResolvedDeckBoards {
 	sideboardPlacement: SideboardPlacement;
 	mainboard: ResolvedMainboardLayout;
 	sideboard: ResolvedSideboardLayout;
+	/** Whether the sideboard holds its own layout; otherwise it takes the mainboard's (#1091). */
+	sideboardCustomised: boolean;
 }
 
 /**
@@ -290,12 +316,16 @@ export interface ResolvedDeckBoards {
  * through this rather than reading the fragments directly. A mainboard stack,
  * which only a client from before ADR-0054 could still write, reads as
  * a grid (ADR-0054), so neither a rendering nor the next board write carries it.
+ * A sideboard naming no layout value takes the mainboard's layout values, and
+ * keeps its own view and reveal (#1091).
  */
 export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeckBoards {
 	const mainboard = {
 		...DEFAULT_DECK_BOARD_LAYOUT,
 		...config.mainboard,
 	};
+	const sideboardCustomised = sideboardStoresOwnLayout(config.sideboard);
+	const { view: _mainboardView, ...mainboardLayoutValues } = mainboard;
 	return {
 		board: config.board ?? DEFAULT_BOARD,
 		sideboardPlacement: config.sideboardPlacement ?? DEFAULT_SIDEBOARD_PLACEMENT,
@@ -305,9 +335,16 @@ export function resolveDeckBoards(config: Partial<DeckModeConfig>): ResolvedDeck
 				? mainboard.view
 				: 'grid',
 		},
-		sideboard: {
-			...DEFAULT_SIDEBOARD_LAYOUT,
-			...config.sideboard,
-		},
+		sideboard: sideboardCustomised
+			? {
+					...DEFAULT_SIDEBOARD_LAYOUT,
+					...config.sideboard,
+				}
+			: {
+					...mainboardLayoutValues,
+					view: config.sideboard?.view ?? DEFAULT_SIDEBOARD_OWN_FIELDS.view,
+					stackReveal: config.sideboard?.stackReveal ?? DEFAULT_SIDEBOARD_OWN_FIELDS.stackReveal,
+				},
+		sideboardCustomised,
 	};
 }

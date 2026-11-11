@@ -3,7 +3,7 @@ import type { BoardSelection, SideboardPlacement, SideboardView } from '~~/share
 import type { ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
-import { DECK_SIDEBOARD_LAYOUT_FIELDS, patchedBoardLayout } from '~~/shared/screenModeConfigs/deck';
+import { DECK_SIDEBOARD_LAYOUT_FIELDS, patchedBoardLayout, sideboardOwnFields } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
@@ -79,6 +79,8 @@ interface BoardSection {
 	view: SideboardView;
 	/** Whether the Screen shows the board; the last one shown cannot be hidden. */
 	shown: boolean;
+	/** Whether the board takes the mainboard's layout values: only an uncustomised sideboard does (#1091). */
+	followsMainboard: boolean;
 }
 
 // Each board is shown or hidden on its own card. `board` stores the pair, so
@@ -137,6 +139,7 @@ const boardSections = computed<BoardSection[]>(() => {
 			viewTabs: mainboardViewTabs,
 			view: mainboard.view,
 			shown: mainboardShown.value,
+			followsMainboard: false,
 		},
 		{
 			key: 'sideboard',
@@ -147,15 +150,31 @@ const boardSections = computed<BoardSection[]>(() => {
 				? 'grid'
 				: sideboard.view,
 			shown: sideboardShown.value,
+			followsMainboard: !resolvedBoards.value.sideboardCustomised,
 		},
 	];
 });
 
 // The mode-config PATCH replaces a board block wholesale, so every knob change
-// writes the complete resolved block back, an Auto value as its absent key.
+// writes the complete resolved block back, an Auto value as its absent key. A
+// sideboard following the mainboard writes back only its own view and reveal,
+// so it keeps following (#1091).
 function updateBoardLayout(key: BoardKey, patch: Parameters<typeof patchedBoardLayout>[1]) {
+	const { sideboard, sideboardCustomised } = resolvedBoards.value;
 	updateConfig({
-		[key]: patchedBoardLayout(resolvedBoards.value[key], patch),
+		[key]: patchedBoardLayout(key === 'sideboard' && !sideboardCustomised
+			? sideboardOwnFields(sideboard)
+			: resolvedBoards.value[key], patch),
+	});
+}
+
+/** Customise stores the mainboard's layout values as the sideboard's own; following again keeps only its view and reveal. */
+function setSideboardFollowsMainboard(follows: boolean) {
+	const { sideboard } = resolvedBoards.value;
+	updateConfig({
+		sideboard: follows
+			? sideboardOwnFields(sideboard)
+			: patchedBoardLayout(sideboard, {}),
 	});
 }
 
@@ -244,9 +263,11 @@ function boardSummary(section: BoardSection): string {
 		return 'Hidden';
 	return settingsSummary([
 		BOARD_VIEW_LABELS[section.view],
-		section.view !== 'list' && cardLayoutSummary(section.view === 'stack'
-			? { maxCardSize: section.layout.maxCardSize }
-			: section.layout),
+		section.followsMainboard
+			? 'Mainboard\'s layout'
+			: section.view !== 'list' && cardLayoutSummary(section.view === 'stack'
+				? { maxCardSize: section.layout.maxCardSize }
+				: section.layout),
 	]);
 }
 
@@ -428,8 +449,37 @@ const badgesSummary = computed(() => {
 
 				<USeparator />
 
+				<div
+					v-if="section.key === 'sideboard'"
+					:data-board-layout="section.followsMainboard ? 'mainboard' : 'own'"
+					class="flex items-center justify-between gap-3"
+				>
+					<ScreenSettingsHint>
+						{{ section.followsMainboard
+							? 'Uses the mainboard\'s layout.'
+							: 'Has its own layout.' }}
+					</ScreenSettingsHint>
+					<UButton
+						size="xs"
+						color="neutral"
+						variant="outline"
+						:label="section.followsMainboard ? 'Customise' : 'Use mainboard\'s'"
+						@click="setSideboardFollowsMainboard(!section.followsMainboard)"
+					/>
+				</div>
+
+				<template v-if="section.followsMainboard">
+					<ScreenConfigField
+						v-if="section.view === 'stack'"
+						:field="boardFields.stackReveal"
+						:model-value="resolvedBoards.sideboard.stackReveal"
+						description="How much of each stacked card but the last shows, in px."
+						@update:model-value="$event !== null && updateBoardLayout(section.key, { stackReveal: Number($event) })"
+					/>
+				</template>
+
 				<ScreenCardGridLayoutFields
-					v-if="section.view !== 'list'"
+					v-else-if="section.view !== 'list'"
 					:view="section.view"
 					:layout="section.layout"
 					:fields="boardFields"

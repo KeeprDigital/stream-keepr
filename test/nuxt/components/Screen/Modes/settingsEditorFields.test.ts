@@ -57,7 +57,8 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 		editor: 'Card',
 		variants: [{}],
 	},
-	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard.
+	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard
+	// following its layout; a customised Sideboard shows its own layout fields (#1091).
 	'deck': {
 		editor: 'Deck',
 		variants: [
@@ -65,6 +66,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 			{
 				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' },
 				sideboard: {
+					...DEFAULT_DECK_BOARD_LAYOUT,
 					...getDefaultConfigForMode('deck').sideboard,
 					view: 'grid',
 				},
@@ -72,6 +74,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 			{
 				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'grid' },
 				sideboard: {
+					...DEFAULT_DECK_BOARD_LAYOUT,
 					...getDefaultConfigForMode('deck').sideboard,
 					view: 'list',
 				},

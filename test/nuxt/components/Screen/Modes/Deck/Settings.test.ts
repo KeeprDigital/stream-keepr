@@ -249,6 +249,10 @@ function boardCard(wrapper: Awaited<ReturnType<typeof mountComponent>>, title: '
 	return card(wrapper, title);
 }
 
+function buttonNamed(within: ReturnType<typeof boardCard>, name: string) {
+	return within.findAll('button').find(button => button.text() === name)!;
+}
+
 function sectionTitles(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 	return settingsLayout(wrapper).map(entry => entry.title);
 }
@@ -666,6 +670,110 @@ describe('screenDeckSettings', () => {
 				stackReveal: 30,
 			},
 		});
+	});
+
+	// A sideboard naming no layout value of its own takes the mainboard's (#1091): it offers
+	// its own view and reveal, and Customise, which writes the mainboard's values as its own.
+	it.each([
+		{
+			name: 'a stacked sideboard following the mainboard',
+			sideboard: { view: 'stack', stackReveal: 40 },
+			follows: true,
+			fields: [
+				'sideboardPlacement',
+				'showCompanion',
+				'view',
+				'stackReveal',
+			],
+			summary: 'Stack · Mainboard\'s layout',
+		},
+		{
+			name: 'a grid sideboard following the mainboard',
+			sideboard: { view: 'grid' },
+			follows: true,
+			fields: ['sideboardPlacement', 'showCompanion', 'view'],
+			summary: 'Grid · Mainboard\'s layout',
+		},
+		{
+			name: 'a customised sideboard',
+			sideboard: { view: 'grid', columns: 3 },
+			follows: false,
+			fields: [
+				'sideboardPlacement',
+				'showCompanion',
+				'view',
+				'alignment',
+				'maxCardSize',
+				'columns',
+				'cardGap',
+			],
+			summary: 'Grid · 3 columns',
+		},
+	])('lays out $name', async ({ sideboard, follows, fields, summary }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			sideboard,
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		const sideboardCard = boardCard(wrapper, 'Sideboard');
+		expect(sideboardCard.findAll('[data-config-field]').map(field => field.attributes('data-config-field'))).toEqual(fields);
+		expect(sideboardCard.get('[data-board-layout]').attributes('data-board-layout')).toBe(follows ? 'mainboard' : 'own');
+		expect(sideboardCard.findAll('button').map(button => button.text())).toContain(follows ? 'Customise' : 'Use mainboard\'s');
+		expect(settingsSummaries(wrapper)['deck:sideboard']).toBe(summary);
+	});
+
+	// What each sideboard layout edit stores: following, only its own view and reveal; customised, its whole block.
+	it.each([
+		{
+			name: 'Customise writes the mainboard\'s layout values as the sideboard\'s own',
+			sideboard: { view: 'stack', stackReveal: 40 },
+			edit: (sideboard: ReturnType<typeof boardCard>) => buttonNamed(sideboard, 'Customise').trigger('click'),
+			written: {
+				view: 'stack',
+				stackReveal: 40,
+				columns: 4,
+				listColumns: 2,
+				maxCardSize: 144,
+				cardGap: 8,
+				alignment: 'center',
+			},
+		},
+		{
+			name: 'Use mainboard\'s keeps only the sideboard\'s view and reveal',
+			sideboard: {
+				view: 'stack',
+				stackReveal: 40,
+				columns: 3,
+				alignment: 'top',
+			},
+			edit: (sideboard: ReturnType<typeof boardCard>) => buttonNamed(sideboard, 'Use mainboard\'s').trigger('click'),
+			written: { view: 'stack', stackReveal: 40 },
+		},
+		{
+			name: 'a following sideboard\'s view change stays following',
+			sideboard: { view: 'stack', stackReveal: 40 },
+			edit: (sideboard: ReturnType<typeof boardCard>) => sideboard.findAll('[data-testid="segmented-tab"]').find(tab => tab.attributes('data-value') === 'list')!.trigger('click'),
+			written: { view: 'list', stackReveal: 40 },
+		},
+		{
+			name: 'a following sideboard\'s stack reveal stays following',
+			sideboard: { view: 'stack' },
+			edit: (sideboard: ReturnType<typeof boardCard>) => sideboard.get('[data-label="Stack Reveal"]').getComponent(UInputNumberStub).vm.$emit('update:modelValue', 60),
+			written: { view: 'stack', stackReveal: 60 },
+		},
+	])('$name', async ({ sideboard, edit, written }) => {
+		mockConfig.value = {
+			...defaultDeckConfig(),
+			sideboard,
+		};
+		const wrapper = await mountComponent();
+		await flushPromises();
+
+		await edit(boardCard(wrapper, 'Sideboard'));
+
+		expect(mockUpdateConfig).toHaveBeenLastCalledWith({ sideboard: written });
 	});
 
 	// An emptied value is Auto: the block is written without it.
