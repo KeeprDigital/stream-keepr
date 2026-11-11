@@ -145,6 +145,7 @@ async function mountEditor(editor: string) {
 				UInput: clearableStub(''),
 				USelect: clearableStub(null),
 				USelectMenu: clearableStub(null),
+				UInputMenu: clearableStub(null),
 				UInputNumber: true,
 				USwitch: true,
 				UButton: true,
@@ -171,7 +172,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		[
 			['Archetype filter', 'archetypeFilter', 'Rakdos Midrange'],
 			['Custom header text', 'headerText', 'Day 2 Metagame'],
-			['Select list', 'playerListId', 7],
+			['Player List', 'playerListId', 7],
 		],
 	],
 	[
@@ -181,7 +182,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		[
 			['Archetype filter', 'archetypeFilter', 'Azorius Control'],
 			['Custom header text', 'headerText', 'Top Cards'],
-			['Select list', 'playerListId', 7],
+			['Player List', 'playerListId', 7],
 		],
 	],
 	[
@@ -190,7 +191,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		{ viewMode: 'watchlist' },
 		[
 			['Custom header text', 'headerText', 'Final Standings'],
-			['Select list', 'playerListId', 7],
+			['Player List', 'playerListId', 7],
 		],
 	],
 	[
@@ -264,7 +265,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		[
 			['Custom header text', 'headerText', 'Deck to Beat'],
 			['Archetype', 'archetypeId', 4],
-			['Select list', 'playerListId', 7],
+			['Player List', 'playerListId', 7],
 		],
 	],
 ])('the %s settings editor', (editor, mode, variant, fields) => {

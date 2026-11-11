@@ -589,8 +589,8 @@ interface InputMenuItemLike {
 /**
  * A `<input role="combobox">` for the search term over `<button role="option">`s, one per item;
  * clicking one emits its `value-key` value (else the item). Without `ignore-filter` it filters by
- * label, as `UInputMenu` does. Kept out of `nuxtUiStubs`, which suites rendering the real menu
- * spread: pass `{ ...nuxtUiStubs, UInputMenu: UInputMenuStub }`.
+ * label, as `UInputMenu` does. With `clear`, a held value shows a "Clear" button emitting `null`.
+ * Kept out of `nuxtUiStubs`, which suites rendering the real menu spread: pass `{ ...nuxtUiStubs, UInputMenu: UInputMenuStub }`.
  */
 export const UInputMenuStub = defineComponent({
 	name: 'UInputMenu',
@@ -627,6 +627,7 @@ export const UInputMenuStub = defineComponent({
 	template: `<div>
 		<input v-bind="$attrs" role="combobox" :aria-label="placeholder" :value="term" @input="term = $event.target.value; $emit('update:searchTerm', term)">
 		<button v-for="(item, index) in shown" :key="index" type="button" role="option" @click="$emit('update:modelValue', valueKey ? item[valueKey] : item)">{{ item.label }}</button>
+		<button v-if="clear && modelValue != null" type="button" aria-label="Clear" @click="$emit('update:modelValue', null)" />
 	</div>`,
 });
 

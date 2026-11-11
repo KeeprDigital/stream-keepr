@@ -950,7 +950,7 @@ describe('screenDeckSettings on a One Piece Card Game Event', () => {
 		await flushPromises();
 
 		await wrapper.get('[data-testid="source-tabs"] [data-value="player"]').trigger('click');
-		await wrapper.get('[data-testid="deck-source-player"]').setValue(search);
+		await wrapper.get('[data-testid="deck-source-player"] [role="combobox"]').setValue(search);
 		const options = card(wrapper, 'Deck Source').findAll('[role="option"]');
 		expect(options.map(option => option.text())).toEqual(['zoro_main']);
 		await options[0]!.trigger('click');

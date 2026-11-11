@@ -4,7 +4,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
-import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { nuxtUiStubs, UInputMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/HeadToHead/Settings.vue';
 
@@ -56,7 +56,7 @@ const USelectStub = defineComponent({
 	emits: ['update:modelValue'],
 	setup(props, { attrs, emit }) {
 		return () => h('select', {
-			'data-testid': attrs['data-testid'],
+			'data-testid': attrs['data-testid'] ?? 'select',
 			'data-values': JSON.stringify((props.items as { value: unknown }[] | undefined ?? []).map(item => item.value)),
 			'data-value': JSON.stringify(props.modelValue ?? null),
 			'onChange': (event: Event) => emit('update:modelValue', JSON.parse((event.target as HTMLSelectElement).dataset.pick!)),
@@ -75,6 +75,7 @@ async function mountComponent(themeOverrides: Record<string, unknown> = {}) {
 				...nuxtUiStubs,
 				...screenSettingsLayoutStubs,
 				USelect: USelectStub,
+				UInputMenu: UInputMenuStub,
 			},
 		},
 	});
@@ -86,7 +87,7 @@ async function mountComponent(themeOverrides: Record<string, unknown> = {}) {
 async function pick(wrapper: Awaited<ReturnType<typeof mountComponent>>, target: string, value: unknown) {
 	const select = wrapper.get(target.startsWith('[')
 		? `${target} select`
-		: `[data-testid="${target}"]`);
+		: `[data-testid="${target}"] select`);
 	(select.element as unknown as HTMLElement).dataset.pick = JSON.stringify(value);
 	await select.trigger('change');
 }
@@ -103,7 +104,7 @@ describe('screenHeadToHeadSettings', () => {
 	it('binds the Screen to a Feature Match Slot of the Event', async () => {
 		const wrapper = await mountComponent();
 
-		expect(JSON.parse(wrapper.get('[data-testid="head-to-head-slot"]').attributes('data-values')!)).toEqual([4, 5]);
+		expect(JSON.parse(wrapper.get('[data-testid="head-to-head-slot"] select').attributes('data-values')!)).toEqual([null, 4, 5]);
 		expect(wrapper.find('[data-testid="head-to-head-player-1"]').exists()).toBe(false);
 
 		await pick(wrapper, 'head-to-head-slot', 5);
@@ -120,11 +121,12 @@ describe('screenHeadToHeadSettings', () => {
 		await flushPromises();
 
 		expect(wrapper.find('[data-testid="head-to-head-slot"]').exists()).toBe(false);
+		const options = (testId: string) => wrapper.findAll(`[data-testid="${testId}"] [role="option"]`);
 		for (const testId of ['head-to-head-player-1', 'head-to-head-player-2'])
-			expect(JSON.parse(wrapper.get(`[data-testid="${testId}"]`).attributes('data-values')!)).toEqual([null, 7, 8]);
+			expect(options(testId).map(option => option.text())).toEqual(['Nadia Rivers', 'Oskar Lind']);
 
-		await pick(wrapper, 'head-to-head-player-1', 8);
-		await pick(wrapper, 'head-to-head-player-2', 7);
+		await options('head-to-head-player-1')[1]!.trigger('click');
+		await options('head-to-head-player-2')[0]!.trigger('click');
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ player1Id: 8 });
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ player2Id: 7 });
@@ -137,7 +139,7 @@ describe('screenHeadToHeadSettings', () => {
 		mockConfig.value = { ...mockConfig.value, playerSource: 'players', player1Id: 7 };
 		const wrapper = await mountComponent();
 
-		await pick(wrapper, 'head-to-head-player-1', null);
+		await wrapper.get('[data-testid="head-to-head-player-1"] [aria-label="Clear"]').trigger('click');
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ player1Id: null });
 	});

@@ -4,7 +4,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
-import { nuxtUiStubs, USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { nuxtUiStubs, UInputMenuStub, USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { screenSettingsLayoutStubs, settingsLayout, settingsSummaries } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import Settings from '~/components/Screen/Modes/PlayerHistory/Settings.vue';
 
@@ -67,6 +67,7 @@ async function mountComponent(themeOverrides: Record<string, unknown> = {}) {
 				...screenSettingsLayoutStubs,
 				USwitch: USwitchStub,
 				USelect: USelectStub,
+				UInputMenu: UInputMenuStub,
 				UIcon: true,
 			},
 		},
@@ -168,7 +169,7 @@ describe('screenPlayerHistorySettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		await wrapper.get('[data-settings-card="player-history:data"] select').setValue('5');
+		await wrapper.get('[data-settings-card="player-history:data"] [role="option"]').trigger('click');
 
 		expect(mockUpdateConfig).toHaveBeenCalledWith({ playerId: 5, currentPage: 1 });
 	});

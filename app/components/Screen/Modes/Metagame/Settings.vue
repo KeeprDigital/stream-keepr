@@ -16,7 +16,6 @@ import { screenModeConfigContract } from '~~/shared/screenModes';
 import { isMetagameColumnOffered, isMetagameSortOffered } from '~~/shared/utils/metagame';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
 import { columnsSummary, FOLLOWS_THE_THEME, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
-import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -37,23 +36,9 @@ defineExpose({ resetConfig, saving });
 // Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
 const fields = screenModeConfigContract('metagame').fields;
 
-const playerListStore = usePlayerListStore();
 const eventStore = useEventStore();
 // The Event's Card Game decides what its Metagame reads (ADR-0074).
 const game = computed(() => eventStore.event?.game);
-
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['playerLists']);
-
-onMounted(async () => {
-	if (!props.eventId) {
-		return;
-	}
-
-	if (!playerListStore.isLoaded) {
-		await playerListStore.loadByEventId(props.eventId);
-	}
-});
 
 const viewModeOptions = [
 	{ label: 'Archetypes', value: 'archetype' },
@@ -193,6 +178,7 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 			<ScreenMetagameScopeFields
 				:config="config"
 				:fields="fields"
+				:event-id="eventId"
 				description="Which players to include in the breakdown."
 				:show-archetype-filter="config.viewMode === 'cards'"
 				@update="updateConfig({ ...$event, currentPage: 1 })"
