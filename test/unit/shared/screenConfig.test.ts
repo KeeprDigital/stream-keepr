@@ -1,3 +1,4 @@
+import type { DeckModeConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
 	DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
@@ -99,27 +100,110 @@ describe('resolveDeckBoards', () => {
 		expect(resolved.sideboard.view).toBe('stack');
 	});
 
-	it('resolves an empty config to the defaults', () => {
+	it('resolves an empty config to the defaults: a grid mainboard, and a stacked sideboard following it', () => {
 		expect(resolveDeckBoards({})).toEqual({
 			board: 'full',
 			sideboardPlacement: 'beside',
-			mainboard: getDefaultConfigForMode('deck').mainboard,
-			sideboard: getDefaultConfigForMode('deck').sideboard,
+			mainboard: { view: 'grid', listColumns: 2, alignment: 'center' },
+			sideboard: {
+				view: 'stack',
+				stackReveal: 30,
+				listColumns: 2,
+				alignment: 'center',
+			},
+			sideboardCustomised: false,
 		});
 	});
 
-	it('completes a partial board block from its default block', () => {
+	// The sideboard takes the mainboard's layout values unless its block names one of its own;
+	// its view and stack reveal are always its own (#1091).
+	it.each([
+		{
+			name: 'a sideboard naming no layout value takes the mainboard\'s, and keeps its own view and reveal',
+			sideboard: { view: 'grid', stackReveal: 50 },
+			reads: {
+				view: 'grid',
+				stackReveal: 50,
+				columns: 6,
+				maxCardSize: 200,
+				cardGap: 4,
+				listColumns: 3,
+				alignment: 'top',
+			},
+			customised: false,
+		},
+		{
+			name: 'an absent sideboard takes the mainboard\'s layout, as a stack with the default reveal',
+			sideboard: undefined,
+			reads: {
+				view: 'stack',
+				stackReveal: 30,
+				columns: 6,
+				maxCardSize: 200,
+				cardGap: 4,
+				listColumns: 3,
+				alignment: 'top',
+			},
+			customised: false,
+		},
+		{
+			name: 'a stored block naming a layout value is its own, completed from the defaults',
+			sideboard: { view: 'grid', columns: 2 },
+			reads: {
+				view: 'grid',
+				stackReveal: 30,
+				columns: 2,
+				listColumns: 2,
+				alignment: 'center',
+			},
+			customised: true,
+		},
+		{
+			name: 'a block an editor wrote is its own, every Card Layout value Auto included',
+			sideboard: {
+				view: 'stack',
+				stackReveal: 30,
+				listColumns: 2,
+				alignment: 'center',
+			},
+			reads: {
+				view: 'stack',
+				stackReveal: 30,
+				listColumns: 2,
+				alignment: 'center',
+			},
+			customised: true,
+		},
+	])('$name', ({ sideboard, reads, customised }) => {
+		const resolved = resolveDeckBoards({
+			mainboard: {
+				view: 'list',
+				columns: 6,
+				maxCardSize: 200,
+				cardGap: 4,
+				listColumns: 3,
+				alignment: 'top',
+			},
+			sideboard,
+		} as Partial<DeckModeConfig>);
+
+		expect(resolved.sideboard).toEqual(reads);
+		expect(resolved.sideboardCustomised).toBe(customised);
+	});
+
+	it('completes a partial mainboard block from its default block', () => {
 		const resolved = resolveDeckBoards({
 			board: 'sideboard',
-			sideboard: { columns: 6 },
+			mainboard: { columns: 6 },
 		});
 
 		expect(resolved.board).toBe('sideboard');
-		expect(resolved.sideboard).toEqual({
-			...getDefaultConfigForMode('deck').sideboard,
+		expect(resolved.mainboard).toEqual({
+			view: 'grid',
 			columns: 6,
+			listColumns: 2,
+			alignment: 'center',
 		});
-		expect(resolved.mainboard).toEqual(getDefaultConfigForMode('deck').mainboard);
 	});
 });
 

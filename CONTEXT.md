@@ -271,7 +271,7 @@ A Screen Output that renders the final composed opacity as a grayscale alpha mat
 _Avoid_: Black-and-white export, chroma key.
 
 **Card Layout**:
-How a card grid on a Most Played Cards Screen or a Deck List board lays out its cards: columns, max card size and gap, each a number or Auto. The cards always fit the space the grid is given, so none leave the Event Canvas. Auto columns are the count at which the cards are largest, a max card size is the widest a card may be, and an Auto gap follows the card's size, as an Auto card badge size does. A Deck's boards share one card size (ADR-0054).
+How a card grid on a Most Played Cards Screen or a Deck List board lays out its cards: columns, max card size and gap, each a number or Auto. The cards always fit the space the grid is given, so none leave the Event Canvas. Auto columns are the count at which the cards are largest, a max card size is the widest a card may be, and an Auto gap follows the card's size, as an Auto card badge size does. A Deck's boards share one card size, and its Sideboard takes the Mainboard's Card Layout and alignment unless customised, keeping its own view and stack reveal (ADR-0054).
 _Avoid_: Card Sizing, Fit, Fixed width, auto columns, card width, dynamic card size.
 
 **Program monitor**:

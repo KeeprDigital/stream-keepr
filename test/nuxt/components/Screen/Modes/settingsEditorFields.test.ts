@@ -57,24 +57,19 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 		editor: 'Card',
 		variants: [{}],
 	},
-	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard.
+	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard
+	// following its layout; a customised Sideboard shows its own layout fields (#1091).
 	'deck': {
 		editor: 'Deck',
 		variants: [
 			{},
 			{
 				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' },
-				sideboard: {
-					...getDefaultConfigForMode('deck').sideboard,
-					view: 'grid',
-				},
+				sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, ...getDefaultConfigForMode('deck').sideboard, view: 'grid' },
 			},
 			{
 				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'grid' },
-				sideboard: {
-					...getDefaultConfigForMode('deck').sideboard,
-					view: 'list',
-				},
+				sideboard: { ...DEFAULT_DECK_BOARD_LAYOUT, ...getDefaultConfigForMode('deck').sideboard, view: 'list' },
 			},
 		],
 		// A Slot side's OP Deck List: its Mainboard, cost curve and badges.
