@@ -360,6 +360,11 @@ describe('a Theme Token write', () => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, dropped: true });
 	});
 
+	// A table's max width is its mode's config (#1081).
+	it.each(['standings.max-width', 'metagame.max-width'])('accepts %s, once a Mode Token, and drops it', (name) => {
+		expect(parseThemeTokenWrite(name, 1200)).toEqual({ ok: true, dropped: true });
+	});
+
 	// The table modes' type and shared chrome read Foundation Tokens (#1077).
 	const SHARED_CHROME = [
 		'surface',

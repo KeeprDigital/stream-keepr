@@ -246,6 +246,15 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 				@update:model-value="updateConfig({ showArchetypeColors: $event === true })"
 			/>
 
+			<ScreenConfigField
+				:field="fields.maxWidth"
+				:model-value="config.maxWidth"
+				description="The widest the table runs, centred. Leave empty to fill the Screen."
+				placeholder="Auto"
+				nullable
+				@update:model-value="updateConfig({ maxWidth: $event })"
+			/>
+
 			<UAlert
 				v-if="warnsPositionChangeHasNoData"
 				data-testid="position-change-no-data"

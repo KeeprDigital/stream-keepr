@@ -136,6 +136,17 @@ describe('screenStandingsDisplay', () => {
 		];
 	});
 
+	// Auto fills the Screen; a set max width caps the content, in Event Canvas pixels.
+	it.each([
+		['Auto', undefined, ''],
+		['a set max width', 1200, '1200px'],
+	])('runs as wide as %s allows', async (_case, maxWidth, painted) => {
+		config.value = { ...config.value, maxWidth };
+		const wrapper = await mountComponent();
+
+		expect((wrapper.get('[data-testid="standings-content"]').element as HTMLElement).style.maxWidth).toBe(painted);
+	});
+
 	it('renders deck text without archetype colors when toggled off', async () => {
 		const wrapper = await mountComponent();
 

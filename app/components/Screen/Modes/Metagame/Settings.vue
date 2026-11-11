@@ -15,7 +15,7 @@ import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { isMetagameColumnOffered, isMetagameSortOffered } from '~~/shared/utils/metagame';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
-import { columnsSummary, FOLLOWS_THE_THEME, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { columnsSummary, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -166,9 +166,9 @@ const tableSummary = computed(() => settingsSummary([
 	columnsSummary(activeColumns.value),
 	look('table'),
 ]));
-const sizeAndSurfaceSummary = computed(() => settingsSummary([
-	look('size-and-surface'),
-], FOLLOWS_THE_THEME));
+const sizeSummary = computed(() => config.value.maxWidth === undefined
+	? 'Auto width'
+	: `Up to ${config.value.maxWidth} px wide`);
 const headerCardSummary = computed(() => headerSummary(config.value));
 const paginationCardSummary = computed(() => paginationSummary(rotation));
 </script>
@@ -269,12 +269,18 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection
-			id="metagame:size-and-surface"
-			title="Size & Surface"
-			subtitle="How wide the table or chart runs, and what it sits on."
-			:summary="sizeAndSurfaceSummary"
+			id="metagame:size"
+			title="Size"
+			:summary="sizeSummary"
 		>
-			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="size-and-surface" />
+			<ScreenConfigField
+				:field="fields.maxWidth"
+				:model-value="config.maxWidth"
+				description="The widest the table or chart runs, centred. Leave empty to fill the Screen."
+				placeholder="Auto"
+				nullable
+				@update:model-value="updateConfig({ maxWidth: $event })"
+			/>
 		</ScreenSettingsSection>
 
 		<ScreenHeaderSettingsCard

@@ -138,3 +138,12 @@ export const DEFAULT_CARD_LAYOUT = {
 	maxCardSize: undefined,
 	cardGap: undefined,
 } as const;
+
+/**
+ * The widest a table mode's content runs, in Event Canvas pixels, under the name
+ * `maxWidth`. Absent is Auto: the content fills its Screen.
+ */
+export const tableMaxWidthField = editorField(
+	z.number().int().min(EVENT_CANVAS_SIDE_BOUNDS.min).max(EVENT_CANVAS_SIDE_BOUNDS.max).optional(),
+	{ label: 'Max width' },
+);

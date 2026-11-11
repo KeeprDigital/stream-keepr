@@ -7,7 +7,7 @@ import {
 } from '../types/enums';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
-import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationPageSize, pageRotationShape } from './subShapes';
+import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_PAGE_ROTATION, headerConfigShape, pageRotationPageSize, pageRotationShape, tableMaxWidthField } from './subShapes';
 
 /** What the Top N count read as while a Screen stored none. */
 const FORMER_TOP_N_COUNT_DEFAULT = 8;
@@ -53,6 +53,9 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	showArchetypeColors: editorField(z.boolean(), { label: 'Show Archetype Colors' }),
 	roundId: z.number().int().positive().optional(),
 
+	// The widest the table runs, centred, in Event Canvas pixels. Absent is Auto: it fills its Screen.
+	maxWidth: tableMaxWidthField,
+
 	// Header
 	...headerConfigShape,
 
@@ -83,6 +86,7 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	],
 	showArchetypeColors: false,
 	roundId: undefined,
+	maxWidth: undefined,
 	...DEFAULT_HEADER_CONFIG,
 	rangeStart: 1,
 	rangeEnd: 16,
@@ -93,7 +97,8 @@ export const standingsModeConfigContract = defineScreenModeConfigContract({
 	rowsPerPage: 8,
 	...DEFAULT_PAGE_ROTATION,
 }, {
-	// The table's width and its rows' motion are the mode's Mode Tokens (#851).
+	// The rows' motion is the mode's Mode Token (#851). The width the table once held
+	// as `maxTableWidth` is not read back: its `maxWidth` starts at Auto (#1081).
 	// Reveal's trigger and interval were never read (#1064): the operator's `revealedCount` advances it.
 	// The Top N count and the slice pair became the one position range (#1080).
 	formerFields: [
