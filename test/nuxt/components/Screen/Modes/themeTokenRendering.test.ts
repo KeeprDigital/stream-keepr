@@ -1097,7 +1097,10 @@ describe('a Theme\'s shadow', () => {
 // bars grow and shrink on its rows' motion timing.
 describe('a Metagame Screen\'s chart', () => {
 	const SERIES = [
-		...CHART_SLOTS.map(slot => ({ token: `series-${slot}`, slot: String(slot) })),
+		...CHART_SLOTS.map(slot => ({
+			token: `series-${slot}`,
+			slot: String(slot),
+		})),
 		{ token: 'series-other', slot: 'other' },
 	];
 	const fill = (slot: string): Probe => ({
@@ -1124,8 +1127,20 @@ describe('a Metagame Screen\'s chart', () => {
 
 	// A former token is read by nothing, wherever it is still stored.
 	it.each([
-		['its Theme', { theme: { 'metagame.chart-series-1': 'rgb(9, 9, 9)' }, themeOverrides: {} }],
-		['its Screen Theme Overrides', { theme: {}, themeOverrides: { 'metagame.chart-series-1': 'rgb(9, 9, 9)' } }],
+		[
+			'its Theme',
+			{
+				theme: { 'metagame.chart-series-1': 'rgb(9, 9, 9)' },
+				themeOverrides: {},
+			},
+		],
+		[
+			'its Screen Theme Overrides',
+			{
+				theme: {},
+				themeOverrides: { 'metagame.chart-series-1': 'rgb(9, 9, 9)' },
+			},
+		],
 	])('ignores a former chart Mode Token stored in %s', async (_case, { theme, themeOverrides }) => {
 		const probe = fill('1');
 		await mountMode('metagame', { ...theme, 'series-1': 'rgb(12, 34, 56)' }, { config: probe.config, themeOverrides });
@@ -1149,14 +1164,14 @@ describe('a Metagame Screen\'s chart', () => {
 // A Mode Token defaulting to a Foundation Token, or to a composite whose colour
 // names one, follows a Theme setting only that Foundation Token.
 describe('a Foundation Token a Mode Token\'s default names', () => {
-	const CASES = [
+	const CASES: Array<{ mode: ScreenMode; token: string; part: string; probe: Probe }> = [
 		{
 			mode: 'feature-match-overlay',
 			token: 'surface',
 			part: 'a built-in preset\'s Frame',
 			probe: { selector: '.feature-match-overlay__frame-fill', attribute: 'fill' },
 		},
-	] satisfies Array<{ mode: ScreenMode; token: string; part: string; probe: Probe }>;
+	];
 
 	it.each(CASES)('restyles $part when a Theme sets $token', async ({ mode, token, probe }) => {
 		await mountMode(mode, { [token]: 'rgb(12, 34, 56)' }, { config: probe.config });

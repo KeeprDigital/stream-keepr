@@ -263,7 +263,10 @@ describe('a Theme\'s announcements', () => {
 
 		const answered = await set(theme.id, 'metagame.chart-series-1', '#ff0000');
 
-		expect(answered).toMatchObject({ revision: written.revision, tokens: { accent: '#123456' } });
+		expect(answered).toMatchObject({
+			revision: written.revision,
+			tokens: { accent: '#123456' },
+		});
 		expect(await storedTokens(theme.id)).toEqual({ accent: '#123456' });
 		expect(published).toEqual([]);
 	});

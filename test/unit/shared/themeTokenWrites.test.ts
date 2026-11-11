@@ -350,7 +350,11 @@ describe('a Theme Token write', () => {
 	// A former token is one its mode declared once: accepted whatever it holds, and never stored.
 	it.each([
 		['a value it once held', 'metagame.chart-series-1', '#ff0000'],
-		['a reference it once held', 'metagame.chart-other', { token: 'accent' }],
+		[
+			'a reference it once held',
+			'metagame.chart-other',
+			{ token: 'accent' },
+		],
 		['a value it could never hold', 'metagame.chart-series-8', 12],
 	])('accepts a former token given %s, and drops it', (_case, name, value) => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, dropped: true });
