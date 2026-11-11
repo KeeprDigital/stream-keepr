@@ -1,16 +1,6 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
 import { EVENT_CANVAS_SIDE_BOUNDS } from '../eventCanvas';
 
-/** One of the chart's categorical colour slots, following the Theme's chart palette. */
-function chartSlot<N extends number>(slot: N) {
-	return {
-		type: 'color',
-		label: `Chart colour ${slot}`,
-		default: { token: `series-${slot}` },
-		settingsGroup: 'chart',
-	} as const;
-}
-
 /** The Metagame settings groups its Mode Tokens may name (ADR-0072). */
 export type MetagameSettingsGroup = 'header' | 'table' | 'chart' | 'size-and-surface';
 
@@ -91,20 +81,6 @@ export const metagameModeTokens = {
 		settingsGroup: 'chart',
 		default: { token: 'divider' },
 	},
-	'chart-series-1': chartSlot(1),
-	'chart-series-2': chartSlot(2),
-	'chart-series-3': chartSlot(3),
-	'chart-series-4': chartSlot(4),
-	'chart-series-5': chartSlot(5),
-	'chart-series-6': chartSlot(6),
-	'chart-series-7': chartSlot(7),
-	'chart-series-8': chartSlot(8),
-	'chart-other': {
-		type: 'color',
-		label: 'Chart Other',
-		settingsGroup: 'chart',
-		default: { token: 'series-other' },
-	},
 	// The widest the table or chart runs, centred. It ships at the widest Event
 	// Canvas, so either fills its Screen until a Theme narrows it.
 	'max-width': {
@@ -130,3 +106,20 @@ export const metagameModeTokens = {
 		},
 	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition<MetagameSettingsGroup>>>;
+
+/**
+ * The Mode Tokens Metagame once declared: its chart slots, which only repeated
+ * the `series-1` … `series-8` and `series-other` Foundation Tokens its chart now
+ * reads directly.
+ */
+export const metagameFormerModeTokens = [
+	'chart-series-1',
+	'chart-series-2',
+	'chart-series-3',
+	'chart-series-4',
+	'chart-series-5',
+	'chart-series-6',
+	'chart-series-7',
+	'chart-series-8',
+	'chart-other',
+] as const;

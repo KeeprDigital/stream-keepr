@@ -10,7 +10,7 @@ import { resolveThemeTokens } from './modules/theme/resolution';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
 import { screenModeHostTokens } from './screenModeDefinitions';
 import { SCREEN_MODES, screenModeSupportsBackgroundLayers, screenModeTokens } from './screenModes';
-import { parseThemeTokenWrite, themeTokenDefinition } from './themeTokens';
+import { isFormerThemeToken, parseThemeTokenWrite, themeTokenDefinition } from './themeTokens';
 import { THEME_TOKEN_WRITE_REFUSALS } from './types/theme';
 
 /** Why a Screen Theme Override write was refused. */
@@ -119,16 +119,21 @@ export function screenModeCanConsume(mode: ScreenMode, name: string): boolean {
 }
 
 export type ScreenThemeOverrideWrite
-	= | { ok: true; value: ThemeTokenValue | ThemeTokenReference | null }
+	= | { ok: true; dropped?: false; value: ThemeTokenValue | ThemeTokenReference | null }
+		| { ok: true; dropped: true }
 		| { ok: false; refusal: ScreenThemeOverrideRefusal };
 
 /**
  * What a Screen in `mode` may store as its override of `name`, or why not. A
  * `null` value clears the override. A set holds what a Theme may hold for the
  * token (`parseThemeTokenWrite`); a set or clear of a token the mode cannot
- * consume is refused, while one stored for another mode stays dormant.
+ * consume is refused, while one stored for another mode stays dormant. A set
+ * or clear of a former token, whichever mode declared it, is accepted and
+ * `dropped`: nothing is stored or removed for it.
  */
 export function parseScreenThemeOverrideWrite(mode: ScreenMode, name: string, value: unknown): ScreenThemeOverrideWrite {
+	if (isFormerThemeToken(name))
+		return { ok: true, dropped: true };
 	if (!themeTokenDefinition(name))
 		return { ok: false, refusal: 'unknown-token' };
 	if (!screenModeCanConsume(mode, name))
