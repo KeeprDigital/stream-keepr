@@ -76,7 +76,8 @@ describe('screenTalentSettings', () => {
 		};
 	});
 
-	it('orders its cards Talent, Layout, Header, Social Profiles, each Look in the card it styles', async () => {
+	// Every element it paints has a Foundation role, so no card holds a Look.
+	it('orders its cards Talent, Layout, Header, Social Profiles', async () => {
 		const wrapper = await mountComponent();
 
 		expect(settingsCards(wrapper)).toEqual([
@@ -90,19 +91,19 @@ describe('screenTalentSettings', () => {
 				title: 'Layout',
 				id: 'talent:layout',
 				collapsible: true,
-				looks: ['layout'],
+				looks: [],
 			},
 			{
 				title: 'Header',
 				id: 'talent:header',
 				collapsible: true,
-				looks: ['header'],
+				looks: [],
 			},
 			{
 				title: 'Social Profiles',
 				id: 'talent:social-profiles',
 				collapsible: true,
-				looks: ['social-profiles'],
+				looks: [],
 			},
 		]);
 	});

@@ -153,7 +153,7 @@ beforeEach(async () => {
 		})
 		.returning({ id: schema.events.id });
 	eventId = event!.id;
-	// A mode declaring a typography Mode Token, so its Screen may override the Theme's fonts.
+	// A plain mode, so its Screen may override the Theme's background.
 	screenId = (await createScreen('main', 'top-cut')).id;
 });
 
@@ -183,12 +183,14 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 			() => libraryFont(face),
 			() => face,
 		],
+		// On a graphics host, whose Graphic Items may bind the Theme's fonts.
 		[
 			'an override\'s library font',
 			'screen',
 			'heading',
 			() => libraryFont(face),
 			() => face,
+			'broadcast-graphics',
 		],
 		[
 			'an override\'s background layer',
@@ -197,7 +199,9 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 			() => libraryImageLayer(plate),
 			() => plate,
 		],
-	])('refuses Retire and Trash while %s references it, naming the referrer', async (_case, owner, token, value, revision) => {
+	])('refuses Retire and Trash while %s references it, naming the referrer', async (_case, owner, token, value, revision, mode?: string) => {
+		if (mode)
+			await db.update(schema.screens).set({ currentMode: mode as never }).where(eq(schema.screens.id, screenId));
 		if (owner === 'theme') {
 			await call(setToken, { themeId, token }, {
 				value: value(),
@@ -418,16 +422,17 @@ describe('a Screen Output\'s capability over its Theme\'s content', () => {
 	});
 
 	it('resolves a dormant override of another mode\'s Mode Token only once the Screen shows that mode again', async () => {
+		await db.update(schema.screens).set({ currentMode: 'feature-match-overlay' }).where(eq(schema.screens.id, screenId));
 		await call(patchOverrides, { id: eventId, screenId }, {
 			tokens: {
-				'top-cut.round-name-typography': libraryFont(face),
+				'feature-match-overlay.frame-media': { kind: 'image', ...plate },
 			},
 		});
 		await db.update(schema.screens).set({ currentMode: 'card' }).where(eq(schema.screens.id, screenId));
-		expect(await resolves(await screenRow(screenId), face)).toBe(false);
+		expect(await resolves(await screenRow(screenId), plate)).toBe(false);
 
-		await db.update(schema.screens).set({ currentMode: 'top-cut' }).where(eq(schema.screens.id, screenId));
-		expect(await resolves(await screenRow(screenId), face)).toBe(true);
+		await db.update(schema.screens).set({ currentMode: 'feature-match-overlay' }).where(eq(schema.screens.id, screenId));
+		expect(await resolves(await screenRow(screenId), plate)).toBe(true);
 	});
 
 	it('resolves nothing of a Theme its Event does not use', async () => {
