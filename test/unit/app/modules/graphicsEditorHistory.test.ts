@@ -6,7 +6,7 @@ import {
 	recordEdit,
 	redoEdit,
 	undoEdit,
-} from '~~/app/modules/feature-match-overlay/editHistory';
+} from '~~/app/modules/graphics/editor/editHistory';
 
 /**
  * The editor's undo history: each record is the state before an edit, and a burst

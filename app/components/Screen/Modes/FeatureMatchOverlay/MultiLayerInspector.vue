@@ -2,11 +2,11 @@
 import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
-import type { LayerGroupRefusal } from '~/modules/feature-match-overlay/layerGrouping';
 import type { AlignEdge, DistributeAxis } from '~/modules/graphics/canvasAlignment';
+import type { LayerGroupRefusal } from '~/modules/graphics/editor/layerGrouping';
 import { editorSelectionLayer } from '~/modules/feature-match-overlay/editorSelection';
-import { ALIGN_COMMANDS, DISTRIBUTE_COMMANDS } from '~/modules/feature-match-overlay/layerAlignment';
-import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/layerGrouping';
+import { ALIGN_COMMANDS, DISTRIBUTE_COMMANDS } from '~/modules/graphics/editor/layerAlignment';
+import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/graphics/editor/layerGrouping';
 
 /**
  * The property panel with several layers selected (#740): how many, and

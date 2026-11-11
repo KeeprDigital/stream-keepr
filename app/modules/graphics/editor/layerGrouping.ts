@@ -1,6 +1,5 @@
+import type { GraphicsEditorLayer, GraphicsEditorTree } from './host';
 import type { GraphicItemsGroupRefusal } from '~~/shared/modules/graphics';
-import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
-import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
 import { graphicItemsGroupRefusal } from '~~/shared/modules/graphics';
 import { MAX_GRAPHIC_GROUP_CHILDREN } from '~~/shared/types/graphics';
 
@@ -8,15 +7,23 @@ import { MAX_GRAPHIC_GROUP_CHILDREN } from '~~/shared/types/graphics';
 export type LayerGroupRefusal = 'source-item' | GraphicItemsGroupRefusal;
 
 /**
- * Why the Feature Match Overlay editor cannot group these layers, or null when it
- * can. A Source Item is host-owned and never joins a Graphic Group (E8), so any
- * selected one refuses the whole selection; the rest is the Graphic Items' own
- * rule (`graphicItemsGroupRefusal`).
+ * Why the graphics editor cannot group these layers, or null when it can. A layer
+ * the host owns, which today is a Source Item, never joins a Graphic Group (E8),
+ * so any selected one refuses the whole selection; the rest is the Graphic Items'
+ * own rule (`graphicItemsGroupRefusal`), within the composition they sit in.
  */
-export function layerGroupRefusal(layout: FeatureMatchLayoutConfig, layers: readonly FeatureMatchLayoutEditorLayer[]): LayerGroupRefusal | null {
-	if (layers.some(layer => layer.type === 'source'))
+export function layerGroupRefusal<D, L extends GraphicsEditorLayer>(
+	tree: GraphicsEditorTree<D, L>,
+	document: D,
+	layers: readonly L[],
+): LayerGroupRefusal | null {
+	const items = layers.map(layer => tree.item(document, layer));
+	if (items.includes(null))
 		return 'source-item';
-	return graphicItemsGroupRefusal(layout.composition, layers.map(layer => layer.itemId));
+	const composition = items[0]?.composition;
+	return composition
+		? graphicItemsGroupRefusal(composition, items.map(item => item!.itemId))
+		: 'too-few';
 }
 
 /** What the editor shows for each refusal, beside the Group control it disables. */
