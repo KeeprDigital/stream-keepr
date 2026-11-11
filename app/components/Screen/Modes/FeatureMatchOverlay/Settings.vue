@@ -11,6 +11,7 @@ import { featureMatchLayoutEditorHost } from '~/modules/feature-match-overlay/ed
 import {
 	compositorSelectionTarget,
 	editorSelectionLabel,
+	editorSelectionLayer,
 	fromCompositorSelectionTarget,
 	fromHostSelectionTarget,
 	hostSelectionTarget,
@@ -21,7 +22,6 @@ import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayLayerList from './LayerList.vue';
-import FeatureMatchOverlayMultiLayerInspector from './MultiLayerInspector.vue';
 import FeatureMatchOverlayPreviewOutputAside from './PreviewOutputAside.vue';
 
 const props = defineProps<{ screen: Screen; eventId: number }>();
@@ -151,6 +151,13 @@ function selectCompositorTarget(target: GraphicsSelectionTarget, toggle = false)
 const selectionFrame = computed(() => canAuthor.value
 	? editor.selectionFrame.value
 	: null);
+/** Each selected layer's stored rectangle, for the panel that edits several. */
+const selectedRects = computed(() => layers.value.flatMap((layer) => {
+	const rect = editorSelectionLayer(config.value.layout, layer);
+	return rect
+		? [rect]
+		: [];
+}));
 const selectionLabel = computed(() => severalSelected.value
 	? `${layers.value.length} layers`
 	: editorSelectionLabel(config.value.layout, selection.value));
@@ -389,10 +396,9 @@ useGraphicsEditorKeyboard(editor, 'feature-match-overlay', {
 			</section>
 
 			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-				<FeatureMatchOverlayMultiLayerInspector
+				<GraphicsMultiLayerInspector
 					v-if="severalSelected"
-					:layout="config.layout"
-					:layers="layers"
+					:rects="selectedRects"
 					:writable="canAuthor"
 					:group-refusal="editor.groupRefusal.value"
 					:can-align="editor.canAlign()"
