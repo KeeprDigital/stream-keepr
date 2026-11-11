@@ -4,7 +4,8 @@ import { FOUNDATION_TOKENS, resolveFoundationTokens, resolveThemeCompositeColors
 import { SCREEN_MODES, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
-// The one home of Theme Token resolution (ADR-0049): override, else Theme, else default.
+// The one home of Theme Token resolution (ADR-0049): a Mode Token reads its override, else its
+// default; a Foundation Token its override, else the Theme, else its default.
 
 const body = {
 	font: { kind: 'application', fontId: 'inter' },
@@ -62,25 +63,20 @@ function resolve(theme: StoredThemeTokens = {}, overrides: StoredThemeTokens = {
 describe('resolveThemeTokens', () => {
 	it.each([
 		['the default', {}, {}, 'rgb(0, 0, 9)'],
+		// A Theme stores Foundation Tokens only; one it stored before is never read.
 		[
-			'the Theme\'s value over the default',
+			'the default, never the Theme\'s value',
 			{ 'demo.badge': 'rgb(1, 0, 0)' },
 			{},
-			'rgb(1, 0, 0)',
+			'rgb(0, 0, 9)',
 		],
 		[
 			'the override over the default',
-			{},
-			{ 'demo.badge': 'rgb(2, 0, 0)' },
-			'rgb(2, 0, 0)',
-		],
-		[
-			'the override over the Theme',
 			{ 'demo.badge': 'rgb(1, 0, 0)' },
 			{ 'demo.badge': 'rgb(2, 0, 0)' },
 			'rgb(2, 0, 0)',
 		],
-	])('reads %s', (_, theme, overrides, expected) => {
+	])('reads a Mode Token as %s', (_, theme, overrides, expected) => {
 		expect(resolve(theme, overrides).values['demo.badge']).toBe(expected);
 	});
 
@@ -104,28 +100,28 @@ describe('resolveThemeTokens', () => {
 			'rgb(4, 0, 0)',
 		],
 		[
-			'another Foundation Token the Theme names',
+			'another Foundation Token the override names',
+			{},
 			{
 				'demo.title': { token: 'text-primary' },
 			},
-			{},
 			'rgb(0, 0, 2)',
 		],
 		[
-			'that Foundation Token\'s override',
+			'that Foundation Token\'s Theme value',
+			{ 'text-primary': 'rgb(5, 0, 0)' },
 			{
 				'demo.title': { token: 'text-primary' },
 			},
-			{ 'text-primary': 'rgb(5, 0, 0)' },
 			'rgb(5, 0, 0)',
 		],
 		[
-			'the Theme\'s literal over the Foundation Token',
-			{ 'demo.title': 'rgb(6, 0, 0)' },
+			'the override\'s literal over the Foundation Token',
 			{ accent: 'rgb(4, 0, 0)' },
+			{ 'demo.title': 'rgb(6, 0, 0)' },
 			'rgb(6, 0, 0)',
 		],
-	// A default names a Foundation Token; so may a value stored before writes were literal-only.
+	// A default names a Foundation Token; so may an override stored before writes were literal-only.
 	])('reads a Mode Token naming a Foundation Token as %s', (_, theme, overrides, expected) => {
 		expect(resolve(theme, overrides).values['demo.title']).toBe(expected);
 	});
@@ -137,18 +133,27 @@ describe('resolveThemeTokens', () => {
 			{},
 		],
 		[
-			'a Mode Token naming a former Foundation Token',
+			'a Mode Token the Theme stores',
 			{
-				'demo.title': { token: 'retired-glow' },
+				'demo.title': { token: 'text-primary' },
+				'demo.badge': 'rgb(7, 0, 0)',
+				'demo.gap': 4,
 			},
 			{},
 		],
 		[
+			'a Mode Token naming a former Foundation Token',
+			{},
+			{
+				'demo.title': { token: 'retired-glow' },
+			},
+		],
+		[
 			'a Mode Token naming a Foundation Token of another type',
+			{},
 			{
 				'demo.title': { token: 'inset' },
 			},
-			{},
 		],
 		[
 			'a Foundation Token naming another',
@@ -159,11 +164,10 @@ describe('resolveThemeTokens', () => {
 		],
 		[
 			'a value of the wrong type',
+			{ accent: 12 },
 			{
-				'accent': 12,
 				'demo.title': { value: 'rgb(8, 0, 0)' },
 			},
-			{},
 		],
 		[
 			'another mode\'s Mode Token, overridden on this Screen',
@@ -181,17 +185,20 @@ describe('resolveThemeTokens', () => {
 		[
 			'a Foundation Token above its bound',
 			{ inset: 240 },
+			{},
 			'inset',
 			100,
 		],
 		[
 			'a Foundation Token below its bound',
 			{ inset: -4 },
+			{},
 			'inset',
 			0,
 		],
 		[
 			'a Mode Token above its own bound',
+			{},
 			{ 'demo.gap': 90 },
 			'demo.gap',
 			40,
@@ -199,17 +206,19 @@ describe('resolveThemeTokens', () => {
 		[
 			'a Foundation Token through a Mode Token\'s tighter bound',
 			{ inset: 90 },
+			{},
 			'demo.gap',
 			40,
 		],
 		[
 			'a value within its bounds',
 			{ inset: 30 },
+			{},
 			'demo.gap',
 			30,
 		],
-	])('reads %s within it', (_, theme, token, expected) => {
-		expect(resolve(theme).values[token]).toBe(expected);
+	])('reads %s within it', (_, theme, overrides, token, expected) => {
+		expect(resolve(theme, overrides).values[token]).toBe(expected);
 	});
 
 	it('reads a stored typography outside its bounds at the nearest bound, field by field', () => {
@@ -248,8 +257,8 @@ describe('resolveThemeTokens', () => {
 			'every Mode Token holds a literal',
 			{ 'demo.title': 'rgb(1, 1, 1)', 'demo.badge': 'rgb(2, 2, 2)', 'demo.gap': 4 },
 		],
-	])('consumes its Mode Tokens and the Foundation Tokens their defaults name when %s', (_, theme) => {
-		const resolved = resolve(theme);
+	])('consumes its Mode Tokens and the Foundation Tokens their defaults name when %s', (_, overrides) => {
+		const resolved = resolve({}, overrides);
 
 		expect(resolved.consumed).toEqual(DECLARED_CONSUMPTION);
 		expect(Object.keys(resolved.values)).toEqual(DECLARED_CONSUMPTION);

@@ -38,7 +38,7 @@ async function mountGroup(group: string, themeOverrides: StoredThemeTokens = {})
 const row = (wrapper: VueWrapper, token: string) => wrapper.get(`[data-token="${token}"]`);
 
 describe('a Screen Settings Group\'s Look', () => {
-	it('lists the Mode Tokens declaring the group, under "Look", each showing whether it follows the Theme', async () => {
+	it('lists the Mode Tokens declaring the group, under "Look", each showing whether it reads its default', async () => {
 		const wrapper = await mountGroup('result-badge', { 'pairings.result-pending': '#ff0000' });
 
 		expect(wrapper.get('[data-settings-group]').attributes('data-settings-group')).toBe('result-badge');
@@ -49,7 +49,7 @@ describe('a Screen Settings Group\'s Look', () => {
 			'pairings.result-bye',
 		]);
 		expect(row(wrapper, 'pairings.result-reported').attributes('data-token-state')).toBe('inherited');
-		expect(row(wrapper, 'pairings.result-reported').text()).toContain('Theme');
+		expect(row(wrapper, 'pairings.result-reported').text()).toContain('Default');
 		expect(row(wrapper, 'pairings.result-pending').attributes('data-token-state')).toBe('set');
 		expect(row(wrapper, 'pairings.result-pending').text()).toContain('Overridden');
 	});

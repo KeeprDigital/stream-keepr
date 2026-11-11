@@ -13,7 +13,11 @@ export interface ScreenThemeTokenEntry {
 	token: ThemeTokenDefinitionOf;
 	/** The Screen Theme Override, if one is stored. */
 	stored: unknown;
-	/** What it reads with no override: its Theme's value as it resolves, or its default as declared, which may name a Foundation Token. */
+	/**
+	 * What it reads with no override: a Foundation Token's Theme value as it
+	 * resolves, else its default as declared, which may name a Foundation Token.
+	 * A Mode Token's is always its default: a Theme stores Foundation Tokens only.
+	 */
 	inherited: unknown;
 	/** What the Screen renders now. */
 	resolved: ThemeTokenValue;
@@ -90,12 +94,14 @@ function createScreenThemeOverrides(screen: MaybeRefOrGetter<Screen | null | und
 	}
 
 	/**
-	 * What a token reads with no override: the value its Theme gives it, as it
-	 * resolves, where the Theme stores one, else its default as declared.
+	 * What a token reads with no override: the value its Theme gives a
+	 * Foundation Token, as it resolves, where the Theme stores one, else its
+	 * default as declared.
 	 */
 	function inheritedValue(name: string): unknown {
-		return theme.value[name] === undefined
-			? themeTokenDefinition(name)!.definition.default
+		const token = themeTokenDefinition(name)!;
+		return token.tier === 'mode' || theme.value[name] === undefined
+			? token.definition.default
 			: resolvedIn(themed.value.values, name, {});
 	}
 
@@ -137,7 +143,7 @@ function createScreenThemeOverrides(screen: MaybeRefOrGetter<Screen | null | und
 		entry,
 		writing: readonly(writing),
 		set: write,
-		/** Clear the override, returning the Screen to the Theme's value. */
+		/** Clear the override, returning the Screen to what the token inherits. */
 		clear: (name: string) => write(name, null),
 	};
 }

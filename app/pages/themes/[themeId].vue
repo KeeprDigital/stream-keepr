@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { FoundationTokenKind } from '~~/shared/modules/theme';
 import type { ThemeResponse } from '~~/shared/types/theme';
-import { FOUNDATION_TOKENS, resolveFoundationTokens, resolveThemeTokens } from '~~/shared/modules/theme';
-import { THEMED_SCREEN_MODE_TOKENS, themeTokenDefinition } from '~~/shared/themeTokens';
+import { FOUNDATION_TOKEN_KIND, FOUNDATION_TOKEN_KINDS, FOUNDATION_TOKENS, resolveFoundationTokens } from '~~/shared/modules/theme';
+import { themeTokenDefinition } from '~~/shared/themeTokens';
 
 definePageMeta({
 	title: 'Theme',
@@ -105,33 +106,31 @@ function clearToken(token: string) {
 
 const stored = computed(() => theme.value?.tokens ?? {});
 
-// Each token as the Theme resolves it, every colour a literal: what its field edits and an edit writes.
-const foundationTokens = computed(() => {
-	const values = resolveFoundationTokens({ vocabulary: FOUNDATION_TOKENS, theme: stored.value, overrides: {} });
-	return Object.keys(FOUNDATION_TOKENS).map(token => ({
-		name: token,
-		token: themeTokenDefinition(token)!,
-		resolved: values[token]!,
-	}));
-});
+const KINDS: Record<FoundationTokenKind, { title: string; description: string }> = {
+	colours: { title: 'Colours', description: 'Surfaces, text, accents and states.' },
+	type: { title: 'Type', description: 'The heading and body fonts.' },
+	motion: { title: 'Motion', description: 'How content enters, updates and leaves.' },
+	surfaces: { title: 'Surfaces', description: 'The accent fill, and the panel raised content sits on.' },
+	background: { title: 'Background & placement', description: 'What paints behind a Screen\'s content, and where that content sits.' },
+	assets: { title: 'Assets', description: 'Library content a Screen shows.' },
+	chart: { title: 'Chart', description: 'The colour of each chart series.' },
+};
 
-const modeGroups = computed(() => THEMED_SCREEN_MODE_TOKENS.map((group) => {
-	const { values } = resolveThemeTokens({
-		vocabulary: FOUNDATION_TOKENS,
-		modeTokens: group.tokens,
-		theme: stored.value,
-		overrides: {},
-	});
-	return {
-		mode: group.mode,
-		label: group.label,
-		tokens: Object.keys(group.tokens).map(token => ({
+// Each Foundation Token as the Theme resolves it, every colour a literal: what its field edits and an edit writes.
+// A Theme stores nothing else: a Mode Token is set per Screen.
+const tokenKinds = computed(() => {
+	const values = resolveFoundationTokens({ vocabulary: FOUNDATION_TOKENS, theme: stored.value, overrides: {} });
+	const tokens = Object.keys(FOUNDATION_TOKENS) as (keyof typeof FOUNDATION_TOKENS)[];
+	return FOUNDATION_TOKEN_KINDS.map(kind => ({
+		kind,
+		...KINDS[kind],
+		tokens: tokens.filter(token => FOUNDATION_TOKEN_KIND[token] === kind).map(token => ({
 			name: token,
 			token: themeTokenDefinition(token)!,
 			resolved: values[token]!,
 		})),
-	};
-}));
+	}));
+});
 
 onMounted(load);
 watch(themeId, load);
@@ -164,6 +163,7 @@ watch(themeId, load);
 				<p class="text-sm text-muted">
 					Every edit is live: it restyles every Screen Output of every Event using this Theme
 					at once. A token left unset follows its default, so it reads as the Default Theme does.
+					What belongs to one Screen Mode alone is set on each Screen.
 				</p>
 			</div>
 
@@ -189,35 +189,13 @@ watch(themeId, load);
 					<ThemePreviewGallery :tokens="stored" />
 				</UCard>
 
-				<UCard>
+				<UCard v-for="group in tokenKinds" :key="group.kind" :data-token-kind="group.kind">
 					<template #header>
 						<h2 class="font-semibold text-highlighted">
-							Foundation Tokens
+							{{ group.title }}
 						</h2>
 						<p class="text-xs text-muted">
-							Roles every Screen Mode may use.
-						</p>
-					</template>
-					<ThemeTokenField
-						v-for="entry in foundationTokens"
-						:key="entry.name"
-						:name="entry.name"
-						:token="entry.token"
-						:stored="stored[entry.name]"
-						:resolved="entry.resolved"
-						:writing="writing.has(entry.name)"
-						@set="value => setToken(entry.name, value)"
-						@clear="clearToken(entry.name)"
-					/>
-				</UCard>
-
-				<UCard v-for="group in modeGroups" :key="group.mode" :data-mode-tokens="group.mode">
-					<template #header>
-						<h2 class="font-semibold text-highlighted">
-							{{ group.label }}
-						</h2>
-						<p class="text-xs text-muted">
-							How this Screen Mode looks. Each token follows a Foundation Token unless given its own value.
+							{{ group.description }}
 						</p>
 					</template>
 					<ThemeTokenField
