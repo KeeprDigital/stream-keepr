@@ -33,7 +33,7 @@ export const ScreenThemeTokenGroupStub = defineComponent({
 });
 
 export const screenSettingsLayoutStubs = {
-	ScreenSettingsCard: ScreenSettingsCardLayoutStub,
+	ScreenSettingsSection: ScreenSettingsCardLayoutStub,
 	ScreenThemeTokenGroup: ScreenThemeTokenGroupStub,
 };
 

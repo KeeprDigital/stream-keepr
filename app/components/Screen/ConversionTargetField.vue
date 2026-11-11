@@ -16,10 +16,9 @@ const label = computed(() => conversionTargetLabel(eventConversionTarget(eventSt
 </script>
 
 <template>
-	<UFormField
+	<ScreenSettingsField
 		label="Conversion target"
 		description="What a player in the scope must reach to count as converted. It never narrows the scope. It is the Event's, set on the Metagame page."
-		class="flex max-sm:flex-col justify-between items-start gap-4"
 	>
 		<div class="flex flex-col items-end gap-1">
 			<span data-testid="event-conversion-target" class="text-sm font-medium">{{ label }}</span>
@@ -31,5 +30,5 @@ const label = computed(() => conversionTargetLabel(eventConversionTarget(eventSt
 				Change on the Metagame page
 			</NuxtLink>
 		</div>
-	</UFormField>
+	</ScreenSettingsField>
 </template>

@@ -29,7 +29,7 @@ const clockSummary = computed(() => {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard id="round-clock:data" title="Data" :collapsible="false">
+		<ScreenSettingsSection id="round-clock:data" title="Data" :collapsible="false">
 			<!-- Unset follows the Current Round from Round to Round (ADR-0066). -->
 			<ScreenRoundField
 				:model-value="config.roundId"
@@ -38,9 +38,9 @@ const clockSummary = computed(() => {
 				:event-id="eventId"
 				@update:model-value="updateConfig({ roundId: $event })"
 			/>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			id="round-clock:round-name"
 			title="Round Name"
 			:summary="config.showRoundName ? 'Shown above the clock' : 'Hidden'"
@@ -52,9 +52,9 @@ const clockSummary = computed(() => {
 				@update:model-value="updateConfig({ showRoundName: $event === true })"
 			/>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="round-name" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			id="round-clock:clock"
 			title="Clock"
 			:summary="clockSummary"
@@ -76,6 +76,6 @@ const clockSummary = computed(() => {
 				@update:model-value="updateConfig({ countUpLimitMinutes: $event ?? null })"
 			/>
 			<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="clock" />
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 	</div>
 </template>

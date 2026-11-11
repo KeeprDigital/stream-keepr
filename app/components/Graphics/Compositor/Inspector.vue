@@ -109,7 +109,6 @@ import { graphicsSelectionKey, resolveGraphicsSelection } from '~/modules/graphi
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 import { OPACITY_INPUT } from '~/utils/opacityInput';
 import GraphicsGeometryFields from '../GeometryFields.vue';
-import GraphicsInspectorSection from '../InspectorSection.vue';
 import GraphicsShapeGeometryFields from '../ShapeGeometryFields.vue';
 import GraphicsCompositorAnimation from './Animation.vue';
 import GraphicsCompositorBindings from './Bindings.vue';
@@ -1237,7 +1236,8 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			</UFormField>
 		</div>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
+			density="row"
 			v-if="selectedItem"
 			id="layout"
 			title="Position and size"
@@ -1304,9 +1304,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
+			density="row"
 			v-if="selectedGroup"
 			id="group"
 			title="Group layout"
@@ -1406,9 +1407,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</UFormField>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
+			density="row"
 			v-if="hasContentSection"
 			id="content"
 			:title="contentTitle"
@@ -1767,9 +1769,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</UFormField>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
+			density="row"
 			v-if="selectedTypography || selectedTextOverflow"
 			id="typography"
 			title="Text style"
@@ -1960,9 +1963,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</template>
 				</UCollapsible>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
+			density="row"
 			v-if="selectedShapeGeometry"
 			id="shape"
 			:title="geometryTitle"
@@ -1986,9 +1990,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
+			density="row"
 			v-if="hasSurfaceSection"
 			id="surface"
 			title="Fill and outline"
@@ -2075,9 +2080,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</template>
 				</GraphicsCompositorSurfaceStyleFields>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
+			density="row"
 			v-if="selection.kind === 'graphic' || selection.kind === 'item'"
 			id="animation"
 			title="Animation"
@@ -2094,6 +2100,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:canvas-height="canvasHeight"
 				@update:graphics="emit('update:graphics', $event)"
 			/>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 	</fieldset>
 </template>

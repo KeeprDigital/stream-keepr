@@ -134,7 +134,7 @@ async function mountEditor(editor: string) {
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: defineComponent({
+				ScreenSettingsSection: defineComponent({
 					setup: (_, { slots }) => () => h('section', slots.default?.()),
 				}),
 				ScreenSettingsToggle: true,

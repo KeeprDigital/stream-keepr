@@ -41,7 +41,7 @@ function mountComponent(themeOverrides: StoredThemeTokens = {}) {
 		global: {
 			stubs: {
 				...nuxtUiStubs,
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsCardStub,
 				ScreenBackgroundLayersEditor: EditorStub,
 			},
 		},

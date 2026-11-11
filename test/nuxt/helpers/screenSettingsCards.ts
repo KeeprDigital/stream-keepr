@@ -2,7 +2,7 @@
  * A mode's Screen settings page as its cards: each card's title, `mode:card`
  * id, whether it collapses, and its closed summary, with each group's Look as
  * the group it names. The card's own open and remember rules are tested at
- * `ScreenSettingsCard`; this shows a mode wires each card.
+ * `ScreenSettingsSection`; this shows a mode wires each card.
  */
 import type { VueWrapper } from '@vue/test-utils';
 import { defineComponent } from 'vue';
@@ -33,7 +33,7 @@ export const ScreenThemeTokenGroupSpy = defineComponent({
 });
 
 export const screenSettingsCardSpies = {
-	ScreenSettingsCard: ScreenSettingsCardSpy,
+	ScreenSettingsSection: ScreenSettingsCardSpy,
 	ScreenThemeTokenGroup: ScreenThemeTokenGroupSpy,
 };
 

@@ -32,7 +32,7 @@ function mountCard(config: { showHeader: boolean; headerText?: string }) {
 		global: {
 			stubs: {
 				...nuxtUiStubs,
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsCardStub,
 			},
 		},
 	});

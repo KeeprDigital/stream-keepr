@@ -117,7 +117,7 @@ async function mountComponent(options: Partial<{
 				USelect: USelectStub,
 				ScreenMediaBackgroundFields: defineComponent({ template: '<div data-testid="media-background-fields" />' }),
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
-				FeatureMatchOverlayControlSection: ControlSectionStub,
+				ScreenSettingsSection: ControlSectionStub,
 				USwitch: USwitchStub,
 				UButton: defineComponent({ template: '<button type="button"><slot /></button>' }),
 				UIOpacityInput: defineComponent({ template: '<input />' }),

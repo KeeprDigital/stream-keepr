@@ -307,7 +307,7 @@ function differentItem(props: Record<string, any>) {
 }
 
 const stubs = {
-	ScreenSettingsCard: defineComponent({
+	ScreenSettingsSection: defineComponent({
 		setup: (_, { slots }) => () => h('section', slots.default?.()),
 	}),
 	ScreenSettingsToggle: controlStub('toggle', props => !props.modelValue),

@@ -252,7 +252,7 @@ async function handleMatchChange(matchId: number | null) {
 
 <template>
 	<div class="flex flex-col gap-6">
-		<ScreenSettingsCard title="Feature Match Slot" :collapsible="false">
+		<ScreenSettingsSection title="Feature Match Slot" :collapsible="false">
 			<ScreenSettingsField label="Feature Match Slot" description="The Slot whose Match this Screen controls.">
 				<ScreenFeatureMatchSelect
 					:model-value="config.featureMatchId"
@@ -261,9 +261,9 @@ async function handleMatchChange(matchId: number | null) {
 					@update:model-value="handleMatchChange($event)"
 				/>
 			</ScreenSettingsField>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 
-		<ScreenSettingsCard
+		<ScreenSettingsSection
 			v-for="card in toggleCards"
 			:id="card.id"
 			:key="card.id"
@@ -289,6 +289,6 @@ async function handleMatchChange(matchId: number | null) {
 				description="Which player seat appears on the left side of the match screen."
 				@update:model-value="$event && updateConfig({ leftSidePlayer: $event })"
 			/>
-		</ScreenSettingsCard>
+		</ScreenSettingsSection>
 	</div>
 </template>

@@ -91,7 +91,7 @@ function mountCard({ mode, config: overrides, rowCount, loading, counting }: Har
 	const wrapper = mount(Host, {
 		global: {
 			stubs: {
-				ScreenSettingsCard: {
+				ScreenSettingsSection: {
 					props: ['title'],
 					template: '<section><h2>{{ title }}</h2><slot /></section>',
 				},

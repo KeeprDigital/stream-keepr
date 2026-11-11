@@ -8,7 +8,6 @@ import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from 
 import { MEDIA_FIT_OPTIONS } from '~/utils/mediaFields';
 import { OPACITY_INPUT } from '~/utils/opacityInput';
 import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
-import FeatureMatchOverlayControlSection from './ControlSection.vue';
 
 /**
  * The Frame's own fields, each section ending with the Look of what it styles:
@@ -68,7 +67,7 @@ const backgroundSummary = computed(() => {
 
 <template>
 	<div class="min-w-0">
-		<FeatureMatchOverlayControlSection title="Background" :summary="backgroundSummary">
+		<ScreenSettingsSection density="row" id="feature-match-overlay-background" title="Background" :summary="backgroundSummary">
 			<div class="space-y-3">
 				<GraphicsNumberField
 					label="Opacity"
@@ -100,9 +99,9 @@ const backgroundSummary = computed(() => {
 					</UFormField>
 				</div>
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection title="Video" :summary="mediaBackground.enabled ? 'On' : 'Off'">
+		<ScreenSettingsSection density="row" id="feature-match-overlay-video" title="Video" :summary="mediaBackground.enabled ? 'On' : 'Off'">
 			<div class="space-y-4">
 				<ScreenMediaBackgroundFields
 					:media="mediaBackground"
@@ -111,9 +110,9 @@ const backgroundSummary = computed(() => {
 				/>
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="frame-video" />
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection title="Animation" :summary="animation.enabled ? `opacity ${animation.opacity}` : 'Off'">
+		<ScreenSettingsSection density="row" id="feature-match-overlay-animation" title="Animation" :summary="animation.enabled ? `opacity ${animation.opacity}` : 'Off'">
 			<div class="space-y-4">
 				<ScreenSettingsToggle
 					label="Animation"
@@ -132,9 +131,9 @@ const backgroundSummary = computed(() => {
 
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="frame-animation" />
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection title="Surface" summary="Fill, border and glow">
+		<ScreenSettingsSection density="row" id="feature-match-overlay-surface" title="Surface" summary="Fill, border and glow">
 			<div class="space-y-4">
 				<FeatureMatchOverlayBorderSidesControl
 					label="Frame border sides"
@@ -143,6 +142,6 @@ const backgroundSummary = computed(() => {
 				/>
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="frame-surface" />
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 	</div>
 </template>

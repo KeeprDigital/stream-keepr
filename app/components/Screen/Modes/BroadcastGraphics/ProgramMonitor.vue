@@ -239,7 +239,7 @@ const programBackgroundStyle = computed(() => {
 		Never collapsible: a Program monitor that can be hidden is not persistent, and
 		absent exactly when the mistake it guards against happens (#335).
 	-->
-	<ScreenSettingsCard title="Program" :collapsible="false">
+	<ScreenSettingsSection title="Program" :collapsible="false">
 		<!--
 			Named by what they hand out and by what the hand-out carries, rather
 			than by a bare icon: the alternative an operator reaches for is the
@@ -342,5 +342,5 @@ const programBackgroundStyle = computed(() => {
 				/>
 			</div>
 		</div>
-	</ScreenSettingsCard>
+	</ScreenSettingsSection>
 </template>

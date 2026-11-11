@@ -23,18 +23,16 @@ const props = defineProps<{
 
 const fields = computed(() => props.rotation.fields);
 const autoPageEnabled = computed(() => props.rotation.rotationConfig.value.autoPageEnabled);
-const intervalSeconds = computed(() =>
-	Math.round(props.rotation.rotationConfig.value.autoPageIntervalMs / fields.value.autoPageIntervalMs.displayScale),
-);
+const intervalMs = computed(() => props.rotation.rotationConfig.value.autoPageIntervalMs);
 const currentPage = computed(() => props.rotation.currentPage.value);
 const totalPages = computed(() => props.rotation.totalPages.value);
 const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.loading || props.counting);
 </script>
 
 <template>
-	<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+	<ScreenSettingsSubheading>
 		Automatic Paging
-	</p>
+	</ScreenSettingsSubheading>
 
 	<ScreenSettingsToggle
 		:label="fields.autoPageEnabled.label"
@@ -43,26 +41,25 @@ const pageSelectionDisabled = computed(() => totalPages.value <= 1 || props.load
 		@update:model-value="rotation.setAutoPageEnabled($event === true)"
 	/>
 
-	<UFormField
+	<ScreenSettingsField
 		v-if="autoPageEnabled"
 		:label="fields.autoPageIntervalMs.label"
 		description="Time between page transitions."
-		class="flex max-sm:flex-col justify-between items-start gap-4"
 	>
-		<UInputNumber
-			:model-value="intervalSeconds"
+		<ScreenSettingsNumberField
+			:model-value="intervalMs"
+			:display-scale="fields.autoPageIntervalMs.displayScale"
 			:min="fields.autoPageIntervalMs.min"
 			:max="fields.autoPageIntervalMs.max"
-			class="w-32"
-			@update:model-value="rotation.setPageDurationMs(Number($event) * fields.autoPageIntervalMs.displayScale)"
+			@update:model-value="rotation.setPageDurationMs(Number($event))"
 		/>
-	</UFormField>
+	</ScreenSettingsField>
 
 	<USeparator />
 
-	<p class="text-xs font-semibold uppercase tracking-wider text-muted">
+	<ScreenSettingsSubheading>
 		Manual Page Controls
-	</p>
+	</ScreenSettingsSubheading>
 
 	<div
 		role="group"

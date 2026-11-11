@@ -112,7 +112,7 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsCardStub,
 				UFormField: SlotOnlyStub,
 				USwitch: USwitchStub,
 				UFieldGroup: SlotOnlyStub,

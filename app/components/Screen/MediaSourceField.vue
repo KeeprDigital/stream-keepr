@@ -74,7 +74,7 @@ function clearAsset(next: GraphicAssetReference | undefined) {
 </script>
 
 <template>
-	<UFormField label="Source">
+	<ScreenSettingsField label="Source" stacked>
 		<USelect
 			:model-value="kind"
 			:items="sourceKindOptions"
@@ -83,9 +83,9 @@ function clearAsset(next: GraphicAssetReference | undefined) {
 			class="w-full"
 			@update:model-value="selectKind($event as 'asset' | 'url')"
 		/>
-	</UFormField>
+	</ScreenSettingsField>
 
-	<UFormField v-if="kind === 'url'" label="Remote Media URL" :error="urlRefusal">
+	<ScreenSettingsField v-if="kind === 'url'" label="Remote Media URL" :error="urlRefusal" stacked>
 		<UInput
 			:model-value="url"
 			:placeholder="assetKind === 'silent-video' ? 'https://example.com/background.webm' : 'https://example.com/background.png'"
@@ -93,8 +93,8 @@ function clearAsset(next: GraphicAssetReference | undefined) {
 			class="w-full"
 			@update:model-value="emit('update:modelValue', { kind: 'url', url: String($event) })"
 		/>
-	</UFormField>
-	<UFormField v-else :label="label">
+	</ScreenSettingsField>
+	<ScreenSettingsField v-else :label="label" stacked>
 		<GraphicsAssetFocusPicker
 			:model-value="reference"
 			:event-id="eventId"
@@ -103,5 +103,5 @@ function clearAsset(next: GraphicAssetReference | undefined) {
 			@select="(_asset, selected) => selectAsset(selected)"
 			@update:model-value="clearAsset($event)"
 		/>
-	</UFormField>
+	</ScreenSettingsField>
 </template>

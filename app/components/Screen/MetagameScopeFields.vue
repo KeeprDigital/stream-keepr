@@ -64,10 +64,9 @@ const scopeOptions = computed(() => {
 </script>
 
 <template>
-	<UFormField
+	<ScreenSettingsField
 		:label="fields.scope.label"
 		:description="description"
-		class="flex max-sm:flex-col justify-between items-start gap-4"
 	>
 		<USelect
 			:model-value="config.scope"
@@ -75,37 +74,33 @@ const scopeOptions = computed(() => {
 			class="w-48"
 			@update:model-value="emit('update', { scope: $event as MetagameScope })"
 		/>
-	</UFormField>
+	</ScreenSettingsField>
 
-	<UFormField
+	<ScreenSettingsField
 		v-if="config.scope === 'topN'"
 		:label="fields.topN.label"
 		description="Include the top N players by position."
-		class="flex max-sm:flex-col justify-between items-start gap-4"
 	>
-		<UInputNumber
+		<ScreenSettingsNumberField
 			:model-value="config.topN"
 			:min="fields.topN.min"
 			:max="fields.topN.max"
-			class="w-32"
 			@update:model-value="emit('update', { topN: Number($event) })"
 		/>
-	</UFormField>
+	</ScreenSettingsField>
 
-	<UFormField
+	<ScreenSettingsField
 		v-if="config.scope === 'minPoints'"
 		:label="fields.minPoints.label"
 		description="Include players with at least this many match points."
-		class="flex max-sm:flex-col justify-between items-start gap-4"
 	>
-		<UInputNumber
+		<ScreenSettingsNumberField
 			:model-value="config.minPoints"
 			:min="fields.minPoints.min"
 			:max="fields.minPoints.max"
-			class="w-32"
 			@update:model-value="emit('update', { minPoints: Number($event) })"
 		/>
-	</UFormField>
+	</ScreenSettingsField>
 
 	<ScreenPlayerListField
 		v-if="config.scope === 'playerList'"
@@ -114,11 +109,10 @@ const scopeOptions = computed(() => {
 		@update:model-value="emit('update', { playerListId: $event })"
 	/>
 
-	<UFormField
+	<ScreenSettingsField
 		v-if="showArchetypeFilter && fields.archetypeFilter"
 		:label="fields.archetypeFilter.label"
 		description="Limit cards to a single archetype. Leave empty for all archetypes."
-		class="flex max-sm:flex-col justify-between items-start gap-4"
 	>
 		<UInput
 			:model-value="config.archetypeFilter ?? ''"
@@ -126,5 +120,5 @@ const scopeOptions = computed(() => {
 			class="w-64"
 			@update:model-value="emit('update', { archetypeFilter: $event || null })"
 		/>
-	</UFormField>
+	</ScreenSettingsField>
 </template>

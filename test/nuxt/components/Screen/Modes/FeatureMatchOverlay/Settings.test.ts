@@ -219,7 +219,7 @@ const UButtonStub = defineComponent({
 });
 
 const SETTINGS_STUBS = {
-	ScreenSettingsCard: ScreenSettingsCardStub,
+	ScreenSettingsSection: ScreenSettingsCardStub,
 	FeatureMatchOverlayLayerInspector: LayerInspectorStub,
 	FeatureMatchOverlayLayerList: LayerListStub,
 	FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
@@ -1049,7 +1049,7 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 			FeatureMatchOverlayPreviewOutputAside: false,
 			GraphicsCanvasManipulationOverlay: true,
 			// The real preview panel, whose toolbar is its card's actions.
-			ScreenSettingsCard: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
+			ScreenSettingsSection: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
 		});
 		await flushPromises();
 		const toggle = wrapper.get('[data-testid="preview-stress-dataset"]');

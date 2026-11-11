@@ -136,9 +136,9 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 
 <template>
 	<div class="space-y-4">
-		<p class="text-xs text-muted">
+		<ScreenSettingsHint>
 			Layers paint in order: the first layer is the bottom of the stack.
-		</p>
+		</ScreenSettingsHint>
 
 		<div class="space-y-3">
 			<div
@@ -186,17 +186,17 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 						:model-value="layer.enabled"
 						@update:model-value="patchLayer(layer.id, { enabled: $event })"
 					/>
-					<UFormField label="Opacity" data-testid="layer-opacity">
+					<ScreenSettingsField label="Opacity" data-testid="layer-opacity" stacked>
 						<UIOpacityInput
 							:model-value="layer.opacity"
 							size="sm"
 							class="w-full"
 							@update:model-value="patchLayer(layer.id, { opacity: $event ?? 1 })"
 						/>
-					</UFormField>
+					</ScreenSettingsField>
 				</div>
 
-				<UFormField v-if="layer.type === 'color'" label="Colour">
+				<ScreenSettingsField v-if="layer.type === 'color'" label="Colour" stacked>
 					<slot name="color" :value="layer.color" :update="(color: string) => patchLayer(layer.id, { color })">
 						<UIColorPicker
 							:model-value="layer.color"
@@ -204,9 +204,9 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 							@update:model-value="color => color && patchLayer(layer.id, { color })"
 						/>
 					</slot>
-				</UFormField>
+				</ScreenSettingsField>
 
-				<UFormField v-if="layer.type === 'gradient'" label="CSS gradient">
+				<ScreenSettingsField v-if="layer.type === 'gradient'" label="CSS gradient" stacked>
 					<UInput
 						:model-value="layer.gradient"
 						placeholder="linear-gradient(180deg, #0f172a 0%, #020617 100%)"
@@ -214,7 +214,7 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 						class="w-full"
 						@update:model-value="patchLayer(layer.id, { gradient: String($event) })"
 					/>
-				</UFormField>
+				</ScreenSettingsField>
 
 				<template v-if="layer.type === 'image' || layer.type === 'video'">
 					<ScreenMediaSourceField
@@ -241,7 +241,7 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 		</div>
 
 		<div class="flex items-end gap-2">
-			<UFormField label="Add layer" data-testid="add-layer-type" class="grow">
+			<ScreenSettingsField label="Add layer" data-testid="add-layer-type" class="grow" stacked>
 				<USelect
 					:model-value="addLayerType"
 					:items="addLayerOptions"
@@ -250,7 +250,7 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 					class="w-full"
 					@update:model-value="addLayerType = $event as BackgroundLayerType"
 				/>
-			</UFormField>
+			</ScreenSettingsField>
 			<UButton
 				data-testid="add-layer"
 				label="Add"

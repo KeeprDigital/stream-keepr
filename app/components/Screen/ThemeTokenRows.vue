@@ -22,9 +22,9 @@ const entries = computed(() => props.names.map(name => overrides.entry(name)));
 
 <template>
 	<div v-if="entries.length">
-		<p class="text-xs font-medium uppercase text-muted">
+		<ScreenSettingsSubheading>
 			{{ heading }}
-		</p>
+		</ScreenSettingsSubheading>
 		<ThemeTokenField
 			v-for="entry in entries"
 			:key="entry.name"

@@ -72,7 +72,7 @@ function updateParam(field: AnimationEffectParamField, value: AnimationEffectPar
 
 <template>
 	<div class="space-y-3">
-		<UFormField label="Effect">
+		<ScreenSettingsField label="Effect" stacked>
 			<USelect
 				:model-value="selection.effect"
 				:items="ANIMATION_EFFECT_OPTIONS"
@@ -81,7 +81,7 @@ function updateParam(field: AnimationEffectParamField, value: AnimationEffectPar
 				class="w-full"
 				@update:model-value="selectEffect($event as AnimationEffectName)"
 			/>
-		</UFormField>
+		</ScreenSettingsField>
 
 		<div class="grid gap-3 md:grid-cols-3">
 			<template
@@ -95,7 +95,8 @@ function updateParam(field: AnimationEffectParamField, value: AnimationEffectPar
 					:model-value="Boolean(params[field.key])"
 					@update:model-value="updateParam(field, $event)"
 				/>
-				<UFormField
+				<ScreenSettingsField
+					stacked
 					v-else
 					:label="field.label"
 				>
@@ -106,17 +107,17 @@ function updateParam(field: AnimationEffectParamField, value: AnimationEffectPar
 						hex-only
 						@update:model-value="updateParam(field, $event)"
 					/>
-					<UInputNumber
+					<ScreenSettingsNumberField
 						v-else
 						:model-value="Number(params[field.key])"
 						:min="field.min"
 						:max="field.max"
 						:step="field.step"
 						size="sm"
-						class="w-full"
+						fill
 						@update:model-value="updateParam(field, Number($event))"
 					/>
-				</UFormField>
+				</ScreenSettingsField>
 			</template>
 		</div>
 	</div>
