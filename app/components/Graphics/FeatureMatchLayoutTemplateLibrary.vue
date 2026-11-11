@@ -24,6 +24,11 @@ import ScreenSettingsSection from '~/components/Screen/SettingsSection.vue';
  * flight (the `placing` model): an edit sent after it carries the whole layout
  * from before it, and would write the placed one away.
  *
+ * The built-in layouts are listed with the rest. One is placed like any other, and
+ * offers nothing else: it is no record of this installation's to revise, delete or
+ * export. A built-in was drawn for one canvas shape, so placing it on an Event
+ * canvas of another shape says so before it happens.
+ *
  * Browsing, revising, deleting, and receiving a Template Package are the same in this
  * library and in the Broadcast Graphic Template library, because a Template Package
  * means the same thing in both, so they share `useGraphicsTemplateLibrary`.
@@ -44,6 +49,8 @@ const props = defineProps<{
 	 * A host with no unsaved edits passes nothing.
 	 */
 	flushEdits?: () => Promise<boolean>;
+	/** The Event canvas's width over its height, which a placed layout has to fit. */
+	canvasAspectRatio?: number;
 }>();
 
 /**
@@ -127,6 +134,17 @@ function askToPlace(templateId: string) {
 		: templateId;
 }
 
+/**
+ * Whether a template was drawn for a canvas of another shape than this Event's.
+ * Only a template that states its aspect ratio can be asked, which today is a
+ * built-in; a saved or installed layout carries no canvas size.
+ */
+function aspectMismatch(template: FeatureMatchLayoutTemplateSummary): boolean {
+	if (template.aspectRatio === undefined || props.canvasAspectRatio === undefined)
+		return false;
+	return Math.abs(props.canvasAspectRatio - template.aspectRatio) > 0.05;
+}
+
 function cancelPlace() {
 	pendingPlaceId.value = null;
 }
@@ -202,6 +220,7 @@ async function place(templateId: string) {
 					:description="template.description"
 					:revision="template.revision"
 					:authored="template.authored"
+					:built-in="template.builtIn"
 					icon="i-lucide-layout-template"
 					test-id="layout-template"
 					:revisable="canRevise(template)"
@@ -223,6 +242,7 @@ async function place(templateId: string) {
 							keeps rather than a response this component has any use for.
 						-->
 						<UButton
+							v-if="!template.builtIn"
 							size="xs"
 							color="neutral"
 							variant="ghost"
@@ -245,7 +265,7 @@ async function place(templateId: string) {
 							Place
 						</UButton>
 						<UButton
-							v-if="canAuthor"
+							v-if="canAuthor && !template.builtIn"
 							size="xs"
 							color="neutral"
 							variant="ghost"
@@ -273,6 +293,14 @@ async function place(templateId: string) {
 						Replace this Screen's Feature Match Layout with “{{ template.name }}”?
 						The Frame, Source Items, and every Graphic Item are replaced. The
 						Screen's Feature Match Slot and canvas size are kept.
+						<span
+							v-if="aspectMismatch(template)"
+							class="mt-1 block"
+							data-testid="layout-template-place-aspect-warning"
+						>
+							It was drawn for a canvas of a different shape than this Event's,
+							so its geometry may need adjusting once placed.
+						</span>
 					</GraphicsTemplateLibraryConfirmation>
 
 					<!--

@@ -45,7 +45,9 @@ describe('useFeatureMatchLayoutEditor without the lease', () => {
 	it.each<[string, (editor: FeatureMatchLayoutEditor) => void]>([
 		[
 			'edit',
-			editor => editor.editFields({ presetId: 'full-table' }),
+			editor => editor.editFields({
+				layout: { ...DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout, sources: [] },
+			}),
 		],
 		[
 			'add a Graphic Item',

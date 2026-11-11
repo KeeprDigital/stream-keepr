@@ -1,31 +1,31 @@
 <script setup lang="ts">
 import type { ScreenOutputMatchSide, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 
 const { config, error, ready, isEmpty, headerText, pageData, pageSize, formatResult, winner } = usePairingsModeData(useScreenContext());
 
 const inset = useScreenInset();
 
 const primaryTextStyle = {
-	color: modeTokenVar('pairings', 'primary-text'),
+	color: foundationTokenVar('text-primary'),
 };
 const secondaryTextStyle = {
-	color: modeTokenVar('pairings', 'secondary-text'),
+	color: foundationTokenVar('text-secondary'),
 };
 const titleStyle = {
-	...modeTypographyStyle('pairings', 'title-typography'),
-	color: modeTokenVar('pairings', 'title-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-primary'),
 };
 const titleDividerStyle = {
-	borderBottomColor: modeTokenVar('pairings', 'title-divider'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 /** On each row too, over the shared row chrome's own line height. */
 const rowStyle = {
-	...modeTypographyStyle('pairings', 'row-typography'),
-	borderBottomColor: modeTokenVar('pairings', 'row-divider'),
+	...foundationTypographyStyle('body'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 const surfaceStyle = {
-	backgroundColor: modeTokenVar('pairings', 'surface'),
+	backgroundColor: foundationTokenVar('surface'),
 };
 
 type ResultState = 'reported' | 'pending' | 'bye';
@@ -44,7 +44,7 @@ function resultState(row: ScreenOutputRoundMatch): ResultState {
 
 function resultStyle(row: ScreenOutputRoundMatch) {
 	return {
-		...modeTypographyStyle('pairings', 'result-typography'),
+		...foundationTypographyStyle('heading'),
 		color: resultColors[resultState(row)],
 	};
 }
@@ -59,8 +59,8 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('tableRef')
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = computed(() => ({
 	...rowLayoutStyle.value,
-	...modeTypographyStyle('pairings', 'row-typography'),
-	color: modeTokenVar('pairings', 'primary-text'),
+	...foundationTypographyStyle('body'),
+	color: foundationTokenVar('text-primary'),
 }));
 
 function sideName(row: ScreenOutputRoundMatch, side: ScreenOutputMatchSide | null) {

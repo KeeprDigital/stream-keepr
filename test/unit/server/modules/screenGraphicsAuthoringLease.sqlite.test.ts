@@ -11,7 +11,7 @@ import {
 	graphicAssetRevisions,
 	graphicAssets,
 } from '~~/server/db/schema/graphicsAsset';
-import { applyFeatureMatchOverlayPreset, DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/featureMatchOverlayPresets';
+import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { seedBroadcastGraphicsScreen } from '~~/test/helpers/broadcastGraphicsScreen';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
@@ -302,7 +302,7 @@ describe('a takeover between admission and commit', () => {
  */
 describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', () => {
 	let storedLayout: FeatureMatchOverlayModeConfig['layout'];
-	const otherPreset = applyFeatureMatchOverlayPreset(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, 'full-table');
+	const otherPreset = structuredClone(FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === 'full-table')!.config);
 
 	beforeEach(async () => {
 		const [slot] = await db.insert(schema.featureMatches).values({ eventId } as never).returning();
@@ -340,21 +340,12 @@ describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', 
 			'its layout',
 			{ layout: otherPreset.layout },
 		],
-		[
-			'its preset',
-			{ presetId: 'full-table' },
-		],
-		[
-			'a display reset',
-			{ presetId: otherPreset.presetId, layout: otherPreset.layout },
-		],
 	])('refuses another Session\'s mode configuration write of %s', async (_, config) => {
 		await lease(HOLDER);
 
 		await expect(modeConfigWrite(OTHER, config)).rejects.toMatchObject({ statusCode: 409 });
 
 		expect((await overlay())?.layout).toEqual(storedLayout);
-		expect((await overlay())?.presetId).toBe(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.presetId);
 	});
 
 	it('admits the holder\'s layout write', async () => {

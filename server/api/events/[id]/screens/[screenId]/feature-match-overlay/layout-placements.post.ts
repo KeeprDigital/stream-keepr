@@ -20,9 +20,8 @@ import { optionalBrowserSessionId } from '~~/server/utils/auth';
  * layout: the Screen's Feature Match Slot assignment, its canvas size, and its live
  * session all belong to the Screen and are untouched.
  *
- * `presetId` is left alone too. It records which built-in starting point initialised
- * this Screen's layout, and a template is not one — overwriting it would claim the
- * layout came from a preset it has nothing to do with.
+ * A built-in template is placed by this path like any other, and nothing records
+ * which template a layout came from.
  *
  * ## Why it happens here rather than in the client
  *
