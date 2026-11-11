@@ -3,9 +3,9 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { createCommandHarness } from './featureMatchSessionHelpers';
-import { integrationRealtimeConfigured } from './helpers';
 import { anotherBrowser } from './identities';
 import { diagnoseRealtimePublishFailure, SCREEN_COMMAND_ROUTE_REFUSALS } from './realtimeDiagnosis';
+import { integrationRealtimeConfigured } from './realtimeKey';
 
 interface LeaseState {
 	artifact: { kind: string; id: string };

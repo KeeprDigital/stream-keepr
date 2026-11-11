@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch } from './client';
-import { $fetchRaw, integrationRealtimeConfigured } from './helpers';
+import { $fetchRaw } from './helpers';
+import { integrationRealtimeConfigured } from './realtimeKey';
 
 describe('misc API endpoints', () => {
 	let eventId: number;

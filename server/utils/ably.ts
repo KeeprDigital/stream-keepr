@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3';
-import type { EventMessage, ScreenChannelDelivery, ScreenChannelFailure } from '~~/server/modules/screen-output-publication';
+import type { AfterAnswer, EventMessage, ScreenChannelDelivery, ScreenChannelFailure } from '~~/server/modules/screen-output-publication';
 import type {
 	MessagePayload,
 	MessageType,
@@ -143,6 +143,26 @@ async function publishToScreenChannels(
 }
 
 /**
+ * The request this publish is made in, where the Worker can finish work after
+ * answering it (`nitro.experimental.asyncContext`, and the Worker's
+ * `waitUntil`). None in a scheduled handler, a request Nitro makes of itself
+ * with no platform context, or a unit test: there the publish waits.
+ */
+function requestAfterAnswer(): AfterAnswer | undefined {
+	try {
+		const request = useEvent();
+		const executionContext = request.context.cloudflare?.context;
+		return executionContext && {
+			request,
+			waitUntil: work => executionContext.waitUntil(work),
+		};
+	}
+	catch {
+		return undefined;
+	}
+}
+
+/**
  * Tell the Screens of a message just published on their Event's channel. Every
  * Event publish in this file ends here, so no publish site can leave its
  * Screens untold; it never throws, whatever became of the Event publish.
@@ -158,6 +178,7 @@ async function tellScreenOutputs<T extends MessageType>(
 		{ type: messageType, payload } as EventMessage,
 		originConnectionId,
 		publishToScreenChannels,
+		requestAfterAnswer(),
 	);
 }
 
@@ -213,7 +234,8 @@ export async function publishMessage<T extends MessageType>(
  * swallow behavior for unrelated callers.
  *
  * Only the Event channel's failure is preserved. The Screens are told after it
- * either way, and a Screen channel's refusal is never this function's.
+ * either way, before this answers or after the request does, and a Screen
+ * channel's refusal is never this function's.
  */
 export async function publishMessageStrict<T extends MessageType>(
 	eventId: number,

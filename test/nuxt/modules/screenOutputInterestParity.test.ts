@@ -79,6 +79,8 @@ const MESSAGES = {
 	'naming something else': eventMessageSamples(OTHER),
 	// A Match the rendering holds, since moved to another Round and re-seated.
 	'moving a Match it holds away': eventMessageSamples({ ...OTHER, matchId: SHOWN.matchId }),
+	// The Match a Slot follows, which only the Slot names, moved and re-seated the same way.
+	'moving the Match its Slot follows away': eventMessageSamples({ ...OTHER, matchId: HELD.matchId }),
 } as const;
 
 type Dependencies = ScreenModeDependencies<any>;
@@ -92,6 +94,8 @@ interface ParityCase {
 	dependsOn: Dependencies;
 	/** What the rendering holds of its last read. */
 	held: unknown;
+	/** The message types the rule narrows as far as the rendering does: it hears those exactly when the rendering re-reads. */
+	exactly?: MessageType[];
 }
 
 function screenIn<M extends ScreenMode>(mode: M, config: Partial<ModeConfigTypeMap[M]> = {}): HearingScreen<M> {
@@ -112,6 +116,13 @@ const seated: ScreenHearsContext = {
 	},
 };
 const seatedIds = seated.slot!.playerIds;
+/** The Slot as the server reads it after a write: following the Match its rendering holds, or none. */
+function following(match: NonNullable<ScreenHearsContext['slot']>['match']): ScreenHearsContext {
+	return {
+		slot: { ...seated.slot!, match },
+	};
+}
+const OVERLAY_NARROWS: MessageType[] = ['match:updated', 'round:updated', 'phase:updated'];
 
 /**
  * The Slot and its Session a Slot-showing mode held in the stores, which the
@@ -409,6 +420,19 @@ const CASES: ParityCase[] = [
 		declaration: 'inline',
 		name: 'Feature Match Overlay',
 		screen: screenIn('feature-match-overlay', { featureMatchId: SHOWN.slotId }),
+		context: following({ id: HELD.matchId, roundId: HELD.roundId, phaseId: HELD.phaseId }),
+		dependsOn: OVERLAY,
+		held: {
+			sourceMatch: { id: HELD.matchId },
+			round: { id: HELD.roundId },
+			phase: { id: HELD.phaseId },
+		},
+		exactly: OVERLAY_NARROWS,
+	},
+	{
+		declaration: 'inline',
+		name: 'Feature Match Overlay, told nothing of its Slot\'s Match',
+		screen: screenIn('feature-match-overlay', { featureMatchId: SHOWN.slotId }),
 		context: seated,
 		dependsOn: OVERLAY,
 		held: {
@@ -416,6 +440,15 @@ const CASES: ParityCase[] = [
 			round: { id: HELD.roundId },
 			phase: { id: HELD.phaseId },
 		},
+	},
+	{
+		declaration: 'inline',
+		name: 'Feature Match Overlay of a Slot following no Match',
+		screen: screenIn('feature-match-overlay', { featureMatchId: SHOWN.slotId }),
+		context: following(null),
+		dependsOn: OVERLAY,
+		held: { sourceMatch: null },
+		exactly: ['match:updated'],
 	},
 	{
 		declaration: 'inline',
@@ -447,28 +480,34 @@ const CASES: ParityCase[] = [
 	},
 ];
 
-/** Every message a case's rendering re-read on, given what it held. */
-const REREADS = CASES.flatMap(parityCase =>
+/** Every message a case's rendering depended on, in each naming, and whether it re-read on it given what it held. */
+const DEPENDENCIES = CASES.flatMap(parityCase =>
 	(Object.keys(parityCase.dependsOn) as MessageType[]).flatMap(type =>
-		Object.entries(MESSAGES).flatMap(([naming, samples]) => {
+		Object.entries(MESSAGES).map(([naming, samples]) => {
 			const dependency = parityCase.dependsOn[type] as true | ((message: unknown, held: unknown) => boolean);
-			const rereads = dependency === true || dependency(samples[type], parityCase.held);
-			return rereads
-				? [
-						{
-							parityCase,
-							type,
-							naming,
-							payload: samples[type],
-						},
-					]
-				: [];
+			return {
+				parityCase,
+				name: parityCase.name,
+				type,
+				naming,
+				payload: samples[type],
+				rereads: dependency === true || dependency(samples[type], parityCase.held),
+			};
 		})));
+const REREADS = DEPENDENCIES.filter(({ rereads }) => rereads);
+/** The messages a rendering ignores of a type its Screen's rule narrows as far as it does. */
+const IGNORED_EXACTLY = DEPENDENCIES.filter(({ parityCase, type, rereads }) => !rereads && parityCase.exactly?.includes(type));
 
 describe('a Screen hears every message its rendering re-reads on', () => {
-	it.each(REREADS.map(reread => ({ ...reread, name: reread.parityCase.name })))('$name: $type $naming', ({ parityCase, type, payload }) => {
+	it.each(REREADS)('$name: $type $naming', ({ parityCase, type, payload }) => {
 		const hears = outputChangeOf(type, payload).some(change => screenHears(parityCase.screen, change, parityCase.context));
 		expect(hears).toBe(true);
+	});
+
+	// Where the rule is told what the rendering holds, it stays as silent as the rendering.
+	it.each(IGNORED_EXACTLY)('$name hears no $type $naming', ({ parityCase, type, payload }) => {
+		const hears = outputChangeOf(type, payload).some(change => screenHears(parityCase.screen, change, parityCase.context));
+		expect(hears).toBe(false);
 	});
 
 	// No dependency goes unproven because no case made its rendering re-read.

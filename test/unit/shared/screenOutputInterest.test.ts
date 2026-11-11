@@ -3,7 +3,7 @@ import type { ScreenMode } from '~~/shared/types/enums';
 import type { MessageType } from '~~/shared/types/messages';
 import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
-import { OUTPUT_CHANGE_KINDS, outputChangeOf, screenHears } from '~~/shared/screenOutputInterest';
+import { OUTPUT_CHANGE_KINDS, outputChangeOf, screenHears, slotNarrowingOf } from '~~/shared/screenOutputInterest';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { eventMessageSamples } from '~~/test/helpers/eventMessageSamples';
@@ -19,8 +19,11 @@ const PLAYER = 21;
 const OPPONENT = 22;
 const OTHER_PLAYER = 29;
 const PHASE = 31;
+const OTHER_PHASE = 39;
 const ROUND = 41;
 const OTHER_ROUND = 49;
+const MATCH = 51;
+const OTHER_MATCH = 59;
 const SLOT = 61;
 const OTHER_SLOT = 69;
 const LIST = 71;
@@ -36,7 +39,7 @@ const SAMPLES = eventMessageSamples({
 	opponentId: OPPONENT,
 	phaseId: PHASE,
 	roundId: ROUND,
-	matchId: 51,
+	matchId: MATCH,
 	slotId: SLOT,
 	playerListId: LIST,
 	talentId: TALENT,
@@ -74,6 +77,17 @@ function seats(slotId: number): ScreenHearsContext {
 		slot: {
 			id: slotId,
 			playerIds: [PLAYER, OPPONENT],
+		},
+	};
+}
+/** The Slot as read after the write: the Match it follows, with that Match's Round and Phase, or none. */
+function follows(slotId: number, match: 'its Match' | 'no Match'): ScreenHearsContext {
+	return {
+		slot: {
+			...seats(slotId).slot!,
+			match: match === 'its Match'
+				? { id: MATCH, roundId: ROUND, phaseId: PHASE }
+				: null,
 		},
 	};
 }
@@ -212,6 +226,7 @@ describe('outputChangeOf', () => {
 				{
 					kind: 'match',
 					roundIds: [ROUND],
+					matchIds: [MATCH],
 				},
 			],
 		],
@@ -221,6 +236,7 @@ describe('outputChangeOf', () => {
 				{
 					kind: 'match',
 					roundIds: [ROUND],
+					matchIds: [MATCH],
 				},
 			],
 		],
@@ -347,6 +363,7 @@ describe('outputChangeOf', () => {
 				{
 					kind: 'match',
 					roundIds: [ROUND],
+					matchIds: [MATCH],
 				},
 			],
 		],
@@ -1221,6 +1238,270 @@ describe('screenHears', () => {
 				playerIds: [playerId],
 			}, context)).toBe(hears);
 		});
+	});
+
+	// A Feature Match Overlay shows the one Match its Slot follows, and that
+	// Match's Round and Phase. Told nothing of them, it hears every one; a
+	// change naming none is a delete or a sync, which may have unlinked the Slot.
+	it.each<[string, OutputChange, ScreenHearsContext | undefined, boolean]>([
+		[
+			'hears the Match its Slot follows',
+			{
+				kind: 'match',
+				roundIds: [ROUND],
+				matchIds: [MATCH],
+			},
+			follows(SLOT, 'its Match'),
+			true,
+		],
+		[
+			'hears that Match moved to another Round',
+			{
+				kind: 'match',
+				roundIds: [OTHER_ROUND],
+				matchIds: [MATCH],
+			},
+			follows(SLOT, 'its Match'),
+			true,
+		],
+		[
+			'ignores another Match',
+			{
+				kind: 'match',
+				roundIds: [ROUND],
+				matchIds: [OTHER_MATCH],
+			},
+			follows(SLOT, 'its Match'),
+			false,
+		],
+		[
+			'ignores every named Match while its Slot follows none',
+			{
+				kind: 'match',
+				roundIds: [ROUND],
+				matchIds: [MATCH],
+			},
+			follows(SLOT, 'no Match'),
+			false,
+		],
+		[
+			'hears a Match change naming no Match',
+			{
+				kind: 'match',
+				roundIds: [OTHER_ROUND],
+			},
+			follows(SLOT, 'its Match'),
+			true,
+		],
+		[
+			'hears a Match change naming no Match while its Slot follows none',
+			{ kind: 'match' },
+			follows(SLOT, 'no Match'),
+			true,
+		],
+		[
+			'hears any Match, told of no Slot',
+			{
+				kind: 'match',
+				matchIds: [OTHER_MATCH],
+			},
+			undefined,
+			true,
+		],
+		[
+			'hears any Match, told only who its Slot seats',
+			{
+				kind: 'match',
+				matchIds: [OTHER_MATCH],
+			},
+			seats(SLOT),
+			true,
+		],
+		[
+			'hears any Match, told of another Slot',
+			{
+				kind: 'match',
+				matchIds: [OTHER_MATCH],
+			},
+			follows(OTHER_SLOT, 'its Match'),
+			true,
+		],
+		[
+			'hears its Match\'s Round',
+			{
+				kind: 'round',
+				roundIds: [ROUND],
+			},
+			follows(SLOT, 'its Match'),
+			true,
+		],
+		[
+			'ignores another Round',
+			{
+				kind: 'round',
+				roundIds: [OTHER_ROUND],
+			},
+			follows(SLOT, 'its Match'),
+			false,
+		],
+		[
+			'hears any Round while its Slot follows no Match',
+			{
+				kind: 'round',
+				roundIds: [OTHER_ROUND],
+			},
+			follows(SLOT, 'no Match'),
+			true,
+		],
+		[
+			'hears any Round, told only who its Slot seats',
+			{
+				kind: 'round',
+				roundIds: [OTHER_ROUND],
+			},
+			seats(SLOT),
+			true,
+		],
+		[
+			'hears a Round change naming no Round',
+			{ kind: 'round' },
+			follows(SLOT, 'its Match'),
+			true,
+		],
+		[
+			'hears its Match\'s Phase',
+			{
+				kind: 'phase',
+				phaseIds: [PHASE],
+			},
+			follows(SLOT, 'its Match'),
+			true,
+		],
+		[
+			'ignores another Phase',
+			{
+				kind: 'phase',
+				phaseIds: [OTHER_PHASE],
+			},
+			follows(SLOT, 'its Match'),
+			false,
+		],
+		[
+			'hears any Phase while its Slot follows no Match',
+			{
+				kind: 'phase',
+				phaseIds: [OTHER_PHASE],
+			},
+			follows(SLOT, 'no Match'),
+			true,
+		],
+		[
+			'hears any Phase, told of another Slot',
+			{
+				kind: 'phase',
+				phaseIds: [OTHER_PHASE],
+			},
+			follows(OTHER_SLOT, 'its Match'),
+			true,
+		],
+	])('a Feature Match Overlay %s', (_case, change, context, hears) => {
+		const screen = screenIn('feature-match-overlay', { featureMatchId: SLOT });
+		expect(screenHears(screen, change, context)).toBe(hears);
+	});
+
+	// Only its Players does a Head-to-Head of a Slot take from the Slot: the
+	// earlier Matches between them are its read's to know.
+	it('a Head-to-Head of a Slot hears every Match, whichever its Slot follows', () => {
+		const screen = screenIn('head-to-head', { featureMatchId: SLOT });
+		expect(screenHears(screen, {
+			kind: 'match',
+			roundIds: [ROUND],
+			matchIds: [OTHER_MATCH],
+		}, follows(SLOT, 'its Match'))).toBe(true);
+	});
+
+	// The caller reads a Slot only for a change its row can rule out.
+	it.each<[string, ReturnType<typeof screenIn>, OutputChange, number | null]>([
+		[
+			'a named Match, for a Feature Match Overlay',
+			screenIn('feature-match-overlay', { featureMatchId: SLOT }),
+			{
+				kind: 'match',
+				matchIds: [MATCH],
+			},
+			SLOT,
+		],
+		[
+			'a named Round, for a Feature Match Overlay',
+			screenIn('feature-match-overlay', { featureMatchId: SLOT }),
+			{
+				kind: 'round',
+				roundIds: [ROUND],
+			},
+			SLOT,
+		],
+		[
+			'a named Phase, for a Feature Match Overlay',
+			screenIn('feature-match-overlay', { featureMatchId: SLOT }),
+			{
+				kind: 'phase',
+				phaseIds: [PHASE],
+			},
+			SLOT,
+		],
+		[
+			'a named Player, for a Head-to-Head of a Slot',
+			screenIn('head-to-head', { featureMatchId: SLOT }),
+			{
+				kind: 'player',
+				playerIds: [PLAYER],
+			},
+			SLOT,
+		],
+		[
+			'a Match change naming only its Round',
+			screenIn('feature-match-overlay', { featureMatchId: SLOT }),
+			{
+				kind: 'match',
+				roundIds: [ROUND],
+			},
+			null,
+		],
+		[
+			'a change naming nothing',
+			screenIn('feature-match-overlay', { featureMatchId: SLOT }),
+			{ kind: 'player' },
+			null,
+		],
+		[
+			'a named Match, for a Head-to-Head of a Slot',
+			screenIn('head-to-head', { featureMatchId: SLOT }),
+			{
+				kind: 'match',
+				matchIds: [MATCH],
+			},
+			null,
+		],
+		[
+			'a Feature Match Overlay of no Slot',
+			screenIn('feature-match-overlay'),
+			{
+				kind: 'match',
+				matchIds: [MATCH],
+			},
+			null,
+		],
+		[
+			'a kind the mode does not follow',
+			screenIn('standings'),
+			{
+				kind: 'match',
+				matchIds: [MATCH],
+			},
+			null,
+		],
+	])('slotNarrowingOf names the Slot to read for %s', (_case, screen, change, slotId) => {
+		expect(slotNarrowingOf(screen, change)).toBe(slotId);
 	});
 
 	it.each<[string, number, boolean]>([

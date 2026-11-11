@@ -235,8 +235,16 @@ const headToHeadSlot = (config: HeadToHeadModeConfig) => config.playerSource ===
 /** Whether a Round Clock follows the Current Round, which any Round, Phase or Match may move. */
 const followsCurrentRound = (config: RoundClockModeConfig) => config.roundId == null;
 
-/** Whether a Feature Match Overlay names its Slot; until then it reads nothing. */
-const selectsOverlaySlot = (config: FeatureMatchOverlayModeConfig) => config.featureMatchId != null;
+/**
+ * The one Match the Overlay's Slot follows, or that Match's Round or Phase:
+ * all it shows of each kind. Until it names a Slot it reads nothing.
+ */
+function overlayFollowed(field: 'matchIds' | 'roundIds' | 'phaseIds') {
+	return (config: FeatureMatchOverlayModeConfig): OutputFollowNarrowing | false =>
+		config.featureMatchId != null && {
+			[field]: { followedBy: config.featureMatchId },
+		};
+}
 
 /** The Players the Overlay's Slot seats, whose sideboards a Deck List Graphic Item shows. */
 function overlaySeatedPlayers(config: FeatureMatchOverlayModeConfig): OutputFollowNarrowing | false {
@@ -386,11 +394,12 @@ const SCREEN_MODE_DEFINITIONS = {
 		outputFollows: {
 			featureMatchSlot: (config: FeatureMatchOverlayModeConfig) => namedSlot(config.featureMatchId),
 			featureMatchSession: (config: FeatureMatchOverlayModeConfig) => namedSlot(config.featureMatchId),
-			// Over-approximation: it shows the one Match its Slot follows, and
-			// that Match's Round and Phase, which the Slot names and the config does not.
-			match: selectsOverlaySlot,
-			round: selectsOverlaySlot,
-			phase: selectsOverlaySlot,
+			// The one Match its Slot follows, and that Match's Round and Phase.
+			// A Slot's Match changes only in a write announcing the Slot, so the
+			// Slot as it stands after any write names the Match its output shows.
+			match: overlayFollowed('matchIds'),
+			round: overlayFollowed('roundIds'),
+			phase: overlayFollowed('phaseIds'),
 			// Over-approximation: followed whether or not the layout holds a Deck List Graphic Item.
 			player: overlaySeatedPlayers,
 			playerDeck: overlaySeatedPlayers,

@@ -6,8 +6,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { screenRealtimeChannel } from '../../shared/utils/realtimeChannels';
 import { LOAD_TOLERANT_WAIT_MS } from '../helpers/loadTolerantBounds';
 import { $fetch, anonymousFetch } from './client';
-import { $fetchRaw, integrationRealtimeConfigured } from './helpers';
+import { $fetchRaw } from './helpers';
 import { executeIntegrationD1 } from './integrationD1';
+import { integrationRealtimeConfigured } from './realtimeKey';
 
 /**
  * A Screen Output reads everything it renders with its Screen Output Asset
