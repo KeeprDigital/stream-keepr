@@ -194,27 +194,27 @@ describe('screenMetagameSettings', () => {
 	});
 
 	// Each Mode Token's Look sits in the card for what it styles (ADR-0072):
-	// the Table outside chart view, the Chart in it.
+	// the Table's outside chart view; the Chart holds none.
 	it.each([
 		[
 			'archetype',
 			'Table',
 			'metagame:table',
-			'table',
+			['table'],
 		],
 		[
 			'cards',
 			'Table',
 			'metagame:table',
-			'table',
+			['table'],
 		],
 		[
 			'chart',
 			'Chart',
 			'metagame:chart',
-			'chart',
+			[],
 		],
-	] as const)('lays out its cards in %s view', async (viewMode, title, id, group) => {
+	] as const)('lays out its cards in %s view', async (viewMode, title, id, groups) => {
 		mockConfig.value = {
 			...structuredClone(defaultConfig),
 			viewMode,
@@ -234,7 +234,7 @@ describe('screenMetagameSettings', () => {
 				id,
 				title,
 				collapsible: true,
-				groups: [group],
+				groups: [...groups],
 			},
 			{
 				id: 'metagame:size-and-surface',
@@ -246,7 +246,7 @@ describe('screenMetagameSettings', () => {
 				id: 'metagame:header',
 				title: 'Header',
 				collapsible: true,
-				groups: ['header'],
+				groups: [],
 			},
 			...(paged
 				? [

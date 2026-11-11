@@ -28,27 +28,27 @@ describe('a closed Screen settings card\'s summary', () => {
 	it.each([
 		[
 			'no override',
-			['header'],
+			['data'],
 			{},
 			null,
 		],
 		[
 			'an override of another group\'s token',
-			['header'],
-			{ 'standings.surface': '#000000' },
+			['data'],
+			{ 'standings.rise': '#000000' },
 			null,
 		],
 		[
 			'one override in the group',
-			['header'],
-			{ 'standings.title-text': '#ff0000' },
+			['table'],
+			{ 'standings.fall': '#ff0000' },
 			'1 Screen Theme Override',
 		],
 		[
 			'overrides across the groups it renders',
 			['table', 'data'],
 			{
-				'standings.surface': '#000000',
+				'standings.rise': '#000000',
 				'standings.reveal-motion': { duration: 100 },
 			},
 			'2 Screen Theme Overrides',

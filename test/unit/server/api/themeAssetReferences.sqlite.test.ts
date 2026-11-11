@@ -153,7 +153,8 @@ beforeEach(async () => {
 		})
 		.returning({ id: schema.events.id });
 	eventId = event!.id;
-	screenId = (await createScreen('main')).id;
+	// A mode declaring a typography Mode Token, so its Screen may override the Theme's fonts.
+	screenId = (await createScreen('main', 'top-cut')).id;
 });
 
 const retire = (revision: Revision) => context.library.retireGraphicAsset({ assetId: revision.assetId, actor: 'author' });
@@ -419,13 +420,13 @@ describe('a Screen Output\'s capability over its Theme\'s content', () => {
 	it('resolves a dormant override of another mode\'s Mode Token only once the Screen shows that mode again', async () => {
 		await call(patchOverrides, { id: eventId, screenId }, {
 			tokens: {
-				'standings.title-typography': libraryFont(face),
+				'top-cut.round-name-typography': libraryFont(face),
 			},
 		});
 		await db.update(schema.screens).set({ currentMode: 'card' }).where(eq(schema.screens.id, screenId));
 		expect(await resolves(await screenRow(screenId), face)).toBe(false);
 
-		await db.update(schema.screens).set({ currentMode: 'standings' }).where(eq(schema.screens.id, screenId));
+		await db.update(schema.screens).set({ currentMode: 'top-cut' }).where(eq(schema.screens.id, screenId));
 		expect(await resolves(await screenRow(screenId), face)).toBe(true);
 	});
 

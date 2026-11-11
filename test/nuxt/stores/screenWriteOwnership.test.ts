@@ -369,8 +369,8 @@ describe('screen store writes and what overtakes them', () => {
 			const write = served();
 			mockRepo.updateThemeOverrides.mockReturnValueOnce(write.promise);
 
-			const save = store.updateThemeOverrides(1, 1, { 'accent': null, 'standings.surface': '#000000' });
-			expect(store.screens[0]!.themeOverrides).toEqual({ 'standings.surface': '#000000' });
+			const save = store.updateThemeOverrides(1, 1, { 'accent': null, 'standings.rise': '#000000' });
+			expect(store.screens[0]!.themeOverrides).toEqual({ 'standings.rise': '#000000' });
 			mockRepo.getById.mockResolvedValueOnce(createMockScreen({
 				id: 1,
 				stateVersion: 2,
