@@ -185,6 +185,34 @@ describe('featureMatchOverlayFrameStyleCard', () => {
 		expect(wrapper.get(`[data-section="${section}"]`).findAll('[data-token]').map(row => row.attributes('data-token'))).toEqual([token]);
 	});
 
+	// A Frame setting stored partly in the layout and partly as a Mode Token is edited in one section (#1103).
+	it.each([
+		[
+			'Video',
+			['[data-testid="media-background-fields"]'],
+			'feature-match-overlay.frame-media',
+		],
+		[
+			'Animation',
+			['[data-testid="settings-toggle"]', '[data-testid="frame-animation-opacity"]'],
+			'feature-match-overlay.frame-animation-effect',
+		],
+	] as const)('edits the Frame\'s %s, its layout fields and its Mode Token, in that one section', async (section, selectors, token) => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.frame = {
+			...config.layout.frame,
+			animation: { enabled: true, opacity: 0.45 },
+		};
+		const wrapper = await mountComponent({ config });
+		const sections = wrapper.findAll('[data-section]');
+		const holding = (has: (found: (typeof sections)[number]) => boolean) =>
+			sections.filter(has).map(found => found.attributes('data-section'));
+
+		for (const selector of selectors)
+			expect(holding(found => found.find(selector).exists())).toEqual([section]);
+		expect(holding(found => found.find(`[data-token="${token}"]`).exists())).toEqual([section]);
+	});
+
 	it.each([
 		[
 			'writes',
