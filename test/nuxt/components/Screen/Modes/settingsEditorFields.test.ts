@@ -29,6 +29,8 @@ const BESPOKE_CONTROLS: Record<string, string> = {
 	// A Card Layout's bounds follow its content (ADR-0054), tested at `ScreenCardGridLayoutFields`.
 	'top-cards.columns': 'a column count kept to the card count',
 	'top-cards.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',
+	'deck.mainboard.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',
+	'deck.sideboard.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',
 	// Numeric sizes and an unset choice, which a string select field cannot hold; both
 	// the editor and the contract read them from TOP_CUT_BRACKET_SIZES.
 	'top-cut.bracketSizeOverride': 'the Bracket size select',
@@ -310,6 +312,8 @@ const stubs = {
 		setup: (_, { slots }) => () => h('section', slots.default?.()),
 	}),
 	ScreenSettingsToggle: controlStub('toggle', props => !props.modelValue),
+	// A bare switch, as a card badge's row shows it, named by its field.
+	USwitch: controlStub('toggle', props => !props.modelValue),
 	UFormField: UFormFieldStub,
 	UInputNumber: controlStub('number', props => (Number(props.modelValue) || 0) + 1),
 	USelect: controlStub('select', differentItem),

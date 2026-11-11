@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import type { TabsItem } from '@nuxt/ui';
 import type { BoardSelection, SideboardPlacement, SideboardView } from '~~/shared/types/enums';
-import type { ResolvedDeckBoardLayout, ResolvedSideboardLayout } from '~~/shared/types/screenConfig';
+import type { ResolvedDeckBoardLayout } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
-import { DECK_SIDEBOARD_LAYOUT_FIELDS } from '~~/shared/screenModeConfigs/deck';
+import { eventCanvasOf } from '~~/shared/eventCanvas';
+import { DECK_SIDEBOARD_LAYOUT_FIELDS, patchedBoardLayout } from '~~/shared/screenModeConfigs/deck';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { DEFAULT_COMPANION_TAG_POSITION, DEFAULT_DECK_TEXT_SIZES, DEFAULT_HIGHLANDER_POINTS_POSITION, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
-import { getMtgGameData } from '~~/shared/utils/gameData';
 import { SIDEBOARD_PLACEMENT_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
-import { lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
-import { useConsumedEventData } from '~/modules/event-data/resync';
+import { cardLayoutSummary, lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 
 const props = defineProps<{
 	screen: Screen;
@@ -34,29 +32,12 @@ defineExpose({ resetConfig, saving });
 const fields = screenModeConfigContract('deck').fields;
 const boardFields = DECK_SIDEBOARD_LAYOUT_FIELDS;
 
+/** The Event Canvas the Screen renders in, which bounds a board's max card size. */
+const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
+
 /** A One Piece Card Game Event shows a Feature Match Slot side's or a Player's Deck List, set up in its own settings (ADR-0057, ADR-0074). */
 const isOpEvent = computed(() => eventStore.event?.game === 'op');
 
-const broadcastDeckListsEnabled = computed(() =>
-	eventStore.event?.game === 'mtg'
-	&& eventStore.event.broadcastDeckListsEnabled,
-);
-const sourceTab = ref<'player' | 'broadcast'>(
-	config.value.deckSource.type === 'broadcast' && broadcastDeckListsEnabled.value
-		? 'broadcast'
-		: 'player',
-);
-const sourceTabs: TabsItem[] = [
-	{ label: 'Player Deck', value: 'player', icon: 'i-lucide-user' },
-	{ label: 'Broadcast Deck List', value: 'broadcast', icon: 'i-lucide-radio' },
-];
-const selectedBroadcastDeckListId = computed(() => config.value.deckSource.type === 'broadcast'
-	? config.value.deckSource.broadcastDeckListId
-	: null);
-const broadcastDeckListOptions = computed(() => [
-	{ label: 'Select a Broadcast Deck List…', value: null },
-	...broadcastDeckListStore.summaries.map(list => ({ label: list.name, value: list.id })),
-]);
 const isBroadcastSource = computed(() => config.value.deckSource.type === 'broadcast');
 // Card points come from the Event's points system; a Broadcast Deck List carries none.
 const showsCardPoints = computed(() => !isBroadcastSource.value && !!eventStore.event?.pointsSystem);
@@ -64,68 +45,6 @@ const showsCardPoints = computed(() => !isBroadcastSource.value && !!eventStore.
 const showsDetailsRow = computed(() =>
 	!!config.value.showDeckStats
 	|| (showsCardPoints.value && config.value.showHighlanderTotal !== false));
-
-function selectBroadcastDeckList(listId: number | null) {
-	if (listId !== null) {
-		updateConfig({
-			deckSource: { type: 'broadcast', broadcastDeckListId: listId },
-		});
-	}
-}
-
-watch(() => config.value.deckSource.type, (source) => {
-	if (source === 'player' || (source === 'broadcast' && broadcastDeckListsEnabled.value))
-		sourceTab.value = source;
-});
-
-watch(broadcastDeckListsEnabled, (enabled, wasEnabled) => {
-	if (!enabled) {
-		sourceTab.value = 'player';
-		return;
-	}
-	if (!wasEnabled) {
-		if (config.value.deckSource.type === 'broadcast')
-			sourceTab.value = 'broadcast';
-		void broadcastDeckListStore.loadCollection(props.eventId);
-	}
-});
-
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['players']);
-
-// Merely loading choices or opening a tab never changes the selected source.
-onMounted(async () => {
-	if (props.eventId && !isOpEvent.value) {
-		await Promise.allSettled([
-			playerStore.loadPlayersByEventId(props.eventId),
-			...(broadcastDeckListsEnabled.value
-				? [
-						broadcastDeckListStore.loadCollection(props.eventId),
-					]
-				: []),
-		]);
-	}
-});
-
-// Players with deck lists (deckName in gameData is the proxy for having a deck)
-const playersWithDecks = computed(() => {
-	return playerStore.players.filter(p => getMtgGameData(p.gameData).deckName);
-});
-
-const playerOptions = computed(() => {
-	return [
-		{ label: 'Select a player…', value: null },
-		...playersWithDecks.value.map((p) => {
-			const deckName = getMtgGameData(p.gameData).deckName;
-			return {
-				label: `${p.name}${deckName
-					? ` - ${deckName}`
-					: ''}`,
-				value: p.id,
-			};
-		}),
-	];
-});
 
 const resolvedBoards = computed(() => resolveDeckBoards(config.value));
 const board = computed<BoardSelection>(() => resolvedBoards.value.board);
@@ -168,18 +87,18 @@ const mainboardShown = computed(() => board.value !== 'sideboard');
 const sideboardShown = computed(() => board.value !== 'mainboard');
 
 /**
- * Both boards shown and Fit are laid out together at one card size. Along the
- * axis they share, the mainboard's alignment places them as one group; across
- * it, each board sits at its own, as far as the Screen's edge.
+ * Both boards shown, and neither a list, are laid out together at one card
+ * size. Along the axis they share, the mainboard's alignment places them as
+ * one group; across it, each board sits at its own, as far as the Screen's edge.
  */
 const boardsPlacedTogether = computed(() =>
 	mainboardShown.value
 	&& sideboardShown.value
-	&& [resolvedBoards.value.mainboard, resolvedBoards.value.sideboard].every(layout => layout.cardSizing === 'fit' && layout.view !== 'list'));
+	&& [resolvedBoards.value.mainboard, resolvedBoards.value.sideboard].every(layout => layout.view !== 'list'));
 
 function alignmentDescription(key: BoardKey): string {
 	if (!boardsPlacedTogether.value)
-		return 'Where the cards sit when they don\'t fill the board\'s space. A Fixed grid places them across only.';
+		return 'Where the cards sit when they don\'t fill the board\'s space.';
 	const beside = resolvedBoards.value.sideboardPlacement === 'beside';
 	if (key === 'mainboard') {
 		return beside
@@ -233,13 +152,10 @@ const boardSections = computed<BoardSection[]>(() => {
 });
 
 // The mode-config PATCH replaces a board block wholesale, so every knob change
-// writes the complete resolved block back.
-function updateBoardLayout(key: BoardKey, patch: Partial<ResolvedSideboardLayout>) {
+// writes the complete resolved block back, an Auto value as its absent key.
+function updateBoardLayout(key: BoardKey, patch: Parameters<typeof patchedBoardLayout>[1]) {
 	updateConfig({
-		[key]: {
-			...resolvedBoards.value[key],
-			...patch,
-		},
+		[key]: patchedBoardLayout(resolvedBoards.value[key], patch),
 	});
 }
 
@@ -328,9 +244,9 @@ function boardSummary(section: BoardSection): string {
 		return 'Hidden';
 	return settingsSummary([
 		BOARD_VIEW_LABELS[section.view],
-		section.view !== 'list' && (section.layout.cardSizing === 'fixed' || section.view === 'stack'
-			? `${section.layout.cardWidth} px cards`
-			: 'Fit'),
+		section.view !== 'list' && cardLayoutSummary(section.view === 'stack'
+			? { maxCardSize: section.layout.maxCardSize }
+			: section.layout),
 	]);
 }
 
@@ -363,43 +279,11 @@ const badgesSummary = computed(() => {
 	/>
 	<div v-else class="flex flex-col gap-6">
 		<ScreenSettingsSection id="deck:deck-source" title="Deck Source" :collapsible="false">
-			<UTabs
-				v-if="broadcastDeckListsEnabled"
-				v-model="sourceTab"
-				:items="sourceTabs"
-				:content="false"
+			<ScreenDeckSourceField
+				:model-value="config.deckSource"
+				:event-id="eventId"
+				@update:model-value="updateConfig({ deckSource: $event })"
 			/>
-
-			<ScreenSettingsField
-				v-if="!broadcastDeckListsEnabled || sourceTab === 'player'"
-				label="Player"
-				description="Select a player with a deck list to show."
-				:class="{ 'mt-5': broadcastDeckListsEnabled }"
-			>
-				<USelect
-					:model-value="selectedPlayerId"
-					:items="playerOptions"
-					class="w-64"
-					@update:model-value="updateConfig({ deckSource: { type: 'player', playerId: $event } })"
-				/>
-			</ScreenSettingsField>
-
-			<div v-else class="mt-5 space-y-3">
-				<ScreenSettingsField
-					label="Broadcast Deck List"
-					description="Choose a list prepared in Event Settings → Broadcast."
-				>
-					<USelect
-						:model-value="selectedBroadcastDeckListId"
-						:items="broadcastDeckListOptions"
-						class="w-96"
-						@update:model-value="selectBroadcastDeckList($event)"
-					/>
-				</ScreenSettingsField>
-				<p v-if="broadcastDeckListStore.summaries.length === 0" class="text-xs text-muted">
-					No Broadcast Deck Lists are available. Create one in Event Settings → Broadcast.
-				</p>
-			</div>
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection id="deck:header" title="Header" :summary="headerCardSummary">
@@ -544,11 +428,12 @@ const badgesSummary = computed(() => {
 
 				<USeparator />
 
-				<ScreenModesDeckCardSizingLayoutFields
+				<ScreenCardGridLayoutFields
 					v-if="section.view !== 'list'"
 					:view="section.view"
 					:layout="section.layout"
 					:fields="boardFields"
+					:canvas="eventCanvas"
 					:show="{ alignment: true, stackReveal: section.view === 'stack' }"
 					:descriptions="{ alignment: alignmentDescription(section.key) }"
 					:grid-name="section.title"
@@ -568,53 +453,52 @@ const badgesSummary = computed(() => {
 		<ScreenSettingsSection id="deck:card-badges" title="Card Badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
 				title="Quantity Badge"
+				description="On cards with multiple copies."
 				:shown="!!config.showQuantities"
 				:shown-field="fields.showQuantities"
-				shown-description="Show quantity badges on cards with multiple copies."
 				:position="config.quantityPosition ?? DEFAULT_QUANTITY_POSITION"
 				:position-field="fields.quantityPosition"
-				:text-size="config.quantityBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.quantityBadgeSize"
+				:size="config.quantityBadgeSize"
 				:size-field="fields.quantityBadgeSize"
 				@update="updateConfig($event)"
-			>
-				<template #look>
-					<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="quantity-badge" />
-				</template>
-			</ScreenCardBadgeFields>
+			/>
 
-			<template v-if="showsCardPoints">
-				<USeparator />
+			<ScreenCardBadgeFields
+				v-if="showsCardPoints"
+				title="Highlander Point Badge"
+				description="7 Point Highlander points on pointed cards; placed on a grid's cards."
+				:shown="!!config.showHighlanderPoints"
+				:shown-field="fields.showHighlanderPoints"
+				:position="config.highlanderPointsPosition ?? DEFAULT_HIGHLANDER_POINTS_POSITION"
+				:position-field="fields.highlanderPointsPosition"
+				:size="config.pointsBadgeSize"
+				:size-field="fields.pointsBadgeSize"
+				@update="updateConfig($event)"
+			/>
 
-				<ScreenCardBadgeFields
-					title="Highlander Point Badge"
-					:shown="!!config.showHighlanderPoints"
-					:shown-field="fields.showHighlanderPoints"
-					shown-description="Show 7 Point Highlander point badges on pointed cards."
-					:position="config.highlanderPointsPosition ?? DEFAULT_HIGHLANDER_POINTS_POSITION"
-					:position-field="fields.highlanderPointsPosition"
-					position-description="Where the point badge appears on the card in grid mode."
-					:text-size="config.pointsBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.pointsBadgeSize"
-					:size-field="fields.pointsBadgeSize"
-					@update="updateConfig($event)"
-				>
-					<template #look>
-						<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="points-badge" />
-					</template>
-				</ScreenCardBadgeFields>
-			</template>
+			<ScreenCardBadgeFields
+				v-if="config.showCompanion !== false"
+				title="Companion Badge"
+				description="On the companion's card; in a corner, it lines up with that side."
+				shown
+				:position="config.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION"
+				:position-field="fields.companionTagPosition"
+				@update="updateConfig($event)"
+			/>
 
-			<template v-if="config.showCompanion !== false">
-				<USeparator />
-
-				<ScreenCardBadgeFields
-					title="Companion Badge"
-					shown
-					:position="config.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION"
-					:position-field="fields.companionTagPosition"
-					position-description="Where the Companion badge sits on its card; in a corner, it lines up with that side."
-					@update="updateConfig($event)"
-				/>
-			</template>
+			<ScreenThemeTokenGroup
+				:screen="screen"
+				:event-id="eventId"
+				group="quantity-badge"
+				heading="Quantity badge look"
+			/>
+			<ScreenThemeTokenGroup
+				v-if="showsCardPoints"
+				:screen="screen"
+				:event-id="eventId"
+				group="points-badge"
+				heading="Point badge look"
+			/>
 		</ScreenSettingsSection>
 	</div>
 </template>

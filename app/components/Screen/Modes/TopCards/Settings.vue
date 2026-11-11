@@ -34,10 +34,9 @@ const fields = screenModeConfigContract('top-cards').fields;
 
 const eventStore = useEventStore();
 const playerStore = usePlayerStore();
-const playerListStore = usePlayerListStore();
 
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['players', 'playerLists']);
+// The Players this editor reads, re-read on Reconnect Resync (#610).
+useConsumedEventData(['players']);
 
 onMounted(async () => {
 	if (!props.eventId) {
@@ -46,10 +45,6 @@ onMounted(async () => {
 
 	if (!playerStore.isLoaded) {
 		await playerStore.loadPlayersByEventId(props.eventId);
-	}
-
-	if (!playerListStore.isLoaded) {
-		await playerListStore.loadByEventId(props.eventId);
 	}
 });
 
@@ -194,6 +189,7 @@ const badgesSummary = computed(() => {
 			<ScreenMetagameScopeFields
 				:config="config"
 				:fields="fields"
+				:event-id="eventId"
 				description="Which players to include in the ranking."
 				@update="updateConfig({ ...$event, currentPage: 1 })"
 			/>
@@ -289,64 +285,70 @@ const badgesSummary = computed(() => {
 		<ScreenSettingsSection id="top-cards:card-badges" title="Card Badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
 				title="Rank Badge"
+				description="Each card's position in the ranking."
 				:shown="config.showRankBadges"
 				:shown-field="fields.showRankBadges"
-				shown-description="Number each card by its position in the ranking."
 				:position="config.rankBadgePosition"
 				:position-field="fields.rankBadgePosition"
-				:text-size="config.rankBadgeTextSize"
+				:size="config.rankBadgeTextSize"
 				:size-field="fields.rankBadgeTextSize"
 				@update="updateConfig($event)"
-			>
-				<template #look>
-					<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="rank-badge" />
-				</template>
-			</ScreenCardBadgeFields>
-
-			<USeparator />
+			/>
 
 			<ScreenCardBadgeFields
 				title="Stat Badge"
+				description="One metric on each card."
 				:shown="config.statBadge !== 'none'"
 				:position="config.statBadgePosition"
 				:position-field="fields.statBadgePosition"
-				:text-size="config.statBadgeTextSize"
+				:size="config.statBadgeTextSize"
 				:size-field="fields.statBadgeTextSize"
 				@update="updateConfig($event)"
 			>
 				<template #shown>
-					<ScreenConfigField
-						:field="fields.statBadge"
+					<USelect
+						:data-config-field="fields.statBadge.key"
+						:aria-label="fields.statBadge.label"
 						:model-value="config.statBadge"
 						:items="statBadgeOptions"
-						description="Show one metric on each card."
-						@update:model-value="$event !== null && updateConfig({ statBadge: $event as TopCardsStat })"
+						class="w-40"
+						@update:model-value="updateConfig({ statBadge: $event as TopCardsStat })"
 					/>
-				</template>
-				<template #look>
-					<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="stat-badge" />
 				</template>
 			</ScreenCardBadgeFields>
 
-			<template v-if="showsPointsBadges">
-				<USeparator />
+			<ScreenCardBadgeFields
+				v-if="showsPointsBadges"
+				title="Point Badge"
+				description="Each pointed card's points from the Event's points system."
+				:shown="config.showPointsBadges"
+				:shown-field="fields.showPointsBadges"
+				:position="config.pointsBadgePosition"
+				:position-field="fields.pointsBadgePosition"
+				:size="config.pointsBadgeTextSize"
+				:size-field="fields.pointsBadgeTextSize"
+				@update="updateConfig($event)"
+			/>
 
-				<ScreenCardBadgeFields
-					title="Point Badge"
-					:shown="config.showPointsBadges"
-					:shown-field="fields.showPointsBadges"
-					shown-description="Show each pointed card's points from the Event's points system."
-					:position="config.pointsBadgePosition"
-					:position-field="fields.pointsBadgePosition"
-					:text-size="config.pointsBadgeTextSize"
-					:size-field="fields.pointsBadgeTextSize"
-					@update="updateConfig($event)"
-				>
-					<template #look>
-						<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="points-badge" />
-					</template>
-				</ScreenCardBadgeFields>
-			</template>
+			<ScreenThemeTokenGroup
+				:screen="screen"
+				:event-id="eventId"
+				group="rank-badge"
+				heading="Rank badge look"
+			/>
+			<ScreenThemeTokenGroup
+				:screen="screen"
+				:event-id="eventId"
+				group="stat-badge"
+				heading="Stat badge look"
+			/>
+			<ScreenThemeTokenGroup
+				v-if="showsPointsBadges"
+				:screen="screen"
+				:event-id="eventId"
+				group="points-badge"
+				heading="Point badge look"
+			/>
 		</ScreenSettingsSection>
 	</div>
 </template>

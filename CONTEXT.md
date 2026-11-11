@@ -172,7 +172,7 @@ _Avoid_: Top Cards for the Most Played Cards mode (one word from Top Cut); Featu
 The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface), and what it declares it carries, such as its Mode Tokens, its own Background Layer stack, its Event References, its Page Rotation, or the Output Changes its Screen Output follows. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
 
 **Event Reference**:
-A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, an Archetype, a Talent, a Talent lineup, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038). Deleting the Phase, Round, Archetype or Talent one names unsets it, and deleting a Talent drops it from a lineup (ADR-0060, ADR-0070).
+A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, an Archetype, a Talent, a Talent lineup, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038). An operator sets one through its kind's one picker, which loads what it lists. Deleting the Phase, Round, Archetype or Talent one names unsets it, and deleting a Talent drops it from a lineup (ADR-0060, ADR-0070).
 _Avoid_: data binding (a Graphic Input Binding is a Broadcast Graphics concept), Graphic Asset Reference (an installation-wide library link, not Event data)
 
 **Output Change**:
@@ -271,12 +271,8 @@ A Screen Output that renders the final composed opacity as a grayscale alpha mat
 _Avoid_: Black-and-white export, chroma key.
 
 **Card Layout**:
-How a card grid on a Most Played Cards Screen lays out its cards: columns, max card size and gap, each a number or Auto. The cards always fit the space the grid is given, so none leave the Event Canvas. Auto columns are the count at which the cards are largest, a max card size is the widest a card may be, and an Auto gap follows the card's size (ADR-0054).
-_Avoid_: Fit, Fixed width, auto columns, card width.
-
-**Card Sizing**:
-How a card grid on a Deck List Screen sizes its cards; a Most Played Cards Screen has a Card Layout in its place. Fixed width: each card takes the grid's own card width, and the grid may run off the Event Canvas. Fit to screen: every card on the page takes the largest size at which all of them fit the space the grid is given, so none overflow. Either may take auto columns, chosen from the card count and the Event Canvas (ADR-0054).
-_Avoid_: dynamic card size, card size presets.
+How a card grid on a Most Played Cards Screen or a Deck List board lays out its cards: columns, max card size and gap, each a number or Auto. The cards always fit the space the grid is given, so none leave the Event Canvas. Auto columns are the count at which the cards are largest, a max card size is the widest a card may be, and an Auto gap follows the card's size, as an Auto card badge size does. A Deck's boards share one card size (ADR-0054).
+_Avoid_: Card Sizing, Fit, Fixed width, auto columns, card width, dynamic card size.
 
 **Program monitor**:
 A control surface's own live rendering of the Screen it drives. It composes what playout has taken, resolving media exactly as a Screen Output does, but is not a Screen Output.

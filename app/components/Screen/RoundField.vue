@@ -8,13 +8,17 @@ import { useConsumedEventData } from '~/modules/event-data/resync';
  * Rounds and Phases it lacks, re-reads them on Reconnect Resync (#610), and
  * emits the Round's id, or `null` for the null option.
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	modelValue?: number | null;
-	/** What no Round means: "Current standings", "Select a round…". */
-	nullLabel: string;
-	description: string;
 	eventId: number;
-}>();
+	label?: string;
+	description?: string;
+	/** What no Round means: "Current standings", "Select a round…". */
+	nullLabel?: string;
+}>(), {
+	label: 'Round',
+	nullLabel: 'Select a round…',
+});
 
 const emit = defineEmits<{
 	'update:modelValue': [roundId: number | null];
@@ -23,10 +27,7 @@ const emit = defineEmits<{
 const roundStore = useRoundStore();
 const phaseStore = usePhaseStore();
 
-const options = computed(() => [
-	{ label: props.nullLabel, value: null },
-	...roundPickerOptions(roundStore.rounds, phaseStore.phases),
-]);
+const items = computed(() => roundPickerOptions(roundStore.rounds, phaseStore.phases));
 
 useConsumedEventData(['phases', 'rounds']);
 
@@ -41,12 +42,12 @@ onMounted(async () => {
 </script>
 
 <template>
-	<ScreenSettingsField label="Round" :description="description">
-		<USelect
-			:model-value="modelValue ?? null"
-			:items="options"
-			class="w-64"
-			@update:model-value="emit('update:modelValue', ($event as number | null | undefined) ?? null)"
-		/>
-	</ScreenSettingsField>
+	<ScreenEventReferenceField
+		:label="label"
+		:description="description"
+		:null-label="nullLabel"
+		:model-value="modelValue"
+		:items="items"
+		@update:model-value="emit('update:modelValue', $event)"
+	/>
 </template>

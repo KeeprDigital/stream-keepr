@@ -3,7 +3,6 @@ import type { ScreenModeConfigOf } from './contract';
 import { z } from 'zod';
 import {
 	BOARD_SELECTION_VALUES,
-	CARD_SIZING_VALUES,
 	MAINBOARD_VIEW_VALUES,
 	PLAYER_SIDE_VALUES,
 	QUANTITY_POSITION_VALUES,
@@ -13,33 +12,27 @@ import {
 import { NINE_POINT_VALUES } from '../utils/ninePoints';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField, screenModeConfigFields } from './fields';
+import { cardBadgeSizeField, cardLayoutShape, DEFAULT_CARD_LAYOUT } from './subShapes';
 
 const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
+
+/** The most cards a board lays out, so the most columns its grid can have: a hundred-card singleton deck. */
+const DECK_BOARD_MAX_CARDS = 100;
 
 /**
  * One board's complete layout block. The Mainboard and Sideboard each carry
  * their own (#478): which view renders the board, and the knobs each view
- * reads — grid reads its columns and how its cards are sized, list reads
- * listColumns. Only the sideboard stacks, as the strip beside the mainboard
- * (ADR-0054), so each board names its own views, and only it says how much of
- * a stacked card shows. Visibility is the `board` selection's concern, so a
- * block carries no show/hide of its own. Its card width and gap are config,
- * read only by its board (ADR-0054).
+ * reads. A grid reads its Card Layout (columns, max card size and gap, each
+ * Auto while absent) and a list its listColumns. Only the sideboard stacks, as
+ * the strip beside the mainboard (ADR-0054), so each board names its own
+ * views, and only it says how much of a stacked card shows. Visibility is the
+ * `board` selection's concern, so a block carries no show/hide of its own.
  */
 function deckBoardLayoutShape<const Views extends readonly [string, ...string[]]>(views: Views) {
 	return {
 		view: editorField(z.enum(views).optional(), { label: 'View' }),
-		// The editor's ranges are the product ranges (#498): columns was 1–20. A
-		// stored value outside one reads clamped.
-		columns: editorField(z.number().int().min(1).max(12).optional(), { label: 'Grid Columns' }),
-		/** Columns chosen from the card count and the Event Canvas, in place of `columns`. */
-		autoColumns: editorField(z.boolean().optional(), { label: 'Auto Columns' }),
+		...cardLayoutShape(DECK_BOARD_MAX_CARDS),
 		listColumns: editorField(z.number().int().min(1).max(4).optional(), { label: 'List Columns' }),
-		/** Fit: every card fits its board's space. Fixed: cards take `cardWidth`. */
-		cardSizing: editorField(z.enum(CARD_SIZING_VALUES).optional(), { label: 'Card Sizing' }),
-		/** A Fixed or stacked card's width in Event Canvas px. */
-		cardWidth: editorField(z.number().int().min(48).max(480).optional(), { label: 'Card Width' }),
-		cardGap: editorField(z.number().int().min(0).max(48).optional(), { label: 'Card Gap' }),
 		/** Where the board's cards sit in its space when they leave some over. */
 		alignment: editorField(z.enum(NINE_POINT_VALUES).optional(), { label: 'Alignment' }),
 	};
@@ -54,10 +47,61 @@ const sideboardLayoutShape = {
 
 /**
  * A layout block's former fields: its size preset and stack share, which
- * `cardWidth` and `stackReveal` replaced, and `dynamicCardSize`, which
- * `cardSizing` replaced (ADR-0054).
+ * `stackReveal` and a card width replaced; `dynamicCardSize`, which Card
+ * Sizing replaced; and Card Sizing itself (`cardSizing`, `cardWidth`,
+ * `autoColumns`), which the Card Layout replaced (ADR-0054).
  */
-const FORMER_BOARD_LAYOUT_FIELDS = ['cardSize', 'stackOverlap', 'dynamicCardSize'] as const;
+const FORMER_BOARD_LAYOUT_FIELDS = [
+	'cardSize',
+	'stackOverlap',
+	'dynamicCardSize',
+	'cardSizing',
+	'cardWidth',
+	'autoColumns',
+] as const;
+
+/** A Fixed card's width before the board set one, under the former Card Sizing. */
+const FORMER_DEFAULT_CARD_WIDTH = 144;
+
+/**
+ * The Card Layout a board's Card Sizing meant (ADR-0054): a Fixed width is the
+ * max card size, and a column count with auto columns on is Auto. A board's
+ * former default was Fixed, so a width stored with no Card Sizing was a Fixed
+ * one; a block storing neither has no max card size.
+ */
+function upgradeBoardCardSizing(block: unknown): unknown {
+	if (typeof block !== 'object' || block === null || Array.isArray(block))
+		return block;
+	const stored = block as Readonly<Record<string, unknown>>;
+	const fixed = stored.cardSizing === 'fixed'
+		|| (stored.cardSizing === undefined && stored.cardWidth !== undefined);
+	const autoColumns = stored.autoColumns === true;
+	if (!fixed && !autoColumns)
+		return block;
+	const upgraded: Record<string, unknown> = { ...stored };
+	if (autoColumns)
+		delete upgraded.columns;
+	if (fixed && !('maxCardSize' in stored))
+		upgraded.maxCardSize = stored.cardWidth ?? FORMER_DEFAULT_CARD_WIDTH;
+	return upgraded;
+}
+
+/** Each stored board block, upgraded on its own; a board not stored stays absent. */
+function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<string, unknown> {
+	const mainboard = upgradeBoardCardSizing(fragment.mainboard);
+	const sideboard = upgradeBoardCardSizing(fragment.sideboard);
+	if (mainboard === fragment.mainboard && sideboard === fragment.sideboard)
+		return fragment;
+	return {
+		...fragment,
+		...('mainboard' in fragment
+			? { mainboard }
+			: {}),
+		...('sideboard' in fragment
+			? { sideboard }
+			: {}),
+	};
+}
 
 const mainboardLayoutConfigSchema = z.object(mainboardLayoutShape).strict();
 const sideboardLayoutConfigSchema = z.object(sideboardLayoutShape).strict();
@@ -66,19 +110,21 @@ const sideboardLayoutConfigSchema = z.object(sideboardLayoutShape).strict();
 export const DECK_MAINBOARD_LAYOUT_FIELDS = screenModeConfigFields(mainboardLayoutShape);
 export const DECK_SIDEBOARD_LAYOUT_FIELDS = screenModeConfigFields(sideboardLayoutShape);
 
-export type ResolvedMainboardLayout = Required<z.output<typeof mainboardLayoutConfigSchema>>;
-export type ResolvedSideboardLayout = Required<z.output<typeof sideboardLayoutConfigSchema>>;
+type MainboardLayout = z.output<typeof mainboardLayoutConfigSchema>;
+type SideboardLayout = z.output<typeof sideboardLayoutConfigSchema>;
+/** The Card Layout values, which stay absent while Auto. */
+type CardLayoutKey = keyof typeof DEFAULT_CARD_LAYOUT;
+
+/** A board's layout block as its defaults complete it; its Card Layout values stay absent while Auto. */
+export type ResolvedMainboardLayout = Required<Omit<MainboardLayout, CardLayoutKey>> & Pick<MainboardLayout, CardLayoutKey>;
+export type ResolvedSideboardLayout = Required<Omit<SideboardLayout, CardLayoutKey>> & Pick<SideboardLayout, CardLayoutKey>;
 /** Either board's resolved layout block, as a reader of both boards reads it. */
 export type ResolvedDeckBoardLayout = ResolvedMainboardLayout | ResolvedSideboardLayout;
 
 export const DEFAULT_DECK_BOARD_LAYOUT: ResolvedMainboardLayout = {
 	view: 'grid',
-	columns: 4,
-	autoColumns: false,
+	...DEFAULT_CARD_LAYOUT,
 	listColumns: 2,
-	cardSizing: 'fixed',
-	cardWidth: 144,
-	cardGap: 8,
 	alignment: 'center',
 };
 
@@ -89,14 +135,28 @@ const DEFAULT_SIDEBOARD_LAYOUT: ResolvedSideboardLayout = {
 	stackReveal: 30,
 };
 
+/**
+ * A board's layout block with an editor's `patch` applied, as its next write
+ * stores it whole: a Card Layout value patched to `null` is Auto, so its key
+ * is left out.
+ */
+export function patchedBoardLayout<Layout extends ResolvedDeckBoardLayout>(
+	layout: Layout,
+	patch: { [Key in keyof ResolvedSideboardLayout]?: ResolvedSideboardLayout[Key] | null },
+): Layout {
+	return Object.fromEntries(Object.entries({
+		...layout,
+		...patch,
+	})
+		.filter(([, value]) => value !== null && value !== undefined)) as Layout;
+}
+
 /** Which boards render, and where the sideboard sits, until an operator changes them. */
 const DEFAULT_BOARD: BoardSelection = 'full';
 const DEFAULT_SIDEBOARD_PLACEMENT: SideboardPlacement = 'beside';
 
-/** Each badge's, pill's and chip's text size in px until an operator sets it; each sizes itself around its own. */
+/** The details pill's and pointed card chip's text size in px until an operator sets it; each sizes itself around its own. */
 export const DEFAULT_DECK_TEXT_SIZES = {
-	quantityBadgeSize: 16,
-	pointsBadgeSize: 14,
 	metaPillSize: 16,
 	pointedCardSize: 14,
 } as const;
@@ -159,9 +219,9 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	/** Where the companion's tag sits on its card: a corner puts the tag's own edge there. */
 	companionTagPosition: editorField(quantityPositionSchema.optional(), { label: 'Badge Position' }),
 
-	// Text sizes in px; each badge, pill and chip sizes itself around its own (ADR-0054).
-	quantityBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
-	pointsBadgeSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge Text Size' }),
+	// Text sizes; each badge, pill and chip sizes itself around its own (ADR-0054). A badge's is Auto while absent.
+	quantityBadgeSize: cardBadgeSizeField,
+	pointsBadgeSize: cardBadgeSizeField,
 	metaPillSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Details Text Size' }),
 	pointedCardSize: editorField(z.number().int().min(8).max(48).optional(), { label: 'Pointed Card Text Size' }),
 }, {
@@ -185,6 +245,9 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	quantityPosition: DEFAULT_QUANTITY_POSITION,
 	companionTagPosition: DEFAULT_COMPANION_TAG_POSITION,
 	...DEFAULT_DECK_TEXT_SIZES,
+	// Auto: each badge follows its card's width (ADR-0054). Named, so a display reset returns it to Auto.
+	quantityBadgeSize: undefined,
+	pointsBadgeSize: undefined,
 }, {
 	formerFields: [
 		// Their colours are the mode's Mode Tokens (#824).
@@ -207,6 +270,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 		'quantitySize',
 		...FORMER_BOARD_LAYOUT_FIELDS.flatMap(field => [`mainboard.${field}`, `sideboard.${field}`]),
 	],
+	upgradeFormerFields: upgradeCardSizing,
 });
 
 export type DeckModeConfig = ScreenModeConfigOf<typeof deckModeConfigContract>;

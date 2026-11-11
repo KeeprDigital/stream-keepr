@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import type { OpDeckGroup } from '~~/shared/utils/opDeckLayout';
-import { DEFAULT_DECK_TEXT_SIZES, DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { useElementSize } from '@vueuse/core';
+import { DEFAULT_QUANTITY_POSITION, resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { cardBadgeTextSize, DECK_AUTO_BADGE_RATIOS } from '~~/shared/utils/cardBadgeSize';
+import { CARD_ASPECT } from '~~/shared/utils/cardGrid';
+import { solveDeckGroups } from '~~/shared/utils/deckLayout';
+import { ninePointPlacement } from '~~/shared/utils/ninePoints';
 import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
@@ -39,39 +43,54 @@ const displayStyle = {
 };
 
 const layout = computed(() => resolveDeckBoards(config.value).mainboard);
-const isFit = computed(() => layout.value.cardSizing === 'fit');
 
-/** Every group shares one column count, so their cards line up. */
-const columns = useCardGridColumns(context, {
-	sizing: () => layout.value.cardSizing,
-	autoColumns: () => layout.value.autoColumns,
-	columns: () => layout.value.columns,
-	count: () => Math.max(1, ...groups.value.map(group => group.cards.length)),
-	cardWidth: () => layout.value.cardWidth,
-	gap: () => layout.value.cardGap,
-});
+// ── The Card Layout, from the space the groups really have ──
+// The groups sit one under the other and are laid out together (ADR-0054):
+// one column count, so their cards line up, and one card size, the largest at
+// which every group fits the space beside the Leader.
 
-function gridColumns(): number | 'auto-fill' {
-	return !isFit.value && layout.value.autoColumns
-		? 'auto-fill'
-		: columns.value;
+/** The space between groups, in Event Canvas px: the layout's gap, set from this. */
+const GROUP_GAP = 16;
+
+// A group's heading is measured, as its Theme types it, from a hidden copy.
+const labelProbe = ref<HTMLElement | null>(null);
+const groupLabelHeight = useLayoutHeight(labelProbe);
+
+const groupsElement = ref<HTMLElement | null>(null);
+const { width: groupsWidth, height: groupsHeight } = useElementSize(groupsElement);
+
+const solved = computed(() => solveDeckGroups({
+	counts: groups.value.map(group => group.cards.length),
+	width: groupsWidth.value,
+	height: groupsHeight.value,
+	columns: layout.value.columns,
+	maxCardWidth: layout.value.maxCardSize,
+	gap: layout.value.cardGap,
+	labelHeight: groupLabelHeight.value,
+	groupGap: GROUP_GAP,
+}));
+const cardWidth = computed(() => `${solved.value.cardWidth}px`);
+const cardGap = computed(() => `${solved.value.gap}px`);
+
+function groupRows(index: number): number {
+	return solved.value.rows[index] ?? 1;
 }
 
-function groupRows(group: OpDeckGroup): number {
-	return Math.max(1, Math.ceil(group.cards.length / columns.value));
+/** Each group takes exactly its solved height: its heading, its rows and the gaps between them. */
+function groupStyle(index: number) {
+	const rows = groupRows(index);
+	const { cardWidth, gap } = solved.value;
+	return {
+		flex: 'none',
+		height: `${groupLabelHeight.value + rows * (cardWidth / CARD_ASPECT) + (rows - 1) * gap}px`,
+	};
 }
 
-/** Fit groups share the height by their rows; Fixed ones take their own. */
-function groupStyle(group: OpDeckGroup) {
-	return isFit.value
-		? { flex: `${groupRows(group)} 1 0%` }
-		: { flex: 'none' };
-}
-
-/** The Leader is shown at twice a Fixed card's width, or fits a fixed share of the Screen. */
-const leaderColumnStyle = computed(() => isFit.value
-	? { width: '28%' }
-	: { width: `${layout.value.cardWidth * 2}px` });
+/** The groups sit together, up and down, at the Mainboard's alignment; each grid places its cards across. */
+const groupsStyle = computed(() => ({
+	gap: `${GROUP_GAP}px`,
+	justifyContent: ninePointPlacement(layout.value.alignment).y,
+}));
 
 const showPlayerName = computed(() => config.value.showPlayerName !== false && !!playerName.value);
 const showLeaderName = computed(() => config.value.showDeckName !== false && !!leader.value);
@@ -84,7 +103,7 @@ const costCurveMax = computed(() => Math.max(1, ...costCurve.value.map(bucket =>
 const quantityPositionClass = computed(() =>
 	CARD_BADGE_POSITION_CLASSES[config.value.quantityPosition ?? DEFAULT_QUANTITY_POSITION]);
 const quantityBadgeStyle = computed(() => ({
-	fontSize: `${config.value.quantityBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.quantityBadgeSize}px`,
+	fontSize: `${cardBadgeTextSize(config.value.quantityBadgeSize, solved.value.cardWidth, DECK_AUTO_BADGE_RATIOS.quantityBadgeSize)}px`,
 	width: '1.75em',
 	height: '1.75em',
 	color: modeTokenVar('deck', 'quantity-badge-text'),
@@ -119,13 +138,13 @@ const quantityBadgeStyle = computed(() => ({
 					</div>
 
 					<div class="flex flex-1 min-h-0 gap-6">
-						<div class="flex flex-col shrink-0 min-h-0 gap-4" :style="leaderColumnStyle">
+						<!-- The Leader fits a fixed share of the Screen. -->
+						<div class="flex flex-col shrink-0 min-h-0 gap-4 w-[28%]">
 							<div v-if="leader" class="op-leader-space flex-1 min-h-0 flex justify-center items-start">
 								<div
 									data-testid="op-deck-leader"
 									:data-number="leader.number"
 									class="op-leader mtg-card"
-									:class="{ 'op-leader--fit': isFit }"
 								>
 									<img :src="leader.imageUrl" :alt="leader.name" class="w-full h-full object-cover">
 								</div>
@@ -159,33 +178,42 @@ const quantityBadgeStyle = computed(() => ({
 							</div>
 						</div>
 
-						<div class="flex flex-col flex-1 min-w-0 min-h-0 gap-4">
+						<!-- A group heading as the Theme types it, measured for the layout. -->
+						<div ref="labelProbe" aria-hidden="true" class="invisible absolute pointer-events-none">
+							<h3 class="text-lg pb-2" :style="titleStyle">
+								Character
+							</h3>
+						</div>
+
+						<div
+							ref="groupsElement"
+							data-testid="op-deck-groups"
+							class="flex flex-col flex-1 min-w-0 min-h-0"
+							:style="groupsStyle"
+						>
 							<section
-								v-for="group in groups"
+								v-for="(group, index) in groups"
 								:key="group.key"
 								data-testid="op-deck-group"
 								:data-group="group.key"
 								:data-count="group.count"
 								class="flex flex-col min-h-0 min-w-0"
-								:style="groupStyle(group)"
+								:style="groupStyle(index)"
 							>
 								<h3 class="text-lg shrink-0 pb-2" :style="titleStyle">
 									{{ group.label }} <span class="tabular-nums" :style="secondaryTextStyle">{{ group.count }}</span>
 								</h3>
 								<ScreenCardGrid
-									:sizing="layout.cardSizing"
-									:columns="gridColumns()"
-									:rows="groupRows(group)"
-									:card-width="`${layout.cardWidth}px`"
-									:gap="`${layout.cardGap}px`"
+									:columns="solved.columns"
+									:rows="groupRows(index)"
+									:card-width="cardWidth"
+									:gap="cardGap"
 									:alignment="layout.alignment"
 								>
 									<ScreenModesDeckOpCard
 										v-for="card in group.cards"
 										:key="card.number"
 										:card="card"
-										:width="`${layout.cardWidth}px`"
-										:sizing="layout.cardSizing"
 										:show-quantity="config.showQuantities !== false"
 										:quantity-position-class="quantityPositionClass"
 										:quantity-badge-style="quantityBadgeStyle"
@@ -205,12 +233,8 @@ const quantityBadgeStyle = computed(() => ({
 	container-type: size;
 }
 
+/* The Leader fits its space both ways. */
 .op-leader {
-	width: 100%;
-}
-
-/* A Fit Leader fits its space both ways. */
-.op-leader--fit {
 	width: min(100cqw, 100cqh * 61 / 85);
 }
 

@@ -16,6 +16,19 @@ import OpDisplay from '~/components/Screen/Modes/Deck/OpDisplay.vue';
 
 const SLOT_ID = 11;
 
+// The space the groups measure; 0 until they are laid out, when their cards have no size yet.
+const measured = vi.hoisted(() => ({ width: 0, height: 0 }));
+vi.mock('@vueuse/core', async (importOriginal) => {
+	const { ref } = await import('vue');
+	return {
+		...await importOriginal<typeof import('@vueuse/core')>(),
+		useElementSize: () => ({
+			width: ref(measured.width),
+			height: ref(measured.height),
+		}),
+	};
+});
+
 const featureMatchStore = reactive({
 	featureMatches: [] as Array<Record<string, unknown>>,
 	holdFeatureMatch: vi.fn((slot: Record<string, unknown>) => {
@@ -170,6 +183,8 @@ function shown(wrapper: VueWrapper) {
 }
 
 beforeEach(() => {
+	measured.width = 0;
+	measured.height = 0;
 	featureMatchStore.featureMatches = [];
 	featureMatchStateStore.featureMatchSessions = new Map();
 	featureMatchStateStore.sessionIdBySlotId = new Map();
@@ -276,6 +291,38 @@ describe('a Deck List Screen showing a Feature Match Slot side', () => {
 		await flushPromises();
 
 		expect(shown(wrapper)).toEqual(after);
+	});
+
+	// An Auto quantity badge follows the solved card width: today's 16 px on the former default 144 px card.
+	it.each([
+		{
+			mainboard: { maxCardSize: 144 },
+			quantityBadgeSize: undefined,
+			size: '16px',
+		},
+		{
+			mainboard: { maxCardSize: 72 },
+			quantityBadgeSize: undefined,
+			size: '8px',
+		},
+		{
+			mainboard: { maxCardSize: 72 },
+			quantityBadgeSize: 20,
+			size: '20px',
+		},
+	])('sizes its quantity badges at $size on a $mainboard.maxCardSize px card, set to $quantityBadgeSize', async ({ mainboard, quantityBadgeSize, size }) => {
+		[measured.width, measured.height] = [2000, 2000];
+		const wrapper = mountDisplay();
+		screen.value = {
+			id: 42,
+			modeConfigs: {
+				deck: { ...screen.value.modeConfigs.deck as object, mainboard, quantityBadgeSize },
+			},
+		};
+		await flushPromises();
+
+		expect(wrapper.findAll('[data-testid="op-deck-quantity-badge"]').map(badge => (badge.element as HTMLElement).style.fontSize))
+			.toEqual(Array.from({ length: 5 }).fill(size));
 	});
 
 	it('shows the Deck List of a Player linked into the side, through a re-import', async () => {

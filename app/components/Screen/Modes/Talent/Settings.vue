@@ -35,11 +35,6 @@ const layoutOptions: { label: string; value: TalentScreenLayout }[] = [
 
 const talents = computed(() => eventStore.event?.talents ?? []);
 
-const talentOptions = computed(() => [
-	{ label: 'Select a Talent…', value: null },
-	...talents.value.map(talent => ({ label: talent.name, value: talent.id })),
-]);
-
 /** The lineup in its order, each named; one the Event no longer lists still shows, so it can be removed. */
 const lineup = computed(() => config.value.talentIds.map(id => ({
 	id,
@@ -121,19 +116,13 @@ const socialProfilesSummary = computed(() => {
 				@update:model-value="updateConfig({ selection: $event as TalentScreenSelection })"
 			/>
 
-			<ScreenSettingsField
+			<ScreenTalentField
 				v-if="config.selection === 'one'"
-				label="Talent"
+				data-testid="talent-one"
+				:model-value="config.talentId"
 				description="The Talent shown."
-			>
-				<USelect
-					data-testid="talent-one"
-					:model-value="config.talentId ?? null"
-					:items="talentOptions"
-					class="w-64"
-					@update:model-value="updateConfig({ talentId: $event ?? null })"
-				/>
-			</ScreenSettingsField>
+				@update:model-value="updateConfig({ talentId: $event })"
+			/>
 
 			<template v-else>
 				<ol v-if="lineup.length > 0" class="flex flex-col gap-2">

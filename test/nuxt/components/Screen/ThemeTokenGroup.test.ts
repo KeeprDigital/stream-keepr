@@ -22,12 +22,13 @@ beforeEach(() => {
 	fakeScreenThemeNetwork(mockApiFetch);
 });
 
-async function mountGroup(group: string, themeOverrides: StoredThemeTokens = {}) {
+async function mountGroup(group: string, themeOverrides: StoredThemeTokens = {}, heading?: string) {
 	const screen = seedThemedScreen('pairings', themeOverrides);
 	const wrapper = mount(screenSettingsPage(screen, () => h(ThemeTokenGroup, {
 		screen: screen(),
 		eventId: 1,
 		group,
+		heading,
 	})), {
 		global: { stubs: nuxtUiStubs },
 	});
@@ -52,6 +53,16 @@ describe('a Screen Settings Group\'s Look', () => {
 		expect(row(wrapper, 'pairings.result-reported').text()).toContain('Default');
 		expect(row(wrapper, 'pairings.result-pending').attributes('data-token-state')).toBe('set');
 		expect(row(wrapper, 'pairings.result-pending').text()).toContain('Overridden');
+	});
+
+	// A card holding several Looks, such as Card Badges, names each.
+	it.each([
+		{ heading: undefined, shown: 'Look' },
+		{ heading: 'Result badge look', shown: 'Result badge look' },
+	])('heads its Look $shown', async ({ heading, shown }) => {
+		const wrapper = await mountGroup('result-badge', {}, heading);
+
+		expect(wrapper.get('h4').text()).toBe(shown);
 	});
 
 	it('renders nothing for a group no Mode Token of the mode declares', async () => {

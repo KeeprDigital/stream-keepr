@@ -3,15 +3,12 @@ import type { HeadToHeadPlayerSource } from '~~/shared/types/enums';
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { headerSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
-import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
 	screen: Screen;
 	eventId: number;
 }>();
 
-const playerStore = usePlayerStore();
-const featureMatchStore = useFeatureMatchStore();
 const eventStore = useEventStore();
 const hasPronouns = computed(() => eventStore.event?.pronounsEnabled ?? true);
 const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
@@ -30,11 +27,6 @@ const sourceOptions: { label: string; value: HeadToHeadPlayerSource }[] = [
 	{ label: 'Two Players', value: 'players' },
 ];
 
-const playerOptions = computed(() => [
-	{ label: 'Select a player…', value: null },
-	...playerStore.players.map(player => ({ label: player.name, value: player.id })),
-]);
-
 // ── Closed card summaries ──
 const playerDetailsSummary = computed(() => settingsSummary([
 	config.value.showPronouns && hasPronouns.value
@@ -43,20 +35,6 @@ const playerDetailsSummary = computed(() => settingsSummary([
 	config.value.showDeckColors ? 'Deck colors shown' : 'Deck colors hidden',
 ]));
 const headerCardSummary = computed(() => headerSummary(config.value));
-
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['featureMatchSlots', 'players']);
-
-onMounted(async () => {
-	if (!props.eventId)
-		return;
-	await Promise.all([
-		featureMatchStore.loadFeatureMatchesByEventId(props.eventId),
-		playerStore.isLoaded
-			? undefined
-			: playerStore.loadPlayersByEventId(props.eventId),
-	]);
-});
 </script>
 
 <template>
@@ -70,38 +48,30 @@ onMounted(async () => {
 				@update:model-value="updateConfig({ playerSource: $event as HeadToHeadPlayerSource })"
 			/>
 
-			<ScreenSettingsField
+			<ScreenFeatureMatchSlotField
 				v-if="config.playerSource === 'featureMatchSlot'"
-				label="Feature Match Slot"
+				data-testid="head-to-head-slot"
+				:model-value="config.featureMatchId"
+				:event-id="eventId"
 				description="Shows the two Players of the Match this Slot is showing."
-			>
-				<ScreenFeatureMatchSelect
-					data-testid="head-to-head-slot"
-					:model-value="config.featureMatchId"
-					placeholder="Select a slot…"
-					@update:model-value="updateConfig({ featureMatchId: $event })"
-				/>
-			</ScreenSettingsField>
+				@update:model-value="updateConfig({ featureMatchId: $event })"
+			/>
 
 			<template v-else>
-				<ScreenSettingsField label="First Player">
-					<USelect
-						data-testid="head-to-head-player-1"
-						:model-value="config.player1Id ?? null"
-						:items="playerOptions"
-						class="w-64"
-						@update:model-value="updateConfig({ player1Id: $event ?? null })"
-					/>
-				</ScreenSettingsField>
-				<ScreenSettingsField label="Second Player">
-					<USelect
-						data-testid="head-to-head-player-2"
-						:model-value="config.player2Id ?? null"
-						:items="playerOptions"
-						class="w-64"
-						@update:model-value="updateConfig({ player2Id: $event ?? null })"
-					/>
-				</ScreenSettingsField>
+				<ScreenPlayerField
+					data-testid="head-to-head-player-1"
+					label="First Player"
+					:model-value="config.player1Id"
+					:event-id="eventId"
+					@update:model-value="updateConfig({ player1Id: $event })"
+				/>
+				<ScreenPlayerField
+					data-testid="head-to-head-player-2"
+					label="Second Player"
+					:model-value="config.player2Id"
+					:event-id="eventId"
+					@update:model-value="updateConfig({ player2Id: $event })"
+				/>
 			</template>
 		</ScreenSettingsSection>
 

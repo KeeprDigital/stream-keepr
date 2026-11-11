@@ -2,14 +2,11 @@
 import type { Screen } from '~/types';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { lookSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
-import { useConsumedEventData } from '~/modules/event-data/resync';
 
 const props = defineProps<{
 	screen: Screen;
 	eventId: number;
 }>();
-
-const featureMatchStore = useFeatureMatchStore();
 
 const { config, saving, updateConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
@@ -22,15 +19,6 @@ defineExpose({ resetConfig, saving });
 // Each control's label and bounds, read from the mode's config contract (#498).
 const fields = screenModeConfigContract('card').fields;
 
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['featureMatchSlots']);
-
-onMounted(async () => {
-	if (props.eventId) {
-		await featureMatchStore.loadFeatureMatchesByEventId(props.eventId);
-	}
-});
-
 const hasMatchBinding = computed(() => !!config.value.featureMatchId);
 
 const cardSummary = computed(() => settingsSummary([
@@ -42,17 +30,14 @@ const cardSummary = computed(() => settingsSummary([
 <template>
 	<div class="flex flex-col gap-6">
 		<ScreenSettingsSection id="card:feature-match-slot" title="Feature Match Slot" :collapsible="false">
-			<ScreenSettingsField
-				label="Feature Match Slot"
+			<ScreenFeatureMatchSlotField
+				:model-value="config.featureMatchId"
+				:event-id="eventId"
 				description="Optionally link a Slot, whose Deck Lists then load on the card search page."
-			>
-				<ScreenFeatureMatchSelect
-					:model-value="config.featureMatchId"
-					placeholder="No match linked"
-					detailed
-					@update:model-value="updateConfig({ featureMatchId: $event })"
-				/>
-			</ScreenSettingsField>
+				null-label="No match linked"
+				detailed
+				@update:model-value="updateConfig({ featureMatchId: $event })"
+			/>
 
 			<p v-if="!hasMatchBinding" class="text-sm text-muted">
 				No match linked. Cards can still be pushed to this screen from the card search page.

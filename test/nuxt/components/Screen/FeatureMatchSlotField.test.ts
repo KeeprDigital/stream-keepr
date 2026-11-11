@@ -2,30 +2,34 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
-import FeatureMatchSelect from '~/components/Screen/FeatureMatchSelect.vue';
+import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import FeatureMatchSlotField from '~/components/Screen/FeatureMatchSlotField.vue';
 
-// The Feature Match Slot picker of Screen settings: every Slot, optionally with each side's deck,
-// emitting the Slot's id, or `null` when cleared, which deletes the reference.
+// What the Feature Match Slot picker adds to an Event Reference picker: `detailed`, each side's
+// deck under its Slot. Loading, picking and clearing: `eventReferencePickers.test.ts`.
 
 const { slotItems } = vi.hoisted(() => ({
 	slotItems: { value: [] as Record<string, unknown>[] },
 }));
 
 mockNuxtImport('useFeatureMatchMenuItems', () => () => ref(slotItems.value));
+mockNuxtImport('useFeatureMatchStore', () => () => ({
+	loadFeatureMatchesByEventId: vi.fn(),
+}));
+vi.mock('~/modules/event-data/resync', () => ({
+	useConsumedEventData: vi.fn(),
+}));
 
 /** A select listing each item through its `item-label` slot, as `USelect`'s menu does. */
 const USelectMenuListStub = defineComponent({
 	props: {
-		modelValue: { type: null, required: false },
 		items: {
 			type: Array,
 			default: () => [],
 		},
-		placeholder: { type: String, required: false },
 	},
-	emits: ['update:modelValue'],
-	template: `<ul :data-placeholder="placeholder">
-		<li v-for="item in items" :key="item.value" data-testid="slot-option" @click="$emit('update:modelValue', item.value)">
+	template: `<ul>
+		<li v-for="item in items" :key="String(item.value)" data-testid="slot-option">
 			<slot name="item-label" :item="item">{{ item.label }}</slot>
 		</li>
 	</ul>`,
@@ -51,7 +55,7 @@ function slot(value: number, label: string, decks: [string | null, string | null
 	};
 }
 
-describe('screenFeatureMatchSelect', () => {
+describe('screenFeatureMatchSlotField', () => {
 	beforeEach(() => {
 		slotItems.value = [
 			slot(11, 'Match 1 — A vs B', ['Mono Red', 'Azorius Control'], ['R', 'WU']),
@@ -59,33 +63,30 @@ describe('screenFeatureMatchSelect', () => {
 		];
 	});
 
-	function mountSelect(detailed: boolean) {
-		return mount(FeatureMatchSelect, {
-			props: { modelValue: 11, placeholder: 'Select a slot…', detailed },
-			global: {
-				stubs: {
-					USelect: USelectMenuListStub,
-					MtgManaColorDisplay: MtgManaColorDisplayStub,
-				},
-			},
-		});
-	}
-
 	it.each([
 		{
 			name: 'detailed: each Slot\'s deck names and colours',
 			detailed: true,
-			texts: ['Match 1 — A vs B Mono Red vs Azorius Control', 'Match 2'],
+			texts: ['Select a slot…', 'Match 1 — A vs B Mono Red vs Azorius Control', 'Match 2'],
 			colors: ['R', 'WU'],
 		},
 		{
 			name: 'plain: each Slot\'s label alone',
 			detailed: false,
-			texts: ['Match 1 — A vs B', 'Match 2'],
+			texts: ['Select a slot…', 'Match 1 — A vs B', 'Match 2'],
 			colors: [],
 		},
 	])('lists every Feature Match Slot, $name', ({ detailed, texts, colors }) => {
-		const wrapper = mountSelect(detailed);
+		const wrapper = mount(FeatureMatchSlotField, {
+			props: { modelValue: 11, eventId: 1, detailed },
+			global: {
+				stubs: {
+					...nuxtUiStubs,
+					USelect: USelectMenuListStub,
+					MtgManaColorDisplay: MtgManaColorDisplayStub,
+				},
+			},
+		});
 
 		const optionText = (option: Element) => [
 			...option.querySelectorAll('span'),
@@ -93,23 +94,5 @@ describe('screenFeatureMatchSelect', () => {
 
 		expect(wrapper.findAll('[data-testid="slot-option"]').map(option => optionText(option.element))).toEqual(texts);
 		expect(wrapper.findAll('[data-colors]').map(color => color.attributes('data-colors'))).toEqual(colors);
-	});
-
-	it('emits the Slot picked', async () => {
-		const wrapper = mountSelect(false);
-		await wrapper.findAll('[data-testid="slot-option"]')[1]!.trigger('click');
-
-		expect(wrapper.emitted('update:modelValue')).toEqual([
-			[12],
-		]);
-	});
-
-	it('emits null when cleared', () => {
-		const wrapper = mountSelect(false);
-		wrapper.getComponent(USelectMenuListStub).vm.$emit('update:modelValue', undefined);
-
-		expect(wrapper.emitted('update:modelValue')).toEqual([
-			[null],
-		]);
 	});
 });
