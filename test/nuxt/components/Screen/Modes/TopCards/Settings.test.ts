@@ -113,6 +113,16 @@ const ScreenSettingsToggleStub = defineComponent({
 	template: '<button type="button" data-testid="settings-toggle" :aria-pressed="modelValue" :aria-disabled="enabled === false" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
 });
 
+/** A card badge row's bare switch, read as a toggle labelled by its accessible name. */
+const USwitchStub = defineComponent({
+	inheritAttrs: false,
+	props: {
+		modelValue: { type: Boolean, required: false },
+	},
+	emits: ['update:modelValue'],
+	template: '<button type="button" data-testid="settings-toggle" :data-config-field="$attrs[\'data-config-field\']" :aria-pressed="modelValue" @click="$emit(\'update:modelValue\', !modelValue)">{{ $attrs[\'aria-label\'] }}</button>',
+});
+
 const UINinePointPickerStub = defineComponent({
 	props: {
 		modelValue: { type: String, required: false },
@@ -202,6 +212,7 @@ async function mountComponent(themeOverrides: Record<string, unknown> = {}) {
 				UInput: true,
 				UInputNumber: UInputNumberStub,
 				UINinePointPicker: UINinePointPickerStub,
+				USwitch: USwitchStub,
 				USeparator: true,
 			},
 		},

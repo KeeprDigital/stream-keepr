@@ -140,6 +140,12 @@ export const DEFAULT_CARD_LAYOUT = {
 } as const;
 
 /**
+ * A card badge's size: its text size in px, which the badge is laid out around
+ * in em. Absent is Auto: a share of its card's solved width (`cardBadgeTextSize`).
+ */
+export const cardBadgeSizeField = editorField(z.number().int().min(8).max(48).optional(), { label: 'Badge size' });
+
+/**
  * The widest a table mode's content runs, in Event Canvas pixels, under the name
  * `maxWidth`. Absent is Auto: the content fills its Screen.
  */

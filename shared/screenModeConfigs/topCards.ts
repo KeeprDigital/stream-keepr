@@ -10,6 +10,7 @@ import { METAGAME_CARD_TYPE_BUCKETS } from '../utils/metagame';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
 import {
+	cardBadgeSizeField,
 	cardLayoutShape,
 	DEFAULT_CARD_LAYOUT,
 	DEFAULT_HEADER_CONFIG,
@@ -65,8 +66,9 @@ function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<
  * they replaced are former fields too. Its cards always fit: Card Sizing
  * (`cardSizing`, `cardWidth`, `autoColumns`) is former, and a stored one reads
  * as the Card Layout it meant (`upgradeCardSizing`). Each badge is placed and
- * sized on its own, as a Deck Screen's are; one `badgeSize` once sized both. A card's image prints its
- * name, so `showCardNames`, a label under it, is a former field.
+ * sized on its own, Auto (following its card) or px, as a Deck Screen's are;
+ * one `badgeSize` once sized both. A card's image prints its name, so
+ * `showCardNames`, a label under it, is a former field.
  */
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Scoping
@@ -91,18 +93,18 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Header
 	...headerConfigShape,
 
-	// Card badges: each placed on its card, and sized around its own text size in px.
+	// Card badges: each placed on its card, and sized around its own text size: Auto while absent, or px.
 	showRankBadges: editorField(z.boolean(), { label: 'Show rank badges' }),
 	rankBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
-	rankBadgeTextSize: editorField(z.number().int().min(8).max(48), { label: 'Badge text size' }),
+	rankBadgeTextSize: cardBadgeSizeField,
 	/** Which metric the stat badge shows; 'none' hides the badge. */
 	statBadge: editorField(z.enum(TOP_CARDS_STAT_VALUES), { label: 'Stat badge' }),
 	statBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
-	statBadgeTextSize: editorField(z.number().int().min(8).max(48), { label: 'Badge text size' }),
+	statBadgeTextSize: cardBadgeSizeField,
 	/** A pointed card's points from the Event's points system; an unpointed card shows none. */
 	showPointsBadges: editorField(z.boolean(), { label: 'Show point badges' }),
 	pointsBadgePosition: editorField(z.enum(QUANTITY_POSITION_VALUES), { label: 'Badge position' }),
-	pointsBadgeTextSize: editorField(z.number().int().min(8).max(48), { label: 'Badge text size' }),
+	pointsBadgeTextSize: cardBadgeSizeField,
 }, {
 	...DEFAULT_METAGAME_SCOPE,
 	archetypeFilter: undefined,
@@ -120,13 +122,13 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	...DEFAULT_HEADER_CONFIG,
 	showRankBadges: true,
 	rankBadgePosition: 'top-left',
-	rankBadgeTextSize: 14,
+	rankBadgeTextSize: undefined,
 	statBadge: 'inclusionRate',
 	statBadgePosition: 'bottom-right',
-	statBadgeTextSize: 14,
+	statBadgeTextSize: undefined,
 	showPointsBadges: false,
 	pointsBadgePosition: 'top-right',
-	pointsBadgeTextSize: 14,
+	pointsBadgeTextSize: undefined,
 }, {
 	formerFields: [
 		'rankBadgeTextColor',

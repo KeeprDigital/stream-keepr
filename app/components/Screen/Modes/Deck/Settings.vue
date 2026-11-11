@@ -570,53 +570,52 @@ const badgesSummary = computed(() => {
 		<ScreenSettingsSection id="deck:card-badges" title="Card Badges" :summary="badgesSummary">
 			<ScreenCardBadgeFields
 				title="Quantity Badge"
+				description="On cards with multiple copies."
 				:shown="!!config.showQuantities"
 				:shown-field="fields.showQuantities"
-				shown-description="Show quantity badges on cards with multiple copies."
 				:position="config.quantityPosition ?? DEFAULT_QUANTITY_POSITION"
 				:position-field="fields.quantityPosition"
-				:text-size="config.quantityBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.quantityBadgeSize"
+				:size="config.quantityBadgeSize"
 				:size-field="fields.quantityBadgeSize"
 				@update="updateConfig($event)"
-			>
-				<template #look>
-					<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="quantity-badge" />
-				</template>
-			</ScreenCardBadgeFields>
+			/>
 
-			<template v-if="showsCardPoints">
-				<USeparator />
+			<ScreenCardBadgeFields
+				v-if="showsCardPoints"
+				title="Highlander Point Badge"
+				description="7 Point Highlander points on pointed cards; placed on a grid's cards."
+				:shown="!!config.showHighlanderPoints"
+				:shown-field="fields.showHighlanderPoints"
+				:position="config.highlanderPointsPosition ?? DEFAULT_HIGHLANDER_POINTS_POSITION"
+				:position-field="fields.highlanderPointsPosition"
+				:size="config.pointsBadgeSize"
+				:size-field="fields.pointsBadgeSize"
+				@update="updateConfig($event)"
+			/>
 
-				<ScreenCardBadgeFields
-					title="Highlander Point Badge"
-					:shown="!!config.showHighlanderPoints"
-					:shown-field="fields.showHighlanderPoints"
-					shown-description="Show 7 Point Highlander point badges on pointed cards."
-					:position="config.highlanderPointsPosition ?? DEFAULT_HIGHLANDER_POINTS_POSITION"
-					:position-field="fields.highlanderPointsPosition"
-					position-description="Where the point badge appears on the card in grid mode."
-					:text-size="config.pointsBadgeSize ?? DEFAULT_DECK_TEXT_SIZES.pointsBadgeSize"
-					:size-field="fields.pointsBadgeSize"
-					@update="updateConfig($event)"
-				>
-					<template #look>
-						<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="points-badge" />
-					</template>
-				</ScreenCardBadgeFields>
-			</template>
+			<ScreenCardBadgeFields
+				v-if="config.showCompanion !== false"
+				title="Companion Badge"
+				description="On the companion's card; in a corner, it lines up with that side."
+				shown
+				:position="config.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION"
+				:position-field="fields.companionTagPosition"
+				@update="updateConfig($event)"
+			/>
 
-			<template v-if="config.showCompanion !== false">
-				<USeparator />
-
-				<ScreenCardBadgeFields
-					title="Companion Badge"
-					shown
-					:position="config.companionTagPosition ?? DEFAULT_COMPANION_TAG_POSITION"
-					:position-field="fields.companionTagPosition"
-					position-description="Where the Companion badge sits on its card; in a corner, it lines up with that side."
-					@update="updateConfig($event)"
-				/>
-			</template>
+			<ScreenThemeTokenGroup
+				:screen="screen"
+				:event-id="eventId"
+				group="quantity-badge"
+				heading="Quantity badge look"
+			/>
+			<ScreenThemeTokenGroup
+				v-if="showsCardPoints"
+				:screen="screen"
+				:event-id="eventId"
+				group="points-badge"
+				heading="Point badge look"
+			/>
 		</ScreenSettingsSection>
 	</div>
 </template>
