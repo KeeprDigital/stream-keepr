@@ -1,5 +1,4 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
-import { EVENT_CANVAS_SIDE_BOUNDS } from '../eventCanvas';
 
 /** The Standings settings groups its Mode Tokens may name (ADR-0072). */
 export type StandingsSettingsGroup = 'data' | 'table';
@@ -17,15 +16,6 @@ export const standingsModeTokens = {
 		label: 'Position Change drop',
 		settingsGroup: 'table',
 		default: { token: 'negative' },
-	},
-	// The widest the table runs, centred. It ships at the widest Event Canvas,
-	// so the table fills its Screen until a Theme narrows it.
-	'max-width': {
-		type: 'dimension',
-		label: 'Table max width',
-		settingsGroup: 'table',
-		default: EVENT_CANVAS_SIDE_BOUNDS.max,
-		bounds: EVENT_CANVAS_SIDE_BOUNDS,
 	},
 	// How a row enters, leaves back to, and moves, each row an eighth of the
 	// duration after the one above. A recipe with no channel cuts.
@@ -59,7 +49,8 @@ export const standingsModeTokens = {
 
 /**
  * The Mode Tokens Standings once declared: its type and shared chrome, which only
- * repeated the Foundation Tokens its display now reads directly.
+ * repeated the Foundation Tokens its display now reads directly, and the table's
+ * max width, now its config's `maxWidth` (#1081).
  */
 export const standingsFormerModeTokens = [
 	'surface',
@@ -70,4 +61,5 @@ export const standingsFormerModeTokens = [
 	'row-divider',
 	'primary-text',
 	'secondary-text',
+	'max-width',
 ] as const;

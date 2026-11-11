@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EVENT_CANVAS_SIDE_BOUNDS } from '../eventCanvas';
 import { METAGAME_SCOPE_VALUES } from '../types/enums';
 import { editorField } from './fields';
 
@@ -114,3 +115,12 @@ export const DEFAULT_PAGE_ROTATION = {
 
 /** How many rows a page of a Page Rotation holds, under whichever name its mode gives the field. */
 export const pageRotationPageSize = editorField(z.number().int().min(1).max(100), { label: 'Rows per page' });
+
+/**
+ * The widest a table mode's content runs, in Event Canvas pixels, under the name
+ * `maxWidth`. Absent is Auto: the content fills its Screen.
+ */
+export const tableMaxWidthField = editorField(
+	z.number().int().min(EVENT_CANVAS_SIDE_BOUNDS.min).max(EVENT_CANVAS_SIDE_BOUNDS.max).optional(),
+	{ label: 'Max width' },
+);

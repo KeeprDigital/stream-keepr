@@ -88,3 +88,27 @@ describe.each(SCREEN_MODE_VALUES)('the %s config contract', (mode) => {
 			expect(modeConfigsMapSchema.parse({ [mode]: stored })).toEqual({ [mode]: stored });
 	});
 });
+
+// A table mode's max width is Auto, stored as absent, or a width within the Event Canvas bounds (#1081).
+describe.each(['standings', 'metagame'] as const)('the %s max width', (mode) => {
+	it.each([
+		[99, false],
+		[100, true],
+		[7680, true],
+		[7681, false],
+	])('takes %d px: %s', (maxWidth, accepted) => {
+		expect(modeConfigPatchSchemaMap[mode].safeParse({ maxWidth }).success).toBe(accepted);
+	});
+
+	it('is Auto on a Screen storing none, and again once cleared', () => {
+		const cleared = parseModeConfigPatchResult({
+			[mode]: { maxWidth: 1200 },
+		}, mode, modeConfigPatchSchemaMap[mode].parse({ maxWidth: null }) as Record<string, unknown>);
+
+		expect(resolveScreenModeConfig({}, mode).maxWidth).toBeUndefined();
+		expect(resolveScreenModeConfig({
+			[mode]: { maxWidth: 1200 },
+		}, mode).maxWidth).toBe(1200);
+		expect(resolveScreenModeConfig(cleared, mode).maxWidth).toBeUndefined();
+	});
+});

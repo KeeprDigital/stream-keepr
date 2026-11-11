@@ -8,7 +8,7 @@ import type {
 	CardBreakdownEntry,
 } from '~~/shared/types/metagame';
 import { getCardTypeDisplayLabel, isMetagameColumnOffered } from '~~/shared/utils/metagame';
-import { foundationTokenVar, foundationTypographyStyle, modeMotionVars, modeTokenVar } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeMotionVars } from '~/modules/screen-mode';
 
 interface TableColumnDefinition<Key extends string> {
 	key: Key;
@@ -213,11 +213,14 @@ const rowLayoutStyle = useTableRowLayout(useTemplateRef<HTMLElement>('rowsRef'),
 	rowCount: () => pageSize.value ?? pageData.value.length,
 });
 
-const contentStyle = {
+// Centred, and no wider than the config's max width; Auto fills the Screen.
+const contentStyle = computed(() => ({
 	width: '100%',
-	maxWidth: modeTokenVar('metagame', 'max-width'),
+	maxWidth: config.value.maxWidth === undefined
+		? undefined
+		: `${config.value.maxWidth}px`,
 	marginInline: 'auto',
-};
+}));
 
 /**
  * Rows enter from the `row-motion` Mode Token's excursion, leave back to it
