@@ -125,8 +125,8 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		showWhen: ({ config, event }) => hasPointsSystem(event) || config.pointedOnly === true,
 	}),
 
-	// Card Layout: columns, max card size and gap, each Auto while absent
-	...cardLayoutShape(TOP_CARDS_MAX_LIMIT, 'layout'),
+	// Card Layout: columns, max card size and gap, each Auto while absent; no more columns than cards ranked
+	...cardLayoutShape(TOP_CARDS_MAX_LIMIT, 'layout', undefined, ({ config }) => config.limit),
 
 	// Paging: cards per page, Auto (one page) while absent; at least `limit` is one page too
 	cardsPerPage: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT).optional(), {

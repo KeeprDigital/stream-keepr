@@ -106,6 +106,13 @@ export interface ConfigFieldMeta<Value extends string = string> {
 	step?: number;
 	/** Stored units per displayed unit: 1000 for a millisecond field edited in seconds. */
 	displayScale?: number;
+	/**
+	 * A tighter upper bound than the schema's, in stored units, read from the
+	 * Screen: a bound that follows the content, such as columns up to the card
+	 * count or a card up to the Event Canvas. The schema's bound stays the one a
+	 * write is checked against.
+	 */
+	maxFor?: (context: ScreenSettingsContext) => number | undefined;
 }
 
 /** A field's editor description is kept under its own key of zod's metadata, clear of zod's own `description`. */
@@ -185,6 +192,8 @@ export interface ScreenModeConfigField {
 	step?: number;
 	/** Stored units per displayed unit; 1 unless the field is edited in another unit. */
 	displayScale: number;
+	/** A tighter upper bound than `max` read from the Screen, in stored units. */
+	maxFor?: (context: ScreenSettingsContext) => number | undefined;
 	/** A select's, position's or set's values, which its options must be drawn from. */
 	values?: readonly string[];
 	/** A nested block's own fields, by their keys within it. */
@@ -301,6 +310,7 @@ function editorFieldView(key: string, field: z.ZodType, meta: ConfigFieldMeta): 
 				? undefined
 				: max / displayScale,
 			step: meta.step,
+			maxFor: meta.maxFor,
 		};
 	}
 	if (inner instanceof z.ZodBoolean)

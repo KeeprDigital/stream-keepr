@@ -35,6 +35,11 @@ import { cardFieldsSummary, fieldDescription, fieldLabel, fieldOptions, fieldPat
  * fills that slot, and passes on the renderer's exposed `resetConfig` and
  * `saving`.
  *
+ * A widget that edits no one field, such as a choice between two ways of
+ * writing a block, mounts as the slot `before:<group>`, at the head of that
+ * Screen Settings Group's section, under its heading, while the group shows.
+ * It is given the same props, with no `fields`.
+ *
  * The mode is the Screen's at setup: the page remounts it on a mode change.
  */
 const props = defineProps<{
@@ -170,7 +175,7 @@ function headingId(card: ScreenSettingsCard, group: string): string {
 				:collapsible="COLLAPSIBLE.has(card.card)"
 				:summary="summaryOf(card)"
 			>
-				<!-- A group's fields under its heading, split from what precedes them, as `ScreenSettingsGroup` draws one. -->
+				<!-- A group's fields under its heading, split from what precedes them. -->
 				<section
 					v-for="(section, index) in card.sections"
 					:key="section.group?.id ?? 'ungrouped'"
@@ -184,6 +189,19 @@ function headingId(card: ScreenSettingsCard, group: string): string {
 						<ScreenSettingsSubheading :id="headingId(card.card, section.group.id)">
 							{{ section.group.title }}
 						</ScreenSettingsSubheading>
+						<div
+							v-if="$slots[`before:${section.group.id}`]"
+							:data-settings-group-slot="`before:${section.group.id}`"
+						>
+							<slot
+								:name="`before:${section.group.id}`"
+								:fields="[]"
+								:config="configRecord"
+								:context="context"
+								:update="update"
+								:rotation="paged?.rotation"
+							/>
+						</div>
 					</template>
 					<template v-for="row in section.rows" :key="row.key">
 						<div v-if="row.kind === 'field'" :data-settings-field="row.key">
