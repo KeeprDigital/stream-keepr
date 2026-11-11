@@ -74,6 +74,11 @@ type ListKeys<Shape extends z.ZodRawShape> = {
  *   (#752). A field of a nested block is named by its path, such as
  *   `mainboard.cardGap`. No reader sees one, a write naming one is accepted without storing
  *   it, and the next PATCH of the mode's config removes it from storage.
+ * - `upgradeFormerFields`, given to `defineScreenModeConfigContract`, maps what
+ *   an earlier version of the contract stored to the fields that replaced it,
+ *   such as a count to the range it meant. It runs wherever former fields are
+ *   dropped, before they are: on every read, on a write a stale client sends,
+ *   and on the stored fragment a PATCH merges into (`upgradeStored`).
  *
  * The write forms are derived from `shape` on the server without special cases
  * (`configContractModeForms`): a full write validates a fragment of the complete
@@ -91,16 +96,32 @@ export interface ScreenModeConfigContract<
 	readonly fields: ScreenModeConfigFields<Shape>;
 	readonly formerFields: readonly string[];
 	/**
-	 * A stored fragment as a reader reads it: without its former fields, and
+	 * A stored fragment as a reader reads it: upgraded (`upgradeStored`), and
 	 * every number outside its field's bounds pulled to the nearest bound
 	 * (`clampToShapeBounds`). Reads only, so a tightened bound never resets or
 	 * refuses a stored config; writes are refused. A fragment needing neither is
 	 * returned as it is.
 	 */
 	readonly readStored: <T extends Record<string, unknown>>(fragment: T) => T;
-	/** A fragment without the contract's former fields; returned as it is when it names none. */
-	readonly withoutFormerFields: <T>(fragment: T) => T;
+	/**
+	 * A fragment an earlier version of the contract may have written, as this
+	 * version holds it: its former fields mapped to the current fields that
+	 * replaced them (`upgradeFormerFields`), then dropped. Returned as it is when
+	 * it needs neither, or is no fragment at all.
+	 */
+	readonly upgradeStored: <T>(fragment: T) => T;
 }
+
+/**
+ * Maps a fragment an earlier version of a contract wrote to the current fields.
+ * It sees the fragment before its former fields are dropped, and may read them,
+ * set current fields from them, and rewrite a current field holding a value
+ * only the earlier version allowed. It returns the fragment itself when it has
+ * nothing to map, and must map its own output to itself, since a fragment is
+ * upgraded on every read. A PATCH body is a fragment too: one naming only part
+ * of what a mapping needs is the hook's to map or leave to be dropped.
+ */
+export type UpgradeFormerFields = (fragment: Readonly<Record<string, unknown>>) => Record<string, unknown>;
 
 /** The config type a contract defines: what a rendering of its mode reads. */
 export type ScreenModeConfigOf<Contract extends ScreenModeConfigContract<any, any>> = Contract['defaults'];
@@ -111,7 +132,11 @@ export function defineScreenModeConfigContract<
 >(
 	shape: Shape & FieldsWithoutDefaults<Shape>,
 	defaults: z.input<z.ZodObject<Shape, z.core.$strict>>,
-	options: { authoredStacks?: readonly AuthoredStack[]; formerFields?: readonly string[] } = {},
+	options: {
+		authoredStacks?: readonly AuthoredStack[];
+		formerFields?: readonly string[];
+		upgradeFormerFields?: UpgradeFormerFields;
+	} = {},
 ): ScreenModeConfigContract<Shape, AuthoredStack> {
 	const formerFields = options.formerFields ?? [];
 	const formerPaths = formerFields.map(field => field.split('.'));
@@ -120,11 +145,14 @@ export function defineScreenModeConfigContract<
 			throw new Error(`Config field "${path.join('.')}" cannot be both a field and a former field of one contract.`);
 	}
 
-	function withoutFormerFields<T>(fragment: T): T {
+	function upgradeStored<T>(fragment: T): T {
+		const upgraded = options.upgradeFormerFields && isPlainRecord(fragment)
+			? options.upgradeFormerFields(fragment)
+			: fragment;
 		let kept: Record<string, unknown> | undefined;
 		for (const path of formerPaths)
-			kept = withoutPath(kept ?? fragment, path) ?? kept;
-		return (kept ?? fragment) as T;
+			kept = withoutPath(kept ?? upgraded, path) ?? kept;
+		return (kept ?? upgraded) as T;
 	}
 
 	return {
@@ -134,8 +162,8 @@ export function defineScreenModeConfigContract<
 		authoredStacks: options.authoredStacks ?? [],
 		fields: screenModeConfigFields(shape),
 		formerFields,
-		readStored: fragment => clampToShapeBounds(shape, withoutFormerFields(fragment)),
-		withoutFormerFields,
+		readStored: fragment => clampToShapeBounds(shape, upgradeStored(fragment)),
+		upgradeStored,
 	};
 }
 

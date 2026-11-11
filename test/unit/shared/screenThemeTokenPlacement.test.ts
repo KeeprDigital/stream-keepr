@@ -7,8 +7,9 @@ import { placeScreenThemeTokens, screenModeBindableFoundationTokens } from '~~/s
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
 // A Screen settings page renders every Theme Token its Screen may override
-// exactly once: in the mounted settings group its Mode Token declares, in
-// Background & Placement, or in the residual Screen-wide look (ADR-0072).
+// exactly once: a Mode Token in the Screen Settings Group it names, a host
+// token in Background & Placement, any other Foundation Token in the
+// Screen-wide look (ADR-0072).
 
 /** What the page lists, from the mode's declaration alone. */
 function overridable(mode: ScreenMode): string[] {
@@ -27,59 +28,33 @@ function overridable(mode: ScreenMode): string[] {
 	];
 }
 
-function declaredGroups(mode: ScreenMode): string[] {
-	return [
-		...new Set(Object.values(screenModeTokens(mode)).map(definition => definition.settingsGroup)),
-	];
-}
-
-/** Every token the page renders for `mode` with `mounted` groups on it, duplicates kept. */
-function rendered(mode: ScreenMode, mounted: readonly string[]): string[] {
-	const placement = placeScreenThemeTokens(mode, mounted);
-	return [
-		...mounted.flatMap(group => placement.groups[group] ?? []),
-		...placement.placement,
-		...placement.screenWide.modeTokens,
-		...placement.screenWide.foundationTokens,
-	];
-}
-
 const MODES = SCREEN_MODE_VALUES.map(mode => [mode] as const);
 
 describe('where a Screen settings page renders each Theme Token', () => {
-	// Every Mode Token names a group, so mounting each group its mode names
-	// leaves the Screen-wide look with Foundation Tokens only.
-	it.each(MODES)('leaves no %s Mode Token in the Screen-wide look once every group is mounted', (mode) => {
-		expect(placeScreenThemeTokens(mode, declaredGroups(mode)).screenWide.modeTokens).toEqual([]);
-	});
-
-	it.each(SCREEN_MODE_VALUES.flatMap(mode => [
-		[mode, 'no group mounted', [] as string[]],
-		[
-			mode,
-			'every group mounted',
-			declaredGroups(mode),
-		],
-		[
-			mode,
-			'its first group mounted',
-			declaredGroups(mode).slice(0, 1),
-		],
-	] as const))('places each %s token exactly once with %s', (mode, _case, mounted) => {
-		const tokens = rendered(mode, mounted);
+	it.each(MODES)('places each %s token exactly once', (mode) => {
+		const placed = placeScreenThemeTokens(mode);
+		const tokens = [
+			...Object.values(placed.groups).flat(),
+			...placed.placement,
+			...placed.foundationTokens,
+		];
 
 		expect(tokens).toHaveLength(new Set(tokens).size);
 		expect([...tokens].sort()).toEqual(overridable(mode).sort());
 	});
 
-	it('keeps a Mode Token in the Screen-wide look until its group is mounted', () => {
-		expect(placeScreenThemeTokens('standings', []).screenWide.modeTokens).toContain('standings.title-text');
+	it.each(MODES)('places every %s Mode Token in a Screen Settings Group, and nothing else there', (mode) => {
+		const placed = placeScreenThemeTokens(mode);
 
-		const mounted = placeScreenThemeTokens('standings', ['header']);
+		expect(Object.values(placed.groups).flat().sort()).toEqual(Object.keys(screenModeTokens(mode)).sort());
+	});
 
-		expect(mounted.groups.header).toEqual(['standings.title-typography', 'standings.title-text', 'standings.title-divider']);
-		expect(mounted.screenWide.modeTokens).not.toContain('standings.title-text');
-		expect(mounted.screenWide.modeTokens).toContain('standings.surface');
+	it('places a Mode Token in the group it names, in declaration order', () => {
+		const placed = placeScreenThemeTokens('standings');
+
+		expect(placed.groups.header).toEqual(['standings.title-typography', 'standings.title-text', 'standings.title-divider']);
+		expect(placed.groups.data).toEqual(['standings.reveal-motion']);
+		expect(placed.foundationTokens).toContain('divider');
 	});
 
 	it.each([
@@ -91,9 +66,9 @@ describe('where a Screen settings page renders each Theme Token', () => {
 		['a graphics host', 'broadcast-graphics', []],
 		['an operator surface', 'feature-match', []],
 	] as const)('puts the Screen inset and alignment in Background & Placement on %s', (_case, mode, placement) => {
-		const placed = placeScreenThemeTokens(mode, []);
+		const placed = placeScreenThemeTokens(mode);
 
 		expect(placed.placement).toEqual(placement);
-		expect(placed.screenWide.foundationTokens).not.toContain('alignment');
+		expect(placed.foundationTokens).not.toContain('alignment');
 	});
 });

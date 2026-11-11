@@ -278,7 +278,7 @@ describe('the Standings settings layout', () => {
 			[
 				{
 					...DATA,
-					groups: ['data'],
+					groups: [],
 				},
 				TABLE,
 				HEADER,
@@ -312,7 +312,7 @@ describe('the Standings settings layout', () => {
 		expect(settingsLayout(wrapper)).toEqual(layout);
 	});
 
-	// The reveal's motion is a reveal-only Look, mounted in every view mode so it never falls to the Screen-wide look.
+	// The reveal's motion applies in the reveal view mode alone, so its Look is absent elsewhere.
 	it.each([
 		['all', false],
 		['topN', false],
@@ -323,9 +323,7 @@ describe('the Standings settings layout', () => {
 			viewMode,
 		});
 
-		const look = wrapper.get<HTMLElement>('[data-settings-group="data"]');
-
-		expect(look.element.style.display !== 'none').toBe(shown);
+		expect(wrapper.find('[data-settings-group="data"]').exists()).toBe(shown);
 	});
 
 	// Each view mode's own fields sit directly under the view mode select that reveals them.

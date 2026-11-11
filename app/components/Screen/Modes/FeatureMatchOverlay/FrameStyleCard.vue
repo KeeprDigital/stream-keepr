@@ -68,7 +68,7 @@ const backgroundSummary = computed(() => {
 
 <template>
 	<div class="min-w-0">
-		<FeatureMatchOverlayControlSection title="Background" :summary="backgroundSummary" default-open>
+		<FeatureMatchOverlayControlSection title="Background" :summary="backgroundSummary">
 			<div class="space-y-3">
 				<GraphicsNumberField
 					label="Opacity"

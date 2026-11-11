@@ -1593,7 +1593,7 @@ describe('graphic Animation bounds', () => {
 	});
 });
 
-/** A Layer Lock is stored on a Feature Match Layout's layers only (ADR-0063). */
+/** A Layer Lock is stored on the layer, in either graphics host (ADR-0063). */
 describe('a Layer Lock', () => {
 	function groupOf(child: Record<string, unknown>) {
 		return {
@@ -1643,16 +1643,9 @@ describe('a Layer Lock', () => {
 	});
 
 	it.each<[string, Record<string, unknown>]>([
-		['a locked top-level item', LOCKED_ITEM],
-		['a locked group child', LOCKED_CHILD],
-		[
-			'an item stored unlocked',
-			{
-				...shapeItem('item'),
-				locked: false,
-			},
-		],
-	])('is refused on a Broadcast Graphic\'s %s', (_, item) => {
+		['top-level item', LOCKED_ITEM],
+		['group child', LOCKED_CHILD],
+	])('is stored on a Broadcast Graphic\'s %s', (_, item) => {
 		const result = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
 			graphics: [
 				{
@@ -1662,7 +1655,8 @@ describe('a Layer Lock', () => {
 			],
 		});
 
-		expect(messages(result)).toContain('Layer Locks are available only in Feature Match Layouts');
+		expect(messages(result)).toEqual([]);
+		expect(result.data?.graphics?.[0]?.items).toEqual([item]);
 	});
 
 	it('leaves a Broadcast Graphic holding no lock alone', () => {

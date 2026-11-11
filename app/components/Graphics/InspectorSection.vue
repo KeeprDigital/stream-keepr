@@ -5,8 +5,9 @@ import { useInspectorSections } from '~/composables/ui/useInspectorSections';
  * One collapsible group of a graphics property panel: a title, a one-line summary
  * of what it holds while collapsed, and its fields.
  *
- * Whether it is open is remembered per browser by `id`, so a section an author
- * has no use for stays out of the way on every item that follows.
+ * It starts closed unless its host opens it. Whether it is open is then
+ * remembered per browser by `id`, so a section an author works in stays open on
+ * every item that follows.
  */
 const props = withDefaults(defineProps<{
 	id: string;
@@ -15,7 +16,7 @@ const props = withDefaults(defineProps<{
 	/** Shown under the title while collapsed. */
 	summary?: string;
 	defaultOpen?: boolean;
-}>(), { defaultOpen: true });
+}>(), { defaultOpen: false });
 
 const sections = useInspectorSections();
 

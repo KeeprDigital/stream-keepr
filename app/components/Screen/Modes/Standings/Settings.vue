@@ -203,15 +203,8 @@ const paginationCardSummary = computed(() => paginationSummary(rotation));
 					description="Direction players are revealed."
 					@update:model-value="updateConfig({ revealOrder: $event as RevealOrder })"
 				/>
+				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="data" />
 			</template>
-
-			<!-- The reveal's own motion: mounted in every view mode, so its token never falls to the Screen-wide look, and shown in reveal only. -->
-			<ScreenThemeTokenGroup
-				v-show="config.viewMode === 'reveal'"
-				:screen="screen"
-				:event-id="eventId"
-				group="data"
-			/>
 		</ScreenSettingsCard>
 
 		<ScreenSettingsCard

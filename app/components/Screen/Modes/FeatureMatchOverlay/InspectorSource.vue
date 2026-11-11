@@ -44,7 +44,7 @@ const SOURCE_ROLE_OPTIONS = [
 	<div class="min-w-0">
 		<FeatureMatchOverlayControlSection
 			title="Details"
-			default-open
+			:summary="item.label"
 		>
 			<div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
 				<UFormField label="Name">
@@ -102,6 +102,7 @@ const SOURCE_ROLE_OPTIONS = [
 		<FeatureMatchOverlayControlSection
 			title="Content"
 			:summary="item.sourceRole || 'Video source'"
+			default-open
 		>
 			<div class="grid gap-3 md:grid-cols-2">
 				<ScreenSettingsToggle
