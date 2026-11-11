@@ -62,11 +62,11 @@ type Wrapper = Awaited<ReturnType<typeof mountComponent>>;
 
 /** Choose the option whose value is `value`, as the kit's select keys it. */
 async function pick(wrapper: Wrapper, testId: string, value: number) {
-	await wrapper.get(`select[data-testid="${testId}"]`).setValue(String(value));
+	await wrapper.get(`select[data-testid="${testId}"], [data-testid="${testId}"] select`).setValue(String(value));
 }
 
 /** The labels of the options a select offers, its placeholder aside. */
-const offered = (wrapper: Wrapper, testId: string) => wrapper.findAll(`select[data-testid="${testId}"] option:not([hidden])`).map(option => option.text());
+const offered = (wrapper: Wrapper, testId: string) => wrapper.findAll(`select[data-testid="${testId}"] option:not([hidden]), [data-testid="${testId}"] select option:not([hidden])`).map(option => option.text());
 
 describe('screenTalentSettings', () => {
 	beforeEach(() => {

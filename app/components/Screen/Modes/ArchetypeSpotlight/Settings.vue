@@ -4,7 +4,6 @@ import type { Screen } from '~/types';
 import { getFeatureMatchStateTracking, getMetagameRules } from '~~/shared/config/games';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
-import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -25,32 +24,11 @@ defineExpose({ resetConfig, saving });
 // Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
 const fields = screenModeConfigContract('archetype-spotlight').fields;
 
-const archetypeStore = useArchetypeStore();
-const playerListStore = usePlayerListStore();
 const eventStore = useEventStore();
 // The Event's Card Game decides whether its Metagame reads standings, and its decks a Sideboard (ADR-0074).
 const game = computed(() => eventStore.event?.game);
 const readsStandings = computed(() => !game.value || getMetagameRules(game.value).readsStandings);
 const hasSideboard = computed(() => !game.value || getFeatureMatchStateTracking(game.value).sideboard);
-
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['archetypes', 'playerLists']);
-
-onMounted(async () => {
-	if (!props.eventId)
-		return;
-
-	if (!archetypeStore.isLoaded)
-		await archetypeStore.loadByEventId(props.eventId);
-
-	if (!playerListStore.isLoaded)
-		await playerListStore.loadByEventId(props.eventId);
-});
-
-const archetypeOptions = computed(() => [
-	{ label: 'Select an archetype…', value: null },
-	...archetypeStore.archetypes.map(archetype => ({ label: archetype.name, value: archetype.id })),
-]);
 
 const boardOptions = [
 	{ label: 'Full Deck', value: 'full' },
@@ -98,18 +76,17 @@ const headerCardSummary = computed(() => headerSummary(config.value));
 <template>
 	<div class="flex flex-col gap-6">
 		<ScreenSettingsSection id="archetype-spotlight:data" title="Data" :collapsible="false">
-			<ScreenSettingsField label="Archetype" description="The archetype to spotlight.">
-				<USelect
-					:model-value="config.archetypeId ?? null"
-					:items="archetypeOptions"
-					class="w-64"
-					@update:model-value="updateConfig({ archetypeId: $event ?? null, currentPage: 1 })"
-				/>
-			</ScreenSettingsField>
+			<ScreenArchetypeField
+				:model-value="config.archetypeId"
+				:event-id="eventId"
+				description="The archetype to spotlight."
+				@update:model-value="updateConfig({ archetypeId: $event, currentPage: 1 })"
+			/>
 
 			<ScreenMetagameScopeFields
 				:config="config"
 				:fields="fields"
+				:event-id="eventId"
 				:description="readsStandings
 					? 'Which players count towards the pilots, meta share and Conversion Rate.'
 					: 'Which players count towards the pilots and meta share.'"

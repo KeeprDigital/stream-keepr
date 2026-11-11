@@ -4,7 +4,6 @@ import type { Screen } from '~/types';
 import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { columnsSummary, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
-import { useConsumedEventData } from '~/modules/event-data/resync';
 import { useEditedScreenModeData } from '~/modules/screen-mode/editorModeData';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
@@ -13,7 +12,6 @@ const props = defineProps<{
 	eventId: number;
 }>();
 
-const playerStore = usePlayerStore();
 const { config, saving, updateConfig: saveConfig, resetConfig } = useModeConfigUpdate(
 	() => props.eventId,
 	() => props.screen.id,
@@ -25,11 +23,6 @@ defineExpose({ resetConfig, saving });
 // Each control's label and bounds, read from the mode's config contract (#498).
 // Edits still go through the Page Rotation's `updateConfig` below (ADR-0039).
 const fields = screenModeConfigContract('player-history').fields;
-
-const playerOptions = computed(() => [
-	{ label: 'Select a player…', value: null },
-	...playerStore.players.map(player => ({ label: player.name, value: player.id })),
-]);
 
 // The Player's Matches the Screen pages, read and followed as its Screen Output reads and follows them, so
 // the page count is the one it renders (#780).
@@ -73,31 +66,17 @@ const tableSummary = computed(() => settingsSummary([
 ]));
 const headerCardSummary = computed(() => headerSummary(config.value));
 const paginationCardSummary = computed(() => paginationSummary(rotation));
-
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['players']);
-
-onMounted(async () => {
-	if (props.eventId && !playerStore.isLoaded) {
-		await playerStore.loadPlayersByEventId(props.eventId);
-	}
-});
 </script>
 
 <template>
 	<div class="flex flex-col gap-6">
 		<ScreenSettingsSection id="player-history:data" title="Data" :collapsible="false">
-			<ScreenSettingsField
-				label="Player"
+			<ScreenPlayerField
+				:model-value="config.playerId"
+				:event-id="eventId"
 				description="Select the player whose match history should be shown."
-			>
-				<USelect
-					:model-value="config.playerId"
-					:items="playerOptions"
-					class="w-64"
-					@update:model-value="updateConfig({ playerId: $event, currentPage: 1 })"
-				/>
-			</ScreenSettingsField>
+				@update:model-value="updateConfig({ playerId: $event, currentPage: 1 })"
+			/>
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection

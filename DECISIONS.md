@@ -802,7 +802,7 @@ The Realtime Event Session re-read only Assignments and Broadcast Deck Lists on 
 ### Consequences
 
 - An operator's resync re-reads every consumed collection at once. That is a burst of list reads per open page, once per reconnection.
-- Each mode's Settings panel consumes the Event Data its pickers load. A store loaded by a component that does not consume it is not re-read on reconnect. It is behind, and its next consumer re-reads it.
+- Each Event Reference picker of a mode's Settings panel consumes the Event Data it loads (ADR-0038), and the panel consumes what it reads itself. A store loaded by a component that does not consume it is not re-read on reconnect. It is behind, and its next consumer re-reads it.
 - A consumer that also reads what no store holds passes its own re-read, which runs on every resync until the consumer is disposed. The metagame pages pass their summary and section fetch. That re-read is never behind, since it dies with its page. A metagame page can fetch twice on one resync, once for its own re-read and once more when the Player re-read bumps the roster version.
 - A Feature Match Slot re-read offers its Session to the Live State Follower, which holds it when it is newer. So a Session missed in the outage reaches Live Control's bound values through the Slots.
 - The Card Spotlight mode, through Screen Mode Data Freshness, also re-reads on the degraded cadence while disconnected.
@@ -1158,7 +1158,7 @@ The editors then hard-coded their controls' labels and bounds, and drifted from 
 
 ## ADR-0038: A Screen Mode Definition declares its Event References, and the Screen write derives its checks from them
 
-Accepted · 2026-10-21 · [#585](https://github.com/KeeprDigital/stream-keepr/issues/585)
+Accepted · 2026-10-21 · [#585](https://github.com/KeeprDigital/stream-keepr/issues/585) · Amended 2026-11-11: one picker per kind sets an Event Reference · [#1092](https://github.com/KeeprDigital/stream-keepr/issues/1092)
 
 ### Decision
 
@@ -1170,6 +1170,8 @@ Accepted · 2026-10-21 · [#585](https://github.com/KeeprDigital/stream-keepr/is
 
 The declarations are Card Spotlight, Feature Match Controls and Feature Match Overlay `featureMatchId` (Feature Match Slot), Deck List `deckSource`, Standings `roundId` and `playerListId`, Metagame and Most Played Cards `playerListId`, Player History `playerId`, Pairings `roundId` (#751), Top Cut Bracket `phaseId` (#752) and `manualBracket` (a whole Manual Bracket, whose Seeds may name Players, ADR-0075), Head-to-Head `featureMatchId` (Feature Match Slot), `player1Id` and `player2Id` (#760), Archetype Spotlight `archetypeId` (Archetype) and `playerListId` (#761), Round Clock `roundId` (#916), and Talent `talentId` (Talent) and `talentIds` (Talent lineup, an ordered list of Talent ids) (#782). Background and Broadcast Graphics declare none. A Broadcast Graphics stack declares only which kind each Graphic Source Selection picks; the pick itself is Live Session state.
 
+**An operator sets an Event Reference through its kind's one picker** (#1092): `ScreenRoundField`, `ScreenPhaseField`, `ScreenPlayerField`, `ScreenPlayerListField`, `ScreenFeatureMatchSlotField`, `ScreenArchetypeField`, `ScreenTalentField` and `ScreenDeckSourceField`, under `app/components/Screen/`. Each is a field row (ADR-0079) that loads what it lists, names it as consumed for Reconnect Resync (ADR-0028), and emits the picked id, or the `null` that deletes the reference (ADR-0041); the Deck Source picker emits a whole Deck Source and holds its Card Game's source tabs and its "shows nothing" hints. All but the Deck Source picker render through `ScreenEventReferenceField`, so a short list is a select whose first option says what none means, and a list that can be long (Players, Archetypes) is a searchable combobox with a clear button. The Player picker searches by name, Nickname or Bandai member number (ADR-0074). A settings page mounts the kind's picker and loads nothing for it. A Talent lineup and a Manual Bracket keep their own editors: each is a list editor, not a pick of one.
+
 ### Why
 
 The switch had no exhaustiveness check, so a mode it forgot was skipped without anyone noticing. It had forgotten Most Played Cards, whose Player List was never checked against the Event. Declaring the references on the Screen Mode Definition puts the question to every mode when it is defined, as the Background Layer declaration does for its stack.
@@ -1179,6 +1181,7 @@ The switch had no exhaustiveness check, so a mode it forgot was skipped without 
 - Saving a Most Played Cards Screen whose Player List belongs to another Event is now refused, as for Metagame. Screens already storing one are not repaired; their next write of Most Played Cards config must name a Player List in the Event, or none.
 - `test/unit/server/modules/screenModeEventReferences.sqlite.test.ts` runs over every declared field, against real SQLite. It shows that create, full update and PATCH all refuse another Event's entity and accept the Screen's own. A new kind fails to compile there until it has samples. The test also lists the declarations, so adding or dropping one is a visible test change. It also checks that a display reset keeps every declared Event Reference, which `MODE_RESET_PRESERVED_KEYS` still lists by hand, among other preserved keys.
 - The type-level check proves only that each declared field exists and holds an id or a Deck Source. Whether a new id field is an Event Reference is still the author's call, but they now have to make it on the definition.
+- Picking a Player, an Archetype or a Slot works one way on every settings page, and a page that mounts a picker cannot forget to load or re-read its list. `test/nuxt/components/Screen/eventReferencePickers.test.ts` runs one table over the kinds. The Feature Match Slot picker now offers "none" as its first option on every page, where it could only be cleared before.
 
 ### Rejected alternatives
 

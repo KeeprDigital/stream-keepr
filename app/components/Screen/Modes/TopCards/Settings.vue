@@ -34,10 +34,9 @@ const fields = screenModeConfigContract('top-cards').fields;
 
 const eventStore = useEventStore();
 const playerStore = usePlayerStore();
-const playerListStore = usePlayerListStore();
 
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['players', 'playerLists']);
+// The Players this editor reads, re-read on Reconnect Resync (#610).
+useConsumedEventData(['players']);
 
 onMounted(async () => {
 	if (!props.eventId) {
@@ -46,10 +45,6 @@ onMounted(async () => {
 
 	if (!playerStore.isLoaded) {
 		await playerStore.loadPlayersByEventId(props.eventId);
-	}
-
-	if (!playerListStore.isLoaded) {
-		await playerListStore.loadByEventId(props.eventId);
 	}
 });
 
@@ -194,6 +189,7 @@ const badgesSummary = computed(() => {
 			<ScreenMetagameScopeFields
 				:config="config"
 				:fields="fields"
+				:event-id="eventId"
 				description="Which players to include in the ranking."
 				@update="updateConfig({ ...$event, currentPage: 1 })"
 			/>
