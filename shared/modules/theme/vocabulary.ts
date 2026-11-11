@@ -135,8 +135,8 @@ export const FOUNDATION_TOKENS = {
 			case: 'none',
 		},
 	},
-	// What Graphic Items bind to (#829). A fill's or surface's colour names a
-	// colour token, so it follows the palette.
+	// What Graphic Items bind to (#829). A fill's or surface's default colour
+	// names a colour token, so one nobody has set follows the palette.
 	'accent-fill': {
 		type: 'fill',
 		label: 'Accent fill',

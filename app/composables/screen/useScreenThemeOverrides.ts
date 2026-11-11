@@ -2,10 +2,10 @@ import type { InjectionKey, MaybeRefOrGetter } from 'vue';
 import type { StoredThemeTokens, ThemeTokenValue } from '~~/shared/modules/theme';
 import type { ThemeTokenDefinitionOf } from '~~/shared/themeTokens';
 import type { Screen } from '~/types';
-import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, readTokenLiteral, resolveFoundationToken, resolveThemeTokens } from '~~/shared/modules/theme';
+import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, resolveFoundationToken, resolveThemeTokens } from '~~/shared/modules/theme';
 import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
 import { screenModeTokens } from '~~/shared/screenModes';
-import { parseThemeTokenWrite, themeTokenDefinition } from '~~/shared/themeTokens';
+import { themeTokenDefinition } from '~~/shared/themeTokens';
 
 /** One Theme Token as a Screen's settings page shows it. */
 export interface ScreenThemeTokenEntry {
@@ -13,7 +13,7 @@ export interface ScreenThemeTokenEntry {
 	token: ThemeTokenDefinitionOf;
 	/** The Screen Theme Override, if one is stored. */
 	stored: unknown;
-	/** What it reads with no override, as stored: a literal, or a Foundation Token it follows. */
+	/** What it reads with no override: its Theme's value as it resolves, or its default as declared, which may name a Foundation Token. */
 	inherited: unknown;
 	/** What the Screen renders now. */
 	resolved: ThemeTokenValue;
@@ -63,7 +63,7 @@ function createScreenThemeOverrides(screen: MaybeRefOrGetter<Screen | null | und
 	watch(themeId, id => void loadTheme(id), { immediate: true });
 
 	const overrides = computed<StoredThemeTokens>(() => toValue(screen)?.themeOverrides ?? {});
-	const resolved = computed(() => {
+	function resolveWith(stored: StoredThemeTokens) {
 		const mode = toValue(screen)?.currentMode;
 		return resolveThemeTokens({
 			vocabulary: FOUNDATION_TOKENS,
@@ -71,20 +71,32 @@ function createScreenThemeOverrides(screen: MaybeRefOrGetter<Screen | null | und
 				? screenModeTokens(mode)
 				: {},
 			theme: theme.value,
-			overrides: overrides.value,
+			overrides: stored,
 			hostTokens: mode
 				? screenModeHostTokens(mode)
 				: [],
 		});
-	});
+	}
+	const resolved = computed(() => resolveWith(overrides.value));
 
-	/** What a token reads with no override: the Theme's stored value where it holds one it may, else the default. */
+	/** The Screen's tokens as they resolve with no override: what its Theme alone gives it. */
+	const themed = computed(() => resolveWith({}));
+
+	function resolvedIn(values: Readonly<Record<string, ThemeTokenValue>>, name: string, stored: StoredThemeTokens): ThemeTokenValue {
+		// A Mode Token may resolve to null, as an unset `asset` does, so ask whether it resolved at all.
+		return (Object.hasOwn(values, name)
+			? values[name]
+			: resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme: theme.value, overrides: stored }, name)) as ThemeTokenValue;
+	}
+
+	/**
+	 * What a token reads with no override: the value its Theme gives it, as it
+	 * resolves, where the Theme stores one, else its default as declared.
+	 */
 	function inheritedValue(name: string): unknown {
-		const stored = theme.value[name];
-		if (stored !== undefined && parseThemeTokenWrite(name, stored).ok)
-			return stored;
-		const { definition } = themeTokenDefinition(name)!;
-		return readTokenLiteral(definition, stored) ?? definition.default;
+		return theme.value[name] === undefined
+			? themeTokenDefinition(name)!.definition.default
+			: resolvedIn(themed.value.values, name, {});
 	}
 
 	function entry(name: string): ScreenThemeTokenEntry {
@@ -93,10 +105,7 @@ function createScreenThemeOverrides(screen: MaybeRefOrGetter<Screen | null | und
 			token: themeTokenDefinition(name)!,
 			stored: overrides.value[name],
 			inherited: inheritedValue(name),
-			// A Mode Token may resolve to null, as an unset `asset` does, so ask whether it resolved at all.
-			resolved: (Object.hasOwn(resolved.value.values, name)
-				? resolved.value.values[name]
-				: resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme: theme.value, overrides: overrides.value }, name)) as ThemeTokenValue,
+			resolved: resolvedIn(resolved.value.values, name, overrides.value),
 		};
 	}
 

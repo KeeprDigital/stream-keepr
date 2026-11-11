@@ -62,14 +62,6 @@ describe('a Screen Settings Group\'s Look', () => {
 
 	it.each([
 		[
-			'points a row at another Foundation Token',
-			{},
-			'follow accent',
-			{
-				'pairings.result-bye': { token: 'accent' },
-			},
-		],
-		[
 			'sets a row\'s colour through its picker, on close,',
 			{},
 			'pick colour',
@@ -88,14 +80,11 @@ describe('a Screen Settings Group\'s Look', () => {
 		if (action === 'clear') {
 			await entry.findAll('button').find(button => button.text() === 'Clear')!.trigger('click');
 		}
-		else if (action === 'pick colour') {
+		else {
 			await entry.get('[data-token-part="colour"]').trigger('click');
 			await entry.get('[data-color-part="hue"]').setValue('#ff0000');
 			await entry.get('[data-color-part="alpha"]').setValue(40);
 			await entry.get('[data-token-part="colour"]').trigger('click');
-		}
-		else {
-			await entry.get('[data-token-part="source"]').setValue('accent');
 		}
 		await flushPromises();
 

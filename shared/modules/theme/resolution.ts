@@ -57,9 +57,9 @@ function firstReadable(stored: readonly unknown[], read: (value: unknown) => The
 
 /**
  * How one Screen reads Foundation Tokens: override, else Theme, else default.
- * A colour inside a composite literal (a fill or a surface) is read the same
- * way, so a colour override reaches every composite naming it. A colour holds
- * a literal only, so this adds at most one step and cannot cycle.
+ * A colour a composite default names (a fill's or a surface's) is read the
+ * same way, so a colour override reaches every composite naming it. A colour
+ * holds a literal only, so this adds at most one step and cannot cycle.
  */
 function foundationResolver({ vocabulary, theme, overrides }: Omit<ResolveThemeTokensInput, 'modeTokens'>) {
 	function resolveColor(name: string): string | undefined {
@@ -103,11 +103,14 @@ export function resolveFoundationTokens(input: Omit<ResolveThemeTokensInput, 'mo
  *
  * - Each token reads from the Screen Theme Override, else the Theme, else its
  *   shipped default.
- * - A Mode Token naming a Foundation Token reads that Foundation Token by the
- *   same precedence, so a Foundation override reaches every Mode Token naming
- *   it. Foundation Tokens hold literals only and nothing names a Mode Token,
- *   so this is one step and cannot cycle; a colour a composite names adds
- *   one more (`foundationResolver`).
+ * - A stored value is a literal, read in one step. A default may name a
+ *   Foundation Token, read by the same precedence, so a Foundation override
+ *   reaches every default naming it. Nothing names a Mode Token, so this is one
+ *   derivation and cannot cycle; a colour a composite default names adds one
+ *   more (`foundationResolver`).
+ * - A value stored before writes were literal-only may name a Foundation Token
+ *   as a default does, whole or as a composite's colour. It reads the same
+ *   way, to its literal, until its token is next written.
  * - A stored value is read, never trusted: a token no longer in the vocabulary
  *   (a former token) is dropped, a number outside a tightened bound reads as
  *   the nearest bound, and a value of the wrong type, or naming no same-type

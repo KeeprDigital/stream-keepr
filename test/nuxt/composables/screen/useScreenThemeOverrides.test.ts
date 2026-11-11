@@ -74,14 +74,16 @@ describe('useScreenThemeOverrides', () => {
 			{ token: 'positive' },
 			'#123456',
 		],
+		// The former stored form: shown as the literal it resolves to, never as stored.
 		[
-			'a Mode Token the Theme points elsewhere',
+			'a Mode Token whose Theme value names a Foundation Token',
 			{
+				'accent': '#aa0000',
 				'standings.rise': { token: 'accent' },
 			},
 			'standings.rise',
-			{ token: 'accent' },
-			FOUNDATION_TOKENS.accent.default,
+			'#aa0000',
+			'#aa0000',
 		],
 	])('reads %s from the Event\'s Theme', async (_case, tokens, name, inherited, resolved) => {
 		network.themeTokens = tokens;
