@@ -17,10 +17,11 @@ import { isTypingTarget } from '~/utils/typingTarget';
  * editors: output selection, zoom and pan, a viewport sized to the canvas aspect
  * ratio, and the item and advisory safe-area guide switches.
  *
- * The host owns the preview iframe (the `viewport` slot) and everything said to
- * it: it builds the preview URL from `output`, `itemGuides` and `safeAreaGuides`,
- * and keeps its own state in sync. The `controls` slot adds host controls to the
- * toolbar; the default slot sits between the toolbar and the viewport.
+ * The one editor preview shell (`GraphicsEditorPreview`) mounts it and owns the
+ * preview iframe (the `viewport` slot) and everything said to it: it builds the
+ * preview URL from `output`, `itemGuides` and `safeAreaGuides`, and keeps the
+ * frame in sync. The `controls` slot adds host controls to the toolbar; the
+ * default slot sits between the toolbar and the viewport.
  *
  * The `animation` slot holds the host's Graphic Animation Preview controls,
  * behind one toolbar control that shows and hides them. They stay mounted while

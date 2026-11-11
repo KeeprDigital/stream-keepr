@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { LockedGraphicItem } from '~/modules/graphics/editor/layerLocks';
 import type { GraphicsCompositionRenderModel } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import GraphicsCompositorGuideLayer from './GuideLayer.vue';
@@ -20,9 +21,17 @@ import GraphicsCompositorItem from './Item.vue';
  * its stacking context; whole-graphic Graphic Animation rides on that same wrapper,
  * which is what makes a graphic fade compose multiplicatively with its items' own.
  */
-const props = defineProps<{ render: GraphicsCompositionRenderModel }>();
+const props = defineProps<{
+	render: GraphicsCompositionRenderModel;
+	/**
+	 * Graphic Items locked against canvas edits, whose guides are drawn but not
+	 * offered. Read only by the guide layer, which only an editor preview draws.
+	 */
+	lockedItems?: readonly LockedGraphicItem[];
+}>();
 
-const emit = defineEmits<{ select: [target: GraphicsSelectionTarget] }>();
+/** `toggle` is a ⌘- or Ctrl-click on a guide: add the item to the editor's selection, or take it out. */
+const emit = defineEmits<{ select: [target: GraphicsSelectionTarget, toggle: boolean] }>();
 
 const ownsGuideLayer = computed(() => props.render.canvasRole === 'screen-output');
 </script>
@@ -106,7 +115,8 @@ const ownsGuideLayer = computed(() => props.render.canvasRole === 'screen-output
 			:item-guides="render.itemGuides"
 			:safe-area-guides="render.safeAreaGuides"
 			:selectable-canvas="render.itemGuides.length > 0"
-			@select="emit('select', $event)"
+			:locked-items="lockedItems"
+			@select="(target, toggle) => emit('select', target, toggle)"
 		/>
 	</div>
 </template>

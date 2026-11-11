@@ -792,6 +792,142 @@ describe('broadcastGraphicsDisplay', () => {
 		expect(wrapper.get('.item-guide').classes()).toContain('is-selected');
 	});
 
+	/** What the frame posts to its embedder while `act` runs, read through a stand-in parent. */
+	async function postedToEditor(act: () => Promise<unknown>) {
+		const posted: unknown[] = [];
+		const originalParent = Object.getOwnPropertyDescriptor(window, 'parent');
+		Object.defineProperty(window, 'parent', {
+			configurable: true,
+			value: {
+				postMessage: (sent: unknown) => posted.push(sent),
+			},
+		});
+		try {
+			await act();
+		}
+		finally {
+			if (originalParent)
+				Object.defineProperty(window, 'parent', originalParent);
+		}
+		return posted;
+	}
+
+	// #1101: the editor adds a ⌘-clicked item to its selection, or takes it out.
+	it.each([
+		[
+			'a click',
+			{},
+			{
+				type: 'graphics-compositor:select',
+				target: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+			},
+		],
+		[
+			'a ⌘-click as a toggle',
+			{ metaKey: true },
+			{
+				type: 'graphics-compositor:select',
+				target: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+				toggle: true,
+			},
+		],
+	])('reports %s on an item guide to its editor', async (_, modifiers, report) => {
+		mockIsPreview.value = true;
+		mockPreviewGuides.value = true;
+		const wrapper = await mountComponent();
+		await pushPreviewState();
+
+		const posted = await postedToEditor(() => wrapper.get('[data-item-guide="bar"]').trigger('click', modifiers));
+
+		expect(posted).toEqual([report]);
+	});
+
+	// ADR-0063: a locked layer's guide is drawn but not offered, so a click falls through to what lies beneath.
+	it('offers no guide for a Graphic Item locked on its own or by its group, in its own Broadcast Graphic only', async () => {
+		mockIsPreview.value = true;
+		mockPreviewGuides.value = true;
+		const bed: ShapeGraphicItemConfig = { ...bar, id: 'bed', label: 'Bed' };
+		const lockedGroup: GraphicGroupItemConfig = {
+			type: 'group',
+			id: 'group',
+			label: 'Group',
+			visible: true,
+			locked: true,
+			anchor: 'top-left',
+			x: 0,
+			y: 0,
+			width: 400,
+			height: 200,
+			arrangement: 'canvas',
+			padding: 0,
+			gap: 0,
+			align: 'start',
+			justify: 'start',
+			clip: false,
+			geometry: squareShapeGeometry(),
+			children: [
+				{ ...bed, id: 'child', label: 'Child' },
+			],
+		};
+		const wrapper = await mountComponent();
+		await pushPreviewState([
+			{
+				id: 'bug',
+				name: 'Bug',
+				items: [
+					bed,
+					{ ...bar },
+				],
+			},
+			{
+				...lowerThird,
+				items: [
+					{ ...bar, locked: true },
+					lockedGroup,
+				],
+			},
+		]);
+
+		const offered = Object.fromEntries(wrapper.findAll('.item-guide').map(guide => [
+			`${guide.attributes('data-in-selected-graphic') === 'true'
+				? 'lower-third'
+				: 'bug'}:${guide.attributes('data-item-guide')}`,
+			guide.attributes('role') === 'button',
+		]));
+		expect(offered).toMatchObject({
+			'bug:bed': true,
+			'bug:bar': true,
+			'lower-third:bar': false,
+			'lower-third:group': false,
+			'lower-third:child': false,
+		});
+		expect(await postedToEditor(() => wrapper.get('[data-in-selected-graphic="true"][data-item-guide="bar"]').trigger('click'))).toEqual([]);
+	});
+
+	// The live output path is unchanged (#1101): locks and selections reach no live Screen Output.
+	it('renders a live Screen Output the same whatever its stack locks or its editor selects, with no guide or selection chrome', async () => {
+		mockOnAirGraphicIds.value = ['lower-third'];
+		mockScreen.value = screenWithStack([lowerThird]);
+		const plain = (await mountComponent()).html();
+
+		mockScreen.value = screenWithStack([
+			{
+				...lowerThird,
+				items: [
+					{ ...bar, locked: true },
+				],
+			},
+		]);
+		const wrapper = await mountComponent();
+		await pushPreviewState();
+
+		expect(wrapper.html()).toBe(plain);
+		expect(wrapper.find('.guide-layer').exists()).toBe(false);
+		expect(wrapper.find('.is-selected').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="canvas-manipulation-overlay"]').exists()).toBe(false);
+		expect(await postedToEditor(() => wrapper.get('[data-graphic-item-kind="shape"]').trigger('click', { metaKey: true }))).toEqual([]);
+	});
+
 	describe('media Graphic Items', () => {
 		const logo: MediaGraphicItemConfig = {
 			type: 'media',

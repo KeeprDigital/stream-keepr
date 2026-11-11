@@ -102,6 +102,15 @@ export interface GraphicsPreviewAnimationPlan {
 	loop: boolean;
 }
 
+/**
+ * One message an editor's preview shell pushes into its frame, named by its
+ * `type`: a plain object that survives structured cloning.
+ */
+export interface GraphicsPreviewPush {
+	type: string;
+	[field: string]: unknown;
+}
+
 export interface GraphicsPreviewState {
 	/** The working stack of Broadcast Graphics, unsaved edits included. */
 	graphics: BroadcastGraphicConfig[];
