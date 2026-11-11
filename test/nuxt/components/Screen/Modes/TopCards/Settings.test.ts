@@ -304,7 +304,7 @@ describe('screenTopCardsSettings', () => {
 		});
 	});
 
-	// A closed card counts only the overrides its mounted Looks show; the rest sit in the Screen-wide look.
+	// A closed card counts only the overrides its mounted Looks show.
 	it.each([
 		{ pointsSystem: '7ph', summary: 'Rank, Stat badges · 2 Screen Theme Overrides' },
 		{ pointsSystem: null, summary: 'Rank, Stat badges · 1 Screen Theme Override' },

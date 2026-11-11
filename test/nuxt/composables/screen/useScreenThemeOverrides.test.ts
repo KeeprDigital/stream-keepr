@@ -56,16 +56,16 @@ describe('useScreenThemeOverrides', () => {
 		[
 			'a Foundation Token the Theme leaves unset',
 			{},
-			'divider',
-			FOUNDATION_TOKENS.divider.default,
-			FOUNDATION_TOKENS.divider.default,
+			'inset',
+			FOUNDATION_TOKENS.inset.default,
+			FOUNDATION_TOKENS.inset.default,
 		],
 		[
 			'a Foundation Token the Theme sets',
-			{ divider: '#123456' },
-			'divider',
-			'#123456',
-			'#123456',
+			{ inset: 30 },
+			'inset',
+			30,
+			30,
 		],
 		[
 			'a Mode Token following its default',
@@ -112,11 +112,11 @@ describe('useScreenThemeOverrides', () => {
 			theme: {
 				id: 'brand',
 				revision: 2,
-				tokens: { divider: '#654321' },
+				tokens: { inset: 50 },
 			},
 		} as never);
 
-		expect(overrides.entry('divider').inherited).toBe('#654321');
+		expect(overrides.entry('inset').inherited).toBe(50);
 	});
 
 	// A group's Look may mount long after the page, as a card opens or a layer is selected.
@@ -138,18 +138,18 @@ describe('useScreenThemeOverrides', () => {
 		const { handed } = mountPage(seedThemedScreen('standings'));
 		await flushPromises();
 
-		void handed[0]!.set('divider', '#ff0000');
+		void handed[0]!.set('inset', 24);
 		await flushPromises();
-		expect(handed[1]!.writing.value.has('divider')).toBe(true);
+		expect(handed[1]!.writing.value.has('inset')).toBe(true);
 
 		answer.resolve(createWireMockScreen({
 			id: 1,
 			currentMode: 'standings',
-			themeOverrides: { divider: '#ff0000' },
+			themeOverrides: { inset: 24 },
 			stateVersion: 1,
 		}) as unknown as Screen);
 		await flushPromises();
-		expect(handed[1]!.writing.value.has('divider')).toBe(false);
+		expect(handed[1]!.writing.value.has('inset')).toBe(false);
 	});
 
 	it('holds no override and writes nothing until the page has loaded its Screen', async () => {
@@ -157,9 +157,9 @@ describe('useScreenThemeOverrides', () => {
 		const overrides = mountPage(() => null).handed[0]!;
 		await flushPromises();
 
-		await overrides.set('divider', '#ff0000');
+		await overrides.set('inset', 24);
 
-		expect(overrides.entry('divider')).toMatchObject({ stored: undefined, resolved: FOUNDATION_TOKENS.divider.default });
+		expect(overrides.entry('inset')).toMatchObject({ stored: undefined, resolved: FOUNDATION_TOKENS.inset.default });
 		expect(overrideWrites(mockApiFetch)).toEqual([]);
 	});
 
@@ -171,14 +171,14 @@ describe('useScreenThemeOverrides', () => {
 		await flushPromises();
 
 		expect(overrides.themeError.value).not.toBeNull();
-		expect(overrides.entry('divider').inherited).toBe(FOUNDATION_TOKENS.divider.default);
+		expect(overrides.entry('inset').inherited).toBe(FOUNDATION_TOKENS.inset.default);
 	});
 
 	it.each([
-		['sets', {}, '#ff0000', '#ff0000'],
+		['sets', {}, 24, 24],
 		[
 			'clears',
-			{ divider: '#ff0000' },
+			{ inset: 24 },
 			null,
 			undefined,
 		],
@@ -189,26 +189,26 @@ describe('useScreenThemeOverrides', () => {
 		await flushPromises();
 
 		void (value === null
-			? overrides.clear('divider')
-			: overrides.set('divider', value));
+			? overrides.clear('inset')
+			: overrides.set('inset', value));
 		await flushPromises();
 
 		expect(overrideWrites(mockApiFetch)).toEqual([
-			{ divider: value },
+			{ inset: value },
 		]);
-		expect(overrides.entry('divider').stored).toBe(shown);
-		expect(overrides.writing.value.has('divider')).toBe(true);
+		expect(overrides.entry('inset').stored).toBe(shown);
+		expect(overrides.writing.value.has('inset')).toBe(true);
 
 		answer.resolve(createWireMockScreen({
 			id: 1,
 			currentMode: 'standings',
 			themeOverrides: value === null
 				? {}
-				: { divider: value },
+				: { inset: value },
 			stateVersion: 1,
 		}) as unknown as Screen);
 		await flushPromises();
-		expect(overrides.entry('divider').stored).toBe(shown);
-		expect(overrides.writing.value.has('divider')).toBe(false);
+		expect(overrides.entry('inset').stored).toBe(shown);
+		expect(overrides.writing.value.has('inset')).toBe(false);
 	});
 });

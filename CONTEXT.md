@@ -76,7 +76,7 @@ Which Players a Metagame read counts: every Player, the top N by placement, thos
 A strategic Deck classification assigned to Players and used for Metagame analysis. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand. An operator renaming one or pinning its series customises it, and a customised Archetype stays when its last Player leaves (ADR-0074).
 
 **Pinned Chart Series**:
-One of the Theme's eight chart series, the Foundation Tokens `series-1` to `series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme, or a Screen Theme Override, decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).
+One of the Theme's eight chart series, the Foundation Tokens `series-1` to `series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).
 _Avoid_: archetype colour, chart colour (an Archetype's mana colours are its colours).
 
 **Pilot**:
@@ -199,7 +199,7 @@ A Screen Mode rendering an ordered stack of Background Layers (ADR-0016).
 _Avoid_: Idle screen, empty state
 
 **Background Layer**:
-One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent. A Screen whose stack is empty paints its Theme's `background` Foundation Token, a stack of the same layers. A gradient layer holds a Graphic Fill gradient, edited with the one fill control; one stored earlier as a CSS gradient string paints as stored until an edit replaces it.
+One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent. A Screen's background has two sources: its own stack, else, while that is empty, its Theme's `background` Foundation Token, a stack of the same layers; no Screen Theme Override supplies one. A gradient layer holds a Graphic Fill gradient, edited with the one fill control; one stored earlier as a CSS gradient string paints as stored until an edit replaces it.
 _Avoid_: background type, media background (when meaning a layer)
 
 **Screen Media Source**:
@@ -279,7 +279,7 @@ A control surface's own live rendering of the Screen it drives. It composes what
 _Avoid_: Preview — which composes the authored state its embedder pushes in and resolves media as the author. Confidence monitor.
 
 **Screen Output Asset Capability**:
-An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, its resolved Theme Tokens' included (ADR-0050) and, on a Talent Screen showing photos, its Talents' photos (ADR-0070), never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
+An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, its resolved Theme Tokens' included — its Theme's Foundation Tokens and its own overrides of its mode's Mode Tokens (ADR-0050) — and, on a Talent Screen showing photos, its Talents' photos (ADR-0070), never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
 
 **Screen Output Link**:
 A short text, about 16 characters, that names one Screen and proves the right to its Screen Output Asset Capability. It is not presented on reads: it is exchanged once for the capability, which then does everything a capability does. It is derived from what the capability is derived from, never stored, so regenerating the capability regenerates the link and the former link stops exchanging. No Session stands in for it.
@@ -395,11 +395,11 @@ A Theme Token a Screen Mode Definition declares for an element of its rendering 
 _Avoid_: component token
 
 **Screen Theme Override**:
-A Screen's own value for one Theme Token, used by that Screen in place of what the token inherits: its Theme's value of a Foundation Token, or a Mode Token's default. Clearing it returns the Screen to that.
+A Screen's own value for one of its mode's Mode Tokens, used by that Screen in place of the token's default, or, on a plain overlay mode, for the `inset` or `alignment` Foundation Token its host places content by, in place of its Theme's value. Every other Foundation Token, Graphic Items' bindings and the logo included, comes from the Theme alone: a write naming one is accepted and the token dropped, and one stored before is read by nothing. Clearing it returns the Screen to what the token inherits.
 _Avoid_: local style, pin
 
 **Screen Settings Group**:
-One element or decision on a Screen's settings page, such as its Header, Table or Card Badges, holding the controls for it and, under "Look", the Screen Theme Overrides of the Mode Tokens that style it. A Mode Token names its group and renders nowhere else, so it is hidden while its group is. The Foundation Tokens sit in the closing "Screen-wide look" card, after "Background & Placement" (ADR-0072).
+One element or decision on a Screen's settings page, such as its Header, Table or Card Badges, holding the controls for it and, under "Look", the Screen Theme Overrides of the Mode Tokens that style it. A Mode Token names its group and renders nowhere else, so it is hidden while its group is. The Screen's `inset` and `alignment` sit in the closing "Background & Placement" card; no card lists a Foundation Token a Screen takes from its Theme alone (ADR-0072).
 
 **Event Canvas**:
 The pixel coordinate space every overlay Screen of an Event is authored and rendered in, default 1920 × 1080. A Screen Output scales it uniformly to fit its window, so output resolution is not the canvas's to set. Feature Match Controls, an operator surface, fills its window instead (ADR-0051).
@@ -853,7 +853,7 @@ _Avoid_: worst-case data, overflow data
 - A value a **Theme** or a **Screen Theme Override** stores for a **Theme Token** never names another token: it is a literal, and so is every colour inside a fill, a surface or a background colour layer
 - Only a shipped default names a token: a **Mode Token**'s default may name a **Foundation Token** of its type, a motion one may follow a motion **Foundation Token**'s timing with its own movement, and a colour inside a composite default may name a colour **Foundation Token**; nothing names a **Mode Token**, and a colour's default names nothing
 - A stored value that names a token, written before values were literals, still reads as the literal it resolves to, and the next edit of its token stores that literal
-- A **Screen** resolves a **Mode Token** from its own **Screen Theme Override**, else the token's default, and a **Foundation Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every default and **Graphic Item** on that Screen that names it
+- A **Screen** resolves a **Mode Token** from its own **Screen Theme Override**, else the token's default, and a **Foundation Token** from its **Event**'s **Theme**, else the token's default; only a plain overlay mode's `inset` and `alignment` read the Screen's own **Screen Theme Override** first
 - A **Screen Theme Override** of another mode's **Mode Token** is kept while the **Screen** shows a different **Screen Mode**, and applies again on its return
 - A **Graphic Item** property either names a whole **Foundation Token** of its type or holds its own value; detaching copies the token's resolved value in
 - A typography **Theme Token** carries no size; the consuming **Graphic Item** or **Screen Mode** display owns it

@@ -539,10 +539,10 @@ describe('screens extended API', () => {
 		const updated = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${standings.id}/theme-overrides`, {
 			method: 'PATCH',
 			body: {
-				tokens: { accent: '#ff0000' },
+				tokens: { 'standings.rise': '#ff0000' },
 			},
 		});
 
-		expect(updated.themeOverrides).toEqual({ accent: '#ff0000' });
+		expect(updated.themeOverrides).toEqual({ 'standings.rise': '#ff0000' });
 	});
 });

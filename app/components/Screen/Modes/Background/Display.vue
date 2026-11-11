@@ -5,13 +5,12 @@ import { screenBackgroundLayers, useScreenModeReady } from '~/modules/screen-mod
 
 const context = useScreenContext();
 const config = useScreenModeConfig(context, 'background');
-const { screen, themeTokens } = context;
+const { themeTokens } = context;
 
-/** The Screen's own stack, else its Theme's background, overridden on this Screen or not. */
+/** The Screen's own stack, else its Theme's background. */
 const layers = computed<BackgroundLayer[]>(() => screenBackgroundLayers(
 	config.value.layers,
 	themeTokens?.value ?? DEFAULT_THEME_TOKENS,
-	screen.value?.themeOverrides ?? {},
 ));
 
 // Its stack reads no data; what it shows marks itself pending while it loads.
