@@ -4,6 +4,7 @@ import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
 import type { GraphicsEditor } from '~/composables/useGraphicsEditor';
 import type { GraphicsEditorHostContract, GraphicsEditorLayerPatch, GraphicsEditorTree } from '~/modules/graphics/editor/host';
 import { toValue } from 'vue';
+import { FEATURE_MATCH_SOURCE_ITEM_ICON } from '~~/shared/featureMatchSourceItems';
 import { FEATURE_MATCH_OVERLAY_HOST_CONTRACT, withoutLayerLock } from '~~/shared/modules/graphics';
 import { copyGraphicLayers, pasteFeatureMatchLayers } from '~/modules/graphics/clipboard';
 import { editorSelectionKey } from './editorSelection';
@@ -53,6 +54,7 @@ export const FEATURE_MATCH_LAYOUT_EDITOR_TREE: GraphicsEditorTree<Layout, Layer>
 		]),
 		...[...layout.sources].reverse().map(source => sourceLayer(source.id)),
 	],
+	compositions: layout => [layout.composition],
 	item: (layout, layer) => layer.type === 'item'
 		? { composition: layout.composition, itemId: layer.itemId }
 		: null,
@@ -65,6 +67,7 @@ export const FEATURE_MATCH_LAYOUT_EDITOR_TREE: GraphicsEditorTree<Layout, Layer>
 	],
 	owned: {
 		label: 'Source Item',
+		icon: FEATURE_MATCH_SOURCE_ITEM_ICON,
 		create: (layout) => {
 			const result = layoutWriter.createSourceItem(layout);
 			return {

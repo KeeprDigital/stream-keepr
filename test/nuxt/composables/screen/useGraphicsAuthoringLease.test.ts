@@ -314,6 +314,54 @@ describe('useGraphicsAuthoringLease', () => {
 		});
 	});
 
+	// What an editor drops its unsaved edits on (#1100): the lease taken by another
+	// Session, or lapsed; never a close of its own, whose pending save still lands.
+	describe('losing the lease', () => {
+		it.each([
+			{
+				way: 'another Session taking it over',
+				then: async () => {
+					leaseAnswers(() => observing('Avery'));
+					await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+				},
+				lost: true,
+			},
+			{
+				way: 'its deadline passing unanswered',
+				then: async () => {
+					leaseAnswers(unreachable);
+					await vi.advanceTimersByTimeAsync(LEASE_TTL_MS);
+				},
+				lost: true,
+			},
+			{
+				way: 'a heartbeat going unanswered short of its deadline',
+				then: async () => {
+					leaseAnswers(unreachable);
+					await vi.advanceTimersByTimeAsync(LEASE_TTL_MS - 1_000);
+				},
+				lost: false,
+			},
+			{
+				way: 'the artifact closing for authoring',
+				then: async (open: Ref<boolean>) => {
+					open.value = false;
+					await settle();
+				},
+				lost: false,
+			},
+		])('counts $way as lost=$lost', async ({ then, lost }) => {
+			const open = ref(true);
+			const { lease } = openEditor({ endpoint: SCREEN_A, enabled: open });
+			await settle();
+			expect(lease.lost.value).toBe(false);
+
+			await then(open);
+
+			expect(lease.lost.value).toBe(lost);
+		});
+	});
+
 	describe('releasing', () => {
 		it.each([
 			{

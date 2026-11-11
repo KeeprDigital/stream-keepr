@@ -4,25 +4,22 @@ import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/typ
 import type { GraphicsAuthoringLeaseStatus } from '~/composables/screen/useGraphicsAuthoringLease';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { Screen } from '~/types';
-import { useEventListener } from '@vueuse/core';
-import { BROADCAST_GRAPHICS_HOST_CONTRACT, replaceBroadcastGraphic, replaceGraphicItemById } from '~~/shared/modules/graphics';
-import { randomUuid } from '~~/shared/utils/uuid';
+import { BROADCAST_GRAPHICS_HOST_CONTRACT } from '~~/shared/modules/graphics';
 import GraphicsCompositorInspector from '~/components/Graphics/Compositor/Inspector.vue';
 import GraphicsCompositorPreview from '~/components/Graphics/Compositor/Preview.vue';
-import GraphicsCompositorStackTree from '~/components/Graphics/Compositor/StackTree.vue';
-import { hasTextSelection, useGraphicsClipboard } from '~/composables/useGraphicsClipboard';
-import {
-	copyGraphicLayers,
-	copyGraphicStyle,
-	pasteBroadcastGraphicLayers,
-	pasteGraphicStyle,
-} from '~/modules/graphics/clipboard';
-import { graphicsSelectionGraphicId, resolveGraphicsSelection } from '~/modules/graphics/selection';
-import { isTypingTarget } from '~/utils/typingTarget';
+import { useGraphicsEditor } from '~/composables/useGraphicsEditor';
+import { useGraphicsEditorKeyboard } from '~/composables/useGraphicsEditorKeyboard';
+import { broadcastGraphicsEditorHost } from '~/modules/broadcast-graphics/editorHost';
+import { CANVAS_SELECTION, layerConfig } from '~/modules/graphics/editor/host';
+import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
+import { graphicsSelectionKey } from '~/modules/graphics/selection';
+import BroadcastGraphicsLayerList from './LayerList.vue';
 
 /**
- * The Edit workspace of a Broadcast Graphics Screen: the shared compositor's
- * authoring tree, preview, and inspector over the Screen's authored stack.
+ * The Edit workspace of a Broadcast Graphics Screen: the shared graphics editor
+ * (#1100) — its layer list, undo, several selected, locks, grouping, alignment,
+ * clipboard and keyboard — with the compositor's preview and inspector, over the
+ * Screen's authored stack.
  *
  * The whole workspace is the artifact one Graphics Authoring Lease covers, so
  * exactly one session authors it and every other session observes it. An observer
@@ -163,86 +160,123 @@ const placing = ref(false);
 /** Whether this session may edit now: it holds the lease, and no placement is in flight. */
 const canAuthor = computed(() => holdsLease.value && !placing.value);
 
-/*
- * Copy and paste (#746): ⌘C and ⌘V copy the selected Graphic Item and paste it
- * into the selected Broadcast Graphic, on this Screen or another; ⌘⌥C and ⌘⌥V do
- * the same for its style. What is copied is kept in this browser. Copying is not
- * a write, so an observer may; pasting is, so only the lease holder does.
+/**
+ * Whether a Broadcast Graphic may be on a program output now. While the realtime
+ * connection is down this client cannot know, so every graphic may be: an edit
+ * the editor refuses is better than one that reaches program unseen.
  */
-const clipboard = useGraphicsClipboard('broadcast-graphics');
-const selection = computed(() => resolveGraphicsSelection(props.graphics, props.selectedTarget));
-
-function copy(style: boolean): boolean {
-	const current = selection.value;
-	if (current.kind !== 'item')
-		return false;
-	return style
-		? clipboard.copyStyle(copyGraphicStyle('broadcast-graphics', current.item))
-		: clipboard.copyLayers(copyGraphicLayers('broadcast-graphics', { composition: current.graphic }, [
-				{ type: 'item', itemId: current.item.id },
-			]));
+function mayBeOnAir(graphicId: string): boolean {
+	return props.playoutDisconnected === true || onAirGraphicIds.value.has(graphicId);
 }
 
-/** Into the selected Broadcast Graphic, and into the Graphic Group the selection is or sits in. */
-async function pasteLayers() {
-	const copied = await clipboard.layersToPaste();
-	const graphicId = graphicsSelectionGraphicId(props.selectedTarget);
-	if (!copied || !canAuthor.value)
-		return;
-	const current = selection.value;
-	const outcome = pasteBroadcastGraphicLayers(copied, { graphics: props.graphics, graphicId: graphicId ?? '' }, {
-		groupId: current.kind === 'item'
-			? current.group?.id ?? current.item.id
-			: undefined,
-		nextId: randomUuid,
-	});
-	if (!outcome.ok) {
-		clipboard.refuse(outcome.refusal);
-		return;
-	}
-	emit('update:graphics', outcome.graphics);
-	const itemId = outcome.pasted.at(-1);
-	if (graphicId && itemId)
-		emit('update:selectedTarget', { type: 'item', graphicId, itemId });
+/*
+ * The shared graphics editor over the stack. Every write — the layer list, the
+ * canvas, the keyboard and the inspector — is one of its undo steps, made only
+ * while this session holds the lease, no placement is in flight, and the graphic
+ * it changes is not on air (#1100). Undo covers the stack, not the Graphic
+ * Channels or the Background beside it.
+ */
+const host = broadcastGraphicsEditorHost({
+	graphics: () => props.graphics,
+	channels: () => props.channels,
+	write: graphics => emit('update:graphics', graphics),
+	selectedGraphicId: () => props.selectedGraphicId,
+	canvasWidth: () => props.canvasWidth,
+	canvasHeight: () => props.canvasHeight,
+	writable: holdsLease,
+	held: placing,
+	onAir: mayBeOnAir,
+});
+const editor = useGraphicsEditor(host);
+const { layers } = editor;
+const severalSelected = computed(() => layers.value.length > 1);
+
+useGraphicsEditorKeyboard(editor, 'broadcast-graphics');
+
+/** A drag on a property panel's number label undoes as one step, however long it pauses. */
+provide(NUMBER_SCRUB_GESTURE, {
+	begin: editor.beginGesture,
+	end: editor.endGesture,
+});
+
+/** A placement undoes as one step: the stack from before it is recorded as it starts. */
+watch(placing, (isPlacing) => {
+	if (isPlacing)
+		editor.checkpoint();
+});
+
+/*
+ * The editor holds the selected layers; the Settings surface holds the selected
+ * target, which the Live workspace and the `?graphic=` address share. One layer
+ * is that target, several are their Broadcast Graphic, and a Broadcast Graphic
+ * or the canvas selected from elsewhere selects no layer.
+ */
+function editorTarget(): GraphicsSelectionTarget | null {
+	const selected = layers.value;
+	if (selected.length === 1)
+		return { type: 'item', graphicId: selected[0]!.graphicId, itemId: selected[0]!.itemId };
+	const anchor = editor.anchor.value;
+	if (selected.length > 1 && anchor)
+		return { type: 'graphic', graphicId: anchor.graphicId };
+	// No layer left: a removed item gives way to its graphic, as long as it stands.
+	const stale = props.selectedTarget;
+	if (stale.type !== 'item')
+		return null;
+	return props.graphics.some(graphic => graphic.id === stale.graphicId)
+		? { type: 'graphic', graphicId: stale.graphicId }
+		: { type: 'canvas' };
 }
 
-async function pasteStyle() {
-	const copied = await clipboard.styleToPaste();
-	const current = selection.value;
-	if (!copied || !canAuthor.value)
-		return;
-	if (current.kind !== 'item') {
-		clipboard.refuse({ reason: 'no-destination' });
+watch(layers, () => {
+	const target = editorTarget();
+	if (target && graphicsSelectionKey(target) !== graphicsSelectionKey(props.selectedTarget))
+		emit('update:selectedTarget', target);
+}, { flush: 'sync' });
+
+watch(() => props.selectedTarget, (target) => {
+	const selected = layers.value;
+	if (target.type === 'item') {
+		const one = selected.length === 1
+			&& selected[0]!.graphicId === target.graphicId
+			&& selected[0]!.itemId === target.itemId;
+		if (!one)
+			editor.select({ type: 'item', graphicId: target.graphicId, itemId: target.itemId });
 		return;
 	}
-	const outcome = pasteGraphicStyle(copied, 'broadcast-graphics', current.item);
-	if (!outcome.ok) {
-		clipboard.refuse(outcome.refusal);
-		return;
-	}
-	emit('update:graphics', replaceBroadcastGraphic(props.graphics, replaceGraphicItemById(current.graphic, outcome.item)));
+	const keep = target.type === 'graphic'
+		&& selected.length > 1
+		&& selected.every(layer => layer.graphicId === target.graphicId);
+	if (selected.length > 0 && !keep)
+		editor.select(CANVAS_SELECTION);
+}, { immediate: true });
+
+/** A Broadcast Graphic selected from its row, or none with the canvas. */
+function selectGraphic(graphicId: string | null) {
+	emit('update:selectedTarget', graphicId
+		? { type: 'graphic', graphicId }
+		: { type: 'canvas' });
 }
 
-function handleKeydown(event: KeyboardEvent) {
-	const mod = event.metaKey || event.ctrlKey;
-	if (!mod || event.shiftKey || event.defaultPrevented || isTypingTarget(event.target))
+/** A click in the preview selects what it hits alone. */
+function selectInPreview(target: GraphicsSelectionTarget) {
+	if (target.type === 'item') {
+		editor.select({ type: 'item', graphicId: target.graphicId, itemId: target.itemId });
 		return;
-	// By code: ⌥ changes the character a key types.
-	if (event.code === 'KeyC' && !hasTextSelection()) {
-		if (copy(event.altKey))
-			event.preventDefault();
 	}
-	else if (event.code === 'KeyV' && canAuthor.value) {
-		event.preventDefault();
-		void (event.altKey
-			? pasteStyle()
-			: pasteLayers());
-	}
+	editor.select(CANVAS_SELECTION);
+	emit('update:selectedTarget', target);
 }
 
-useEventListener(import.meta.client
-	? window
-	: undefined, 'keydown', handleKeydown);
+/** Each selected layer's stored rectangle, for the panel that edits several. */
+const selectedRects = computed(() => layers.value.flatMap((layer) => {
+	const rect = layerConfig(host.tree, props.graphics, layer);
+	return rect
+		? [rect]
+		: [];
+}));
+
+/** Whether the Broadcast Graphic the inspector shows may be on air, and so is not edited. */
+const selectedOnAir = computed(() => selectedGraphic.value !== null && !editor.mayEditComposition(selectedGraphic.value));
 </script>
 
 <template>
@@ -256,27 +290,47 @@ useEventListener(import.meta.client
 			@take-over="emit('takeOver')"
 		/>
 
-		<GraphicsSaveState
-			class="mb-2 justify-end"
-			:save-state="saveState ?? 'idle'"
-			:save-error="saveError"
-			:writable="holdsLease"
-			@retry="emit('retrySave')"
-		/>
+		<div class="mb-2 flex flex-wrap items-center justify-end gap-2">
+			<GraphicsSaveState
+				:save-state="saveState ?? 'idle'"
+				:save-error="saveError"
+				:writable="holdsLease"
+				@retry="emit('retrySave')"
+			/>
+			<UFieldGroup size="sm">
+				<UButton
+					variant="soft"
+					color="neutral"
+					icon="i-lucide-undo-2"
+					:disabled="!editor.canUndo.value"
+					aria-label="Undo"
+					title="Undo (⌘Z)"
+					data-testid="editor-undo"
+					@click="editor.undo()"
+				/>
+				<UButton
+					variant="soft"
+					color="neutral"
+					icon="i-lucide-redo-2"
+					:disabled="!editor.canRedo.value"
+					aria-label="Redo"
+					title="Redo (⌘⇧Z)"
+					data-testid="editor-redo"
+					@click="editor.redo()"
+				/>
+			</UFieldGroup>
+		</div>
 
 		<div class="grid min-h-[calc(100vh-18rem)] items-start gap-4 xl:grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)_minmax(19rem,24rem)] 2xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_minmax(24rem,30rem)]">
 			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-				<GraphicsCompositorStackTree
+				<BroadcastGraphicsLayerList
 					:graphics="graphics"
-					:selected-target="selectedTarget"
-					:selected-graphic-id="selectedGraphicId"
-					:contract="BROADCAST_GRAPHICS_HOST_CONTRACT"
+					:editor="editor"
+					:tree="host.tree"
+					:selected-graphic-id="selectedTarget.type === 'graphic' ? selectedTarget.graphicId : null"
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
-					:writable="canAuthor"
-					:theme-tokens="previewTheme.themeTokens.value"
-					@update:graphics="emit('update:graphics', $event)"
-					@update:selected-target="emit('update:selectedTarget', $event)"
+					@select-graphic="selectGraphic"
 				>
 					<template #graphic-badge="{ graphic }">
 						<!--
@@ -304,12 +358,12 @@ useEventListener(import.meta.client
 							variant="subtle"
 							size="sm"
 							icon="i-lucide-radio"
-							title="This Broadcast Graphic is composing into a program output. An edit under a live On-air Update Policy reaches it immediately."
+							title="This Broadcast Graphic is composing into a program output. It cannot be edited until it is off air."
 						>
 							On air
 						</UBadge>
 					</template>
-				</GraphicsCompositorStackTree>
+				</BroadcastGraphicsLayerList>
 
 				<!--
 					Beside the stack, each a section that starts closed and says what it
@@ -370,23 +424,49 @@ useEventListener(import.meta.client
 					:canvas-width="canvasWidth"
 					:canvas-height="canvasHeight"
 					:preview-theme-values="previewTheme.previewThemeValues.value"
-					@select-target="emit('update:selectedTarget', $event)"
+					@select-target="selectInPreview"
 				/>
 			</section>
 
 			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-				<GraphicsCompositorInspector
-					:graphics="graphics"
-					:selected-target="selectedTarget"
-					:contract="BROADCAST_GRAPHICS_HOST_CONTRACT"
-					:canvas-width="canvasWidth"
-					:canvas-height="canvasHeight"
-					:event-id="eventId"
-					:game="game"
-					:writable="canAuthor"
-					:theme-tokens="previewTheme.themeTokens.value"
-					@update:graphics="emit('update:graphics', $event)"
+				<GraphicsMultiLayerInspector
+					v-if="severalSelected"
+					:rects="selectedRects"
+					:writable="editor.writable.value && !selectedOnAir"
+					:group-refusal="editor.groupRefusal.value"
+					:can-align="editor.canAlign()"
+					:can-distribute="editor.canDistribute()"
+					@update="editor.setLayersGeometry"
+					@group="editor.group()"
+					@align="edge => editor.align(edge)"
+					@distribute="axis => editor.distribute(axis)"
 				/>
+				<template v-else>
+					<UAlert
+						v-if="selectedOnAir"
+						class="mb-3"
+						color="warning"
+						variant="soft"
+						icon="i-lucide-radio"
+						:title="playoutDisconnected ? 'Playout unknown' : 'On air'"
+						:description="playoutDisconnected
+							? 'Whether this Broadcast Graphic is on air cannot be known until the connection returns, so it cannot be edited until then.'
+							: 'This Broadcast Graphic is composing into a program output, so it cannot be edited until it is off air.'"
+						data-testid="edit-on-air-notice"
+					/>
+					<GraphicsCompositorInspector
+						:graphics="graphics"
+						:selected-target="selectedTarget"
+						:contract="BROADCAST_GRAPHICS_HOST_CONTRACT"
+						:canvas-width="canvasWidth"
+						:canvas-height="canvasHeight"
+						:event-id="eventId"
+						:game="game"
+						:writable="canAuthor && !selectedOnAir"
+						:theme-tokens="previewTheme.themeTokens.value"
+						@update:graphics="editor.editFields($event)"
+					/>
+				</template>
 			</section>
 		</div>
 	</div>

@@ -86,8 +86,9 @@ export interface GraphicsEditOptions {
  * records, so the host's write undoes as one step.
  *
  * A composition the host forbids, such as a Broadcast Graphic on air, is left
- * alone by every verb: its Graphic Items are not written, and nothing is added to
- * it. Its layers are still selected and copied.
+ * alone: no write that changes or removes it is made, by a verb or a host's own
+ * `edit`, and undo and redo restore everything but it. Its layers are still
+ * selected and copied.
  *
  * A locked layer (#747) is left alone by every canvas verb — a move, a resize, a
  * rotation and an arrow nudge — and still edited by the property panel. The
@@ -197,14 +198,28 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 		return true;
 	}
 
-	/** Write the document as one undoable edit. Answers the same document as no edit at all. */
+	/** Write the document as one undoable edit. Answers the same document, or one changing a forbidden composition, as no edit at all. */
 	function edit(next: D, editOptions: GraphicsEditOptions = {}): boolean {
-		return next !== read() && commit(() => contract.document.write(next), editOptions);
+		return next !== read()
+			&& !changesForbidden(next)
+			&& commit(() => contract.document.write(next), editOptions);
 	}
 
 	/** Field edits from the property panels: one undo step per burst of typing. */
 	function editFields(next: D) {
 		edit(next, { coalesce: 'fields' });
+	}
+
+	/**
+	 * What an undo or redo writes: the document it restores, with each composition
+	 * the host forbids now left as it is, and what the host keeps outside undo.
+	 */
+	function restoring(restored: D): D {
+		const current = read();
+		const kept = tree.compositions(current)
+			.filter(composition => !mayEditComposition(composition))
+			.reduce((next, composition) => tree.withComposition(next, composition), restored);
+		return contract.document.restore?.(kept, current) ?? kept;
 	}
 
 	function undo() {
@@ -214,7 +229,7 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 		if (!step)
 			return;
 		history.value = step.history;
-		contract.document.write(step.restore);
+		contract.document.write(restoring(step.restore));
 	}
 
 	/**
@@ -235,13 +250,22 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 		if (!step)
 			return;
 		history.value = step.history;
-		contract.document.write(step.restore);
+		contract.document.write(restoring(step.restore));
 	}
 
 	/* ── Forbidden edits ───────────────────────────── */
 
 	function mayEditComposition(composition: BroadcastGraphicConfig): boolean {
 		return !forbidden.composition?.(composition);
+	}
+
+	/** Whether a document would change, or remove, a composition the host forbids now. */
+	function changesForbidden(next: D): boolean {
+		if (!forbidden.composition)
+			return false;
+		const after = new Map(tree.compositions(next).map(composition => [composition.id, composition]));
+		return tree.compositions(read()).some(composition => !mayEditComposition(composition)
+			&& after.get(composition.id) !== composition);
 	}
 
 	/** Whether the host lets this layer be written now. A layer it owns always is. */
@@ -272,6 +296,11 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 		return composition && mayEditComposition(composition)
 			? composition
 			: null;
+	}
+
+	/** Whether a new Graphic Item has somewhere to go now. */
+	function canAddItem(): boolean {
+		return writable.value && destination() !== null;
 	}
 
 	function addItem(kind: GraphicItemKind) {
@@ -329,6 +358,11 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 
 	/* ── Either kind of layer ──────────────────────── */
 
+	/** Why a layer cannot be removed on its own, or null when it can. */
+	function removalRefusal(layer: L): string | null {
+		return tree.removal?.(read(), layer) ?? null;
+	}
+
 	/** The layers a verb acts on: the one it names, or every selected layer; never one the host forbids. */
 	function targets(target?: GraphicsEditorSelection<L>): L[] {
 		const named = target
@@ -349,9 +383,9 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 		return over.length > 0 && edit(over.reduce(apply, read()), editOptions);
 	}
 
-	/** Remove a layer, or every selected layer as one undo step. */
+	/** Remove a layer, or every selected layer as one undo step, leaving any the host keeps from going alone. */
 	function remove(target?: GraphicsEditorSelection<L>) {
-		const removed = editEach(targets(target), (next, layer) => {
+		const removed = editEach(targets(target).filter(layer => removalRefusal(layer) === null), (next, layer) => {
 			const item = tree.item(next, layer);
 			if (!item)
 				return tree.owned?.remove(next, layer) ?? next;
@@ -755,9 +789,13 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 		undo,
 		redo,
 		addItem,
+		canAddItem,
 		addGroupChild,
 		addHostLayer,
 		remove,
+		removalRefusal,
+		mayEdit,
+		mayEditComposition,
 		duplicate,
 		move,
 		moveToEdge,

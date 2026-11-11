@@ -256,7 +256,7 @@ export default withNuxt(
 	},
 	{
 		// The panels only; StyleRef.vue reads its own writable prop.
-		files: ['app/components/Graphics/Compositor/{Animation,Bindings,Inspector,SocialProfileProjections,StackTree}.vue'],
+		files: ['app/components/Graphics/Compositor/{Animation,Bindings,Inspector,SocialProfileProjections}.vue'],
 		rules: {
 			'no-restricted-syntax': [
 				'error',
