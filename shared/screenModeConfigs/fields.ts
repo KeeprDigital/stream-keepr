@@ -101,6 +101,8 @@ export interface ConfigFieldMeta<Value extends string = string> {
 	reference?: EventReferenceKind;
 	/** The named slot of the bespoke widget that edits it, for a field no plain control can. */
 	slot?: string;
+	/** What else an edit writing `value` to it writes, such as entering a view starting that view over. */
+	writesWith?: (value: unknown, context: ScreenSettingsContext) => Readonly<Record<string, unknown>> | undefined;
 	/** A colour string's control, or a nine-point position's. Every other field's is read from its schema. */
 	control?: 'color' | 'position';
 	step?: number;
@@ -178,6 +180,7 @@ export interface ScreenModeConfigField {
 	placeholder?: string;
 	reference?: EventReferenceKind;
 	slot?: string;
+	writesWith?: (value: unknown, context: ScreenSettingsContext) => Readonly<Record<string, unknown>> | undefined;
 	/** Emptied, it writes the `null` that deletes it (ADR-0041): the field is optional or nullable. */
 	clearable: boolean;
 	min?: number;
@@ -268,6 +271,7 @@ function editorFieldView(key: string, field: z.ZodType, meta: ConfigFieldMeta): 
 		placeholder: meta.placeholder,
 		reference: meta.reference,
 		slot: meta.slot,
+		writesWith: meta.writesWith,
 		clearable: inner !== field,
 		displayScale,
 	};

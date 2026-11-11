@@ -1,6 +1,7 @@
 import type { ScreenModeConfigField, ScreenSettingsCard, ScreenSettingsContext, ScreenSettingsGroupDeclaration } from '~~/shared/screenModeConfigs/fields';
 import type { PageRotationMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { PagedModeData } from './pagedModeData';
 import type { RotationConfigWrites } from './rotationWrites';
 import { SCREEN_SETTINGS_CARD_TITLES, SCREEN_SETTINGS_CARDS } from '~~/shared/screenModeConfigs/fields';
 import { SCREEN_MODES, screenModeConfigContract } from '~~/shared/screenModes';
@@ -57,6 +58,8 @@ export interface ScreenModeSettingsSlotProps {
 	update: (patch: Record<string, unknown>) => void;
 	/** A paginated mode's Page Rotation writes. */
 	rotation: RotationConfigWrites<any> | undefined;
+	/** A paginated mode's data, as its Screen Output reads it. */
+	data: PagedModeData | undefined;
 }
 
 /** Whether `mode` pages its rows: its Screen Mode Definition declares a Page Rotation (ADR-0039). */

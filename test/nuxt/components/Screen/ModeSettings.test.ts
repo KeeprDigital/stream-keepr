@@ -13,7 +13,7 @@ import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 import { nuxtUiStubs, UFormFieldBesideStub, UInputMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
-import ScreenModeSettings from '~/components/Screen/ModeSettings.vue';
+import { getScreenModeSettingsComponent } from '~/modules/screen-mode';
 import { useEventStore } from '~/stores/event';
 
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
@@ -70,7 +70,9 @@ mockNuxtImport('usePlayerStore', () => () => ({
 }));
 mockNuxtImport('usePlayerListStore', () => () => ({
 	...loaded,
-	lists: [],
+	lists: [
+		{ id: 7, name: 'Feature Table', memberCount: 4 },
+	],
 	loadByEventId: vi.fn(),
 }));
 mockNuxtImport('useRoundStore', () => () => ({
@@ -91,6 +93,13 @@ mockNuxtImport('usePhaseStore', () => () => ({
 		{ id: 3, name: 'Swiss', sortOrder: 1 },
 	],
 	loadPhasesByEventId: vi.fn(),
+}));
+mockNuxtImport('useArchetypeStore', () => () => ({
+	...loaded,
+	archetypes: [
+		{ id: 7, name: 'Burn' },
+	],
+	loadByEventId: vi.fn(),
 }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({
 	...loaded,
@@ -117,6 +126,7 @@ const EVERY_FEATURE: Partial<DbEvent> = {
 	featureMatchDefaultTurnTrackingEnabled: true,
 	featureMatchDefaultExtraTurnsEnabled: true,
 	featureMatchDefaultMulliganTrackingEnabled: true,
+	pointsSystem: '7ph',
 };
 
 interface PageOptions {
@@ -140,7 +150,10 @@ async function mountPage(mode: ScreenMode, { game = 'mtg', config: variant = {},
 		...variant,
 	});
 	writes.length = 0;
-	const Page = screenSettingsPage(screen, () => h(ScreenModeSettings, {
+	// The mode's own page: the renderer, or the component wrapping it to fill a bespoke slot, loaded before it mounts.
+	const settings = getScreenModeSettingsComponent(mode)!;
+	await (settings as { __asyncLoader?: () => Promise<unknown> }).__asyncLoader?.();
+	const Page = screenSettingsPage(screen, () => h(settings, {
 		screen: screen(),
 		eventId: 1,
 	}));
@@ -195,6 +208,9 @@ async function edit(row: Omit<DOMWrapper<Element>, 'exists'>) {
 	const option = row.find('[role="option"]');
 	if (option.exists())
 		return option.trigger('click');
+	const point = row.find('[role="radio"][aria-checked="false"]');
+	if (point.exists())
+		return point.trigger('click');
 	const toggle = row.find('[role="switch"]');
 	if (toggle.exists())
 		return toggle.trigger('click');
@@ -238,6 +254,37 @@ const VARIANTS = {
 		{ playerSource: 'players' },
 	],
 	'feature-match': [{}],
+	'standings': [
+		{},
+		{ viewMode: 'range', autoPageEnabled: true },
+		{ viewMode: 'watchlist' },
+		{
+			viewMode: 'reveal',
+			columns: [
+				{ key: 'name', visible: true },
+				{ key: 'deck', visible: true },
+			],
+		},
+	],
+	'metagame': [
+		{},
+		{ viewMode: 'cards', scope: 'topN', autoPageEnabled: true },
+		{ viewMode: 'chart', scope: 'minPoints' },
+		{ scope: 'playerList' },
+	],
+	'archetype-spotlight': [
+		{},
+		{ scope: 'topN', autoPageEnabled: true },
+		{ scope: 'minPoints' },
+		{ scope: 'playerList' },
+	],
+	'top-cards': [
+		{},
+		{ scope: 'topN', cardsPerPage: 5, autoPageEnabled: true },
+		{ scope: 'minPoints', statBadge: 'none' },
+		// Kept while on, so a Screen whose Event lost its points system can turn them off.
+		{ scope: 'playerList', pointedOnly: true, showPointsBadges: true },
+	],
 } as const satisfies Partial<Record<ScreenMode, readonly Record<string, unknown>[]>>;
 
 type RenderedMode = keyof typeof VARIANTS;
@@ -254,6 +301,13 @@ const NOT_FOR_GAME: Partial<Record<RenderedMode, Partial<Record<Game, readonly s
 			'showMulliganInfo',
 			'allowLifeControls',
 		],
+	},
+	// One Piece decks have no Sideboard.
+	'archetype-spotlight': {
+		op: ['board'],
+	},
+	'top-cards': {
+		op: ['board'],
 	},
 };
 
@@ -421,15 +475,24 @@ describe('the generic settings renderer', () => {
 	});
 
 	it.each(RENDERED_MODES)('renders every %s Mode Token in its group\'s Look, at the end of that group\'s card', async (mode) => {
-		const wrapper = await mountPage(mode);
 		const groups = screenModeConfigContract(mode).groups as Record<string, { card: string }>;
-		const tokens = Object.entries(screenModeTokens(mode));
+		const tokens = screenModeTokens(mode) as Record<string, { settingsGroup: string }>;
+		const seen = new Set<string>();
 
-		expect(wrapper.findAll('[data-theme-token]')).toHaveLength(tokens.length);
-		for (const [name, token] of tokens) {
-			const card = wrapper.get(`[data-settings-card="${groups[token.settingsGroup]!.card}"]`);
-			expect(card.find(`[data-settings-look] [data-settings-group="${token.settingsGroup}"] [data-theme-token="${name}"]`).exists(), name).toBe(true);
+		// A group that applies only sometimes shows its Look with it.
+		for (const variant of VARIANTS[mode]) {
+			const wrapper = await mountPage(mode, { config: variant });
+			for (const found of wrapper.findAll('[data-theme-token]')) {
+				const name = found.attributes('data-theme-token')!;
+				const group = tokens[name]!.settingsGroup;
+				expect(found.element.closest('[data-settings-look] [data-settings-group]')?.getAttribute('data-settings-group'), name).toBe(group);
+				expect(found.element.closest('[data-settings-card]')?.getAttribute('data-settings-card'), name).toBe(groups[group]!.card);
+				seen.add(name);
+			}
+			wrapper.unmount();
 		}
+
+		expect([...seen].sort()).toEqual(Object.keys(tokens).sort());
 	});
 
 	it('counts a card\'s overridden Mode Tokens while its Look is closed, and clears them in one write', async () => {
@@ -474,6 +537,46 @@ describe('the generic settings renderer', () => {
 					...stored,
 					{ key: 'opponentArchetype', visible: false },
 					{ key: 'gameScore', visible: true },
+				],
+			},
+		]);
+	});
+
+	it('offers only the columns its Card Game reads, keeping the others where they were stored', async () => {
+		const stored = [
+			{ key: 'archetype', visible: true },
+			{ key: 'winRate', visible: true },
+			{ key: 'count', visible: true },
+			{ key: 'metaShare', visible: true },
+			{ key: 'avgPlace', visible: false },
+			{ key: 'colors', visible: false },
+			{ key: 'conversionRate', visible: false },
+		];
+		const wrapper = await mountPage('metagame', {
+			game: 'op',
+			config: { archetypeColumns: stored },
+		});
+		const list = wrapper.get('[data-settings-slot="columns"]');
+
+		expect(list.findAll('[data-testid="column-label"]').map(label => label.text())).toEqual([
+			'Archetype',
+			'Count',
+			'Share',
+			'Colours',
+		]);
+
+		await list.get('[aria-label="Show Colours column"]').trigger('click');
+
+		expect(writes).toEqual([
+			{
+				archetypeColumns: [
+					{ key: 'archetype', visible: true },
+					{ key: 'count', visible: true },
+					{ key: 'metaShare', visible: true },
+					{ key: 'colors', visible: true },
+					{ key: 'winRate', visible: true },
+					{ key: 'avgPlace', visible: false },
+					{ key: 'conversionRate', visible: false },
 				],
 			},
 		]);

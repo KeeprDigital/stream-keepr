@@ -13,6 +13,8 @@ export interface PagedModeData {
 	rowCount: Readonly<Ref<number>>;
 	loading: Readonly<Ref<boolean>>;
 	answered: Readonly<Ref<boolean>>;
+	/** Standings: the Screen's read found no previous Round's Round Standings to compare positions with (#905). */
+	noPreviousRoundStandings?: Readonly<Ref<boolean>>;
 }
 
 /**

@@ -47,7 +47,9 @@ export const archetypeSpotlightModeConfigContract = defineScreenModeConfigContra
 		card: 'content',
 		group: 'top-cards',
 		slot: 'card-type-filter',
-		description: 'The card types the top cards may include.',
+		description: ({ event }) => event?.game === 'op'
+			? 'The card types the top cards may include; Leaders never are.'
+			: 'The card types the top cards may include; basic lands never are.',
 	}),
 
 	// Header
