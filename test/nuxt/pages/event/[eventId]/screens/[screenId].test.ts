@@ -1,8 +1,9 @@
-import type { PropType } from 'vue';
+import type { VueWrapper } from '@vue/test-utils';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, nextTick, reactive } from 'vue';
+import { defineComponent, nextTick, reactive } from 'vue';
+import { UButtonStub, UDropdownMenuStub, UModalStub, UTooltipStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { ScreenSettingsCardStub } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import EditorFocusModeToggle from '~/components/Graphics/EditorFocusModeToggle.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
@@ -40,6 +41,7 @@ const mockScreenStore = reactive({
 	subscribeToScreenPresence: vi.fn(),
 	unsubscribeFromScreenPresence: vi.fn(),
 	getConnectedCount: vi.fn(() => 0),
+	sendScreenCommand: vi.fn(async () => {}),
 	getScreenById: vi.fn((_eventId: number, screenId: number) => new Promise((resolve) => {
 		pendingLoads.push({ screenId, resolve });
 	})),
@@ -99,55 +101,18 @@ const SlotStub = defineComponent({
 	template: '<div><slot /></div>',
 });
 
-/**
- * The same, plus the tooltip's own words in the DOM.
- *
- * On this page the sentence saying what a hand-out carries lives in the tooltip
- * rather than on the button, so a naming test has no way to read it otherwise (#266).
- */
-const UTooltipStub = defineComponent({
-	props: {
-		text: { type: String, default: '' },
-	},
-	template: '<div :data-tooltip="text"><slot /></div>',
-});
+/** Opens the header menu behind `trigger` and chooses the item labelled `label`. */
+async function chooseMenuItem(page: VueWrapper, trigger: string, label: string) {
+	await page.get(trigger).trigger('click');
+	const item = page.findAll('[role="menuitem"]').find(entry => entry.text() === label);
+	if (!item)
+		throw new Error(`No menu item "${label}" behind ${trigger}`);
+	await item.trigger('click');
+	await flushPromises();
+}
 
-const UButtonStub = defineComponent({
-	name: 'UButton',
-	props: {
-		label: { type: String, default: '' },
-	},
-	emits: ['click'],
-	template: '<button type="button" @click="$emit(\'click\')">{{ label }}<slot /></button>',
-});
-
-/**
- * The Open menu's items as buttons, since what the page decides is the item list and
- * every hand-out reaches `openScreenOutput` through one of its `onSelect`s.
- */
-const UDropdownMenuStub = defineComponent({
-	props: {
-		items: {
-			type: Array as PropType<Array<Array<{ label: string; onSelect: (event: Event) => void }>>>,
-			default: () => [],
-		},
-	},
-	setup(props) {
-		return {
-			entries: computed(() => props.items.flat()),
-		};
-	},
-	template: `<div>
-		<button
-			v-for="entry in entries"
-			:key="entry.label"
-			type="button"
-			:data-open-output="entry.label"
-			@click="entry.onSelect($event)"
-		>{{ entry.label }}</button>
-		<slot />
-	</div>`,
-});
+const OPEN_MENU = '[data-testid="open-output-menu"]';
+const MORE_MENU = '[data-testid="screen-actions-menu"]';
 
 function makeScreen(id: number) {
 	return {
@@ -195,7 +160,7 @@ async function mountPage(stubOverrides: Record<string, unknown> = {}) {
 				UFieldGroup: SlotStub,
 				UDropdownMenu: UDropdownMenuStub,
 				USeparator: true,
-				UPopover: true,
+				UModal: UModalStub,
 				UAlert: true,
 				ScreenSettingsSection: ScreenSettingsCardStub,
 				ScreenThemeTokensSettings: ThemeTokensSettingsStub,
@@ -446,8 +411,7 @@ describe('screen config page — handing out this Screen’s output', () => {
 		wrapper = await mountLoadedPage();
 		mockCapabilityResponse.value = 'rotated-capability';
 
-		await wrapper.get('[data-open-output="Open output"]').trigger('click');
-		await flushPromises();
+		await chooseMenuItem(wrapper, OPEN_MENU, 'Open output');
 
 		expect(window.open).toHaveBeenCalledWith('', '_blank');
 		expect(outputWindow.opener).toBeNull();
@@ -470,11 +434,176 @@ describe('screen config page — handing out this Screen’s output', () => {
 			wrapper = await mountLoadedPage();
 			mockCapabilityResponse.value = 'rotated-capability';
 
-			await wrapper.get('[data-open-output="Open fill output"]').trigger('click');
-			await flushPromises();
+			await chooseMenuItem(wrapper, OPEN_MENU, 'Open fill output');
 
 			expect(outputWindow.location.href).toBe(accessUrl('rotated-capability', 'fill'));
 		});
+	});
+});
+
+/**
+ * The header keeps what an operator reaches for at the top level and puts the rare
+ * and destructive actions in one menu, where Rotate and Reset still confirm (#1063).
+ */
+describe('screen config page — the Screen header', () => {
+	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
+
+	const resetConfig = vi.fn();
+	const modeSettings = { resetBlocked: false };
+
+	/** A mode's settings, exposing what the header's Reset reaches. */
+	const ModeSettingsStub = defineComponent({
+		setup(_, { expose }) {
+			expose({ resetConfig, resetBlocked: modeSettings.resetBlocked, saving: false });
+			return {};
+		},
+		template: '<div data-testid="mode-editor" />',
+	});
+
+	beforeEach(() => {
+		pendingLoads = [];
+		route.params.screenId = '1';
+		mockScreenStore.screens = [];
+		mockScreenStore.sendScreenCommand.mockClear();
+		modeSettings.resetBlocked = false;
+		resetConfig.mockClear();
+		stubModePolicy({ displayType: 'overlay', outputOptions: [] });
+		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => ModeSettingsStub as never);
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({ assetCapability: 'rotated-capability' });
+	});
+
+	afterEach(() => {
+		wrapper?.unmount();
+		wrapper = null;
+		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => null);
+	});
+
+	async function mountLoadedPage() {
+		wrapper = await mountPage();
+		await flushPromises();
+		resolveLoad(1, makeScreen(1));
+		await flushPromises();
+		return wrapper;
+	}
+
+	function rotations() {
+		return mockApiFetch.mock.calls.filter(([path, options]) =>
+			path === '/api/events/1/screens/1/asset-capability' && options?.method === 'POST');
+	}
+
+	function dialogButton(page: VueWrapper, label: string) {
+		const button = page.findAll('[role="dialog"] button').find(entry => entry.text() === label);
+		if (!button)
+			throw new Error(`No "${label}" button in an open dialog`);
+		return button;
+	}
+
+	it('offers Open, Copy output URL, Refresh and one menu at the top level, in that order', async () => {
+		const page = await mountLoadedPage();
+
+		expect(page.findAll('[data-header-action]').map(action => action.attributes('data-header-action'))).toEqual([
+			'open',
+			'copy-output-url',
+			'refresh',
+			'more',
+		]);
+	});
+
+	it('holds Identify, Debug, Rotate Asset Access and Reset mode settings in the one menu', async () => {
+		const page = await mountLoadedPage();
+
+		await page.get(MORE_MENU).trigger('click');
+
+		expect(page.findAll('[role="menuitem"]').map(item => item.text())).toEqual([
+			'Identify',
+			'Debug',
+			'Rotate Asset Access',
+			'Reset mode settings',
+		]);
+	});
+
+	it('refreshes the Screen\'s outputs on one click', async () => {
+		const page = await mountLoadedPage();
+
+		await page.get('[data-header-action="refresh"]').trigger('click');
+		await flushPromises();
+
+		expect(mockScreenStore.sendScreenCommand).toHaveBeenCalledExactlyOnceWith(1, 'refresh');
+	});
+
+	it.each([
+		{ item: 'Identify', command: 'identify' },
+		{ item: 'Debug', command: 'debug' },
+	])('sends $command when $item is chosen from the menu', async ({ item, command }) => {
+		const page = await mountLoadedPage();
+
+		await chooseMenuItem(page, MORE_MENU, item);
+
+		expect(mockScreenStore.sendScreenCommand).toHaveBeenCalledExactlyOnceWith(1, command);
+	});
+
+	// Choosing a destructive item only asks; the write waits for the dialog's own button.
+	describe.each([
+		{
+			item: 'Rotate Asset Access',
+			confirm: 'Rotate Access',
+			writes: () => rotations().length,
+		},
+		{
+			item: 'Reset mode settings',
+			confirm: 'Reset',
+			writes: () => resetConfig.mock.calls.length,
+		},
+	])('$item', ({ item, confirm, writes }) => {
+		it('asks before it writes, and writes once confirmed', async () => {
+			const page = await mountLoadedPage();
+
+			await chooseMenuItem(page, MORE_MENU, item);
+
+			expect(page.get('[role="dialog"]').attributes('aria-label')).toBe(item);
+			expect(writes()).toBe(0);
+
+			await dialogButton(page, confirm).trigger('click');
+			await flushPromises();
+
+			expect(writes()).toBe(1);
+			expect(page.find('[role="dialog"]').exists()).toBe(false);
+		});
+
+		it('writes nothing when cancelled', async () => {
+			const page = await mountLoadedPage();
+
+			await chooseMenuItem(page, MORE_MENU, item);
+			await dialogButton(page, 'Cancel').trigger('click');
+			await flushPromises();
+
+			expect(page.find('[role="dialog"]').exists()).toBe(false);
+			expect(writes()).toBe(0);
+		});
+	});
+
+	it('keeps the rotation dialog open when the rotation fails, so it can be retried', async () => {
+		mockApiFetch.mockRejectedValue(new Error('offline'));
+		const page = await mountLoadedPage();
+
+		await chooseMenuItem(page, MORE_MENU, 'Rotate Asset Access');
+		await dialogButton(page, 'Rotate Access').trigger('click');
+		await flushPromises();
+
+		expect(page.find('[role="dialog"]').exists()).toBe(true);
+	});
+
+	// A graphics host's reset is an authoring write: without the lease it is not offered.
+	it('disables Reset mode settings, with the reason, while the mode\'s settings block it', async () => {
+		modeSettings.resetBlocked = true;
+		const page = await mountLoadedPage();
+
+		await page.get(MORE_MENU).trigger('click');
+		const reset = page.findAll('[role="menuitem"]').find(entry => entry.text() === 'Reset mode settings')!;
+
+		expect(reset.attributes('disabled')).toBeDefined();
+		expect(reset.attributes('aria-description')).toBe('Another session is editing this Screen\'s graphics');
 	});
 });
 
