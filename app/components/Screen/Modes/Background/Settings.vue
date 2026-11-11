@@ -23,8 +23,8 @@ function writeLayers(nextLayers: BackgroundLayer[]) {
 </script>
 
 <template>
-	<ScreenSettingsSection title="Background Layers" subtitle="With no layers, the Theme's background shows.">
-		<ScreenBackgroundLayersEditor
+	<ScreenSettingsSection title="Background Layers">
+		<ScreenBackgroundSource
 			:layers="layers"
 			:event-id="eventId"
 			@update:layers="writeLayers"

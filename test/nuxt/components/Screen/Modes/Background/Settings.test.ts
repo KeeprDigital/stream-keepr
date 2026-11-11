@@ -3,7 +3,8 @@ import type { BackgroundLayer, BackgroundModeConfig } from '~~/shared/types/scre
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, ref } from 'vue';
+import { computed, defineComponent, h, ref } from 'vue';
+import { screenSettingsPage } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import Settings from '~/components/Screen/Modes/Background/Settings.vue';
 import { createMockScreen } from '../../../../../helpers/fixtures';
 
@@ -119,11 +120,8 @@ function animationLayer(id: string): BackgroundLayer {
 }
 
 async function mountComponent() {
-	return mount(Settings, {
-		props: {
-			screen: createMockScreen({ currentMode: 'background' }),
-			eventId: 7,
-		},
+	const screen = createMockScreen({ currentMode: 'background' }) as never;
+	return mount(screenSettingsPage(() => screen, () => h(Settings, { screen, eventId: 7 })), {
 		global: {
 			stubs: {
 				ScreenSettingsSection: defineComponent({ template: '<section><slot /></section>' }),
@@ -374,9 +372,23 @@ describe('screenModesBackgroundSettings', () => {
 		});
 	});
 
+	// The rule is BackgroundSource's; this card writes it onto `layers`, an Authored Stack it may empty.
+	it('returns the Screen to its Theme\'s background by writing the empty stack', async () => {
+		config.value = {
+			layers: [
+				colorLayer('base'),
+			],
+		};
+		const wrapper = await mountComponent();
+
+		await wrapper.findAll('button').find(button => button.text() === 'Reset to Theme')!.trigger('click');
+
+		expect(updateConfig).toHaveBeenCalledWith({ layers: [] });
+	});
+
 	it('exposes resetConfig and saving for the configuration page', async () => {
 		const wrapper = await mountComponent();
-		const exposed = wrapper.vm as unknown as { resetConfig?: unknown; saving?: unknown };
+		const exposed = wrapper.findComponent(Settings).vm as unknown as { resetConfig?: unknown; saving?: unknown };
 
 		expect(exposed.resetConfig).toBeDefined();
 		expect(exposed.saving).toBeDefined();

@@ -7,6 +7,7 @@ import type { MediaFieldsPatch } from '~/utils/mediaFields';
 import { applyGraphicFillEdit } from '~~/shared/modules/graphics';
 import { BACKGROUND_LAYER_TYPE_VALUES } from '~~/shared/types/screenConfig';
 import { randomUuid } from '~~/shared/utils/uuid';
+import { BACKGROUND_LAYER_TYPE_LABELS } from '~/utils/backgroundLayerLabels';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
 
 /**
@@ -31,19 +32,11 @@ const emit = defineEmits<{
 
 const hasAnimationLayer = computed(() => props.layers.some(layer => layer.type === 'animation'));
 
-const LAYER_TYPE_LABELS: Record<BackgroundLayerType, string> = {
-	color: 'Colour',
-	gradient: 'Gradient',
-	image: 'Image',
-	video: 'Video',
-	animation: 'Animation',
-};
-
 const addLayerType = ref<BackgroundLayerType>('color');
 
 /** One animation layer per stack — the schema's rule, refused here before the write. */
 const addLayerOptions = computed(() => BACKGROUND_LAYER_TYPE_VALUES.map(type => ({
-	label: LAYER_TYPE_LABELS[type],
+	label: BACKGROUND_LAYER_TYPE_LABELS[type],
 	value: type,
 	disabled: type === 'animation' && hasAnimationLayer.value,
 })));
@@ -177,7 +170,7 @@ function updateAnimationSelection(id: string, selection: AnimationEffectSelectio
 				class="space-y-3 rounded-md border border-default/60 p-3"
 			>
 				<div class="flex items-center gap-2">
-					<span class="text-sm font-medium">{{ LAYER_TYPE_LABELS[layer.type] }}</span>
+					<span class="text-sm font-medium">{{ BACKGROUND_LAYER_TYPE_LABELS[layer.type] }}</span>
 					<span class="grow" />
 					<UButton
 						data-testid="move-layer-back"
