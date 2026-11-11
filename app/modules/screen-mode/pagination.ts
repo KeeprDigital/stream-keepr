@@ -4,12 +4,13 @@ import type { PageRotationMode } from '~~/shared/screenModes';
 import type { ModeConfigTypeMap, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { computed, ref, watchEffect } from 'vue';
-import { msUntilNextRotationFlip, projectRotationPage, rotationAnchorForPage, rotationPageSize } from '~~/shared/modules/page-rotation';
+import { msUntilNextRotationFlip, projectRotationPage, rotationAnchorForPage, rotationPageCount, rotationPageSize } from '~~/shared/modules/page-rotation';
 import { screenModePageRotation } from '~~/shared/screenModes';
 
 export interface ScreenModePaginationOptions<TRow> {
 	rows: ComputedRef<TRow[]>;
-	pageSize: ComputedRef<number>;
+	/** How many rows a page holds; undefined is Auto, one page of every row. */
+	pageSize: ComputedRef<number | undefined>;
 	/** The manually selected page — authoritative only while auto-page is off. */
 	currentPage: ComputedRef<number>;
 	autoPageEnabled: ComputedRef<boolean>;
@@ -94,7 +95,9 @@ export function useProjectedRotationPage(options: ProjectedRotationPageOptions):
 export function useScreenModePagination<TRow>(options: ScreenModePaginationOptions<TRow>) {
 	const { getServerTime } = useServerTime();
 
-	const totalPages = computed(() => Math.max(1, Math.ceil(options.rows.value.length / options.pageSize.value)));
+	const totalPages = computed(() => rotationPageCount(options.rows.value.length, options.pageSize.value));
+	/** An Auto page holds every row. */
+	const pageSize = computed(() => options.pageSize.value ?? options.rows.value.length);
 
 	const rotationPage = useProjectedRotationPage({
 		autoPageEnabled: options.autoPageEnabled,
@@ -109,8 +112,8 @@ export function useScreenModePagination<TRow>(options: ScreenModePaginationOptio
 	});
 
 	const pageData = computed(() => {
-		const start = (currentPage.value - 1) * options.pageSize.value;
-		return options.rows.value.slice(start, start + options.pageSize.value);
+		const start = (currentPage.value - 1) * pageSize.value;
+		return options.rows.value.slice(start, start + pageSize.value);
 	});
 
 	function setPage(page: number) {
@@ -143,7 +146,7 @@ export function useScreenModePagination<TRow>(options: ScreenModePaginationOptio
 		/** How many rows the rotation pages over, which its page count follows. */
 		rowCount: computed(() => options.rows.value.length),
 		/** How many rows a page holds, which a rendering lays its rows out for. */
-		pageSize: options.pageSize,
+		pageSize,
 		pageData,
 		totalPages,
 		currentPage,
@@ -164,7 +167,8 @@ export interface PaginatedScreenModeOptions<M extends PageRotationMode, TRow> {
  * A paginated Screen Mode's paging as its rendering reads it: the mode's Page
  * Rotation over `rows`, a page holding as many rows as the field the mode
  * declares (`pageRotation.pageSize`). Its `pageSize` is that field's value,
- * so a rendering never names the field itself.
+ * or every row while the field is Auto, so a rendering never names the field
+ * itself.
  *
  * A page selection is written only from an interactive surface, such as the
  * Program monitor; a Screen Output never writes, so it cannot move the

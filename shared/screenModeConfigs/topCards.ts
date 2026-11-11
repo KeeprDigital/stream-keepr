@@ -56,8 +56,8 @@ function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<
  *
  * Its Page Rotation pages the ranking by cards: `cardsPerPage` a page, however
  * many columns the Screen lays them out in, so a page count never depends on
- * the space the Screen measures (ADR-0054). The default is the most cards a
- * Screen can rank, so a Screen that never set it shows every card on one page.
+ * the space the Screen measures (ADR-0054). It is Auto while absent, the
+ * default: every card on one page.
  *
  * Its badge colours (#823) are Mode Tokens; the fields it once held for them
  * are former fields, which a stored config may still carry. Its Card Layout
@@ -84,8 +84,8 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Card Layout: columns, max card size and gap, each Auto while absent
 	...cardLayoutShape(TOP_CARDS_MAX_LIMIT),
 
-	// Paging: cards per page; at least `limit` is one page
-	cardsPerPage: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT), { label: 'Cards per page' }),
+	// Paging: cards per page, Auto (one page) while absent; at least `limit` is one page too
+	cardsPerPage: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT).optional(), { label: 'Cards per page' }),
 	...pageRotationShape,
 
 	// Header
@@ -114,7 +114,8 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	excludedCardTypes: ['Land'],
 	pointedOnly: false,
 	...DEFAULT_CARD_LAYOUT,
-	cardsPerPage: TOP_CARDS_MAX_LIMIT,
+	// Named, so a display reset returns it to Auto.
+	cardsPerPage: undefined,
 	...DEFAULT_PAGE_ROTATION,
 	...DEFAULT_HEADER_CONFIG,
 	showRankBadges: true,

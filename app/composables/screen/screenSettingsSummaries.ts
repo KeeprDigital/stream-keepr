@@ -24,7 +24,10 @@ export function paginationSummary(rotation: Pick<PageRotationControls, 'pageSize
 	const paging = autoPageEnabled
 		? `Auto-page every ${autoPageIntervalMs / 1000} s`
 		: 'Manual paging';
-	return `${rotation.pageSize.value} per page · ${paging}`;
+	const pageSize = rotation.pageSize.value;
+	return `${pageSize === undefined
+		? 'One page'
+		: `${pageSize} per page`} · ${paging}`;
 }
 
 /** How many of a table's columns show. */
