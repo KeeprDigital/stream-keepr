@@ -33,8 +33,9 @@ function mountLineup(talentIds: number[]) {
 type Wrapper = ReturnType<typeof mountLineup>;
 
 const lineup = (wrapper: Wrapper) => wrapper.findAll('[data-lineup-talent]').map(row => row.text());
-/** The labels of the Talents the add picker offers, its placeholder aside. */
-const offered = (wrapper: Wrapper) => wrapper.findAll('select[data-testid="talent-lineup-add"] option:not([hidden])').map(option => option.text());
+/** The add picker: the shared Talent picker (an Event Reference), its none option aside. */
+const addPicker = (wrapper: Wrapper) => wrapper.get('[data-lineup-add] select');
+const offered = (wrapper: Wrapper) => addPicker(wrapper).findAll('option:not([value="null"])').map(option => option.text());
 
 describe('a Talent lineup', () => {
 	it('adds to the end from the Talents not yet in it', async () => {
@@ -42,7 +43,7 @@ describe('a Talent lineup', () => {
 
 		expect(lineup(wrapper)).toEqual(['Caster']);
 		expect(offered(wrapper)).toEqual(['Host', 'Analyst']);
-		await wrapper.get('select[data-testid="talent-lineup-add"]').setValue(String(HOST));
+		await addPicker(wrapper).setValue(String(HOST));
 
 		expect(wrapper.emitted('update')).toEqual([
 			[
@@ -87,6 +88,6 @@ describe('a Talent lineup', () => {
 	])('offers adding to a lineup of $held: $adds', ({ held, adds }) => {
 		const wrapper = mountLineup(Array.from({ length: held }, (_, index) => 100 + index));
 
-		expect(wrapper.find('[data-testid="talent-lineup-add"]').exists()).toBe(adds);
+		expect(wrapper.find('[data-lineup-add]').exists()).toBe(adds);
 	});
 });

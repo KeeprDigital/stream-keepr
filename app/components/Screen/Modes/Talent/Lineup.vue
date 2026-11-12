@@ -5,7 +5,8 @@ import { TALENT_SCREEN_MAX_LINEUP } from '~~/shared/screenModeConfigs/talent';
  * A Talent Screen's lineup (#782): the Event's Talents in the order shown,
  * each moved, removed or added to, at most `TALENT_SCREEN_MAX_LINEUP`. A
  * Talent the Event no longer lists still shows, so it can be removed. Every
- * edit emits the whole lineup.
+ * edit emits the whole lineup. A Talent is added through the shared Talent
+ * picker, offering those not yet in the lineup.
  */
 const props = defineProps<{
 	talentIds: readonly number[];
@@ -22,10 +23,6 @@ const lineup = computed(() => props.talentIds.map(id => ({
 	id,
 	name: talents.value.find(talent => talent.id === id)?.name ?? 'Unknown Talent',
 })));
-
-const addOptions = computed(() => talents.value
-	.filter(talent => !props.talentIds.includes(talent.id))
-	.map(talent => ({ label: talent.name, value: talent.id })));
 
 const full = computed(() => props.talentIds.length >= TALENT_SCREEN_MAX_LINEUP);
 
@@ -96,15 +93,13 @@ function remove(index: number) {
 		<ScreenSettingsHint v-if="full">
 			A lineup holds at most {{ TALENT_SCREEN_MAX_LINEUP }} Talents.
 		</ScreenSettingsHint>
-		<ScreenSettingsField v-else label="Add to lineup">
-			<USelect
-				data-testid="talent-lineup-add"
-				:model-value="undefined"
-				:items="addOptions"
-				placeholder="Select a Talent…"
-				class="w-64"
-				@update:model-value="add($event)"
-			/>
-		</ScreenSettingsField>
+		<ScreenTalentField
+			v-else
+			data-lineup-add
+			label="Add to lineup"
+			:model-value="null"
+			:excluded="talentIds"
+			@update:model-value="add($event)"
+		/>
 	</div>
 </template>
