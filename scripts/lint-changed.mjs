@@ -1,9 +1,9 @@
 /**
  * `pnpm lint:changed` — ESLint over the files this checkout changes.
  *
- * A whole-repository lint builds the TypeScript program for one type-aware
- * rule: 140 s and 3.8 GB on a cold cache, which is what every fresh worktree
- * has. The files a branch touched take about 15 s. CI lints everything cold,
+ * `pnpm verify:quick` checks a change in proportion to it, and a whole-repository
+ * lint is 39 s and 3.5 GB on a cold cache, which is what every fresh worktree
+ * has. The files a branch touched take a few seconds. CI lints everything cold,
  * and is the backstop for a finding one file's change causes in another
  * (README § Testing).
  *
@@ -43,6 +43,19 @@ export function lintTargets(changed) {
 		: changed;
 }
 
+/** Where the one type-aware rule runs (eslint.config.mjs): linting these builds a TypeScript program. */
+const TYPE_AWARE = /^(?:server|shared)\/.*\.ts$/;
+
+/**
+ * @param {string[] | 'everything'} targets what `lintTargets` answered to lint
+ * @returns {'lint' | 'lint-untyped'} the run slots the lint holds (`RUN_SLOT_COSTS`)
+ */
+export function lintCost(targets) {
+	return targets === 'everything' || targets.some(file => TYPE_AWARE.test(file))
+		? 'lint'
+		: 'lint-untyped';
+}
+
 if (import.meta.main) {
 	const targets = lintTargets(changedFiles());
 	if (targets === 'nothing') {
@@ -55,7 +68,7 @@ if (import.meta.main) {
 				? ''
 				: 's'}\n`);
 		// A changed file ESLint has no configuration for (an image, a migration) is not a finding.
-		process.exitCode = await runHoldingSlots('lint', targets === 'everything'
+		process.exitCode = await runHoldingSlots(lintCost(targets), targets === 'everything'
 			? [...ESLINT, '.']
 			: [
 					...ESLINT,

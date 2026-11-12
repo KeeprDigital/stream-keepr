@@ -102,24 +102,17 @@ export default withNuxt(
 		},
 	}),
 	{
-		files: ['{app,server,shared,test}/**/*.{ts,tsx,mts,cts}'],
+		// The one type-aware rule, on the code where its finding is a defect no test
+		// sees: on Workers, a promise a request handler never awaited can be cut off
+		// once the response has gone, and the write or publish is lost. Linted
+		// everywhere it cost 176 s of CPU and 4.4 GB for a cold run, against 60 s and
+		// 3.5 GB here (46 s and 2.0 GB without it), most of that spent building the
+		// app's and the tests' TypeScript program to find floating promises that in a
+		// component are a click handler's. tsconfig.eslint.json is this block's program.
+		files: ['{server,shared}/**/*.ts'],
 		languageOptions: {
 			parser: tsParser,
 			parserOptions: {
-				project: './tsconfig.eslint.json',
-				tsconfigRootDir: import.meta.dirname,
-			},
-		},
-		rules: {
-			'ts/no-floating-promises': 'error',
-		},
-	},
-	{
-		files: ['app/**/*.vue'],
-		languageOptions: {
-			parserOptions: {
-				extraFileExtensions: ['.vue'],
-				parser: tsParser,
 				project: './tsconfig.eslint.json',
 				tsconfigRootDir: import.meta.dirname,
 			},

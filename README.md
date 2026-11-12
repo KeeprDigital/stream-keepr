@@ -385,8 +385,11 @@ How `pnpm verify` runs:
   `projectService` exhausts the heap). Measured again in November 2026:
   Vitest's own worker count, one fewer than the cores (the unit suite 56 s at
   nine workers, 44 s at six; the Nuxt suite 113 s and 75 s, so a run takes at
-  most six slots); and `--no-isolate` for the unit suite (Miniflare stubs
-  outlive the file that made them).
+  most six slots); `--no-isolate` for the unit suite (Miniflare stubs
+  outlive the file that made them); and `ts/no-floating-promises` on app and
+  test code as well as server and shared (a cold lint cost 176 s of CPU and
+  4.4 GB, against 60 s and 3.5 GB with the rule where a floating promise loses
+  a write, and 46 s and 2.0 GB without it).
 
 CI (`.github/workflows/ci.yml`) runs the same gates as `pnpm verify` on PRs
 and in the merge queue, split across parallel jobs (lint, typecheck, the unit

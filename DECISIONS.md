@@ -2846,6 +2846,8 @@ Accepted · 2026-11-12
 
 **CI's lint, typecheck, unit suite and Nuxt suite are four jobs, not one.**
 
+**The one type-aware lint rule, `ts/no-floating-promises`, runs on server and shared code only.** There a floating promise is a defect no test sees: on Workers a promise a request handler never awaited can be cut off once the response has gone, and the write or publish is lost. In a component it is a click handler's, and the rule's yield was `void` written in front of it.
+
 ### Why
 
 Most work here is done by agents, several at once, each in its own worktree and none able to see the others. The gates were sized as if each run had the machine.
@@ -2854,6 +2856,7 @@ Most work here is done by agents, several at once, each in its own worktree and 
 - **The rule nobody could follow.** "Run one integration suite at a time per machine" was an instruction to agents with no way to see each other. The pool enforces it.
 - **More workers were slower.** Vitest starts one worker fewer than the cores. On the 10-core machine (four performance cores) the unit suite took 56 s at nine workers and 44 s at six; the Nuxt suite 113 s and 75 s. The ceiling is the faster setting, not a compromise.
 - **Proportion.** A change to one shared utility reaches 16 unit files (3 s against 56 s for the suite); a change to one component reaches 38 Nuxt files (39 s against 113 s). Quick ran every test for every push, 216 times in three weeks, and CI then ran them again.
+- **One rule was most of lint.** Linting everything with type information cost 176 s of CPU and 4.4 GB for a cold run, nearly all of it building the app's and the tests' TypeScript program. With the rule on server and shared code it is 60 s and 3.5 GB; without the rule at all, 46 s and 2.0 GB. Changed files outside server and shared now lint in under two seconds and half a gigabyte.
 - **CI's wall time was one job.** Lint, typecheck and both suites ran in sequence for 11 to 18 minutes; every other job took 2 to 4.
 
 ### Consequences
@@ -2873,5 +2876,6 @@ Most work here is done by agents, several at once, each in its own worktree and 
 - **Lock files or a pid directory for the ledger.** Taking a slot and reaping a dead holder's must be one atomic step, or two runs both reap and one takes a live holder's slot. SQLite's file lock gives that, and `node:sqlite` ships with the pinned Node.
 - **The ledger in the temp directory.** Where that is depends on each session's environment (`TMPDIR`): two sessions given different ones would each see an empty pool. The Git common directory is the same for every worktree by construction.
 - **Failing a gate that waits too long.** It fails exactly when the machine is busiest, and the agent's answer to a failed gate is to run it again.
+- **Dropping `ts/no-floating-promises` altogether.** It would save a further 14 s of CPU and 1.5 GB on a cold lint, and give up the one check that stands between a forgotten `await` in a handler and a write lost in production.
 - **Seeding a fresh worktree's ESLint cache from the main checkout.** The cache is keyed by absolute path and by a config hash that holds the checkout's path.
 - **Sharding the Nuxt suite in CI.** Its coverage floor is over the whole suite, so shards would need a merged report; the split already takes the wall time from the sum to the longest job.
