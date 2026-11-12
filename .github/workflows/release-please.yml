@@ -60,6 +60,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: package.json
+          # setup-node caches by itself only for npm, so nothing is cached
+          # here today. Said outright, so the job that publishes a release
+          # never restores a cache another run could have written.
+          package-manager-cache: false
       - name: Refuse a release the merge queue did not verify
         env:
           GH_TOKEN: ${{ github.token }}

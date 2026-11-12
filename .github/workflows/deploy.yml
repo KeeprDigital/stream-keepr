@@ -118,6 +118,9 @@ jobs:
           # Full history: fetching a marker tag brings the commit it points
           # at, which a shallow clone would have to deepen to.
           fetch-depth: 0
+          # The promotion pushes the marker tags with this checkout's
+          # credential. Nothing in this job uploads an artifact.
+          persist-credentials: true
       - name: Check out the promotion tooling from this workflow's commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -153,4 +156,6 @@ jobs:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           echo "Release $RELEASE_TAG promoted; https://stream.keepr.digital answered deploy:verify (liveness only, not release identity or dependency health)." >> "$GITHUB_STEP_SUMMARY"
+          # The backticks are Markdown, not a command to expand.
+          # shellcheck disable=SC2016
           echo 'Run the six `:deployed` gates locally (`pnpm accept deployed`), in README order, stopping at the first failure.' >> "$GITHUB_STEP_SUMMARY"

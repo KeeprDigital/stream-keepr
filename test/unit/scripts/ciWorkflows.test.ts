@@ -10,6 +10,7 @@ import { parse } from 'yaml';
 
 interface Step {
 	'id'?: string;
+	'name'?: string;
 	'uses'?: string;
 	'run'?: string;
 	'if'?: string;
@@ -131,11 +132,19 @@ describe('the CI scope decides what a merge group can affect against the queue\'
 	});
 
 	// A docs-only change skips the code gates, so `checks` runs what they check of a document instead.
-	it('the checks job lints only for code, and runs the docs checks only for a docs-only change', () => {
-		const commands = (ci.jobs.checks!.steps ?? []).filter(step => step.run).map(step => [step.run, step.if]);
+	// The workflows are code, so their two linters run with the lint. Every step
+	// past the setup runs for exactly one of the two: one with no condition is missing here.
+	it('the checks job lints the code and the workflows only for code, and runs the docs checks only for a docs-only change', () => {
+		const [checkout, setup, ...checks] = ci.jobs.checks!.steps ?? [];
 
-		expect(commands).toEqual([
+		expect([
+			checkout?.uses?.replace(/@.*/, ''),
+			setup?.uses,
+		]).toEqual(['actions/checkout', './.github/actions/setup']);
+		expect(checks.map(step => [step.name ?? step.run ?? step.uses?.replace(/@.*/, ''), step.if])).toEqual([
 			['pnpm lint', FOR_CODE],
+			['actionlint', FOR_CODE],
+			['zizmorcore/zizmor-action', FOR_CODE],
 			['pnpm verify:docs', FOR_DOCS],
 		]);
 	});

@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { execFileSync, spawn } from 'node:child_process';
-import { chmodSync, existsSync, rmSync } from 'node:fs';
-import { basename } from 'node:path';
+import { chmodSync, existsSync, readFileSync, rmSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -43,6 +43,14 @@ function alive(pid: number): boolean {
 /** Holds until `pid` is gone: a killed process goes when a busy machine gets round to it. */
 function gone(pid: number) {
 	return vi.waitFor(() => expect(alive(pid)).toBe(false));
+}
+
+/** The signals the stand-in has recorded ignoring, in order: none until it has taken one. */
+function signalsReceived(profile: string): string[] {
+	const record = join(profile, 'signals-received');
+	return existsSync(record)
+		? readFileSync(record, 'utf8').split('\n').filter(Boolean)
+		: [];
 }
 
 /**
@@ -151,13 +159,13 @@ describe('the acceptance browser\'s shutdown', () => {
 		await gone(pid);
 	});
 
-	it('takes the browser down at once on a second signal', async () => {
-		const { runner, exited, pid } = await startRunner();
+	it('takes the browser down at once on a second signal, without waiting out the grace', async () => {
+		const { runner, exited, pid, profile } = await startRunner('patient');
 
-		// Nothing says when the runner has taken the first, so the second follows
-		// at once. Every way the two can land ends the same: taken apart, the
-		// second skips the grace; merged into one by the system, the grace runs.
+		// The first signal is taken once the stand-in records the SIGTERM it brings. The
+		// grace it starts outlasts the test, so only the second signal's skip ends the runner.
 		runner.kill('SIGINT');
+		await vi.waitFor(() => expect(signalsReceived(profile)).toEqual(['SIGTERM']));
 		runner.kill('SIGINT');
 
 		expect(await exited).toEqual({ code: null, signal: 'SIGINT' });

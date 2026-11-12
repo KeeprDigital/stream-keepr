@@ -168,21 +168,33 @@ export async function verifyDeployment({
 	}
 }
 
-async function main() {
-	const baseUrl = process.env.STREAM_KEEPR_DEPLOY_HEALTH_URL || DEFAULT_BASE_URL;
+/**
+ * The command: probe the target the environment names, production when it
+ * names none, and say what the answer does and does not prove.
+ *
+ * Its environment and its fetch are arguments so that a test hands it both:
+ * a regression in how the target is read then asks the test's stand-in, not
+ * production.
+ *
+ * @param {{ env?: NodeJS.ProcessEnv, fetchRequest?: typeof fetch }} [options]
+ * @returns {Promise<0 | 1>} the exit code
+ */
+export async function main({ env = process.env, fetchRequest = fetch } = {}) {
+	const baseUrl = env.STREAM_KEEPR_DEPLOY_HEALTH_URL || DEFAULT_BASE_URL;
 	try {
-		const { url } = await verifyDeployment({ baseUrl });
+		const { url } = await verifyDeployment({ baseUrl, fetchRequest });
 		console.log(`deploy:verify: ${url} answered the Worker's clock reading: liveness only. `
 			+ 'Not proven: which release is serving, or D1, auth, R2, KV, Ably and validator readiness '
 			+ '(the deployed acceptance gates cover those).');
+		return 0;
 	}
 	catch (error) {
 		if (!(error instanceof DeployVerifyFailure))
 			throw error;
 		console.error(`deploy:verify: FAILED: ${error.message}`);
-		process.exitCode = 1;
+		return 1;
 	}
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href)
-	await main();
+	process.exitCode = await main();

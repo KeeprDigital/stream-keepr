@@ -79,8 +79,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # A PR's test merge commit and its first parent, the base: enough to
-          # diff. A merge group's base is further back; the script fetches it.
+          # diff. A merge group's base is further back; the script fetches it,
+          # with the credential this checkout leaves. This job uploads nothing.
           fetch-depth: 2
+          persist-credentials: true
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: package.json
@@ -104,6 +106,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
       # The cache is not restored: a cold run is the backstop for what a local
       # run can miss, whether through the per-file ESLint cache or through
@@ -111,6 +115,42 @@ jobs:
       # (README § Testing).
       - if: needs.scope.outputs.code == 'true'
         run: pnpm lint
+      # The workflows are code nothing else reads before it runs. actionlint
+      # checks that each is one GitHub will accept (syntax, expressions, the
+      # `run:` scripts through shellcheck); zizmor checks what it is trusted
+      # with, such as a checkout that leaves its credential on disk
+      # (`.github/zizmor.yml` holds what is switched off, and why). Steps of
+      # this job for the reason the docs checks are. Neither is in
+      # `pnpm verify`: README § Testing says how to run them.
+      - name: actionlint
+        if: needs.scope.outputs.code == 'true'
+        env:
+          # A downloaded binary, so pinned by version and by the SHA-256 its
+          # release publishes for linux_amd64 (actionlint_<version>_checksums.txt).
+          # Dependabot does not see it: bump the two together by hand.
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 --output "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v$ACTIONLINT_VERSION/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "$ACTIONLINT_SHA256  $archive" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          # Without shellcheck, actionlint skips every `run:` script and says nothing.
+          shellcheck --version
+          "$RUNNER_TEMP/actionlint" -color
+      # The action carries its zizmor release, pinned by hash, in its own tree,
+      # so this one pin is both and Dependabot moves it. Offline, so the result
+      # depends on this tree alone; without `advanced-security`, which would
+      # upload the findings rather than fail on them. Not dependabot.yml: a
+      # change to it alone is outside the code (scripts/ci-scope.mjs), so a
+      # finding there would fail the next change instead.
+      - if: needs.scope.outputs.code == 'true'
+        uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        with:
+          advanced-security: false
+          online-audits: false
+          collect: workflows,actions
       # A docs-only change skips the code gates, but `pnpm lint` formats every
       # document and the documentation test follows its links: unchecked, a
       # bad document would fail the next code change instead (#1028). A step of
@@ -127,6 +167,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
       # Includes the silent-video validator Worker's own program (#618), and
       # fails when either committed worker-configuration.d.ts is stale.
@@ -142,6 +184,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm test:unit:coverage
 
@@ -153,6 +197,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm test:nuxt:coverage
 
@@ -168,6 +214,8 @@ jobs:
         shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
       # Each shard starts its own servers over its own databases, so the halves
       # share nothing. Realtime tests self-skip: no Ably key is configured in CI
@@ -182,6 +230,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm test:local-auth
       - run: pnpm accept still-images
@@ -201,6 +251,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup
       # The silent-video validator is a second deployed Worker (#618), bundled
       # by wrangler exactly as `pnpm deploy:validator` would. About a second,
