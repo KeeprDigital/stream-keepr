@@ -185,7 +185,7 @@ describe('resolveThemeTokens', () => {
 		const resolved = resolve(theme, overrides);
 
 		expect(resolved.values).toEqual(resolve().values);
-		expect(resolved.consumed).toEqual(DECLARED_CONSUMPTION);
+		expect(Object.keys(resolved.values)).toEqual(DECLARED_CONSUMPTION);
 	});
 
 	it.each([
@@ -267,7 +267,6 @@ describe('resolveThemeTokens', () => {
 	])('consumes its Mode Tokens and the Foundation Tokens their defaults name when %s', (_, overrides) => {
 		const resolved = resolve({}, overrides);
 
-		expect(resolved.consumed).toEqual(DECLARED_CONSUMPTION);
 		expect(Object.keys(resolved.values)).toEqual(DECLARED_CONSUMPTION);
 	});
 
@@ -280,7 +279,7 @@ describe('resolveThemeTokens', () => {
 			hostTokens: ['text-primary', 'inset'],
 		});
 
-		expect(resolved.consumed).toEqual([
+		expect(Object.keys(resolved.values)).toEqual([
 			'demo.title',
 			'demo.badge',
 			'demo.gap',
@@ -556,13 +555,13 @@ describe('a motion Mode Token', () => {
 	});
 
 	it.each(['standings', 'metagame'] as const)('has a %s Screen consume the enter motion its row motion follows', (mode) => {
-		const { consumed } = resolveThemeTokens({
+		const { values } = resolveThemeTokens({
 			vocabulary: FOUNDATION_TOKENS,
 			modeTokens: screenModeTokens(mode),
 			theme: {},
 			overrides: {},
 		});
-		expect(consumed).toContain('motion-enter');
+		expect(Object.keys(values)).toContain('motion-enter');
 	});
 
 	it.each(['standings.row-motion', 'metagame.row-motion'])('reads %s\'s own override over the enter motion', (name) => {

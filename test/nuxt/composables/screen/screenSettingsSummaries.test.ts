@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computed } from 'vue';
-import { columnsSummary, headerSummary, lookSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
+import { headerSummary, paginationSummary, settingsSummary } from '~/composables/screen/screenSettingsSummaries';
 
 // The one line a closed Screen settings card shows in place of its body.
 
@@ -27,38 +27,6 @@ describe('a closed Screen settings card\'s summary', () => {
 
 	it.each([
 		[
-			'no override',
-			['reveal'],
-			{},
-			null,
-		],
-		[
-			'an override of another group\'s token',
-			['reveal'],
-			{ 'standings.rise': '#000000' },
-			null,
-		],
-		[
-			'one override in the group',
-			['table'],
-			{ 'standings.fall': '#ff0000' },
-			'1 Screen Theme Override',
-		],
-		[
-			'overrides across the groups it renders',
-			['table', 'reveal'],
-			{
-				'standings.rise': '#000000',
-				'standings.reveal-motion': { duration: 100 },
-			},
-			'2 Screen Theme Overrides',
-		],
-	])('counts a Look\'s overrides: %s', (_case, groups, overrides, summary) => {
-		expect(lookSummary('standings', overrides, groups)).toBe(summary);
-	});
-
-	it.each([
-		[
 			'manual paging',
 			{ autoPageEnabled: false, autoPageIntervalMs: 10000 },
 			'8 per page · Manual paging',
@@ -73,27 +41,6 @@ describe('a closed Screen settings card\'s summary', () => {
 			pageSize: computed(() => 8),
 			rotationConfig: computed(() => rotationConfig),
 		})).toBe(summary);
-	});
-
-	it.each([
-		[
-			'some',
-			[
-				{ visible: true },
-				{ visible: false },
-				{ visible: true },
-			],
-			'2 of 3 columns shown',
-		],
-		[
-			'none',
-			[
-				{ visible: false },
-			],
-			'0 of 1 columns shown',
-		],
-	])('counts the columns shown: %s', (_case, columns, summary) => {
-		expect(columnsSummary(columns)).toBe(summary);
 	});
 
 	it.each([

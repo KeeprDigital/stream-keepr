@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
 import {
 	authorsGraphicInputs,
-	authorsGraphicStack,
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 	getGraphicItemDefinition,
@@ -318,14 +317,6 @@ describe('graphicItemDefinitions', () => {
 		// the token catalogue reads current Event Data as well as a Feature Match
 		// Session, so a Feature Match Overlay declares both.
 		expect(FEATURE_MATCH_OVERLAY_HOST_CONTRACT.contextKinds).toEqual(['event', 'feature-match']);
-	});
-
-	it('authors a stack for Broadcast Graphics and one composition for Feature Match Overlay', () => {
-		// A Broadcast Graphics Screen composes an ordered stack of Broadcast
-		// Graphics; a Feature Match Overlay renders exactly one Feature Match Layout
-		// for exactly one Feature Match Slot, so it offers no stack to author.
-		expect(authorsGraphicStack(BROADCAST_GRAPHICS_HOST_CONTRACT)).toBe(true);
-		expect(authorsGraphicStack(FEATURE_MATCH_OVERLAY_HOST_CONTRACT)).toBe(false);
 	});
 
 	it('declares Graphic Inputs for Broadcast Graphics and binds host tokens for Feature Match Overlay', () => {

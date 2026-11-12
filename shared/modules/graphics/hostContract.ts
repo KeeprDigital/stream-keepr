@@ -145,8 +145,3 @@ export function graphicsHostTokenCatalogue(
 export function authorsGraphicInputs(contract: GraphicsHostContract): boolean {
 	return contract.textValues.kind === 'graphic-inputs';
 }
-
-/** Whether this host's authoring tree roots an author-editable stack. */
-export function authorsGraphicStack(contract: GraphicsHostContract): boolean {
-	return contract.composition === 'stack';
-}

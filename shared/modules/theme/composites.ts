@@ -165,10 +165,6 @@ export const THEME_COMPOSITE_VALUE_SCHEMAS = compositeSchemas(literalColorSchema
  */
 export const STORED_THEME_COMPOSITE_VALUE_SCHEMAS = compositeSchemas(themeColorSchema);
 
-export function isThemeCompositeTokenType(type: string): type is ThemeCompositeTokenType {
-	return Object.hasOwn(THEME_COMPOSITE_VALUE_SCHEMAS, type);
-}
-
 /** Maps every colour of a fill, or answers undefined when one does. */
 function mapFill<C, D>(fill: ThemeFill<C>, map: (color: C) => D | undefined): ThemeFill<D> | undefined {
 	if (fill.type === 'solid') {

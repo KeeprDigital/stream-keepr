@@ -30,15 +30,13 @@ export interface ResolveThemeTokensInput {
 }
 
 export interface ResolvedThemeTokens {
-	/** Each consumed token's resolved value, by name. */
-	values: Readonly<Record<string, ThemeTokenValue>>;
 	/**
-	 * The tokens the Screen consumes, from its mode's declaration alone: every
-	 * Mode Token it declares, then each Foundation Token their defaults name or
-	 * its host consumes, in vocabulary order. What a Theme or override stores
-	 * never changes it.
+	 * Each token the Screen consumes, resolved, by name: every Mode Token its
+	 * mode declares, then each Foundation Token their defaults name or its host
+	 * consumes, in vocabulary order. Which tokens it holds follows the mode's
+	 * declaration alone; what a Theme or override stores never changes it.
 	 */
-	consumed: readonly string[];
+	values: Readonly<Record<string, ThemeTokenValue>>;
 }
 
 function isReference(value: unknown): value is ThemeTokenReference {
@@ -177,13 +175,7 @@ export function resolveThemeTokens(input: ResolveThemeTokensInput): ResolvedThem
 	for (const name of consumedFoundation)
 		values[name] = resolveFoundation(name);
 
-	return {
-		values,
-		consumed: [
-			...Object.keys(modeTokens),
-			...consumedFoundation,
-		],
-	};
+	return { values };
 }
 
 /**
