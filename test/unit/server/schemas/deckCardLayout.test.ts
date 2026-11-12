@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { modeConfigPatchSchemaMap } from '~~/server/schemas/api/screen';
+import { deckModeConfigContract } from '~~/shared/screenModeConfigs/deck';
 import { resolveDeckBoards, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 
 describe('a Deck List board\'s Card Layout', () => {
@@ -33,5 +34,37 @@ describe('a Deck List board\'s Card Layout', () => {
 				[board]: { [field]: value },
 			}).success).toBe(accepted);
 		}
+	});
+
+	// The editor narrows a board's columns to the cards that board lays out, and never below the field's minimum (ADR-0054).
+	it.each([
+		{
+			name: 'its own card count',
+			cards: { mainboard: 24, sideboard: 9 },
+			most: { mainboard: 24, sideboard: 9 },
+		},
+		{
+			name: 'the field\'s minimum while it holds no cards',
+			cards: { mainboard: 0, sideboard: 0 },
+			most: { mainboard: 1, sideboard: 1 },
+		},
+		{
+			name: 'the contract\'s bound for a count past it',
+			cards: { mainboard: 250, sideboard: 101 },
+			most: { mainboard: 100, sideboard: 100 },
+		},
+		{
+			name: 'the contract\'s bound alone while no Deck List is resolved',
+			cards: undefined,
+			most: { mainboard: undefined, sideboard: undefined },
+		},
+	])('the editor bounds each board\'s columns by $name', ({ cards, most }) => {
+		const { fields } = deckModeConfigContract;
+		const context = { config: {}, event: null, deckBoardCards: cards };
+
+		expect({
+			mainboard: fields.mainboard.fields!.columns!.maxFor?.(context),
+			sideboard: fields.sideboard.fields!.columns!.maxFor?.(context),
+		}).toEqual(most);
 	});
 });

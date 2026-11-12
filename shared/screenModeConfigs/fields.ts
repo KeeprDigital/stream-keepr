@@ -33,8 +33,9 @@ export const SCREEN_SETTINGS_CARD_TITLES = {
 /**
  * What a field's editor description may depend on beyond the field itself: the
  * mode's config as the page shows it, the nested block holding the field, the
- * Screen's Event (its Card Game and feature flags; null until it loads), and
- * whether the Event holds a Player List.
+ * Screen's Event (its Card Game and feature flags; null until it loads),
+ * whether the Event holds a Player List, and the cards each board of a Deck
+ * List Screen lays out.
  */
 export interface ScreenSettingsContext {
 	config: Readonly<Record<string, any>>;
@@ -42,6 +43,13 @@ export interface ScreenSettingsContext {
 	block?: Readonly<Record<string, any>>;
 	event: Readonly<Partial<EventListResponse>> | null;
 	hasPlayerLists?: boolean;
+	/**
+	 * How many cards each board of the Screen's Deck List lays out, one per Deck
+	 * List entry: a Deck List Screen's, where its page knows them. Where the page
+	 * holds only copies, the count is those: never fewer than the entries. Absent
+	 * while no Deck List is resolved.
+	 */
+	deckBoardCards?: Readonly<Record<'mainboard' | 'sideboard', number>>;
 }
 
 /** A description value, fixed or read from the Screen it describes. */
