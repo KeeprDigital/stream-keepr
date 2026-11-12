@@ -12,6 +12,7 @@ import {
 	MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM,
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
+	parseModeConfigPatchResult,
 } from '~~/server/schemas/api/screen';
 import { addGraphicItem, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import {
@@ -379,6 +380,60 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 				{ id: 'thirds', name: 'B' },
 			],
 		}).success).toBe(false);
+	});
+
+	// A PATCH stores what it parsed: a key the patch form dropped would be lost, and one it filled in invented.
+	it('carries Graphic Inputs, their Graphic Input Binding and Graphic Placeholder Styles through the patch path unchanged', () => {
+		const graphics = [
+			{
+				...graphic('lower-third'),
+				inputs: [
+					{
+						type: 'text',
+						key: 'name',
+						label: 'Name',
+						required: true,
+						updatePolicy: 'staged',
+						default: 'Unnamed',
+						maxLength: 40,
+					},
+					{
+						type: 'choice',
+						key: 'side',
+						label: 'Side',
+						required: false,
+						updatePolicy: 'live',
+						default: 'left',
+						options: [
+							{ value: 'left', label: 'Left' },
+							{ value: 'right', label: 'Right' },
+						],
+					},
+				],
+				sources: [
+					{ key: 'player', label: 'Player', kind: 'player' },
+				],
+				bindings: [
+					{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+				],
+				items: [
+					{
+						...textItem('name-line'),
+						text: '{name} — {side}',
+						placeholderStyles: {
+							side: { fontWeight: 300, color: '#00d9ff' },
+						},
+					},
+				],
+			},
+		];
+
+		const patch = modeConfigPatchSchemaMap['broadcast-graphics'].parse({ graphics }) as Record<string, unknown>;
+
+		expect(patch).toEqual({ graphics });
+		expect(parseModeConfigPatchResult({}, 'broadcast-graphics', patch)).toEqual({
+			'broadcast-graphics': { graphics },
+		});
 	});
 
 	it('names the whole-Screen Graphic Input cap rather than reporting a byte count', () => {
