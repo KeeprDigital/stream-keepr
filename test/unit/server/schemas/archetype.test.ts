@@ -15,6 +15,21 @@ describe('createArchetypeSchema', () => {
 	});
 });
 
+// A name is compared without its surrounding spaces, so it is stored without them.
+describe.each([
+	['createArchetypeSchema', createArchetypeSchema],
+	['updateArchetypeSchema', updateArchetypeSchema],
+])('%s', (_name, archetypeSchema) => {
+	it.each([
+		['trims a name', '  Azorius Control ', 'Azorius Control'],
+		['refuses a name of spaces', '   ', undefined],
+	])('%s', (_case, name, stored) => {
+		const parsed = archetypeSchema.safeParse({ name });
+		expect(parsed.data?.name).toBe(stored);
+		expect(parsed.success).toBe(stored !== undefined);
+	});
+});
+
 describe('updateArchetypeSchema', () => {
 	// A One Piece Archetype's Leader and customised flag are derived (ADR-0074).
 	it.each([

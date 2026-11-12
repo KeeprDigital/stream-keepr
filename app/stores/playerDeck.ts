@@ -100,6 +100,21 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 		}
 	}
 
+	/** A merge moved these decks to the survivor: they stay reviewed, under its name and colours. */
+	function applyArchetypeMerged(mergedArchetypeId: number, survivor: Archetype) {
+		deckCache.applyArchetypeMerged(mergedArchetypeId, survivor);
+		for (const deck of decks.value) {
+			if (deck.archetypeId !== mergedArchetypeId)
+				continue;
+
+			deck.archetypeId = survivor.id;
+			deck.name = survivor.name;
+			deck.colors = survivor.colors ?? '';
+			if (deck.isPrimary)
+				applyPrimaryDeckProjection(deck);
+		}
+	}
+
 	function applyArchetypeDeleted(archetypeId: number) {
 		deckCache.applyArchetypeDeleted(archetypeId);
 		for (const deck of decks.value) {
@@ -151,6 +166,7 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 		applyRemoteReviewed,
 		applyRemoteCardsResolved,
 		applyArchetypeUpdated,
+		applyArchetypeMerged,
 		applyArchetypeDeleted,
 		$reset,
 	};

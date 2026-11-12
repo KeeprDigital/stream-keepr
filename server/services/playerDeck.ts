@@ -747,6 +747,23 @@ export function playerDeckService() {
 			));
 	};
 
+	/**
+	 * Build (without executing) the write that moves every deck reviewed as one
+	 * Archetype to another, still reviewed. For the batch that merges the two.
+	 */
+	const buildMoveReviewsQuery = (eventId: number, fromArchetypeId: number, toArchetypeId: number) => {
+		return db
+			.update(playerDecks)
+			.set({
+				archetypeId: toArchetypeId,
+				updatedAt: new Date(),
+			})
+			.where(and(
+				eq(playerDecks.eventId, eventId),
+				eq(playerDecks.archetypeId, fromArchetypeId),
+			));
+	};
+
 	const reviewDeck = async (
 		eventId: number,
 		playerId: number,
@@ -862,6 +879,7 @@ export function playerDeckService() {
 		listPlayerIdsByArchetype,
 		listPrimaryPlayerIdsByArchetype,
 		buildClearReviewsByArchetypeQuery,
+		buildMoveReviewsQuery,
 		reviewDeck,
 		selectFromDecks,
 		findManyByIds,

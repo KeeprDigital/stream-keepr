@@ -143,6 +143,9 @@ const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
 					@select="onArchetypeSelect"
 				/>
 			</template>
+
+			<!-- The table counts Pilots, so an Archetype no deck is assigned to shows only here. -->
+			<MetagameEmptyArchetypes v-if="isMtg && eventId" :event-id="eventId" />
 		</UCard>
 	</div>
 </template>

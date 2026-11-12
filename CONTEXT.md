@@ -73,7 +73,13 @@ Analysis of Players, Deck Lists, cards, archetypes, and standings within an Even
 Which Players a Metagame read counts: every Player, the top N by placement, those with at least a minimum match-point total, or one Player List's members. A One Piece Card Game Event, having no standings, offers only every Player and a Player List, and reads any other scope as every Player (ADR-0074). The Metagame page and every Screen Mode reading the Metagame carry the same scope, so a scope asks each read the same question; an Archetype's pilots, meta share and Conversion Rate are read within it.
 
 **Archetype**:
-A strategic Deck classification assigned to Players and used for Metagame analysis. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand. An operator renaming one or pinning its series customises it, and a customised Archetype stays when its last Player leaves (ADR-0074).
+A strategic Deck classification used for Metagame analysis. On a Magic: The Gathering Event an operator assigns one to a Deck List in **Archetype Review**, and a Player's Archetype is that of their primary Deck List. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand. An operator renaming one or pinning its series customises it, and a customised Archetype stays when its last Player leaves (ADR-0074).
+
+**Archetype Review**:
+The Magic: The Gathering workflow in which an operator assigns each Player's Deck List an Archetype. A Deck List is reviewed once it holds one and unreviewed until then; reassigning moves one reviewed Deck List to another Archetype, where renaming an Archetype changes it for every Deck List it holds, and merging one into another moves every Deck List it holds to the survivor (ADR-0085). A One Piece Card Game Event has none.
+
+**Empty Archetype**:
+An Archetype no Deck List in its Event is assigned to, whichever Deck List is a Player's primary and whatever the Metagame Scope, and that no Player holds without one. An Archetype with no **Pilot** in the current scope is not thereby empty. On a Magic: The Gathering Event it stays until an operator removes it, alone or with every other; a One Piece Card Game Event removes its own (ADR-0074, ADR-0085).
 
 **Pinned Chart Series**:
 One of the Theme's eight chart series, the Foundation Tokens `series-1` to `series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).

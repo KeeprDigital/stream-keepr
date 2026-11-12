@@ -2,13 +2,14 @@ import type { SetArchetypeKeyCardsInput } from '~~/server/schemas/api/archetype'
 import type { CreateArchetypeInput, UpdateArchetypeInput } from '~~/shared/api';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { cards, events } from '~~/server/db/schema';
+import { cards, events, players } from '~~/server/db/schema';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { playerUpdateModule } from '~~/server/modules/player-update';
 import { archetypeService } from '~~/server/services/archetype';
 import { archetypeCardService } from '~~/server/services/archetypeCard';
 import { playerDeckService } from '~~/server/services/playerDeck';
-import { buildReleaseScreenEventReferencesQuery } from '~~/server/services/screen';
+import { buildReleaseScreenEventReferencesQuery, buildRepointScreenEventReferencesQuery } from '~~/server/services/screen';
+import { sameArchetypeName } from '~~/shared/utils/archetypeName';
 
 interface CreateArchetypeParams {
 	eventId: number;
@@ -26,6 +27,20 @@ interface UpdateArchetypeParams {
 interface DeleteArchetypeParams {
 	eventId: number;
 	archetypeId: number;
+	originConnectionId?: string;
+}
+
+interface MergeArchetypeParams {
+	eventId: number;
+	/** The Archetype merged away. */
+	archetypeId: number;
+	/** The Archetype its decks move to. */
+	intoArchetypeId: number;
+	originConnectionId?: string;
+}
+
+interface RemoveEmptyArchetypesParams {
+	eventId: number;
 	originConnectionId?: string;
 }
 
@@ -64,8 +79,25 @@ export function archetypeWriteModule() {
 	const archetypes = archetypeService();
 	const archetypeCards = archetypeCardService();
 
+	/**
+	 * An Event holds one Archetype per name, ignoring case and surrounding
+	 * spaces. The refusal names the holder, which an operator can merge into.
+	 */
+	async function refuseTakenName(eventId: number, name: string, renamedArchetypeId?: number) {
+		const holder = (await archetypes.findByEventId(eventId))
+			.find(archetype => archetype.id !== renamedArchetypeId && sameArchetypeName(archetype.name, name));
+		if (holder) {
+			throw createError({
+				statusCode: 409,
+				statusMessage: 'Conflict',
+				message: `This Event already has an Archetype named “${holder.name}”`,
+			});
+		}
+	}
+
 	async function createArchetype({ eventId, input, originConnectionId }: CreateArchetypeParams) {
 		await refuseOnOpEvent(eventId, 'created');
+		await refuseTakenName(eventId, input.name);
 		const newArchetype = await archetypes.create(eventId, input);
 
 		return await publication.archetypeCreated({
@@ -78,6 +110,8 @@ export function archetypeWriteModule() {
 	async function updateArchetype({ eventId, archetypeId, input, originConnectionId }: UpdateArchetypeParams) {
 		// A rename or a pin customises it, which a derived Archetype's cleanup spares (ADR-0074).
 		const current = await archetypes.findById(archetypeId, eventId);
+		if (input.name !== undefined)
+			await refuseTakenName(eventId, input.name, archetypeId);
 		const customises = (input.name !== undefined && input.name !== current?.name) || input.chartSeries != null;
 		const archetype = await archetypes.update(archetypeId, eventId, customises
 			? { ...input, customised: true }
@@ -172,6 +206,104 @@ export function archetypeWriteModule() {
 		});
 
 		return { success: true };
+	}
+
+	/**
+	 * Merges one Archetype into another: its decks move to the survivor, still
+	 * reviewed, the Screens naming it name the survivor, and it is deleted. The
+	 * survivor keeps its own colours, key cards and Pinned Chart Series.
+	 */
+	async function mergeArchetype({ eventId, archetypeId, intoArchetypeId, originConnectionId }: MergeArchetypeParams) {
+		await refuseOnOpEvent(eventId, 'merged');
+		if (archetypeId === intoArchetypeId) {
+			throw createError({
+				statusCode: 400,
+				statusMessage: 'An Archetype cannot be merged into itself',
+			});
+		}
+		const [merged, survivor] = await Promise.all([
+			archetypes.findById(archetypeId, eventId),
+			archetypes.findById(intoArchetypeId, eventId),
+		]);
+		if (!merged || !survivor) {
+			throw createError({
+				statusCode: 404,
+				message: 'Archetype not found',
+			});
+		}
+
+		const deckService = playerDeckService();
+		const [playerIds, primaryPlayerIds] = await Promise.all([
+			deckService.listPlayerIdsByArchetype(eventId, archetypeId),
+			deckService.listPrimaryPlayerIdsByArchetype(eventId, archetypeId),
+		]);
+
+		// One commit: decks left on a deleted Archetype would lose their review, and
+		// a Screen left naming it would be released by the next delete (ADR-0060).
+		const [, , repointedScreens] = await db.batch([
+			deckService.buildMoveReviewsQuery(eventId, archetypeId, intoArchetypeId),
+			// A Player's Archetype is their primary deck's, re-projected below. The Player
+			// write can also give one with no Deck List, and that Player moves here.
+			db.update(players)
+				.set({ archetypeId: intoArchetypeId })
+				.where(and(eq(players.eventId, eventId), eq(players.archetypeId, archetypeId))),
+			buildRepointScreenEventReferencesQuery(eventId, 'archetype', archetypeId, intoArchetypeId),
+			archetypes.buildRemoveQuery(archetypeId, eventId),
+		]);
+
+		// No origin, because the merging client never received these Screens back.
+		for (const screen of repointedScreens)
+			await publication.screenUpdated({ eventId, entity: screen });
+
+		await playerUpdateModule().reconcileDeckProjections({
+			eventId,
+			playerIds: primaryPlayerIds,
+			originConnectionId,
+		});
+		const secondaryPlayerIds = playerIds.filter(playerId => !primaryPlayerIds.includes(playerId));
+		await playerUpdateModule().publishPlayerSnapshotUpdates({
+			eventId,
+			playerIds: secondaryPlayerIds,
+			originConnectionId,
+		});
+
+		await publication.archetypeDeleted({
+			eventId,
+			id: archetypeId,
+			mergedIntoArchetypeId: intoArchetypeId,
+			originConnectionId,
+		});
+
+		return { archetypeId: intoArchetypeId, mergedArchetypeId: archetypeId };
+	}
+
+	/**
+	 * Removes the Event's Empty Archetypes. Emptiness is judged by the delete
+	 * itself, so an Archetype a deck is assigned to meanwhile stays.
+	 */
+	async function removeEmptyArchetypes({ eventId, originConnectionId }: RemoveEmptyArchetypesParams) {
+		await refuseOnOpEvent(eventId, 'removed');
+
+		const [removed, clearedScreens] = await db.batch([
+			archetypes.buildRemoveEmptyQuery(eventId),
+			buildReleaseScreenEventReferencesQuery(eventId, ['archetype']),
+		]);
+
+		// No origin, because the removing client never received these Screens back.
+		for (const screen of clearedScreens)
+			await publication.screenUpdated({ eventId, entity: screen });
+
+		for (const archetype of removed) {
+			await publication.archetypeDeleted({
+				eventId,
+				id: archetype.id,
+				originConnectionId,
+			});
+		}
+
+		return {
+			archetypeIds: removed.map(archetype => archetype.id),
+		};
 	}
 
 	async function updateCards({ eventId, archetypeId, input, originConnectionId }: UpdateCardsParams) {
@@ -288,6 +420,8 @@ export function archetypeWriteModule() {
 		createArchetype,
 		updateArchetype,
 		deleteArchetype,
+		mergeArchetype,
+		removeEmptyArchetypes,
 		updateCards,
 	};
 }

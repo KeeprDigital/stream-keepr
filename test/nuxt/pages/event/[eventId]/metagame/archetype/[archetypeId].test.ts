@@ -40,11 +40,21 @@ const mockEventStore = reactive({
 	event: { id: 99, game: 'mtg' as 'mtg' | 'op' },
 });
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-mockNuxtImport('useMetagameStore', () => () => reactive({
+const mockMetagameStore = reactive({
 	scopeQuery: { scope: 'all' },
 	conversionTarget: { conversionMetric: 'topN', conversionThreshold: 8 },
 	invalidationVersion: 0,
-}));
+});
+mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
+const mockArchetypeStore = reactive({
+	archetypes: [
+		{ id: 7 },
+		{ id: 8 },
+	],
+	isLoaded: true,
+	loadByEventId: vi.fn(),
+});
+mockNuxtImport('useArchetypeStore', () => () => mockArchetypeStore);
 mockNuxtImport('usePlayerStore', () => () => reactive({
 	players: [],
 	isLoaded: true,
@@ -74,6 +84,8 @@ async function mountPage() {
 				MetagameCardsTable: true,
 				MetagamePlayersTable: true,
 				MetagameArchetypeChartSeriesField: true,
+				MetagameArchetypeNameField: true,
+				MetagameArchetypeActions: true,
 			},
 		},
 	});
@@ -99,6 +111,25 @@ describe('archetype metagame detail page', () => {
 		wrapper.unmount();
 	});
 
+	// An Archetype the Event no longer holds, deleted or merged away, has no details to read.
+	it('reads no details of an Archetype the Event no longer holds, and shows none', async () => {
+		const wrapper = await mountPage();
+		await flushPromises();
+		mockFetch.mockClear();
+
+		mockArchetypeStore.archetypes = [];
+		mockMetagameStore.invalidationVersion++;
+		await flushPromises();
+
+		expect(mockFetch).not.toHaveBeenCalledWith('/api/events/99/metagame/archetypes/7', expect.anything());
+		expect(wrapper.find('[data-testid="stats"]').exists()).toBe(false);
+		wrapper.unmount();
+		mockArchetypeStore.archetypes = [
+			{ id: 7 },
+			{ id: 8 },
+		];
+	});
+
 	it('edits the Pinned Chart Series of the Archetype it shows', async () => {
 		const wrapper = await mountPage();
 		await flushPromises();
@@ -119,6 +150,21 @@ describe('archetype metagame detail page', () => {
 		expect(wrapper.get('[data-testid="stats"]').text()).toBe(stats);
 		expect(wrapper.findComponent({ name: 'MetagameCardsTable' }).exists()).toBe(true);
 		expect(wrapper.findComponent({ name: 'MetagameArchetypeChartSeriesField' }).exists()).toBe(true);
+		wrapper.unmount();
+		mockEventStore.event.game = 'mtg';
+	});
+
+	// An MTG Archetype is the operator's to rename, merge and delete; an OP one follows its Leader and is only renamed (ADR-0074).
+	it.each([
+		['mtg', true],
+		['op', false],
+	] as const)('on a %s Event, renames the Archetype, and merges or deletes it: %s', async (game, managed) => {
+		mockEventStore.event.game = game;
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		expect(wrapper.findComponent({ name: 'MetagameArchetypeNameField' }).props()).toEqual({ eventId: 99, archetypeId: 1, mergeable: managed });
+		expect(wrapper.findComponent({ name: 'MetagameArchetypeActions' }).exists()).toBe(managed);
 		wrapper.unmount();
 		mockEventStore.event.game = 'mtg';
 	});

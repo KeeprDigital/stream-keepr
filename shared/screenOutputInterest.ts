@@ -354,10 +354,12 @@ const OUTPUT_CHANGES: { [K in MessageType]: (payload: MessagePayload<K>) => read
 			archetypeIds: [archetype.id],
 		},
 	],
-	'archetype:deleted': ({ archetypeId }) => [
+	'archetype:deleted': ({ archetypeId, mergedIntoArchetypeId }) => [
 		{
 			kind: 'archetype',
-			archetypeIds: [archetypeId],
+			archetypeIds: mergedIntoArchetypeId === undefined
+				? [archetypeId]
+				: [archetypeId, mergedIntoArchetypeId],
 		},
 	],
 	'archetype:keyCardsUpdated': ({ archetypeId }) => [

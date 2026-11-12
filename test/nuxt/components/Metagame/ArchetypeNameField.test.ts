@@ -38,14 +38,22 @@ const LAW = createMockUiArchetype({
 	leaderCardNumber: 'OP01-002',
 });
 
-async function mountField() {
+const KID = createMockUiArchetype({
+	id: 5,
+	eventId: 99,
+	name: 'Eustass Kid',
+	leaderCardNumber: 'OP01-051',
+});
+
+async function mountField(props: { mergeable?: boolean } = {}) {
 	const store = useArchetypeStore();
 	store.$reset();
 	mockRepo.list.mockResolvedValue([
 		{ ...LAW },
+		{ ...KID },
 	]);
 	const wrapper = mount(ArchetypeNameField, {
-		props: { eventId: 99, archetypeId: LAW.id },
+		props: { eventId: 99, archetypeId: LAW.id, ...props },
 		global: { stubs: nuxtUiStubs },
 	});
 	await flushPromises();
@@ -90,5 +98,28 @@ describe('metagame ArchetypeNameField', () => {
 		await nameInput(wrapper).setValue(typed);
 
 		expect(renameButton(wrapper).attributes('disabled')).toBeDefined();
+	});
+
+	// An Event holds one Archetype per name, ignoring case and surrounding spaces.
+	it('offers a merge into the Archetype holding the name, where Archetypes can be merged', async () => {
+		const { wrapper } = await mountField({ mergeable: true });
+
+		await nameInput(wrapper).setValue(' eustass kid ');
+		const merge = wrapper.get('button[aria-label="Merge into Eustass Kid"]');
+		await merge.trigger('click');
+
+		expect(wrapper.emitted('merge')).toEqual([
+			[KID.id],
+		]);
+		expect(mockRepo.update).not.toHaveBeenCalled();
+	});
+
+	it('offers neither a rename nor a merge for a held name, where an Archetype follows its Leader', async () => {
+		const { wrapper } = await mountField();
+
+		await nameInput(wrapper).setValue('eustass kid');
+
+		expect(renameButton(wrapper).attributes('disabled')).toBeDefined();
+		expect(wrapper.get('[data-name-taken]').text()).toContain('Eustass Kid');
 	});
 });

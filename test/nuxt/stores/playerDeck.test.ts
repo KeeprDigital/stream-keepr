@@ -10,6 +10,7 @@ mockNuxtImport('$fetch', () => mockFetch);
 const mockReviewDeck = vi.fn();
 const mockApplyArchetypeUpdated = vi.fn();
 const mockApplyArchetypeDeleted = vi.fn();
+const mockApplyArchetypeMerged = vi.fn();
 const mockApplyReviewedDeck = vi.fn();
 const mockClearCachedDeck = vi.fn();
 const mockPlayerStore = reactive({ players: [] as any[] });
@@ -27,6 +28,7 @@ mockNuxtImport('usePlayerDeckCache', () => () => ({
 	reviewDeck: mockReviewDeck,
 	applyArchetypeUpdated: mockApplyArchetypeUpdated,
 	applyArchetypeDeleted: mockApplyArchetypeDeleted,
+	applyArchetypeMerged: mockApplyArchetypeMerged,
 	applyReviewedDeck: mockApplyReviewedDeck,
 	clearCachedDeck: mockClearCachedDeck,
 }));
@@ -207,6 +209,51 @@ describe('usePlayerDeckStore', () => {
 			gameData: { type: 'mtg', deckName: 'Reviewed Control', deckColors: 'WU' },
 		});
 		expect(mockApplyArchetypeUpdated).toHaveBeenCalledOnce();
+	});
+
+	it('moves a merged Archetype\'s decks to its survivor, still reviewed, everywhere', () => {
+		const player = {
+			id: 2,
+			archetypeId: 5,
+			gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' },
+		};
+		mockPlayerStore.players = [player];
+		const store = usePlayerDeckStore();
+		const reviewedAt = new Date();
+		store.decks = [
+			deck({
+				archetypeId: 5,
+				reviewedAt,
+				name: 'Burn',
+				colors: 'R',
+			}),
+			deck({
+				id: 11,
+				playerId: 3,
+				archetypeId: 6,
+				reviewedAt,
+				name: 'Control',
+				colors: 'U',
+			}),
+		] as any;
+		const survivor = { id: 7, name: 'Boros Burn', colors: 'RW' } as any;
+
+		store.applyArchetypeMerged(5, survivor);
+
+		expect(store.decks).toMatchObject([
+			{
+				archetypeId: 7,
+				reviewedAt,
+				name: 'Boros Burn',
+				colors: 'RW',
+			},
+			{ archetypeId: 6, name: 'Control', colors: 'U' },
+		]);
+		expect(player).toMatchObject({
+			archetypeId: 7,
+			gameData: { type: 'mtg', deckName: 'Boros Burn', deckColors: 'RW' },
+		});
+		expect(mockApplyArchetypeMerged).toHaveBeenCalledWith(5, survivor);
 	});
 
 	it('reverts deleted archetype reviews to submitted details everywhere', () => {

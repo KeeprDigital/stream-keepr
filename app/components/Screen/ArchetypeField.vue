@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { useConsumedEventData } from '~/modules/event-data/resync';
-
 /**
  * The Archetype picker of Screen settings, an Event Reference (ADR-0038): the
- * Event's Archetypes, searched by name since an Event can hold many. It loads
- * the Archetypes it lacks, re-reads them on Reconnect Resync (#610), and emits
- * the Archetype's id, or `null` when cleared.
+ * Event's Archetypes, searched by name since an Event can hold many. It lists
+ * an Empty Archetype too, marked, since a Screen may name one. It loads what
+ * it lacks, re-reads it on Reconnect Resync (#610), and emits the Archetype's
+ * id, or `null` when cleared.
  */
 const props = withDefaults(defineProps<{
 	modelValue?: number | null;
@@ -23,14 +22,16 @@ const emit = defineEmits<{
 }>();
 
 const archetypeStore = useArchetypeStore();
+const { emptyArchetypes } = useArchetypeHoldings(() => props.eventId);
 
-const items = computed(() => archetypeStore.archetypes.map(archetype => ({ label: archetype.name, value: archetype.id })));
-
-useConsumedEventData(['archetypes']);
-
-onMounted(async () => {
-	if (props.eventId && !archetypeStore.isLoaded)
-		await archetypeStore.loadByEventId(props.eventId);
+const items = computed(() => {
+	const empty = new Set(emptyArchetypes.value.map(archetype => archetype.id));
+	return archetypeStore.archetypes.map(archetype => ({
+		label: empty.has(archetype.id)
+			? `${archetype.name} (empty)`
+			: archetype.name,
+		value: archetype.id,
+	}));
 });
 </script>
 
