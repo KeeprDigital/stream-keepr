@@ -351,7 +351,6 @@ export interface GraphicsAssetCatalogue
 	GraphicsAssetDeliveryCatalogue,
 	GraphicsAssetRetentionCatalogue,
 	GraphicsIngestionOperationCatalogue {
-	initiateGraphicsIngestion: (operation: GraphicsIngestionOperation) => Promise<GraphicsIngestionOperation>;
 	recordStagedBytes: (input: {
 		operation: GraphicsIngestionOperation;
 		usedBytes: number;
@@ -1087,8 +1086,6 @@ export function createGraphicsAssetLibrary(
 	const generateIdentity = dependencies.generateIdentity ?? (() => crypto.randomUUID());
 	const silentVideoPlaybackValidator = dependencies.silentVideoPlaybackValidator
 		?? createUnavailableSilentVideoPlaybackValidator();
-	const activeIngestionLeaseMilliseconds
-		= GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS + 30_000;
 	const trashRecoveryMilliseconds = 30 * 24 * 60 * 60 * 1000;
 
 	function requireCatalogue(): GraphicsAssetCatalogue {
@@ -1124,7 +1121,15 @@ export function createGraphicsAssetLibrary(
 	 * reconciliation regenerates a poster through. Built before any of them is
 	 * named below.
 	 */
+	const lifecycle = createGraphicsIngestionOperationLifecycle({
+		requireCatalogue,
+		requireStaging,
+		silentVideoPlaybackValidator,
+		now,
+		generateIdentity,
+	});
 	const {
+		activeIngestionLeaseMilliseconds,
 		initiateGraphicsOperation,
 		changedOperation,
 		SilentVideoValidationRuntimeError,
@@ -1134,13 +1139,7 @@ export function createGraphicsAssetLibrary(
 		releaseCancelledStagedInput,
 		storeCanonicalStream,
 		storeCanonicalBytes,
-	} = createGraphicsIngestionOperationLifecycle({
-		requireCatalogue,
-		requireStaging,
-		silentVideoPlaybackValidator,
-		now,
-		generateIdentity,
-	});
+	} = lifecycle;
 
 	/**
 	 * Attestations a browser or the pinned validation runtime made about these
