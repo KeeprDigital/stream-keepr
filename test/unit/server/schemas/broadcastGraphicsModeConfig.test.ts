@@ -507,6 +507,80 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		expect(messages(result)).toEqual(refusal);
 	});
 
+	// Each declared type is its own branch of the declaration, with fields no other takes.
+	it.each<[string, Record<string, unknown>]>([
+		[
+			'text',
+			{ default: 'Unnamed', maxLength: 20 },
+		],
+		[
+			'number',
+			{ default: 0, integer: true, min: 0 },
+		],
+		[
+			'toggle',
+			{ default: false },
+		],
+		[
+			'choice',
+			{
+				default: 'left',
+				options: [
+					{ value: 'left', label: 'Left' },
+					{ value: 'right', label: 'Right' },
+				],
+			},
+		],
+		[
+			'color',
+			{ default: '#00d9ff' },
+		],
+		[
+			'media',
+			{ default: null, mediaKind: 'image' },
+		],
+	])('accepts a %s Graphic Input, keeping its declaration as written', (type, fields) => {
+		const declaration = {
+			type,
+			key: 'input',
+			label: 'Input',
+			required: false,
+			updatePolicy: 'staged',
+			...fields,
+		};
+
+		const result = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [
+				{
+					...graphic('lower-third'),
+					inputs: [declaration],
+				},
+			],
+		});
+
+		expect(messages(result)).toEqual([]);
+		expect(result.data?.graphics[0]?.inputs).toEqual([declaration]);
+	});
+
+	it('refuses a Graphic Input carrying a field its declared type does not take', () => {
+		const result = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [
+				{
+					...graphic('lower-third'),
+					inputs: [
+						{
+							...textInput('flag'),
+							type: 'toggle',
+							default: false,
+						},
+					],
+				},
+			],
+		});
+
+		expect(result.success).toBe(false);
+	});
+
 	it('rejects a Graphic Input key a Graphic Text Template could not name', () => {
 		const result = broadcastGraphicsModeConfigSchema.safeParse({
 			graphics: [

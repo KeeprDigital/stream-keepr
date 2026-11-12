@@ -47,66 +47,6 @@ describe('broadcast graphics Graphic Input command API', () => {
 		catch {}
 	});
 
-	it('accepts a Broadcast Graphic declaring typed Graphic Inputs and a Graphic Text Template', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-declare', graphicWith([
-			NAME,
-			integrationTextInput('title'),
-			{
-				type: 'number',
-				key: 'score',
-				label: 'Score',
-				required: false,
-				updatePolicy: 'live',
-				default: 0,
-				integer: true,
-				min: 0,
-			},
-			{
-				type: 'toggle',
-				key: 'flag',
-				label: 'Flag',
-				required: false,
-				updatePolicy: 'staged',
-				default: false,
-			},
-			{
-				type: 'choice',
-				key: 'side',
-				label: 'Side',
-				required: false,
-				updatePolicy: 'staged',
-				default: 'left',
-				options: [
-					{ value: 'left', label: 'Left' },
-					{ value: 'right', label: 'Right' },
-				],
-			},
-			{
-				type: 'color',
-				key: 'accent',
-				label: 'Accent',
-				required: false,
-				updatePolicy: 'staged',
-				default: '#00d9ff',
-			},
-			{
-				type: 'media',
-				key: 'badge',
-				label: 'Badge',
-				required: false,
-				updatePolicy: 'staged',
-				default: null,
-				mediaKind: 'image',
-			},
-		]));
-
-		const screen = await $fetch<{ modeConfigs: Record<string, { graphics: Array<{ inputs?: unknown[] }> }> }>(
-			`/api/events/${eventId}/screens/${harness.screen.id}`,
-		);
-
-		expect(screen.modeConfigs['broadcast-graphics']!.graphics[0]!.inputs).toHaveLength(7);
-	});
-
 	it('keeps a staged edit off air until Update Graphic accepts the complete set', async () => {
 		const harness = await createGraphicsHarness(eventId, 'inputs-update', graphicWith([
 			NAME,
