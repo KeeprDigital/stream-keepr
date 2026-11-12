@@ -50,12 +50,15 @@ export const RUN_SLOTS_HELD_ENV = 'STREAM_KEEPR_RUN_SLOTS_HELD';
 
 /**
  * What each gate holds while it runs, measured on the 10-core, 16 GB machine
- * this was written on (November 2026): cold ESLint peaks at 3.8 GB and each
- * cold `vue-tsc` program at 3.7 GB, on one core apiece. A test suite is not
- * here: it takes one slot per worker (`vitest.shared.ts`).
+ * this was written on (November 2026): a cold ESLint run over server or shared
+ * code peaks at 3.5 GB, where its one type-aware rule builds their TypeScript
+ * program, and each cold `vue-tsc` program at 3.7 GB, on one core apiece. A
+ * test suite is not here: it takes one slot per worker (`vitest.shared.ts`).
  */
 export const RUN_SLOT_COSTS = /** @type {const} */ ({
 	'lint': 3,
+	// No server or shared file among them, so no TypeScript program: half a gigabyte.
+	'lint-untyped': 1,
 	'typecheck': 3,
 	'build': 3,
 	// One `nuxt dev` with its workerd, and a Chrome beside it.

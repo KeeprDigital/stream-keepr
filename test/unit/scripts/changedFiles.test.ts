@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { afterEach, describe, expect, it } from 'vitest';
 import { changedFiles } from '../../../scripts/changed-files.mjs';
-import { lintTargets } from '../../../scripts/lint-changed.mjs';
+import { lintCost, lintTargets } from '../../../scripts/lint-changed.mjs';
 
 /** Against real git: a local "origin" and a clone of it on a branch. Nothing remote. */
 describe('what a checkout changes', () => {
@@ -115,6 +115,30 @@ describe('what `pnpm lint:changed` lints', () => {
 		},
 	])('$change', ({ changed, lints }) => {
 		expect(lintTargets(changed)).toEqual(lints);
+	});
+
+	// Only server and shared code carries the type-aware rule, so only it builds a TypeScript program.
+	it.each([
+		{
+			targets: 'app and test files alone',
+			linted: ['app/a.vue', 'test/unit/b.test.ts', 'README.md'],
+			cost: 'lint-untyped',
+		},
+		{
+			targets: 'a server file among them',
+			linted: ['app/a.vue', 'server/api/b.get.ts'],
+			cost: 'lint',
+		},
+		{
+			targets: 'a shared file among them',
+			linted: ['shared/utils/c.ts'],
+			cost: 'lint',
+		},
+		{ targets: 'everything', linted: 'everything', cost: 'lint' },
+	] as const)('holds the run slots of a $cost for $targets', ({ linted, cost }) => {
+		expect(lintCost(typeof linted === 'string'
+			? linted
+			: [...linted])).toBe(cost);
 	});
 
 	it('lints everything once naming the files would save nothing', () => {
