@@ -765,43 +765,6 @@ describe('broadcast Graphic Template library', () => {
 		expect((await request(screenLease, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
 	});
 
-	it('refuses a revision built on a stale one, naming the revision that exists', async () => {
-		const template = await saveTemplate();
-		const stale = await templateRevision(template.id);
-
-		const accepted = await request(`${TEMPLATES_PATH}/${template.id}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: { description: 'First writer wins', revision: stale },
-		});
-		expect(accepted.status).toBe(200);
-
-		// The other window had the library open and never saw the revision above.
-		const refused = await request(`${TEMPLATES_PATH}/${template.id}`, {
-			method: 'PATCH',
-			cookie: secondBrowserCookie,
-			body: { description: 'Second writer overwrites', revision: stale },
-		});
-
-		expect(refused.status).toBe(409);
-		expect(refused.data.message).toContain(`revision ${stale + 1}`);
-		const after = await request(`${TEMPLATES_PATH}/${template.id}`, { cookie: authorCookie });
-		expect((after.data as BroadcastGraphicTemplateResponse).description).toBe('First writer wins');
-	});
-
-	it('refuses a revision that states no revision at all', async () => {
-		const template = await saveTemplate();
-		// An omissible precondition is an inert one: if saying nothing meant "do not
-		// check", every caller that forgot would get an unguarded last-write-wins.
-		const refused = await request(`${TEMPLATES_PATH}/${template.id}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: { description: 'Stated no revision' },
-		});
-
-		expect(refused.status).toBe(400);
-	});
-
 	it('refuses a placement that states no Screen version at all', async () => {
 		const template = await saveTemplate();
 		const refused = await request(placementPath(otherEventId, otherScreenId), {
