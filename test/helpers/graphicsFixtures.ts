@@ -1,6 +1,7 @@
 /**
- * Shared Graphics byte fixtures: the 1×1 PNG, distinct-digest variants of it,
- * the 16×16 poster PNG, the validator's silent videos, and their sha256.
+ * Shared Graphics byte fixtures: the 1×1 PNG, distinct-digest and padded
+ * variants of it, the 16×16 poster PNG, the validator's silent videos, and
+ * their sha256.
  */
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
@@ -30,6 +31,60 @@ export function pngWithTextChunks(count: number): Uint8Array {
 
 /** The same 1×1 image as `pixelPng` under a different digest. */
 export const replacementPng = pngWithTextChunks(1);
+
+const crcTable = (() => {
+	const table = new Uint32Array(256);
+	for (let index = 0; index < table.length; index++) {
+		let value = index;
+		for (let bit = 0; bit < 8; bit++) {
+			value = value & 1
+				? 0xEDB88320 ^ (value >>> 1)
+				: value >>> 1;
+		}
+		table[index] = value >>> 0;
+	}
+	return table;
+})();
+
+function crc32(bytes: Uint8Array): number {
+	let crc = 0xFFFFFFFF;
+	for (const byte of bytes)
+		crc = crcTable[(crc ^ byte) & 0xFF]! ^ (crc >>> 8);
+	return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function uint32(value: number): Uint8Array {
+	return Uint8Array.of(
+		(value >>> 24) & 0xFF,
+		(value >>> 16) & 0xFF,
+		(value >>> 8) & 0xFF,
+		value & 0xFF,
+	);
+}
+
+/**
+ * `pixelPng` padded to exactly `byteLength` bytes by one CRC-valid ancillary
+ * chunk before `IDAT`: a valid 1×1 PNG of any size, such as one that outgrows
+ * a multipart part.
+ */
+export function pngOfByteLength(byteLength: number): Uint8Array {
+	const idatOffset = 33;
+	const type = new TextEncoder().encode('skPR');
+	const payload = new Uint8Array(byteLength - pixelPng.byteLength - 12);
+	const checksumInput = new Uint8Array(type.byteLength + payload.byteLength);
+	checksumInput.set(type);
+	checksumInput.set(payload, type.byteLength);
+	const chunk = new Uint8Array(12 + payload.byteLength);
+	chunk.set(uint32(payload.byteLength));
+	chunk.set(type, 4);
+	chunk.set(payload, 8);
+	chunk.set(uint32(crc32(checksumInput)), chunk.byteLength - 4);
+	const result = new Uint8Array(pixelPng.byteLength + chunk.byteLength);
+	result.set(pixelPng.subarray(0, idatOffset));
+	result.set(chunk, idatOffset);
+	result.set(pixelPng.subarray(idatOffset), idatOffset + chunk.byteLength);
+	return result;
+}
 
 /** Hex sha256 of `bytes`: the content digest the Graphics library keys on. */
 export function digestOf(bytes: Uint8Array): string {
