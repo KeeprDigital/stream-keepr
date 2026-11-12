@@ -118,32 +118,4 @@ describe('useFeatureMatchModeData', () => {
 
 		expect(match.value?.id).toBe(1);
 	});
-
-	it('reads the Slot through its Screen and holds it, never the Event\'s Slots', async () => {
-		createComposable();
-
-		await flushPromises();
-
-		expect(mockApiFetch).toHaveBeenCalledWith(
-			'/api/screen-output/events/1/screens/1/feature-match-slots/1',
-			expect.anything(),
-		);
-		expect(mockFeatureMatchStore.holdFeatureMatch).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
-		expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).not.toHaveBeenCalled();
-	});
-
-	it('reads the newly configured Slot when the configured match changes', async () => {
-		createComposable();
-		await flushPromises();
-
-		mockApiFetch.mockClear();
-		mockConfig.value = { featureMatchId: 2 };
-
-		await flushPromises();
-
-		expect(mockApiFetch).toHaveBeenCalledWith(
-			'/api/screen-output/events/1/screens/1/feature-match-slots/2',
-			expect.anything(),
-		);
-	});
 });

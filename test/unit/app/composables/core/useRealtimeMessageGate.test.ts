@@ -35,16 +35,41 @@ describe('useRealtimeMessageGate', () => {
 		});
 	});
 
-	it('logs async handler failures without throwing', async () => {
-		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		const accepted = useRealtimeMessageGate(ref('connection-1')).accept('player:updated', async () => {
-			throw new Error('boom');
+	// A handler's failure is logged and goes no further, so its channel goes on delivering.
+	it.each([
+		[
+			'throws',
+			() => {
+				throw new Error('boom');
+			},
+		],
+		[
+			'rejects',
+			async () => {
+				throw new Error('boom');
+			},
+		],
+	])('logs a handler that %s, and hands it the next message', async (_, fail) => {
+		const logged = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const handled: unknown[] = [];
+		const accepted = useRealtimeMessageGate(ref('connection-1')).accept('player:updated', (data) => {
+			handled.push(data);
+			if (handled.length === 1)
+				return fail();
 		});
+		const first = { eventId: 1, originConnectionId: 'connection-2' } as never;
+		const second = { eventId: 2, originConnectionId: 'connection-2' } as never;
 
-		accepted({ eventId: 1, originConnectionId: 'connection-2' } as never, undefined);
+		expect(() => accepted(first, undefined)).not.toThrow();
 		await Promise.resolve();
+		accepted(second, undefined);
 
-		expect(consoleSpy).toHaveBeenCalledWith('Failed to handle realtime message "player:updated":', expect.any(Error));
-		consoleSpy.mockRestore();
+		expect(logged.mock.calls).toEqual([
+			[
+				'Failed to handle realtime message "player:updated":',
+				expect.any(Error),
+			],
+		]);
+		expect(handled).toEqual([first, second]);
 	});
 });

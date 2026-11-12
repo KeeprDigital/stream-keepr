@@ -179,7 +179,7 @@ describe('useTopCutModeData', () => {
 	});
 
 	describe('live-follow', () => {
-		async function following(shown: Partial<Pick<typeof defaultConfig, 'showSeeds' | 'showArchetypes'>> = {}) {
+		async function following(shown: Partial<Pick<typeof defaultConfig, 'showArchetypes'>>) {
 			mutableConfig.phaseId = 3;
 			Object.assign(mutableConfig, shown);
 			mockFetch.mockResolvedValue(answer());
@@ -188,88 +188,17 @@ describe('useTopCutModeData', () => {
 			mockFetch.mockClear();
 		}
 
-		// Which message says which kind changed, and which kinds a bracket follows, is
-		// `screenOutputInterest`'s own test. These are what only its read can narrow.
+		// Its one wiring case: the mode and the configuration it renders reach the shared
+		// rule. What a bracket hears, and how widely, is `screenOutputInterest`'s own tests.
 		it.each([
-			[
-				'a Match moved out of it',
-				'match:updated',
-				{
-					match: { id: 101, roundId: 99 },
-				},
-			],
-			[
-				'an entrant renamed',
-				'player:updated',
-				{
-					player: { id: 9 },
-				},
-			],
-		])('re-reads on %s', async (_, type, payload) => {
-			await following();
-			deliver(type, payload);
+			{ showArchetypes: true, reads: 1 },
+			{ showArchetypes: false, reads: 0 },
+		])('re-reads $reads times on an Archetype deleted while showArchetypes is $showArchetypes', async ({ showArchetypes, reads }) => {
+			await following({ showArchetypes });
+			deliver('archetype:deleted', { archetypeId: 5 });
 			await flushPromises();
 
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-		});
-
-		// Seeds place the bracket whether or not they show. They come from Round
-		// Standings before the Phase, which a sync of any Round may store, and any
-		// Round or Phase edit may reorder.
-		const seedChanges = [
-			[
-				'an earlier Round\'s Round Standings synced from Melee',
-				'melee:roundStandingsSynced',
-				{ roundId: 20 },
-			],
-			[
-				'an earlier Round renumbered',
-				'round:updated',
-				{
-					round: { id: 20, phaseId: 2 },
-				},
-			],
-			[
-				'another Phase reordered',
-				'phase:updated',
-				{
-					phase: { id: 2 },
-				},
-			],
-		] as const;
-
-		// An Archetype is named by its Archetype or a Deck List, neither of which
-		// is a Player message.
-		const archetypeChanges = [
-			[
-				'an Archetype deleted',
-				'archetype:deleted',
-				{ archetypeId: 5 },
-			],
-		] as const;
-
-		it.each(seedChanges)('re-reads on %s, whether or not seeds show', async (_, type, payload) => {
-			await following();
-			deliver(type, payload);
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-		});
-
-		it.each(archetypeChanges)('re-reads on %s while Archetypes show', async (_, type, payload) => {
-			await following({ showArchetypes: true });
-			deliver(type, payload);
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-		});
-
-		it.each(archetypeChanges)('does not re-read on %s while Archetypes are hidden', async (_, type, payload) => {
-			await following();
-			deliver(type, payload);
-			await flushPromises();
-
-			expect(mockFetch).not.toHaveBeenCalled();
+			expect(mockFetch).toHaveBeenCalledTimes(reads);
 		});
 	});
 

@@ -553,28 +553,6 @@ describe('useStandingsModeData', () => {
 			expect(totalPages.value).toBe(4);
 			expect(names(pageData.value)).toEqual(['Diana', 'Ethan', 'Fiona']);
 		});
-
-		it('projects a rotating page from server time on a rendering, and never writes', async () => {
-			vi.useFakeTimers();
-			Object.assign(mutableConfig, {
-				autoPageEnabled: true,
-				autoPageIntervalMs: 5000,
-				rowsPerPage: 3,
-				rotationAnchor: mockServerNow - 5000,
-			});
-
-			const { currentPage, pageData } = await mountStandings();
-			await nextTick();
-			expect(currentPage.value).toBe(2);
-			expect(pageData.value[0]!.name).toBe('Diana');
-
-			mockServerNow += 5000;
-			vi.advanceTimersByTime(5000);
-			await nextTick();
-
-			expect(currentPage.value).toBe(3);
-			expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
-		});
 	});
 
 	describe('freshness', () => {

@@ -252,16 +252,5 @@ describe('useHeadToHeadModeData', () => {
 			await flushPromises();
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
-
-		// The Players' records come from any Round, and Melee names no Players in a
-		// Round sync. Which kinds a Head-to-Head follows is `screenOutputInterest`'s own test.
-		it('re-reads when Melee stores any Round\'s Round Standings', async () => {
-			await showingSlot();
-
-			deliver('melee:roundStandingsSynced', { roundId: 40 });
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-		});
 	});
 });

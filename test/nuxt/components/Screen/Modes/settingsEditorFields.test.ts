@@ -20,6 +20,23 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Broadcast Graphics Background: one Animation Effect selection, a union field the shared Animation Effect editor edits from its catalogue schema',
 };
 
+/**
+ * Modes whose page the generic renderer draws from their contract with nothing
+ * for this guard to hold it to: no option or label decided for the Screen, no
+ * nested block, no row of controls, no bound following content. Their fields
+ * are drawn once and written by name at the renderer (`ModeSettings.test.ts`),
+ * each control's kind, label and bounds at `ConfigField.test.ts`.
+ */
+const MODES_DRAWN_WHOLE_FROM_THEIR_CONTRACT: readonly ScreenMode[] = [
+	'card',
+	'player-history',
+	'pairings',
+	'head-to-head',
+	'talent',
+	'top-cut',
+	'round-clock',
+];
+
 // Fields a scalar control writes without being that field's own control, and why.
 // A bespoke control counts as rendering its field. A field its contract gives a
 // named slot, such as Deck's board toggles, is that slot's widget's.
@@ -48,10 +65,6 @@ interface EditorVariants {
 
 const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	'feature-match': {
-		editor: RENDERER,
-		variants: [{}],
-	},
-	'card': {
 		editor: RENDERER,
 		variants: [{}],
 	},
@@ -109,54 +122,12 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 			},
 		],
 	},
-	'player-history': {
-		editor: RENDERER,
-		variants: [
-			{ autoPageEnabled: true },
-		],
-	},
-	'pairings': {
-		editor: RENDERER,
-		variants: [
-			{ autoPageEnabled: true },
-		],
-	},
 	// Each scope's own field, and auto-page.
 	'archetype-spotlight': {
 		editor: 'ArchetypeSpotlight',
 		variants: [
 			{ scope: 'topN', autoPageEnabled: true },
 			{ scope: 'minPoints' },
-		],
-	},
-	// The Slot binding and the two Player pickers: both are Event References, so only the source, show toggles and header are scalar.
-	'head-to-head': {
-		editor: RENDERER,
-		variants: [
-			{},
-			{ playerSource: 'players' },
-		],
-	},
-	// The one-Talent and lineup pickers are Event References; rotating shows its dwell, and the header its text.
-	'talent': {
-		editor: RENDERER,
-		variants: [
-			{},
-			{ selection: 'lineup', rotateSocialProfiles: true, showHeader: true },
-		],
-	},
-	// A One Piece Card Game Event also offers showing Players by Nickname (ADR-0077).
-	'top-cut': {
-		editor: RENDERER,
-		variants: [{}],
-		opVariants: [{}],
-	},
-	// Its Round picker is an Event Reference; counting up after the end shows its limit.
-	'round-clock': {
-		editor: RENDERER,
-		variants: [
-			{},
-			{ countUpAfterEnd: true },
 		],
 	},
 	// Each scope's own field, and auto-page.
@@ -426,22 +397,39 @@ async function mountEditor(editor: string, mode: ScreenMode) {
 	return wrapper;
 }
 
-describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
-	const entry = EDITOR_VARIANTS[mode];
-	const reason = MODES_WITHOUT_SCALAR_CONTROLS[mode];
+/** Whether a field's page decides something of it for the Screen, which a contract's types cannot hold to its declaration. */
+function decidedForTheScreen(mode: ScreenMode, path: string, field: ScreenModeConfigField): boolean {
+	const groups = screenModeConfigContract(mode).groups as Record<string, { layout?: string }> | undefined;
+	return typeof field.options === 'function'
+		|| field.labelFor !== undefined
+		|| field.maxFor !== undefined
+		|| path.includes('.')
+		|| (field.group !== undefined && groups?.[field.group]?.layout === 'row');
+}
 
-	it('is guarded: listed with its variants, or with why its editor has no scalar control', () => {
-		expect(Boolean(entry) !== Boolean(reason), `list ${mode} in EDITOR_VARIANTS or MODES_WITHOUT_SCALAR_CONTROLS`).toBe(true);
+describe('the settings editors\' guard', () => {
+	it('lists every Screen Mode once: with its variants, with why its editor has no scalar control, or as drawn whole from its contract', () => {
+		expect([
+			...Object.keys(EDITOR_VARIANTS),
+			...Object.keys(MODES_WITHOUT_SCALAR_CONTROLS),
+			...MODES_DRAWN_WHOLE_FROM_THEIR_CONTRACT,
+		].sort()).toEqual([...SCREEN_MODE_VALUES].sort());
 	});
 
-	if (reason) {
-		it(`declares no scalar editor field, since ${reason}`, () => {
-			expect(contractEditorFields(mode).size).toBe(0);
-		});
-		return;
-	}
-	if (!entry)
-		return;
+	it.each(Object.entries(MODES_WITHOUT_SCALAR_CONTROLS) as [ScreenMode, string][])('%s declares no scalar editor field, since %s', (mode) => {
+		expect(contractEditorFields(mode).size).toBe(0);
+	});
+
+	// One gaining such a field has a page that can drift: list it in EDITOR_VARIANTS.
+	it('a mode drawn whole from its contract declares no field its page decides for the Screen', () => {
+		expect(MODES_DRAWN_WHOLE_FROM_THEIR_CONTRACT.flatMap(mode => [
+			...contractEditorFields(mode),
+		].filter(([path, field]) => decidedForTheScreen(mode, path, field)).map(([path]) => `${mode}.${path}`))).toEqual([]);
+	});
+});
+
+describe.each(Object.keys(EDITOR_VARIANTS) as ScreenMode[])('the %s settings editor', (mode) => {
+	const entry = EDITOR_VARIANTS[mode]!;
 
 	it('renders every scalar control from its contract field, and every editor field', async () => {
 		const fields = contractEditorFields(mode);

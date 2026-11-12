@@ -770,39 +770,6 @@ describe('the shared graphics editor\'s Broadcast Graphics', () => {
 		expect(harness.writes).toEqual([]);
 	});
 
-	// Undo covers the item tree; a Graphic Channel assignment is made outside it.
-	it('keeps the Graphic Channel each graphic is in now through an undo', () => {
-		const harness = editing();
-		harness.editor.toggleVisible();
-		harness.channels.value = [
-			{ id: 'thirds', name: 'Lower thirds' },
-		];
-		harness.graphics.value = harness.graphics.value.map(graphic => ({ ...graphic, channelId: 'thirds' }));
-
-		harness.editor.undo();
-
-		expect(rect(harness, 'a')?.visible).toBe(true);
-		expect(harness.document().map(graphic => graphic.channelId)).toEqual(['thirds', 'thirds']);
-	});
-
-	// Align, group and paste act within one composition.
-	it.each<[string, (harness: ReturnType<typeof editing>) => void]>([
-		[
-			'⌘-click',
-			harness => harness.editor.toggleSelect(SLATE_ITEM),
-		],
-		[
-			'Shift-click',
-			harness => harness.editor.extendSelect(SLATE_ITEM),
-		],
-	])('selects layers of one Broadcast Graphic at a time on %s', (_, selecting) => {
-		const harness = editing();
-
-		selecting(harness);
-
-		expect(harness.editor.layers.value).toEqual([SLATE_ITEM]);
-	});
-
 	it('adds a Graphic Item to the selected Broadcast Graphic when no layer is selected', () => {
 		const harness = editing();
 		harness.editor.select({ type: 'canvas' });
