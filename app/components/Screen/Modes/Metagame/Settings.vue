@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { ScreenSettingsContext } from '~~/shared/screenModeConfigs/fields';
+import type { ModeSettingsExposed } from '~/modules/screen-mode/settingsPage';
 import type { Screen } from '~/types';
 import { isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
 import { isMetagameSortOffered } from '~~/shared/utils/metagame';
-import { useModeSettingsRenderer } from '~/composables/screen/useModeSettingsRenderer';
+import { passOnRendererExposed } from '~/modules/screen-mode/settingsPage';
 
 /**
  * The Metagame settings page: the generic renderer (#1094), with the Event's
@@ -15,7 +16,9 @@ defineProps<{
 	eventId: number;
 }>();
 
-defineExpose(useModeSettingsRenderer());
+const renderer = useTemplateRef<ModeSettingsExposed>('renderer');
+
+defineExpose(passOnRendererExposed(renderer));
 
 /** The Conversion Target matters while the Conversion Rate orders or shows the archetypes, on a Metagame that reads it. */
 function showsConversionRate({ config, event }: ScreenSettingsContext): boolean {

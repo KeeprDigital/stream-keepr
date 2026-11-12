@@ -3,9 +3,9 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { nextTick, ref } from 'vue';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 import EditorPreview from '~/components/Graphics/EditorPreview.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE, GRAPHICS_PREVIEW_SELECT_MESSAGE } from '~/modules/graphics/previewMessages';
-import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 // The preview drawn at half the canvas, so a drag's pixels are canvas pixels doubled.
 vi.mock('@vueuse/core', async importOriginal => ({

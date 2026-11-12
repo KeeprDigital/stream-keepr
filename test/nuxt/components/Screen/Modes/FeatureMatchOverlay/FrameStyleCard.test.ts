@@ -5,11 +5,11 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import FrameStyleCard from '~/components/Screen/Modes/FeatureMatchOverlay/FrameStyleCard.vue';
 import SurfaceStyleTokenInput from '~/components/Theme/SurfaceStyleTokenInput.vue';
 import { THEME_TOKEN_DRAFT_COMMIT_MS } from '~/modules/theme-editor/draft';
-import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 const { mockApiFetch } = vi.hoisted(() => ({
 	mockApiFetch: vi.fn(),

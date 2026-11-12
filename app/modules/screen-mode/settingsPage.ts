@@ -1,8 +1,10 @@
+import type { Ref } from 'vue';
 import type { ScreenModeConfigField, ScreenSettingsCard, ScreenSettingsContext, ScreenSettingsGroupDeclaration } from '~~/shared/screenModeConfigs/fields';
 import type { PageRotationMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { PagedModeData } from './pagedModeData';
 import type { RotationConfigWrites } from './rotationWrites';
+import { computed } from 'vue';
 import { SCREEN_SETTINGS_CARD_TITLES, SCREEN_SETTINGS_CARDS } from '~~/shared/screenModeConfigs/fields';
 import { SCREEN_MODES, screenModeConfigContract } from '~~/shared/screenModes';
 import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
@@ -60,6 +62,24 @@ export interface ScreenModeSettingsSlotProps {
 	rotation: RotationConfigWrites<any> | undefined;
 	/** A paginated mode's data, as its Screen Output reads it. */
 	data: PagedModeData | undefined;
+}
+
+/** What the generic settings renderer (`ScreenModeSettings`) hands the page. */
+export interface ModeSettingsExposed {
+	resetConfig: () => void;
+	saving: boolean;
+}
+
+/**
+ * What a mode's settings wrapping the generic renderer hand the page: the
+ * renderer's own, read through its template ref, by convention `renderer`:
+ * `defineExpose(passOnRendererExposed(useTemplateRef('renderer')))`.
+ */
+export function passOnRendererExposed(renderer: Readonly<Ref<ModeSettingsExposed | null>>) {
+	return {
+		resetConfig: () => renderer.value?.resetConfig(),
+		saving: computed(() => renderer.value?.saving ?? false),
+	};
 }
 
 /** Whether `mode` pages its rows: its Screen Mode Definition declares a Page Rotation (ADR-0039). */

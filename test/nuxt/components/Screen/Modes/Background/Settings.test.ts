@@ -4,10 +4,10 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, ref } from 'vue';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 import { screenSettingsPage } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import Settings from '~/components/Screen/Modes/Background/Settings.vue';
 import { createMockScreen } from '../../../../../helpers/fixtures';
-import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
 enableAutoUnmount(afterEach);

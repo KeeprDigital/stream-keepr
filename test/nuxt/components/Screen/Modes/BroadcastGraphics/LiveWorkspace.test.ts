@@ -16,8 +16,8 @@ import {
 import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { liveSessionSelectors } from '~~/test/nuxt/helpers/broadcastGraphicsLiveSessionReads';
-import LiveWorkspace from '~/components/Screen/Modes/BroadcastGraphics/LiveWorkspace.vue';
 import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
+import LiveWorkspace from '~/components/Screen/Modes/BroadcastGraphics/LiveWorkspace.vue';
 
 enableAutoUnmount(afterEach);
 

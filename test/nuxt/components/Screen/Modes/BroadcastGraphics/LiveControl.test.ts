@@ -17,8 +17,8 @@ import {
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
 import { UInputMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import LiveControl from '~/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
 import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
+import LiveControl from '~/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
 
 enableAutoUnmount(afterEach);
 

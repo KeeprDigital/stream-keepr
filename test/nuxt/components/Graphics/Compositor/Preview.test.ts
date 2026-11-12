@@ -3,9 +3,9 @@ import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 import Preview from '~/components/Graphics/Compositor/Preview.vue';
 import { GRAPHICS_PREVIEW_SELECT_MESSAGE, GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
-import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 enableAutoUnmount(afterEach);
 

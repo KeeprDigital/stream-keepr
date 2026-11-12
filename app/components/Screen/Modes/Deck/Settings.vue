@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { DeckModeConfig } from '~~/shared/types/screenConfig';
+import type { ModeSettingsExposed } from '~/modules/screen-mode/settingsPage';
 import type { Screen } from '~/types';
 import { patchedBoardLayout, sideboardOwnFields } from '~~/shared/screenModeConfigs/deck';
 import { resolveDeckBoards } from '~~/shared/types/screenConfig';
-import { useModeSettingsRenderer } from '~/composables/screen/useModeSettingsRenderer';
+import { passOnRendererExposed } from '~/modules/screen-mode/settingsPage';
 
 /**
  * The Deck List Screen's settings: the generic renderer (#1094), with the two
@@ -18,7 +19,9 @@ defineProps<{
 	eventId: number;
 }>();
 
-defineExpose(useModeSettingsRenderer());
+const renderer = useTemplateRef<ModeSettingsExposed>('renderer');
+
+defineExpose(passOnRendererExposed(renderer));
 
 function boardsOf(config: Readonly<Record<string, any>>) {
 	return resolveDeckBoards(config as Partial<DeckModeConfig>);

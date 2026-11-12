@@ -12,6 +12,17 @@ import ScreenRoundField from '~/components/Screen/RoundField.vue';
 import ScreenTalentField from '~/components/Screen/TalentField.vue';
 import { fieldDescription, fieldLabel, fieldOptions, fieldValue } from '~/modules/screen-mode/settingsPage';
 
+const props = defineProps<{
+	entry: SettingsPageField;
+	eventId: number;
+	/** Its control alone, named by its label, in a row its group's title labels. */
+	inline?: boolean;
+}>();
+
+const emit = defineEmits<{
+	update: [value: unknown];
+}>();
+
 /**
  * One contract field's control on a generic settings page (#1094): a plain
  * control by its kind (`ScreenConfigField`), its Event Reference kind's picker
@@ -29,23 +40,16 @@ const ID_PICKERS: Partial<Record<EventReferenceKind, { picker: Component; withEv
 	round: { picker: ScreenRoundField, withEvent: true },
 	player: { picker: ScreenPlayerField, withEvent: true },
 	playerList: { picker: ScreenPlayerListField, withEvent: true },
-	featureMatchSlot: { picker: ScreenFeatureMatchSlotField, withEvent: true, props: { detailed: true } },
+	featureMatchSlot: {
+		picker: ScreenFeatureMatchSlotField,
+		withEvent: true,
+		props: { detailed: true },
+	},
 	archetype: { picker: ScreenArchetypeField, withEvent: true },
 	phase: { picker: ScreenPhaseField, withEvent: true },
 	// The Event's Talents ride on the Event itself.
 	talent: { picker: ScreenTalentField, withEvent: false },
 };
-
-const props = defineProps<{
-	entry: SettingsPageField;
-	eventId: number;
-	/** Its control alone, named by its label, in a row its group's title labels. */
-	inline?: boolean;
-}>();
-
-const emit = defineEmits<{
-	update: [value: unknown];
-}>();
 
 const field = computed(() => ({
 	...props.entry.field,
@@ -72,8 +76,12 @@ const idPickerProps = computed(() => ({
 	label: field.value.label,
 	description: description.value,
 	modelValue: referenceId.value,
-	...(nullLabel.value ? { nullLabel: nullLabel.value } : {}),
-	...(idPicker.value?.withEvent ? { eventId: props.eventId } : {}),
+	...(nullLabel.value
+		? { nullLabel: nullLabel.value }
+		: {}),
+	...(idPicker.value?.withEvent
+		? { eventId: props.eventId }
+		: {}),
 	...idPicker.value?.props,
 }));
 /** A bound following the Screen's content, in displayed units. */

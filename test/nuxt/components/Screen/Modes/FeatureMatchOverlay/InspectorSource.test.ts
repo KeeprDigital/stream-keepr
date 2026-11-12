@@ -6,11 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import InspectorSource from '~/components/Screen/Modes/FeatureMatchOverlay/InspectorSource.vue';
 import SurfaceStyleTokenInput from '~/components/Theme/SurfaceStyleTokenInput.vue';
 import { THEME_TOKEN_DRAFT_COMMIT_MS } from '~/modules/theme-editor/draft';
-import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 /**
  * A Source Item's Bounds section, with the real geometry fields and editor: what

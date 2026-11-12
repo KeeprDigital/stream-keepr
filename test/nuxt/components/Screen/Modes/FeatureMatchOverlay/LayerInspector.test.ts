@@ -7,8 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
-import LayerInspector from '~/components/Screen/Modes/FeatureMatchOverlay/LayerInspector.vue';
 import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
+import LayerInspector from '~/components/Screen/Modes/FeatureMatchOverlay/LayerInspector.vue';
 
 // The host-owned half of the Feature Match Overlay property panel: the Frame and the Source Items.
 

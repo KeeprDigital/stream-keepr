@@ -854,21 +854,27 @@ describe('the generic settings renderer', () => {
 		{
 			name: 'a max card size by a canvas\'s height, at a card\'s 61:85 aspect',
 			mode: 'deck',
-			options: { event: { canvasWidth: 1280, canvasHeight: 720 } },
+			options: {
+				event: { canvasWidth: 1280, canvasHeight: 720 },
+			},
 			field: 'mainboard.maxCardSize',
 			max: '516',
 		},
 		{
 			name: 'a max card size by a canvas narrower than its tallest card',
 			mode: 'deck',
-			options: { event: { canvasWidth: 400, canvasHeight: 1080 } },
+			options: {
+				event: { canvasWidth: 400, canvasHeight: 1080 },
+			},
 			field: 'mainboard.maxCardSize',
 			max: '400',
 		},
 		{
 			name: 'Most Played Cards columns by the cards it ranks',
 			mode: 'top-cards',
-			options: { config: { limit: 12 } },
+			options: {
+				config: { limit: 12 },
+			},
 			field: 'columns',
 			max: '12',
 		},

@@ -1,8 +1,8 @@
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { defineComponent, h, nextTick, ref } from 'vue';
-import PreviewPanel from '~/components/Graphics/PreviewPanel.vue';
 import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
+import PreviewPanel from '~/components/Graphics/PreviewPanel.vue';
 
 // The one preview panel shared by the Broadcast Graphics and Feature Match Overlay editors: output
 // selection, zoom and pan, the canvas-aspect viewport, and the item and safe-area guide switches.

@@ -4,8 +4,8 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
-import TemplateLibrary from '~/components/Graphics/FeatureMatchLayoutTemplateLibrary.vue';
 import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
+import TemplateLibrary from '~/components/Graphics/FeatureMatchLayoutTemplateLibrary.vue';
 
 enableAutoUnmount(afterEach);
 

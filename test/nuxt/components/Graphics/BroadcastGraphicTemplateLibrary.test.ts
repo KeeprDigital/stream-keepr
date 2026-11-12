@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { transportFailure } from '~~/test/helpers/transportFailure';
-import TemplateLibrary from '~/components/Graphics/BroadcastGraphicTemplateLibrary.vue';
 import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
+import TemplateLibrary from '~/components/Graphics/BroadcastGraphicTemplateLibrary.vue';
 
 enableAutoUnmount(afterEach);
 

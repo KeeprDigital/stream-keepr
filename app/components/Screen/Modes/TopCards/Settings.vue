@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { MetagameCardTypeBucket } from '~~/shared/utils/metagame';
+import type { ModeSettingsExposed } from '~/modules/screen-mode/settingsPage';
 import type { Screen } from '~/types';
-import { fieldDescription } from '~/modules/screen-mode/settingsPage';
-import { useModeSettingsRenderer } from '~/composables/screen/useModeSettingsRenderer';
+import { fieldDescription, passOnRendererExposed } from '~/modules/screen-mode/settingsPage';
 
 /**
  * The Most Played Cards settings page: the generic renderer (#1094), with the
@@ -13,7 +13,9 @@ defineProps<{
 	eventId: number;
 }>();
 
-defineExpose(useModeSettingsRenderer());
+const renderer = useTemplateRef<ModeSettingsExposed>('renderer');
+
+defineExpose(passOnRendererExposed(renderer));
 
 /** Ranking pointed cards keeps nonbasic lands in, whatever the Land filter holds. */
 function lockedTypes(config: Readonly<Record<string, any>>): MetagameCardTypeBucket[] {
