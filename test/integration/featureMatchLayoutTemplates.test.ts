@@ -1,8 +1,5 @@
 import type { ScreenResponse } from '~~/shared/api';
-import type {
-	FeatureMatchLayoutTemplateResponse,
-	FeatureMatchLayoutTemplateSummary,
-} from '~~/shared/types/featureMatchLayoutTemplate';
+import type { FeatureMatchLayoutTemplateResponse } from '~~/shared/types/featureMatchLayoutTemplate';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -10,12 +7,11 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenC
 import { $fetch, fetch, operatorSessionCookie } from './client';
 
 /**
- * The Feature Match Layout Template library through the real API.
+ * The Feature Match Layout Template library through the real API: one wiring pass
+ * of the round trip an author takes, and the export only a server answers.
  *
- * The behaviour under test is the round trip an author takes: compose a layout on a
- * Screen, save it as a template, and place that template on another Screen — in
- * another Event — as a copy that is nothing to do with the template any more, and
- * that arrives without a trace of the Event it was authored in.
+ * The library's rules are proved over real SQL in
+ * `test/unit/server/api/featureMatchLayoutTemplateLibrary.sqlite.test.ts`.
  */
 
 const LIBRARY_PATH = '/api/graphics-templates/feature-match-layouts';
@@ -52,25 +48,11 @@ async function request(
 describe('feature Match Layout Template library', () => {
 	let sourceEventId: number;
 	let sourceScreenId: number;
-	let sourceSlotId: number;
 	let otherEventId: number;
 	let otherScreenId: number;
-	let otherSlotId: number;
 	let authorCookie: string;
 	let templateId: string;
-	/** The layout the source Screen was authored with, as saved into the library. */
-	let savedLayout: FeatureMatchLayoutConfig;
 
-	/**
-	 * An Event, a Feature Match Overlay Screen, and a Feature Match Slot to assign to
-	 * it. The assignment itself happens in `beforeAll`, alongside the layout each
-	 * Screen is seeded with.
-	 *
-	 * The Slot is what makes "a layout carries no Event identity" a claim that can
-	 * fail. A Screen whose `featureMatchId` is `null` throughout satisfies every
-	 * assertion about the absence of one for free, so both Screens get a real Slot
-	 * before anything is saved or placed.
-	 */
 	async function createEventWithOverlayScreen(name: string, slug: string) {
 		const event = await $fetch('/api/events', {
 			method: 'POST',
@@ -80,37 +62,15 @@ describe('feature Match Layout Template library', () => {
 			method: 'POST',
 			body: { name, slug, currentMode: 'feature-match-overlay' },
 		});
-		const slot = await $fetch<{ id: number }>(`/api/events/${event.id}/feature-match-slots`, {
-			method: 'POST',
-			body: { bestOf: 3 },
-		});
-		return { eventId: event.id as number, screenId: screen.id, slotId: slot.id };
+		return { eventId: event.id as number, screenId: screen.id };
+	}
+
+	async function storedScreen(eventId: number, screenId: number) {
+		return await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
 	}
 
 	async function storedLayout(eventId: number, screenId: number): Promise<FeatureMatchLayoutConfig> {
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		return screen.modeConfigs!['feature-match-overlay']!.layout as FeatureMatchLayoutConfig;
-	}
-
-	async function storedOverlayConfig(eventId: number, screenId: number) {
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		return screen.modeConfigs!['feature-match-overlay']!;
-	}
-
-	async function screenStateVersion(eventId: number, screenId: number): Promise<number> {
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		return screen.stateVersion;
-	}
-
-	async function place(eventId: number, screenId: number, body: { templateId: string }, cookie?: string) {
-		return await request(
-			`/api/events/${eventId}/screens/${screenId}/feature-match-overlay/layout-placements`,
-			{
-				method: 'POST',
-				cookie,
-				body: { ...body, stateVersion: await screenStateVersion(eventId, screenId) },
-			},
-		);
+		return (await storedScreen(eventId, screenId)).modeConfigs!['feature-match-overlay']!.layout as FeatureMatchLayoutConfig;
 	}
 
 	beforeAll(async () => {
@@ -119,49 +79,29 @@ describe('feature Match Layout Template library', () => {
 		const source = await createEventWithOverlayScreen(`Layout Source Event ${runId}`, `layout-source-${runId}`);
 		sourceEventId = source.eventId;
 		sourceScreenId = source.screenId;
-		sourceSlotId = source.slotId;
 		const other = await createEventWithOverlayScreen(`Layout Target Event ${runId}`, `layout-target-${runId}`);
 		otherEventId = other.eventId;
 		otherScreenId = other.screenId;
-		otherSlotId = other.slotId;
 
-		// A layout distinguishable from the target Screen's default in every part an
-		// author would recognise: the Frame, the Source Items, and the composition.
+		// Distinguishable from the default the target Screen is seeded with below.
 		const authored = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout);
 		authored.frame.opacity = 0.33;
-		authored.sources = [
-			{
-				id: 'main-source',
-				label: 'Authored Main Source',
-				visible: true,
-				anchor: 'top-left',
-				sourceRole: 'main',
-				frameCutout: true,
-				x: 10,
-				y: 20,
-				width: 800,
-				height: 600,
-			},
-		];
 		const patched = await request(
 			`/api/events/${sourceEventId}/screens/${sourceScreenId}/config/feature-match-overlay`,
 			{
 				method: 'PATCH',
-				body: { layout: authored, featureMatchId: sourceSlotId },
+				body: { layout: authored },
 			},
 		);
 		expect(patched.status).toBe(200);
-		savedLayout = await storedLayout(sourceEventId, sourceScreenId);
 
-		// The target Screen starts from the untouched default and its own assigned
-		// Slot, so "placing replaced the layout" is a comparison against a layout that
-		// really is stored rather than against the absence of one, and "the Screen's
-		// own state survives" is a comparison against state that really is there.
+		// A stored default, so "placing replaced the layout" compares against a
+		// layout that really is there rather than against the absence of one.
 		const seeded = await request(
 			`/api/events/${otherEventId}/screens/${otherScreenId}/config/feature-match-overlay`,
 			{
 				method: 'PATCH',
-				body: { layout: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout, featureMatchId: otherSlotId },
+				body: { layout: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout },
 			},
 		);
 		expect(seeded.status).toBe(200);
@@ -178,14 +118,22 @@ describe('feature Match Layout Template library', () => {
 		}
 	});
 
-	it('saves a Screen\'s layout as a template at revision 1, leaving the Screen untouched', async () => {
+	/*
+	 * The refusal for a caller with no session at all is the API boundary's since
+	 * #398, composed around every `/api/**` route before any handler runs, and it
+	 * is proved against a genuinely anonymous client in `apiBoundary.test.ts`.
+	 */
+
+	it('saves a Screen\'s layout into the library and places it on a Screen in another Event', async () => {
+		const savedLayout = await storedLayout(sourceEventId, sourceScreenId);
+		expect(await storedLayout(otherEventId, otherScreenId)).not.toEqual(savedLayout);
+
 		const saved = await request(LIBRARY_PATH, {
 			method: 'POST',
 			cookie: authorCookie,
 			body: {
 				source: { eventId: sourceEventId, screenId: sourceScreenId },
 				name: `Authored layout ${runId}`,
-				description: 'Saved from the source Screen',
 			},
 		});
 
@@ -193,182 +141,20 @@ describe('feature Match Layout Template library', () => {
 		const template = saved.data as FeatureMatchLayoutTemplateResponse;
 		templateId = template.id;
 		expect(template.revision).toBe(1);
-		expect(template.authored).toBe(true);
-		expect(template.sourceCount).toBe(1);
 		expect(template.document).toEqual(savedLayout);
 
-		// Saving copies out of Screen configuration; it never converts the Screen's
-		// layout into a reference to the template.
-		expect(await storedLayout(sourceEventId, sourceScreenId)).toEqual(savedLayout);
-	});
-
-	/**
-	 * A Feature Match Slot is Screen state, not layout. It is the identity that would
-	 * make a saved layout belong to one Event, and there is nowhere in the stored
-	 * document for it to be.
-	 *
-	 * The source Screen carries a real Slot assignment while this is saved, so a save
-	 * that copied the Screen's whole Feature Match Overlay configuration instead of
-	 * its layout would put a Slot identity from one Event into an installation-wide
-	 * library — and fail here.
-	 *
-	 * Two assertions, because they catch different things. The field-name check names
-	 * the leak an author would recognise and is the one that reads as the rule. It
-	 * proves only that nothing is called `featureMatchId`, though, so a Slot travelling
-	 * under some other key would walk past it; equality against the layout the Screen
-	 * holds is what closes that, since a document with anything extra on it is not
-	 * equal to one without.
-	 */
-	it('carries no Feature Match Slot assignment into the library', async () => {
-		const assigned = await storedOverlayConfig(sourceEventId, sourceScreenId);
-		expect(assigned.featureMatchId).toBe(sourceSlotId);
-
-		const entry = await request(`${LIBRARY_PATH}/${templateId}`, { cookie: authorCookie });
-		expect(entry.status).toBe(200);
-		const document = (entry.data as FeatureMatchLayoutTemplateResponse).document;
-		expect(JSON.stringify(document)).not.toContain('featureMatchId');
-		expect(document).toEqual(savedLayout);
-	});
-
-	it('lists the saved template in the installation-scoped library', async () => {
-		const listed = await request(LIBRARY_PATH, { cookie: authorCookie });
-
-		expect(listed.status).toBe(200);
-		const templates = (listed.data as { templates: FeatureMatchLayoutTemplateSummary[] }).templates;
-		expect(templates.some(template => template.id === templateId)).toBe(true);
-	});
-
-	/*
-	 * The refusal for a caller with no session at all is the API boundary's since
-	 * #398, composed around every `/api/**` route before any handler runs, and it
-	 * is proved against a genuinely anonymous client in `apiBoundary.test.ts`.
-	 * This suite's client is signed in, so asserting it here would mean sending a
-	 * request a different way to test a middleware this file is not about.
-	 */
-
-	/**
-	 * The acceptance criterion stated as one operator-visible rule: placing a layout
-	 * template replaces the whole layout. The target Screen is in another Event, and
-	 * what arrives is the Frame, the Source Items, and the composition together —
-	 * while everything that was never part of the layout stays as it was.
-	 */
-	it('replaces the whole layout of a Screen in another Event when a template is placed', async () => {
-		const before = await storedOverlayConfig(otherEventId, otherScreenId);
-		expect(before.layout).not.toEqual(savedLayout);
-
-		const placed = await place(otherEventId, otherScreenId, { templateId }, authorCookie);
+		const target = await storedScreen(otherEventId, otherScreenId);
+		const placed = await request(
+			`/api/events/${otherEventId}/screens/${otherScreenId}/feature-match-overlay/layout-placements`,
+			{
+				method: 'POST',
+				cookie: authorCookie,
+				body: { templateId, stateVersion: target.stateVersion },
+			},
+		);
 
 		expect(placed.status).toBe(201);
-		const after = await storedOverlayConfig(otherEventId, otherScreenId);
-		expect(after.layout).toEqual(savedLayout);
-		// The Screen's own state survives: a placement writes the layout and nothing
-		// else the Screen owns. The Slot assignment is the state worth naming, because
-		// it is the one a placement carrying a whole configuration would overwrite.
-		expect(before.featureMatchId).toBe(otherSlotId);
-		expect(after.featureMatchId).toBe(otherSlotId);
-	});
-
-	/**
-	 * The copy is unlinked. Revising the template afterwards must not reach the
-	 * layout already placed from it, or a library edit would rewrite a Screen
-	 * somebody is running a show on.
-	 */
-	it('leaves a placed layout untouched when the template it came from is revised', async () => {
-		const current = await request(`${LIBRARY_PATH}/${templateId}`, { cookie: authorCookie });
-		const revision = (current.data as FeatureMatchLayoutTemplateResponse).revision;
-		const revised = structuredClone(savedLayout);
-		revised.frame.opacity = 0.66;
-
-		const patched = await request(`${LIBRARY_PATH}/${templateId}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: { document: revised, revision },
-		});
-
-		expect(patched.status).toBe(200);
-		expect((patched.data as FeatureMatchLayoutTemplateResponse).revision).toBe(revision + 1);
-		const placed = await storedLayout(otherEventId, otherScreenId);
-		expect(placed.frame.opacity).toBe(savedLayout.frame.opacity);
-	});
-
-	/**
-	 * A stale revision is refused rather than applied last-write-wins: two authors
-	 * with the library open must not silently overwrite one another.
-	 */
-	it('refuses a revision the author did not read', async () => {
-		const stale = await request(`${LIBRARY_PATH}/${templateId}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: { name: 'Stale rename', revision: 1 },
-		});
-
-		expect(stale.status).toBe(409);
-	});
-
-	/**
-	 * The two libraries are separate artifacts sharing only an envelope. A Broadcast
-	 * Graphic Template identity is a perfectly valid identity that this library must
-	 * not answer with, because the document behind it cannot be placed on a Feature
-	 * Match Overlay.
-	 */
-	it('does not resolve a Broadcast Graphic Template identity', async () => {
-		const graphicsScreen = await $fetch<ScreenResponse>(`/api/events/${sourceEventId}/screens`, {
-			method: 'POST',
-			body: {
-				name: `Graphics Screen ${runId}`,
-				slug: `graphics-screen-${runId}`,
-				currentMode: 'broadcast-graphics',
-			},
-		});
-		await request(`/api/events/${sourceEventId}/screens/${graphicsScreen.id}/config/broadcast-graphics`, {
-			method: 'PATCH',
-			body: {
-				graphics: [
-					{ id: 'a-graphic', name: 'A graphic', items: [] },
-				],
-			},
-		});
-		const savedGraphic = await request('/api/graphics-templates/broadcast-graphics', {
-			method: 'POST',
-			cookie: authorCookie,
-			body: {
-				source: { eventId: sourceEventId, screenId: graphicsScreen.id, graphicId: 'a-graphic' },
-				name: `A graphic ${runId}`,
-			},
-		});
-		expect(savedGraphic.status).toBe(201);
-		const graphicTemplateId = savedGraphic.data.id as string;
-
-		const crossRead = await request(`${LIBRARY_PATH}/${graphicTemplateId}`, { cookie: authorCookie });
-		expect(crossRead.status).toBe(404);
-
-		const crossPlace = await place(
-			otherEventId,
-			otherScreenId,
-			{ templateId: graphicTemplateId },
-			authorCookie,
-		);
-		expect(crossPlace.status).toBe(404);
-
-		await request(`/api/graphics-templates/broadcast-graphics/${graphicTemplateId}`, {
-			method: 'DELETE',
-			cookie: authorCookie,
-		});
-	});
-
-	/**
-	 * Placing onto a Screen in another mode would author a layout the Screen does not
-	 * render and no output would ever show.
-	 */
-	it('refuses to place a layout on a Screen that is not a Feature Match Overlay', async () => {
-		const backgroundScreen = await $fetch<ScreenResponse>(`/api/events/${otherEventId}/screens`, {
-			method: 'POST',
-			body: { name: `Background Screen ${runId}`, slug: `background-screen-${runId}`, currentMode: 'background' },
-		});
-
-		const refused = await place(otherEventId, backgroundScreen.id, { templateId }, authorCookie);
-
-		expect(refused.status).toBe(409);
+		expect(await storedLayout(otherEventId, otherScreenId)).toEqual(savedLayout);
 	});
 
 	/**
