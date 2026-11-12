@@ -9,7 +9,6 @@ import type {
 	GraphicAssetRetentionView,
 	GraphicAssetRevisionId,
 	GraphicAssetSilentVideoFacts,
-	GraphicAssetSourceDeclarations,
 	GraphicAssetUsage,
 	GraphicAssetValidationReport,
 	GraphicsAssetCapacityLimits,
@@ -21,7 +20,6 @@ import type {
 	GraphicsDerivativeId,
 	GraphicsDiscrepancy,
 	GraphicsDiscrepancyActionOutcome,
-	GraphicsDuplicateContentPolicy,
 	GraphicsIngestionAttentionItem,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
@@ -58,7 +56,11 @@ import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperati
 import type { GraphicsAssetDelivery, GraphicsAssetDeliveryCatalogue } from './delivery';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
 import type { processStaticFont } from './font';
-import type { GraphicsAssetIngestionCatalogue, ReusableGraphicAsset } from './ingestion';
+import type {
+	GraphicsAssetIngestion,
+	GraphicsAssetIngestionCatalogue,
+	ReusableGraphicAsset,
+} from './ingestion';
 import type { GraphicsAssetMultipartState } from './multipart';
 import type {
 	BoundedByteStream,
@@ -207,6 +209,7 @@ export {
 	installedGraphicsTemplateId,
 } from './identities';
 export type {
+	GraphicsAssetIngestion,
 	GraphicsAssetIngestionCatalogue,
 	PublishGraphicAssetCatalogueInput,
 	ReusableGraphicAsset,
@@ -499,7 +502,7 @@ export interface GraphicsAssetCatalogue
  * {@link GraphicsAssetDelivery}, which a reader needing only them can build on
  * its own (ADR-0073).
  */
-export interface GraphicsAssetLibrary extends GraphicsAssetDelivery {
+export interface GraphicsAssetLibrary extends GraphicsAssetDelivery, GraphicsAssetIngestion {
 	getHealth: () => Promise<GraphicsAssetLibraryHealth>;
 	/**
 	 * The administrator-only Operations Cockpit reading: whether the library is
@@ -516,64 +519,6 @@ export interface GraphicsAssetLibrary extends GraphicsAssetDelivery {
 	updateCapacityLimits: (
 		input: GraphicsAssetCapacityLimits,
 	) => Promise<GraphicsAssetLibraryCapacity>;
-	initiateGraphicsIngestion: (input: GraphicAssetSourceDeclarations & {
-		idempotencyKey: string;
-		initiatedBy: string;
-		name: string;
-		defaultEventId?: number;
-		duplicateContentPolicy?: GraphicsDuplicateContentPolicy;
-		declaredByteLength: number;
-	}) => Promise<GraphicsIngestionOperation>;
-	initiateGraphicAssetReplacement: (input: GraphicAssetSourceDeclarations & {
-		assetId: GraphicAssetId;
-		idempotencyKey: string;
-		initiatedBy: string;
-		declaredByteLength: number;
-	}) => Promise<GraphicsIngestionOperation>;
-	/**
-	 * Initiates a one-time copy of an approved public HTTPS resource. The remote
-	 * length is unknown until the copy runs, so the operation starts with the
-	 * worst-case bound for the Graphic Asset kind implied by its declarations.
-	 */
-	initiateRemoteGraphicAssetCopy: (input: GraphicAssetSourceDeclarations & {
-		idempotencyKey: string;
-		initiatedBy: string;
-		name: string;
-		defaultEventId?: number;
-		duplicateContentPolicy?: GraphicsDuplicateContentPolicy;
-	}) => Promise<GraphicsIngestionOperation>;
-	/**
-	 * Runs the bounded remote copy. The URL is never persisted, logged, or
-	 * reported: it is supplied per attempt and its query parameters and fragment
-	 * are treated as secrets.
-	 */
-	copyRemoteGraphicAssetSource: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-		sourceUrl: string;
-	}) => Promise<GraphicsIngestionOperation>;
-	/**
-	 * Provisional staged bytes for an operation paused for browser confirmation.
-	 * Only the initiating author may read them, and they remain undiscoverable
-	 * and non-addressable outside this operation.
-	 */
-	resolveStagedGraphicAssetSource: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-	}) => Promise<
-		| {
-			outcome: 'available';
-			body: ReadableStream<Uint8Array>;
-			byteLength: number;
-		}
-		| { outcome: 'missing' }
-		| { outcome: 'unavailable'; retryable: true }
-	>;
-	confirmGraphicAssetBrowserEvidence: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
-	}) => Promise<GraphicsIngestionOperation>;
 	/**
 	 * Initiates preflight of one received Template Package. The package is
 	 * transferred and staged through the same durable path every other ingestion
@@ -660,48 +605,6 @@ export interface GraphicsAssetLibrary extends GraphicsAssetDelivery {
 		kind: InstalledGraphicsTemplateKind;
 		removedBy: string;
 	}) => Promise<{ outcome: 'removed' | 'not-found' }>;
-	cancelGraphicsIngestion: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-	}) => Promise<GraphicsIngestionOperation>;
-	getIngestionOperation: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-	}) => Promise<GraphicsIngestionOperation>;
-	uploadGraphicAsset: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-		declaredMime?: string;
-		bytes: BoundedByteStream;
-	}) => Promise<GraphicsIngestionOperation>;
-	startGraphicAssetMultipartUpload: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-	}) => Promise<GraphicsIngestionOperation>;
-	uploadGraphicAssetMultipartPart: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-		partNumber: number;
-		bytes: BoundedByteStream;
-	}) => Promise<GraphicsIngestionOperation>;
-	completeGraphicAssetMultipartUpload: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-	}) => Promise<GraphicsIngestionOperation>;
-	retryGraphicsIngestion: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-	}) => Promise<GraphicsIngestionOperation>;
-	/**
-	 * The font-specific entry point into {@link confirmGraphicAssetBrowserEvidence}.
-	 * It rejects non-font evidence before the shared kind check so a font client
-	 * receives a font-shaped error.
-	 */
-	confirmFontBrowserEvidence: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-		evidence: NonNullable<GraphicAssetSourceDeclarations['browserDecodeEvidence']>;
-	}) => Promise<GraphicsIngestionOperation>;
 	listGraphicAssets: (input: {
 		search?: string;
 		lifecycleStates?: readonly GraphicAssetLifecycleState[];
