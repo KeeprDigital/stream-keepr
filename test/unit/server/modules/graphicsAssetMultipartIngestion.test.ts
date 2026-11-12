@@ -1,27 +1,10 @@
-import type {
-	GraphicsMultipartUpload,
-	InMemoryGraphicsStagingObjectStore,
-} from '~~/server/modules/graphics-asset-library/object-store';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
-import { createHash } from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-	createGraphicsAssetLibrary,
-} from '~~/server/modules/graphics-asset-library';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
-import {
-	createInMemoryCanonicalGraphicsObjectStore,
-	createInMemoryStagingGraphicsObjectStore,
-} from '~~/server/modules/graphics-asset-library/in-memory-object-store';
-import {
-	createBoundedByteStream,
-	GraphicsObjectInputError,
-	unavailableObjectStoreOutcome,
-} from '~~/server/modules/graphics-asset-library/object-store';
-import {
-	GRAPHICS_MULTIPART_PART_BYTES,
-} from '~~/shared/utils/graphicsAssetCompatibility';
-import { pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
+import { createBoundedByteStream } from '~~/server/modules/graphics-asset-library/object-store';
+import { GRAPHICS_MULTIPART_PART_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import { digestOf, pngOfByteLength } from '~~/test/helpers/graphicsFixtures';
+import { createTestGraphicsLibrary, decodeEvidence } from '~~/test/helpers/graphicsLibrary';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 let harness: SqliteD1Harness;
@@ -34,175 +17,44 @@ afterEach(async () => {
 	await harness.close();
 });
 
-const crcTable = (() => {
-	const table = new Uint32Array(256);
-	for (let index = 0; index < table.length; index++) {
-		let value = index;
-		for (let bit = 0; bit < 8; bit++) {
-			value = value & 1
-				? 0xEDB88320 ^ (value >>> 1)
-				: value >>> 1;
-		}
-		table[index] = value >>> 0;
-	}
-	return table;
-})();
-
-function crc32(bytes: Uint8Array): number {
-	let crc = 0xFFFFFFFF;
-	for (const byte of bytes)
-		crc = crcTable[(crc ^ byte) & 0xFF]! ^ (crc >>> 8);
-	return (crc ^ 0xFFFFFFFF) >>> 0;
-}
-
-function writeUint32(value: number): Uint8Array {
-	return Uint8Array.of(
-		(value >>> 24) & 0xFF,
-		(value >>> 16) & 0xFF,
-		(value >>> 8) & 0xFF,
-		value & 0xFF,
-	);
-}
-
-function largeValidPng() {
-	const idatOffset = 33;
-	const type = new TextEncoder().encode('skPR');
-	const payloadLength = GRAPHICS_MULTIPART_PART_BYTES + 1
-		- transparentPixelPng.byteLength
-		- 12;
-	const payload = new Uint8Array(payloadLength);
-	const checksumInput = new Uint8Array(type.byteLength + payload.byteLength);
-	checksumInput.set(type);
-	checksumInput.set(payload, type.byteLength);
-	const chunk = new Uint8Array(12 + payload.byteLength);
-	chunk.set(writeUint32(payload.byteLength));
-	chunk.set(type, 4);
-	chunk.set(payload, 8);
-	chunk.set(writeUint32(crc32(checksumInput)), chunk.byteLength - 4);
-	const result = new Uint8Array(transparentPixelPng.byteLength + chunk.byteLength);
-	result.set(transparentPixelPng.subarray(0, idatOffset));
-	result.set(chunk, idatOffset);
-	result.set(transparentPixelPng.subarray(idatOffset), idatOffset + chunk.byteLength);
-	return result;
-}
-
-function createLibrary(
-	staging: InMemoryGraphicsStagingObjectStore = createInMemoryStagingGraphicsObjectStore(),
-) {
-	let nextIdentity = 0;
-	return createGraphicsAssetLibrary({
-		catalogue: createD1GraphicsAssetCatalogue(harness.database),
-		staging,
-		canonical: createInMemoryCanonicalGraphicsObjectStore(),
-		generateIdentity: () => `multipart-identity-${++nextIdentity}`,
-		now: () => new Date('2026-07-28T01:00:00.000Z'),
-	});
-}
-
-async function initiateLargeTransfer(
-	library: ReturnType<typeof createLibrary>,
-	idempotencyKey: string,
-) {
-	const operation = await library.initiateGraphicsIngestion({
-		idempotencyKey,
-		initiatedBy: 'graphics-author-1',
-		name: 'Large transfer',
-		declaredByteLength: GRAPHICS_MULTIPART_PART_BYTES + 1,
-	});
-	await library.startGraphicAssetMultipartUpload({
-		operationId: operation.id,
-		initiatedBy: operation.initiatedBy,
-	});
-	return operation;
-}
-
+// The facade's one multipart case. The transfer's rules (verified parts, part
+// claims, retries, cleanup) are held at ingestion's own seam:
+// graphicsAssetIngestionMultipart.sqlite.test.ts.
 describe('resumable image ingestion through the Graphics Asset Library public module', () => {
-	it('resumes from verified parts, ignores a duplicate part, and publishes through the normal pipeline', async () => {
-		const bytes = largeValidPng();
-		const library = createLibrary();
+	it('publishes a multipart transfer through the normal pipeline', async () => {
+		const bytes = pngOfByteLength(GRAPHICS_MULTIPART_PART_BYTES + 1);
+		const { library } = createTestGraphicsLibrary({
+			catalogue: createD1GraphicsAssetCatalogue(harness.database),
+		});
 		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'large-scoreboard-logo',
 			initiatedBy: 'graphics-author-1',
 			name: 'Large scoreboard logo',
 			declaredMime: 'image/png',
-			browserDecodeEvidence: {
-				outcome: 'decoded',
-				sourceDigest: createHash('sha256').update(bytes).digest('hex'),
-				width: 1,
-				height: 1,
-			},
+			browserDecodeEvidence: decodeEvidence(bytes),
 			declaredByteLength: bytes.byteLength,
 		});
+		const transfer = { operationId: operation.id, initiatedBy: operation.initiatedBy };
 
-		const started = await library.startGraphicAssetMultipartUpload({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-		});
+		const started = await library.startGraphicAssetMultipartUpload(transfer);
 		expect(started).toMatchObject({
 			stage: 'transferring',
-			transferredByteLength: 0,
-			transfer: {
-				method: 'multipart',
-				partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-				maximumConcurrentParts: 3,
-				partCount: 2,
-				completedParts: [],
-			},
+			transfer: { method: 'multipart', partCount: 2 },
 		});
-
-		const firstPartBytes = bytes.subarray(0, GRAPHICS_MULTIPART_PART_BYTES);
-		const afterFirstPart = await library.uploadGraphicAssetMultipartPart({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			partNumber: 1,
-			bytes: createBoundedByteStream(firstPartBytes, {
-				byteLength: firstPartBytes.byteLength,
-				maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			}),
-		});
-		const reconnected = await library.getIngestionOperation({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-		});
-		expect(reconnected).toEqual(afterFirstPart);
-		expect(reconnected).toMatchObject({
-			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			transfer: {
-				completedParts: [
-					{
-						partNumber: 1,
-						partIdentity: `${operation.id}:1`,
-						byteLength: GRAPHICS_MULTIPART_PART_BYTES,
-					},
-				],
-			},
-		});
-
-		const duplicate = await library.uploadGraphicAssetMultipartPart({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			partNumber: 1,
-			bytes: createBoundedByteStream(firstPartBytes, {
-				byteLength: firstPartBytes.byteLength,
-				maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			}),
-		});
-		expect(duplicate).toEqual(afterFirstPart);
-
-		const finalPartBytes = bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES);
-		await library.uploadGraphicAssetMultipartPart({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			partNumber: 2,
-			bytes: createBoundedByteStream(finalPartBytes, {
-				byteLength: finalPartBytes.byteLength,
-				maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			}),
-		});
-		const completed = await library.completeGraphicAssetMultipartUpload({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-		});
+		for (const [index, part] of [
+			bytes.subarray(0, GRAPHICS_MULTIPART_PART_BYTES),
+			bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES),
+		].entries()) {
+			await library.uploadGraphicAssetMultipartPart({
+				...transfer,
+				partNumber: index + 1,
+				bytes: createBoundedByteStream(part, {
+					byteLength: part.byteLength,
+					maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+				}),
+			});
+		}
+		const completed = await library.completeGraphicAssetMultipartUpload(transfer);
 
 		expect(completed).toMatchObject({
 			stage: 'completed',
@@ -212,277 +64,15 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 				outcome: 'accepted',
 				facts: {
 					byteLength: bytes.byteLength,
-					sha256: createHash('sha256').update(bytes).digest('hex'),
+					sha256: digestOf(bytes),
 				},
 			},
 		});
-	});
-
-	it('retries an ambiguous part response from the last verified checkpoint', async () => {
-		const delegate = createInMemoryStagingGraphicsObjectStore();
-		let hideFirstSuccessfulResponse = true;
-		const staging: InMemoryGraphicsStagingObjectStore = {
-			...delegate,
-			async uploadPart(input) {
-				const result = await delegate.uploadPart(input);
-				if (hideFirstSuccessfulResponse) {
-					hideFirstSuccessfulResponse = false;
-					return unavailableObjectStoreOutcome();
-				}
-				return result;
-			},
-		};
-		const library = createLibrary(staging);
-		const operation = await initiateLargeTransfer(library, 'ambiguous-part-response');
-		const firstPart = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES);
-
-		await expect(library.uploadGraphicAssetMultipartPart({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			partNumber: 1,
-			bytes: createBoundedByteStream(firstPart, {
-				byteLength: firstPart.byteLength,
-				maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			}),
-		})).rejects.toMatchObject({ code: 'graphics-asset-library-unavailable' });
-		await expect(library.getIngestionOperation({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-		})).resolves.toMatchObject({
-			transferredByteLength: 0,
-			transfer: { completedParts: [] },
-		});
-
-		const retried = await library.uploadGraphicAssetMultipartPart({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			partNumber: 1,
-			bytes: createBoundedByteStream(firstPart, {
-				byteLength: firstPart.byteLength,
-				maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			}),
-		});
-		expect(retried).toMatchObject({
-			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			transfer: {
-				completedParts: [
-					{ partNumber: 1 },
-				],
-			},
-		});
-	});
-
-	// A part whose transfer fails gives its claim back even though a sibling
-	// part moved the checkpoint meanwhile, so the client's retry is accepted.
-	it.each([
-		{
-			failure: 'the store answers unavailable',
-			fail: (): ReturnType<typeof unavailableObjectStoreOutcome> => unavailableObjectStoreOutcome(),
-			refusal: { code: 'graphics-asset-library-unavailable' },
-		},
-		{
-			failure: 'the byte stream of the part throws',
-			fail: (): never => {
-				throw new GraphicsObjectInputError('Byte stream length mismatch');
-			},
-			refusal: { message: 'Byte stream length mismatch' },
-		},
-	])('accepts a part again after $failure while a sibling part completed', async ({ fail, refusal }) => {
-		const delegate = createInMemoryStagingGraphicsObjectStore();
-		const tail = Uint8Array.of(0);
-		const firstPart = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES);
-		let failFirstPart = true;
-		const staging: InMemoryGraphicsStagingObjectStore = {
-			...delegate,
-			async uploadPart(input) {
-				if (input.partNumber !== 1 || !failFirstPart)
-					return await delegate.uploadPart(input);
-				failFirstPart = false;
-				await uploadPart(2, tail);
-				return fail();
-			},
-		};
-		const library = createLibrary(staging);
-		const operation = await initiateLargeTransfer(library, 'failed-part-beside-a-sibling');
-		function uploadPart(partNumber: number, bytes: Uint8Array) {
-			return library.uploadGraphicAssetMultipartPart({
-				operationId: operation.id,
-				initiatedBy: operation.initiatedBy,
-				partNumber,
-				bytes: createBoundedByteStream(bytes, {
-					byteLength: bytes.byteLength,
-					maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-				}),
-			});
-		}
-
-		await expect(uploadPart(1, firstPart)).rejects.toMatchObject(refusal);
-
-		await expect(uploadPart(1, firstPart)).resolves.toMatchObject({
-			transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES + 1,
-			transfer: {
-				completedParts: [
-					{ partNumber: 1 },
-					{ partNumber: 2 },
-				],
-			},
-		});
-	});
-
-	it('says what the catalogue threw when a part meets an unreachable checkpoint (#633)', async () => {
-		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
-		let checkpointReachable = true;
-		const library = createGraphicsAssetLibrary({
-			catalogue: {
-				...catalogue,
-				async getGraphicAssetMultipartState(...input) {
-					if (!checkpointReachable)
-						throw new Error('D1_ERROR: database is locked: SQLITE_BUSY');
-					return await catalogue.getGraphicAssetMultipartState(...input);
-				},
-			},
-			staging: createInMemoryStagingGraphicsObjectStore(),
-			canonical: createInMemoryCanonicalGraphicsObjectStore(),
-			now: () => new Date('2026-07-28T01:00:00.000Z'),
-		});
-		const operation = await initiateLargeTransfer(library, 'unreachable-checkpoint');
-		checkpointReachable = false;
-		const firstPart = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES);
-
-		await expect(library.uploadGraphicAssetMultipartPart({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			partNumber: 1,
-			bytes: createBoundedByteStream(firstPart, {
-				byteLength: firstPart.byteLength,
-				maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			}),
-		})).rejects.toMatchObject({
-			code: 'graphics-asset-library-unavailable',
-			message: 'Graphics multipart checkpoint is temporarily unavailable',
-		});
-		expect(warn.mock.calls.map(([line]) => JSON.parse(line as string))).toEqual([
+		await expect(library.listGraphicAssets({})).resolves.toEqual([
 			expect.objectContaining({
-				message: 'graphics_catalogue_unavailable',
-				reason: 'D1_ERROR: database is locked: SQLITE_BUSY',
+				id: completed.result?.assetId,
+				revisionId: completed.result?.revisionId,
 			}),
 		]);
-	});
-
-	it('bounds retries per part and aborts multipart state idempotently on cancellation', async () => {
-		const delegate = createInMemoryStagingGraphicsObjectStore();
-		let abortCount = 0;
-		const staging: InMemoryGraphicsStagingObjectStore = {
-			...delegate,
-			async abortMultipart(upload) {
-				abortCount++;
-				return await delegate.abortMultipart(upload);
-			},
-		};
-		const library = createLibrary(staging);
-		const operation = await initiateLargeTransfer(library, 'bounded-part-retries');
-		const firstPart = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES);
-		staging.injectTransientFailure('multipart-upload-part', 3);
-
-		for (let attempt = 0; attempt < 3; attempt++) {
-			await expect(library.uploadGraphicAssetMultipartPart({
-				operationId: operation.id,
-				initiatedBy: operation.initiatedBy,
-				partNumber: 1,
-				bytes: createBoundedByteStream(firstPart, {
-					byteLength: firstPart.byteLength,
-					maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-				}),
-			})).rejects.toMatchObject({ code: 'graphics-asset-library-unavailable' });
-		}
-		await expect(library.uploadGraphicAssetMultipartPart({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-			partNumber: 1,
-			bytes: createBoundedByteStream(firstPart, {
-				byteLength: firstPart.byteLength,
-				maximumByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			}),
-		})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
-
-		const cancelled = await library.cancelGraphicsIngestion({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-		});
-		const cancelledAgain = await library.cancelGraphicsIngestion({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-		});
-		expect(cancelled.stage).toBe('cancelled');
-		expect(cancelledAgain).toEqual(cancelled);
-		expect(abortCount).toBe(1);
-	});
-
-	it('durably retries staged-byte cleanup when multipart abort is unavailable', async () => {
-		const staging = createInMemoryStagingGraphicsObjectStore();
-		const library = createLibrary(staging);
-		const operation = await initiateLargeTransfer(library, 'retry-cancelled-cleanup');
-		staging.injectTransientFailure('multipart-abort');
-
-		const pending = await library.cancelGraphicsIngestion({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-		});
-		expect(pending).toMatchObject({
-			stage: 'cancelled',
-			transfer: { cleanupPending: true },
-		});
-
-		const cleaned = await library.cancelGraphicsIngestion({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-		});
-		expect(cleaned).toMatchObject({
-			stage: 'cancelled',
-			transfer: { cleanupPending: false },
-		});
-	});
-
-	it('finishes cancelled cleanup when the checkpoint names an upload the store no longer holds', async () => {
-		const delegate = createInMemoryStagingGraphicsObjectStore();
-		let upload: GraphicsMultipartUpload | undefined;
-		const staging: InMemoryGraphicsStagingObjectStore = {
-			...delegate,
-			async beginMultipart(input) {
-				const started = await delegate.beginMultipart(input);
-				if (started.outcome === 'started')
-					upload = started.upload;
-				return started;
-			},
-		};
-		const library = createLibrary(staging);
-		const operation = await initiateLargeTransfer(library, 'cleanup-upload-already-gone');
-		staging.injectTransientFailure('multipart-abort');
-
-		const pending = await library.cancelGraphicsIngestion({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-		});
-		expect(pending).toMatchObject({
-			stage: 'cancelled',
-			transfer: { cleanupPending: true },
-		});
-
-		// Reclaiming the upload out of band leaves the checkpoint naming a gone
-		// upload — what a landed abort with a failed checkpoint-clear leaves behind.
-		// Every later pass re-aborts it, so reading that as unavailable kept
-		// `cleanupPending` true until the 24h sweep.
-		expect(upload).toBeDefined();
-		await expect(staging.abortMultipart(upload!)).resolves.toEqual({ outcome: 'aborted' });
-
-		const cleaned = await library.cancelGraphicsIngestion({
-			operationId: operation.id,
-			initiatedBy: operation.initiatedBy,
-		});
-		expect(cleaned).toMatchObject({
-			stage: 'cancelled',
-			transfer: { cleanupPending: false },
-		});
 	});
 });

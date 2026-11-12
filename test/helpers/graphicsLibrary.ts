@@ -1,7 +1,10 @@
 /**
  * A Graphics Asset Library on a controlled clock and in-memory object stores,
- * plus the ingest, replace and reference steps the library suites arrange.
+ * plus the ingest, replace and reference steps the library suites arrange, and
+ * Graphic Asset ingestion built through its own seam on the same pieces.
  */
+import type { GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
+import type { GraphicsAssetIngestionCatalogue } from '~~/server/modules/graphics-asset-library/ingestion';
 import type {
 	InMemoryGraphicsCanonicalObjectStore,
 	InMemoryGraphicsStagingObjectStore,
@@ -23,10 +26,14 @@ import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
 } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
+import { createGraphicsAssetIngestion } from '~~/server/modules/graphics-asset-library/ingestion';
 import {
+	consumeBoundedByteStream,
 	createBoundedByteStream,
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import { createGraphicsIngestionOperationLifecycle } from '~~/server/modules/graphics-asset-library/operation-lifecycle';
+import { createUnavailableSilentVideoPlaybackValidator } from '~~/server/modules/graphics-asset-library/silent-video-playback-validator';
 import { digestOf, pixelPng } from '~~/test/helpers/graphicsFixtures';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
@@ -65,28 +72,13 @@ export type TestGraphicsLibraryOptions = Partial<Omit<LibraryDependencies, 'stag
 	canonical?: InMemoryGraphicsCanonicalObjectStore;
 };
 
-export function createTestGraphicsLibrary(options: TestGraphicsLibraryOptions & Pick<LibraryDependencies, 'catalogue'>) {
-	const {
-		start = '2026-07-28T00:00:00.000Z',
-		identityPrefix = 'identity',
-		staging = createInMemoryStagingGraphicsObjectStore(),
-		canonical = createInMemoryCanonicalGraphicsObjectStore(),
-		...dependencies
-	} = options;
+/** A clock a test moves by hand, and identities minted in order: `<prefix>-1`, `<prefix>-2`, … */
+function controlledClockAndIdentities(start: string, identityPrefix: string) {
 	let currentTime = new Date(start);
 	let nextIdentity = 0;
-	const library = createGraphicsAssetLibrary({
-		staging,
-		canonical,
+	return {
 		now: () => currentTime,
 		generateIdentity: () => `${identityPrefix}-${++nextIdentity}`,
-		...dependencies,
-	});
-	return {
-		library,
-		staging,
-		canonical,
-		now: () => currentTime,
 		advance(milliseconds: number) {
 			currentTime = new Date(currentTime.getTime() + milliseconds);
 		},
@@ -96,7 +88,154 @@ export function createTestGraphicsLibrary(options: TestGraphicsLibraryOptions & 
 	};
 }
 
+export function createTestGraphicsLibrary(options: TestGraphicsLibraryOptions & Pick<LibraryDependencies, 'catalogue'>) {
+	const {
+		start = '2026-07-28T00:00:00.000Z',
+		identityPrefix = 'identity',
+		staging = createInMemoryStagingGraphicsObjectStore(),
+		canonical = createInMemoryCanonicalGraphicsObjectStore(),
+		...dependencies
+	} = options;
+	const { now, generateIdentity, advance, advanceTo } = controlledClockAndIdentities(start, identityPrefix);
+	const library = createGraphicsAssetLibrary({
+		staging,
+		canonical,
+		now,
+		generateIdentity,
+		...dependencies,
+	});
+	return {
+		library,
+		staging,
+		canonical,
+		now,
+		advance,
+		advanceTo,
+	};
+}
+
 export type TestGraphicsLibrary = ReturnType<typeof createTestGraphicsLibrary>;
+
+type IngestionDependencies = Parameters<typeof createGraphicsAssetIngestion>[0];
+type LifecycleDependencies = Parameters<typeof createGraphicsIngestionOperationLifecycle>[0];
+
+/** What ingestion and the operation lifecycle it runs on both read and write: the D1 catalogue, or a wrapper of it. */
+type IngestionSeamCatalogue = GraphicsAssetIngestionCatalogue & ReturnType<LifecycleDependencies['requireCatalogue']>;
+
+export interface TestGraphicsIngestionOptions<Catalogue extends IngestionSeamCatalogue> {
+	catalogue: Catalogue;
+	/** The clock's starting instant. */
+	start?: string;
+	/** Prefix for minted identities: `<prefix>-1`, `<prefix>-2`, … */
+	identityPrefix?: string;
+	staging?: InMemoryGraphicsStagingObjectStore;
+	canonical?: InMemoryGraphicsCanonicalObjectStore;
+	remoteSource?: IngestionDependencies['remoteSource'];
+	silentVideoPlaybackValidator?: LifecycleDependencies['silentVideoPlaybackValidator'];
+}
+
+/**
+ * Graphic Asset ingestion built through its own seam (ADR-0073), by the two
+ * factories the facade builds it with, over the catalogue it is handed. The
+ * facade's own halves are ports here: retention's Evidence write is recorded,
+ * and a Template Package operation, which is the facade's to continue, throws.
+ */
+export function createTestGraphicsIngestion<Catalogue extends IngestionSeamCatalogue>(
+	options: TestGraphicsIngestionOptions<Catalogue>,
+) {
+	const {
+		catalogue,
+		start = '2026-07-28T00:00:00.000Z',
+		identityPrefix = 'identity',
+		staging = createInMemoryStagingGraphicsObjectStore(),
+		canonical = createInMemoryCanonicalGraphicsObjectStore(),
+	} = options;
+	const { now, generateIdentity, advance, advanceTo } = controlledClockAndIdentities(start, identityPrefix);
+	const lifecycle = createGraphicsIngestionOperationLifecycle({
+		requireCatalogue: () => catalogue,
+		requireStaging: () => staging,
+		silentVideoPlaybackValidator: options.silentVideoPlaybackValidator
+			?? createUnavailableSilentVideoPlaybackValidator(),
+		now,
+		generateIdentity,
+	});
+	const supersessions: Parameters<IngestionDependencies['recordSupersession']>[0][] = [];
+	const ingestion = createGraphicsAssetIngestion({
+		catalogue,
+		staging,
+		canonical,
+		lifecycle,
+		remoteSource: options.remoteSource,
+		now,
+		generateIdentity,
+		recordSupersession: async (input) => {
+			supersessions.push(input);
+		},
+		continueTemplatePackage: async (operation) => {
+			throw new Error(`Template Package operation ${operation.id} is the facade's to continue`);
+		},
+	});
+	return {
+		ingestion,
+		catalogue,
+		staging,
+		canonical,
+		lifecycle,
+		/** Every supersession ingestion handed to retention, in order. */
+		supersessions,
+		now,
+		advance,
+		advanceTo,
+	};
+}
+
+/** The Graphic Assets the catalogue holds as active: what publication stored, read without discovery. */
+export async function storedGraphicAssets(
+	context: { catalogue: Pick<GraphicsAssetCatalogue, 'listGraphicAssets'> },
+	search = '',
+) {
+	return await context.catalogue.listGraphicAssets(search, ['active']);
+}
+
+/**
+ * One revision as publication stored it: the catalogue's content row and the
+ * canonical bytes that row names, read without delivery. `undefined` when the
+ * catalogue holds no such revision.
+ */
+export async function storedRevisionContent(
+	context: {
+		catalogue: Pick<GraphicsAssetCatalogue, 'findRevisionContent'>;
+		canonical: Pick<InMemoryGraphicsCanonicalObjectStore, 'read'>;
+	},
+	reference: { assetId: GraphicAssetId; revisionId: GraphicAssetRevisionId },
+) {
+	const content = await context.catalogue.findRevisionContent(reference);
+	if (!content)
+		return undefined;
+	const stored = await context.canonical.read(canonicalIdentity(content.digest));
+	if (stored.outcome !== 'available')
+		throw new Error(`Canonical bytes for revision ${reference.revisionId} are ${stored.outcome}`);
+	return {
+		contentType: stored.object.contentType,
+		byteLength: content.byteLength,
+		bytes: await consumeBoundedByteStream({
+			body: stored.body,
+			byteLength: stored.object.byteLength,
+			maximumByteLength: stored.object.byteLength,
+		}),
+	};
+}
+
+/** Graphics Asset Library Capacity limits, written as the facade's capacity family writes them. */
+export async function setCapacityLimits(
+	context: { catalogue: Pick<GraphicsAssetCatalogue, 'updateCapacityLimits'>; now: () => Date },
+	limits: { canonicalLimitBytes: number; stagingLimitBytes: number },
+) {
+	return await context.catalogue.updateCapacityLimits({
+		...limits,
+		updatedAt: context.now().toISOString(),
+	});
+}
 
 /** What a browser reports after decoding a 1×1 image. */
 export function decodeEvidence(bytes: Uint8Array, size = { width: 1, height: 1 }) {
