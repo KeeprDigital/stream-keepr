@@ -14,6 +14,7 @@ import { graphicsObjectIdentity } from './object-store';
  * it publishes: Graphic Asset ingestion and Template Packages share this one
  * interface rather than each declaring its own copy (ADR-0073).
  *
+ * Both start an operation through `initiateGraphicsIngestion`.
  * `claimGraphicsIngestion` is what keeps one active attempt per operation: it
  * answers the operation only to the caller whose compare-and-set landed, and
  * takes a working operation only once its last write is older than
@@ -22,6 +23,7 @@ import { graphicsObjectIdentity } from './object-store';
  */
 export interface GraphicsIngestionOperationCatalogue {
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
+	initiateGraphicsIngestion: (operation: GraphicsIngestionOperation) => Promise<GraphicsIngestionOperation>;
 	getIngestionOperation: (
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
