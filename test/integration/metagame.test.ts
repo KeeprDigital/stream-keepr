@@ -7,7 +7,6 @@ describe('metagame API', () => {
 	let playerListId: number;
 	let archetypeId1: number;
 	let archetypeId2: number;
-	let deckTestPlayerId: number;
 
 	beforeAll(async () => {
 		// Create MTG event
@@ -295,11 +294,9 @@ describe('metagame API', () => {
 
 	// ──────────────── Player decks endpoint ────────────────
 
+	// Which deck a query selects is `decks.get.sqlite.test.ts`'s; this is the route on a real server.
 	describe('player decks endpoint', () => {
-		async function ensureDeckTestPlayer() {
-			if (deckTestPlayerId)
-				return deckTestPlayerId;
-
+		it('returns an empty normalized collection for a player without submitted decks', async () => {
 			const player = (await $fetch(`/api/events/${eventId}/players`, {
 				method: 'POST',
 				body: {
@@ -311,21 +308,7 @@ describe('metagame API', () => {
 					gameData: { type: 'mtg', deckName: 'Test Deck', deckColors: 'G' },
 				},
 			})) as any;
-
-			deckTestPlayerId = player.id;
-			return deckTestPlayerId;
-		}
-
-		it('returns an empty normalized collection for a player without submitted decks', async () => {
-			const playerId = await ensureDeckTestPlayer();
-			const data = (await $fetch(`/api/events/${eventId}/players/${playerId}/decks`)) as any;
-
-			expect(data).toEqual({ decks: [], selectedDeckId: null });
-		});
-
-		it('accepts a real phase selection without inventing a positional deck', async () => {
-			const playerId = await ensureDeckTestPlayer();
-			const data = (await $fetch(`/api/events/${eventId}/players/${playerId}/decks?phaseId=1`)) as any;
+			const data = (await $fetch(`/api/events/${eventId}/players/${player.id}/decks`)) as any;
 
 			expect(data).toEqual({ decks: [], selectedDeckId: null });
 		});
