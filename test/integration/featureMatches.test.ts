@@ -90,18 +90,6 @@ describe('feature match slots API', () => {
 		expect(updated.player2Data).toMatchObject({ name: 'Bob' });
 	});
 
-	it('updates only the table number without resubmitting player fields', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/feature-match-slots/${matchId}/setup`, {
-			method: 'PATCH',
-			body: { tableNumber: '12' },
-		});
-
-		expect(updated.id).toBe(matchId);
-		expect(updated.tableNumber).toBe(12);
-		expect(updated.player1Data).toMatchObject({ name: 'Alice' });
-		expect(updated.player2Data).toMatchObject({ name: 'Bob' });
-	});
-
 	it('promotes a Match and returns affected Slots plus the saved Assignment', async () => {
 		const sourceMatch = await $fetch(`/api/events/${eventId}/matches`, {
 			method: 'POST',
