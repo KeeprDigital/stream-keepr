@@ -36,9 +36,11 @@ export function useArchetypeReviewDeckUrl({ loading, queue }: UseArchetypeReview
 			return;
 
 		if (requested !== reconciledDeckId) {
+			// The page opening on a deck is no step to go back from; a link followed later is.
+			const arriving = reconciledDeckId === undefined;
 			reconciledDeckId = requested;
 			if (requested != null && requested !== shownDeckId.value)
-				queue.jumpToDeck(requested);
+				queue.jumpToDeck(requested, { history: !arriving });
 		}
 
 		const shown = shownDeckId.value;

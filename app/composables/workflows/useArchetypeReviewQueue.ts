@@ -1,3 +1,4 @@
+import type { Ref } from 'vue';
 import type { PlayerDeckResponse, PlayerDeckSummaryResponse } from '~~/shared/types/metagame';
 import type { Player } from '~/types';
 import { isReviewedPlayerDeck } from '~~/shared/utils/playerDeck';
@@ -27,8 +28,11 @@ export function useArchetypeReviewQueue() {
 	const { fetchDeck } = usePlayerDeckCache();
 
 	const queueFilter = ref<QueueFilter>('unreviewed');
-	const currentIndex = ref(0);
-	const pinnedDeckId = ref<number | null>(null);
+	/** The deck shown, by id: it stays shown while the Event holds it, whichever list it moves to. */
+	const shownDeckId = ref<number | null>(null);
+	/** The decks shown before this one, oldest first, and those gone back from, nearest last. */
+	const shownBefore = ref<number[]>([]);
+	const goneBackFrom = ref<number[]>([]);
 
 	// ── Queue entries — stable, no async dependencies ──
 
@@ -56,6 +60,12 @@ export function useArchetypeReviewQueue() {
 				: 0;
 			if (aReviewed !== bReviewed)
 				return aReviewed - bReviewed;
+			// Reviewed decks run most recently reviewed first.
+			if (aReviewed) {
+				const byReview = new Date(b.deck.reviewedAt!).getTime() - new Date(a.deck.reviewedAt!).getTime();
+				if (byReview !== 0)
+					return byReview;
+			}
 			const byName = a.displayName.localeCompare(b.displayName);
 			return byName !== 0
 				? byName
@@ -79,12 +89,21 @@ export function useArchetypeReviewQueue() {
 	});
 
 	const filteredCount = computed(() => filteredQueue.value.length);
-	const currentEntry = computed(() => {
-		if (pinnedDeckId.value != null)
-			return allEntries.value.find(entry => entry.deck.id === pinnedDeckId.value) ?? null;
+	const currentEntry = computed(() => allEntries.value.find(entry => entry.deck.id === shownDeckId.value) ?? null);
+	/** The shown deck's place in the filter's list, or -1 for a deck outside it. */
+	const currentIndex = computed(() => filteredQueue.value.findIndex(entry => entry.deck.id === shownDeckId.value));
 
-		return filteredQueue.value[currentIndex.value] ?? null;
-	});
+	/** Where the list resumes: the place of the deck last shown from it. */
+	let listPlace = 0;
+	watch(currentIndex, (index) => {
+		if (index >= 0)
+			listPlace = index;
+	}, { immediate: true, flush: 'sync' });
+
+	function deckIdAtListPlace(): number | null {
+		const queue = filteredQueue.value;
+		return queue[Math.min(listPlace, queue.length - 1)]?.deck.id ?? null;
+	}
 
 	// ── Deck loading — separate from queue entries to avoid circular reactivity ──
 
@@ -113,21 +132,20 @@ export function useArchetypeReviewQueue() {
 		deckLoading.value = false;
 	}, { immediate: true });
 
-	// A filter change starts its list over, at once: a jump that changes the
-	// filter picks its deck afterwards, and a later reset would undo the pick.
+	// A filter change keeps the deck shown when the new list holds it, and
+	// otherwise shows that list's first deck, or none for an empty list.
 	watch(queueFilter, () => {
-		currentIndex.value = 0;
-	}, { flush: 'sync' });
-
-	watch(filteredQueue, (queue) => {
-		if (queue.length === 0) {
-			currentIndex.value = 0;
+		if (currentIndex.value >= 0)
 			return;
-		}
-
-		if (currentIndex.value > queue.length - 1)
-			currentIndex.value = queue.length - 1;
+		listPlace = 0;
+		show(deckIdAtListPlace());
 	});
+
+	// Nothing shown: on load, or once the Event no longer holds the deck shown.
+	watch([currentEntry, filteredQueue], ([entry]) => {
+		if (!entry)
+			shownDeckId.value = deckIdAtListPlace();
+	}, { immediate: true });
 
 	// ── Progress ──
 
@@ -152,58 +170,92 @@ export function useArchetypeReviewQueue() {
 		return counts;
 	});
 
-	function advance(onNavigate?: () => void) {
-		if (currentIndex.value < filteredCount.value - 1) {
-			currentIndex.value++;
-			onNavigate?.();
-		}
+	const holdsDeck = (deckId: number) => allEntries.value.some(entry => entry.deck.id === deckId);
+
+	/** Shows a deck, or none, as a step the reviewer can go back from. */
+	function show(deckId: number | null) {
+		if (deckId === shownDeckId.value)
+			return;
+		if (currentEntry.value)
+			shownBefore.value.push(currentEntry.value.deck.id);
+		goneBackFrom.value = [];
+		shownDeckId.value = deckId;
 	}
 
-	function goBack(onNavigate?: () => void) {
-		if (currentIndex.value > 0) {
-			currentIndex.value--;
-			onNavigate?.();
+	/** Takes the nearest deck the Event still holds off a history, dropping those it lost. */
+	function takeHeld(history: Ref<number[]>): number | null {
+		while (history.value.length > 0) {
+			const deckId = history.value.pop()!;
+			if (holdsDeck(deckId))
+				return deckId;
 		}
+		return null;
 	}
 
-	/** Shows a deck of the Event, widening the filter to every deck when its list lacks it. */
-	function jumpToDeck(deckId: number): boolean {
-		const holdsDeck = (entry: ReviewEntry) => entry.deck.id === deckId;
-		if (!allEntries.value.some(holdsDeck))
+	/** The list's next deck: after the deck shown, or where the list was left for a deck outside it. */
+	const nextInListDeckId = computed(() => {
+		if (currentIndex.value < 0)
+			return deckIdAtListPlace();
+		return filteredQueue.value[currentIndex.value + 1]?.deck.id ?? null;
+	});
+
+	const canGoBack = computed(() => shownBefore.value.some(holdsDeck));
+	const canAdvance = computed(() => goneBackFrom.value.some(holdsDeck) || nextInListDeckId.value != null);
+
+	/** Retraces a step gone back from, then carries on through the list. */
+	function advance() {
+		const retraced = takeHeld(goneBackFrom);
+		if (retraced == null) {
+			if (nextInListDeckId.value != null)
+				show(nextInListDeckId.value);
+			return;
+		}
+		if (currentEntry.value)
+			shownBefore.value.push(currentEntry.value.deck.id);
+		shownDeckId.value = retraced;
+	}
+
+	/** Returns to the deck shown before this one, whichever list holds it now. */
+	function goBack() {
+		const before = takeHeld(shownBefore);
+		if (before == null)
+			return;
+		if (currentEntry.value)
+			goneBackFrom.value.push(currentEntry.value.deck.id);
+		shownDeckId.value = before;
+	}
+
+	/**
+	 * Shows a deck of the Event, in its list or not, leaving the filter alone.
+	 * `history: false` is the page opening on the deck: no step to go back from.
+	 */
+	function jumpToDeck(deckId: number, { history = true }: { history?: boolean } = {}): boolean {
+		if (!holdsDeck(deckId))
 			return false;
-		if (!filteredQueue.value.some(holdsDeck))
-			queueFilter.value = 'all';
-		currentIndex.value = filteredQueue.value.findIndex(holdsDeck);
+		if (history)
+			show(deckId);
+		else
+			shownDeckId.value = deckId;
 		return true;
 	}
 
+	/**
+	 * Names the deck a review moves on to before the review takes the deck shown
+	 * out of its list. The deck shown stays shown until `commit`.
+	 */
 	function prepareAdvance(): ReviewAdvanceController {
-		const pinnedId = currentEntry.value?.deck.id ?? null;
-		const nextDeckId = filteredQueue.value[currentIndex.value + 1]?.deck.id ?? null;
-
-		pinnedDeckId.value = pinnedId;
+		const nextDeckId = nextInListDeckId.value;
 
 		return {
 			commit() {
-				deckLoading.value = nextDeckId != null;
-
-				if (nextDeckId != null) {
-					const nextIndex = filteredQueue.value.findIndex(entry => entry.deck.id === nextDeckId);
-					currentIndex.value = nextIndex >= 0
-						? nextIndex
-						: Math.max(Math.min(currentIndex.value, filteredQueue.value.length - 1), 0);
-				}
-				else {
-					currentIndex.value = filteredQueue.value.length > 0
-						? Math.min(currentIndex.value, filteredQueue.value.length - 1)
-						: 0;
-				}
-
-				pinnedDeckId.value = null;
+				const moveTo = nextDeckId != null && holdsDeck(nextDeckId)
+					? nextDeckId
+					: deckIdAtListPlace();
+				deckLoading.value = moveTo != null && moveTo !== shownDeckId.value;
+				show(moveTo);
 			},
 			cancel() {
 				deckLoading.value = false;
-				pinnedDeckId.value = null;
 			},
 		};
 	}
@@ -221,6 +273,8 @@ export function useArchetypeReviewQueue() {
 		reviewedCount,
 		progressPercent,
 		archetypePlayerCounts,
+		canGoBack,
+		canAdvance,
 		advance,
 		goBack,
 		jumpToDeck,

@@ -92,6 +92,12 @@ describe('the deck Archetype Review shows, and its URL', () => {
 		expect(shownDeckId(queue)).toBe(Number(deckId));
 	});
 
+	it('arrives with nothing to go back to', async () => {
+		const queue = await arrive({ deckId: '2' });
+
+		expect(queue.canGoBack.value).toBe(false);
+	});
+
 	// The queue rebuilds its entries on every Player or deck message: none of them is a request for the URL's deck.
 	it('stays on the deck stepped to when the Event\'s data changes', async () => {
 		const queue = await arrive({ deckId: '1' });
@@ -153,11 +159,7 @@ describe('the deck Archetype Review shows, and its URL', () => {
 	it('names no deck once none is shown, keeping the rest of the URL', async () => {
 		const queue = await arrive({ tab: 'x' });
 
-		mockPlayerDeckStore.decks = mockPlayerDeckStore.decks.map(entry => ({
-			...entry,
-			archetypeId: 50,
-			reviewedAt: new Date(),
-		}));
+		mockPlayerDeckStore.decks = [];
 		await nextTick();
 		await nextTick();
 
