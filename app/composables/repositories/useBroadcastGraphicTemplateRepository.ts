@@ -6,6 +6,7 @@ import type {
 } from '~~/shared/types/broadcastGraphicTemplate';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
+import { randomUuid } from '~~/shared/utils/uuid';
 
 /**
  * HTTP adapter for the Broadcast Graphic Template library.
@@ -130,7 +131,7 @@ export function useBroadcastGraphicTemplateRepository() {
 			method: 'POST',
 			headers: apiHeaders.getHeaders(),
 			body: {
-				idempotencyKey: `skgraphic-import-${crypto.randomUUID()}`,
+				idempotencyKey: `skgraphic-import-${randomUuid()}`,
 				source: 'template-package',
 				sourceFileName: file.name,
 				declaredByteLength: file.size,

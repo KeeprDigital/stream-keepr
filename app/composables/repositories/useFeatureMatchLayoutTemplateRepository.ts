@@ -6,6 +6,7 @@ import type {
 } from '~~/shared/types/featureMatchLayoutTemplate';
 import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
+import { randomUuid } from '~~/shared/utils/uuid';
 
 /**
  * HTTP adapter for the Feature Match Layout Template library.
@@ -134,7 +135,7 @@ export function useFeatureMatchLayoutTemplateRepository() {
 			method: 'POST',
 			headers: apiHeaders.getHeaders(),
 			body: {
-				idempotencyKey: `sklayout-import-${crypto.randomUUID()}`,
+				idempotencyKey: `sklayout-import-${randomUuid()}`,
 				source: 'template-package',
 				sourceFileName: file.name,
 				declaredByteLength: file.size,

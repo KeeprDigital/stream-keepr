@@ -2,6 +2,7 @@ import type {
 	GraphicAssetBrowserDecodeEvidence,
 	GraphicAssetFontBrowserChallenge,
 } from '~~/shared/types/graphicsAsset';
+import { sha256Hex } from '~~/shared/utils/sha256';
 
 async function pixelDigest(context: CanvasRenderingContext2D, fontFamily: string, text: string) {
 	context.clearRect(0, 0, context.canvas.width, context.canvas.height);
@@ -9,10 +10,7 @@ async function pixelDigest(context: CanvasRenderingContext2D, fontFamily: string
 	context.textBaseline = 'alphabetic';
 	context.fillText(text, 12, 72);
 	const pixels = context.getImageData(0, 0, context.canvas.width, context.canvas.height).data;
-	return Array.from(
-		new Uint8Array(await crypto.subtle.digest('SHA-256', pixels)),
-		byte => byte.toString(16).padStart(2, '0'),
-	).join('');
+	return sha256Hex(pixels);
 }
 
 export async function verifyStaticFontBrowserLoad(
@@ -20,10 +18,7 @@ export async function verifyStaticFontBrowserLoad(
 	challenge: GraphicAssetFontBrowserChallenge,
 ): Promise<GraphicAssetBrowserDecodeEvidence> {
 	const bytes = await source.arrayBuffer();
-	const sourceDigest = Array.from(
-		new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
-		byte => byte.toString(16).padStart(2, '0'),
-	).join('');
+	const sourceDigest = await sha256Hex(bytes);
 	const family = `stream-keepr-font-validation-${sourceDigest}`;
 	const face = new FontFace(family, bytes);
 	try {
