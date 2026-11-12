@@ -2,11 +2,12 @@ import type {
 	GraphicsMultipartUploadIdentity,
 	InMemoryGraphicsStagingObjectStore,
 } from '~~/server/modules/graphics-asset-library/object-store';
-import { describe, expect, it, vi } from 'vitest';
+import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
-	createInMemoryGraphicsAssetCatalogue,
 } from '~~/server/modules/graphics-asset-library';
+import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -26,6 +27,17 @@ import { digestOf, pixelPng as transparentPixelPng } from '~~/test/helpers/graph
 import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 import { publicServerFailure } from '~~/test/helpers/publicServerFailure';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+
+let harness: SqliteD1Harness;
+
+beforeEach(async () => {
+	harness = await createSqliteD1Harness();
+});
+
+afterEach(async () => {
+	await harness.close();
+});
 
 // The API boundary imports the asking user for its actor resolution, which builds
 // the Better Auth instance over `~~/server/db` — a binding no unit run has. Nothing here
@@ -150,7 +162,7 @@ function createLibrary(
 ) {
 	const staging = options.staging ?? createInMemoryStagingGraphicsObjectStore();
 	const canonical = createInMemoryCanonicalGraphicsObjectStore();
-	const catalogue = createInMemoryGraphicsAssetCatalogue();
+	const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 	const remote = createRemoteHost(options);
 	let nextIdentity = 0;
 	const library = createGraphicsAssetLibrary({

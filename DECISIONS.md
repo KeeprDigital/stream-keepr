@@ -2408,7 +2408,7 @@ All of a Screen's Mode Tokens sat in one flat Theme card above the mode's settin
 
 ## ADR-0073: The Graphics Asset Library keeps one facade, and an operation family moves behind its own smaller interface only where its invariants get a home
 
-Accepted · 2026-11-04 · [#623](https://github.com/KeeprDigital/stream-keepr/issues/623) · Follow-ups [#989](https://github.com/KeeprDigital/stream-keepr/issues/989), [#990](https://github.com/KeeprDigital/stream-keepr/issues/990), [#991](https://github.com/KeeprDigital/stream-keepr/issues/991), [#992](https://github.com/KeeprDigital/stream-keepr/issues/992)
+Accepted · 2026-11-04 · [#623](https://github.com/KeeprDigital/stream-keepr/issues/623) · Follow-ups [#989](https://github.com/KeeprDigital/stream-keepr/issues/989), [#990](https://github.com/KeeprDigital/stream-keepr/issues/990), [#991](https://github.com/KeeprDigital/stream-keepr/issues/991), [#992](https://github.com/KeeprDigital/stream-keepr/issues/992) · Amended 2026-11-12 by [#1122](https://github.com/KeeprDigital/stream-keepr/issues/1122), which deletes the in-memory catalogue adapter.
 
 ### Evaluation
 
@@ -2444,6 +2444,8 @@ Ingestion and Template Packages share the Graphics Ingestion Operation lifecycle
 
 **A family moves only when it gains something.** Its invariants must be nameable and testable at its own seam, and something must vary across that seam: both catalogue adapters, or a caller needing only that family. No generic repository or table abstraction is introduced to fold together SQL that merely looks alike.
 
+**The catalogue port has one adapter, D1 (#1122).** The in-memory adapter the evaluation counts was built only by tests, and is deleted: every library test runs on the SQLite harness. So a second adapter no longer earns a family its seam; a caller needing only that family still does. The cross-adapter contracts the evaluation lists, and the one #991 proposes, have nothing left to compare.
+
 **Delivery is the first.** `server/modules/graphics-asset-library/delivery.ts` holds it:
 
 - **Interface:** `GraphicsAssetDelivery` has the five reads, unchanged: `inspectGraphicAssetRevision(s)`, `inspectGraphicAssetRevisionContent`, `resolveGraphicAssetRevision` and `resolveGraphicAssetThumbnail`.
@@ -2468,7 +2470,7 @@ How the existing types fit around it:
 
 **Before,** a reader learned the 53-method facade and built it from the 43-method catalogue port plus a staging store. The Screen Output Asset Capability, which only ever reads bytes, built the whole library over a stub staging store to reach two methods (`screen-output-assets/runtime.ts:60–97`). Delivery's rules were spread across closures in the factory, and were tested only through the full library.
 
-**After,** a reader learns five methods and builds them from three catalogue reads and the canonical store. The rules sit in one module, which is tested at its own interface against both catalogue adapters. The deletion test agrees: delete `delivery.ts` and the agreement, missing-versus-unavailable and reporting rules reappear in the facade and in every reader that wants delivery alone.
+**After,** a reader learns five methods and builds them from three catalogue reads and the canonical store. The rules sit in one module, which is tested at its own interface on the D1 catalogue. The deletion test agrees: delete `delivery.ts` and the agreement, missing-versus-unavailable and reporting rules reappear in the facade and in every reader that wants delivery alone.
 
 ### Consequences
 

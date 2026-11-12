@@ -2,12 +2,13 @@ import type {
 	GraphicsMultipartUpload,
 	InMemoryGraphicsStagingObjectStore,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { createHash } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
-	createInMemoryGraphicsAssetCatalogue,
 } from '~~/server/modules/graphics-asset-library';
+import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -21,6 +22,17 @@ import {
 	GRAPHICS_MULTIPART_PART_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+
+let harness: SqliteD1Harness;
+
+beforeEach(async () => {
+	harness = await createSqliteD1Harness();
+});
+
+afterEach(async () => {
+	await harness.close();
+});
 
 const crcTable = (() => {
 	const table = new Uint32Array(256);
@@ -79,7 +91,7 @@ function createLibrary(
 ) {
 	let nextIdentity = 0;
 	return createGraphicsAssetLibrary({
-		catalogue: createInMemoryGraphicsAssetCatalogue(),
+		catalogue: createD1GraphicsAssetCatalogue(harness.database),
 		staging,
 		canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		generateIdentity: () => `multipart-identity-${++nextIdentity}`,
@@ -319,7 +331,7 @@ describe('resumable image ingestion through the Graphics Asset Library public mo
 
 	it('says what the catalogue threw when a part meets an unreachable checkpoint (#633)', async () => {
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		const catalogue = createInMemoryGraphicsAssetCatalogue();
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 		let checkpointReachable = true;
 		const library = createGraphicsAssetLibrary({
 			catalogue: {

@@ -1,10 +1,11 @@
+import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
-	createInMemoryGraphicsAssetCatalogue,
 } from '~~/server/modules/graphics-asset-library';
+import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -13,6 +14,17 @@ import {
 	consumeBoundedByteStream,
 	createBoundedByteStream,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+
+let harness: SqliteD1Harness;
+
+beforeEach(async () => {
+	harness = await createSqliteD1Harness();
+});
+
+afterEach(async () => {
+	await harness.close();
+});
 
 function digest(bytes: Uint8Array) {
 	return createHash('sha256').update(bytes).digest('hex');
@@ -21,7 +33,7 @@ function digest(bytes: Uint8Array) {
 function library() {
 	let identity = 0;
 	return createGraphicsAssetLibrary({
-		catalogue: createInMemoryGraphicsAssetCatalogue(),
+		catalogue: createD1GraphicsAssetCatalogue(harness.database),
 		staging: createInMemoryStagingGraphicsObjectStore(),
 		canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		generateIdentity: () => `font-identity-${++identity}`,

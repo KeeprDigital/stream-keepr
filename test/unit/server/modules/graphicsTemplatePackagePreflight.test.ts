@@ -1,9 +1,6 @@
 import type { PackageLibrary } from '~~/test/helpers/templatePackageLibrary';
 import { describe, expect, it } from 'vitest';
-import {
-	createGraphicsAssetLibrary,
-	createInMemoryGraphicsAssetCatalogue,
-} from '~~/server/modules/graphics-asset-library';
+import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -16,7 +13,7 @@ import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/tem
 import { testGraphicAssetRevisionId } from '~~/test/helpers/graphicsAssetIdentities';
 import { digestOf, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
 import { jpegDeclaring, webpPixel } from '~~/test/helpers/graphicsImageFixtures';
-import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
+import { boundedBytes, createSqliteGraphicsAssetCatalogue } from '~~/test/helpers/graphicsLibrary';
 import {
 	issueCodes as codes,
 	createPackageLibrary,
@@ -39,7 +36,7 @@ const createLibrary = createPackageLibrary;
 
 describe('the Template Package preflight contract', () => {
 	it('maps a package exported from this installation back to its exact origins', async () => {
-		const { library } = createLibrary('sender');
+		const { library } = await createLibrary('sender');
 		const backdrop = await ingestImage(library, 'Backdrop');
 		const archive = await exportPackage(library, {
 			assets: [
@@ -66,7 +63,7 @@ describe('the Template Package preflight contract', () => {
 	});
 
 	it('revalidates every embedded source under this installation\'s current profiles', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const motion = await ingestSilentVideo(sender, 'Motion');
 		const face = await ingestStaticFont(sender, 'Face');
@@ -78,7 +75,7 @@ describe('the Template Package preflight contract', () => {
 			],
 		});
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver } = await createLibrary('receiver');
 		const report = reportOf(await preflight(receiver, archive));
 
 		// Each embedded source was judged under the receiver's own profile for its
@@ -116,7 +113,7 @@ describe('the Template Package preflight contract', () => {
 		canonicalMime,
 		validationCode,
 	}) => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const parts = readTemplatePackageParts(
 			await exportPackage(sender, {
@@ -156,7 +153,7 @@ describe('the Template Package preflight contract', () => {
 		];
 		expect(original.bytes).not.toEqual(notAnImage);
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver } = await createLibrary('receiver');
 		const operation = await preflight(receiver, writeTemplatePackage(parts));
 		const report = reportOf(operation);
 
@@ -170,7 +167,7 @@ describe('the Template Package preflight contract', () => {
 	});
 
 	it('rejects packaged content whose bytes do not match its recorded digest', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const parts = readTemplatePackageParts(
 			await exportPackage(sender, {
@@ -185,7 +182,7 @@ describe('the Template Package preflight contract', () => {
 			bytes: webpPixel.slice(0, parts.contents[0]!.bytes.byteLength),
 		};
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver } = await createLibrary('receiver');
 		const report = reportOf(await preflight(receiver, writeTemplatePackage(parts)));
 
 		expect(report.outcome).toBe('rejected');
@@ -194,7 +191,7 @@ describe('the Template Package preflight contract', () => {
 
 	describe('archive safety', () => {
 		async function validParts() {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			return readTemplatePackageParts(
 				await exportPackage(sender, {
@@ -206,7 +203,7 @@ describe('the Template Package preflight contract', () => {
 		}
 
 		async function rejectionCodes(archive: Uint8Array) {
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const operation = await preflight(receiver, archive);
 			const report = reportOf(operation);
 			expect(report.outcome).toBe('rejected');
@@ -393,7 +390,7 @@ describe('the Template Package preflight contract', () => {
 
 	describe('envelope limits', () => {
 		it('refuses to initiate a package beyond the received archive limit', async () => {
-			const { library } = createLibrary('receiver');
+			const { library } = await createLibrary('receiver');
 			await expect(library.initiateTemplatePackagePreflight({
 				idempotencyKey: 'oversized',
 				initiatedBy: 'package-author',
@@ -402,7 +399,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('accepts a declared length at exactly the received archive limit', async () => {
-			const { library } = createLibrary('receiver');
+			const { library } = await createLibrary('receiver');
 			const operation = await library.initiateTemplatePackagePreflight({
 				idempotencyKey: 'at-the-limit',
 				initiatedBy: 'package-author',
@@ -420,7 +417,7 @@ describe('the Template Package preflight contract', () => {
 					bytes: new Uint8Array([index % 256]),
 				}),
 			);
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(await preflight(receiver, writeTestArchive(entries)));
 
 			expect(report.outcome).toBe('rejected');
@@ -429,7 +426,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('rejects a manifest declaring more packaged revisions than the limit allows', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const parts = readTemplatePackageParts(
 				await exportPackage(sender, {
@@ -451,7 +448,7 @@ describe('the Template Package preflight contract', () => {
 				}),
 			);
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(await preflight(receiver, writeTemplatePackage(parts)));
 
 			expect(report.outcome).toBe('rejected');
@@ -461,7 +458,7 @@ describe('the Template Package preflight contract', () => {
 
 	describe('artifact and Template declarations', () => {
 		it('rejects a package whose declared Template kind contradicts its artifact', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const parts = readTemplatePackageParts(
 				await exportPackage(sender, {
@@ -472,7 +469,7 @@ describe('the Template Package preflight contract', () => {
 			);
 			(parts.manifest as { templateKind: string }).templateKind = 'feature-match-layout-template';
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(await preflight(receiver, writeTemplatePackage(parts)));
 
 			expect(report.outcome).toBe('rejected');
@@ -480,7 +477,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('rejects a received file name that contradicts the declared artifact', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -488,7 +485,7 @@ describe('the Template Package preflight contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(
 				await preflight(receiver, archive, { sourceFileName: 'layout.sklayout' }),
 			);
@@ -498,7 +495,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('rejects a package embedding an asset its Template never requires', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			// The document names nothing, so the declared asset is dead weight.
 			const archive = await exportPackage(sender, {
@@ -508,7 +505,7 @@ describe('the Template Package preflight contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(await preflight(receiver, archive));
 
 			expect(report.outcome).toBe('rejected');
@@ -516,7 +513,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('rejects a Template requiring content the package never embedded', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const parts = readTemplatePackageParts(
 				await exportPackage(sender, {
@@ -530,7 +527,7 @@ describe('the Template Package preflight contract', () => {
 				logo: { assetId: 'never-packaged', revisionId: 'never-packaged-revision' },
 			};
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(await preflight(receiver, writeTemplatePackage(parts)));
 
 			expect(report.outcome).toBe('rejected');
@@ -538,7 +535,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('rejects a Template document carrying executable content', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const parts = readTemplatePackageParts(
 				await exportPackage(sender, {
@@ -552,7 +549,7 @@ describe('the Template Package preflight contract', () => {
 				caption: '<script>steal()</script>',
 			};
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(await preflight(receiver, writeTemplatePackage(parts)));
 
 			expect(report.outcome).toBe('rejected');
@@ -560,7 +557,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('rejects a Template document depending on a remote resource', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const parts = readTemplatePackageParts(
 				await exportPackage(sender, {
@@ -574,7 +571,7 @@ describe('the Template Package preflight contract', () => {
 				overlayImage: 'https://cdn.example.com/overlay.png',
 			};
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(await preflight(receiver, writeTemplatePackage(parts)));
 
 			expect(report.outcome).toBe('rejected');
@@ -591,7 +588,7 @@ describe('the Template Package preflight contract', () => {
 		}
 
 		it('permanently rejects a schema version newer than this installation reads', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const parts = readTemplatePackageParts(
 				await exportPackage(sender, {
@@ -602,7 +599,7 @@ describe('the Template Package preflight contract', () => {
 			);
 			(parts.manifest as { schemaVersion: number }).schemaVersion = 99;
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const operation = await preflight(receiver, writeTemplatePackage(parts));
 			const report = reportOf(operation);
 
@@ -616,7 +613,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('reports the schema it read and that no migration was needed', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -624,7 +621,7 @@ describe('the Template Package preflight contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(await preflight(receiver, archive));
 
 			expect(report.schema).toEqual({ received: 1, supported: 1, migrated: false });
@@ -633,7 +630,7 @@ describe('the Template Package preflight contract', () => {
 
 	describe('origin-aware mapping proposals', () => {
 		it('creates a separate Graphic Asset that reuses bytes already stored here', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -642,7 +639,7 @@ describe('the Template Package preflight contract', () => {
 			});
 
 			// The receiver already holds these exact bytes under its own provenance.
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			await ingestImage(receiver, 'Locally uploaded backdrop');
 			const operation = await preflight(receiver, archive);
 			const report = reportOf(operation);
@@ -660,7 +657,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('creates a separate Graphic Asset for a related revision of a known source', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const parts = readTemplatePackageParts(
 				await exportPackage(sender, {
@@ -699,7 +696,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('rejects the complete package when an exact origin claims different content', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const other = await ingestImage(sender, 'Other', webpPixel, 'image/webp');
 			const parts = readTemplatePackageParts(
@@ -734,7 +731,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('stores shared bytes once while keeping distinct packaged identities apart', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const first = await ingestImage(sender, 'First');
 			const second = await ingestImage(sender, 'Second');
 			const archive = await exportPackage(sender, {
@@ -744,7 +741,7 @@ describe('the Template Package preflight contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(await preflight(receiver, archive));
 
 			expect(report.mappings).toHaveLength(2);
@@ -762,14 +759,14 @@ describe('the Template Package preflight contract', () => {
 
 	describe('the report-bound confirmation gate', () => {
 		async function pausedPackage() {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
 					{ slot: 'backdrop', reference: backdrop },
 				],
 			});
-			const { library: receiver, staging } = createLibrary('receiver');
+			const { library: receiver, staging } = await createLibrary('receiver');
 			await ingestImage(receiver, 'Locally uploaded backdrop');
 			const operation = await preflight(receiver, archive);
 			expect(operation.stage).toBe('awaiting-confirmation');
@@ -812,10 +809,10 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('gives different bytes a different fingerprint', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const other = await ingestImage(sender, 'Other', webpPixel, 'image/webp');
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 
 			const first = reportOf(await preflight(receiver, await exportPackage(sender, {
 				assets: [
@@ -832,14 +829,14 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('reaches the same fingerprint when a retry reaches the same conclusion', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
 					{ slot: 'backdrop', reference: backdrop },
 				],
 			});
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			await ingestImage(receiver, 'Locally uploaded backdrop');
 
 			const operation = await preflight(receiver, archive);
@@ -860,7 +857,7 @@ describe('the Template Package preflight contract', () => {
 			// The dangerous interleaving: the author's confirmation is in flight when
 			// a retry durably records a different report. Writing the confirmation
 			// back over it would install a proposal nobody agreed to.
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -868,7 +865,7 @@ describe('the Template Package preflight contract', () => {
 				],
 			});
 
-			const base = createInMemoryGraphicsAssetCatalogue();
+			const { catalogue: base } = await createSqliteGraphicsAssetCatalogue();
 			let interleave: (() => Promise<void>) | undefined;
 			// Fires between the confirm handler's read of the report and its write.
 			const catalogue = new Proxy(base, {
@@ -970,14 +967,14 @@ describe('the Template Package preflight contract', () => {
 		it('gives a changed mapping name a different fingerprint', async () => {
 			// A mapping whose displayed name changed is a different proposal to the
 			// person confirming it, however identical its shape.
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
 					{ slot: 'backdrop', reference: backdrop },
 				],
 			});
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const local = await ingestImage(receiver, 'Local original name');
 
 			const before = await preflight(receiver, archive);
@@ -995,7 +992,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('does not pause a proposal that carries nothing to confirm', async () => {
-			const { library } = createLibrary('sender');
+			const { library } = await createLibrary('sender');
 			const backdrop = await ingestImage(library, 'Backdrop');
 			const operation = await preflight(library, await exportPackage(library, {
 				assets: [
@@ -1018,7 +1015,7 @@ describe('the Template Package preflight contract', () => {
 		// package carrying them must survive the full loop: export declares what
 		// the items pin, and preflight reconciles the Template document against
 		// those declarations without reporting anything undeclared or unused.
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop', transparentPixelPng);
 		const insert = await ingestImage(sender, 'Insert', webpPixel, 'image/webp');
 		const graphic = {
@@ -1092,7 +1089,7 @@ describe('the Template Package preflight contract', () => {
 			throw new Error(`Expected an export, got ${JSON.stringify(exported.report.issues)}`);
 		const archive = await collectStream(exported.package.open());
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver } = await createLibrary('receiver');
 		const report = reportOf(await preflight(receiver, archive));
 
 		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
@@ -1107,7 +1104,7 @@ describe('the Template Package preflight contract', () => {
 
 	describe('packaged font attestation', () => {
 		it('records the weaker profile a packaged font actually satisfied', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const face = await ingestStaticFont(sender, 'Face');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -1115,7 +1112,7 @@ describe('the Template Package preflight contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const operation = await preflight(receiver, archive);
 			const report = reportOf(operation);
 
@@ -1136,7 +1133,7 @@ describe('the Template Package preflight contract', () => {
 		it('does not raise the gap when an exact origin reuses an attested revision', async () => {
 			// Reusing the local revision keeps whatever attestation it already
 			// earned, so there is no weaker profile for the author to accept.
-			const { library } = createLibrary('sender');
+			const { library } = await createLibrary('sender');
 			const face = await ingestStaticFont(library, 'Face');
 			const operation = await preflight(library, await exportPackage(library, {
 				assets: [
@@ -1156,7 +1153,7 @@ describe('the Template Package preflight contract', () => {
 		it('leaves an uploaded font\'s own full attestation untouched', async () => {
 			// The upload path still collects real evidence, so the weaker profile is
 			// scoped to the packaged path rather than a library-wide downgrade.
-			const { library } = createLibrary('sender');
+			const { library } = await createLibrary('sender');
 			const face = await ingestStaticFont(library, 'Face');
 			const assets = await library.listGraphicAssets({});
 			const uploaded = assets.find(asset => asset.id === face.assetId);
@@ -1171,14 +1168,14 @@ describe('the Template Package preflight contract', () => {
 
 	describe('durable cancellation and retry', () => {
 		it('cancels a paused package idempotently and releases its staged bytes', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
 					{ slot: 'backdrop', reference: backdrop },
 				],
 			});
-			const { library: receiver, staging } = createLibrary('receiver');
+			const { library: receiver, staging } = await createLibrary('receiver');
 			await ingestImage(receiver, 'Locally uploaded backdrop');
 			const operation = await preflight(receiver, archive);
 			expect(operation.stage).toBe('awaiting-confirmation');
@@ -1207,14 +1204,14 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('resumes from durably staged bytes after a transient staging failure', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
 					{ slot: 'backdrop', reference: backdrop },
 				],
 			});
-			const { library: receiver, staging } = createLibrary('receiver');
+			const { library: receiver, staging } = await createLibrary('receiver');
 
 			staging.injectTransientFailure('read', 1);
 			const failed = await preflight(receiver, archive);
@@ -1231,14 +1228,14 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('publishes nothing discoverable while a package is only preflighted', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
 					{ slot: 'backdrop', reference: backdrop },
 				],
 			});
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 
 			const operation = await preflight(receiver, archive);
 
@@ -1254,7 +1251,7 @@ describe('the Template Package preflight contract', () => {
 
 	describe('the complete report', () => {
 		it('reports mappings, quota, limits, and observed totals together', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const face = await ingestStaticFont(sender, 'Face');
 			const archive = await exportPackage(sender, {
@@ -1263,7 +1260,7 @@ describe('the Template Package preflight contract', () => {
 					{ slot: 'face', reference: face },
 				],
 			});
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 
 			const report = reportOf(await preflight(receiver, archive));
 
@@ -1291,7 +1288,7 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('reports every blocking problem together rather than only the first', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const parts = readTemplatePackageParts(
 				await exportPackage(sender, {
@@ -1306,7 +1303,7 @@ describe('the Template Package preflight contract', () => {
 				overlayImage: 'https://cdn.example.com/overlay.png',
 			};
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const report = reportOf(await preflight(receiver, writeTemplatePackage(parts)));
 
 			expect(codes(report)).toEqual(
@@ -1321,17 +1318,17 @@ describe('the Template Package preflight contract', () => {
 		// canonical store that no revision or derivative reaches are not yet counted
 		// against the quota, so a package bringing them is charged for them.
 		it('charges for packaged bytes the canonical store holds but the catalogue does not', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
 					{ slot: 'backdrop', reference: backdrop },
 				],
 			});
-			const { library: clean } = createLibrary('clean-receiver');
+			const { library: clean } = await createLibrary('clean-receiver');
 			const expected = reportOf(await preflight(clean, archive));
 
-			const { library: receiver, canonical } = createLibrary('receiver');
+			const { library: receiver, canonical } = await createLibrary('receiver');
 			await canonical.createImmutable({
 				identity: graphicsObjectIdentity(`sha256/${digestOf(transparentPixelPng)}`),
 				bytes: boundedBytes(transparentPixelPng),
@@ -1348,14 +1345,14 @@ describe('the Template Package preflight contract', () => {
 		});
 
 		it('blocks a package that would grow canonical storage past its quota', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
 					{ slot: 'backdrop', reference: backdrop },
 				],
 			});
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			await receiver.updateCapacityLimits({
 				canonicalLimitBytes: 1,
 				stagingLimitBytes: 10 * 1024 * 1024,

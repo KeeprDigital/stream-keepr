@@ -1,10 +1,11 @@
 import type { GraphicAssetValidationReport, GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
-import { describe, expect, it, vi } from 'vitest';
+import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
-	createInMemoryGraphicsAssetCatalogue,
 	graphicAssetRevisionId,
 } from '~~/server/modules/graphics-asset-library';
+import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -18,7 +19,19 @@ import {
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { digestOf, sixteenPixelPng as sixteenPixelPosterPng, pixelPng as transparentPixelPng, vp9Webm } from '~~/test/helpers/graphicsFixtures';
 import { jpegDeclaring, jpegPixel, webpDeclaring, webpPixel } from '~~/test/helpers/graphicsImageFixtures';
+import { addEvent } from '~~/test/helpers/graphicsLibrary';
 import { callsTo } from '~~/test/helpers/lastCallTo';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+
+let harness: SqliteD1Harness;
+
+beforeEach(async () => {
+	harness = await createSqliteD1Harness();
+});
+
+afterEach(async () => {
+	await harness.close();
+});
 
 // Only an accepted validation report carries facts, so a reading of them has
 // to say which outcome it expected rather than assume one.
@@ -79,7 +92,7 @@ function animatedWebp() {
 function createLibrary(
 	staging = createInMemoryStagingGraphicsObjectStore(),
 	canonical = createInMemoryCanonicalGraphicsObjectStore(),
-	catalogue = createInMemoryGraphicsAssetCatalogue(),
+	catalogue = createD1GraphicsAssetCatalogue(harness.database),
 	now = () => new Date('2026-07-27T04:00:00.000Z'),
 	silentVideoPlaybackValidator?: {
 		validate: (input: any) => Promise<any>;
@@ -557,6 +570,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 
 	it('durably publishes one validated PNG and discovers it with its exact operation result', async () => {
 		const { library } = createLibrary();
+		await addEvent(harness, 7);
 		const initiation = {
 			idempotencyKey: 'upload-scoreboard-logo',
 			initiatedBy: 'graphics-author-1',
@@ -945,6 +959,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 
 	it('reuses an existing Graphic Asset for ordinary duplicate content', async () => {
 		const { library } = createLibrary();
+		await Promise.all([7, 9].map(eventId => addEvent(harness, eventId)));
 
 		async function ingest(idempotencyKey: string, name: string, defaultEventId: number) {
 			const operation = await library.initiateGraphicsIngestion({
@@ -1103,7 +1118,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 	});
 
 	it('publishes concurrent identical replacement content as one Graphic Asset Revision', async () => {
-		const delegate = createInMemoryGraphicsAssetCatalogue();
+		const delegate = createD1GraphicsAssetCatalogue(harness.database);
 		let publishingArrivals = 0;
 		let releasePublishing!: () => void;
 		const bothPublishing = new Promise<void>((resolve) => {
@@ -1178,7 +1193,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 	});
 
 	it('rejects a stale replacement no-op and creates a Graphic Asset Revision when retried', async () => {
-		const delegate = createInMemoryGraphicsAssetCatalogue();
+		const delegate = createD1GraphicsAssetCatalogue(harness.database);
 		let signalNoopStarted!: () => void;
 		const noopStarted = new Promise<void>((resolve) => {
 			signalNoopStarted = resolve;
@@ -1291,6 +1306,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 
 	it('updates Graphic Asset metadata and Event associations without creating a Graphic Asset Revision', async () => {
 		const { library } = createLibrary();
+		await Promise.all([7, 9, 11].map(eventId => addEvent(harness, eventId)));
 		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'metadata-original',
 			initiatedBy: 'graphics-author-1',
@@ -1373,7 +1389,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 	});
 
 	it('atomically reuses content when two ordinary ingestions publish concurrently', async () => {
-		const delegate = createInMemoryGraphicsAssetCatalogue();
+		const delegate = createD1GraphicsAssetCatalogue(harness.database);
 		let reusableLookups = 0;
 		let releaseLookups!: () => void;
 		const bothLooking = new Promise<void>((resolve) => {
@@ -1424,7 +1440,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 	});
 
 	it('honours cancellation after entering publishing but before catalogue publication', async () => {
-		const delegate = createInMemoryGraphicsAssetCatalogue();
+		const delegate = createD1GraphicsAssetCatalogue(harness.database);
 		let publicationStarted!: () => void;
 		let releasePublication!: () => void;
 		const started = new Promise<void>((resolve) => {
@@ -1497,7 +1513,7 @@ describe('still-image ingestion through the Graphics Asset Library public module
 			...transferring,
 			stage: 'validating',
 			updatedAt: '2026-07-27T04:01:01.000Z',
-		}, transferring.updatedAt)).rejects.toThrow('lost its claim');
+		}, transferring.updatedAt)).rejects.toThrow('lost its durable transition');
 	});
 });
 
@@ -1802,15 +1818,13 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 	});
 
 	it('reserves the poster envelope in the Graphics Staging Allowance', async () => {
-		const blockedCatalogue = createInMemoryGraphicsAssetCatalogue({
+		const { library } = createLibrary();
+		const { canonical, staging } = await library.getCapacity();
+		await library.updateCapacityLimits({
+			canonicalLimitBytes: canonical.limitBytes,
 			stagingLimitBytes: vp9Webm.byteLength + MAX_SILENT_VIDEO_POSTER_BYTES - 1,
 		});
-		const { library: blocked } = createLibrary(
-			createInMemoryStagingGraphicsObjectStore(),
-			createInMemoryCanonicalGraphicsObjectStore(),
-			blockedCatalogue,
-		);
-		await expect(blocked.initiateGraphicsIngestion({
+		await expect(library.initiateGraphicsIngestion({
 			idempotencyKey: 'vp9-poster-capacity-blocked',
 			initiatedBy: 'graphics-author-1',
 			name: 'VP9 poster capacity',
@@ -1824,7 +1838,10 @@ describe('silent-video ingestion through the Graphics Asset Library public modul
 			},
 		});
 
-		const { library } = createLibrary();
+		await library.updateCapacityLimits({
+			canonicalLimitBytes: canonical.limitBytes,
+			stagingLimitBytes: staging.limitBytes,
+		});
 		const initiated = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'vp9-poster-capacity-accounted',
 			initiatedBy: 'graphics-author-1',

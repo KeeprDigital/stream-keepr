@@ -6,10 +6,7 @@ import type { SilentVideoPlaybackValidator } from '~~/server/modules/graphics-as
 import type { GraphicAssetReference, GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import type { TemplatePackagePreflightIssueCode, TemplatePackagePreflightReport } from '~~/shared/types/templatePackage';
 import { readFile } from 'node:fs/promises';
-import {
-	createGraphicsAssetLibrary,
-	createInMemoryGraphicsAssetCatalogue,
-} from '~~/server/modules/graphics-asset-library';
+import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -17,7 +14,7 @@ import {
 import { createBoundedByteStream, graphicsObjectIdentity } from '~~/server/modules/graphics-asset-library/object-store';
 import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
 import { digestOf, pixelPng, sixteenPixelPng, vp9Webm } from '~~/test/helpers/graphicsFixtures';
-import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
+import { boundedBytes, createSqliteGraphicsAssetCatalogue } from '~~/test/helpers/graphicsLibrary';
 import { collectStream } from '~~/test/helpers/storedZipArchive';
 import { acceptEveryTemplateDocument } from '~~/test/helpers/templatePackagePayload';
 
@@ -77,13 +74,16 @@ export function acceptStagedSilentVideo(
 
 type LibraryDependencies = Parameters<typeof createGraphicsAssetLibrary>[0];
 
-/** An in-memory library minting `<label>-identity-N`, at a fixed instant. */
-export function createPackageLibrary(label: string, dependencies: Partial<LibraryDependencies> = {}) {
+/**
+ * A library minting `<label>-identity-N`, at a fixed instant. Each has a
+ * catalogue of its own unless given one, so a sender and a receiver share nothing.
+ */
+export async function createPackageLibrary(label: string, dependencies: Partial<LibraryDependencies> = {}) {
 	let nextIdentity = 0;
 	const canonical = createInMemoryCanonicalGraphicsObjectStore();
 	const staging = createInMemoryStagingGraphicsObjectStore();
+	const catalogue = dependencies.catalogue ?? (await createSqliteGraphicsAssetCatalogue()).catalogue;
 	const library = createGraphicsAssetLibrary({
-		catalogue: createInMemoryGraphicsAssetCatalogue(),
 		staging,
 		canonical,
 		silentVideoPlaybackValidator: acceptStagedSilentVideo(staging),
@@ -91,6 +91,7 @@ export function createPackageLibrary(label: string, dependencies: Partial<Librar
 		now: () => new Date('2026-07-30T09:00:00.000Z'),
 		generateIdentity: () => `${label}-identity-${++nextIdentity}`,
 		...dependencies,
+		catalogue,
 	});
 	return { library, canonical, staging };
 }
