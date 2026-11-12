@@ -4,14 +4,8 @@ import type {
 } from '~~/server/modules/graphics-asset-library/object-store';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-	createGraphicsAssetLibrary,
-} from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
-import {
-	createInMemoryCanonicalGraphicsObjectStore,
-	createInMemoryStagingGraphicsObjectStore,
-} from '~~/server/modules/graphics-asset-library/in-memory-object-store';
+import { createInMemoryStagingGraphicsObjectStore } from '~~/server/modules/graphics-asset-library/in-memory-object-store';
 import {
 	consumeBoundedByteStream,
 	graphicsObjectIdentity,
@@ -24,7 +18,13 @@ import {
 	MAX_STILL_IMAGE_INGESTION_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
 import { digestOf, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
-import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
+import {
+	boundedBytes,
+	createTestGraphicsIngestion,
+	publishedRevision,
+	storedGraphicAssets,
+	storedRevisionContent,
+} from '~~/test/helpers/graphicsLibrary';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 import { publicServerFailure } from '~~/test/helpers/publicServerFailure';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
@@ -48,7 +48,7 @@ vi.mock('~~/server/utils/auth', () => ({
 
 // `rethrowGraphicsAssetApiError` reaches Nitro's auto-imported `createError`
 // and, on its 503 branch, `setResponseHeader` — neither of which a unit run
-// has. Nothing in the library module calls either.
+// has. Nothing in the ingestion module calls either.
 vi.stubGlobal('createError', (input: { statusCode: number; message: string; cause?: unknown }) =>
 	Object.assign(new Error(input.message), input));
 const mockSetResponseHeader = vi.fn();
@@ -155,31 +155,28 @@ function createRemoteHost(options: {
 	return { fetcher, requests, resolved };
 }
 
-function createLibrary(
+function createIngestion(
 	options: Parameters<typeof createRemoteHost>[0] & {
 		staging?: InMemoryGraphicsStagingObjectStore;
 	} = {},
 ) {
-	const staging = options.staging ?? createInMemoryStagingGraphicsObjectStore();
-	const canonical = createInMemoryCanonicalGraphicsObjectStore();
-	const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 	const remote = createRemoteHost(options);
-	let nextIdentity = 0;
-	const library = createGraphicsAssetLibrary({
-		catalogue,
-		staging,
-		canonical,
-		remoteSource: remote.fetcher,
-		generateIdentity: () => `identity-${++nextIdentity}`,
-		now: () => new Date('2026-07-30T04:00:00.000Z'),
-	});
 	return {
-		library,
-		staging,
-		canonical,
-		catalogue,
+		...createTestGraphicsIngestion({
+			catalogue: createD1GraphicsAssetCatalogue(harness.database),
+			staging: options.staging,
+			remoteSource: remote.fetcher,
+			start: '2026-07-30T04:00:00.000Z',
+		}),
 		remote,
 	};
+}
+
+/** The active Graphic Assets publication stored, read from the catalogue's rows. */
+async function storedAssets() {
+	return await storedGraphicAssets({
+		catalogue: createD1GraphicsAssetCatalogue(harness.database),
+	});
 }
 
 /**
@@ -195,21 +192,25 @@ const oversizedRemoteSource = (() => {
 /**
  * A remote copy whose multipart upload outlives the request that started it:
  * the first part fails and the request's own abort cannot land either, which is
- * what a worker death leaves behind for a later sweep to reclaim.
+ * what a worker death leaves behind for a later sweep to reclaim. `uploadIds`
+ * goes on recording every upload the staging store starts, in order.
  */
 async function strandRemoteCopyMultipartUpload(idempotencyKey: string) {
 	const delegate = createInMemoryStagingGraphicsObjectStore();
 	let uploadId: GraphicsMultipartUploadIdentity | undefined;
+	const uploadIds: GraphicsMultipartUploadIdentity[] = [];
 	const staging: InMemoryGraphicsStagingObjectStore = {
 		...delegate,
 		async beginMultipart(input) {
 			const started = await delegate.beginMultipart(input);
-			if (started.outcome === 'started')
+			if (started.outcome === 'started') {
 				uploadId = started.upload.uploadId;
+				uploadIds.push(started.upload.uploadId);
+			}
 			return started;
 		},
 	};
-	const { library, catalogue } = createLibrary({
+	const { ingestion, catalogue } = createIngestion({
 		staging,
 		hops: {
 			'https://cdn.example.test/scoreboard.png': {
@@ -218,7 +219,7 @@ async function strandRemoteCopyMultipartUpload(idempotencyKey: string) {
 			},
 		},
 	});
-	const operation = await library.initiateRemoteGraphicAssetCopy({
+	const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 		idempotencyKey,
 		initiatedBy: 'graphics-author-1',
 		name: 'Interrupted remote source',
@@ -226,25 +227,26 @@ async function strandRemoteCopyMultipartUpload(idempotencyKey: string) {
 	});
 	staging.injectTransientFailure('multipart-upload-part');
 	staging.injectTransientFailure('multipart-abort');
-	const failed = await library.copyRemoteGraphicAssetSource({
+	const failed = await ingestion.copyRemoteGraphicAssetSource({
 		operationId: operation.id,
 		initiatedBy: operation.initiatedBy,
 		sourceUrl: 'https://cdn.example.test/scoreboard.png',
 	});
 	return {
-		library,
+		ingestion,
 		catalogue,
 		staging,
 		operation,
 		failed,
 		uploadId,
+		uploadIds,
 	};
 }
 
-describe('approved remote HTTPS copy through the Graphics Asset Library public module', () => {
+describe('approved remote HTTPS copy at the Graphic Asset ingestion seam', () => {
 	it('publishes an ordinary local Graphic Asset from a confirmed one-time copy', async () => {
-		const { library } = createLibrary();
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const { ingestion, catalogue, canonical } = createIngestion();
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-copy-1',
 			initiatedBy: 'graphics-author-1',
 			name: 'Remote scoreboard',
@@ -255,7 +257,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			stage: 'created',
 		});
 
-		const copied = await library.copyRemoteGraphicAssetSource({
+		const copied = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png?signature=super-secret#fragment',
@@ -271,7 +273,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			},
 		});
 
-		const staged = await library.resolveStagedGraphicAssetSource({
+		const staged = await ingestion.resolveStagedGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
@@ -284,7 +286,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			maximumByteLength: staged.byteLength,
 		})).resolves.toEqual(transparentPixelPng);
 
-		const completed = await library.confirmGraphicAssetBrowserEvidence({
+		const completed = await ingestion.confirmGraphicAssetBrowserEvidence({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			evidence: {
@@ -303,17 +305,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			},
 		});
 
-		const assets = await library.listGraphicAssets({});
+		const assets = await storedAssets();
 		expect(assets).toHaveLength(1);
-		const resolvedRevision = await library.resolveGraphicAssetRevision({
-			assetId: completed.result!.assetId,
-			revisionId: completed.result!.revisionId,
-		});
-		expect(resolvedRevision).toMatchObject({
-			outcome: 'available',
-			contentType: 'image/png',
-			byteLength: transparentPixelPng.byteLength,
-		});
+		await expect(storedRevisionContent({ catalogue, canonical }, publishedRevision(completed)))
+			.resolves
+			.toMatchObject({
+				contentType: 'image/png',
+				byteLength: transparentPixelPng.byteLength,
+			});
 	});
 
 	it.each([
@@ -353,15 +352,15 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			code: 'remote-source-destination-not-public',
 		},
 	] as const)('rejects $label without copying a byte', async ({ sourceUrl, code }) => {
-		const { library, remote, staging } = createLibrary();
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const { ingestion, remote, staging } = createIngestion();
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: `remote-reject-${code}-${sourceUrl}`,
 			initiatedBy: 'graphics-author-1',
 			name: 'Rejected remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const failed = await library.copyRemoteGraphicAssetSource({
+		const failed = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl,
@@ -379,7 +378,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			},
 		});
 		expect(remote.requests).toEqual([]);
-		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
+		await expect(storedAssets()).resolves.toEqual([]);
 		await expect(
 			staging.readMetadata(graphicsObjectIdentity(`ingestion/${operation.id}/source`)),
 		).resolves.toMatchObject({ outcome: 'missing' });
@@ -399,19 +398,19 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		addresses,
 		label,
 	}) => {
-		const { library, remote } = createLibrary({
+		const { ingestion, remote } = createIngestion({
 			addresses: {
 				'cdn.example.test': [...addresses],
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: `remote-dns-${label}`,
 			initiatedBy: 'graphics-author-1',
 			name: 'Rebound remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const failed = await library.copyRemoteGraphicAssetSource({
+		const failed = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -431,17 +430,17 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('rejects a hostname with no public DNS result', async () => {
-		const { library } = createLibrary({
+		const { ingestion } = createIngestion({
 			unresolvable: ['cdn.example.test'],
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-nxdomain',
 			initiatedBy: 'graphics-author-1',
 			name: 'Unresolvable remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		await expect(library.copyRemoteGraphicAssetSource({
+		await expect(ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -457,7 +456,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('revalidates the scheme and destination at every redirect hop', async () => {
-		const { library, remote } = createLibrary({
+		const { ingestion, remote } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
 					location: 'https://edge.example.test/hop-one.png',
@@ -473,14 +472,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				'internal.example.test': ['10.0.0.9'],
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-redirect-private',
 			initiatedBy: 'graphics-author-1',
 			name: 'Redirected remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const failed = await library.copyRemoteGraphicAssetSource({
+		const failed = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -509,21 +508,21 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('rejects a downgrade to plaintext HTTP after a redirect', async () => {
-		const { library } = createLibrary({
+		const { ingestion } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
 					location: 'http://cdn.example.test/scoreboard.png',
 				},
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-redirect-downgrade',
 			initiatedBy: 'graphics-author-1',
 			name: 'Downgraded remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		await expect(library.copyRemoteGraphicAssetSource({
+		await expect(ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -539,7 +538,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('follows at most three redirects', async () => {
-		const { library, remote } = createLibrary({
+		const { ingestion, remote } = createIngestion({
 			hops: {
 				'https://cdn.example.test/hop-0.png': { location: '/hop-1.png' },
 				'https://cdn.example.test/hop-1.png': { location: '/hop-2.png' },
@@ -548,14 +547,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				'https://cdn.example.test/hop-4.png': { body: transparentPixelPng },
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-redirect-limit',
 			initiatedBy: 'graphics-author-1',
 			name: 'Over-redirected remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const failed = await library.copyRemoteGraphicAssetSource({
+		const failed = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/hop-0.png',
@@ -579,7 +578,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('copies through exactly three redirects', async () => {
-		const { library } = createLibrary({
+		const { ingestion } = createIngestion({
 			hops: {
 				'https://cdn.example.test/hop-0.png': { location: '/hop-1.png' },
 				'https://cdn.example.test/hop-1.png': { location: '/hop-2.png' },
@@ -587,14 +586,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				'https://cdn.example.test/hop-3.png': { body: transparentPixelPng },
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-redirect-three',
 			initiatedBy: 'graphics-author-1',
 			name: 'Thrice-redirected remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		await expect(library.copyRemoteGraphicAssetSource({
+		await expect(ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/hop-0.png',
@@ -605,7 +604,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('sends no cookies, authorization, or interactive authentication', async () => {
-		const { library, remote } = createLibrary({
+		const { ingestion, remote } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
 					location: 'https://edge.example.test/scoreboard.png',
@@ -613,14 +612,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				'https://edge.example.test/scoreboard.png': { body: transparentPixelPng },
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-no-credentials',
 			initiatedBy: 'graphics-author-1',
 			name: 'Anonymous remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		await library.copyRemoteGraphicAssetSource({
+		await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png?signature=super-secret',
@@ -634,20 +633,20 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('never persists remote query parameters or fragments', async () => {
-		const { library, catalogue } = createLibrary();
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const { ingestion, catalogue } = createIngestion();
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-secret-hygiene',
 			initiatedBy: 'graphics-author-1',
 			name: 'Signed remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const copied = await library.copyRemoteGraphicAssetSource({
+		const copied = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png?signature=super-secret&token=leak#private-fragment',
 		});
-		const completed = await library.confirmGraphicAssetBrowserEvidence({
+		const completed = await ingestion.confirmGraphicAssetBrowserEvidence({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			evidence: {
@@ -662,7 +661,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			copied,
 			completed,
 			await catalogue.getIngestionOperation(operation.id, operation.initiatedBy),
-			await library.listGraphicAssets({}),
+			await storedAssets(),
 		]);
 		expect(durableState).not.toContain('super-secret');
 		expect(durableState).not.toContain('token=leak');
@@ -686,7 +685,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			code: 'remote-source-length-mismatch',
 		},
 	] as const)('rejects a remote source that returns $label', async ({ hop, code }) => {
-		const { library, staging } = createLibrary({
+		const { ingestion, staging } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
 					body: transparentPixelPng,
@@ -694,14 +693,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				},
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: `remote-length-${code}`,
 			initiatedBy: 'graphics-author-1',
 			name: 'Mis-declared remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const failed = await library.copyRemoteGraphicAssetSource({
+		const failed = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -724,7 +723,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		expect(reported).not.toContain('undefined');
 		if (code === 'remote-source-length-mismatch')
 			expect(reported).toContain(String(transparentPixelPng.byteLength + 5));
-		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
+		await expect(storedAssets()).resolves.toEqual([]);
 		await expect(
 			staging.readMetadata(graphicsObjectIdentity(`ingestion/${operation.id}/source`)),
 		).resolves.toMatchObject({ outcome: 'missing' });
@@ -735,7 +734,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		{ label: 'declares an unparseable length', contentLength: 'chunked' },
 		{ label: 'declares a zero length', contentLength: '0' },
 	] as const)('copies a remote source that $label', async ({ contentLength }) => {
-		const { library } = createLibrary({
+		const { ingestion } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
 					body: transparentPixelPng,
@@ -743,14 +742,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				},
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: `remote-unknown-length-${contentLength}`,
 			initiatedBy: 'graphics-author-1',
 			name: 'Chunked remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const copied = await library.copyRemoteGraphicAssetSource({
+		const copied = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -769,7 +768,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('rejects an undeclared remote source that outgrows its Graphic Asset kind limit', async () => {
-		const { library, staging } = createLibrary({
+		const { ingestion, staging } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
 					body: new Uint8Array(MAX_STILL_IMAGE_INGESTION_BYTES + 1),
@@ -777,14 +776,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				},
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-unknown-length-exceeded',
 			initiatedBy: 'graphics-author-1',
 			name: 'Oversized remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const failed = await library.copyRemoteGraphicAssetSource({
+		const failed = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -806,7 +805,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('rejects an undeclared remote source that returns no content', async () => {
-		const { library } = createLibrary({
+		const { ingestion } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
 					body: new Uint8Array(0),
@@ -814,14 +813,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				},
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-unknown-length-empty',
 			initiatedBy: 'graphics-author-1',
 			name: 'Empty remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		await expect(library.copyRemoteGraphicAssetSource({
+		await expect(ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -839,7 +838,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	it('stages an undeclared remote source larger than one multipart part', async () => {
 		// Bytes beyond one 16 MiB part force the resumable multipart path, so the
 		// whole source reaches staging without ever being held in memory at once.
-		const { library } = createLibrary({
+		const { ingestion } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
 					body: oversizedRemoteSource,
@@ -847,14 +846,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				},
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-unknown-length-multipart',
 			initiatedBy: 'graphics-author-1',
 			name: 'Large remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const failed = await library.copyRemoteGraphicAssetSource({
+		const failed = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -875,7 +874,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('clears the multipart checkpoint once the remote copy stages its source', async () => {
-		const { library, catalogue } = createLibrary({
+		const { ingestion, catalogue } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
 					body: oversizedRemoteSource,
@@ -883,14 +882,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				},
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-checkpoint-cleared',
 			initiatedBy: 'graphics-author-1',
 			name: 'Large remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		await library.copyRemoteGraphicAssetSource({
+		await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -901,7 +900,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			operation.id,
 			operation.initiatedBy,
 		)).resolves.toBeUndefined();
-		const authoritative = await library.getIngestionOperation({
+		const authoritative = await ingestion.getIngestionOperation({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
@@ -946,7 +945,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				return started;
 			},
 		};
-		const { library, catalogue } = createLibrary({
+		const { ingestion, catalogue } = createIngestion({
 			staging,
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
@@ -956,14 +955,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				},
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-body-died',
 			initiatedBy: 'graphics-author-1',
 			name: 'Interrupted remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const failed = await library.copyRemoteGraphicAssetSource({
+		const failed = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -1005,7 +1004,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				return unavailableObjectStoreOutcome();
 			},
 		};
-		const { library, catalogue } = createLibrary({
+		const { ingestion, catalogue } = createIngestion({
 			staging,
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
@@ -1014,14 +1013,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				},
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-upload-reclaimed-elsewhere',
 			initiatedBy: 'graphics-author-1',
 			name: 'Interrupted remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const failed = await library.copyRemoteGraphicAssetSource({
+		const failed = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -1053,7 +1052,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			uploadId: stranded.uploadId!,
 		})).resolves.toEqual({ outcome: 'aborted' });
 
-		const retried = await stranded.library.copyRemoteGraphicAssetSource({
+		const retried = await stranded.ingestion.copyRemoteGraphicAssetSource({
 			operationId: stranded.operation.id,
 			initiatedBy: stranded.operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -1077,7 +1076,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		const stranded = await strandRemoteCopyMultipartUpload('remote-checkpoint-abort-unavailable');
 		stranded.staging.injectTransientFailure('multipart-abort');
 
-		const thrown = await stranded.library.copyRemoteGraphicAssetSource({
+		const thrown = await stranded.ingestion.copyRemoteGraphicAssetSource({
 			operationId: stranded.operation.id,
 			initiatedBy: stranded.operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -1111,10 +1110,64 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		expect(mockSetResponseHeader).toHaveBeenCalledWith(requestEvent, 'retry-after', 5);
 	});
 
+	it('aborts the stranded upload of a previous attempt before starting another', async () => {
+		const context = await strandRemoteCopyMultipartUpload('remote-copy-retry');
+		const identity = graphicsObjectIdentity(`ingestion/${context.operation.id}/source`);
+		const [stranded] = context.uploadIds;
+		await expect(context.catalogue.getGraphicAssetMultipartState(
+			context.operation.id,
+			context.operation.initiatedBy,
+		)).resolves.toMatchObject({ uploadId: stranded });
+
+		const retried = await context.ingestion.copyRemoteGraphicAssetSource({
+			operationId: context.operation.id,
+			initiatedBy: context.operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		});
+
+		// The retry took an upload of its own, so the checkpoint could only name
+		// one of the two: the first has to be reclaimed rather than forgotten.
+		expect(context.uploadIds).toHaveLength(2);
+		await expect(context.staging.resumeMultipart(identity, stranded!))
+			.resolves
+			.toMatchObject({ outcome: 'unavailable' });
+		expect(retried).toMatchObject({
+			transferredByteLength: oversizedRemoteSource.byteLength,
+		});
+		await expect(context.catalogue.getGraphicAssetMultipartState(
+			context.operation.id,
+			context.operation.initiatedBy,
+		)).resolves.toBeUndefined();
+	});
+
+	it('refuses to start another upload while the stranded one cannot be aborted', async () => {
+		const context = await strandRemoteCopyMultipartUpload('remote-copy-retry');
+		const identity = graphicsObjectIdentity(`ingestion/${context.operation.id}/source`);
+		const [stranded] = context.uploadIds;
+
+		context.staging.injectTransientFailure('multipart-abort');
+		await expect(context.ingestion.copyRemoteGraphicAssetSource({
+			operationId: context.operation.id,
+			initiatedBy: context.operation.initiatedBy,
+			sourceUrl: 'https://cdn.example.test/scoreboard.png',
+		})).rejects.toMatchObject({ code: 'graphics-asset-library-unavailable' });
+
+		// Nothing new was started, so the checkpoint still names the upload a
+		// later sweep has to reclaim.
+		expect(context.uploadIds).toHaveLength(1);
+		await expect(context.staging.resumeMultipart(identity, stranded!))
+			.resolves
+			.toMatchObject({ outcome: 'resumed' });
+		await expect(context.catalogue.getGraphicAssetMultipartState(
+			context.operation.id,
+			context.operation.initiatedBy,
+		)).resolves.toMatchObject({ uploadId: stranded });
+	});
+
 	it('reports no client-transfer facts for a remote copy holding a checkpoint', async () => {
 		const stranded = await strandRemoteCopyMultipartUpload('remote-checkpoint-no-transfer');
 
-		const authoritative = await stranded.library.getIngestionOperation({
+		const authoritative = await stranded.ingestion.getIngestionOperation({
 			operationId: stranded.operation.id,
 			initiatedBy: stranded.operation.initiatedBy,
 		});
@@ -1124,7 +1177,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('treats the remote content type as an untrusted hint and trusts observed bytes', async () => {
-		const { library } = createLibrary({
+		const { ingestion } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': {
 					body: transparentPixelPng,
@@ -1132,14 +1185,14 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				},
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-mime-hint',
 			initiatedBy: 'graphics-author-1',
 			name: 'Mislabelled remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		const copied = await library.copyRemoteGraphicAssetSource({
+		const copied = await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -1157,31 +1210,31 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('keeps a transiently unreachable remote source retryable with the same operation', async () => {
-		const { library, remote } = createLibrary({
+		const { ingestion, remote } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': { status: 503 },
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-transient',
 			initiatedBy: 'graphics-author-1',
 			name: 'Flaky remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		await expect(library.copyRemoteGraphicAssetSource({
+		await expect(ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
 		})).rejects.toMatchObject({ code: 'graphics-asset-library-unavailable' });
 
-		await expect(library.getIngestionOperation({
+		await expect(ingestion.getIngestionOperation({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		})).resolves.toMatchObject({ stage: 'created', transferredByteLength: 0 });
 
 		remote.requests.length = 0;
-		const reinitiated = await library.initiateRemoteGraphicAssetCopy({
+		const reinitiated = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-transient',
 			initiatedBy: 'graphics-author-1',
 			name: 'Flaky remote source',
@@ -1191,19 +1244,19 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('rejects a permanently unavailable remote source', async () => {
-		const { library } = createLibrary({
+		const { ingestion } = createIngestion({
 			hops: {
 				'https://cdn.example.test/scoreboard.png': { status: 403 },
 			},
 		});
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-forbidden',
 			initiatedBy: 'graphics-author-1',
 			name: 'Forbidden remote source',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		await expect(library.copyRemoteGraphicAssetSource({
+		await expect(ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
@@ -1220,42 +1273,42 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('reuses an existing Graphic Asset when the copied bytes already exist', async () => {
-		const { library } = createLibrary();
+		const { ingestion } = createIngestion();
 		const evidence = {
 			outcome: 'decoded',
 			sourceDigest: digestOf(transparentPixelPng),
 			width: 1,
 			height: 1,
 		} as const;
-		const first = await library.initiateRemoteGraphicAssetCopy({
+		const first = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-dedupe-1',
 			initiatedBy: 'graphics-author-1',
 			name: 'First remote copy',
 			sourceFileName: 'scoreboard.png',
 		});
-		await library.copyRemoteGraphicAssetSource({
+		await ingestion.copyRemoteGraphicAssetSource({
 			operationId: first.id,
 			initiatedBy: first.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
 		});
-		const published = await library.confirmGraphicAssetBrowserEvidence({
+		const published = await ingestion.confirmGraphicAssetBrowserEvidence({
 			operationId: first.id,
 			initiatedBy: first.initiatedBy,
 			evidence,
 		});
 
-		const second = await library.initiateRemoteGraphicAssetCopy({
+		const second = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-dedupe-2',
 			initiatedBy: 'graphics-author-1',
 			name: 'Second remote copy',
 			sourceFileName: 'scoreboard.png',
 		});
-		await library.copyRemoteGraphicAssetSource({
+		await ingestion.copyRemoteGraphicAssetSource({
 			operationId: second.id,
 			initiatedBy: second.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
 		});
-		const reused = await library.confirmGraphicAssetBrowserEvidence({
+		const reused = await ingestion.confirmGraphicAssetBrowserEvidence({
 			operationId: second.id,
 			initiatedBy: second.initiatedBy,
 			evidence,
@@ -1269,24 +1322,24 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 				revisionId: published.result!.revisionId,
 			},
 		});
-		await expect(library.listGraphicAssets({})).resolves.toHaveLength(1);
+		await expect(storedAssets()).resolves.toHaveLength(1);
 	});
 
 	it('cancels a remote copy before publication and releases its staged bytes', async () => {
-		const { library, staging } = createLibrary();
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const { ingestion, staging } = createIngestion();
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-cancel',
 			initiatedBy: 'graphics-author-1',
 			name: 'Cancelled remote copy',
 			sourceFileName: 'scoreboard.png',
 		});
-		await library.copyRemoteGraphicAssetSource({
+		await ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
 		});
 
-		const cancelled = await library.cancelGraphicsIngestion({
+		const cancelled = await ingestion.cancelGraphicsIngestion({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		});
@@ -1295,23 +1348,23 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 		await expect(
 			staging.readMetadata(graphicsObjectIdentity(`ingestion/${operation.id}/source`)),
 		).resolves.toMatchObject({ outcome: 'missing' });
-		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
-		await expect(library.resolveStagedGraphicAssetSource({
+		await expect(storedAssets()).resolves.toEqual([]);
+		await expect(ingestion.resolveStagedGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		})).resolves.toMatchObject({ outcome: 'missing' });
 	});
 
 	it('refuses a local streamed upload against a remote-copy operation', async () => {
-		const { library } = createLibrary();
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const { ingestion } = createIngestion();
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-upload-refused',
 			initiatedBy: 'graphics-author-1',
 			name: 'Remote copy operation',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		await expect(library.uploadGraphicAsset({
+		await expect(ingestion.uploadGraphicAsset({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			bytes: boundedBytes(transparentPixelPng),
@@ -1319,23 +1372,23 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 	});
 
 	it('refuses a client multipart transfer against a remote-copy operation', async () => {
-		const { library } = createLibrary();
-		const operation = await library.initiateRemoteGraphicAssetCopy({
+		const { ingestion } = createIngestion();
+		const operation = await ingestion.initiateRemoteGraphicAssetCopy({
 			idempotencyKey: 'remote-multipart-refused',
 			initiatedBy: 'graphics-author-1',
 			name: 'Remote copy operation',
 			sourceFileName: 'scoreboard.png',
 		});
 
-		await expect(library.startGraphicAssetMultipartUpload({
+		await expect(ingestion.startGraphicAssetMultipartUpload({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 		})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
 	});
 
 	it('refuses a remote copy against a local-upload operation', async () => {
-		const { library } = createLibrary();
-		const operation = await library.initiateGraphicsIngestion({
+		const { ingestion } = createIngestion();
+		const operation = await ingestion.initiateGraphicsIngestion({
 			idempotencyKey: 'local-copy-refused',
 			initiatedBy: 'graphics-author-1',
 			name: 'Local upload operation',
@@ -1343,7 +1396,7 @@ describe('approved remote HTTPS copy through the Graphics Asset Library public m
 			declaredByteLength: transparentPixelPng.byteLength,
 		});
 
-		await expect(library.copyRemoteGraphicAssetSource({
+		await expect(ingestion.copyRemoteGraphicAssetSource({
 			operationId: operation.id,
 			initiatedBy: operation.initiatedBy,
 			sourceUrl: 'https://cdn.example.test/scoreboard.png',
