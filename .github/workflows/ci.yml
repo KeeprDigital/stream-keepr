@@ -91,40 +91,70 @@ jobs:
 
   # Every gate `pnpm test` runs (verify.mjs --tests) appears below as its own step
   # (test/unit/scripts/workerSmoke.test.ts holds that), split across parallel
-  # jobs so the longest one, not the sum, sets the wall time.
+  # jobs so the longest one, not the sum, sets the wall time. Lint, typecheck
+  # and the two suites were one job of 11 to 18 minutes, three times the next
+  # longest; each is its own job now, and the Nuxt suite sets the wall time.
   checks:
-    name: Lint, typecheck, unit and Nuxt suites
+    name: Lint
     needs: scope
-    # Every step below runs for exactly one of the two: the code gates for a
-    # change that can affect the code, the docs checks for one that cannot.
+    # Every step below runs for exactly one of the two: the lint for a change
+    # that can affect the code, the docs checks for one that cannot.
     if: needs.scope.outputs.code == 'true' || needs.scope.outputs.docs == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
-      # Cheap gates first so they fail fast. Neither cache is restored: a cold
-      # run is the backstop for what the local per-file ESLint cache can miss
+      # The cache is not restored: a cold run is the backstop for what a local
+      # run can miss, whether through the per-file ESLint cache or through
+      # `pnpm verify:quick` linting only the files a branch changes
       # (README § Testing).
       - if: needs.scope.outputs.code == 'true'
         run: pnpm lint
-      # Includes the silent-video validator Worker's own program (#618), and
-      # fails when either committed worker-configuration.d.ts is stale.
-      - if: needs.scope.outputs.code == 'true'
-        run: pnpm typecheck
-      # With --coverage, so the thresholds in vitest.shared.ts fail these steps
-      # when coverage drops below them (#469).
-      - if: needs.scope.outputs.code == 'true'
-        run: pnpm test:unit:coverage
-      - if: needs.scope.outputs.code == 'true'
-        run: pnpm test:nuxt:coverage
-      # A docs-only change skips the gates above, but `pnpm lint` formats every
+      # A docs-only change skips the code gates, but `pnpm lint` formats every
       # document and the documentation test follows its links: unchecked, a
       # bad document would fail the next code change instead (#1028). A step of
       # this job, not a job of its own, so that a full run still has no skipped
       # job: a merge group reuses only such a run (scripts/ci-reuse.mjs).
       - if: needs.scope.outputs.docs == 'true'
         run: pnpm verify:docs
+
+  typecheck:
+    name: Typecheck
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      # Includes the silent-video validator Worker's own program (#618), and
+      # fails when either committed worker-configuration.d.ts is stale.
+      - run: pnpm typecheck
+
+  # With --coverage, so the thresholds in vitest.shared.ts fail these jobs when
+  # coverage drops below them (#469).
+  unit:
+    name: Unit suite
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm test:unit:coverage
+
+  nuxt:
+    name: Nuxt suite
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm test:nuxt:coverage
 
   integration:
     name: Integration suite (${{ matrix.shard }}/2)
@@ -196,7 +226,7 @@ jobs:
   # record the group runs everything.
   record:
     name: Record the verified tree
-    needs: [scope, checks, integration, server-and-browser, worker-guard]
+    needs: [scope, checks, typecheck, unit, nuxt, integration, server-and-browser, worker-guard]
     if: >-
       github.event_name == 'pull_request'
       && github.event.pull_request.head.repo.full_name == github.repository
@@ -231,7 +261,7 @@ jobs:
 
   passed:
     name: CI passed
-    needs: [scope, checks, integration, server-and-browser, worker-guard, record]
+    needs: [scope, checks, typecheck, unit, nuxt, integration, server-and-browser, worker-guard, record]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2

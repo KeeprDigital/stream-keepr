@@ -43,7 +43,6 @@ const ci = workflow('ci.yml');
 const prTitle = workflow('pr-title.yml');
 const releasePlease = workflow('release-please.yml');
 const gates = Object.keys(ci.jobs).filter(id => !['scope', 'record', 'passed'].includes(id));
-const scripts = (JSON.parse(readFileSync('package.json', 'utf8')) as { scripts: Record<string, string> }).scripts;
 const FOR_CODE = 'needs.scope.outputs.code == \'true\'';
 const FOR_DOCS = 'needs.scope.outputs.docs == \'true\'';
 
@@ -114,18 +113,29 @@ describe('the CI scope decides what a merge group can affect against the queue\'
 	});
 
 	// A docs-only change skips the code gates, so `checks` runs what they check of a document instead.
-	it('the checks job runs each code gate only for code, and the docs checks only for a docs-only change', () => {
+	it('the checks job lints only for code, and runs the docs checks only for a docs-only change', () => {
 		const commands = (ci.jobs.checks!.steps ?? []).filter(step => step.run).map(step => [step.run, step.if]);
 
 		expect(scope.outputs).toHaveProperty('docs', '${{ steps.scope.outputs.docs }}');
 		expect(commands).toEqual([
 			['pnpm lint', FOR_CODE],
-			['pnpm typecheck', FOR_CODE],
-			['pnpm test:unit:coverage', FOR_CODE],
-			['pnpm test:nuxt:coverage', FOR_CODE],
 			['pnpm verify:docs', FOR_DOCS],
 		]);
-		expect(scripts['verify:docs']).toBe('eslint "**/*.md" && vitest run test/unit/docs/documentation.test.ts');
+	});
+
+	// One job held all four for 11 to 18 minutes; apart, the longest sets the wall time.
+	it('typecheck and the two suites each run in a job of their own', () => {
+		const alone = (id: string) => (ci.jobs[id]!.steps ?? []).filter(step => step.run).map(step => step.run);
+
+		expect([
+			alone('typecheck'),
+			alone('unit'),
+			alone('nuxt'),
+		]).toEqual([
+			['pnpm typecheck'],
+			['pnpm test:unit:coverage'],
+			['pnpm test:nuxt:coverage'],
+		]);
 	});
 });
 

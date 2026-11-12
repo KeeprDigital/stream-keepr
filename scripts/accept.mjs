@@ -14,12 +14,12 @@
  *                                     the first failure
  */
 
-import { spawn } from 'node:child_process';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { loadCommittedInstallation, resolveDeployedTarget } from './graphics-acceptance/deployed-target.mjs';
 import { AcceptanceFailure, createAcceptanceEvidence } from './graphics-acceptance/evidence.mjs';
 import { reportFailures } from './graphics-acceptance/harness.mjs';
+import { runHoldingSlots } from './slots.mjs';
 
 /**
  * Name → runner script (and its leading arguments), what it proves, what a
@@ -91,18 +91,15 @@ export const DEPLOY_DAY = [
 	'graphics-package',
 ];
 
+/** Each harness drives a browser, or a container: it holds run slots like any other gate. */
 function run(name, flags) {
 	const [script, ...leading] = HARNESSES[name].script;
-	const child = spawn(process.execPath, [
+	return runHoldingSlots('browser-gate', [
+		process.execPath,
 		fileURLToPath(new URL(script, import.meta.url)),
 		...leading,
 		...flags,
-	], {
-		stdio: 'inherit',
-	});
-	return new Promise((resolve) => {
-		child.once('close', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
-	});
+	]);
 }
 
 function list() {

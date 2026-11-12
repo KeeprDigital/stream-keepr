@@ -1,6 +1,7 @@
 import type { IntegrationServer, IntegrationServerAddress } from './servers';
 import process from 'node:process';
 import { main as reapStrandedWorkerd } from '../../scripts/reap-workerd.mjs';
+import { acquireRunSlots, RUN_SLOT_COSTS } from '../../scripts/slots.mjs';
 import { signInAsOperator } from './client';
 import { INTEGRATION_REALTIME_SKIP_NOTICE, integrationServerEnv, keylessIntegrationServerEnv } from './helpers';
 import { prepareIntegrationD1 } from './integrationD1';
@@ -113,11 +114,19 @@ export async function setup() {
 	if (!integrationRealtimeConfigured)
 		console.warn(INTEGRATION_REALTIME_SKIP_NOTICE);
 
+	// The whole machine's run slots, before anything starts: these tests time
+	// real requests against several servers, and another suite beside them, in
+	// this worktree or any other, makes every result meaningless.
+	const slots = await acquireRunSlots({ want: RUN_SLOT_COSTS.integration, label: 'integration suite' });
+
 	// A workerd stranded by a killed session still holds sqlite locks on the
 	// persist directories; sweep them before touching that state.
 	await reapStrandedWorkerd();
 
-	const { servers, realtime } = await startIntegrationServers();
+	const { servers, realtime } = await startIntegrationServers().catch((error) => {
+		slots.release();
+		throw error;
+	});
 	const address = ({ url, persistDir }: IntegrationServer): IntegrationServerAddress => ({ url, persistDir });
 	// The pool list may include the realtime server: no pool id reaches past the keyless ones.
 	process.env[INTEGRATION_SERVER_LIST_ENV] = JSON.stringify(servers.map(address));
@@ -126,5 +135,6 @@ export async function setup() {
 	return async () => {
 		await Promise.all(servers.map(server => server.stop()));
 		await Promise.all(servers.map(server => resetIntegrationWranglerState(server.persistDir)));
+		slots.release();
 	};
 }
