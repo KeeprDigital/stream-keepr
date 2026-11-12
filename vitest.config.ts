@@ -1,8 +1,11 @@
 import { defineConfig } from 'vitest/config';
+import { CHECKOUT_TSCONFIG } from './build/checkoutTsconfig.ts';
 import { wasmModulePlugin } from './build/wasmModulePlugin.ts';
 import { heldToRunSlots, hideLoadTolerantWaitFrame, LOAD_TOLERANT_BAIL_AFTER_FAILURES, LOAD_TOLERANT_HOOK_TIMEOUT_MS, LOAD_TOLERANT_TEST_TIMEOUT_MS, rootAliases, unitCoverageConfig, unitRerunTriggers } from './vitest.shared.ts';
 
 export default defineConfig({
+	// Named, or Vite goes looking and climbs out of this checkout (build/checkoutTsconfig.ts).
+	tsconfig: CHECKOUT_TSCONFIG,
 	plugins: [
 		wasmModulePlugin('test-webassembly-modules'),
 		heldToRunSlots('unit tests'),

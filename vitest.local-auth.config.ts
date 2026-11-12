@@ -1,7 +1,10 @@
 import { defineConfig } from 'vitest/config';
+import { CHECKOUT_TSCONFIG } from './build/checkoutTsconfig.ts';
 import { rootAliases } from './vitest.shared.ts';
 
 export default defineConfig({
+	// Named, or Vite goes looking and climbs out of this checkout (build/checkoutTsconfig.ts).
+	tsconfig: CHECKOUT_TSCONFIG,
 	resolve: { alias: rootAliases },
 	test: {
 		name: 'local-auth',
