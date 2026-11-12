@@ -27,17 +27,6 @@ const playerStore = usePlayerStore();
 const player = computed(() => props.playerId == null
 	? null
 	: playerStore.players.find(p => p.id === props.playerId) ?? null);
-const reviewPagePath = computed(() => props.playerId != null && eventStore.eventId
-	? `/event/${eventStore.eventId}/archetype-review?playerId=${props.playerId}`
-	: null);
-
-async function reviewDeck() {
-	if (!reviewPagePath.value)
-		return;
-	close();
-	await navigateTo(reviewPagePath.value);
-}
-
 // Props arrive as reactive proxies from useOverlay, so they must not be structuredClone()d.
 const localDeckLists = computed(() => props.deckLists);
 
@@ -88,6 +77,18 @@ const selectedDeckIndex = computed(() => pickedDeckIndex.value ?? defaultDeckInd
 
 // Get the currently selected deck list
 const selectedDeck = computed(() => localDeckLists.value[selectedDeckIndex.value] ?? null);
+
+// Archetype Review opens on the Deck List shown here: a Player can hold several.
+const reviewPagePath = computed(() => props.playerId != null && eventStore.eventId && selectedDeck.value
+	? `/event/${eventStore.eventId}/archetype-review?deckId=${selectedDeck.value.deckId}`
+	: null);
+
+async function reviewDeck() {
+	if (!reviewPagePath.value)
+		return;
+	close();
+	await navigateTo(reviewPagePath.value);
+}
 
 // ── Deck card computeds ──────────────────────────────────────────────────────
 
