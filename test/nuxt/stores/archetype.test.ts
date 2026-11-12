@@ -30,6 +30,7 @@ const mockMetagameStore = {
 const mockPlayerDeckStore = {
 	applyArchetypeUpdated: vi.fn(),
 	applyArchetypeDeleted: vi.fn(),
+	applyArchetypeMerged: vi.fn(),
 };
 const mockFeatureMatchStore = {
 	loadFeatureMatchesByEventId: vi.fn(),
@@ -86,6 +87,100 @@ describe('useArchetypeStore', () => {
 			expect(mockPlayerDeckStore.applyArchetypeDeleted).toHaveBeenCalledWith(1);
 			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
 			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
+		});
+	});
+
+	describe('merging an Archetype into another', () => {
+		const merged = createMockUiArchetype({ id: 1, name: 'Burn' });
+		const survivor = createMockUiArchetype({ id: 2, name: 'Boros Burn' });
+
+		it('drops it, moves Player Decks to the survivor, reloads the Event\'s Feature Matches and invalidates the Metagame', async () => {
+			store.archetypes = [merged, survivor];
+			mockFetch.mockResolvedValue({ archetypeId: 2, mergedArchetypeId: 1 });
+
+			await expect(store.mergeArchetype(9, 1, 2)).resolves.toBe(true);
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/events/9/archetypes/1/merge', expect.objectContaining({
+				method: 'POST',
+				body: { intoArchetypeId: 2 },
+			}));
+			expect(store.archetypes).toEqual([survivor]);
+			expect(mockPlayerDeckStore.applyArchetypeMerged).toHaveBeenCalledWith(1, survivor);
+			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(9);
+			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
+		});
+
+		it('keeps both when the merge is refused, and says why', async () => {
+			store.archetypes = [merged, survivor];
+			mockFetch.mockRejectedValue(transportFailure({
+				status: 404,
+				body: { message: 'Archetype not found' },
+			}));
+
+			await expect(store.mergeArchetype(9, 1, 2)).resolves.toBe(false);
+
+			expect(store.archetypes).toEqual([merged, survivor]);
+			expect(store.error).toBe('Archetype not found');
+			expect(mockPlayerDeckStore.applyArchetypeMerged).not.toHaveBeenCalled();
+		});
+
+		it('follows a peer\'s merge the same way, untagging no Player Deck', () => {
+			store.archetypes = [merged, survivor];
+
+			deliver('archetype:deleted', { archetypeId: 1, mergedIntoArchetypeId: 2 });
+
+			expect(store.archetypes).toEqual([survivor]);
+			expect(mockPlayerDeckStore.applyArchetypeMerged).toHaveBeenCalledWith(1, survivor);
+			expect(mockPlayerDeckStore.applyArchetypeDeleted).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('removing the Empty Archetypes', () => {
+		it('drops the Archetypes the server removed and invalidates the Metagame', async () => {
+			const held = createMockUiArchetype({ id: 1, name: 'Burn' });
+			store.archetypes = [
+				held,
+				createMockUiArchetype({ id: 2, name: 'Empty' }),
+			];
+			mockFetch.mockResolvedValue({
+				archetypeIds: [2],
+			});
+
+			await expect(store.removeEmptyArchetypes(9)).resolves.toEqual([2]);
+
+			expect(mockFetch).toHaveBeenCalledWith('/api/events/9/archetypes/empty', expect.objectContaining({ method: 'DELETE' }));
+			expect(store.archetypes).toEqual([held]);
+			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
+		});
+	});
+
+	describe('findNameHolder', () => {
+		it.each([
+			[
+				'another Archetype of the name in another case',
+				'azorius control',
+				2,
+				1,
+			],
+			[
+				'none for the Archetype\'s own name',
+				'Azorius Control',
+				1,
+				undefined,
+			],
+			[
+				'none for a free name',
+				'Boros Energy',
+				2,
+				undefined,
+			],
+		])('finds %s', (_case, name, renamedId, holderId) => {
+			store.archetypes = [
+				createMockUiArchetype({ id: 1, name: 'Azorius Control' }),
+				createMockUiArchetype({ id: 2, name: 'Burn' }),
+			];
+
+			expect(store.findNameHolder(name, renamedId)?.id).toBe(holderId);
 		});
 	});
 
@@ -202,6 +297,21 @@ describe('useArchetypeStore', () => {
 			await removing;
 
 			expect(store.archetypes).toEqual(shown);
+			expectNothingFollowedUp();
+		});
+
+		it('a late merge drops no Archetype and follows up on nothing', async () => {
+			store.archetypes = [archetype];
+			const merge = deferred<{ archetypeId: number; mergedArchetypeId: number }>();
+			mockFetch.mockReturnValueOnce(merge.promise);
+
+			const merging = store.mergeArchetype(1, 1, 2);
+			const shown = await switchAway();
+			merge.resolve({ archetypeId: 2, mergedArchetypeId: 1 });
+			await merging;
+
+			expect(store.archetypes).toEqual(shown);
+			expect(mockPlayerDeckStore.applyArchetypeMerged).not.toHaveBeenCalled();
 			expectNothingFollowedUp();
 		});
 

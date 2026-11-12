@@ -20,7 +20,7 @@ export const createArchetypeSchema = createInsertSchema(archetypes)
 		updatedAt: true,
 	})
 	.extend({
-		name: z.string().min(1).max(200),
+		name: z.string().trim().min(1).max(200),
 		colors: z.string().max(50).nullable().optional(),
 	})
 	.strict();
@@ -35,7 +35,7 @@ export const updateArchetypeSchema = createUpdateSchema(archetypes)
 		updatedAt: true,
 	})
 	.extend({
-		name: z.string().min(1).max(200).optional(),
+		name: z.string().trim().min(1).max(200).optional(),
 		colors: z.string().max(50).nullable().optional(),
 		chartSeries: chartSeriesSchema,
 	})
@@ -55,6 +55,13 @@ export const setArchetypeKeyCardsSchema = z.object({
 	data => !(data.cardIds !== undefined && data.cardNames !== undefined),
 	{ message: 'Provide either cardIds or cardNames, not both' },
 );
+
+// ── Merge ──
+
+/** The Archetype the one in the path is merged into. */
+export const mergeArchetypeSchema = z.object({
+	intoArchetypeId: z.number().int().positive(),
+}).strict();
 
 // ── Route Params ──
 

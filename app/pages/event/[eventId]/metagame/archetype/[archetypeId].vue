@@ -17,6 +17,7 @@ const metagameStore = useMetagameStore();
 const metagameClient = useMetagameClient();
 const { openPlayerDeckList } = usePlayerDeckListModal();
 const { runRequest } = useRequestFeedback();
+const { mergeInto } = useArchetypeManagement(() => eventStore.eventId!, () => Number(route.params.archetypeId));
 
 const game = computed(() => eventStore.event?.game);
 const isMtg = computed(() => game.value === 'mtg');
@@ -230,13 +231,22 @@ watch(
 					/>
 				</div>
 				<MetagameStatStrip :stats="stats" />
-				<!-- An OP operator renames a Leader Archetype here, customising it (ADR-0074). -->
+				<!--
+					A rename changes the Archetype for every Deck List it holds. On MTG a name another
+					Archetype holds is offered as a merge; on OP a rename customises a Leader Archetype (ADR-0074).
+				-->
 				<MetagameArchetypeNameField
-					v-if="!isMtg"
+					:event-id="eventStore.eventId!"
+					:archetype-id="detail.id"
+					:mergeable="isMtg"
+					@merge="mergeInto"
+				/>
+				<MetagameArchetypeChartSeriesField
 					:event-id="eventStore.eventId!"
 					:archetype-id="detail.id"
 				/>
-				<MetagameArchetypeChartSeriesField
+				<MetagameArchetypeActions
+					v-if="isMtg"
 					:event-id="eventStore.eventId!"
 					:archetype-id="detail.id"
 				/>

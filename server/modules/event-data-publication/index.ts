@@ -282,8 +282,11 @@ export function eventDataPublicationModule() {
 		return archetype;
 	}
 
-	async function archetypeDeleted({ eventId, id, originConnectionId }: DeletedPublicationInput) {
-		await publishEventDataChange(eventId, 'archetype:deleted', { archetypeId: id }, originConnectionId);
+	/** `mergedIntoArchetypeId` names the Archetype a merge moved its decks to; a plain delete left them unreviewed. */
+	async function archetypeDeleted({ eventId, id, mergedIntoArchetypeId, originConnectionId }: DeletedPublicationInput & { mergedIntoArchetypeId?: number }) {
+		await publishEventDataChange(eventId, 'archetype:deleted', mergedIntoArchetypeId === undefined
+			? { archetypeId: id }
+			: { archetypeId: id, mergedIntoArchetypeId }, originConnectionId);
 	}
 
 	async function archetypeKeyCardsUpdated({ eventId, archetypeId, keyCards, originConnectionId }: ArchetypeKeyCardsUpdatedInput) {

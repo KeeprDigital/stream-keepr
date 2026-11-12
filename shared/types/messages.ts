@@ -315,6 +315,8 @@ export interface MessageDefinitions {
 
 	'archetype:deleted': {
 		archetypeId: number;
+		/** Set by a merge: the Archetype its decks moved to, still reviewed. A plain delete left them unreviewed. */
+		mergedIntoArchetypeId?: number;
 	};
 
 	'archetype:keyCardsUpdated': {

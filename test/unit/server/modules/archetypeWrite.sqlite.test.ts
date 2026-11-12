@@ -12,6 +12,7 @@ const publication = {
 	archetypeUpdated: vi.fn(async (input: { entity: unknown; keyCards: unknown }) => ({ entity: input.entity, keyCards: input.keyCards })),
 	archetypeDeleted: vi.fn(),
 	archetypeKeyCardsUpdated: vi.fn(),
+	screenUpdated: vi.fn(),
 };
 const playerUpdates = {
 	reconcileDeckProjections: vi.fn(),
@@ -399,5 +400,219 @@ describe('setting an Archetype\'s key cards', () => {
 		}))
 			.rejects
 			.toMatchObject({ statusCode: 404 });
+	});
+});
+
+// Names clash ignoring case and surrounding spaces, so a slip of the shift key makes no second Archetype.
+describe('naming an Archetype as another of its Event', () => {
+	it.each([
+		[
+			'creating it',
+			async (eventId: number) => archetypeWriteModule().createArchetype({
+				eventId,
+				input: { name: 'izzet phoenix' },
+			}),
+		],
+		[
+			'renaming it',
+			async (eventId: number) => archetypeWriteModule().updateArchetype({
+				eventId,
+				archetypeId: (await createArchetype(eventId, 'Burn')).id,
+				input: { name: ' IZZET PHOENIX ' },
+			}),
+		],
+	])('refuses %s, naming the Archetype that holds the name', async (_case, act) => {
+		const eventId = await createEvent();
+		await createArchetype(eventId, 'Izzet Phoenix');
+
+		await expect(act(eventId)).rejects.toMatchObject({
+			statusCode: 409,
+			message: expect.stringContaining('Izzet Phoenix'),
+		});
+
+		const names = (await db.select().from(schema.archetypes).where(eq(schema.archetypes.eventId, eventId))).map(row => row.name);
+		expect(names).not.toContain('izzet phoenix');
+		expect(names).not.toContain(' IZZET PHOENIX ');
+		expect(publication.archetypeCreated).not.toHaveBeenCalled();
+		expect(publication.archetypeUpdated).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['its own name in another case', 'izzet phoenix'],
+		['a name another Event\'s Archetype holds', 'Burn'],
+	])('allows a rename to %s', async (_case, name) => {
+		const eventId = await createEvent();
+		await createArchetype(await createEvent(), 'Burn');
+		const archetype = await createArchetype(eventId, 'Izzet Phoenix');
+
+		await expect(archetypeWriteModule().updateArchetype({
+			eventId,
+			archetypeId: archetype.id,
+			input: { name },
+		}))
+			.resolves
+			.toMatchObject({
+				entity: { name },
+			});
+	});
+});
+
+describe('merging an Archetype into another', () => {
+	it('moves its decks to the survivor, still reviewed, and removes it in the same commit', async () => {
+		const eventId = await createEvent();
+		const merged = await createArchetype(eventId, 'Burn');
+		const [survivor] = await db.insert(schema.archetypes).values({
+			eventId,
+			name: 'Boros Burn',
+			colors: 'RW',
+			chartSeries: 4,
+		}).returning();
+		await db.insert(schema.archetypeCards).values([
+			{ archetypeId: merged.id, cardId: await createCard('Goblin Guide') },
+			{ archetypeId: survivor!.id, cardId: await createCard('Lightning Helix') },
+		]);
+		const primary = await createReviewedDeck(eventId, merged.id, true);
+		const secondary = await createReviewedDeck(eventId, merged.id, false);
+		await createReviewedDeck(eventId, survivor!.id, true);
+		// The Player write can give a Player an Archetype with no Deck List: they move with it.
+		const [deckless] = await db.insert(schema.players).values({ eventId, name: 'Deckless', archetypeId: merged.id }).returning();
+
+		await expect(archetypeWriteModule().mergeArchetype({
+			eventId,
+			archetypeId: merged.id,
+			intoArchetypeId: survivor!.id,
+			originConnectionId: 'origin-1',
+		})).resolves.toEqual({ archetypeId: survivor!.id, mergedArchetypeId: merged.id });
+
+		const decks = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.eventId, eventId));
+		expect(decks.map(deck => [deck.archetypeId, deck.reviewedAt != null])).toEqual([
+			[survivor!.id, true],
+			[survivor!.id, true],
+			[survivor!.id, true],
+		]);
+		// The survivor keeps its own colours, key cards and Pinned Chart Series; the merged one's go with it.
+		expect(await db.select().from(schema.archetypes).where(eq(schema.archetypes.eventId, eventId)))
+			.toMatchObject([
+				{
+					id: survivor!.id,
+					name: 'Boros Burn',
+					colors: 'RW',
+					chartSeries: 4,
+				},
+			]);
+		expect(await keyCardNames(survivor!.id)).toEqual(['Lightning Helix']);
+		expect(await db.select({ archetypeId: schema.players.archetypeId }).from(schema.players).where(eq(schema.players.id, deckless!.id)))
+			.toEqual([
+				{ archetypeId: survivor!.id },
+			]);
+		expect(playerUpdates.reconcileDeckProjections).toHaveBeenCalledWith(expect.objectContaining({
+			playerIds: [primary.playerId],
+		}));
+		expect(playerUpdates.publishPlayerSnapshotUpdates).toHaveBeenCalledWith(expect.objectContaining({
+			playerIds: [secondary.playerId],
+		}));
+		expect(publication.archetypeDeleted).toHaveBeenCalledWith({
+			eventId,
+			id: merged.id,
+			mergedIntoArchetypeId: survivor!.id,
+			originConnectionId: 'origin-1',
+		});
+	});
+
+	it.each([
+		[
+			'into itself',
+			400,
+			async (eventId: number, mergedId: number) => ({ eventId, archetypeId: mergedId, intoArchetypeId: mergedId }),
+		],
+		[
+			'into another Event\'s Archetype',
+			404,
+			async (eventId: number, mergedId: number) => ({
+				eventId,
+				archetypeId: mergedId,
+				intoArchetypeId: (await createArchetype(await createEvent(), 'Elsewhere')).id,
+			}),
+		],
+		[
+			'when another Event owns it',
+			404,
+			async (eventId: number, mergedId: number) => ({
+				eventId: await createEvent(),
+				archetypeId: mergedId,
+				intoArchetypeId: (await createArchetype(eventId, 'Survivor')).id,
+			}),
+		],
+	])('refuses a merge %s, leaving its decks reviewed as it', async (_case, statusCode, params) => {
+		const eventId = await createEvent();
+		const merged = await createArchetype(eventId, 'Burn');
+		const { deckId } = await createReviewedDeck(eventId, merged.id, true);
+
+		await expect(archetypeWriteModule().mergeArchetype(await params(eventId, merged.id))).rejects.toMatchObject({ statusCode });
+
+		const [deck] = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.id, deckId));
+		expect(deck?.archetypeId).toBe(merged.id);
+		expect(publication.archetypeDeleted).not.toHaveBeenCalled();
+	});
+});
+
+describe('removing the Empty Archetypes', () => {
+	it('removes each Archetype no Deck List is assigned to, and no other', async () => {
+		const eventId = await createEvent();
+		const otherEventId = await createEvent();
+		const held = await createArchetype(eventId, 'Held by a primary deck');
+		const heldBySecondary = await createArchetype(eventId, 'Held by a secondary deck');
+		const empty = await createArchetype(eventId, 'Empty');
+		const alsoEmpty = await createArchetype(eventId, 'Also empty');
+		const elsewhere = await createArchetype(otherEventId, 'Empty elsewhere');
+		await createReviewedDeck(eventId, held.id, true);
+		await createReviewedDeck(eventId, heldBySecondary.id, false);
+		// The Player write can give a Player an Archetype with no Deck List: the Metagame counts them as its Pilot.
+		const heldByPlayer = await createArchetype(eventId, 'Held by a Player alone');
+		await db.insert(schema.players).values({ eventId, name: 'Deckless', archetypeId: heldByPlayer.id });
+
+		const result = await archetypeWriteModule().removeEmptyArchetypes({ eventId, originConnectionId: 'origin-1' });
+
+		expect(result.archetypeIds.toSorted()).toEqual([empty.id, alsoEmpty.id]);
+		const kept = await db.select({ id: schema.archetypes.id }).from(schema.archetypes);
+		expect(kept.map(row => row.id)).toEqual(expect.arrayContaining([
+			held.id,
+			heldBySecondary.id,
+			heldByPlayer.id,
+			elsewhere.id,
+		]));
+		expect(kept.map(row => row.id)).not.toEqual(expect.arrayContaining([empty.id]));
+		expect(kept.map(row => row.id)).not.toEqual(expect.arrayContaining([alsoEmpty.id]));
+		expect(publication.archetypeDeleted.mock.calls.map(([input]) => input).toSorted((a, b) => a.id - b.id)).toEqual([
+			{ eventId, id: empty.id, originConnectionId: 'origin-1' },
+			{ eventId, id: alsoEmpty.id, originConnectionId: 'origin-1' },
+		]);
+	});
+});
+
+describe('on a One Piece Card Game Event, an Archetype following its Leader', () => {
+	it.each([
+		[
+			'is not merged',
+			async (eventId: number) => archetypeWriteModule().mergeArchetype({
+				eventId,
+				archetypeId: (await createArchetype(eventId, 'Luffy')).id,
+				intoArchetypeId: (await createArchetype(eventId, 'Zoro')).id,
+			}),
+		],
+		[
+			'is not removed for being empty',
+			async (eventId: number) => {
+				await createArchetype(eventId, 'Luffy');
+				return archetypeWriteModule().removeEmptyArchetypes({ eventId });
+			},
+		],
+	])('%s', async (_case, act) => {
+		const eventId = await createEvent('op');
+
+		await expect(act(eventId)).rejects.toMatchObject({ statusCode: 400 });
+
+		expect(await db.select().from(schema.archetypes).where(eq(schema.archetypes.eventId, eventId))).not.toHaveLength(0);
+		expect(publication.archetypeDeleted).not.toHaveBeenCalled();
 	});
 });

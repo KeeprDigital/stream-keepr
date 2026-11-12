@@ -136,6 +136,82 @@ describe('archetypes API', () => {
 		});
 	});
 
+	// ── Merge, name clashes and Empty Archetypes ──
+
+	it('refuses a second Archetype of a name in another case, and merges one into another', async () => {
+		const merged = (await $fetch(`/api/events/${eventId}/archetypes`, {
+			method: 'POST',
+			body: { name: 'Merge Away' },
+		})) as any;
+		const survivor = (await $fetch(`/api/events/${eventId}/archetypes`, {
+			method: 'POST',
+			body: { name: 'Merge Survivor' },
+		})) as any;
+		const player = (await $fetch(`/api/events/${eventId}/players`, {
+			method: 'POST',
+			body: { name: 'Merge Player' },
+		})) as any;
+		await $fetch(`/api/events/${eventId}/players/${player.id}`, {
+			method: 'PATCH',
+			body: { archetypeId: merged.id },
+		});
+
+		const clash = await $fetchRaw(`/api/events/${eventId}/archetypes/${merged.id}`, {
+			method: 'PATCH',
+			body: { name: ' merge survivor ' },
+		});
+		expect(clash.status).toBe(409);
+		expect(clash._data.message).toContain('Merge Survivor');
+
+		const res = await $fetchRaw(`/api/events/${eventId}/archetypes/${merged.id}/merge`, {
+			method: 'POST',
+			body: { intoArchetypeId: survivor.id },
+		});
+		expect(res.status).toBe(200);
+		expect(res._data).toEqual({ archetypeId: survivor.id, mergedArchetypeId: merged.id });
+
+		const archetypes = (await $fetch(`/api/events/${eventId}/archetypes`)) as any;
+		expect(archetypes.archetypes.find((a: any) => a.id === merged.id)).toBeUndefined();
+		const players = (await $fetch(`/api/events/${eventId}/players`)) as any;
+		expect(players.players.find((p: any) => p.id === player.id).archetypeId).toBe(survivor.id);
+	});
+
+	// In an Event of its own: it removes every Empty Archetype of the Event it is asked of.
+	it('removes the Empty Archetypes, keeping one a Player holds', async () => {
+		const event = (await $fetch('/api/events', {
+			method: 'POST',
+			body: { name: 'Integration Empty Archetypes Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
+		})) as any;
+		try {
+			const empty = (await $fetch(`/api/events/${event.id}/archetypes`, {
+				method: 'POST',
+				body: { name: 'Empty To Remove' },
+			})) as any;
+			const held = (await $fetch(`/api/events/${event.id}/archetypes`, {
+				method: 'POST',
+				body: { name: 'Held By A Player' },
+			})) as any;
+			const player = (await $fetch(`/api/events/${event.id}/players`, {
+				method: 'POST',
+				body: { name: 'Holding Player' },
+			})) as any;
+			await $fetch(`/api/events/${event.id}/players/${player.id}`, {
+				method: 'PATCH',
+				body: { archetypeId: held.id },
+			});
+
+			const res = await $fetchRaw(`/api/events/${event.id}/archetypes/empty`, { method: 'DELETE' });
+
+			expect(res.status).toBe(200);
+			expect(res._data.archetypeIds).toEqual([empty.id]);
+			const archetypes = (await $fetch(`/api/events/${event.id}/archetypes`)) as any;
+			expect(archetypes.archetypes.map((a: any) => a.id)).toEqual([held.id]);
+		}
+		finally {
+			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' }).catch(() => {});
+		}
+	});
+
 	// ── Validation ──
 
 	// ── Key Cards API ──

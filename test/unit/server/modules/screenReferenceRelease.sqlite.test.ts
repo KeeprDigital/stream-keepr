@@ -111,6 +111,7 @@ async function seed(imported: boolean) {
 	return {
 		eventId,
 		doomed,
+		kept,
 		selecting: await screens('Selecting', doomed),
 		bystanders: await screens('Bystander', kept),
 	};
@@ -300,6 +301,58 @@ describe('deleting a Phase, Round or Archetype releases the Screens naming it', 
 				.toBe(kind === 'archetype'
 					? seeded.doomed.archetype
 					: undefined);
+		}
+	});
+});
+
+// A merge leaves a Screen showing the Archetype its decks moved to, where a delete would leave it showing none.
+describe('merging an Archetype repoints the Screens naming it', () => {
+	it('names the survivor in each reference in the same write and announces each Screen first', async () => {
+		const seeded = await seed(false);
+
+		await archetypeWriteModule().mergeArchetype({
+			eventId: seeded.eventId,
+			archetypeId: seeded.doomed.archetype,
+			intoArchetypeId: seeded.kept.archetype,
+			originConnectionId: 'merge-origin',
+		});
+
+		const repointed = seeded.selecting.filter(({ kind }) => kind === 'archetype');
+		expect(repointed).not.toHaveLength(0);
+		for (const { mode, field, kind, screen } of seeded.selecting) {
+			const stored = (await screenService().findById(screen.id, seeded.eventId))!;
+			if (kind === 'archetype') {
+				expect(stored.stateVersion, `${mode}.${field}`).toBe(screen.stateVersion + 1);
+				expect(stored.modeConfigs?.[mode], `${mode}.${field}`).toHaveProperty(field, seeded.kept.archetype);
+			}
+			else {
+				expect(stored, `${mode}.${field}`).toMatchObject({ stateVersion: screen.stateVersion, modeConfigs: screen.modeConfigs });
+			}
+		}
+		for (const { screen } of seeded.bystanders) {
+			expect(await screenService().findById(screen.id, seeded.eventId))
+				.toMatchObject({ stateVersion: screen.stateVersion, modeConfigs: screen.modeConfigs });
+		}
+
+		// The merging client holds these Screens at their old version too, so no origin.
+		expect(publication.screenUpdated!.mock.calls.map(([input]) => input).toSorted((a, b) => a.entity.id - b.entity.id))
+			.toEqual(repointed.map(({ screen }) => ({
+				eventId: seeded.eventId,
+				entity: expect.objectContaining({ id: screen.id }),
+			})));
+		const announced = publication.archetypeDeleted!.mock.invocationCallOrder[0]!;
+		for (const order of publication.screenUpdated!.mock.invocationCallOrder)
+			expect(order).toBeLessThan(announced);
+
+		// A repointed Screen still saves whole: its reference names an Archetype of the Event.
+		for (const { screen } of repointed) {
+			const stored = (await screenService().findById(screen.id, seeded.eventId))!;
+			await expect(screenWriteModule().updateScreen({
+				authoringSessionId: undefined,
+				eventId: seeded.eventId,
+				screenId: screen.id,
+				input: { stateVersion: stored.stateVersion, modeConfigs: stored.modeConfigs } as never,
+			})).resolves.toMatchObject({ stateVersion: stored.stateVersion + 1 });
 		}
 	});
 });

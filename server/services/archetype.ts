@@ -1,8 +1,8 @@
 import type { DbArchetype } from '~~/server/db/schema';
 import type { CreateArchetypeInput, UpdateArchetypeInput } from '~~/shared/api';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, notExists } from 'drizzle-orm';
 import { db } from '~~/server/db';
-import { archetypes } from '~~/server/db/schema';
+import { archetypes, playerDecks, players } from '~~/server/db/schema';
 import { chunkArray, SAFE_INARRAY_SIZE } from '~~/server/utils/db';
 
 export function archetypeService() {
@@ -80,6 +80,23 @@ export function archetypeService() {
 			.returning();
 	};
 
+	/**
+	 * Build (without executing) the delete of the Event's Empty Archetypes: those
+	 * no Deck List is assigned to, primary or not. One a Player holds with no
+	 * Deck List, as the Player write allows, has a Pilot and stays. For a batch
+	 * that also releases the Screens naming them (ADR-0060).
+	 */
+	const buildRemoveEmptyQuery = (eventId: number) => {
+		return db
+			.delete(archetypes)
+			.where(and(
+				eq(archetypes.eventId, eventId),
+				notExists(db.select({ id: playerDecks.id }).from(playerDecks).where(eq(playerDecks.archetypeId, archetypes.id))),
+				notExists(db.select({ id: players.id }).from(players).where(eq(players.archetypeId, archetypes.id))),
+			))
+			.returning();
+	};
+
 	return {
 		findByEventId,
 		findById,
@@ -87,5 +104,6 @@ export function archetypeService() {
 		create,
 		update,
 		buildRemoveQuery,
+		buildRemoveEmptyQuery,
 	};
 }

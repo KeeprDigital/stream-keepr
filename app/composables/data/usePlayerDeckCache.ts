@@ -186,6 +186,19 @@ export function usePlayerDeckCache() {
 		});
 	}
 
+	/** A merge moved these decks to the survivor: they stay reviewed, under its name and colours. */
+	function applyArchetypeMerged(mergedArchetypeId: number, survivor: Archetype) {
+		for (const { collection } of cache.values()) {
+			for (const deck of collection.decks) {
+				if (deck.archetypeId === mergedArchetypeId) {
+					deck.archetypeId = survivor.id;
+					deck.name = survivor.name;
+					deck.colors = survivor.colors ?? '';
+				}
+			}
+		}
+	}
+
 	function applyArchetypeDeleted(archetypeId: number) {
 		for (const { collection } of cache.values()) {
 			for (const deck of collection.decks) {
@@ -234,6 +247,7 @@ export function usePlayerDeckCache() {
 		clearCachedDeck,
 		reviewDeck,
 		applyArchetypeUpdated,
+		applyArchetypeMerged,
 		applyArchetypeDeleted,
 		applyReviewedDeck,
 		getDeckLists,

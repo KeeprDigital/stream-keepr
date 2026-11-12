@@ -74,6 +74,8 @@ async function mountPage() {
 				MetagameCardsTable: true,
 				MetagamePlayersTable: true,
 				MetagameArchetypeChartSeriesField: true,
+				MetagameArchetypeNameField: true,
+				MetagameArchetypeActions: true,
 			},
 		},
 	});
@@ -119,6 +121,21 @@ describe('archetype metagame detail page', () => {
 		expect(wrapper.get('[data-testid="stats"]').text()).toBe(stats);
 		expect(wrapper.findComponent({ name: 'MetagameCardsTable' }).exists()).toBe(true);
 		expect(wrapper.findComponent({ name: 'MetagameArchetypeChartSeriesField' }).exists()).toBe(true);
+		wrapper.unmount();
+		mockEventStore.event.game = 'mtg';
+	});
+
+	// An MTG Archetype is the operator's to rename, merge and delete; an OP one follows its Leader and is only renamed (ADR-0074).
+	it.each([
+		['mtg', true],
+		['op', false],
+	] as const)('on a %s Event, renames the Archetype, and merges or deletes it: %s', async (game, managed) => {
+		mockEventStore.event.game = game;
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		expect(wrapper.findComponent({ name: 'MetagameArchetypeNameField' }).props()).toEqual({ eventId: 99, archetypeId: 1, mergeable: managed });
+		expect(wrapper.findComponent({ name: 'MetagameArchetypeActions' }).exists()).toBe(managed);
 		wrapper.unmount();
 		mockEventStore.event.game = 'mtg';
 	});

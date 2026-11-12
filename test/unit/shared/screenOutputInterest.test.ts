@@ -563,6 +563,16 @@ describe('outputChangeOf', () => {
 		expect(outputChangeOf(type, SAMPLES[type])).toEqual(kinds.map(kind => ({ kind })));
 	});
 
+	// A merge moves the merged Archetype's decks to the survivor, so a Screen showing either shows a change.
+	it('names the survivor of a merge beside the Archetype merged away', () => {
+		expect(outputChangeOf('archetype:deleted', { archetypeId: 91, mergedIntoArchetypeId: 92 })).toEqual([
+			{
+				kind: 'archetype',
+				archetypeIds: [91, 92],
+			},
+		]);
+	});
+
 	// Operator-only data, and what travels on a Screen's own channel (its commands, and
 	// the notices of these changes), which are no change to what an output shows.
 	// One starting to reach outputs must be a decision made here.

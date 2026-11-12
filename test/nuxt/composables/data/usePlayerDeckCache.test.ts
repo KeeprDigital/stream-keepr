@@ -259,6 +259,45 @@ describe('usePlayerDeckCache', () => {
 		});
 	});
 
+	it('moves a merged Archetype\'s cached decks to its survivor, still reviewed', async () => {
+		const reviewedAt = new Date('2026-01-01').toISOString() as never;
+		mockFetch.mockResolvedValue(collection([
+			deck({
+				archetypeId: 5,
+				reviewedAt,
+				name: 'Burn',
+				colors: 'R',
+			}),
+			deck({
+				id: 11,
+				archetypeId: 6,
+				reviewedAt,
+				name: 'Control',
+				colors: 'U',
+			}),
+		]));
+		const cache = usePlayerDeckCache();
+		const player = createMockPlayer({ id: 1 });
+		await cache.fetchDeck(player.id, 1, player.updatedAt);
+
+		cache.applyArchetypeMerged(5, { id: 7, name: 'Boros Burn', colors: 'RW' } as never);
+
+		expect(cache.getDeckLists(player as never)).toMatchObject([
+			{
+				deckId: 10,
+				name: 'Boros Burn',
+				colors: 'RW',
+				reviewed: true,
+			},
+			{
+				deckId: 11,
+				name: 'Control',
+				colors: 'U',
+				reviewed: true,
+			},
+		]);
+	});
+
 	it('builds every submitted deck list from normalized deck metadata', async () => {
 		const highlander = {
 			status: 'legal' as const,

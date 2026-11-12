@@ -52,6 +52,10 @@ const EVENT_DATA = {
 		{ id: 21, name: 'Azorius Control' },
 		{ id: 22, name: 'Mono Red' },
 	],
+	// One deck is assigned to Azorius Control; Mono Red is an Empty Archetype.
+	decks: [
+		{ id: 41, playerId: 7, archetypeId: 21 },
+	],
 	featureMatches: [
 		{ id: 11, label: 'Match 1 — A vs B' },
 		{ id: 12, label: 'Match 2' },
@@ -70,6 +74,7 @@ const stores = vi.hoisted(() => {
 		player: store('players', 'loadPlayersByEventId'),
 		playerList: store('lists', 'loadByEventId'),
 		archetype: store('archetypes', 'loadByEventId'),
+		playerDeck: store('decks', 'loadByEventId'),
 		featureMatch: store('featureMatches', 'loadFeatureMatchesByEventId'),
 		event: {
 			event: {
@@ -89,6 +94,7 @@ const held = {
 	player: reactive(stores.player),
 	playerList: reactive(stores.playerList),
 	archetype: reactive(stores.archetype),
+	playerDeck: reactive(stores.playerDeck),
 	featureMatch: reactive(stores.featureMatch),
 };
 mockNuxtImport('useRoundStore', () => () => held.round);
@@ -96,6 +102,7 @@ mockNuxtImport('usePhaseStore', () => () => held.phase);
 mockNuxtImport('usePlayerStore', () => () => held.player);
 mockNuxtImport('usePlayerListStore', () => () => held.playerList);
 mockNuxtImport('useArchetypeStore', () => () => held.archetype);
+mockNuxtImport('usePlayerDeckStore', () => () => held.playerDeck);
 mockNuxtImport('useFeatureMatchStore', () => () => held.featureMatch);
 mockNuxtImport('useEventStore', () => () => stores.event);
 mockNuxtImport('useFeatureMatchMenuItems', () => () => computed(() =>
@@ -116,6 +123,7 @@ function answerLoads() {
 	answer(held.player, held.player.loadPlayersByEventId, { players: EVENT_DATA.players });
 	answer(held.playerList, held.playerList.loadByEventId, { lists: EVENT_DATA.lists });
 	answer(held.archetype, held.archetype.loadByEventId, { archetypes: EVENT_DATA.archetypes });
+	answer(held.playerDeck, held.playerDeck.loadByEventId, { decks: EVENT_DATA.decks });
 	answer(held.featureMatch, held.featureMatch.loadFeatureMatchesByEventId, { featureMatches: EVENT_DATA.featureMatches });
 }
 
@@ -170,9 +178,10 @@ const KINDS: PickerKind[] = [
 		kind: 'Archetype',
 		picker: ArchetypeField,
 		nullLabel: 'Select an archetype…',
-		offers: ['Azorius Control', 'Mono Red'],
-		pick: { label: 'Mono Red', id: 22 },
-		rereads: ['archetypes'],
+		// It lists an Empty Archetype, marked: hidden, an operator could neither pick nor find it.
+		offers: ['Azorius Control', 'Mono Red (empty)'],
+		pick: { label: 'Mono Red (empty)', id: 22 },
+		rereads: ['archetypes', 'playerDecks', 'players'],
 		searchable: true,
 	},
 	{
@@ -205,6 +214,7 @@ describe('event reference pickers', () => {
 		Object.assign(held.player, { players: [] });
 		Object.assign(held.playerList, { lists: [] });
 		Object.assign(held.archetype, { archetypes: [] });
+		Object.assign(held.playerDeck, { decks: [] });
 		Object.assign(held.featureMatch, { featureMatches: [] });
 		answerLoads();
 	});

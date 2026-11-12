@@ -180,6 +180,38 @@ export function buildReleaseScreenEventReferencesQuery(eventId: number, kinds: r
 		.returning();
 }
 
+/**
+ * Names another record in every declared Event Reference of `kind` naming
+ * `fromId`, on each Screen in the Event, as a new Screen version. A merge
+ * batches it before deleting the merged record, so a Screen goes on showing
+ * what the record's decks moved to where a delete would leave it showing none.
+ */
+export function buildRepointScreenEventReferencesQuery(eventId: number, kind: 'archetype', fromId: number, toId: number) {
+	const paths = SCREEN_MODE_VALUES.flatMap(mode =>
+		Object.entries(SCREEN_MODES[mode].eventReferences).flatMap(([field, declared]) => declared === kind
+			? [`$."${mode}".${field}`]
+			: []));
+	if (paths.length === 0)
+		throw new Error(`No Screen Mode declares an Event Reference of ${kind}`);
+
+	const names = (path: string) => sql`json_extract(${screens.modeConfigs}, ${path}) = ${fromId}`;
+	return db
+		.update(screens)
+		.set({
+			// `json_replace` writes only a field that is there, so a Screen naming nothing gains none.
+			modeConfigs: paths.reduce<SQL>(
+				(configs, path) => sql`json_replace(${configs}, ${path}, case when ${names(path)} then ${toId} else json_extract(${screens.modeConfigs}, ${path}) end)`,
+				sql`${screens.modeConfigs}`,
+			),
+			stateVersion: sql`${screens.stateVersion} + 1`,
+		})
+		.where(and(
+			eq(screens.eventId, eventId),
+			or(...paths.map(names)),
+		))
+		.returning();
+}
+
 export function screenService() {
 	const findById = async (id: number, eventId: number): Promise<DbScreen | undefined> => {
 		return await db.query.screens.findFirst({
