@@ -18,7 +18,6 @@ import {
 	DEFAULT_HEADER_CONFIG,
 	DEFAULT_METAGAME_SCOPE,
 	DEFAULT_PAGE_ROTATION,
-	FORMER_METAGAME_ARCHETYPE_FILTER_FIELD,
 	hasSideboard,
 	headerConfigShape,
 	METAGAME_CARD_SORT_BY_LABELS,
@@ -219,7 +218,6 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 			showWhen: ({ config, event }) => hasPointsSystem(event) || config.showPointsBadges === true,
 		},
 	},
-	formerFields: [FORMER_METAGAME_ARCHETYPE_FILTER_FIELD],
 });
 
 export type TopCardsModeConfig = ScreenModeConfigOf<typeof topCardsModeConfigContract>;
