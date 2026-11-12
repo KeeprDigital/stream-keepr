@@ -244,7 +244,7 @@ export function createMetagameReadModelImplementation() {
 		const scope = metagameScope.scope;
 		const board = metagameScope.deckUniverse.board;
 
-		if (metagameScope.resolvedArchetypeId === null || totalDecks === 0) {
+		if (totalDecks === 0) {
 			return { entries: [], totalDecks: 0, scope };
 		}
 
@@ -319,7 +319,6 @@ export function createMetagameReadModelImplementation() {
 		playerListId?: number,
 		archetypeId?: number,
 		board: BoardSelection = 'full',
-		archetypeName?: string,
 		excludeTypes?: MetagameCardTypeBucket[],
 		minPoints?: number,
 		pointedOnly?: boolean,
@@ -329,17 +328,26 @@ export function createMetagameReadModelImplementation() {
 			topN,
 			playerListId,
 			archetypeId,
-			archetype: archetypeName,
 			board,
 			minPoints,
 		});
-		if (metagameScope.resolvedArchetypeId === null) {
-			return { entries: [], totalDecks: 0, scope };
+		// The Archetype the read is narrowed to, named for its caller: a Screen holds its id alone (ADR-0038).
+		const archetype = archetypeId == null
+			? undefined
+			: await db.query.archetypes.findFirst({
+					where: and(eq(archetypes.id, archetypeId), eq(archetypes.eventId, eventId)),
+					columns: { id: true, name: true },
+				});
+		if (archetypeId != null && !archetype) {
+			return { entries: [], totalDecks: 0, scope: metagameScope.scope };
 		}
 
 		const totalDecks = await metagameScope.deckUniverse.countDecks();
+		const breakdown = await computeCardBreakdown(eventId, metagameScope, totalDecks, sortBy, limit, excludeTypes, pointedOnly);
 
-		return computeCardBreakdown(eventId, metagameScope, totalDecks, sortBy, limit, excludeTypes, pointedOnly);
+		return archetype
+			? { ...breakdown, archetype }
+			: breakdown;
 	}
 
 	// ── Summary dashboard ──────────────────────────────────────────

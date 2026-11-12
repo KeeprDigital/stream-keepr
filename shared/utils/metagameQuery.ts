@@ -32,9 +32,8 @@ export interface MetagameCardBreakdownOptions {
 	sortBy?: MetagameCardSortBy;
 	limit?: number;
 	board?: BoardSelection;
+	/** The Archetype whose decks alone are counted. */
 	archetypeId?: number;
-	/** Legacy Screen config filter name; preserved while Screen config stores names instead of ids. */
-	archetype?: string;
 	/** Card-type buckets to drop server-side, before the limit applies. */
 	excludeTypes?: MetagameCardTypeBucket[];
 	/** Only cards the Event's points system points, before the limit applies. */
@@ -85,8 +84,6 @@ export function buildCardBreakdownQuery(
 	scope: MetagameScopeInput,
 	options: MetagameCardBreakdownOptions = {},
 ) {
-	const archetype = options.archetype?.trim();
-
 	return {
 		...buildMetagameScopeQuery(scope),
 		sortBy: options.sortBy ?? 'inclusionRate',
@@ -96,9 +93,6 @@ export function buildCardBreakdownQuery(
 			: {}),
 		...(options.archetypeId != null
 			? { archetypeId: options.archetypeId }
-			: {}),
-		...(archetype
-			? { archetype }
 			: {}),
 		...(options.excludeTypes?.length
 			? {
@@ -139,7 +133,7 @@ export function metagameScreenQuery(config: MetagameModeConfig, target: Conversi
 				query: buildCardBreakdownQuery(config, {
 					sortBy: config.cardSortBy,
 					limit: config.limit,
-					archetype: config.archetypeFilter,
+					archetypeId: config.archetypeId,
 				}),
 			}
 		: {
@@ -183,7 +177,7 @@ export function topCardsScreenQuery(config: TopCardsModeConfig) {
 			sortBy: config.sortBy,
 			limit: config.limit,
 			board: config.board,
-			archetype: config.archetypeFilter,
+			archetypeId: config.archetypeId,
 			excludeTypes: config.pointedOnly
 				? config.excludedCardTypes.filter(type => type !== 'Land')
 				: config.excludedCardTypes,

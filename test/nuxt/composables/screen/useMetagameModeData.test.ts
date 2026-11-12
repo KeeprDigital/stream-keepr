@@ -26,7 +26,7 @@ const defaultConfig = {
 	topN: 8,
 	minPoints: 9,
 	playerListId: undefined as number | undefined,
-	archetypeFilter: undefined as string | undefined,
+	archetypeId: undefined as number | undefined,
 	sortBy: 'metaShare' as const,
 	cardSortBy: 'inclusionRate' as const,
 	archetypeColumns: [
@@ -201,13 +201,16 @@ describe('useMetagameModeData', () => {
 			],
 			totalDecks: 2,
 			scope: 'all',
+			archetype: { id: 4, name: 'Mono Red' },
 		}));
-		Object.assign(mutableConfig, { viewMode: 'cards', archetypeFilter: 'Mono Red' });
+		Object.assign(mutableConfig, { viewMode: 'cards', archetypeId: 4 });
 
-		const { displayRows } = makeMetagameModeData();
+		const { displayRows, headerText } = makeMetagameModeData();
 		await flushPromises();
 
 		expect(names(displayRows.value)).toEqual(['Lightning Bolt']);
+		// The Archetype as the read names it: the Screen holds its id alone (ADR-0038).
+		expect(headerText.value).toBe('Full Field Cards: Mono Red');
 	});
 
 	describe('pages', () => {

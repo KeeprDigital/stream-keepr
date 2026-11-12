@@ -36,7 +36,7 @@ export function useMetagameModeData(context: ScreenContext) {
 			config.value.topN,
 			config.value.minPoints,
 			config.value.playerListId,
-			config.value.archetypeFilter,
+			config.value.archetypeId,
 			config.value.sortBy,
 			config.value.cardSortBy,
 			config.value.limit,
@@ -94,9 +94,10 @@ export function useMetagameModeData(context: ScreenContext) {
 					: 'Full Field';
 
 		switch (config.value.viewMode) {
+			// The Archetype as its read names it: the Screen holds its id alone (ADR-0038).
 			case 'cards':
-				return config.value.archetypeFilter
-					? `${prefix} Cards: ${config.value.archetypeFilter}`
+				return cardData.value?.archetype
+					? `${prefix} Cards: ${cardData.value.archetype.name}`
 					: `${prefix} Most Played Cards`;
 			case 'archetype':
 			case 'chart':

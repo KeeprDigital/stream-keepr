@@ -132,6 +132,8 @@ describe('deleting a Phase, Round or Archetype releases the Screens naming it', 
 		expect(declared.map(({ mode, field, kind }) => `${mode}.${field}: ${kind}`)).toEqual([
 			'standings.roundId: round',
 			'top-cut.phaseId: phase',
+			'metagame.archetypeId: archetype',
+			'top-cards.archetypeId: archetype',
 			'pairings.roundId: round',
 			'archetype-spotlight.archetypeId: archetype',
 			'round-clock.roundId: round',

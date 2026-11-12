@@ -109,10 +109,11 @@ describe('topCardsScreenQuery', () => {
 	});
 
 	it('scopes the same way the Metagame card breakdown does', () => {
-		const stored = { scope: 'playerList', playerListId: 3, archetypeFilter: 'Rakdos Midrange' } as const;
-		const { scope, playerListId, archetype } = screenQuery({ ...stored, viewMode: 'cards' }).query as Record<string, unknown>;
+		const stored = { scope: 'playerList', playerListId: 3, archetypeId: 4 } as const;
+		const { scope, playerListId, archetypeId } = screenQuery({ ...stored, viewMode: 'cards' }).query as Record<string, unknown>;
 
-		expect(topCardsQuery(stored)).toMatchObject({ scope, playerListId, archetype });
+		expect(archetypeId).toBe(4);
+		expect(topCardsQuery(stored)).toMatchObject({ scope, playerListId, archetypeId });
 	});
 
 	// A pointed land such as Strip Mine is a pointed pick, so ranking pointed cards keeps nonbasic lands in.

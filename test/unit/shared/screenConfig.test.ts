@@ -214,8 +214,8 @@ describe('resolveDeckBoards', () => {
  */
 describe('toModeConfigPatch', () => {
 	it('sends a cleared field as a deletion and leaves every field it does not name out', () => {
-		expect(toModeConfigPatch('metagame', { archetypeFilter: undefined, headerText: null, topN: 16 }))
-			.toEqual({ archetypeFilter: null, headerText: null, topN: 16 });
+		expect(toModeConfigPatch('metagame', { archetypeId: undefined, headerText: null, topN: 16 }))
+			.toEqual({ archetypeId: null, headerText: null, topN: 16 });
 	});
 
 	it('never deletes an authored stack, which leaves it out instead (ADR-0037)', () => {

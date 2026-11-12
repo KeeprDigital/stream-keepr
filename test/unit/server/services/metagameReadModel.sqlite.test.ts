@@ -278,6 +278,41 @@ describe('card breakdown', () => {
 		expect(await metagameReadModel().getCardBreakdown(emptyEventId, { scope: 'all' }))
 			.toMatchObject({ entries: [], totalDecks: 0, scope: 'all' });
 	});
+
+	it('narrows to one Archetype\'s decks by its id, and names the Archetype it counted', async () => {
+		const filtered = await metagameReadModel().getCardBreakdown(eventId, { scope: 'all', archetypeId: monoRedId });
+
+		expect(filtered).toMatchObject({
+			totalDecks: 2,
+			archetype: { id: monoRedId, name: 'Mono Red' },
+		});
+		expect(names(filtered.entries)).toEqual([
+			'Disdainful Stroke',
+			'Lightning Bolt',
+			'Shatterskull Smashing',
+			'Treasure Vault',
+		]);
+	});
+
+	it('names no Archetype while it counts every Archetype\'s decks', async () => {
+		expect(await metagameReadModel().getCardBreakdown(eventId, { scope: 'all' })).not.toHaveProperty('archetype');
+	});
+
+	it.each([
+		[
+			'an Archetype no Event holds',
+			async () => 999_999,
+		],
+		[
+			'another Event\'s Archetype',
+			async () => (await db.insert(schema.archetypes)
+				.values({ eventId: emptyEventId, name: 'Elsewhere' })
+				.returning({ id: schema.archetypes.id }))[0]!.id,
+		],
+	])('counts nothing, and names nothing, for %s', async (_what, archetypeId) => {
+		expect(await metagameReadModel().getCardBreakdown(eventId, { scope: 'all', archetypeId: await archetypeId() }))
+			.toEqual({ entries: [], totalDecks: 0, scope: 'all' });
+	});
 });
 
 describe('pointed cards', () => {

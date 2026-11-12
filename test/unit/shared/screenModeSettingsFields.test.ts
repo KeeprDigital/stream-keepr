@@ -134,14 +134,14 @@ describe('when a settings field shows', () => {
 		],
 		[
 			'metagame',
-			'archetypeFilter',
+			'archetypeId',
 			'in the cards view',
 			context({ viewMode: 'cards' }),
 			true,
 		],
 		[
 			'metagame',
-			'archetypeFilter',
+			'archetypeId',
 			'in the archetype view',
 			context({ viewMode: 'archetype' }),
 			false,

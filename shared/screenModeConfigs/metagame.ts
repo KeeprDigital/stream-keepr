@@ -74,7 +74,8 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 
 	// Scoping
 	...metagameScopeShape,
-	archetypeFilter: withEditorMeta(metagameArchetypeFilterField, { showWhen: showsCards }),
+	/** The Archetype the cards view counts alone; an Event Reference (ADR-0038). */
+	archetypeId: withEditorMeta(metagameArchetypeFilterField, { showWhen: showsCards }),
 
 	// Sorting
 	sortBy: editorField(z.enum(METAGAME_SORT_BY_VALUES), {
@@ -147,7 +148,7 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 }, {
 	viewMode: 'archetype',
 	...DEFAULT_METAGAME_SCOPE,
-	archetypeFilter: undefined,
+	archetypeId: undefined,
 	sortBy: 'metaShare',
 	cardSortBy: 'inclusionRate',
 	archetypeColumns: [
