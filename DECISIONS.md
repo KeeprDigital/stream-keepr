@@ -2408,7 +2408,7 @@ All of a Screen's Mode Tokens sat in one flat Theme card above the mode's settin
 
 ## ADR-0073: The Graphics Asset Library keeps one facade, and an operation family moves behind its own smaller interface only where its invariants get a home
 
-Accepted · 2026-11-04 · [#623](https://github.com/KeeprDigital/stream-keepr/issues/623) · Follow-ups [#989](https://github.com/KeeprDigital/stream-keepr/issues/989), [#990](https://github.com/KeeprDigital/stream-keepr/issues/990), [#991](https://github.com/KeeprDigital/stream-keepr/issues/991), [#992](https://github.com/KeeprDigital/stream-keepr/issues/992) · Amended 2026-11-12 by [#1122](https://github.com/KeeprDigital/stream-keepr/issues/1122), which deletes the in-memory catalogue adapter.
+Accepted · 2026-11-04 · [#623](https://github.com/KeeprDigital/stream-keepr/issues/623) · Follow-ups [#989](https://github.com/KeeprDigital/stream-keepr/issues/989), [#990](https://github.com/KeeprDigital/stream-keepr/issues/990), [#992](https://github.com/KeeprDigital/stream-keepr/issues/992); [#991](https://github.com/KeeprDigital/stream-keepr/issues/991) was closed as not planned, and what remained of it is [#1140](https://github.com/KeeprDigital/stream-keepr/issues/1140) · Amended 2026-11-12 by [#1122](https://github.com/KeeprDigital/stream-keepr/issues/1122), which deletes the in-memory catalogue adapter, and by #1140, which requires retention of the catalogue port.
 
 ### Evaluation
 
@@ -2423,7 +2423,7 @@ The evidence is from `main` at `82c22f49`, after #949 (Talent photo) and #950 (I
 | Delivery                | 5 reads (`index.ts:5446–5553`)               | `findRevisionContent(s)`, `findThumbnailContent` (`index.ts:607–657`)          | Closures in the factory (`index.ts:1693–1710`, `1802–1882`)                            | **Moved here**                                            |
 | Ingestion               | 15 (`index.ts:4210–4249`, `4473–5275`)       | 19, among them publish, reuse, claim, multipart and staged bytes               | `continueGraphicsIngestion` (`index.ts:3707`), helpers (`1891–2631`)                   | Worth doing: #989                                         |
 | Template Packages       | 8 (`index.ts:4250–4472`, export `5554–5717`) | 12, plus `findRevisionContent` (`index.ts:3339`, `5580`)                       | `index.ts:2692–3706`                                                                   | Worth doing after the ingestion operation interface: #990 |
-| Discovery and lifecycle | 6 (`index.ts:5276–5445`)                     | 6; Retire-blocking SQL (`catalogue.ts:265`)                                    | Facade plus Evidence hooks (`index.ts:1717–1775`)                                      | Worth doing, as a contract across both adapters: #991     |
+| Discovery and lifecycle | 6 (`index.ts:5276–5445`)                     | 6; Retire-blocking SQL (`catalogue.ts:265`)                                    | Facade plus Evidence hooks (`index.ts:1717–1775`)                                      | #991 closed as not planned; what remained of it: #1140    |
 | Retention               | 6 (`index.ts:5718–5779`, `5801–5818`)        | `GraphicsAssetRetentionCatalogue`, 32 (`retention.ts:160`)                     | `createGraphicsRetention` (`retention.ts:426`)                                         | Already split; no ticket                                  |
 | Reconciliation          | 7 (`index.ts:5819–5876`)                     | `GraphicsAssetReconciliationCatalogue`, 30 (`reconciliation.ts:151`)           | `createGraphicsReconciliation` (`reconciliation.ts:356`), media port (`index.ts:1433`) | Already split; no ticket                                  |
 | Operational reads       | 4 (`index.ts:4174`, `5780–5800`)             | Cockpit 9 (`operations-cockpit.ts:91`), queues 14 (`operational-queues.ts:64`) | Their own modules                                                                      | Already split; no ticket                                  |
@@ -2434,7 +2434,7 @@ Ingestion and Template Packages share the Graphics Ingestion Operation lifecycle
 **Behaviour contracts across both catalogue adapters:**
 
 - **Delivery's reads match.** Its seam test (`test/unit/server/modules/graphicsAssetDelivery.sqlite.test.ts`) runs against both adapters.
-- **Retire, Trash, Restore and usage match in type but not in behaviour.** The in-memory `retireGraphicAsset` holds Retire back for template owners only (`in-memory-catalogue.ts:1250–1255`). D1 also counts Themes, Screen Theme Overrides and Talents. #991 makes that a shared contract.
+- **Retire, Trash, Restore and usage match in type but not in behaviour.** The in-memory `retireGraphicAsset` holds Retire back for template owners only (`in-memory-catalogue.ts:1250–1255`). D1 also counts Themes, Screen Theme Overrides and Talents. #991 proposed making that a shared contract. It was closed as not planned once D1 was the only adapter, and what remained of it is #1140.
 - **Publication, claim and Template Package installation** exist in both adapters and are contract candidates in #989 and #990.
 - **Retention, reconciliation, cockpit and queue catalogues** have only the D1 adapter, so they stay on the SQLite harness.
 
@@ -2444,7 +2444,9 @@ Ingestion and Template Packages share the Graphics Ingestion Operation lifecycle
 
 **A family moves only when it gains something.** Its invariants must be nameable and testable at its own seam, and something must vary across that seam: both catalogue adapters, or a caller needing only that family. No generic repository or table abstraction is introduced to fold together SQL that merely looks alike.
 
-**The catalogue port has one adapter, D1 (#1122).** The in-memory adapter the evaluation counts was built only by tests, and is deleted: every library test runs on the SQLite harness. So a second adapter no longer earns a family its seam; a caller needing only that family still does. The cross-adapter contracts the evaluation lists, and the one #991 proposes, have nothing left to compare.
+**The catalogue port has one adapter, D1 (#1122).** The in-memory adapter the evaluation counts was built only by tests, and is deleted: every library test runs on the SQLite harness. So a second adapter no longer earns a family its seam; a caller needing only that family still does. The cross-adapter contracts the evaluation lists, and the one #991 proposed, have nothing left to compare.
+
+**Retention is required of the catalogue port (#1140).** `GraphicsAssetCatalogue` extends `GraphicsAssetRetentionCatalogue`, so the facade no longer asks at run time whether its catalogue has retention: a Retire, Trash, Restore or supersession always has a catalogue to write its Evidence to, and the type holds that. Evidence stays best-effort against a transition that already committed. The reconciliation, cockpit and queue catalogues are still probed for; the same argument may apply to them, and it has not been decided.
 
 **Delivery is the first.** `server/modules/graphics-asset-library/delivery.ts` holds it:
 
@@ -2483,7 +2485,7 @@ How the existing types fit around it:
   - Delivery: small, done (5 facade methods, 3 catalogue reads, 1 caller rewired).
   - Ingestion: large (#989).
   - Template Packages: medium to large (#990).
-  - Discovery and lifecycle: medium (#991).
+  - Discovery and lifecycle: not split (#991 closed as not planned). What remained of it, requiring retention of the catalogue port, was small (#1140).
 
 ### Rejected alternatives
 

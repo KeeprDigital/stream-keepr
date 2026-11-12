@@ -17,7 +17,6 @@ import type {
 import type { GraphicsAssetMultipartState } from './multipart';
 import type { GraphicsOperationsCockpitCatalogue } from './operations-cockpit';
 import type { GraphicsAssetReconciliationCatalogue } from './reconciliation';
-import type { GraphicsAssetRetentionCatalogue } from './retention';
 import type { TemplatePackagePreflightState } from './template-package-preflight';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
 import { graphicsCanonicalCapacityPressure } from '~~/shared/utils/graphicsAssetCapacity';
@@ -486,7 +485,6 @@ function updateOperationStatement(
 export function createD1GraphicsAssetCatalogue(
 	database: D1Database,
 ): GraphicsAssetCatalogue
-	& GraphicsAssetRetentionCatalogue
 	& GraphicsAssetReconciliationCatalogue
 	& GraphicsOperationsCockpitCatalogue {
 	return {
