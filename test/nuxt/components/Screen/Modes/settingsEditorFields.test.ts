@@ -15,7 +15,7 @@ vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/ed
 
 const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'background': 'its editor is the Background Layer stack, an authored stack',
-	'feature-match-overlay': 'its editor picks a Feature Match Slot (an Event Reference), applies a preset, and edits the server-validated layout',
+	'feature-match-overlay': 'its editor picks a Feature Match Slot (an Event Reference) and edits the server-validated layout',
 	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Broadcast Graphics Background: one Animation Effect selection, a union field the shared Animation Effect editor edits from its catalogue schema',
 };
 
@@ -23,7 +23,7 @@ const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 // A bespoke control counts as rendering its field. A field its contract gives a
 // named slot, such as Deck's board toggles, is that slot's widget's.
 const BESPOKE_CONTROLS: Record<string, string> = {
-	// A Card Layout's bounds follow its content (ADR-0054), tested at `ScreenCardGridLayoutFields`.
+	// A Card Layout's bounds follow its content (ADR-0054), tested at the generic renderer (`ModeSettings.test.ts`).
 	'top-cards.columns': 'a column count kept to the card count',
 	'top-cards.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',
 	'deck.mainboard.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',

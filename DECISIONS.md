@@ -1794,7 +1794,7 @@ Accepted · 2026-10-28 · Amended 2026-11-11: Card Sizing, Fixed width or Fit to
 
 - **Auto follows the card:** a fixed share of the card's solved width (`cardBadgeTextSize`), the share that gives the badge's former default text size at its mode's former default card width, as an Auto gap does. That is 14 px on a 160 px Most Played Cards card (`TOP_CARDS_AUTO_BADGE_RATIO`), and 16 px for a quantity badge and 14 px for a point badge on a 144 px Deck card (`DECK_AUTO_BADGE_RATIOS`). Each Deck board's badges follow that board's card width, and Auto keeps to a set size's bounds, 8 to 48 px (`CARD_BADGE_SIZE_BOUNDS`), so a very small or large card cannot take its badge past them. A Deck list row has no card, so its Auto point badge keeps 14 px.
 - **A stored size is kept** as a set size, the former default included, as a stored `cardGap` is: a stored default cannot be told from a choice.
-- **One row per badge:** settings shows each badge as one row holding whether it shows, its position and its size; emptying the size returns it to Auto. Its colours stay Mode Tokens, in the Card Badges card's Looks after the rows.
+- **One row per badge:** settings shows each badge as one row holding whether it shows, its position and its size; emptying the size returns it to Auto. A badge's Screen Settings Group is declared `layout: 'row'`, which the generic renderer draws as one row its title names, so no mode writes a badge component. Its colours stay Mode Tokens, in the Card Badges card's Looks after the rows.
 
 **Earlier sizes were not migrated.** Every field Card Sizing replaced is a former field, which a stored config may still carry and which reads as the mode's default until the Screen is next written:
 

@@ -29,7 +29,7 @@ export type SettingsPageRow
 
 /** A run of a card's rows: its ungrouped fields, or one Screen Settings Group's. */
 export interface SettingsPageSection {
-	group?: { id: string; title: string };
+	group?: { id: string; title: string; layout?: 'row' };
 	rows: SettingsPageRow[];
 }
 
@@ -150,7 +150,7 @@ export function settingsPageCards(mode: ScreenMode, context: ScreenSettingsConte
 				{
 					group: group === undefined
 						? undefined
-						: { id: group, title: groups[group]!.title },
+						: { id: group, title: groups[group]!.title, layout: groups[group]!.layout },
 					rows,
 				},
 			];

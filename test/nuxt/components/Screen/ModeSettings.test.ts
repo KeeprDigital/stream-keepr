@@ -768,6 +768,55 @@ describe('the generic settings renderer', () => {
 		]);
 	});
 
+	// A group laid out as a row, such as a card badge, holds its fields' controls in one row named by the group.
+	it.each([
+		{
+			mode: 'top-cards',
+			config: { showRankBadges: true, statBadge: 'inclusionRate', showPointsBadges: true },
+			rows: {
+				'Rank badge': ['showRankBadges', 'rankBadgePosition', 'rankBadgeTextSize'],
+				'Stat badge': ['statBadge', 'statBadgePosition', 'statBadgeTextSize'],
+				'Point badge': ['showPointsBadges', 'pointsBadgePosition', 'pointsBadgeTextSize'],
+			},
+		},
+		{
+			mode: 'deck',
+			config: {},
+			rows: {
+				'Quantity badge': ['showQuantities', 'quantityPosition', 'quantityBadgeSize'],
+				'Point badge': ['showHighlanderPoints', 'highlanderPointsPosition', 'pointsBadgeSize'],
+				'Companion badge': ['companionTagPosition'],
+			},
+		},
+	] as { mode: RenderedMode; config: Record<string, unknown>; rows: Record<string, string[]> }[])(
+		'draws each $mode card badge as one row of its controls',
+		async ({ mode, config: variant, rows }) => {
+			const wrapper = await mountPage(mode, { config: variant });
+
+			const drawn = wrapper.findAll('[data-settings-row]').map(row => [
+				row.attributes('aria-label'),
+				row.findAll('[data-settings-field]').map(field => field.attributes('data-settings-field')),
+			]);
+
+			expect(Object.fromEntries(drawn)).toEqual(rows);
+		},
+	);
+
+	it('writes a card badge row\'s emptied size as the null that returns it to Auto', async () => {
+		const wrapper = await mountPage('top-cards', {
+			config: { showRankBadges: true, rankBadgeTextSize: 20 },
+		});
+		const size = wrapper.get('[data-settings-row="rank-badge"] [data-settings-field="rankBadgeTextSize"] input[type="number"]');
+
+		expect(size.attributes('aria-label')).toBe('Badge size');
+
+		await size.setValue('');
+
+		expect(writes).toEqual([
+			{ rankBadgeTextSize: null },
+		]);
+	});
+
 	// A block is written whole, and its schema has no `null` inside: an emptied value is Auto, its key left out.
 	it.each([
 		{
@@ -800,13 +849,33 @@ describe('the generic settings renderer', () => {
 		expect(screenModeConfigContract('deck').schema.partial().safeParse(writes[0]).success).toBe(true);
 	});
 
-	it('bounds a max card size by the largest card the Screen\'s Event Canvas holds', async () => {
-		const wrapper = await mountPage('deck', {
-			event: { canvasWidth: 1280, canvasHeight: 720 } as Partial<DbEvent>,
-		});
+	// Bounds follow the content: a max card size to the largest card the Event Canvas holds whole, columns to the cards ranked.
+	it.each([
+		{
+			name: 'a max card size by a canvas\'s height, at a card\'s 61:85 aspect',
+			mode: 'deck',
+			options: { event: { canvasWidth: 1280, canvasHeight: 720 } },
+			field: 'mainboard.maxCardSize',
+			max: '516',
+		},
+		{
+			name: 'a max card size by a canvas narrower than its tallest card',
+			mode: 'deck',
+			options: { event: { canvasWidth: 400, canvasHeight: 1080 } },
+			field: 'mainboard.maxCardSize',
+			max: '400',
+		},
+		{
+			name: 'Most Played Cards columns by the cards it ranks',
+			mode: 'top-cards',
+			options: { config: { limit: 12 } },
+			field: 'columns',
+			max: '12',
+		},
+	] as { name: string; mode: RenderedMode; options: PageOptions; field: string; max: string }[])('bounds $name', async ({ mode, options, field, max }) => {
+		const wrapper = await mountPage(mode, options);
 
-		// 720 px tall at a card's 61:85 aspect.
-		expect(wrapper.get('[data-settings-field="mainboard.maxCardSize"] input[type="number"]').attributes('max')).toBe('516');
+		expect(wrapper.get(`[data-settings-field="${field}"] input[type="number"]`).attributes('max')).toBe(max);
 	});
 
 	it('offers a badge position every point but the centre, which a badge cannot take', async () => {

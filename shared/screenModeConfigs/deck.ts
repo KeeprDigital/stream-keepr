@@ -482,15 +482,18 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 			card: 'content',
 			showWhen: context => !isMagic(context) || showsCardPoints(context),
 		},
-		'quantity-badge': { title: 'Quantity badge', card: 'content' },
+		// Each badge one row: whether it shows, its position and its size.
+		'quantity-badge': { title: 'Quantity badge', card: 'content', layout: 'row' },
 		'points-badge': {
 			title: 'Point badge',
 			card: 'content',
+			layout: 'row',
 			showWhen: context => !isMagic(context) || showsCardPoints(context),
 		},
 		'companion-badge': {
 			title: 'Companion badge',
 			card: 'content',
+			layout: 'row',
 			showWhen: context => isMagic(context) && context.config.showCompanion !== false,
 		},
 	},

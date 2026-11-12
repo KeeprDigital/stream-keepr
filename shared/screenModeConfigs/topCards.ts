@@ -243,12 +243,14 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	groups: {
 		'ranking': { title: 'Ranking', card: 'content' },
 		'layout': { title: 'Layout', card: 'content' },
-		'rank-badge': { title: 'Rank badge', card: 'content' },
-		'stat-badge': { title: 'Stat badge', card: 'content' },
+		// Each badge one row: whether it shows, its position and its size.
+		'rank-badge': { title: 'Rank badge', card: 'content', layout: 'row' },
+		'stat-badge': { title: 'Stat badge', card: 'content', layout: 'row' },
 		// Kept while shown, so a Screen whose Event lost its points system can turn them off.
 		'points-badge': {
 			title: 'Point badge',
 			card: 'content',
+			layout: 'row',
 			showWhen: ({ config, event }) => hasPointsSystem(event) || config.showPointsBadges === true,
 		},
 	},

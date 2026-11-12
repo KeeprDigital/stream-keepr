@@ -14,6 +14,8 @@ import { fieldDescription, fieldLabel, fieldOptions, fieldValue } from '~/module
 const props = defineProps<{
 	entry: SettingsPageField;
 	eventId: number;
+	/** Its control alone, named by its label, in a row its group's title labels. */
+	inline?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -153,6 +155,7 @@ function toggledSet(value: string, checked: boolean): string[] {
 		:placeholder="field.placeholder"
 		:nullable="field.clearable"
 		:max="contentMax"
+		:inline="inline"
 		@update:model-value="emit('update', field.control === 'toggle' ? $event === true : $event)"
 	/>
 </template>

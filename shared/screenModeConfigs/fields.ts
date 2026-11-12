@@ -69,6 +69,12 @@ export interface ScreenSettingsGroupDeclaration {
 	title: string;
 	card: ScreenSettingsCard;
 	showWhen?: (context: ScreenSettingsContext) => boolean;
+	/**
+	 * `row`: the group's fields share one row, which its title names, each
+	 * control named by its field's label, as a card badge's show, position and
+	 * size do. Absent: a heading over a row per field.
+	 */
+	layout?: 'row';
 }
 
 /**

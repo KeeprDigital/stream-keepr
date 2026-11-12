@@ -1,6 +1,7 @@
 <script setup lang="ts" generic="Value extends string | number | boolean">
 import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
 import { NINE_POINT_VALUES } from '~~/shared/utils/ninePoints';
+import ScreenSettingsField from '~/components/Screen/SettingsField.vue';
 
 /**
  * One Screen Mode config field, rendered from its contract metadata (ADR-0037):
@@ -16,6 +17,9 @@ import { NINE_POINT_VALUES } from '~~/shared/utils/ninePoints';
  *
  * A control that cannot have an effect is not rendered at all (#1060): its
  * page leaves the field out rather than disabling it.
+ *
+ * `inline` draws the control alone, named by its label, for a row its group's
+ * title labels (a card badge's show, position and size).
  */
 const props = defineProps<{
 	field: ScreenModeConfigField;
@@ -27,6 +31,7 @@ const props = defineProps<{
 	nullable?: boolean;
 	/** A tighter upper bound than the field's own, in displayed units, such as a page smaller than the ranking. */
 	max?: number;
+	inline?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -110,21 +115,28 @@ function updateText(value: unknown) {
 
 <template>
 	<ScreenSettingsToggle
-		v-if="field.control === 'toggle'"
+		v-if="field.control === 'toggle' && !inline"
 		:data-config-field="field.key"
 		:label="field.label"
 		:description="description"
 		:model-value="modelValue === null || modelValue === undefined ? undefined : Boolean(modelValue)"
 		@update:model-value="updateValue($event)"
 	/>
-	<ScreenSettingsField
+	<component
+		:is="inline ? 'div' : ScreenSettingsField"
 		v-else
 		:data-config-field="field.key"
-		:label="field.label"
-		:description="description"
+		v-bind="inline ? {} : { label: field.label, description }"
 	>
+		<USwitch
+			v-if="field.control === 'toggle'"
+			:aria-label="field.label"
+			:model-value="Boolean(modelValue)"
+			@update:model-value="updateValue($event)"
+		/>
 		<ScreenSettingsNumberField
-			v-if="field.control === 'number'"
+			v-else-if="field.control === 'number'"
+			:aria-label="inline ? field.label : undefined"
 			:model-value="typeof modelValue === 'number' ? modelValue : undefined"
 			:min="field.min"
 			:max="numberMax"
@@ -135,6 +147,7 @@ function updateText(value: unknown) {
 		/>
 		<USelect
 			v-else-if="field.control === 'select'"
+			:aria-label="inline ? field.label : undefined"
 			:model-value="selectValue"
 			:items="selectItems"
 			:placeholder="placeholder"
@@ -150,16 +163,18 @@ function updateText(value: unknown) {
 		/>
 		<UIColorPicker
 			v-else-if="field.control === 'color'"
+			:aria-label="inline ? field.label : undefined"
 			:model-value="typeof modelValue === 'string' ? modelValue : undefined"
 			:placeholder="placeholder"
 			@update:model-value="updateValue($event)"
 		/>
 		<UInput
 			v-else
+			:aria-label="inline ? field.label : undefined"
 			:model-value="modelValue === null || modelValue === undefined ? '' : String(modelValue)"
 			:placeholder="placeholder"
 			class="w-64"
 			@update:model-value="updateText($event)"
 		/>
-	</ScreenSettingsField>
+	</component>
 </template>

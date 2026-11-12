@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ScreenSettingsCard, ScreenSettingsContext } from '~~/shared/screenModeConfigs/fields';
 import type { ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
-import type { ScreenModeSettingsSlotProps, SettingsPageCard, SettingsPageField } from '~/modules/screen-mode/settingsPage';
+import type { ScreenModeSettingsSlotProps, SettingsPageCard, SettingsPageField, SettingsPageSection } from '~/modules/screen-mode/settingsPage';
 import type { Screen } from '~/types';
 import { withEveryColumn } from '~~/shared/screenModeConfigs/subShapes';
 import { screenModeConfigContract } from '~~/shared/screenModes';
@@ -43,6 +43,10 @@ import { cardFieldsSummary, fieldDescription, fieldLabel, fieldOptions, fieldPat
  * writing a block, mounts as the slot `before:<group>`, at the head of that
  * Screen Settings Group's section, under its heading, while the group shows.
  * It is given the same props, with no `fields`.
+ *
+ * A group declared `layout: 'row'` draws its fields as one row its title
+ * names, each control named by its field's label, with no heading: three card
+ * badges are three rows. Its fields name no slot.
  *
  * The mode is the Screen's at setup: the page remounts it on a mode change.
  */
@@ -204,6 +208,28 @@ function afterSlot(card: ScreenSettingsCard, group: string | undefined): string 
 function headingId(card: ScreenSettingsCard, group: string): string {
 	return `${mode}-${card}-${group}-heading`;
 }
+
+/** Whether a section's group lays its fields out as one row. */
+function isRow(section: SettingsPageSection): boolean {
+	return section.group?.layout === 'row';
+}
+
+/** A row's description: its first field's, which says what the group is (a badge's show toggle). */
+function rowDescription(section: SettingsPageSection): string | undefined {
+	const first = section.rows[0];
+	return first?.kind === 'field'
+		? fieldDescription(first.entry)
+		: undefined;
+}
+
+/** What every slot is given but its `fields`. */
+const slotProps = computed(() => ({
+	config: configRecord.value,
+	context: context.value,
+	update,
+	rotation: paged?.rotation,
+	data: paged?.data,
+}));
 </script>
 
 <template>
@@ -219,86 +245,90 @@ function headingId(card: ScreenSettingsCard, group: string): string {
 				<section
 					v-for="(section, index) in card.sections"
 					:key="section.group?.id ?? 'ungrouped'"
-					:role="section.group ? 'group' : undefined"
-					:aria-labelledby="section.group ? headingId(card.card, section.group.id) : undefined"
+					:role="section.group && !isRow(section) ? 'group' : undefined"
+					:aria-labelledby="section.group && !isRow(section) ? headingId(card.card, section.group.id) : undefined"
 					:data-settings-section="section.group?.id"
 					class="flex flex-col gap-4"
 				>
-					<template v-if="section.group">
-						<USeparator v-if="index > 0" />
-						<ScreenSettingsSubheading :id="headingId(card.card, section.group.id)">
-							{{ section.group.title }}
-						</ScreenSettingsSubheading>
-						<div
-							v-if="$slots[`before:${section.group.id}`]"
-							:data-settings-group-slot="`before:${section.group.id}`"
-						>
-							<slot
-								:name="`before:${section.group.id}`"
-								:fields="[]"
-								:config="configRecord"
-								:context="context"
-								:update="update"
-								:rotation="paged?.rotation"
-								:data="paged?.data"
-							/>
-						</div>
-					</template>
-					<template v-for="row in section.rows" :key="row.key">
-						<div v-if="row.kind === 'field'" :data-settings-field="row.key">
-							<ScreenModeSettingsField
-								:entry="row.entry"
-								:event-id="eventId"
-								@update="updateField(row.entry, $event)"
-							/>
-						</div>
-						<div
-							v-else
-							:data-settings-slot="row.slot"
-							:data-settings-fields="slotFieldKeys(row.fields)"
-						>
-							<slot
-								:name="row.slot"
-								:fields="row.fields"
-								:config="configRecord"
-								:context="context"
-								:update="update"
-								:rotation="paged?.rotation"
-								:data="paged?.data"
-							>
-								<ScreenPageSelection
-									v-if="row.slot === 'page-rotation' && paged"
-									:rotation="paged.rotation"
-									:loading="paged.data.loading.value"
-									:counting="!paged.data.answered.value"
-								/>
-								<template v-else-if="row.slot === 'columns'">
-									<ScreenSettingsField
-										v-for="entry in row.fields"
-										:key="entry.path.join('.')"
-										:label="fieldLabel(entry)"
-										:description="fieldDescription(entry)"
-										stacked
-									>
-										<ScreenColumnVisibilityList
-											:columns="columnsOf(entry)"
-											:labels="columnLabels(entry)"
-											@update="updateColumns(entry, $event)"
+					<USeparator v-if="section.group && index > 0" />
+					<!-- A group laid out as a row: its title names one row holding each field's control. -->
+					<div
+						v-if="section.group && isRow(section)"
+						role="group"
+						:aria-label="section.group.title"
+						:data-settings-row="section.group.id"
+					>
+						<ScreenSettingsField :label="section.group.title" :description="rowDescription(section)">
+							<div class="flex flex-wrap items-center gap-4">
+								<template v-for="row in section.rows" :key="row.key">
+									<div v-if="row.kind === 'field'" :data-settings-field="row.key">
+										<ScreenModeSettingsField
+											:entry="row.entry"
+											:event-id="eventId"
+											inline
+											@update="updateField(row.entry, $event)"
 										/>
-									</ScreenSettingsField>
+									</div>
 								</template>
-							</slot>
-						</div>
+							</div>
+						</ScreenSettingsField>
+					</div>
+					<template v-else>
+						<template v-if="section.group">
+							<ScreenSettingsSubheading :id="headingId(card.card, section.group.id)">
+								{{ section.group.title }}
+							</ScreenSettingsSubheading>
+							<div
+								v-if="$slots[`before:${section.group.id}`]"
+								:data-settings-group-slot="`before:${section.group.id}`"
+							>
+								<slot :name="`before:${section.group.id}`" v-bind="slotProps" :fields="[]" />
+							</div>
+						</template>
+						<template v-for="row in section.rows" :key="row.key">
+							<div v-if="row.kind === 'field'" :data-settings-field="row.key">
+								<ScreenModeSettingsField
+									:entry="row.entry"
+									:event-id="eventId"
+									@update="updateField(row.entry, $event)"
+								/>
+							</div>
+							<div
+								v-else
+								:data-settings-slot="row.slot"
+								:data-settings-fields="slotFieldKeys(row.fields)"
+							>
+								<slot :name="row.slot" v-bind="slotProps" :fields="row.fields">
+									<ScreenPageSelection
+										v-if="row.slot === 'page-rotation' && paged"
+										:rotation="paged.rotation"
+										:loading="paged.data.loading.value"
+										:counting="!paged.data.answered.value"
+									/>
+									<template v-else-if="row.slot === 'columns'">
+										<ScreenSettingsField
+											v-for="entry in row.fields"
+											:key="entry.path.join('.')"
+											:label="fieldLabel(entry)"
+											:description="fieldDescription(entry)"
+											stacked
+										>
+											<ScreenColumnVisibilityList
+												:columns="columnsOf(entry)"
+												:labels="columnLabels(entry)"
+												@update="updateColumns(entry, $event)"
+											/>
+										</ScreenSettingsField>
+									</template>
+								</slot>
+							</div>
+						</template>
 					</template>
 					<slot
 						v-if="$slots[afterSlot(card.card, section.group?.id)]"
 						:name="afterSlot(card.card, section.group?.id)"
+						v-bind="slotProps"
 						:fields="[]"
-						:config="configRecord"
-						:context="context"
-						:update="update"
-						:rotation="paged?.rotation"
-						:data="paged?.data"
 					/>
 				</section>
 
