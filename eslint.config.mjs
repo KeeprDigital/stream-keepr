@@ -48,20 +48,6 @@ const forcedFailureTests = [
 	'test/unit/server/modules/meleeSyncWorkflows.test.ts',
 	'test/unit/server/api/**/melee-config.put.test.ts',
 ];
-// Still on a stand-in for a D1-backed service, each asserting an outcome (#1119). The list only shrinks.
-const serviceMockTestsToRehome = [
-	'test/unit/server/modules/broadcastDeckListWrite.test.ts',
-	'test/unit/server/modules/eventDataPublication.test.ts',
-	'test/unit/server/api/events/index.post.test.ts',
-	'test/unit/server/api/events/*/index.get.test.ts',
-	'test/unit/server/api/events/*/melee-config.get.test.ts',
-	'test/unit/server/api/events/*/broadcast-deck-lists/routes.test.ts',
-	'test/unit/server/api/events/*/melee/unresolved-deck-cards/*.put.test.ts',
-	'test/unit/server/api/events/*/screens/*/command.post.test.ts',
-	'test/unit/server/api/realtime/token.get.test.ts',
-	'test/unit/server/api/screen-output/broadcastDeckList.test.ts',
-	'test/unit/server/api/screen-output/screenBySlug.test.ts',
-];
 // Unit and Nuxt bounds are hang detectors, set once in test/helpers/loadTolerantBounds.ts
 // (README § Testing). A number written on one test, hook or wait can only undercut them.
 const boundedCall = 'CallExpression:matches([callee.name=/^(?:it|test|describe|beforeAll|beforeEach|afterAll|afterEach)$/], [callee.object.name=/^(?:it|test|describe)$/], [callee.callee.object.name=/^(?:it|test|describe)$/], [callee.object.name=\'vi\'][callee.property.name=/^(?:waitFor|waitUntil)$/])';
@@ -235,10 +221,7 @@ export default withNuxt(
 	},
 	{
 		files: ['test/unit/server/{modules,api}/**/*.ts'],
-		ignores: [
-			...forcedFailureTests,
-			...serviceMockTestsToRehome,
-		],
+		ignores: forcedFailureTests,
 		rules: {
 			'no-restricted-syntax': [
 				'error',
