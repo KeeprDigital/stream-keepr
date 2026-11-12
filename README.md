@@ -168,6 +168,8 @@ points at them.
 
 Releases and deploys are decided in
 [ADR-0019](DECISIONS.md#adr-0019-the-migration-history-is-squashed-into-one-baseline-before-ship)
+and
+[ADR-0083](DECISIONS.md#adr-0083-the-history-is-squashed-into-one-baseline-again-before-the-next-ship-under-a-new-name)
 (migrations),
 [ADR-0035](DECISIONS.md#adr-0035-the-app-and-the-validator-each-carry-a-promotion-marker-and-the-validator-deploys-on-a-build-fingerprint)
 (promotion markers) and
@@ -502,26 +504,36 @@ code queries through `db` from `~~/server/db`. Wrangler records applied
 migrations in `_hub_migrations`; production's history is in that table, so the
 name must not change.
 
-The history starts at `0000_baseline.sql`, squashed before first ship while no
-database held data (ADR-0019). Its tail is hand-written — a seed row and the
-Screen Deck-source triggers — because drizzle-kit cannot generate either;
-`test/unit/server/db/baselineMigration.sqlite.test.ts` fails if a re-squash
-drops them. The `screen_deck_source_slot_side` section of `0001_since_v1_5_0`
-replaced those triggers; a re-squash takes its version.
+The history is one migration, `0000_baseline_2.sql`: the whole schema, squashed
+a second time before the release after v1.5.0, because production's database is
+wiped before that release ships (ADR-0083, after ADR-0019's first squash). It
+has two parts:
 
-The baseline squash was a one-time transition. A D1 whose `_hub_migrations` still lists
-the old `0000`–`0031` names reads `0000_baseline` as unapplied and fails on its
-existing tables, so such a database is dropped and recreated once (ADR-0019
-required this of production before the squash deployed). A D1 that has applied
-`0000_baseline` is past the transition: it takes later migrations as they come
-and is never wiped for this.
+- **Generated**: every table, index (the partial unique ones too) and foreign
+  key, written by `pnpm db:generate` from the schema.
+- **Hand-written tail**, below the `Hand-written below` comment, which
+  drizzle-kit cannot generate: the `graphics_capacity_settings` seed row and
+  the two Screen Deck-source triggers.
+  `test/unit/server/db/baselineMigration.sqlite.test.ts` fails if a re-squash
+  drops either.
 
-`0001_since_v1_5_0.sql` holds every change made after v1.5.0 shipped with only
-the baseline: 21 unreleased migrations concatenated verbatim, in order, so a
-v1.5.0 database's rows take every backfill (ADR-0071). Production applies it as
-one migration. A local D1 that applied the old separately numbered files
-reads it as unapplied and fails on tables it already has; reset it once with
-`rm -rf .wrangler/state && pnpm db:migrate`.
+It carries no backfill: it only ever runs on a database with no tables.
+
+**A database that already has tables cannot take it.** The name is new on
+purpose. Wrangler skips a migration whose name `_hub_migrations` already lists,
+so a rewritten `0000_baseline.sql` would have been skipped without a word by a
+v1.5.0 database, leaving it on the old schema. Under its new name it reads as
+unapplied and fails on the first table that exists ("table `archetype_cards`
+already exists"), before anything changes.
+
+- **Production** is emptied by a human before the first deploy that carries it
+  ([Deploy day](#deploy-day), step 2).
+- **Every local D1** from before the squash is reset once, in each checkout and
+  worktree: `rm -rf .wrangler/state && pnpm db:migrate`. The integration suite
+  resets its own databases on every run.
+
+This is a one-time transition. A D1 that has applied `0000_baseline_2` takes
+later migrations as they come and is never wiped for this.
 
 **The next migration takes the next journal number.** drizzle-kit numbers a
 new migration by its count of journal entries and diffs against the snapshot
@@ -768,6 +780,33 @@ mid-run names the Event it left behind; delete it before rerunning.
    pnpm build
    pnpm db:migrations:list:remote
    ```
+
+   **The first deploy after v1.5.0 only: production's D1 must hold no tables.**
+   `0000_baseline_2` replaces the history v1.5.0 applied and cannot run over
+   it ([Database](#database), ADR-0083). Everything in the database is
+   discarded; that is decided (#1121). With nothing on air, and after the
+   recovery point above, a human does one of:
+
+   - **Replace the database (preferred).** Create a new D1
+     (`pnpm exec wrangler d1 create <name>`) and put its id in `wrangler.jsonc`
+     (`d1_databases[0].database_id`) in a PR that merges before the release is
+     cut: the Deploy workflow ships a released tag, so the id must be in it.
+     Delete the old database only once the deployed gates pass. Until then
+     rolling the Worker back to v1.5.0 returns it to the old database, intact.
+   - **Empty it in place.** Drop every table in the existing database.
+     Deleting rows is not enough, and neither is clearing `_hub_migrations`
+     alone. Only the recovery point leads back.
+
+   Then `pnpm db:migrations:list:remote` lists `0000_baseline_2.sql` and
+   nothing else. If a table is left, step 3 stops at `db:migrate:remote` on
+   "table … already exists": nothing was applied, the v1.5.0 Worker keeps
+   serving, and the `production` marker reads `pending`.
+
+   The new database has no accounts, so bootstrap the first admin again
+   ([First admin account](#first-admin-account)). The R2 buckets are not
+   touched: the new catalogue knows none of their objects, and
+   [Reconciliation](#reconciliation) reports them as unexpected unless the
+   buckets are emptied with the database.
 
 3. **Deploy.** Deploy the validator first when `pnpm deploy:status` says it
    would deploy (it always does on a first deploy), so the service binding

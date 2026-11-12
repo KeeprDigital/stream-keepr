@@ -50,16 +50,35 @@ describe('the baseline migration', () => {
 		`)).resolves.toBeDefined();
 	});
 
-	it('rejects a Screen whose Deck source names another Event\'s Player', async () => {
+	// The Slot clause was a later migration's rewrite of the triggers; the second squash carried it here.
+	it.each([
+		[
+			'Player',
+			`INSERT INTO players (id, event_id, name) VALUES (7, 2, 'Ada')`,
+			{ type: 'player', playerId: 7 },
+		],
+		[
+			'Feature Match Slot',
+			`INSERT INTO feature_match_slots (id, event_id) VALUES (7, 2)`,
+			{ type: 'featureMatchSlot', slotId: 7, side: 'player1' },
+		],
+	])('rejects a Screen whose Deck source names another Event\'s %s', async (_named, insertOtherEventsRow, deckSource) => {
 		await harness.client.execute(`
 			INSERT INTO events (id, name, game, feature_match_orientation)
 			VALUES (2, 'Other Event', 'mtg', 'horizontal')
 		`);
-		await harness.client.execute(`INSERT INTO players (id, event_id, name) VALUES (7, 2, 'Ada')`);
+		await harness.client.execute(insertOtherEventsRow);
 
-		await expect(harness.client.execute(`
-			INSERT INTO screens (id, event_id, name, slug, current_mode, mode_configs, asset_capability_seed, asset_capability_digest)
-			VALUES (1, 1, 'Deck', 'deck', 'deck', '{"deck":{"deckSource":{"type":"player","playerId":7}}}', 'seed-1', 'digest-1')
-		`)).rejects.toThrow(/SCREEN_DECK_SOURCE_CONFLICT/);
+		await expect(harness.client.execute({
+			sql: `
+				INSERT INTO screens (id, event_id, name, slug, current_mode, mode_configs, asset_capability_seed, asset_capability_digest)
+				VALUES (1, 1, 'Deck', 'deck', 'deck', ?, 'seed-1', 'digest-1')
+			`,
+			args: [
+				JSON.stringify({
+					deck: { deckSource },
+				}),
+			],
+		})).rejects.toThrow(/SCREEN_DECK_SOURCE_CONFLICT/);
 	});
 });

@@ -1,13 +1,3 @@
-CREATE TABLE `animation_effect_presets` (
-	`id` text PRIMARY KEY NOT NULL,
-	`name` text NOT NULL,
-	`revision` integer DEFAULT 1 NOT NULL,
-	`selection` text NOT NULL,
-	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
-	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL
-);
---> statement-breakpoint
-CREATE INDEX `animation_effect_presets_name_idx` ON `animation_effect_presets` (`name`);--> statement-breakpoint
 CREATE TABLE `archetype_cards` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`archetype_id` integer NOT NULL,
@@ -25,6 +15,9 @@ CREATE TABLE `archetypes` (
 	`event_id` integer NOT NULL,
 	`name` text NOT NULL,
 	`colors` text,
+	`chart_series` integer,
+	`leader_card_number` text,
+	`customised` integer DEFAULT false NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade
@@ -32,6 +25,7 @@ CREATE TABLE `archetypes` (
 --> statement-breakpoint
 CREATE INDEX `archetypes_event_id_idx` ON `archetypes` (`event_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `archetypes_event_name_idx` ON `archetypes` (`event_id`,`name`);--> statement-breakpoint
+CREATE UNIQUE INDEX `archetypes_event_leader_idx` ON `archetypes` (`event_id`,`leader_card_number`) WHERE "archetypes"."leader_card_number" is not null;--> statement-breakpoint
 CREATE TABLE `broadcast_deck_list_entries` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`list_id` integer NOT NULL,
@@ -79,14 +73,11 @@ CREATE TABLE `broadcast_graphic_templates` (
 	`revision` integer DEFAULT 1 NOT NULL,
 	`document` text NOT NULL,
 	`graphic_asset_reference_version` text,
-	`style_set_id` text,
-	`style_set_revision` integer,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX `broadcast_graphic_templates_name_idx` ON `broadcast_graphic_templates` (`name`);--> statement-breakpoint
-CREATE INDEX `broadcast_graphic_templates_style_set_idx` ON `broadcast_graphic_templates` (`style_set_id`);--> statement-breakpoint
 CREATE TABLE `broadcast_graphics_live_sessions` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`event_id` integer NOT NULL,
@@ -116,11 +107,18 @@ CREATE TABLE `cards` (
 	`mana_cost` text,
 	`deck_counter_types` text DEFAULT '[]' NOT NULL,
 	`deck_tokens` text DEFAULT '[]' NOT NULL,
+	`card_number` text,
+	`category` text,
+	`cost` integer,
+	`power` integer,
+	`counter` integer,
+	`image_url` text,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `cards_name_game_idx` ON `cards` (`name`,`game`);--> statement-breakpoint
+CREATE UNIQUE INDEX `cards_name_game_idx` ON `cards` (`name`,`game`) WHERE "cards"."game" = 'mtg';--> statement-breakpoint
+CREATE UNIQUE INDEX `cards_op_number_idx` ON `cards` (`card_number`) WHERE "cards"."game" = 'op';--> statement-breakpoint
 CREATE INDEX `cards_game_idx` ON `cards` (`game`);--> statement-breakpoint
 CREATE TABLE `event_card_name_overrides` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -143,12 +141,15 @@ CREATE TABLE `event_talents` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`event_id` integer NOT NULL,
 	`name` text NOT NULL,
+	`role` text,
 	`twitch_handle` text,
 	`youtube_handle` text,
 	`x_handle` text,
 	`instagram_handle` text,
 	`tiktok_handle` text,
 	`bluesky_handle` text,
+	`photo` text,
+	`graphic_asset_reference_version` text,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade
@@ -179,29 +180,45 @@ CREATE TABLE `events` (
 	`melee_sync_lease_token` text,
 	`melee_sync_lease_command` text,
 	`melee_sync_lease_expires_at` integer,
+	`melee_live_results_enabled` integer DEFAULT false NOT NULL,
+	`melee_live_results_next_check_at` integer,
+	`melee_live_results_backoff_step` integer DEFAULT 0 NOT NULL,
+	`melee_live_results_last_checked_at` integer,
+	`melee_live_results_last_change_at` integer,
+	`melee_live_results_error` text,
+	`melee_live_results_stop_reason` text,
 	`display_record_separator` text DEFAULT '-' NOT NULL,
 	`display_hide_zero_draws` integer DEFAULT true NOT NULL,
 	`display_position_format` text DEFAULT 'ordinal' NOT NULL,
+	`theme_id` text,
+	`canvas_width` integer DEFAULT 1920 NOT NULL,
+	`canvas_height` integer DEFAULT 1080 NOT NULL,
+	`conversion_metric` text DEFAULT 'topN' NOT NULL,
+	`conversion_threshold` integer DEFAULT 8 NOT NULL,
 	`feature_match_default_best_of` integer DEFAULT 3 NOT NULL,
 	`feature_match_default_starting_life` integer DEFAULT 20 NOT NULL,
 	`feature_match_default_clock_type` text DEFAULT 'countdown' NOT NULL,
 	`feature_match_default_clock_duration` integer DEFAULT 50 NOT NULL,
 	`feature_match_default_count_up_after_countdown` integer DEFAULT false NOT NULL,
+	`feature_match_default_count_up_limit` integer,
 	`feature_match_default_turn_tracking_enabled` integer DEFAULT false NOT NULL,
 	`feature_match_default_active_player_tracking_enabled` integer DEFAULT false NOT NULL,
 	`feature_match_default_extra_turns_enabled` integer DEFAULT false NOT NULL,
 	`feature_match_default_extra_turns` integer DEFAULT 5 NOT NULL,
 	`feature_match_default_extra_turns_label` text DEFAULT 'Extra Turns' NOT NULL,
+	`feature_match_default_untimed_label` text DEFAULT '' NOT NULL,
 	`feature_match_default_mulligan_tracking_enabled` integer DEFAULT false NOT NULL,
 	`standings_enabled` integer DEFAULT true NOT NULL,
 	`broadcast_deck_lists_enabled` integer DEFAULT false NOT NULL,
 	`lgs_enabled` integer DEFAULT false NOT NULL,
 	`pronouns_enabled` integer DEFAULT true NOT NULL,
 	`table_number_enabled` integer DEFAULT false NOT NULL,
+	`feature_match_notes_enabled` integer DEFAULT false NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY (`commentator1_talent_id`) REFERENCES `event_talents`(`id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`commentator2_talent_id`) REFERENCES `event_talents`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`commentator2_talent_id`) REFERENCES `event_talents`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`theme_id`) REFERENCES `themes`(`id`) ON UPDATE no action ON DELETE restrict
 );
 --> statement-breakpoint
 CREATE TABLE `feature_match_assignments` (
@@ -223,6 +240,32 @@ CREATE INDEX `feature_match_assignments_event_id_idx` ON `feature_match_assignme
 CREATE INDEX `feature_match_assignments_round_idx` ON `feature_match_assignments` (`round_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `feature_match_assignments_slot_unique_idx` ON `feature_match_assignments` (`round_id`,`slot_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `feature_match_assignments_match_unique_idx` ON `feature_match_assignments` (`round_id`,`match_id`);--> statement-breakpoint
+CREATE TABLE `feature_match_deck_list_entries` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`deck_list_id` integer NOT NULL,
+	`sort_order` integer NOT NULL,
+	`quantity` integer NOT NULL,
+	`card_number` text NOT NULL,
+	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	FOREIGN KEY (`deck_list_id`) REFERENCES `feature_match_deck_lists`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `feature_match_deck_list_entries_order_idx` ON `feature_match_deck_list_entries` (`deck_list_id`,`sort_order`);--> statement-breakpoint
+CREATE TABLE `feature_match_deck_lists` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`event_id` integer NOT NULL,
+	`slot_id` integer NOT NULL,
+	`source_text` text NOT NULL,
+	`mainboard_count` integer NOT NULL,
+	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`slot_id`) REFERENCES `feature_match_slots`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `feature_match_deck_lists_event_id_idx` ON `feature_match_deck_lists` (`event_id`);--> statement-breakpoint
+CREATE INDEX `feature_match_deck_lists_slot_id_idx` ON `feature_match_deck_lists` (`slot_id`);--> statement-breakpoint
 CREATE TABLE `feature_match_layout_templates` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -282,21 +325,6 @@ CREATE TABLE `feature_match_slots` (
 CREATE INDEX `feature_match_slots_event_id_idx` ON `feature_match_slots` (`event_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `feature_match_slots_external_unique_idx` ON `feature_match_slots` (`event_id`,`external_id`,`external_source`);--> statement-breakpoint
 CREATE UNIQUE INDEX `feature_match_slots_match_unique_idx` ON `feature_match_slots` (`event_id`,`match_id`) WHERE "feature_match_slots"."match_id" is not null;--> statement-breakpoint
-CREATE TABLE `graphic_style_sets` (
-	`id` text PRIMARY KEY NOT NULL,
-	`name` text NOT NULL,
-	`description` text,
-	`revision` integer DEFAULT 0 NOT NULL,
-	`draft_revision` integer DEFAULT 1 NOT NULL,
-	`draft` text NOT NULL,
-	`published` text,
-	`published_at` integer,
-	`operation_version` text,
-	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
-	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL
-);
---> statement-breakpoint
-CREATE INDEX `graphic_style_sets_name_idx` ON `graphic_style_sets` (`name`);--> statement-breakpoint
 CREATE TABLE `graphics_authoring_leases` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`artifact_kind` text NOT NULL,
@@ -344,7 +372,6 @@ CREATE TABLE `matches` (
 	`player2_game_wins` integer,
 	`game_draws` integer,
 	`is_bye` integer DEFAULT false NOT NULL,
-	`result_string` text,
 	`sort_order` integer DEFAULT 0 NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
@@ -430,6 +457,8 @@ CREATE TABLE `player_decks` (
 	`is_primary` integer DEFAULT false NOT NULL,
 	`archetype_id` integer,
 	`reviewed_at` integer,
+	`leader_card_number` text,
+	`hand_edited` integer DEFAULT false NOT NULL,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade,
@@ -491,6 +520,7 @@ CREATE TABLE `players` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`event_id` integer NOT NULL,
 	`name` text NOT NULL,
+	`nickname` text,
 	`pronouns` text,
 	`external_id` text,
 	`external_source` text,
@@ -505,6 +535,7 @@ CREATE TABLE `players` (
 	`archetype_id` integer,
 	`lgs` text,
 	`game_data` text,
+	`manually_edited_fields` text,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade,
@@ -524,6 +555,8 @@ CREATE TABLE `rounds` (
 	`round_number` integer NOT NULL,
 	`control_mode` text DEFAULT 'default' NOT NULL,
 	`last_synced_at` integer,
+	`started_at` integer,
+	`duration_minutes` integer,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade,
@@ -540,7 +573,7 @@ CREATE TABLE `screens` (
 	`slug` text NOT NULL,
 	`current_mode` text DEFAULT 'background' NOT NULL,
 	`mode_configs` text,
-	`screen_config` text,
+	`theme_overrides` text DEFAULT '{}' NOT NULL,
 	`state_version` integer DEFAULT 0 NOT NULL,
 	`graphic_asset_reference_version` text,
 	`asset_capability_seed` text NOT NULL,
@@ -556,6 +589,25 @@ CREATE TABLE `screens` (
 CREATE INDEX `screens_event_id_idx` ON `screens` (`event_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `screens_slug_idx` ON `screens` (`event_id`,`slug`);--> statement-breakpoint
 CREATE UNIQUE INDEX `screens_asset_capability_digest_idx` ON `screens` (`asset_capability_digest`);--> statement-breakpoint
+CREATE TABLE `tcgplus_imported_deck_lists` (
+	`player_id` integer PRIMARY KEY NOT NULL,
+	`leader_card_number` text,
+	`entries` text NOT NULL,
+	`imported_at` integer NOT NULL,
+	FOREIGN KEY (`player_id`) REFERENCES `players`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `themes` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`tokens` text DEFAULT '{}' NOT NULL,
+	`revision` integer DEFAULT 1 NOT NULL,
+	`graphic_asset_reference_version` text,
+	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
+	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX `themes_name_idx` ON `themes` (`name`);--> statement-breakpoint
 CREATE TABLE `account` (
 	`id` text PRIMARY KEY NOT NULL,
 	`account_id` text NOT NULL,
@@ -574,6 +626,14 @@ CREATE TABLE `account` (
 );
 --> statement-breakpoint
 CREATE INDEX `account_user_id_idx` ON `account` (`user_id`);--> statement-breakpoint
+CREATE TABLE `rateLimit` (
+	`id` text PRIMARY KEY NOT NULL,
+	`key` text NOT NULL,
+	`count` integer NOT NULL,
+	`last_request` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `rateLimit_key_unique` ON `rateLimit` (`key`);--> statement-breakpoint
 CREATE TABLE `session` (
 	`id` text PRIMARY KEY NOT NULL,
 	`expires_at` integer NOT NULL,
@@ -862,6 +922,8 @@ CREATE TABLE `installed_graphics_templates` (
 	`source_template_revision` integer,
 	`installed_by_operation_id` text NOT NULL,
 	`event_id` integer,
+	`removed_at` integer,
+	`removed_by` text,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE set null
@@ -872,7 +934,8 @@ CREATE INDEX `installed_graphics_templates_operation_idx` ON `installed_graphics
 CREATE INDEX `installed_graphics_templates_source_idx` ON `installed_graphics_templates` (`source_template_identity`);--> statement-breakpoint
 
 -- Hand-written below: drizzle-kit cannot express seed rows or triggers, so a
--- regenerated baseline omits them. Keep them when squashing again.
+-- regenerated baseline omits them. Keep them when squashing again
+-- (`test/unit/server/db/baselineMigration.sqlite.test.ts` fails if one is lost).
 
 -- The installation's single capacity row; the Graphics Asset Library reads it
 -- rather than creating it.
@@ -881,6 +944,9 @@ INSERT INTO `graphics_capacity_settings` (`id`) VALUES (1);--> statement-breakpo
 -- The reference proof executes inside the Screen INSERT/UPDATE statement. It is
 -- therefore serialized with Broadcast Deck List deletion and Event disabling,
 -- closing the gap between a pre-write reference check and the stateVersion write.
+-- A Feature Match Slot side Deck Source must name a Slot of the Screen's Event
+-- too (#876, ADR-0057); a Slot delete clears the Deck Sources naming it in the
+-- same batch, ahead of the delete.
 CREATE TRIGGER `screens_deck_source_insert_guard`
 BEFORE INSERT ON `screens`
 WHEN (
@@ -900,6 +966,14 @@ WHEN (
 		WHERE `broadcast_deck_lists`.`id` = json_extract(NEW.`mode_configs`, '$.deck.deckSource.broadcastDeckListId')
 			AND `broadcast_deck_lists`.`event_id` = NEW.`event_id`
 			AND `events`.`broadcast_deck_lists_enabled` = 1
+	)
+) OR (
+	json_extract(NEW.`mode_configs`, '$.deck.deckSource.type') = 'featureMatchSlot'
+	AND json_type(NEW.`mode_configs`, '$.deck.deckSource.slotId') = 'integer'
+	AND NOT EXISTS (
+		SELECT 1 FROM `feature_match_slots`
+		WHERE `feature_match_slots`.`id` = json_extract(NEW.`mode_configs`, '$.deck.deckSource.slotId')
+			AND `feature_match_slots`.`event_id` = NEW.`event_id`
 	)
 )
 BEGIN
@@ -925,6 +999,14 @@ WHEN (
 		WHERE `broadcast_deck_lists`.`id` = json_extract(NEW.`mode_configs`, '$.deck.deckSource.broadcastDeckListId')
 			AND `broadcast_deck_lists`.`event_id` = NEW.`event_id`
 			AND `events`.`broadcast_deck_lists_enabled` = 1
+	)
+) OR (
+	json_extract(NEW.`mode_configs`, '$.deck.deckSource.type') = 'featureMatchSlot'
+	AND json_type(NEW.`mode_configs`, '$.deck.deckSource.slotId') = 'integer'
+	AND NOT EXISTS (
+		SELECT 1 FROM `feature_match_slots`
+		WHERE `feature_match_slots`.`id` = json_extract(NEW.`mode_configs`, '$.deck.deckSource.slotId')
+			AND `feature_match_slots`.`event_id` = NEW.`event_id`
 	)
 )
 BEGIN

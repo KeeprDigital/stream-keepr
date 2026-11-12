@@ -1,1 +1,0 @@
-ALTER TABLE `events` ADD `feature_match_default_count_up_limit` integer;

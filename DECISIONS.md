@@ -446,7 +446,7 @@ Better Auth admits only the hostnames in `AUTH_ALLOWED_HOSTS` — the production
 
 ## ADR-0019: The migration history is squashed into one baseline before ship
 
-Accepted · 2026-10-13, amended under #621
+Accepted · 2026-10-13, amended under #621 · Done a second time by ADR-0083, whose `0000_baseline_2.sql` replaces the `0000_baseline.sql` named here
 
 ### Decision
 
@@ -1351,7 +1351,7 @@ Accepted · 2026-10-22 · [#773](https://github.com/KeeprDigital/stream-keepr/is
 
 **Top Cut Bracket's key is `top-cut`, not `topCut`**, the one camelCase Screen Mode key; its Screen Output read was already `top-cut`. Its label and five others changed with it (Card Spotlight, Deck List, Top Cut Bracket, Feature Match Controls, Most Played Cards, Head-to-Head). A label is the Screen Mode Definition's alone and changes freely. A key is stored, so renaming one takes a migration; only `topCut` was renamed.
 
-**Migration `0001_since_v1_5_0`, in its `top_cut_screen_mode_key` section, moves every stored use of the key.** That covers a Screen's `current_mode`, the `topCut` key of its `mode_configs` (in whatever mode the Screen is now), and the `topCut.` root of the owner slots its Top Cut Bracket Background Layers index under in `graphic_asset_references`. A Screen holding both keys keeps the `top-cut` config, as a write does. Unlike ADR-0016's rename, this is a forward migration on released data, since ADR-0019's baseline is closed.
+**A migration moved every stored use of the key**, until the second squash removed it along with every database that stored one (ADR-0083). It covered a Screen's `current_mode`, the `topCut` key of its `mode_configs` (in whatever mode the Screen is now), and the `topCut.` root of the owner slots its Top Cut Bracket Background Layers index under in `graphic_asset_references`. A Screen holding both keys kept the `top-cut` config, as a write does. Unlike ADR-0016's rename, this was a forward migration on released data, since ADR-0019's baseline was closed. A key renamed after the next release takes one again.
 
 **A Screen write accepts the former key and stores the current one.** `FORMER_SCREEN_MODE_KEYS` (`shared/types/enums.ts`) maps each renamed key to its key now. The mode configuration PATCH route's `:mode`, and `currentMode` and the `modeConfigs` keys on Screen create and full update, read a former key as the current one. A `modeConfigs` carrying both keeps the current key's config. Every other unknown key is still refused, and nothing reads or answers a former key.
 
@@ -1363,14 +1363,14 @@ Deployed installations store `topCut` in all three places, and a key left behind
 
 - Nothing realtime or packaged carries a Screen Mode key that needed handling. `screen:updated` names only the Screen. Template Packages and Feature Match Layout Templates name only a graphics host (`broadcast-graphics`, `feature-match-overlay`), whose keys did not change.
 - A tab or Screen Output on a build from before the deploy can still write, but it cannot render a Screen in `top-cut` mode, because its registry does not know the key. Reloading it, for example with the Screen `refresh` command, fixes it.
-- The migration rewrites `mode_configs`, so the Deck Source update guard runs on each Screen it touches and re-proves that Screen's Deck Source, as on any write. A Screen whose Deck Source no longer resolves would stop the migration; the guards and ADR-0032 prevent one.
-- `test/unit/server/db/topCutScreenModeKeyMigration.sqlite.test.ts` holds the migration back, stores the former key in all three places, and applies it. `test/unit/server/schemas/formerScreenModeKeys.test.ts` covers the write paths.
+- Such a migration rewrites `mode_configs`, so the Deck Source update guard runs on each Screen it touches and re-proves that Screen's Deck Source, as on any write. A Screen whose Deck Source no longer resolves would stop the migration; the guards and ADR-0032 prevent one.
+- `test/unit/server/schemas/formerScreenModeKeys.test.ts` covers the write paths. The migration's held-back test, which stored the former key in all three places and applied it, went with the migration (ADR-0083).
 
 ### Rejected alternatives
 
 - **Rename the other keys to match their new labels** (`card`, `deck`, `top-cards`, `feature-match`). Each would take a migration of its own for no gain to an operator, who sees only the label.
 - **Refuse a former key with a clear error.** It costs as much code as accepting it, and a stale tab's full write would fail rather than land.
-- **Rewrite the baseline.** ADR-0019's squash was a one-time transition, and installations have applied `0000_baseline`.
+- **Rewrite the baseline.** ADR-0019's squash was a one-time transition, and installations had applied `0000_baseline`. ADR-0083 rewrote it later, once production's database was to be wiped.
 
 ## ADR-0044: An operator form settles on what its save stored
 
@@ -1437,7 +1437,7 @@ Accepted · 2026-10-26
 
 ### Decision
 
-**A Player records the Melee-imported fields an operator has edited, and Melee Sync stops writing them.** `players.manually_edited_fields` (migration `0001_since_v1_5_0`) is a JSON list drawn from `PLAYER_MANUALLY_EDITED_FIELD_VALUES`, `name` and `pronouns`. `playerService().update`, the one manual Player write behind the Players page and a Slot setup's write-through (ADR-0045), adds a field to it in the same statement when the write changes that field's value. The Melee bulk upsert (`buildBulkPlayerUpsertQueries`), shared by the Players sync and the Deck List sync, keeps the Player's own value for each listed field and takes Melee's for the rest.
+**A Player records the Melee-imported fields an operator has edited, and Melee Sync stops writing them.** `players.manually_edited_fields` is a JSON list drawn from `PLAYER_MANUALLY_EDITED_FIELD_VALUES`, `name` and `pronouns`. `playerService().update`, the one manual Player write behind the Players page and a Slot setup's write-through (ADR-0045), adds a field to it in the same statement when the write changes that field's value. The Melee bulk upsert (`buildBulkPlayerUpsertQueries`), shared by the Players sync and the Deck List sync, keeps the Player's own value for each listed field and takes Melee's for the rest.
 
 **An edit is a change of value.** Writing the value a field already holds marks nothing, whatever a save carries. Edit Player sends only the fields its operator changed, measured against the Player as held when it saves (#1026). It once sent its whole form as opened, so a name Melee Sync changed under the open modal was written back and marked. Clearing a field is an edit: an operator who removes pronouns keeps them removed rather than taking Melee's.
 
@@ -1452,7 +1452,7 @@ The Melee upsert wrote `excluded.name` unconditionally, and `excluded.pronouns` 
 ### Consequences
 
 - Nothing hands a field back to Melee yet. A Player whose edited name later changes on Melee keeps the edited one until the field is removed from the list. A "reset to Melee" action is its own change.
-- Players imported before the migration have no list, which is read as empty, so they behave as before until edited.
+- A Player with no list is read as having an empty one, so it takes Melee's values until edited.
 - `test/unit/server/services/playerManualEditsSurviveMeleeSync.sqlite.test.ts` covers both sync paths, a cleared field, an unchanged whole-form save, and an edit made in a Slot's setup. `test/nuxt/components/Player/ManageModal.test.ts` covers what Edit Player sends.
 
 ### Rejected alternatives
@@ -1472,7 +1472,7 @@ Accepted · 2026-10-26
 
 **Melee's `ResultString` is no longer kept.** It is English from player 1's side ("Kim Fields won 2-0-0") that no Player-side reading can turn round, and it existed only as the fallback for a reported Match without game wins, which no longer occurs. Migration `0001_since_v1_5_0` drops `matches.result_string`. Player history, Pairings, Head-to-Head and Top Cut Bracket read the Game Score; the stored `match.result` Graphic binding keeps its id and resolves the Game Score from player 1's side.
 
-**Migration `0001_since_v1_5_0`, in its `melee_owned_match_results` section, brings stored Matches to the same shape.** It clears every result on a Match not from Melee, gives a reported Melee Match its missing zeros, and removes game wins and game draws from unreported Matches and byes.
+**No stored Match needs bringing to that shape.** A migration once did it: it cleared every result on a Match not from Melee, gave a reported Melee Match its missing zeros, and removed game wins and game draws from unreported Matches and byes. The second squash removed it along with every database holding such a Match (ADR-0083).
 
 ### Why
 
@@ -1482,10 +1482,10 @@ Manual results were never meant to exist. A result entered by hand reached Playe
 
 ### Consequences
 
-- The migration clears results operators entered on manual Matches. They are not recoverable from the database afterwards.
+- Results operators entered on manual Matches under v1.5.0 are gone with the database that held them (ADR-0083).
 - Melee's `HasResult` stays the authority on whether a Match is reported. A Match Melee sends with `HasResult: false` and game draws (seen once locally, as "0-0-1 Draw") is unreported until Melee reports it.
 - `HeadToHeadOutcome` loses `reported` and an earlier Match's `gameScore` is never `null`.
-- `test/unit/server/mappers/meleeMappings.test.ts` pins the mapping, `test/unit/server/db/meleeOwnedMatchResultsMigration.sqlite.test.ts` the migration, and `test/integration/matches.test.ts` the refused manual writes.
+- `test/unit/server/mappers/meleeMappings.test.ts` pins the mapping and `test/integration/matches.test.ts` the refused manual writes.
 
 ### Rejected alternatives
 
@@ -1572,7 +1572,7 @@ Accepted · 2026-10-27 · [#812](https://github.com/KeeprDigital/stream-keepr/is
 - A Graphic Theme Binding (#829) is a slot name and a token name beside the property, never in place of it. The property keeps the value it last resolved to, so a document stays complete and renders without a Theme. The compositor paints every bound slot from the Theme's Foundation Tokens, which no Screen overrides (#1085). An author's edit to a bound slot's value detaches that slot, keeping what the author made of the resolved value. That is the only implicit change; there is no override record. A binding naming no Foundation Token of its slot's type is refused on a write and inert on a read.
 - The Theme editor and a Screen's token section edit every token as it resolves, so an edit writes literals: the first edit of a composite still on its default, or of a value stored in a former form, fixes each colour it named at the colour it resolved to. Each colour inside a composite, or a `background` colour layer, is a plain colour picker, and no token offers a Foundation Token to follow (#1083). A colour a new outline, glow or gradient stop starts with is the shipped default of the role it once named.
 - Media treatment and on-screen cycling bind nothing, because no token type fills either. A Media Graphic Item's picture binds an asset token, such as the logo (#831).
-- Migration `0001_since_v1_5_0`, in its `remove_graphic_style_sets` section, drops the Graphic Style Set and Animation Effect Preset libraries and a Broadcast Graphic Template's link columns (#830). A template's document is untouched, so its values stay as the literals it already held.
+- The Graphic Style Set and Animation Effect Preset libraries and a Broadcast Graphic Template's link columns are gone from the schema (#830). A template's document is untouched, so its values stay as the literals it already held.
 - A graphics document recorded with a Style Set link, stored or in a `.skgraphic` or `.sklayout` exported before #830, still reads. An item's `styleRefs`, and a Broadcast Graphic's `styleSet` and `styleRefs`, are former fields: accepted by the graphics schemas and dropped, as ADR-0037's are, so a write that sends the document (a Screen write, a template revision carrying its document, a package install) stores it without them. A client holding one sends it back unrefused. A copy the server makes of a stored document without parsing it, such as saving a placed graphic as a template or renaming a template, carries a stale link along, inert, until such a write. Every other unknown key is still refused.
 - A rendering holds its Event's Theme in its Event context (ADR-0022), not in a read of its own (#820). A token write advances the Theme's revision in the same statement, then announces `theme:updated` with the whole stored map on every Event using the Theme. A holder applies it only for the Theme its Event names, and only if it is newer than the revision held. A Theme switch is an Event Presentation Settings write, so it announces `event:updated`. That names the new Theme without its tokens, so a rendering whose context names a Theme it does not hold re-reads the context.
 - A Screen Theme Override write is one Screen write (`PATCH …/screens/:screenId/theme-overrides`, #827): it names tokens, each with a value or the `null` that clears it (ADR-0041), and announces `screen:updated`, so outputs re-read the Screen with its overrides. It stores the mode's own Mode Tokens and, on a plain overlay mode, `inset` and `alignment` (#1085). Any other Foundation Token, `background`, `logo` and every token a graphics host's Graphic Items bind included, is accepted and dropped as a former token is: a write naming nothing else answers 200 with the Screen as it stands, bumps no version and announces nothing. One stored before #1085 is read by nothing and not pruned, since the production database is wiped instead (#1060). Another mode's live Mode Token, or a name no token has, is refused whole, and an override already stored for another mode's Mode Token stays dormant. The Screen's page lists exactly what an override write stores (`placeScreenThemeTokens`, ADR-0072).
@@ -2023,7 +2023,7 @@ Accepted · 2026-11-03 · [#908](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**The Conversion Target is an Event setting.** The `events` row holds `conversion_metric` (`topN` or `minPoints`) and `conversion_threshold`, Top 8 by default (migration `0001_since_v1_5_0`). The Metagame page, the Metagame Screen and Archetype Spotlight all count Conversion Rate against it. `conversionMetric` and `conversionThreshold` are former fields of both Screen Mode contracts (ADR-0037), so a stored per-Screen target is read without them.
+**The Conversion Target is an Event setting.** The `events` row holds `conversion_metric` (`topN` or `minPoints`) and `conversion_threshold`, Top 8 by default. The Metagame page, the Metagame Screen and Archetype Spotlight all count Conversion Rate against it. `conversionMetric` and `conversionThreshold` are former fields of both Screen Mode contracts (ADR-0037), so a stored per-Screen target is read without them.
 
 **It is written whole, within its metric's bounds.** An Event PATCH names both fields or neither. Top N takes 1–999; a minimum-points target takes 0–999 (`shared/conversionTarget.ts`).
 
@@ -2184,7 +2184,7 @@ Accepted · 2026-11-04 · [#916](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**A Round gains an optional start and duration, entered by an operator.** `rounds.started_at` (a server timestamp) and `rounds.duration_minutes` (whole minutes, 1 to 600) are added by migration `0001_since_v1_5_0`. Both are `manualWritable` in `PROVENANCE_ENTITIES`, so a Round edit (`PATCH …/rounds/:roundId`) accepts them, an ISO instant and a number, and `null` clears either. A new Round starts untimed: the create write refuses them. They ride the Round's response, so `round:updated` announces them.
+**A Round gains an optional start and duration, entered by an operator.** `rounds.started_at` (a server timestamp) and `rounds.duration_minutes` (whole minutes, 1 to 600) hold them. Both are `manualWritable` in `PROVENANCE_ENTITIES`, so a Round edit (`PATCH …/rounds/:roundId`) accepts them, an ISO instant and a number, and `null` clears either. A new Round starts untimed: the create write refuses them. They ride the Round's response, so `round:updated` announces them.
 
 **"Start now" sets the start to server time.** `POST …/rounds/:roundId/start` (`roundWriteModule().start`) writes the server's own clock as the start, so the operator's browser clock never sets it. The Event Structure page offers it on each Round row until the Round has started, then in the Round's menu, where it restarts the clock. The Round edit modal edits the start and duration, and sends either only when edited, so a save never undoes a "Start now" made while it was open.
 
@@ -2266,7 +2266,7 @@ An Installed Graphics Template could not be deleted, so the revisions its refere
 - **A Graphic Asset an Installed Graphics Template references can no longer be Retired** until that Template is removed. This applies to every installation already made, with no backfill: their references were always indexed under `installed-graphics-template`. An asset already retired under an Installed Graphics Template stays retired, and that Template stays unplaceable until the asset is restored.
 - Only the User who started an installation can retry it, as for every Graphics Ingestion Operation, while any signed-in User may remove what it installed. A retry reinstalls only while that operation's record exists; the retention contract plans to clean one up a year after it ends. Either way, importing the Template Package again still works, as a new Installed Graphics Template. The library's Delete prompt says so.
 - Removal records no Evidence: it is not a Graphic Asset lifecycle transition. The removed row's `removed_by` and `removed_at` record who removed it and when.
-- Migration `0001_since_v1_5_0`, in its `installed_template_removal` section, adds the two nullable columns. Existing rows read as installed.
+- The two columns are nullable. A row with neither set reads as installed.
 
 ### Rejected alternatives
 
@@ -2280,7 +2280,7 @@ Accepted · 2026-11-04 · [#909](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Decision
 
-**The pin is a series slot, 1 to 8, stored on the Archetype.** The `archetypes` row holds a nullable `chart_series` (migration `0001_since_v1_5_0`). It names one of the chart series Foundation Tokens `series-1` to `series-8`, which the Metagame chart reads directly (ADR-0049); the Theme still decides what each series looks like, and a Screen holds no look of its own (ADR-0051).
+**The pin is a series slot, 1 to 8, stored on the Archetype.** The `archetypes` row holds a nullable `chart_series`. It names one of the chart series Foundation Tokens `series-1` to `series-8`, which the Metagame chart reads directly (ADR-0049); the Theme still decides what each series looks like, and a Screen holds no look of its own (ADR-0051).
 
 **An operator sets and clears it through the Archetype write.** The Archetype PATCH takes `chartSeries` (an integer 1–8, or null); the write announces `archetype:updated`, which every Metagame Screen already re-reads on. Creating an Archetype takes no pin, and Melee Sync writes no Archetype field, so it never writes one. The Archetype's Metagame page edits it, naming any other Archetype pinning the same series and warning when the chosen one is taken.
 
@@ -2321,7 +2321,7 @@ Accepted · 2026-11-04 · [#782](https://github.com/KeeprDigital/stream-keepr/is
 
 **It is offered to Events of every Card Game.** It needs no results and no Deck Lists, so ADR-0057 does not exclude it.
 
-**A Talent holds a free-text role** (`event_talents.role`, migration `0001_since_v1_5_0`), at most 100 characters, trimmed, blank stored as none. It is edited with the Talent, carried on `talent:created` and `talent:updated`, and shown on the Screen while `showRole` is on (T5 b).
+**A Talent holds a free-text role** (`event_talents.role`), at most 100 characters, trimmed, blank stored as none. It is edited with the Talent, carried on `talent:created` and `talent:updated`, and shown on the Screen while `showRole` is on (T5 b).
 
 ### Why
 
@@ -2342,7 +2342,7 @@ Productions want a plain "on the desk" Screen without authoring a Broadcast Grap
 
 ## ADR-0071: The migrations unreleased at v1.5.0 are squashed into one, and journal numbers are never reserved
 
-Accepted · 2026-11-04 · [#953](https://github.com/KeeprDigital/stream-keepr/issues/953). Amends ADR-0019.
+Accepted · 2026-11-04 · [#953](https://github.com/KeeprDigital/stream-keepr/issues/953). Amends ADR-0019. · Amended by ADR-0083: `0001_since_v1_5_0.sql` and its held-back tests are gone, squashed into the baseline once production's database was to be wiped. The numbering rule stands.
 
 ### Decision
 
@@ -2518,7 +2518,7 @@ Accepted · 2026-11-04 · [#1000](https://github.com/KeeprDigital/stream-keepr/i
 
 **OP cards live in the shared card catalogue, keyed by card number; MTG cards stay keyed by name.**
 
-- Player Deck Lists, pasted Feature Match Deck Lists and picked Leaders all reference the catalogue, replacing the inline snapshots ADR-0057 first kept. A migration builds catalogue rows from the snapshots already stored.
+- Player Deck Lists, pasted Feature Match Deck Lists and picked Leaders all reference the catalogue, replacing the inline snapshots ADR-0057 first kept. No stored snapshot is carried over: the migrations that built catalogue rows from them went in the second squash (ADR-0083).
 - Card data comes only from bandai-keepr's bulk lookup. The export's own card fields are not used.
 - A card number the catalogue already holds is never looked up again.
 - If the lookup fails, the import or paste fails whole and saves nothing.
@@ -2643,7 +2643,7 @@ Productions want to show how far past time a Match or Round has run, but only fo
 
 **Both clocks share one rule: counting up after running out is opt-in, and may hold at a limit in whole minutes (1 to 600), or count up without one.** `countUpOvertimeMs` (`shared/utils/clock.ts`) is the rule, with the bounds `COUNT_UP_LIMIT_MINUTES_MIN` and `COUNT_UP_LIMIT_MINUTES_MAX`. Both clocks stay clock projections: a held clock is a display, and nothing writes when it reaches its limit.
 
-**A Feature Match Session clock takes its limit from its Event.** `events.feature_match_default_count_up_limit` (minutes, `null` for no limit, migration `0007_count_up_limit`) sits beside the count-up toggle in the Event's Format Settings. As with the toggle, a Session's clock takes it when its state is created (`countUpLimitMs` on `ClockState`), so an edit applies to the next Match or a Match reset, not to a running one. A Match reset rebuilds the state from the Session's source snapshot, so an Event write naming any Feature Match default besides best of corrects every active Session's snapshot to the Event's defaults (`applyEventDefaults`, a `SnapshotCorrected` that leaves the state alone), and the Slots are announced. A state persisted before the limit existed carries none and counts up without limit. `formatClockDisplay` applies it, so the operator clock, both Feature Match Screen Modes and the public Feature Match read all hold at the same value.
+**A Feature Match Session clock takes its limit from its Event.** `events.feature_match_default_count_up_limit` (minutes, `null` for no limit) sits beside the count-up toggle in the Event's Format Settings. As with the toggle, a Session's clock takes it when its state is created (`countUpLimitMs` on `ClockState`), so an edit applies to the next Match or a Match reset, not to a running one. A Match reset rebuilds the state from the Session's source snapshot, so an Event write naming any Feature Match default besides best of corrects every active Session's snapshot to the Event's defaults (`applyEventDefaults`, a `SnapshotCorrected` that leaves the state alone), and the Slots are announced. A state persisted before the limit existed carries none and counts up without limit. `formatClockDisplay` applies it, so the operator clock, both Feature Match Screen Modes and the public Feature Match read all hold at the same value.
 
 **A Round Clock counts up when its Screen says so.** `countUpAfterEnd` (off by default) and `countUpLimitMinutes` (unset for no limit) are Round Clock Screen config, set in the Clock card. `projectRoundClock` takes them, and after the end shows the time since the end, re-evaluating each second until it holds. The state stays `ended`, so its colour is the clock's colour after the end.
 
@@ -2879,3 +2879,35 @@ Most work here is done by agents, several at once, each in its own worktree and 
 - **Dropping `ts/no-floating-promises` altogether.** It would save a further 14 s of CPU and 1.5 GB on a cold lint, and give up the one check that stands between a forgotten `await` in a handler and a write lost in production.
 - **Seeding a fresh worktree's ESLint cache from the main checkout.** The cache is keyed by absolute path and by a config hash that holds the checkout's path.
 - **Sharding the Nuxt suite in CI.** Its coverage floor is over the whole suite, so shards would need a merged report; the split already takes the wall time from the sum to the longest job.
+
+## ADR-0083: The history is squashed into one baseline again before the next ship, under a new name
+
+Accepted · 2026-11-12 · [#1121](https://github.com/KeeprDigital/stream-keepr/issues/1121), [#953](https://github.com/KeeprDigital/stream-keepr/issues/953) · Amends ADR-0019 and ADR-0071
+
+### Decision
+
+**The eight migrations (`0000_baseline`, `0001_since_v1_5_0` and `0002`–`0007`) are replaced by one, `0000_baseline_2.sql`.** As in ADR-0019, drizzle-kit generates it from the current schema, and a hand-written tail adds the two things drizzle-kit cannot express: the `graphics_capacity_settings` seed row, and the two `screens` Deck-source triggers as ADR-0057 left them, Slot-side clause included. The partial unique indexes need no hand: they are in the schema, so they are generated. The journal has one entry and one snapshot.
+
+**Every hand-written backfill over v1.5.0 rows is deleted, with the four held-back tests that proved them.** Production's database is wiped whole before the next release ships (the maintainer's decision on #1121; ADR-0037 had already settled it for stored Screen Mode config), so no row is left for one to rewrite.
+
+**The baseline takes a new name, so a database that was not emptied fails the migration and is not skipped.** A human empties production's D1 of every table before the first deploy that carries this, and every local D1 is reset once (README § Database and § Deploy day).
+
+### Why
+
+ADR-0019's reasoning holds again: the backfills protect data that will not exist, and their tests only exercised them. Squashing also settles #953 for good. With one journal entry, the next migration is `0001`, and drizzle-kit numbers it right unaided.
+
+Wrangler decides whether to run a migration by its name alone. v1.5.0's `_hub_migrations` lists `0000_baseline.sql`, so a rewritten file of that name would be skipped. Measured with `wrangler d1 migrations apply --local`: over a v1.5.0 database, the new content under the old name answers "No migrations to apply!"; under the new name it stops on "table `archetype_cards` already exists" with nothing applied, as it does over a database holding all eight. The deploy migrates before it replaces the Worker, and its verify proves liveness only (README § Deploy). A skipped baseline would have put the new Worker on v1.5.0's schema with every local gate green.
+
+### Consequences
+
+- **A human must empty production's D1 before the next deploy.** README § Deploy day, step 2, has the two ways: replace the database and commit its id to `wrangler.jsonc`, or drop every table in place. Missed, the deploy stops at `db:migrate:remote`, the v1.5.0 Worker keeps serving, and the `production` marker reads `pending`. The new database has no accounts, so the first admin is bootstrapped again; the R2 buckets are not touched.
+- Every local D1 from before this is reset once, in each checkout and worktree: `rm -rf .wrangler/state && pnpm db:migrate`.
+- **The schema is unchanged.** The eight migrations and the one were each applied to an empty database, by the test harness's splitter and by Wrangler's local D1, and compared table by table: columns with their types, defaults and nullability, foreign keys, every index including the automatic ones, triggers and rows. Both give 54 tables, 582 columns, 72 foreign keys, 116 named indexes (8 partial), 2 triggers and the one seed row. The new snapshot equals the old `0007` snapshot apart from its ids. Two things differ, and neither is schema: ten tables list their columns in schema order, where additions used to come last, and `events.theme_id` declares its foreign key as a table constraint.
+- No held-back migration test exists. `createSqliteD1Harness({ throughMigration })` stays for the next data migration (README § Database). `baselineMigration.sqlite.test.ts` pins the hand-written tail, now with the Slot-side clause.
+- ADR-0071's numbering rule stands. Earlier ADRs that named `0001_since_v1_5_0` or one of its backfills now say the migration is gone.
+
+### Rejected alternatives
+
+- **Keep the name `0000_baseline.sql`.** Fewer words to change, but a production database nobody emptied would skip it in silence. One emptied of tables but not of `_hub_migrations` would too, and the Worker would deploy onto no schema at all.
+- **Delete the tests and keep `0001`–`0007`.** It leaves backfill SQL that runs on every fresh database, rewrites nothing, and has no test.
+- **Concatenate the SQL by hand, as ADR-0071 did.** ADR-0071 concatenated to keep the backfills. With none to keep, generating gives the file and the snapshot `pnpm db:generate` diffs against, and nothing to transcribe wrongly.
