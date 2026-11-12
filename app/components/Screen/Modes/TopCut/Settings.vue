@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Screen } from '~/types';
 import { useConsumedEventData } from '~/modules/event-data/resync';
+import { useModeSettingsRenderer } from '~/composables/screen/useModeSettingsRenderer';
 
 /**
  * The Top Cut Bracket Screen's settings: the generic renderer (#1094), with
@@ -13,12 +14,7 @@ const props = defineProps<{
 	eventId: number;
 }>();
 
-const renderer = useTemplateRef<{ resetConfig: () => void; saving: boolean }>('renderer');
-
-defineExpose({
-	resetConfig: () => renderer.value?.resetConfig(),
-	saving: computed(() => renderer.value?.saving ?? false),
-});
+defineExpose(useModeSettingsRenderer());
 
 const playerStore = usePlayerStore();
 

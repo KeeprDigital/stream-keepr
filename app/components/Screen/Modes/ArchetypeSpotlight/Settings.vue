@@ -3,6 +3,7 @@ import type { ScreenSettingsContext } from '~~/shared/screenModeConfigs/fields';
 import type { Screen } from '~/types';
 import { getMetagameRules } from '~~/shared/config/games';
 import { fieldDescription } from '~/modules/screen-mode/settingsPage';
+import { useModeSettingsRenderer } from '~/composables/screen/useModeSettingsRenderer';
 
 /**
  * The Archetype Spotlight settings page: the generic renderer (#1094), with
@@ -14,12 +15,7 @@ defineProps<{
 	eventId: number;
 }>();
 
-const settings = useTemplateRef<{ resetConfig: () => void; saving: boolean }>('settings');
-
-defineExpose({
-	resetConfig: () => settings.value?.resetConfig(),
-	saving: computed(() => settings.value?.saving ?? false),
-});
+defineExpose(useModeSettingsRenderer());
 
 /** The Event's Card Game decides whether its Metagame reads standings, and so a Conversion Rate (ADR-0074). */
 function readsStandings({ event }: ScreenSettingsContext): boolean {
@@ -28,7 +24,7 @@ function readsStandings({ event }: ScreenSettingsContext): boolean {
 </script>
 
 <template>
-	<ScreenModeSettings ref="settings" :screen="screen" :event-id="eventId">
+	<ScreenModeSettings ref="renderer" :screen="screen" :event-id="eventId">
 		<template #card-type-filter="{ fields, config, context, update }">
 			<ScreenCardTypeFilterField
 				:excluded="config.excludedCardTypes"

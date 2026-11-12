@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Screen } from '~/types';
 import { isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
+import { useModeSettingsRenderer } from '~/composables/screen/useModeSettingsRenderer';
 
 /**
  * The Standings settings page: the generic renderer (#1094), with the reveal
@@ -11,12 +12,7 @@ defineProps<{
 	eventId: number;
 }>();
 
-const settings = useTemplateRef<{ resetConfig: () => void; saving: boolean }>('settings');
-
-defineExpose({
-	resetConfig: () => settings.value?.resetConfig(),
-	saving: computed(() => settings.value?.saving ?? false),
-});
+defineExpose(useModeSettingsRenderer());
 
 /** The Position Change column shows, yet the Screen's own read found no previous Round to compare with (#905). */
 function warnsPositionChangeHasNoData(config: Readonly<Record<string, any>>, noPreviousRoundStandings: boolean | undefined): boolean {
@@ -25,7 +21,7 @@ function warnsPositionChangeHasNoData(config: Readonly<Record<string, any>>, noP
 </script>
 
 <template>
-	<ScreenModeSettings ref="settings" :screen="screen" :event-id="eventId">
+	<ScreenModeSettings ref="renderer" :screen="screen" :event-id="eventId">
 		<template #reveal="{ config, update }">
 			<ScreenModesStandingsRevealControls
 				:revealed-count="config.revealedCount"

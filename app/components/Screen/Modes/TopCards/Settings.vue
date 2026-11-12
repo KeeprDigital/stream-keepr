@@ -2,6 +2,7 @@
 import type { MetagameCardTypeBucket } from '~~/shared/utils/metagame';
 import type { Screen } from '~/types';
 import { fieldDescription } from '~/modules/screen-mode/settingsPage';
+import { useModeSettingsRenderer } from '~/composables/screen/useModeSettingsRenderer';
 
 /**
  * The Most Played Cards settings page: the generic renderer (#1094), with the
@@ -12,12 +13,7 @@ defineProps<{
 	eventId: number;
 }>();
 
-const settings = useTemplateRef<{ resetConfig: () => void; saving: boolean }>('settings');
-
-defineExpose({
-	resetConfig: () => settings.value?.resetConfig(),
-	saving: computed(() => settings.value?.saving ?? false),
-});
+defineExpose(useModeSettingsRenderer());
 
 /** Ranking pointed cards keeps nonbasic lands in, whatever the Land filter holds. */
 function lockedTypes(config: Readonly<Record<string, any>>): MetagameCardTypeBucket[] {
@@ -28,7 +24,7 @@ function lockedTypes(config: Readonly<Record<string, any>>): MetagameCardTypeBuc
 </script>
 
 <template>
-	<ScreenModeSettings ref="settings" :screen="screen" :event-id="eventId">
+	<ScreenModeSettings ref="renderer" :screen="screen" :event-id="eventId">
 		<!-- Which cards the ranking reads, so it shows page 1 of the new ranking. -->
 		<template #card-type-filter="{ fields, config, context, update }">
 			<ScreenCardTypeFilterField

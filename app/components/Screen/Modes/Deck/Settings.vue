@@ -3,6 +3,7 @@ import type { DeckModeConfig } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import { patchedBoardLayout, sideboardOwnFields } from '~~/shared/screenModeConfigs/deck';
 import { resolveDeckBoards } from '~~/shared/types/screenConfig';
+import { useModeSettingsRenderer } from '~/composables/screen/useModeSettingsRenderer';
 
 /**
  * The Deck List Screen's settings: the generic renderer (#1094), with the two
@@ -17,12 +18,7 @@ defineProps<{
 	eventId: number;
 }>();
 
-const renderer = useTemplateRef<{ resetConfig: () => void; saving: boolean }>('renderer');
-
-defineExpose({
-	resetConfig: () => renderer.value?.resetConfig(),
-	saving: computed(() => renderer.value?.saving ?? false),
-});
+defineExpose(useModeSettingsRenderer());
 
 function boardsOf(config: Readonly<Record<string, any>>) {
 	return resolveDeckBoards(config as Partial<DeckModeConfig>);

@@ -3,6 +3,7 @@ import type { ScreenSettingsContext } from '~~/shared/screenModeConfigs/fields';
 import type { Screen } from '~/types';
 import { isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
 import { isMetagameSortOffered } from '~~/shared/utils/metagame';
+import { useModeSettingsRenderer } from '~/composables/screen/useModeSettingsRenderer';
 
 /**
  * The Metagame settings page: the generic renderer (#1094), with the Event's
@@ -14,12 +15,7 @@ defineProps<{
 	eventId: number;
 }>();
 
-const settings = useTemplateRef<{ resetConfig: () => void; saving: boolean }>('settings');
-
-defineExpose({
-	resetConfig: () => settings.value?.resetConfig(),
-	saving: computed(() => settings.value?.saving ?? false),
-});
+defineExpose(useModeSettingsRenderer());
 
 /** The Conversion Target matters while the Conversion Rate orders or shows the archetypes, on a Metagame that reads it. */
 function showsConversionRate({ config, event }: ScreenSettingsContext): boolean {
@@ -29,7 +25,7 @@ function showsConversionRate({ config, event }: ScreenSettingsContext): boolean 
 </script>
 
 <template>
-	<ScreenModeSettings ref="settings" :screen="screen" :event-id="eventId">
+	<ScreenModeSettings ref="renderer" :screen="screen" :event-id="eventId">
 		<template #after:archetypes="{ config, context }">
 			<ScreenConversionTargetField v-if="showsConversionRate(context)" :event-id="eventId" />
 
