@@ -1,10 +1,9 @@
-import type { MaybeRefOrGetter } from 'vue';
 import type { BroadcastGraphicConfig, GraphicChannelConfig } from '~~/shared/types/graphics';
 import type { GraphicsEditor } from '~/composables/useGraphicsEditor';
-import type { GraphicsEditorHostContract, GraphicsEditorTree } from '~/modules/graphics/editor/host';
-import { toValue } from 'vue';
+import type { GraphicsEditorHostContract, GraphicsEditorSessionOptions, GraphicsEditorTree } from '~/modules/graphics/editor/host';
 import { BROADCAST_GRAPHICS_HOST_CONTRACT } from '~~/shared/modules/graphics';
 import { copyGraphicLayers, pasteBroadcastGraphicLayers } from '~/modules/graphics/clipboard';
+import { compositionItemLayers, graphicsEditorSession } from '~/modules/graphics/editor/host';
 
 /**
  * The Broadcast Graphics half of the shared graphics editor's Host Contract.
@@ -47,13 +46,7 @@ export function broadcastGraphicsEditorLayerKey(layer: Layer): string {
 
 /** Each Broadcast Graphic's layers, front to back, its group's children beneath each group. */
 export function broadcastGraphicLayers(graphic: BroadcastGraphicConfig): Layer[] {
-	const layer = (itemId: string): Layer => ({ type: 'item', graphicId: graphic.id, itemId });
-	return [...graphic.items].reverse().flatMap(item => [
-		layer(item.id),
-		...(item.type === 'group'
-			? [...item.children].reverse().map(child => layer(child.id))
-			: []),
-	]);
+	return compositionItemLayers(graphic, (itemId): Layer => ({ type: 'item', graphicId: graphic.id, itemId }));
 }
 
 function graphicOf(graphics: Stack, graphicId: string | null | undefined): BroadcastGraphicConfig | undefined {
@@ -128,19 +121,14 @@ export function broadcastGraphicsEditorTree(selectedGraphicId: () => string | nu
 	};
 }
 
-export interface BroadcastGraphicsEditorHostOptions {
+/** `held`: a Broadcast Graphic Template placement is in flight. */
+export interface BroadcastGraphicsEditorHostOptions extends GraphicsEditorSessionOptions {
 	graphics: () => Stack;
 	/** The Screen's Graphic Channels, so a restored graphic never names one since deleted. */
 	channels: () => readonly GraphicChannelConfig[];
 	write: (graphics: BroadcastGraphicConfig[]) => void;
 	/** The Broadcast Graphic selected while no layer is: where a new item goes. */
 	selectedGraphicId: () => string | null;
-	canvasWidth: MaybeRefOrGetter<number>;
-	canvasHeight: MaybeRefOrGetter<number>;
-	/** Whether this session holds the Screen's Graphics Authoring Lease. */
-	writable: MaybeRefOrGetter<boolean>;
-	/** Whether a Broadcast Graphic Template placement is in flight. */
-	held?: MaybeRefOrGetter<boolean>;
 	/** Whether a Broadcast Graphic may be on a program output now. */
 	onAir: (graphicId: string) => boolean;
 }
@@ -164,6 +152,7 @@ function keepChannels(restored: Stack, current: Stack, channels: readonly Graphi
 }
 
 export function broadcastGraphicsEditorHost(options: BroadcastGraphicsEditorHostOptions): GraphicsEditorHostContract<Stack, Layer> {
+	const session = graphicsEditorSession(options);
 	return {
 		tree: broadcastGraphicsEditorTree(options.selectedGraphicId),
 		document: {
@@ -172,13 +161,9 @@ export function broadcastGraphicsEditorHost(options: BroadcastGraphicsEditorHost
 			restore: (restored, current) => keepChannels(restored, current, options.channels()),
 		},
 		forbidden: {
-			writable: () => toValue(options.writable),
-			held: () => toValue(options.held) ?? false,
+			...session.forbidden,
 			composition: composition => options.onAir(composition.id),
 		},
-		canvas: () => ({
-			width: toValue(options.canvasWidth),
-			height: toValue(options.canvasHeight),
-		}),
+		canvas: session.canvas,
 	};
 }

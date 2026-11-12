@@ -1,8 +1,10 @@
+import type { MaybeRefOrGetter } from 'vue';
 import type { GraphicItemLocation } from '~~/shared/modules/graphics';
 import type { GraphicsHostContract } from '~~/shared/modules/graphics/hostContract';
 import type { BroadcastGraphicConfig, GraphicRect } from '~~/shared/types/graphics';
 import type { SnapLayer } from '~/modules/graphics/canvasManipulation';
 import type { ClipboardPasteRefusal, CopiedLayers } from '~/modules/graphics/clipboard';
+import { toValue } from 'vue';
 import { findGraphicItem, patchGraphicItem, replaceGraphicItemById, withoutLayerLock } from '~~/shared/modules/graphics';
 
 /**
@@ -26,6 +28,12 @@ import { findGraphicItem, patchGraphicItem, replaceGraphicItemById, withoutLayer
  * `D` is the host's document, `L` its layer reference. The tree is pure, so the
  * editor's rules are tested on it without a mounted editor.
  */
+
+/**
+ * One Graphic Item tree the editor writes: a Broadcast Graphic, or the
+ * composition a Feature Match Layout holds, which has the same shape.
+ */
+export type GraphicComposition = BroadcastGraphicConfig;
 
 /** A layer reference. `type` names its kind and is never `'canvas'`. */
 export interface GraphicsEditorLayer {
@@ -89,15 +97,15 @@ export interface GraphicsEditorTree<D, L extends GraphicsEditorLayer> {
 	/** Every layer in the layer list's order, front to back, a group's children beneath it. */
 	order: (document: D) => L[];
 	/** Every composition the document holds: what `forbidden.composition` is asked of. */
-	compositions: (document: D) => readonly BroadcastGraphicConfig[];
+	compositions: (document: D) => readonly GraphicComposition[];
 	/** The composition a Graphic Item layer sits in and its id there; null for a layer the host owns. */
-	item: (document: D, layer: L) => { composition: BroadcastGraphicConfig; itemId: string } | null;
+	item: (document: D, layer: L) => { composition: GraphicComposition; itemId: string } | null;
 	/** The layer naming a Graphic Item of a composition. */
-	itemLayer: (composition: BroadcastGraphicConfig, itemId: string) => L;
+	itemLayer: (composition: GraphicComposition, itemId: string) => L;
 	/** The composition a new or pasted Graphic Item joins, given what is selected. */
-	destination: (document: D, selected: readonly L[]) => BroadcastGraphicConfig | null;
+	destination: (document: D, selected: readonly L[]) => GraphicComposition | null;
 	/** The document with one composition replaced, matched by its id, or added when it has none by that id. */
-	withComposition: (document: D, composition: BroadcastGraphicConfig) => D;
+	withComposition: (document: D, composition: GraphicComposition) => D;
 	/** Everything positioned on the canvas a layer sits on: what it snaps to. */
 	canvasLayers: (document: D, layer: L) => readonly SnapLayer[];
 	/**
@@ -155,7 +163,7 @@ export interface GraphicsEditorForbiddenEdits {
 	 * air: no write changes it, none of its Graphic Items is written, nothing is
 	 * added to it, and undo and redo leave it as it is.
 	 */
-	composition?: (composition: BroadcastGraphicConfig) => boolean;
+	composition?: (composition: GraphicComposition) => boolean;
 }
 
 export interface GraphicsEditorHostContract<D, L extends GraphicsEditorLayer> {
@@ -166,6 +174,43 @@ export interface GraphicsEditorHostContract<D, L extends GraphicsEditorLayer> {
 	canvas: () => { width: number; height: number };
 }
 
+/**
+ * A composition's Graphic Item layers in the layer list's order: front to
+ * back, each Graphic Group's children beneath it.
+ */
+export function compositionItemLayers<L>(composition: GraphicComposition, layer: (itemId: string) => L): L[] {
+	return [...composition.items].reverse().flatMap(item => [
+		layer(item.id),
+		...(item.type === 'group'
+			? [...item.children].reverse().map(child => layer(child.id))
+			: []),
+	]);
+}
+
+/** What every host's session says alike: whether it may write, whether it is held, and its canvas. */
+export interface GraphicsEditorSessionOptions {
+	/** Whether this session holds the Screen's Graphics Authoring Lease (ADR-0030). */
+	writable: MaybeRefOrGetter<boolean>;
+	/** Whether a template placement is in flight, the server rewriting the document. */
+	held?: MaybeRefOrGetter<boolean>;
+	canvasWidth: MaybeRefOrGetter<number>;
+	canvasHeight: MaybeRefOrGetter<number>;
+}
+
+/** A host's lease and placement edits forbidden, and its canvas, from its session. */
+export function graphicsEditorSession(options: GraphicsEditorSessionOptions): Pick<GraphicsEditorHostContract<unknown, GraphicsEditorLayer>, 'canvas'> & { forbidden: Required<Pick<GraphicsEditorForbiddenEdits, 'writable' | 'held'>> } {
+	return {
+		forbidden: {
+			writable: () => toValue(options.writable),
+			held: () => toValue(options.held) ?? false,
+		},
+		canvas: () => ({
+			width: toValue(options.canvasWidth),
+			height: toValue(options.canvasHeight),
+		}),
+	};
+}
+
 /* ── Reading and writing a layer of either kind ── */
 
 /** Where a Graphic Item layer sits in its composition; nothing for a host-owned layer or one that has gone. */
@@ -173,7 +218,7 @@ export function layerItemLocation<D, L extends GraphicsEditorLayer>(
 	tree: GraphicsEditorTree<D, L>,
 	document: D,
 	layer: L,
-): (GraphicItemLocation & { composition: BroadcastGraphicConfig }) | undefined {
+): (GraphicItemLocation & { composition: GraphicComposition }) | undefined {
 	const item = tree.item(document, layer);
 	const location = item && findGraphicItem(item.composition, item.itemId);
 	return item && location

@@ -1,12 +1,12 @@
-import type { MaybeRefOrGetter, Ref } from 'vue';
+import type { Ref } from 'vue';
 import type { FeatureMatchLayoutConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
 import type { GraphicsEditor } from '~/composables/useGraphicsEditor';
-import type { GraphicsEditorHostContract, GraphicsEditorLayerPatch, GraphicsEditorTree } from '~/modules/graphics/editor/host';
-import { toValue } from 'vue';
+import type { GraphicsEditorHostContract, GraphicsEditorLayerPatch, GraphicsEditorSessionOptions, GraphicsEditorTree } from '~/modules/graphics/editor/host';
 import { FEATURE_MATCH_SOURCE_ITEM_ICON } from '~~/shared/featureMatchSourceItems';
 import { FEATURE_MATCH_OVERLAY_HOST_CONTRACT, withoutLayerLock } from '~~/shared/modules/graphics';
 import { copyGraphicLayers, pasteFeatureMatchLayers } from '~/modules/graphics/clipboard';
+import { compositionItemLayers, graphicsEditorSession } from '~/modules/graphics/editor/host';
 import { editorSelectionKey } from './editorSelection';
 import * as layoutWriter from './layout';
 
@@ -46,12 +46,7 @@ export const FEATURE_MATCH_LAYOUT_EDITOR_TREE: GraphicsEditorTree<Layout, Layer>
 	host: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 	key: editorSelectionKey,
 	order: layout => [
-		...[...layout.composition.items].reverse().flatMap(item => [
-			{ type: 'item' as const, itemId: item.id },
-			...(item.type === 'group'
-				? [...item.children].reverse().map(child => ({ type: 'item' as const, itemId: child.id }))
-				: []),
-		]),
+		...compositionItemLayers(layout.composition, (itemId): Layer => ({ type: 'item', itemId })),
 		...[...layout.sources].reverse().map(source => sourceLayer(source.id)),
 	],
 	compositions: layout => [layout.composition],
@@ -99,18 +94,10 @@ export const FEATURE_MATCH_LAYOUT_EDITOR_TREE: GraphicsEditorTree<Layout, Layer>
 	},
 };
 
-export interface FeatureMatchLayoutEditorHostOptions {
+/** `held`: a Feature Match Layout Template placement is in flight, so the editor writes nothing until the placed layout is held. */
+export interface FeatureMatchLayoutEditorHostOptions extends GraphicsEditorSessionOptions {
 	config: Ref<FeatureMatchOverlayModeConfig>;
 	updateConfig: (partial: Partial<FeatureMatchOverlayModeConfig>) => void;
-	canvasWidth: MaybeRefOrGetter<number>;
-	canvasHeight: MaybeRefOrGetter<number>;
-	/** Whether this session holds the Screen's Graphics Authoring Lease (#738). */
-	writable: MaybeRefOrGetter<boolean>;
-	/**
-	 * Whether a Feature Match Layout Template placement is in flight. The server is
-	 * rewriting the layout, so the editor writes nothing until the placed one is held.
-	 */
-	held?: MaybeRefOrGetter<boolean>;
 }
 
 /**
@@ -126,13 +113,6 @@ export function featureMatchLayoutEditorHost(options: FeatureMatchLayoutEditorHo
 			read: () => options.config.value.layout,
 			write: layout => options.updateConfig({ layout }),
 		},
-		forbidden: {
-			writable: () => toValue(options.writable),
-			held: () => toValue(options.held) ?? false,
-		},
-		canvas: () => ({
-			width: toValue(options.canvasWidth),
-			height: toValue(options.canvasHeight),
-		}),
+		...graphicsEditorSession(options),
 	};
 }

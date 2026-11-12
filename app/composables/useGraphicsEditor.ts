@@ -1,8 +1,9 @@
-import type { BroadcastGraphicConfig, GraphicItemKind, GraphicRect } from '~~/shared/types/graphics';
+import type { GraphicItemKind, GraphicRect } from '~~/shared/types/graphics';
 import type { AlignEdge, DistributeAxis } from '~/modules/graphics/canvasAlignment';
 import type { ClipboardPasteRefusal, CopiedLayers, CopiedStyle } from '~/modules/graphics/clipboard';
 import type { EditHistory } from '~/modules/graphics/editor/editHistory';
 import type {
+	GraphicComposition,
 	GraphicsEditorHostContract,
 	GraphicsEditorLayer,
 	GraphicsEditorLayerPatch,
@@ -255,7 +256,7 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 
 	/* ── Forbidden edits ───────────────────────────── */
 
-	function mayEditComposition(composition: BroadcastGraphicConfig): boolean {
+	function mayEditComposition(composition: GraphicComposition): boolean {
 		return !forbidden.composition?.(composition);
 	}
 
@@ -279,7 +280,7 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 	/** Edit the composition a Graphic Item layer sits in, unless the host forbids it. */
 	function editItem(
 		layer: L,
-		apply: (composition: BroadcastGraphicConfig, itemId: string) => BroadcastGraphicConfig,
+		apply: (composition: GraphicComposition, itemId: string) => GraphicComposition,
 		editOptions: GraphicsEditOptions = {},
 	): boolean {
 		const item = tree.item(read(), layer);
@@ -291,7 +292,7 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 	}
 
 	/** The composition a new Graphic Item joins, when the host lets it be edited. */
-	function destination(): BroadcastGraphicConfig | null {
+	function destination(): GraphicComposition | null {
 		const composition = tree.destination(read(), layers.value);
 		return composition && mayEditComposition(composition)
 			? composition
@@ -338,7 +339,7 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 		if (!group || isCanvasSelection(current))
 			return;
 		const itemId = randomUuid();
-		let added: BroadcastGraphicConfig | undefined;
+		let added: GraphicComposition | undefined;
 		if (editItem(current, (composition) => {
 			added = addGraphicGroupChild(composition, { kind, groupId: group.id, id: itemId }).graphic;
 			return added;
@@ -481,7 +482,7 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 			return;
 		const itemId = randomUuid();
 		const itemIds = layers.value.map(layer => tree.item(read(), layer)!.itemId);
-		let grouped: BroadcastGraphicConfig | undefined;
+		let grouped: GraphicComposition | undefined;
 		if (editItem(first, (composition) => {
 			grouped = groupGraphicItems(composition, itemIds, { id: itemId }).graphic;
 			return grouped;
