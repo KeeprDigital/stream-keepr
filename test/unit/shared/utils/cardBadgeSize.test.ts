@@ -3,7 +3,7 @@ import { cardBadgeTextSize, DECK_AUTO_BADGE_RATIOS, TOP_CARDS_AUTO_BADGE_RATIO }
 
 // An Auto badge follows its card: at its mode's former default card width it is
 // the former default text size, so a Screen that never set one looks as it did.
-// A set size in px is kept whatever the card's width.
+// Auto keeps to a set size's bounds, 8 to 48 px; a set size is kept whatever the card's width.
 describe('cardBadgeTextSize', () => {
 	it.each([
 		{
@@ -47,6 +47,20 @@ describe('cardBadgeTextSize', () => {
 			cardWidth: 237,
 			ratio: TOP_CARDS_AUTO_BADGE_RATIO,
 			px: 20.74,
+		},
+		{
+			name: 'a Deck quantity badge on a card too narrow for 8 px',
+			size: undefined,
+			cardWidth: 48,
+			ratio: DECK_AUTO_BADGE_RATIOS.quantityBadgeSize,
+			px: 8,
+		},
+		{
+			name: 'a Most Played Cards badge on a card too wide for 48 px',
+			size: undefined,
+			cardWidth: 1200,
+			ratio: TOP_CARDS_AUTO_BADGE_RATIO,
+			px: 48,
 		},
 		{
 			name: 'a set size on a wide card',

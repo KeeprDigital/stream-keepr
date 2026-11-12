@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getFeatureMatchStateTracking, getMetagameRules } from '../config/games';
 import { EVENT_CANVAS_SIDE_BOUNDS, eventCanvasOf } from '../eventCanvas';
 import { METAGAME_SCOPE_VALUES } from '../types/enums';
+import { CARD_BADGE_SIZE_BOUNDS } from '../utils/cardBadgeSize';
 import { CARD_ASPECT } from '../utils/cardGrid';
 import { editorField } from './fields';
 
@@ -247,7 +248,7 @@ export const DEFAULT_CARD_LAYOUT = {
  * in em. Absent is Auto: a share of its card's solved width (`cardBadgeTextSize`).
  */
 export function cardBadgeSizeField(group: string, showWhen?: (context: ScreenSettingsContext) => boolean) {
-	return editorField(z.number().int().min(8).max(48).optional(), {
+	return editorField(z.number().int().min(CARD_BADGE_SIZE_BOUNDS.min).max(CARD_BADGE_SIZE_BOUNDS.max).optional(), {
 		label: 'Badge size',
 		card: 'content',
 		group,
