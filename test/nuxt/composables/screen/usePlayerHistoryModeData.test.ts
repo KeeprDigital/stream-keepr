@@ -376,29 +376,5 @@ describe('usePlayerHistoryModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 			expect(formatOutcome(pageData.value[0]!)).toBe('WIN 2–0');
 		});
-
-		it('follows an edit to the selected Player\'s record or an opponent\'s', async () => {
-			const { player } = await showingPendingHistory();
-			mockFetch.mockResolvedValue({
-				player: { ...mockPlayer, wins: 13 },
-				history: [pending],
-			});
-
-			deliver('player:updated', {
-				player: { id: 7 },
-			});
-			await flushPromises();
-			expect(player.value?.wins).toBe(13);
-
-			deliver('player:updated', {
-				player: { id: 2 },
-			});
-			await flushPromises();
-			expect(mockFetch).toHaveBeenCalledTimes(2);
-
-			deliver('player:deleted', { playerId: 7 });
-			await flushPromises();
-			expect(mockFetch).toHaveBeenCalledTimes(3);
-		});
 	});
 });

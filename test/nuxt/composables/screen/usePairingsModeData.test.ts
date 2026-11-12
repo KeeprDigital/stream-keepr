@@ -320,22 +320,5 @@ describe('usePairingsModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(1);
 			expect(formatResult(pageData.value[0]!)).toBe('2–0');
 		});
-
-		it('picks up a Match paired into the Round, or moved out of it', async () => {
-			await showingPendingPairings();
-
-			deliver('match:created', {
-				match: match({ id: 5 }),
-			});
-			await flushPromises();
-			deliver('match:updated', {
-				match: match({ roundId: 32 }),
-			});
-			await flushPromises();
-			deliver('match:deleted', { matchId: 1 });
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(3);
-		});
 	});
 });

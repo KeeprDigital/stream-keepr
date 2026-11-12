@@ -1,9 +1,13 @@
+import type { EffectScope } from 'vue';
 import type { PageRotationMode } from '~~/shared/screenModes';
+import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { pageRotationEdit, rotationAnchorForPage } from '~~/shared/modules/page-rotation';
 import { DEFAULT_PAGE_ROTATION } from '~~/shared/screenModeConfigs/subShapes';
-import { SCREEN_MODES } from '~~/shared/screenModes';
+import { SCREEN_MODES, screenModePageRotation } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
+import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 import { usePaginatedScreenMode, useScreenModePagination } from '~/modules/screen-mode/pagination';
 import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
@@ -26,9 +30,12 @@ mockNuxtImport('useServerTime', () => () => ({
 
 const screenContext = screenContextOf();
 
-mockNuxtImport('useScreenStore', () => () => ({
-	updateModeConfig: vi.fn(),
+const { screenStore } = vi.hoisted(() => ({
+	screenStore: {
+		updateModeConfig: vi.fn(),
+	},
 }));
+mockNuxtImport('useScreenStore', () => () => screenStore);
 
 function rows(count: number) {
 	return computed(() => Array.from({ length: count }, (_, i) => i));
@@ -267,5 +274,211 @@ describe('usePaginatedScreenMode', () => {
 		expect(editor.totalPages.value).toBe(pages);
 		expect(output.pageData.value).toHaveLength(firstPage);
 		expect(editor.pageSize.value).toBe(cardsPerPage);
+	});
+
+	/**
+	 * A mode's rendering rotates by its config alone: the Rotation Anchor and
+	 * page duration it holds, over the page size its mode declares (ADR-0039).
+	 */
+	describe('a Standings rendering\'s Page Rotation', () => {
+		const EVENT_ID = 4;
+		const SCREEN_ID = 9;
+		const PAGE_MS = 10_000;
+		type Config = ModeConfigTypeMap['standings'];
+		const scopes: EffectScope[] = [];
+
+		/** Six rows at two a page, rotating every ten seconds, 25 seconds in: page 3 of 3. */
+		function rendering({ config: held = {}, interactive = false, screen = true }: { config?: Partial<Config>; interactive?: boolean; screen?: boolean } = {}) {
+			const config = ref<Config>({
+				...getDefaultConfigForMode('standings'),
+				rowsPerPage: 2,
+				autoPageEnabled: true,
+				autoPageIntervalMs: PAGE_MS,
+				rotationAnchor: mockServerNow - 25_000,
+				...held,
+			});
+			const rowCount = ref(6);
+			const scope = effectScope();
+			scopes.push(scope);
+			const paging = scope.run(() => usePaginatedScreenMode(
+				screenContextOf({
+					screen: ref(screen
+						? { id: SCREEN_ID }
+						: null),
+					eventId: computed(() => EVENT_ID),
+					interactive: ref(interactive),
+				}),
+				{
+					mode: 'standings',
+					config: computed(() => config.value),
+					rows: computed(() => Array.from({ length: rowCount.value }, (_, index) => index)),
+				},
+			))!;
+			/** Writes an edit as a settings editor does, through the one rule for shape changes. */
+			function edit(patch: Partial<Config>) {
+				config.value = {
+					...config.value,
+					...pageRotationEdit(screenModePageRotation('standings'), config.value, patch, mockServerNow),
+				};
+			}
+			return { paging, config, rowCount, edit };
+		}
+		type Rendering = ReturnType<typeof rendering>;
+
+		const shown = ({ paging }: Rendering) => ({
+			page: paging.currentPage.value,
+			of: paging.totalPages.value,
+			rows: paging.pageData.value,
+		});
+
+		beforeEach(() => {
+			vi.useFakeTimers();
+			mockIsSynced.value = true;
+			mockServerNow = 1_000_000;
+			screenStore.updateModeConfig.mockReset();
+		});
+		afterEach(() => {
+			scopes.splice(0).forEach(scope => scope.stop());
+			vi.useRealTimers();
+		});
+
+		it('turns its pages at each boundary, and writes nothing as it runs, even where it could', async () => {
+			const held = rendering({ interactive: true });
+			expect(shown(held)).toEqual({
+				page: 3,
+				of: 3,
+				rows: [4, 5],
+			});
+
+			await advance(5_000);
+			expect(shown(held)).toEqual({
+				page: 1,
+				of: 3,
+				rows: [0, 1],
+			});
+			await advance(PAGE_MS);
+			expect(shown(held)).toEqual({
+				page: 2,
+				of: 3,
+				rows: [2, 3],
+			});
+
+			expect(screenStore.updateModeConfig).not.toHaveBeenCalled();
+		});
+
+		// Each change arrives as its Screen's config does; the rendering follows it with no state of its own.
+		it.each<{ change: string; arrive: (held: Rendering) => void; shows: { page: number; of: number }; afterMs: number; then: number }>([
+			{
+				change: 'a page size edit restarts it over the new page count',
+				arrive: ({ edit }) => edit({ rowsPerPage: 3 }),
+				shows: { page: 1, of: 2 },
+				afterMs: PAGE_MS,
+				then: 2,
+			},
+			{
+				change: 'a page duration edit restarts it at the new duration',
+				arrive: ({ edit }) => edit({ autoPageIntervalMs: 4_000 }),
+				shows: { page: 1, of: 3 },
+				afterMs: 4_000,
+				then: 2,
+			},
+			{
+				change: 'a page selected elsewhere is shown, and the rotation runs on from it',
+				arrive: ({ config }) => {
+					config.value = {
+						...config.value,
+						rotationAnchor: rotationAnchorForPage({ page: 2, pageDurationMs: PAGE_MS, now: mockServerNow }),
+					};
+				},
+				shows: { page: 2, of: 3 },
+				afterMs: PAGE_MS,
+				then: 3,
+			},
+			{
+				change: 'auto-page turned off holds the selected page',
+				arrive: ({ edit }) => edit({ autoPageEnabled: false, currentPage: 2 }),
+				shows: { page: 2, of: 3 },
+				afterMs: PAGE_MS,
+				then: 2,
+			},
+			{
+				change: 'rows shrinking to one page leave nothing to rotate',
+				arrive: ({ rowCount }) => {
+					rowCount.value = 2;
+				},
+				shows: { page: 1, of: 1 },
+				afterMs: PAGE_MS,
+				then: 1,
+			},
+		])('$change', async ({ arrive, shows, afterMs, then }) => {
+			const held = rendering();
+			expect(shown(held)).toMatchObject({ page: 3, of: 3 });
+
+			arrive(held);
+			await nextTick();
+			expect(shown(held)).toMatchObject(shows);
+
+			await advance(afterMs);
+			expect(held.paging.currentPage.value).toBe(then);
+		});
+
+		// Only an interactive surface writes a page selection; a Screen Output cannot move the Rotation Anchor (ADR-0009).
+		it.each<{ surface: string; interactive: boolean; screen?: boolean; autoPageEnabled: boolean; writes: string; written: Partial<Config>[] }>([
+			{
+				surface: 'an interactive surface with auto-page off',
+				interactive: true,
+				autoPageEnabled: false,
+				writes: 'the page',
+				written: [
+					{ currentPage: 2 },
+				],
+			},
+			{
+				surface: 'an interactive surface while rotating',
+				interactive: true,
+				autoPageEnabled: true,
+				writes: 'a Rotation Anchor holding it a whole page duration',
+				written: [
+					{ rotationAnchor: 1_000_000 - PAGE_MS },
+				],
+			},
+			{
+				surface: 'a Screen Output with auto-page off',
+				interactive: false,
+				autoPageEnabled: false,
+				writes: 'nothing',
+				written: [],
+			},
+			{
+				surface: 'a Screen Output while rotating',
+				interactive: false,
+				autoPageEnabled: true,
+				writes: 'nothing',
+				written: [],
+			},
+			{
+				surface: 'an interactive surface with no Screen loaded',
+				interactive: true,
+				screen: false,
+				autoPageEnabled: false,
+				writes: 'nothing',
+				written: [],
+			},
+		])('selecting page 2 on $surface writes $writes', ({ interactive, screen, autoPageEnabled, written }) => {
+			const { paging } = rendering({
+				interactive,
+				screen,
+				config: { autoPageEnabled, currentPage: 1 },
+			});
+
+			paging.setPage(2);
+
+			expect(screenStore.updateModeConfig.mock.calls).toEqual(written.map(patch => [
+				EVENT_ID,
+				SCREEN_ID,
+				'standings',
+				patch,
+			]));
+		});
 	});
 });

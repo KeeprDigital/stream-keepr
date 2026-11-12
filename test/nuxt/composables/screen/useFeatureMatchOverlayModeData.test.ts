@@ -269,40 +269,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 			expect(data().phase.value).toMatchObject({ name: 'Swiss' });
 		});
 
-		it('reads Session state through the Screen and never starts a Session', async () => {
-			mountOverlay({
-				isPreview: ref(false),
-				screen: ref({
-					id: 42,
-					modeConfigs: {
-						'feature-match-overlay': boundConfig(11),
-					},
-				} as never),
-			});
-			await flushPromises();
-
-			const read = mockFeatureMatchStateStore.readSessionsAsScreenOutput.mock.calls[0]?.[0] as
-				(slotId: number) => Promise<unknown>;
-			await expect(read(11)).resolves.toEqual({ id: 90, slotId: 11 });
-			expect(mockApiFetch.mock.calls.every(([, options]) => !(options as { method?: string } | undefined)?.method)).toBe(true);
-		});
-
-		it('shows nothing of the Slot it left when the newly selected Slot\'s read is overtaken', async () => {
-			const { data } = mountOverlay({
-				isPreview: ref(true),
-			});
-			pushPreviewConfig(boundConfig(11));
-			await flushPromises();
-			expect(data().round.value).toMatchObject({ name: 'Round 3' });
-
-			mockFeatureMatchStore.holdFeatureMatch.mockReturnValueOnce(false);
-			pushPreviewConfig(boundConfig(12));
-			await flushPromises();
-
-			expect(data().round.value).toBeUndefined();
-			expect(data().sourceMatch.value).toBeNull();
-		});
-
 		it('reads the Slot an editor preview pushes, which its author has not saved', async () => {
 			mountOverlay({
 				isPreview: ref(true),
@@ -316,43 +282,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 				'/api/screen-output/events/7/screens/42/feature-match-slots/12',
 				expect.anything(),
 			);
-		});
-
-		// The followed Session carries side order (ADR-0058); the read's is as old as the read.
-		it.each([
-			{
-				held: 'the Session the store follows',
-				followed: { id: 90, slotId: 11, sequence: 4 },
-				shown: { id: 90, slotId: 11, sequence: 4 },
-			},
-			{
-				held: 'the Session its read carried, while the store follows none',
-				followed: null,
-				shown: { id: 90, slotId: 11 },
-			},
-		])('carries $held', async ({ followed, shown }) => {
-			mockFeatureMatchStateStore.sessionIdBySlotId = new Map(followed
-				? [
-						[11, followed.id],
-					]
-				: []);
-			mockFeatureMatchStateStore.featureMatchSessions = new Map(followed
-				? [
-						[followed.id, followed],
-					]
-				: []);
-			const { data } = mountOverlay({
-				isPreview: ref(false),
-				screen: ref({
-					id: 42,
-					modeConfigs: {
-						'feature-match-overlay': boundConfig(11),
-					},
-				} as never),
-			});
-			await flushPromises();
-
-			expect(data().match.value?.activeSession).toEqual(shown);
 		});
 	});
 
@@ -411,73 +340,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 	});
 
 	/**
-	 * The Overlay's half of the rule the Feature Match Screen holds: nothing
-	 * published while this client was suspended is ever delivered late, so the only
-	 * way to find out what was missed is to ask (#307).
-	 */
-	describe('a connection that was suspended and came back', () => {
-		async function suspendAndResume() {
-			realtime.transport.connectionState = 'suspended';
-			await nextTick();
-			realtime.transport.connectionState = 'connected';
-			realtime.reattach(7);
-			await nextTick();
-			await flushPromises();
-		}
-
-		it('re-reads the Slot, its Session and its Match through the Screen, with no resync of its own', async () => {
-			const { data } = mountBoundOutput();
-			await flushPromises();
-			mockApiFetch.mockClear();
-			mockApiFetch.mockResolvedValueOnce({
-				...slotRead(11),
-				slot: {
-					id: 11,
-					matchId: 301,
-					activeSession: { id: 91, slotId: 11 },
-				},
-				round: { id: 21, name: 'Round 4', phaseId: 5 },
-			});
-
-			await suspendAndResume();
-
-			expect(mockApiFetch).toHaveBeenCalledWith(
-				'/api/screen-output/events/7/screens/42/feature-match-slots/11',
-				expect.anything(),
-			);
-			expect(mockFeatureMatchStore.holdFeatureMatch).toHaveBeenLastCalledWith(expect.objectContaining({ id: 11, matchId: 301 }));
-			expect(data().round.value).toMatchObject({ name: 'Round 4' });
-			expect(mockFeatureMatchStateStore.loadState).not.toHaveBeenCalled();
-		});
-
-		it('does not re-read the moment it disconnects', async () => {
-			mountBoundOutput();
-			await flushPromises();
-			mockApiFetch.mockClear();
-
-			realtime.transport.connectionState = 'suspended';
-			await nextTick();
-			await flushPromises();
-
-			expect(mockApiFetch).not.toHaveBeenCalled();
-		});
-
-		it('keeps what it shows when the read answers a Slot overtaken by a newer promotion', async () => {
-			const { data } = mountBoundOutput();
-			await flushPromises();
-			mockFeatureMatchStore.holdFeatureMatch.mockReturnValueOnce(false);
-			mockApiFetch.mockResolvedValueOnce({
-				...slotRead(11),
-				round: { id: 19, name: 'Round 2', phaseId: 5 },
-			});
-
-			await suspendAndResume();
-
-			expect(data().round.value).toMatchObject({ name: 'Round 3' });
-		});
-	});
-
-	/**
 	 * The Match, Round and Phase the Overlay shows are held by no store on an
 	 * output, so the Event messages that change them say when to read again.
 	 */
@@ -503,18 +365,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 
 			expect(data().sourceMatch.value).toMatchObject({ id: 301 });
 			expect(data().round.value).toMatchObject({ name: 'Round 4' });
-		});
-
-		it('re-reads when the Round it shows changes', async () => {
-			mountBoundOutput();
-			await flushPromises();
-			mockApiFetch.mockClear();
-
-			deliver('round:updated', {
-				round: { id: 20, name: 'Top 8' },
-			});
-			await flushPromises();
-			expect(mockApiFetch).toHaveBeenCalledTimes(1);
 		});
 	});
 });

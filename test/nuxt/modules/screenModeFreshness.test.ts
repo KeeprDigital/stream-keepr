@@ -2,6 +2,7 @@ import type { EffectScope } from 'vue';
 import type { ScreenModeDependencies, ScreenModeFreshnessTransport } from '~/modules/screen-mode/freshness';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '~~/test/helpers/deferred';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { SCREEN_MODE_REREAD_MS, useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 
@@ -19,16 +20,26 @@ interface Held {
 
 const scopes: EffectScope[] = [];
 
-function harness(dependsOn: ScreenModeDependencies<Held> = {}, { attached = [] as number[] } = {}) {
+interface HarnessOptions {
+	attached?: number[];
+	/** What the mode selects as it mounts; `null` for nothing. */
+	selected?: number | null;
+	/** Each read's answer, where the test settles them by hand. */
+	readAs?: () => Promise<Held>;
+}
+
+function harness(dependsOn: ScreenModeDependencies<Held> = {}, { attached = [], selected = 7, readAs }: HarnessOptions = {}) {
 	const realtime = createFakeEventChannel();
 	for (const eventId of attached)
 		realtime.attach(eventId);
 	const eventId = ref<number | null>(1);
-	const selection = ref<number | null>(7);
+	const selection = ref<number | null>(selected);
 	const read = vi.fn(async (): Promise<Held> => ({
 		ids: [selection.value!],
 		label: `read ${read.mock.calls.length}`,
 	}));
+	if (readAs)
+		read.mockImplementation(readAs);
 	const scope = effectScope();
 	scopes.push(scope);
 	const freshness = scope.run(() => useScreenModeFreshness<Held>({
@@ -93,6 +104,111 @@ describe('useScreenModeFreshness', () => {
 
 			expect(read).toHaveBeenCalledTimes(1);
 			expect(freshness.data.value).toEqual({ ids: [], label: 'none' });
+		});
+	});
+
+	// A rendering shows its scaffold by `answered`, false only while a first read
+	// is in flight, and its activity by `loading`, true for every read in flight.
+	describe('loading and answered', () => {
+		const answer: Held = {
+			ids: [7],
+			label: 'answered',
+		};
+
+		/** A mode whose reads the test settles by hand, in the order they were made. */
+		function reading(selected: number | null) {
+			const flights: ReturnType<typeof deferred<Held>>[] = [];
+			return {
+				...harness({ 'player:updated': true }, {
+					selected,
+					readAs: () => {
+						const flight = deferred<Held>();
+						flights.push(flight);
+						return flight.promise;
+					},
+				}),
+				flights,
+			};
+		}
+		type Reading = ReturnType<typeof reading>;
+
+		it.each<{ state: string; selected?: number | null; arrive?: (mode: Reading) => void | Promise<void>; loading: boolean; answered: boolean; error?: string }>([
+			{
+				state: 'its first read is in flight',
+				loading: true,
+				answered: false,
+			},
+			{
+				state: 'its first read has answered',
+				arrive: ({ flights }) => flights[0]!.resolve(answer),
+				loading: false,
+				answered: true,
+			},
+			{
+				state: 'its first read has failed',
+				arrive: ({ flights }) => flights[0]!.reject(new Error('unavailable')),
+				loading: false,
+				answered: true,
+				error: 'Failed to read',
+			},
+			{
+				state: 'a re-read is in flight',
+				arrive: async ({ flights, deliver }) => {
+					flights[0]!.resolve(answer);
+					await flushPromises();
+					deliver('player:updated');
+				},
+				loading: true,
+				answered: true,
+			},
+			{
+				state: 'a re-read has failed',
+				arrive: async ({ flights, deliver }) => {
+					flights[0]!.resolve(answer);
+					await flushPromises();
+					deliver('player:updated');
+					await flushPromises();
+					flights[1]!.reject(new Error('unavailable'));
+				},
+				loading: false,
+				answered: true,
+			},
+			{
+				state: 'a superseded read has answered, and the read of what it selects now has not',
+				arrive: async ({ flights, selection }) => {
+					selection.value = 9;
+					await flushPromises();
+					flights[0]!.resolve(answer);
+				},
+				loading: true,
+				answered: false,
+			},
+			{
+				state: 'it selects nothing',
+				selected: null,
+				loading: false,
+				answered: true,
+			},
+			{
+				state: 'it stopped selecting while its read was in flight',
+				arrive: ({ selection }) => {
+					selection.value = null;
+				},
+				loading: false,
+				answered: true,
+			},
+		])('while $state, loading is $loading and answered is $answered', async ({ selected = 7, arrive, loading, answered, error }) => {
+			const mode = reading(selected);
+			await flushPromises();
+
+			await arrive?.(mode);
+			await flushPromises();
+
+			expect({
+				loading: mode.freshness.loading.value,
+				answered: mode.freshness.answered.value,
+				error: mode.freshness.error.value,
+			}).toEqual({ loading, answered, error: error ?? null });
 		});
 	});
 
