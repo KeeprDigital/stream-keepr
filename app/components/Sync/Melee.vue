@@ -10,7 +10,7 @@ const meleeStore = useMeleeStore();
 const roundStore = useRoundStore();
 const phaseStore = usePhaseStore();
 const overlay = useOverlay();
-const { runRequest } = useRequestFeedback();
+const { reportMeleeOperation } = useMeleeOperationFeedback();
 
 const { event, eventId, hasLastError, isSetupComplete, isAnySyncRunning, statusDescription } = useMeleeSyncOverview();
 
@@ -220,23 +220,6 @@ const selectedRoundLabel = computed(() =>
 	specificRoundOptions.value.find(option => option.value === selectedSpecificRoundId.value)?.label ?? 'round',
 );
 
-function latestOperationToast() {
-	const operation = meleeStore.lastOperation;
-	if (!operation) {
-		return null;
-	}
-
-	return {
-		title: operation.title,
-		description: operation.description,
-		color: operation.status === 'success'
-			? 'success'
-			: operation.status === 'warning'
-				? 'warning'
-				: 'error',
-	} as const;
-}
-
 function operationAlertColor(status: 'success' | 'warning' | 'error') {
 	return status === 'success'
 		? 'success'
@@ -265,13 +248,7 @@ async function runStoreAction(action: () => Promise<unknown>) {
 	if (isAnySyncRunning.value)
 		return;
 
-	await runRequest(action, {
-		success: () => latestOperationToast() ?? false,
-		error: ({ message }) => latestOperationToast() ?? {
-			title: 'Operation Failed',
-			description: message,
-			color: 'error',
-		},
+	await reportMeleeOperation(action, {
 		onSuccess: async () => {
 			await loadUnresolvedDeckCards();
 		},

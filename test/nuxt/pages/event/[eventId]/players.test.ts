@@ -72,14 +72,20 @@ mockNuxtImport('usePlayerListStore', () => () => ({
 	lists: [],
 	getCachedMemberIds: () => undefined,
 }));
-mockNuxtImport('useMeleeStore', () => () => ({ syncingRound: false }));
+const meleeStore = reactive({
+	syncingRound: false,
+	lastOperation: null as { status: string; title: string; description: string } | null,
+	syncSpecificRound: vi.fn(),
+});
+const toast = {
+	add: vi.fn(),
+};
+mockNuxtImport('useMeleeStore', () => () => meleeStore);
 mockNuxtImport('useScreenStore', () => () => ({ isLoaded: true, currentEventId: 1, screens: [] }));
 mockNuxtImport('useOverlay', () => () => ({
 	create: vi.fn(),
 }));
-mockNuxtImport('useToast', () => () => ({
-	add: vi.fn(),
-}));
+mockNuxtImport('useToast', () => () => toast);
 mockNuxtImport('usePlayerDeckListModal', () => () => ({
 	openPlayerDeckList: vi.fn(),
 }));
@@ -142,7 +148,7 @@ const PlayerListStub = defineComponent({
 	template: '<ul><li v-for="player in players" :key="player.id" :data-player-record="player.id">{{ player.wins }}-{{ player.losses }}</li></ul>',
 });
 
-async function mountPage() {
+async function mountPage(stubs: Record<string, unknown> = {}) {
 	const pagePath = '../../../../../app/pages/event/[eventId]/players.vue';
 	const { default: PlayersPage } = await import(pagePath);
 	return mount(PlayersPage, {
@@ -157,6 +163,7 @@ async function mountPage() {
 				UIInitialLoadError: true,
 				UAlert: true,
 				UButton: true,
+				...stubs,
 			},
 		},
 	});
@@ -230,5 +237,55 @@ describe('players page — Round Standings', () => {
 		await wrapper.get('[data-round="4"]').trigger('click');
 
 		expect(wrapper.get('[data-player-record="41"]').text()).toBe('9-0');
+	});
+});
+
+// The Players page starts a Round sync from the alert over a Round with no standings.
+describe('players page — Round sync', () => {
+	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
+
+	beforeEach(() => {
+		eventStore.event.meleeEnabled = true;
+		Object.assign(rounds[0]!, { externalSource: 'melee' });
+		mockFetch.mockReset().mockResolvedValue({ standings: [] });
+		toast.add.mockClear();
+		meleeStore.lastOperation = null;
+	});
+
+	afterEach(() => {
+		wrapper?.unmount();
+		wrapper = null;
+		eventStore.event.meleeEnabled = false;
+	});
+
+	it('tells the operator what the Melee store recorded of the sync, as the Sync page does', async () => {
+		meleeStore.syncSpecificRound.mockImplementation(async () => {
+			meleeStore.lastOperation = {
+				status: 'warning',
+				title: 'Round Synced — Reload Needed',
+				description: 'Round 3 synced successfully. Reload the page before retrying the sync.',
+			};
+			return { success: true };
+		});
+		wrapper = await mountPage({
+			UAlert: defineComponent({ template: '<div><slot name="actions" /></div>' }),
+			UButton: defineComponent({ template: '<button type="button"><slot /></button>' }),
+		});
+		await wrapper.get('[data-round="3"]').trigger('click');
+		await flushPromises();
+
+		await wrapper.findAll('button').find(button => button.text() === 'Sync Round')!.trigger('click');
+		await flushPromises();
+
+		expect(meleeStore.syncSpecificRound).toHaveBeenCalledWith(3);
+		expect(toast.add.mock.calls).toEqual([
+			[
+				{
+					title: 'Round Synced — Reload Needed',
+					description: 'Round 3 synced successfully. Reload the page before retrying the sync.',
+					color: 'warning',
+				},
+			],
+		]);
 	});
 });

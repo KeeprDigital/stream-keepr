@@ -129,6 +129,7 @@ const mockPlayerDeckCache = {
 
 const mockMeleeStore = reactive({
 	syncingRound: false,
+	lastOperation: null as { status: string; title: string; description: string } | null,
 	syncSpecificRound: vi.fn(async () => ({ success: true })),
 	$reset: vi.fn(),
 });
@@ -300,6 +301,7 @@ describe('matches page', () => {
 		storesLoading.value = false;
 		mockEventStore.event = null;
 		mockMeleeStore.syncSpecificRound.mockClear();
+		mockMeleeStore.lastOperation = null;
 		mockRoundStore.loadRoundsByEventId.mockClear();
 		mockMatchStore.loadMatchesByRoundId.mockClear();
 		mockFeatureMatchAssignmentStore.consumeRound.mockClear();
@@ -521,5 +523,41 @@ describe('matches page', () => {
 		expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 2);
 		expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
 		expect(mockMatchRepository.list).not.toHaveBeenCalled();
+	});
+
+	it('tells the operator what the Melee store recorded of a Round sync, as the Sync page does', async () => {
+		mockEventStore.event = { meleeEnabled: true };
+		mockRoundStore.rounds = [
+			{
+				id: 2,
+				phaseId: 1,
+				name: 'Round 1',
+				lastSyncedAt: null,
+				externalSource: 'melee',
+			},
+		];
+		mockMeleeStore.syncSpecificRound.mockImplementationOnce(async () => {
+			mockMeleeStore.lastOperation = {
+				status: 'warning',
+				title: 'Round Synced — Reload Needed',
+				description: 'Round 1 synced successfully. Reload the page before retrying the sync.',
+			};
+			return { success: true };
+		});
+		const wrapper = await mountPage();
+		await flushPromises();
+
+		await wrapper.get('[data-testid="empty-state"]').findAll('button').find(button => button.text().includes('Sync Matches'))!.trigger('click');
+		await flushPromises();
+
+		expect(mockToast.add.mock.calls).toEqual([
+			[
+				{
+					title: 'Round Synced — Reload Needed',
+					description: 'Round 1 synced successfully. Reload the page before retrying the sync.',
+					color: 'warning',
+				},
+			],
+		]);
 	});
 });
