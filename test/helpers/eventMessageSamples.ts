@@ -65,6 +65,9 @@ export function eventMessageSamples(ids: EventMessageSampleIds): { [K in Message
 		'player:created': { player },
 		'player:updated': { player },
 		'player:deleted': { playerId: ids.playerId },
+		'player:deckProjectionsChanged': {
+			playerIds: [ids.playerId],
+		},
 		'playerDeck:reviewed': {
 			deck: { playerId: ids.playerId },
 		},

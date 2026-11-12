@@ -68,6 +68,35 @@ describe('usePlayerMatchHistory', () => {
 		expect(history.value.map(row => row.opponentName)).toEqual(['Bob (renamed)']);
 	});
 
+	// An Archetype rename or delete names the Players it re-projected, or none when they do not fit (ADR-0084).
+	it.each([
+		{
+			naming: 'its Player',
+			playerIds: [7],
+			reads: 2,
+		},
+		{
+			naming: 'an opponent it holds',
+			playerIds: [3, 8],
+			reads: 2,
+		},
+		{
+			naming: 'Players it does not show',
+			playerIds: [3, 4],
+			reads: 1,
+		},
+		{ naming: 'no Player', playerIds: null, reads: 2 },
+	])('has read $reads times after a deck projection change naming $naming', async ({ playerIds, reads }) => {
+		mockFetch.mockResolvedValue(answer(7, 'Alice'));
+		readHistory(() => 7);
+		await flushPromises();
+
+		realtime.deliver('player:deckProjectionsChanged', { playerIds });
+		await flushPromises();
+
+		expect(mockFetch).toHaveBeenCalledTimes(reads);
+	});
+
 	it('shows nothing of the last Player while the next Player\'s history loads', async () => {
 		const playerId = ref(7);
 		mockFetch.mockResolvedValue(answer(7, 'Alice'));

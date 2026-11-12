@@ -5,6 +5,8 @@ interface Options {
 }
 
 export function createPlayerMetagameRealtimeHandlers({ accept }: Options) {
+	const eventStore = useEventStore();
+
 	return {
 		'player:created': accept('player:created', (data) => {
 			usePlayerStore().applyRemoteCreated(data);
@@ -13,6 +15,16 @@ export function createPlayerMetagameRealtimeHandlers({ accept }: Options) {
 		'player:updated': accept('player:updated', (data) => {
 			usePlayerStore().applyRemoteUpdated(data);
 			useMetagameStore().applyRemoteInvalidated();
+		}),
+		// An Archetype rename or delete names the Players it re-projected and carries
+		// none (ADR-0084), so an operator re-reads the Players, as after a Melee
+		// players sync. A rendering of a Screen has no operator Session, so it skips
+		// the reload.
+		'player:deckProjectionsChanged': accept('player:deckProjectionsChanged', async (data) => {
+			useMetagameStore().applyRemoteInvalidated();
+			if (!eventStore.event)
+				return;
+			await usePlayerStore().loadPlayersByEventId(data.eventId);
 		}),
 		'player:deleted': accept('player:deleted', (data) => {
 			usePlayerStore().applyRemoteDeleted(data);

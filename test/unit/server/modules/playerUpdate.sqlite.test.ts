@@ -10,7 +10,6 @@ const db = drizzle(harness.database, { schema });
 const publication = {
 	playerCreated: vi.fn(async (input: { entity: unknown }) => input.entity),
 	playerUpdated: vi.fn(async (input: { entity: unknown }) => input.entity),
-	playersUpdated: vi.fn(async (input: { entities: unknown[] }) => input.entities),
 	playerDeleted: vi.fn(),
 	playerDeckReviewed: vi.fn(async (input: { entity: unknown }) => input.entity),
 	featureMatchSlotsUpdated: vi.fn(),
@@ -411,43 +410,6 @@ describe('a One Piece Card Game Player\'s Deck List reference and Archetype', ()
 
 		expect(await readPlayer((created as { id: number }).id)).toMatchObject({ gameData: null, archetypeId: null });
 	});
-});
-
-// The Players go out as one change, so a rename many Players hold re-resolves bindings once.
-it('re-projects each Player whose reviewed primary Deck List names an edited Archetype, announcing them as one change', async () => {
-	const eventId = await createEvent();
-	const archetype = await createArchetype(eventId, 'Azorius Control');
-	const players = [await createPlayer(eventId), await createPlayer(eventId)];
-	for (const player of players) {
-		await createDeck(eventId, player.id, {
-			archetypeId: archetype.id,
-			reviewedAt: new Date(),
-		});
-	}
-	await db.update(schema.archetypes).set({ name: 'Azorius Tempo' }).where(eq(schema.archetypes.id, archetype.id));
-
-	const answered = await playerUpdateModule().reconcileDeckProjections({
-		eventId,
-		playerIds: players.map(player => player.id),
-		originConnectionId: 'origin-1',
-	});
-
-	for (const player of players)
-		expect((await readPlayer(player.id))?.gameData).toMatchObject({ deckName: 'Azorius Tempo' });
-	expect(answered).toHaveLength(2);
-	expect(publication.playersUpdated.mock.calls).toEqual([
-		[
-			{
-				eventId,
-				entities: players.map(player => expect.objectContaining({
-					id: player.id,
-					gameData: expect.objectContaining({ deckName: 'Azorius Tempo' }),
-				})),
-				originConnectionId: 'origin-1',
-			},
-		],
-	]);
-	expect(publication.playerUpdated).not.toHaveBeenCalled();
 });
 
 describe('deleting a Player', () => {

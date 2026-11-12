@@ -157,6 +157,15 @@ describe('outputChangeOf', () => {
 			],
 		],
 		[
+			'player:deckProjectionsChanged',
+			[
+				{
+					kind: 'player',
+					playerIds: [PLAYER],
+				},
+			],
+		],
+		[
 			'playerDeck:reviewed',
 			[
 				{
@@ -498,6 +507,26 @@ describe('outputChangeOf', () => {
 		],
 	])('%s names what it changed', (type, changes) => {
 		expect(outputChangeOf(type, SAMPLES[type])).toEqual(changes);
+	});
+
+	// One message stands for a `player:updated` of each Player it names, so a Screen
+	// hearing any of those hears it; naming none, it may be any Player (ADR-0084).
+	it.each<[string, number[] | null, OutputChange]>([
+		[
+			'every Player it names',
+			[OTHER_PLAYER, PLAYER],
+			{
+				kind: 'player',
+				playerIds: [OTHER_PLAYER, PLAYER],
+			},
+		],
+		[
+			'the whole kind when it names none',
+			null,
+			{ kind: 'player' },
+		],
+	])('player:deckProjectionsChanged changes %s', (_case, playerIds, change) => {
+		expect(outputChangeOf('player:deckProjectionsChanged', { playerIds })).toEqual([change]);
 	});
 
 	// A wholesale sync names no id, so no narrowing can miss what it rewrote.
