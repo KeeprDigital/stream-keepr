@@ -161,10 +161,10 @@ function setMembership(graphicId: string, channelId: string | null) {
 		:summary="summary"
 		data-testid="graphic-channels"
 	>
-		<p class="text-xs text-muted">
+		<ScreenSettingsHint>
 			A Graphic Channel keeps at most one of its Broadcast Graphics on air. Graphics in
 			different channels, or in none, run concurrently.
-		</p>
+		</ScreenSettingsHint>
 
 		<UButton
 			size="xs"

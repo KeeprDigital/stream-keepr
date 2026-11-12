@@ -78,7 +78,7 @@ function update(updates: Partial<FeatureMatchSourceFramingStyle>) {
 			@update="update"
 		/>
 
-		<UFormField label="Glow position" size="sm">
+		<ScreenSettingsField label="Glow position" size="sm" stacked>
 			<USelect
 				:model-value="style.glowPosition ?? 'both'"
 				:items="GLOW_POSITION_OPTIONS"
@@ -88,6 +88,6 @@ function update(updates: Partial<FeatureMatchSourceFramingStyle>) {
 				aria-label="Glow position"
 				@update:model-value="update({ glowPosition: $event as FeatureMatchOverlayGlowPosition })"
 			/>
-		</UFormField>
+		</ScreenSettingsField>
 	</div>
 </template>

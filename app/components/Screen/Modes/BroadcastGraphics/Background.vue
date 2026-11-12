@@ -94,11 +94,11 @@ const selection = computed<AnimationEffectSelection>(() => ({
 		:summary="summary"
 		data-testid="broadcast-graphics-background-settings"
 	>
-		<p class="text-xs text-muted">
+		<ScreenSettingsHint>
 			One Animation Effect behind every Broadcast Graphic on this Screen. It renders in
 			the Overlay and Fill Outputs and never in the Key Output, which stays an alpha
 			matte.
-		</p>
+		</ScreenSettingsHint>
 
 		<fieldset :disabled="!canAuthor" class="space-y-3">
 			<ScreenSettingsToggle

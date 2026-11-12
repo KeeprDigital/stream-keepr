@@ -38,14 +38,14 @@ const SOURCE_ROLE_OPTIONS = [
 			title="Details"
 			:summary="item.label"
 		>
-			<UFormField label="Name">
+			<ScreenSettingsField label="Name" stacked>
 				<UInput
 					:model-value="item.label"
 					size="sm"
 					class="w-full"
 					@update:model-value="editor.updateSource(item.id, { label: String($event) })"
 				/>
-			</UFormField>
+			</ScreenSettingsField>
 		</ScreenSettingsSection>
 
 		<ScreenSettingsSection
@@ -84,7 +84,7 @@ const SOURCE_ROLE_OPTIONS = [
 					another installation — so it is chosen from the vocabulary rather
 					than typed as local shorthand.
 				-->
-				<UFormField label="Source role">
+				<ScreenSettingsField label="Source role" stacked>
 					<USelect
 						:model-value="item.sourceRole"
 						:items="SOURCE_ROLE_OPTIONS"
@@ -94,7 +94,7 @@ const SOURCE_ROLE_OPTIONS = [
 						aria-label="Source role"
 						@update:model-value="editor.updateSource(item.id, { sourceRole: $event })"
 					/>
-				</UFormField>
+				</ScreenSettingsField>
 			</div>
 		</ScreenSettingsSection>
 

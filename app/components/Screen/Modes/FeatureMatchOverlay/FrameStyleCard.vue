@@ -90,7 +90,7 @@ const backgroundSummary = computed(() => {
 							@update:model-value="updateFrame({ backgroundImage: $event ?? undefined })"
 						/>
 					</div>
-					<UFormField label="Image fit">
+					<ScreenSettingsField label="Image fit" stacked>
 						<USelect
 							:model-value="config.layout.frame.backgroundImageFit"
 							:items="MEDIA_FIT_OPTIONS"
@@ -99,7 +99,7 @@ const backgroundSummary = computed(() => {
 							class="w-full"
 							@update:model-value="updateFrame({ backgroundImageFit: $event as MediaFit })"
 						/>
-					</UFormField>
+					</ScreenSettingsField>
 				</div>
 			</div>
 		</ScreenSettingsSection>

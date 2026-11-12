@@ -164,7 +164,7 @@ function updateBackground(next: BroadcastGraphicsBackgroundConfig) {
 	<div class="space-y-6">
 		<section class="rounded-lg border border-default/70 bg-default p-3">
 			<div class="grid gap-3">
-				<UFormField label="Workspace" size="sm">
+				<ScreenSettingsField label="Workspace" size="sm" stacked>
 					<div class="flex flex-wrap items-center gap-2">
 						<UFieldGroup size="sm">
 							<UButton
@@ -183,7 +183,7 @@ function updateBackground(next: BroadcastGraphicsBackgroundConfig) {
 						<!-- Editor Focus Mode is the Edit workspace's alone (#744): Live keeps the page as it is. -->
 						<GraphicsEditorFocusModeToggle v-if="workspace === 'edit'" />
 					</div>
-				</UFormField>
+				</ScreenSettingsField>
 			</div>
 		</section>
 
