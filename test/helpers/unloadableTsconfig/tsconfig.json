@@ -1,0 +1,6 @@
+{
+	// Unloadable on purpose: it extends a generated file that is never here, as the
+	// root tsconfig does while `nuxt prepare` has `.nuxt` cleared. A Vite server told
+	// which tsconfig to use never opens this one (test/unit/build/checkoutTsconfig.test.ts).
+	"extends": "./.nuxt/tsconfig.json"
+}

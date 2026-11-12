@@ -2,7 +2,7 @@
 import antfu from '@antfu/eslint-config';
 import tsParser from '@typescript-eslint/parser';
 import * as drizzle from 'eslint-plugin-drizzle';
-import withNuxt from './.nuxt/eslint.config.mjs';
+import { configs as nuxtConfigs } from './.nuxt/eslint.config.mjs';
 
 // AGENTS.md § Writing tests. Flat config lets the last matching block's
 // `no-restricted-syntax` win, so blocks that narrow `test/**` repeat these.
@@ -103,7 +103,10 @@ const compositorPanelSyntax = [
 	{ selector: 'Identifier[name=\'replaceBroadcastGraphic\']', message: 'Stack replacement belongs to the compositor editing module.' },
 ];
 
-export default withNuxt(
+// The generated file's `withNuxt()` is this, plus a step that writes
+// `.nuxt/eslint-typegen.d.ts` as the config resolves: every lint run, beside a
+// typecheck reading `.nuxt`. Only `nuxt prepare` writes there (README § Testing).
+export default nuxtConfigs.clone().append(
 	antfu({
 		ignores: [
 			'**/migrations',

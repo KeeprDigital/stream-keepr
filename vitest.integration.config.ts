@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import { CHECKOUT_TSCONFIG } from './build/checkoutTsconfig.ts';
 import {
 	INTEGRATION_REALTIME_PROJECT_ENV,
 	INTEGRATION_REALTIME_TEST_FILES,
@@ -13,6 +14,8 @@ const servers = integrationServerCount();
 // time, against the only server holding the Ably key; every other file then
 // runs against the keyless ones (test/integration/state.ts § realtime server).
 export default defineConfig({
+	// Named, or Vite goes looking and climbs out of this checkout (build/checkoutTsconfig.ts).
+	tsconfig: CHECKOUT_TSCONFIG,
 	test: {
 		globalSetup: ['test/integration/globalSetup.ts'],
 		setupFiles: ['test/integration/selectServer.ts', 'test/integration/requestLedgerReport.ts'],

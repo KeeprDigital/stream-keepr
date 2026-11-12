@@ -1,0 +1,9 @@
+{
+	// For Vue's Vite plugin, which finds a tsconfig for each component's script
+	// itself, whatever Vite was told (`build/checkoutTsconfig.ts`). It climbs
+	// from the component until a tsconfig's `include` holds the file. This one
+	// does, as `server/tsconfig.json` does for the server; without it the climb
+	// leaves the checkout, and from an agent's worktree reads the main
+	// checkout's `.nuxt` (#1160).
+	"extends": "../.nuxt/tsconfig.app.json"
+}

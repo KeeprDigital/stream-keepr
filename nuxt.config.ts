@@ -1,6 +1,7 @@
 import type { MutationBodyMethod } from './shared/utils/requestBodyLimits';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { CHECKOUT_TSCONFIG } from './build/checkoutTsconfig';
 import { localConfigurationModule } from './build/localConfigurationModule';
 import { SUPPORTED_SOCIAL_NETWORKS } from './shared/socialProfiles';
 import {
@@ -247,6 +248,8 @@ export default defineNuxtConfig({
 	},
 
 	vite: {
+		// Named, or Vite goes looking and climbs out of this checkout (build/checkoutTsconfig.ts).
+		tsconfig: CHECKOUT_TSCONFIG,
 		// Each integration server optimises dependencies into its own cache: they
 		// start together, and one shared cache is rewritten under the others' pages.
 		...(isIntegration

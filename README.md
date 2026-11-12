@@ -374,9 +374,24 @@ How `pnpm verify` runs:
   catches it. Delete the cache directory to reproduce CI exactly.
 - **Only `nuxt prepare` writes `.nuxt`.** The root tsconfig extends it, so every
   other gate reads it (except the validator's two, whose tsconfig stands alone); the Nuxt suite, the servers and `verify`'s build each use
-  their own build directory. Keep it that way when adding a gate. Dev servers
+  their own build directory. Keep it that way when adding a gate. Lint is the
+  gate that once broke it: the ESLint config `@nuxt/eslint` generates offers
+  `withNuxt()`, which also writes rule types to `.nuxt/eslint-typegen.d.ts` as
+  the config resolves, and a typecheck beside it read the half-written file.
+  `eslint.config.mjs` composes the same config without that step; the types
+  checked nothing in that file. Dev servers
   started together also need their own Vite cache (`nuxt.config.ts` gives each
   one), or they rewrite each other's optimised dependencies.
+- **A checkout reads its own `.nuxt` and no other.** An agent's worktree sits
+  inside the main checkout (`.claude/worktrees/<name>`). Left to find a
+  tsconfig, Vite climbs from the file past every `tsconfig.json` that does not
+  claim it, out of the worktree and into the main checkout's, which extends the
+  main checkout's `.nuxt`. A `nuxt prepare` there clears that directory before
+  it rewrites it, and for those seconds a transform in any worktree failed with
+  `Failed to load tsconfig '../../../.nuxt/tsconfig.json'`. So every Vite and
+  Vitest config names this checkout's tsconfig (`build/checkoutTsconfig.ts`),
+  and `app/tsconfig.json` ends the climb for a component's script, which Vue's
+  plugin transforms without being told. A new config names it too.
 - **Tried and rejected** (measured on a 10-core machine, September 2026):
   integration test files in parallel against one server (they assert
   library-wide state); `--no-isolate` for the Nuxt suite (about 4× faster, but
