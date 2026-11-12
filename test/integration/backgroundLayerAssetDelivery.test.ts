@@ -188,6 +188,11 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 			expect(new Uint8Array(await delivered.arrayBuffer())).toEqual(pixelPng);
 		});
 
+		// Trash and Revision Pruning read one index whatever the mode, so one mode proves
+		// both here; the slot each mode's layer is indexed under is the unit suite's.
+		if (mode !== MODES_WITH_A_BACKGROUND_LAYER_STACK[0])
+			return;
+
 		it('counts the revision as in use, under the layer that pins it, and refuses to trash it', async () => {
 			const usage = await $fetch<GraphicAssetUsage[]>(
 				`/api/graphics-assets/${reference.assetId}/usage`,

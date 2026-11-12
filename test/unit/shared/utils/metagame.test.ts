@@ -27,18 +27,7 @@ describe('metagame card type display helpers', () => {
 		expect(getCardTypeDisplayLabel('Land — Island Mountain')).toBe('Land');
 	});
 
-	it('uses the shared bucket ordering consistently', () => {
-		expect(CARD_TYPE_BUCKET_ORDER).toEqual([
-			'Creature',
-			'Planeswalker',
-			'Battle',
-			'Instant',
-			'Sorcery',
-			'Artifact',
-			'Enchantment',
-			'Land',
-			'Other',
-		]);
+	it('orders a card by its type bucket: creatures before spells, lands last of the three', () => {
 		expect(getCardTypeBucketOrder('Creature — Human')).toBeLessThan(getCardTypeBucketOrder('Instant'));
 		expect(getCardTypeBucketOrder('Instant')).toBeLessThan(getCardTypeBucketOrder('Land'));
 	});

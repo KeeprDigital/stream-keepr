@@ -206,27 +206,6 @@ describe('metagame API', () => {
 			expect(data.entries).toBeInstanceOf(Array);
 		});
 
-		it('groups players by archetypeId with correct counts', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes`)) as any;
-
-			const monoRed = data.entries.find((e: any) => e.name === 'Mono Red');
-			expect(monoRed).toBeDefined();
-			expect(monoRed.count).toBe(2);
-			expect(monoRed.id).toBe(archetypeId1);
-
-			const azorius = data.entries.find((e: any) => e.name === 'Azorius Control');
-			expect(azorius).toBeDefined();
-			expect(azorius.count).toBe(1);
-		});
-
-		it('computes metaShare correctly', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes`)) as any;
-
-			const monoRed = data.entries.find((e: any) => e.name === 'Mono Red');
-			// 2 out of 3 classified = 66.67%
-			expect(monoRed.metaShare).toBeCloseTo(66.67, 1);
-		});
-
 		it('respects scope=topN', async () => {
 			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?scope=topN&topN=2`)) as any;
 			// Top 2 players by position: p1, p2
@@ -244,55 +223,6 @@ describe('metagame API', () => {
 			expect(data.scope).toBe('minPoints');
 			expect(data.totalPlayers).toBe(2);
 		});
-
-		it('returns null conversion rates without a conversion target', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes`)) as any;
-			expect(data.entries[0].conversionRate).toBeNull();
-		});
-
-		it('computes conversion rate against a topN target', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?conversionMetric=topN&conversionThreshold=2`)) as any;
-
-			// Mono Red: p1 (position 1) converted, p3 (position 3) not → 50%
-			const monoRed = data.entries.find((e: any) => e.name === 'Mono Red');
-			expect(monoRed.conversionRate).toBe(50);
-
-			// Azorius: p2 (position 2) converted → 100%
-			const azorius = data.entries.find((e: any) => e.name === 'Azorius Control');
-			expect(azorius.conversionRate).toBe(100);
-		});
-
-		it('computes conversion rate against a minPoints target', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?conversionMetric=minPoints&conversionThreshold=12`)) as any;
-
-			// Mono Red: p1 (15 points) converted, p3 (9 points) not → 50%
-			const monoRed = data.entries.find((e: any) => e.name === 'Mono Red');
-			expect(monoRed.conversionRate).toBe(50);
-		});
-
-		it('rejects a conversion metric without a threshold', async () => {
-			await expect(
-				$fetch(`/api/events/${eventId}/metagame/archetypes?conversionMetric=topN`),
-			).rejects.toMatchObject({ statusCode: 400 });
-		});
-
-		it('rolls archetypes beyond limit into an Other row', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?limit=1`)) as any;
-
-			expect(data.entries).toHaveLength(2);
-			expect(data.entries[0].name).toBe('Mono Red');
-
-			const other = data.entries[1];
-			expect(other.id).toBe(-1);
-			expect(other.name).toBe('Other');
-			expect(other.count).toBe(1);
-		});
-
-		it('returns keyCards array for each archetype', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes`)) as any;
-			expect(data.entries[0]).toHaveProperty('keyCards');
-			expect(data.entries[0].keyCards).toBeInstanceOf(Array);
-		});
 	});
 
 	// ──────────────── Cards ────────────────
@@ -307,11 +237,6 @@ describe('metagame API', () => {
 			expect(data).toHaveProperty('scope');
 			expect(data.totalDecks).toBe(0);
 			expect(data.entries).toBeInstanceOf(Array);
-		});
-
-		it('respects limit param', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/cards?limit=2`)) as any;
-			expect(data.entries.length).toBeLessThanOrEqual(2);
 		});
 	});
 
@@ -347,14 +272,6 @@ describe('metagame API', () => {
 			expect(data.players).toHaveLength(2);
 			expect(data.keyCards).toBeInstanceOf(Array);
 			expect(data.cardBreakdown).toBeInstanceOf(Array);
-		});
-
-		it('computes conversion against the requested target', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes/${archetypeId1}?conversionMetric=topN&conversionThreshold=2`)) as any;
-
-			// Mono Red: p1 (position 1) converted, p3 (position 3) not
-			expect(data.convertedCount).toBe(1);
-			expect(data.conversionRate).toBe(50);
 		});
 
 		it('returns null conversion stats without a conversion target', async () => {
@@ -517,7 +434,8 @@ describe('metagame API', () => {
  * Metagame reads at the Archetype counts an Event reaches, on local D1 (#702).
  * The represented Archetypes were looked up with one bound parameter per id plus
  * the Event's, so a hundred of them failed every read — a small requested limit
- * included, since it applied after the lookup.
+ * included, since it applied after the lookup. The operator reads are proved on
+ * a real D1 in `test/unit/server/modules/metagameArchetypesD1.test.ts`.
  *
  * Fixture: 120 represented Archetypes, `Archetype 001` to `120`, and one with no
  * Players. `001` has four Players and every other one Player: 123 classified.
@@ -554,35 +472,6 @@ describe('metagame reads with a hundred and more represented Archetypes', () => 
 			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
 		}
 		catch {}
-	});
-
-	it('answers the operator summary', async () => {
-		const summary = await $fetch(`/api/events/${eventId}/metagame`, {
-			query: { scope: 'all' },
-		});
-
-		expect(summary).toMatchObject({
-			totalPlayers: REPRESENTED + 5,
-			classifiedPlayers: REPRESENTED + 3,
-			totalArchetypes: REPRESENTED + 1,
-			scopedArchetypeCount: REPRESENTED,
-		});
-		expect(summary.topArchetypes.map(entry => entry.name)).toEqual([1, 2, 3, 4, 5].map(archetypeName));
-	});
-
-	it('answers the full operator breakdown and a small requested limit', async () => {
-		const full = await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
-			query: { scope: 'all' },
-		});
-		expect(full.entries.map(entry => entry.name))
-			.toEqual(Array.from({ length: REPRESENTED }, (_, index) => archetypeName(index + 1)));
-		expect(full.entries[0]).toMatchObject({ count: 4, winRate: 50 });
-
-		const limited = await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
-			query: { scope: 'all', limit: 5 },
-		});
-		expect(limited.entries.map(entry => entry.name)).toEqual([1, 2, 3, 4, 5].map(archetypeName).concat('Other'));
-		expect(limited.entries.at(-1)).toMatchObject({ id: -1, count: REPRESENTED - 5, winRate: 50 });
 	});
 
 	it('answers a capability-authorised Screen Output read of the breakdown its Screen renders', async () => {

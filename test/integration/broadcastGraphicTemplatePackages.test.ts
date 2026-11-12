@@ -14,7 +14,6 @@ import { maximalBroadcastGraphicDocument } from '../helpers/broadcastGraphicDocu
 import { collectStream } from '../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
-	writeTemplatePackage,
 } from '../helpers/templatePackageArchive';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
@@ -432,80 +431,5 @@ describe('broadcast Graphic Template Packages', () => {
 		// import produced a design this installation owns the identity of.
 		expect(parts.manifest.template.identity).toBe(templateId);
 		expect(parts.manifest.template.revision).toBe(1);
-	});
-
-	it('places an imported design on a Screen like any other library entry', async () => {
-		const received = await receivePackage(exportedPackage);
-		const completed = await installPackage(received.id);
-		const templateId = completed.templatePackageInstallation!.templateId;
-		installedTemplateIds.push(templateId);
-
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		const placed = await request(
-			`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/placements`,
-			{
-				method: 'POST',
-				cookie: authorCookie,
-				body: { templateId, stateVersion: screen.stateVersion },
-			},
-		);
-
-		expect(placed.status).toBe(201);
-		const graphic = placed.data.graphic as BroadcastGraphicConfig;
-		// A placement is a copy in its own right: fresh identities, and no trace of
-		// the template or the installation it came from.
-		expect(graphic.id).not.toBe(templateId);
-		expect(graphic.items).toHaveLength(sourceTemplate.document.items.length);
-	});
-
-	/**
-	 * The installation endpoint invites retries, so adoption has to be idempotent
-	 * over the installation that already committed. A second library entry would be
-	 * a second design an author has to tell apart from the first, and a second set of
-	 * Graphic Asset References claiming the same revisions.
-	 */
-	it('answers a repeated installation with the entry that already exists', async () => {
-		const received = await receivePackage(exportedPackage);
-		const completed = await installPackage(received.id);
-		const templateId = completed.templatePackageInstallation!.templateId;
-		installedTemplateIds.push(templateId);
-
-		const before = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateListResponse;
-
-		const repeated = await installPackage(received.id);
-
-		expect(repeated.templatePackageInstallation).toEqual(completed.templatePackageInstallation);
-		const after = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateListResponse;
-		expect(after.templates).toHaveLength(before.templates.length);
-	});
-
-	/**
-	 * Spec user story 44, proved through the wiring the application actually runs.
-	 * The refusal lands at Template Package Preflight, so no library entry, asset,
-	 * origin, or reference is ever created for the package that carried it.
-	 */
-	it('refuses a Graphic Item Definition configuration version it does not implement, installing nothing', async () => {
-		const parts = readTemplatePackageParts(exportedPackage);
-		parts.manifest.applicationCapabilities = parts.manifest.applicationCapabilities.map(
-			declaration => declaration.identity === 'media'
-				? { ...declaration, configurationVersion: 99 }
-				: declaration,
-		);
-		const before = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateListResponse;
-
-		const received = await receivePackage(writeTemplatePackage(parts));
-
-		expect(received.stage).toBe('failed');
-		expect(received.templatePackagePreflight!.outcome).toBe('rejected');
-		expect(received.templatePackagePreflight!.issues.some(issue =>
-			issue.code === 'unsupported-application-capability',
-		)).toBe(true);
-
-		const after = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateListResponse;
-		expect(after.templates).toHaveLength(before.templates.length);
 	});
 });

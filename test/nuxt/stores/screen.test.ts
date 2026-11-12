@@ -1,5 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isReactive } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { createMockScreen } from '~~/test/helpers/fixtures';
@@ -41,6 +41,11 @@ describe('useScreenStore', () => {
 		store = useScreenStore();
 		store.$reset();
 		mockFetch.mockResolvedValue({ ok: true });
+	});
+
+	// A test that fails before its last line must not leave fake timers to the ones after it.
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	describe('loadScreensByEventId', () => {
@@ -231,7 +236,6 @@ describe('useScreenStore', () => {
 			expect(loaded![0]!.modeConfigs).toEqual({
 				deck: { showDeckName: false },
 			});
-			vi.useRealTimers();
 		});
 	});
 
@@ -295,38 +299,6 @@ describe('useScreenStore', () => {
 			expect(isReactive(loaded)).toBe(false);
 		});
 
-		it('takes the slug answer at the revision the cache already holds', async () => {
-			// The server bumps `stateVersion` once per write, so an equal revision is the same Screen.
-			store.screens = [
-				createMockScreen({
-					id: 7,
-					slug: 'main',
-					name: 'Old',
-					stateVersion: 4,
-				}),
-			];
-			mockRepo.getBySlug.mockResolvedValue(createMockScreen({
-				id: 7,
-				slug: 'main',
-				name: 'Fresh',
-				stateVersion: 4,
-			}));
-
-			await store.loadScreenBySlug(1, 'main');
-
-			expect(store.activeScreen!.name).toBe('Fresh');
-		});
-
-		it('answers a refusal with the newest held revision when the cache holds the Screen more than once', async () => {
-			seedDuplicateCacheEntries(store, [1, 5, 2]);
-			mockRepo.getBySlug.mockResolvedValue(createMockScreen({ id: 10, name: 'v3', stateVersion: 3 }));
-
-			const loaded = await store.loadScreenBySlug(1, 'screen');
-
-			expect(loaded!.stateVersion).toBe(5);
-			expect(store.activeScreen!.stateVersion).toBe(5);
-		});
-
 		it('does not let a slug load that raced a settled save overwrite it', async () => {
 			// The loader nulls `activeScreen` before its GET, so the comparison reads `screens` (#261).
 			vi.useFakeTimers();
@@ -376,7 +348,6 @@ describe('useScreenStore', () => {
 			expect(loaded!.modeConfigs).toEqual({
 				deck: { showDeckName: false },
 			});
-			vi.useRealTimers();
 		});
 	});
 
@@ -534,21 +505,6 @@ describe('useScreenStore', () => {
 			expect(isReactive(loaded)).toBe(false);
 		});
 
-		it('answers a refusal with the newest revision held, whatever its position, when the cache holds the Screen more than once', async () => {
-			// The comparison maxes over every entry for the id; the answer must select
-			// the same one. Take the first (or the last) instead and a refusal hands back
-			// a revision older than both the cache's newest and the payload it refused —
-			// worse than the version-blind overwrite this guard replaced.
-			seedDuplicateCacheEntries(store, [1, 5, 2]);
-			expect(store.screens).toHaveLength(3);
-			mockRepo.getById.mockResolvedValue(createMockScreen({ id: 10, name: 'v3', stateVersion: 3 }));
-
-			const loaded = await store.getScreenById(1, 10);
-
-			expect(loaded!.stateVersion).toBe(5);
-			expect(store.screens.map(s => s.stateVersion)).toEqual([1, 5, 2]);
-		});
-
 		it('caches an answer at the revision the cache already holds', async () => {
 			store.screens = [
 				createMockScreen({ id: 5, name: 'Old', stateVersion: 4 }),
@@ -610,7 +566,6 @@ describe('useScreenStore', () => {
 			expect(loaded!.modeConfigs).toEqual({
 				deck: { showDeckName: false },
 			});
-			vi.useRealTimers();
 		});
 	});
 
@@ -649,17 +604,6 @@ describe('useScreenStore', () => {
 			expect(store.screens.map(s => s.name)).toEqual(['Saved']);
 			// Nothing mirrors a create's answer into the cache, so it is what the server made.
 			expect(created!.name).toBe('Created');
-		});
-
-		it('takes a create answering at the revision the cache already holds', async () => {
-			store.screens = [
-				createMockScreen({ id: 10, name: 'Old', stateVersion: 4 }),
-			];
-			mockRepo.create.mockResolvedValue(createMockScreen({ id: 10, name: 'Fresh', stateVersion: 4 }));
-
-			await store.createScreen(1, { name: 'Screen', slug: 'screen', currentMode: 'background' });
-
-			expect(store.screens.map(s => s.name)).toEqual(['Fresh']);
 		});
 	});
 

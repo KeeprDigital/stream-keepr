@@ -116,7 +116,6 @@ const ChannelsStub = defineComponent({
 	setup(props) {
 		return () => h('div', {
 			'data-testid': 'graphic-channels-panel',
-			'data-channels': String(props.channels.length),
 			'data-writable': String(props.writable),
 		});
 	},
@@ -229,25 +228,6 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		const wrapper = await mountWorkspace({ flushEdits });
 
 		expect(wrapper.getComponent(TemplateLibraryStub).props('flushEdits')).toBe(flushEdits);
-	});
-
-	it('leaves an observing session browsing the library read-only', async () => {
-		const wrapper = await mountWorkspace({ writable: false });
-
-		expect(wrapper.get('[data-testid="template-library"]').attributes('data-writable')).toBe('false');
-	});
-
-	it('carries Graphic Channel authoring, under the same Graphics Authoring Lease', async () => {
-		const wrapper = await mountWorkspace({
-			channels: [
-				{ id: 'thirds', name: 'Lower thirds' },
-			],
-			writable: false,
-		});
-
-		const panel = wrapper.get('[data-testid="graphic-channels-panel"]');
-		expect(panel.attributes('data-channels')).toBe('1');
-		expect(panel.attributes('data-writable')).toBe('false');
 	});
 
 	// The inspector authors Graphic Input Bindings against a curated field catalog that separates

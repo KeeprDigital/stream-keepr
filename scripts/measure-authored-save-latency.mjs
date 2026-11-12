@@ -26,9 +26,6 @@ import { openOperatorSessionForOrigin } from './graphics-acceptance/operator.mjs
  * image revision each, Text Graphic Items pin a font three times over — base
  * typography and two Graphic Placeholder Styles — so media and font
  * preconditions both ride in every sizeable batch.
- *
- * Exported so `test/unit/scripts/authoredSaveLatencyConfig.test.ts` can hold it
- * against the real schema and the real reference discovery.
  */
 export function authoredConfigForReferenceCount(count, assets) {
 	const items = [];

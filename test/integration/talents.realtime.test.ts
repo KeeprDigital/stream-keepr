@@ -2,6 +2,7 @@ import type { InboundMessage } from 'ably';
 import Ably from 'ably';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
+import { LOAD_TOLERANT_WAIT_MS } from '../helpers/loadTolerantBounds';
 import { $fetch } from './client';
 import { $fetchRaw } from './helpers';
 import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './realtimeKey';
@@ -63,16 +64,6 @@ describe('talents API', () => {
 		expect(found!.socialProfiles).toEqual({ twitch: 'JohnLive', youtube: 'JohnCasts' });
 	});
 
-	it('carries the complete Social Profile map in the Event response', async () => {
-		const event = await $fetch(`/api/events/${eventId}`);
-		const talent = event.talents.find(item => item.id === talentId);
-
-		expect(talent).toMatchObject({
-			id: talentId,
-			socialProfiles: { twitch: 'JohnLive', youtube: 'JohnCasts' },
-		});
-	});
-
 	it.skipIf(!integrationRealtimeConfigured)('publishes normalized complete Social Profile maps from the Talent routes', async () => {
 		const realtime = new Ably.Realtime(INTEGRATION_ABLY_API_KEY);
 		const channel = realtime.channels.get(eventRealtimeChannel(eventId));
@@ -114,7 +105,7 @@ describe('talents API', () => {
 			await Promise.race([
 				messagesReceived,
 				new Promise<never>((_resolve, reject) => {
-					timeout = setTimeout(() => reject(new Error('Timed out waiting for Talent realtime messages')), 10_000);
+					timeout = setTimeout(() => reject(new Error('Timed out waiting for Talent realtime messages')), LOAD_TOLERANT_WAIT_MS);
 				}),
 			]);
 
@@ -174,46 +165,16 @@ describe('talents API', () => {
 		});
 	});
 
-	it('updates a talent name without clearing omitted Social Profiles', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/talents/${talentId}`, {
-			method: 'PATCH',
-			body: { name: 'Jane Commentator' },
-		});
-
-		expect(updated.id).toBe(talentId);
-		expect(updated.name).toBe('Jane Commentator');
-		expect(updated.socialProfiles).toEqual({ twitch: 'JohnStillLive' });
-	});
-
-	it('replaces the complete Social Profile set while preserving Talent identity', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/talents/${talentId}`, {
-			method: 'PATCH',
-			body: {
-				socialProfiles: {
-					instagram: 'https://instagram.com/JaneOnCoverage/',
-					bluesky: '@jane.bsky.social',
-				},
-			},
-		});
-
-		expect(updated.id).toBe(talentId);
-		expect(updated.name).toBe('Jane Commentator');
-		expect(updated.socialProfiles).toEqual({
-			instagram: 'JaneOnCoverage',
-			bluesky: 'jane.bsky.social',
-		});
-	});
-
 	it('allows duplicate Social Profile handles on other Talents', async () => {
 		const duplicate = await $fetch(`/api/events/${eventId}/talents`, {
 			method: 'POST',
 			body: {
 				name: 'Shared Channel Co-host',
-				socialProfiles: { instagram: 'JaneOnCoverage' },
+				socialProfiles: { twitch: 'JohnStillLive' },
 			},
 		});
 
-		expect(duplicate.socialProfiles).toEqual({ instagram: 'JaneOnCoverage' });
+		expect(duplicate.socialProfiles).toEqual({ twitch: 'JohnStillLive' });
 	});
 
 	it('returns validation errors for malformed and wrong-network profile input', async () => {

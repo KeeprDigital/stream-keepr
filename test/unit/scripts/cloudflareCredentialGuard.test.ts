@@ -1,11 +1,16 @@
 import process from 'node:process';
-import { describe, expect, it } from 'vitest';
-import { BLOCKED_CLOUDFLARE_API_TOKEN } from '../../helpers/blockCloudflareCredentials.ts';
+import { expect, it } from 'vitest';
 
-describe('the unit suite\'s Cloudflare credentials', () => {
-	it('are a sentinel that authenticates nothing, so no child can use a developer\'s login', () => {
-		expect(process.env.CLOUDFLARE_API_TOKEN).toBe(BLOCKED_CLOUDFLARE_API_TOKEN);
-		expect(Object.keys(process.env).filter(name =>
-			(name.startsWith('CLOUDFLARE_') || name.startsWith('WRANGLER_')) && name !== 'CLOUDFLARE_API_TOKEN')).toEqual([]);
-	});
+// Wiring: the unit suite's setup files run test/helpers/blockCloudflareCredentials.ts.
+// Importing it applies the guard, so the environment is read before the import:
+// unwired, it still holds a developer's settings, or no token at all.
+it('the unit suite starts holding only a Cloudflare token that authenticates nothing, so no child can use a developer\'s login', async () => {
+	const atStart = Object.entries(process.env)
+		.filter(([name]) => name.startsWith('CLOUDFLARE_') || name.startsWith('WRANGLER_'));
+
+	const { BLOCKED_CLOUDFLARE_API_TOKEN } = await import('../../helpers/blockCloudflareCredentials.ts');
+
+	expect(atStart).toEqual([
+		['CLOUDFLARE_API_TOKEN', BLOCKED_CLOUDFLARE_API_TOKEN],
+	]);
 });

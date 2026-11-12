@@ -1,5 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STATE_CONFLICT_CODE } from '~~/shared/utils/stateConflict';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { transportFailure } from '~~/test/helpers/transportFailure';
@@ -36,6 +36,11 @@ describe('useScreenStore error reporting', () => {
 		store.$reset();
 		// Reset, not clear: a previous row's rejection must not leak into the next route.
 		vi.resetAllMocks();
+	});
+
+	// A test that fails before its last line must not leave fake timers to the ones after it.
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	it.each([
@@ -99,7 +104,6 @@ describe('useScreenStore error reporting', () => {
 		await settled;
 
 		expect(store.error).toBe('This Event has been archived');
-		vi.useRealTimers();
 	});
 
 	// The sentence substitution wraps the whole action, so the conflict retry inside it still meets the raw 409 (#381).

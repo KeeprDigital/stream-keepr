@@ -13,7 +13,6 @@ import {
 	modeConfigsMapSchema,
 	pairingsModeConfigSchema,
 	parseModeConfigPatchResult,
-	playerHistoryModeConfigSchema,
 	standingsModeConfigSchema,
 	topCardsModeConfigSchema,
 	updateScreenSchema,
@@ -66,18 +65,6 @@ describe('deckModeConfigSchema', () => {
 		},
 	};
 
-	it('accepts valid Deck List mode config', () => {
-		const result = deckModeConfigSchema.safeParse(validConfig);
-		expect(result.success).toBe(true);
-	});
-
-	it('accepts a Broadcast Deck List source', () => {
-		expect(deckModeConfigSchema.safeParse({
-			...validConfig,
-			deckSource: { type: 'broadcast', broadcastDeckListId: 42 },
-		}).success).toBe(true);
-	});
-
 	it('requires the canonical discriminated source and rejects the legacy key', () => {
 		expect(deckModeConfigSchema.safeParse({ ...validConfig, deckSource: undefined }).success).toBe(false);
 		expect(deckModeConfigSchema.safeParse({ ...validConfig, playerId: 1 }).success).toBe(false);
@@ -100,14 +87,6 @@ describe('deckModeConfigSchema', () => {
 			playerId: 1,
 			deckSource: { type: 'player', playerId: 2 },
 		}).success).toBe(false);
-	});
-
-	it('accepts a Player source with no selected Player', () => {
-		const result = deckModeConfigSchema.safeParse({
-			...validConfig,
-			deckSource: { type: 'player', playerId: null },
-		});
-		expect(result.success).toBe(true);
 	});
 
 	it('rejects the removed board visibility booleans', () => {
@@ -152,11 +131,6 @@ describe('deckModeConfigSchema', () => {
 });
 
 describe('featureMatchOverlayModeConfigSchema', () => {
-	it('accepts the default Feature Match Overlay config', () => {
-		const result = featureMatchOverlayModeConfigSchema.safeParse(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		expect(result.success).toBe(true);
-	});
-
 	it('accepts every built-in Feature Match Layout Template', () => {
 		for (const builtIn of BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES) {
 			const result = featureMatchOverlayModeConfigSchema.safeParse({
@@ -585,18 +559,6 @@ describe('backgroundModeConfigSchema', () => {
 
 		expect(result.layers.map(layer => layer.playbackRate)).toEqual([undefined, 4, 0.25]);
 	});
-
-	it('enforces the one-animation-layer rule on the PATCH path too, because it lives on the layers field', () => {
-		expect(modeConfigPatchSchemaMap.background.safeParse({
-			layers: [
-				animationLayer,
-				{ ...animationLayer, id: 'anim-2' },
-			],
-		}).success).toBe(false);
-		expect(modeConfigPatchSchemaMap.background.safeParse({
-			layers: [animationLayer],
-		}).success).toBe(true);
-	});
 });
 
 // The application serves media only under `/video/`, so every other same-origin
@@ -777,15 +739,6 @@ describe('modeConfigPatchSchemaMap', () => {
 		expect(resolveScreenModeConfig(stored, 'deck').deckSource).toEqual({ type: 'player', playerId: null });
 	});
 
-	it('does not inject defaulted fields into a patch that omits them', () => {
-		// An injected `archetypeLimit: null` would be the delete sentinel.
-		const parsed = modeConfigPatchSchemaMap.metagame.parse({ sortBy: 'count' });
-
-		expect(parsed).toEqual({ sortBy: 'count' });
-		expect(Object.hasOwn(parsed, 'archetypeLimit')).toBe(false);
-		expect(Object.hasOwn(parsed, 'minPoints')).toBe(false);
-	});
-
 	it('still accepts explicit values and the null sentinel for defaulted fields', () => {
 		expect(modeConfigPatchSchemaMap.metagame.parse({ archetypeLimit: 8 }))
 			.toEqual({ archetypeLimit: 8 });
@@ -837,14 +790,6 @@ describe('metagameModeConfigSchema', () => {
 		headerText: 'Full Field Metagame',
 	};
 
-	it('accepts valid metagame config with column arrays', () => {
-		const result = metagameModeConfigSchema.safeParse({
-			...validConfig,
-			minPoints: 9,
-		});
-		expect(result.success).toBe(true);
-	});
-
 	it('saves a stored config predating minPoints and archetypeLimit as it is, and reads them with their defaults', () => {
 		expect(modeConfigsMapSchema.parse({ metagame: validConfig })).toEqual({ metagame: validConfig });
 
@@ -855,31 +800,10 @@ describe('metagameModeConfigSchema', () => {
 		expect(resolved.archetypeColumns).toEqual(validConfig.archetypeColumns);
 	});
 
-	it('accepts the minPoints scope with explicit minPoints', () => {
-		expect(metagameModeConfigSchema.parse({
-			...validConfig,
-			scope: 'minPoints',
-			minPoints: 12,
-		}).minPoints).toBe(12);
-	});
-
-	it('rejects a negative or fractional minPoints', () => {
+	it('takes minPoints as a whole number from zero', () => {
+		expect(metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: 0 }).success).toBe(true);
 		expect(metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: -1 }).success).toBe(false);
 		expect(metagameModeConfigSchema.safeParse({ ...validConfig, minPoints: 1.5 }).success).toBe(false);
-	});
-
-	it('offers the chart display alongside the archetype and card tables, and nothing else', () => {
-		expect(metagameModeConfigSchema.safeParse({
-			...validConfig,
-			minPoints: 9,
-			viewMode: 'chart',
-		}).success).toBe(true);
-		expect(modeConfigPatchSchemaMap.metagame.parse({ viewMode: 'chart' })).toEqual({ viewMode: 'chart' });
-		expect(metagameModeConfigSchema.safeParse({
-			...validConfig,
-			minPoints: 9,
-			viewMode: 'pie',
-		}).success).toBe(false);
 	});
 });
 
@@ -913,27 +837,9 @@ describe('topCardsModeConfigSchema', () => {
 		statBadgeTextSize: 14,
 	};
 
-	it('accepts a valid top cards config', () => {
-		expect(topCardsModeConfigSchema.safeParse(validConfig).success).toBe(true);
-	});
-
-	it('accepts an empty excluded-types list', () => {
-		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, excludedCardTypes: [] }).success).toBe(true);
-	});
-
-	it('rejects an unknown excluded card type', () => {
-		expect(topCardsModeConfigSchema.safeParse({
-			...validConfig,
-			excludedCardTypes: ['Tribal'],
-		}).success).toBe(false);
-	});
-
-	it('rejects a limit above the grid cap', () => {
+	it('ranks up to the grid cap of 60 cards, and no more', () => {
+		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, limit: 60 }).success).toBe(true);
 		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, limit: 61 }).success).toBe(false);
-	});
-
-	it('rejects the stat badge showing an unknown metric', () => {
-		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, statBadge: 'winRate' }).success).toBe(false);
 	});
 
 	// Cards per page is Auto while absent, or a number up to the most cards a Screen ranks.
@@ -959,14 +865,6 @@ describe('topCardsModeConfigSchema', () => {
 			.toEqual({
 				'top-cards': { limit: 12 },
 			});
-	});
-
-	it('rejects a page of more grid rows than the shared page size bound', () => {
-		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, rowsPerPage: 101 }).success).toBe(false);
-	});
-
-	it('is strict about unknown keys', () => {
-		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, pageSize: 10 }).success).toBe(false);
 	});
 });
 
@@ -1006,13 +904,6 @@ describe('archetypeSpotlightModeConfigSchema', () => {
 		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, cardLimit: 0 }).success).toBe(false);
 		expect(archetypeSpotlightModeConfigSchema.safeParse({ ...defaults, cardLimit: 21 }).success).toBe(false);
 	});
-
-	it('refuses an unknown excluded card type', () => {
-		expect(archetypeSpotlightModeConfigSchema.safeParse({
-			...defaults,
-			excludedCardTypes: ['Tribal'],
-		}).success).toBe(false);
-	});
 });
 
 // ──────────────── Head-to-Head ────────────────
@@ -1020,19 +911,9 @@ describe('archetypeSpotlightModeConfigSchema', () => {
 describe('headToHeadModeConfigSchema', () => {
 	const defaults = getDefaultConfigForMode('head-to-head');
 
-	it('takes its Players from a Feature Match Slot or from two picked Players, and nothing else', () => {
-		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'featureMatchSlot', featureMatchId: 4 }).success).toBe(true);
-		expect(headToHeadModeConfigSchema.safeParse({
-			...defaults,
-			playerSource: 'players',
-			player1Id: 11,
-			player2Id: 12,
-		}).success).toBe(true);
-		expect(headToHeadModeConfigSchema.safeParse({ ...defaults, playerSource: 'round' }).success).toBe(false);
-	});
-
 	it('names its Slot and Players by positive ids', () => {
 		for (const field of ['featureMatchId', 'player1Id', 'player2Id']) {
+			expect(headToHeadModeConfigSchema.safeParse({ ...defaults, [field]: 1 }).success).toBe(true);
 			expect(headToHeadModeConfigSchema.safeParse({ ...defaults, [field]: 0 }).success).toBe(false);
 			expect(headToHeadModeConfigSchema.safeParse({ ...defaults, [field]: 2.5 }).success).toBe(false);
 		}
@@ -1053,14 +934,8 @@ describe('headToHeadModeConfigSchema', () => {
 // ──────────────── Page Rotation fields ────────────────
 
 describe('page rotation config fields', () => {
-	it('every paginated mode accepts an optional rotationAnchor server timestamp', () => {
+	it('takes a rotationAnchor server timestamp, and neither a negative nor a fractional one', () => {
 		expect(standingsModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
-		expect(playerHistoryModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
-		expect(metagameModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
-		expect(topCardsModeConfigSchema.partial().safeParse({ rotationAnchor: 1_700_000_000_000 }).success).toBe(true);
-	});
-
-	it('rejects a negative or fractional rotationAnchor', () => {
 		expect(standingsModeConfigSchema.partial().safeParse({ rotationAnchor: -1 }).success).toBe(false);
 		expect(standingsModeConfigSchema.partial().safeParse({ rotationAnchor: 1.5 }).success).toBe(false);
 	});

@@ -8,7 +8,6 @@ import {
 	verdictFailureCode,
 } from '../../../scripts/graphics-acceptance/chromium.mjs';
 import { ACCEPTANCE_FAILURE_CODES } from '../../../scripts/graphics-acceptance/evidence.mjs';
-import { authoredPageRequest } from '../../../scripts/graphics-acceptance/installation.mjs';
 
 /** The name Better Auth issues this installation's session under, over http (#398). */
 const COOKIE_NAME = 'better-auth.session_token';
@@ -161,19 +160,6 @@ describe('opening the acceptance page as the author that staged the ingestion', 
 		await expect(opening).rejects.toMatchObject({ code: 'author-session-cookie-refused' });
 		expect(page.methods()).not.toContain('Page.navigate');
 		expect(page.methods()).not.toContain('Runtime.enable');
-	});
-
-	// A page opened for staged work carries the session that staged it, as one expression.
-	it('pairs a staged page with the identity that staged it', () => {
-		const session = {
-			origin: 'http://127.0.0.1:8787',
-			sessionCookies: [SESSION_COOKIE],
-		};
-
-		expect(authoredPageRequest(session, PAGE_URL)).toEqual({
-			url: PAGE_URL,
-			cookies: [SESSION_COOKIE],
-		});
 	});
 
 	/**

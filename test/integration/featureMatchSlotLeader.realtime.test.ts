@@ -2,6 +2,7 @@ import type { InboundMessage } from 'ably';
 import Ably from 'ably';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
+import { LOAD_TOLERANT_WAIT_MS } from '../helpers/loadTolerantBounds';
 import { LAW, NAMI, ZORO } from '../helpers/opCards';
 import { $fetch } from './client';
 import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './realtimeKey';
@@ -37,6 +38,8 @@ describe('a Feature Match Slot side\'s Leader', () => {
 		slotId = slot.id;
 		const session = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}/sessions`, { method: 'POST' });
 		sessionId = session.id;
+		// The side holds another Leader mid-Session, so picking Zoro below is a change.
+		await changeLeader(NAMI);
 	});
 
 	afterAll(async () => {
@@ -54,15 +57,6 @@ describe('a Feature Match Slot side\'s Leader', () => {
 			},
 		});
 	}
-
-	it('reaches the active Session\'s snapshot without reopening it', async () => {
-		await changeLeader(NAMI);
-
-		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}`);
-		expect(slot.activeSession!.id).toBe(sessionId);
-		expect(slot.activeSession!.sourceSnapshot.player1.data!.gameData).toEqual({ type: 'op', leader: NAMI });
-		expect(slot.activeSession!.sourceSnapshot.player2.data!.gameData).toEqual({ type: 'op', leader: LAW });
-	});
 
 	// The Slot's own announcement carries its corrected Session; the correction announces nothing itself.
 	it.skipIf(!integrationRealtimeConfigured)('announces the change with the Slot and its corrected Session', async () => {
@@ -85,7 +79,7 @@ describe('a Feature Match Slot side\'s Leader', () => {
 			const message = await Promise.race([
 				announced,
 				new Promise<never>((_resolve, reject) => {
-					timeout = setTimeout(() => reject(new Error('Timed out waiting for the Leader announcement')), 10_000);
+					timeout = setTimeout(() => reject(new Error('Timed out waiting for the Leader announcement')), LOAD_TOLERANT_WAIT_MS);
 				}),
 			]);
 

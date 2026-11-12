@@ -576,11 +576,6 @@ const SCREEN_MODE_DEFINITIONS = {
 
 export const SCREEN_MODES: Record<ScreenMode, ScreenModeDefinition> = SCREEN_MODE_DEFINITIONS;
 
-/** Derive the display type for a given screen mode. */
-export function getDisplayType(mode: ScreenMode): DisplayType {
-	return SCREEN_MODES[mode].displayType;
-}
-
 /** The Screen Modes whose definition declares a Background Layer stack. */
 export type BackgroundLayersCapableMode = {
 	[M in ScreenMode]: typeof SCREEN_MODE_DEFINITIONS[M] extends { backgroundLayers: true } ? M : never;

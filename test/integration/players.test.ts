@@ -85,26 +85,6 @@ describe('players API', () => {
 		expect(updated.pronouns).toBe('they/them');
 	});
 
-	it('rejects forged Melee Player provenance on update', async () => {
-		const res = await $fetchRaw(`/api/events/${eventId}/players/${playerId}`, {
-			method: 'PATCH',
-			body: {
-				name: 'Forged Update',
-				externalId: 'forged-external-id',
-				externalSource: 'melee',
-			},
-		});
-
-		expect(res.status).toBeGreaterThanOrEqual(400);
-		expect(res.status).toBeLessThan(500);
-
-		// Confirm the row is unchanged — no name update and no external identity applied.
-		const player = await $fetch(`/api/events/${eventId}/players/${playerId}`);
-		expect(player.name).toBe('Updated Player');
-		expect(player.externalId).toBeNull();
-		expect(player.externalSource).toBeNull();
-	});
-
 	/**
 	 * Until #309 this route handed back the raw database row, so the same Player
 	 * carried Melee's provenance bookkeeping here and carried none of it from

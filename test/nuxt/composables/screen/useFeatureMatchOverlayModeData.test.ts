@@ -1,8 +1,8 @@
 import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, nextTick, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
@@ -87,12 +87,14 @@ function mountOverlay(context: Partial<ScreenContext>) {
 		},
 	});
 
-	const wrapper = mount(Parent);
+	mount(Parent);
 	return {
-		wrapper,
 		data: () => data,
 	};
 }
+
+// Unmounted whether or not the test passed, so no rendering's `message` listener outlives its test.
+enableAutoUnmount(afterEach);
 
 /**
  * The editor pushes its working Feature Match Layout into the embedded preview,
@@ -149,7 +151,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 		// they are looking at their unsaved edits. Gating the preview configuration on
 		// the guides switch meant switching guides off silently reverted the embedded
 		// preview to the saved Feature Match Layout, so guides are off here on purpose.
-		const { wrapper, data } = mountOverlay({
+		const { data } = mountOverlay({
 			isPreview: ref(true),
 			previewGuides: ref(false),
 		});
@@ -160,13 +162,12 @@ describe('useFeatureMatchOverlayModeData', () => {
 		await nextTick();
 
 		expect(data().config.value.layout.sources[0]?.id).toBe('working-source');
-		wrapper.unmount();
 	});
 
 	it('ignores a pushed working configuration on a live Screen Output', async () => {
 		// A live Screen Output renders the saved Feature Match Layout. Nothing but an
 		// embedded editor preview may be talked into rendering unsaved edits.
-		const { wrapper, data } = mountOverlay({
+		const { data } = mountOverlay({
 			isPreview: ref(false),
 			previewGuides: ref(false),
 		});
@@ -176,7 +177,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 		await nextTick();
 
 		expect(data().config.value.layout.sources[0]?.id).toBe('saved-source');
-		wrapper.unmount();
 	});
 
 	/**
@@ -184,7 +184,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 	 * earlier (#351); the empty push comes last, after a real one, so adopting it is visible.
 	 */
 	it('takes a working configuration only from the embedding editor, and never an empty push', async () => {
-		const { wrapper, data } = mountOverlay({
+		const { data } = mountOverlay({
 			isPreview: ref(true),
 			previewGuides: ref(false),
 		});
@@ -231,8 +231,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 		}));
 		await nextTick();
 		expect(data().config.value.layout.sources[0]?.id).toBe('working-source');
-
-		wrapper.unmount();
 	});
 
 	/**
@@ -248,7 +246,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 		}
 
 		it('reads it through the Screen, holds it, and renders its Match, Round and Phase', async () => {
-			const { wrapper, data } = mountOverlay({
+			const { data } = mountOverlay({
 				isPreview: ref(false),
 				screen: ref({
 					id: 42,
@@ -269,11 +267,10 @@ describe('useFeatureMatchOverlayModeData', () => {
 			expect(data().sourceMatch.value).toMatchObject({ id: 300 });
 			expect(data().round.value).toMatchObject({ name: 'Round 3' });
 			expect(data().phase.value).toMatchObject({ name: 'Swiss' });
-			wrapper.unmount();
 		});
 
 		it('reads Session state through the Screen and never starts a Session', async () => {
-			const { wrapper } = mountOverlay({
+			mountOverlay({
 				isPreview: ref(false),
 				screen: ref({
 					id: 42,
@@ -288,11 +285,10 @@ describe('useFeatureMatchOverlayModeData', () => {
 				(slotId: number) => Promise<unknown>;
 			await expect(read(11)).resolves.toEqual({ id: 90, slotId: 11 });
 			expect(mockApiFetch.mock.calls.every(([, options]) => !(options as { method?: string } | undefined)?.method)).toBe(true);
-			wrapper.unmount();
 		});
 
 		it('shows nothing of the Slot it left when the newly selected Slot\'s read is overtaken', async () => {
-			const { wrapper, data } = mountOverlay({
+			const { data } = mountOverlay({
 				isPreview: ref(true),
 			});
 			pushPreviewConfig(boundConfig(11));
@@ -305,11 +301,10 @@ describe('useFeatureMatchOverlayModeData', () => {
 
 			expect(data().round.value).toBeUndefined();
 			expect(data().sourceMatch.value).toBeNull();
-			wrapper.unmount();
 		});
 
 		it('reads the Slot an editor preview pushes, which its author has not saved', async () => {
-			const { wrapper } = mountOverlay({
+			mountOverlay({
 				isPreview: ref(true),
 			});
 			await flushPromises();
@@ -321,7 +316,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 				'/api/screen-output/events/7/screens/42/feature-match-slots/12',
 				expect.anything(),
 			);
-			wrapper.unmount();
 		});
 
 		// The followed Session carries side order (ADR-0058); the read's is as old as the read.
@@ -347,7 +341,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 						[followed.id, followed],
 					]
 				: []);
-			const { wrapper, data } = mountOverlay({
+			const { data } = mountOverlay({
 				isPreview: ref(false),
 				screen: ref({
 					id: 42,
@@ -359,7 +353,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 			await flushPromises();
 
 			expect(data().match.value?.activeSession).toEqual(shown);
-			wrapper.unmount();
 		});
 	});
 
@@ -379,7 +372,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 		}
 
 		it('stands in when an editor preview has no Feature Match Slot bound', async () => {
-			const { wrapper, data } = mountOverlay({
+			const { data } = mountOverlay({
 				isPreview: ref(true),
 			});
 			await flushPromises();
@@ -388,13 +381,12 @@ describe('useFeatureMatchOverlayModeData', () => {
 			await nextTick();
 
 			expect(data().usesSampleDataset.value).toBe(true);
-			wrapper.unmount();
 		});
 
 		it('stands aside when the preview has a Slot to show real data from', async () => {
 			// An author checking a name plate against the actual finalists is checking
 			// something the sample cannot tell them.
-			const { wrapper, data } = mountOverlay({
+			const { data } = mountOverlay({
 				isPreview: ref(true),
 			});
 			await flushPromises();
@@ -403,20 +395,18 @@ describe('useFeatureMatchOverlayModeData', () => {
 			await nextTick();
 
 			expect(data().usesSampleDataset.value).toBe(false);
-			wrapper.unmount();
 		});
 
 		it('never stands in on a live Screen Output, whatever its Slot holds', async () => {
 			// An unassigned Overlay renders empty on air. Invented player names would be
 			// indistinguishable, to everyone watching, from real ones.
-			const { wrapper, data } = mountOverlay({
+			const { data } = mountOverlay({
 				isPreview: ref(false),
 			});
 			await flushPromises();
 
 			expect(data().config.value.featureMatchId).toBeNull();
 			expect(data().usesSampleDataset.value).toBe(false);
-			wrapper.unmount();
 		});
 	});
 
@@ -436,7 +426,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 		}
 
 		it('re-reads the Slot, its Session and its Match through the Screen, with no resync of its own', async () => {
-			const { wrapper, data } = mountBoundOutput();
+			const { data } = mountBoundOutput();
 			await flushPromises();
 			mockApiFetch.mockClear();
 			mockApiFetch.mockResolvedValueOnce({
@@ -458,11 +448,10 @@ describe('useFeatureMatchOverlayModeData', () => {
 			expect(mockFeatureMatchStore.holdFeatureMatch).toHaveBeenLastCalledWith(expect.objectContaining({ id: 11, matchId: 301 }));
 			expect(data().round.value).toMatchObject({ name: 'Round 4' });
 			expect(mockFeatureMatchStateStore.loadState).not.toHaveBeenCalled();
-			wrapper.unmount();
 		});
 
 		it('does not re-read the moment it disconnects', async () => {
-			const { wrapper } = mountBoundOutput();
+			mountBoundOutput();
 			await flushPromises();
 			mockApiFetch.mockClear();
 
@@ -471,11 +460,10 @@ describe('useFeatureMatchOverlayModeData', () => {
 			await flushPromises();
 
 			expect(mockApiFetch).not.toHaveBeenCalled();
-			wrapper.unmount();
 		});
 
 		it('keeps what it shows when the read answers a Slot overtaken by a newer promotion', async () => {
-			const { wrapper, data } = mountBoundOutput();
+			const { data } = mountBoundOutput();
 			await flushPromises();
 			mockFeatureMatchStore.holdFeatureMatch.mockReturnValueOnce(false);
 			mockApiFetch.mockResolvedValueOnce({
@@ -486,7 +474,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 			await suspendAndResume();
 
 			expect(data().round.value).toMatchObject({ name: 'Round 3' });
-			wrapper.unmount();
 		});
 	});
 
@@ -496,7 +483,7 @@ describe('useFeatureMatchOverlayModeData', () => {
 	 */
 	describe('the Event Data the Overlay holds', () => {
 		it('re-reads when its Slot moves to another Match', async () => {
-			const { wrapper, data } = mountBoundOutput();
+			const { data } = mountBoundOutput();
 			await flushPromises();
 			mockApiFetch.mockResolvedValueOnce({
 				...slotRead(11),
@@ -516,11 +503,10 @@ describe('useFeatureMatchOverlayModeData', () => {
 
 			expect(data().sourceMatch.value).toMatchObject({ id: 301 });
 			expect(data().round.value).toMatchObject({ name: 'Round 4' });
-			wrapper.unmount();
 		});
 
 		it('re-reads when the Round it shows changes', async () => {
-			const { wrapper } = mountBoundOutput();
+			mountBoundOutput();
 			await flushPromises();
 			mockApiFetch.mockClear();
 
@@ -529,7 +515,6 @@ describe('useFeatureMatchOverlayModeData', () => {
 			});
 			await flushPromises();
 			expect(mockApiFetch).toHaveBeenCalledTimes(1);
-			wrapper.unmount();
 		});
 	});
 });

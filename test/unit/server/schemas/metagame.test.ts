@@ -5,14 +5,8 @@ import {
 	metagameQuerySchema,
 } from '~~/server/schemas/api/metagame';
 
-describe.each([
-	['metagameQuerySchema', metagameQuerySchema],
-	['metagameArchetypesQuerySchema', metagameArchetypesQuerySchema],
-	['metagameCardsQuerySchema', metagameCardsQuerySchema],
-] as const)('%s scope', (_name, schema) => {
-	it('defaults to the whole Event', () => {
-		expect(schema.parse({}).scope).toBe('all');
-	});
+describe('metagameQuerySchema scope', () => {
+	const schema = metagameQuerySchema;
 
 	it.each([
 		[
@@ -41,13 +35,18 @@ describe.each([
 		expect(schema.safeParse({ scope, [scope]: min - 1 }).success).toBe(false);
 		expect(schema.safeParse({ scope, [scope]: max + 1 }).success).toBe(false);
 	});
+
+	// Both compose `metagameQuerySchema`, so its scope rules are theirs.
+	it.each([
+		['metagameArchetypesQuerySchema', metagameArchetypesQuerySchema],
+		['metagameCardsQuerySchema', metagameCardsQuerySchema],
+	] as const)('holds for %s too', (_name, composed) => {
+		expect(composed.safeParse({ scope: 'topN', topN: 8 }).success).toBe(true);
+		expect(composed.safeParse({ scope: 'topN' }).success).toBe(false);
+	});
 });
 
 describe('metagameArchetypesQuerySchema', () => {
-	it('defaults to Meta Share order with no conversion target or limit', () => {
-		expect(metagameArchetypesQuerySchema.parse({ scope: 'all' })).toEqual({ scope: 'all', sortBy: 'metaShare' });
-	});
-
 	it.each([
 		[
 			'a topN target',
@@ -102,15 +101,6 @@ describe.each([
 });
 
 describe('metagameCardsQuerySchema', () => {
-	it('defaults to Inclusion Rate order, 50 cards, the full Deck List and no excluded types', () => {
-		expect(metagameCardsQuerySchema.parse({ scope: 'all' })).toEqual({
-			scope: 'all',
-			sortBy: 'inclusionRate',
-			limit: 50,
-			board: 'full',
-		});
-	});
-
 	it('refuses the retired board value both', () => {
 		expect(metagameCardsQuerySchema.safeParse({ scope: 'all', board: 'both' }).success).toBe(false);
 	});

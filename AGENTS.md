@@ -63,7 +63,14 @@ A test earns its place by going red when behaviour a user, operator or caller
 relies on breaks, and staying green through a refactor.
 
 - Test each rule at its **home**, the one module that owns it. A consumer gets
-  one **wiring** test (passes the right input, shows the result).
+  one **wiring** test (passes the right input, shows the result). A change
+  that moves a rule into a shared module takes its consumers' tests of it down
+  to that one case.
+- An integration test proves what only a running server can: routing and the
+  API boundary, body limits and streaming, real D1 and R2, state across
+  requests, and one wiring pass per feature. A rule's branches stay at its home.
+- A test that mounts nothing and uses no Nuxt import belongs in `test/unit`,
+  where it costs no Nuxt boot.
 - Drive real code through a public seam and fake only the boundary: network,
   Ably, clock, object storage. Persistence runs on `createSqliteD1Harness` with
   the real migrations.
@@ -79,7 +86,10 @@ relies on breaks, and staying green through a refactor.
   codes and key tokens.
 - Assert an optimistic update while its request is pending
   (`test/helpers/deferred.ts`).
-- Write cases as `it.each` tables. Build setup from the kits in `test/helpers/`
+- Write cases as `it.each` tables in which every row can fail alone: it reaches
+  a branch, bound or declaration no other row does. A table generated from a
+  catalogue (every Screen Mode, field or token) gets a row per distinct branch,
+  not a row per member. Build setup from the kits in `test/helpers/`
   and `test/nuxt/helpers/` (Nuxt UI stubs, graphics fixtures, realtime fakes),
   extending a kit when it lacks something.
 - Test comments state the invariant in at most three lines; issue history

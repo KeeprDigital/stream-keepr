@@ -123,6 +123,14 @@ function refusedCommandFailure(code: string, message: string, inputKeys: string[
 	});
 }
 
+// `clearMocks` forgets calls, not answers: without this a refusal one test arms
+// on `sendCommand` would answer the next test's command too.
+beforeEach(() => {
+	for (const call of Object.values(mockRepository))
+		call.mockReset();
+	mockRepository.getSession.mockResolvedValue(session());
+});
+
 describe('broadcastGraphicsLiveSessionStore', () => {
 	let store: ReturnType<typeof useBroadcastGraphicsLiveSessionStore>;
 

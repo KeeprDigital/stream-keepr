@@ -5,7 +5,6 @@ import type {
 } from '~~/shared/types/broadcastGraphicTemplate';
 import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/types/graphics';
 import type {
-	GraphicAssetLifecycleActionOutcome,
 	GraphicAssetUsage,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
@@ -492,83 +491,6 @@ describe('broadcast Graphic Template library', () => {
 		expect(stack.map(entry => entry.id)).toEqual([graphic.id]);
 	});
 
-	it('regenerates every Graphic Item id so two copies coexist in one Screen document', async () => {
-		const second = await place(otherEventId, otherScreenId, { templateId }, authorCookie);
-
-		expect(second.status).toBe(201);
-		const stack = await authoredStack(otherEventId, otherScreenId);
-		expect(stack).toHaveLength(2);
-
-		const itemIds = stack.flatMap(graphic => graphic.items.flatMap(item => [
-			item.id,
-			...(item.type === 'group'
-				? item.children.map(child => child.id)
-				: []),
-		]));
-		expect(new Set(itemIds).size).toBe(itemIds.length);
-		expect(itemIds).not.toContain('backing');
-		expect(itemIds).not.toContain('bug');
-		// A second copy in the same Screen is named distinctly rather than duplicated.
-		expect(stack.map(graphic => graphic.name)).toEqual(['Lower third', 'Lower third (2)']);
-	});
-
-	it('rewrites every staggered Graphic Item id onto the placed copy', async () => {
-		const [placed] = await authoredStack(otherEventId, otherScreenId);
-
-		const graphicStagger = placed!.animation!.stagger!.enter!;
-		const [backing, headline] = placed!.items.map(item => item.id);
-		// `itemIds` is the *selection* of staggered items; the sequence comes from the
-		// container's list order restricted to it, then reversed for `reverse-list`. So
-		// this asserts each authored entry's mapping, entry by entry — the array's own
-		// order carries no behaviour and is preserved only because rewriting it in place
-		// is the simplest correct thing to do.
-		expect(graphicStagger.itemIds).toEqual([headline, backing]);
-		expect(graphicStagger.step).toBe(80);
-
-		const group = placed!.items.find(item => item.type === 'group');
-		if (group?.type !== 'group')
-			throw new Error('expected the placed copy to carry the Graphic Group');
-		expect(group.animation!.stagger!.enter!.itemIds)
-			.toEqual(group.children.map(child => child.id));
-
-		// No authored id survives anywhere, which is what a stale stagger would be:
-		// silently ignored, every staggered item animating together at offset zero.
-		const staggered = [
-			...graphicStagger.itemIds,
-			...group.animation!.stagger!.enter!.itemIds,
-		];
-		for (const authored of [
-			'backing',
-			'headline',
-			'badges',
-			'bug',
-			'rule',
-		])
-			expect(staggered).not.toContain(authored);
-	});
-
-	it('carries each Graphic Input default as the placed copy\'s own initial manual value', async () => {
-		const [placed] = await authoredStack(otherEventId, otherScreenId);
-
-		expect(placed!.inputs).toEqual([
-			{
-				type: 'text',
-				key: 'player',
-				label: 'Player',
-				required: true,
-				updatePolicy: 'staged',
-				default: 'Reid Duke',
-				maxLength: 40,
-			},
-		]);
-		expect(placed!.sources).toEqual([
-			{ key: 'player', label: 'Player', kind: 'player' },
-		]);
-		expect(placed!.bindings).toEqual([
-			{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.name' },
-		]);
-	});
-
 	it('places an authored Graphic Asset Reference its Screen Output can resolve', async () => {
 		const stack = await authoredStack(otherEventId, otherScreenId);
 		const placedMedia = stack[0]!.items
@@ -635,6 +557,8 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('leaves a placed copy and its template with no live coupling in either direction', async () => {
+		// A second copy beside the first, left alone below: the control a revision must not reach.
+		expect((await place(otherEventId, otherScreenId, { templateId }, authorCookie)).status).toBe(201);
 		const before = await authoredStack(otherEventId, otherScreenId);
 		const placed = structuredClone(before[0]!);
 
@@ -759,25 +683,6 @@ describe('broadcast Graphic Template library', () => {
 					items: [
 						{ type: 'text', id: 'a' },
 					],
-				},
-				revision: await templateRevision(templateId),
-			},
-		});
-
-		expect(refused.status).toBe(400);
-	});
-
-	it('refuses two Graphic Items with the same id in a template document', async () => {
-		const current = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
-		const document = (current.data as BroadcastGraphicTemplateResponse).document;
-
-		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: {
-				document: {
-					...document,
-					items: [document.items[0]!, document.items[0]!],
 				},
 				revision: await templateRevision(templateId),
 			},
@@ -1001,86 +906,6 @@ describe('broadcast Graphic Template library', () => {
 		expect(refused.data.message).toContain('retiring-graphic');
 
 		await request(`${TEMPLATES_PATH}/${retiringTemplateId}`, { method: 'DELETE', cookie: authorCookie });
-	});
-
-	// #614: every template write holds each reference to the selectability rule a
-	// Screen applies to a new choice, and Retire is refused while a saved template
-	// references the asset (ADR-0034).
-	it('refuses a revision that pins an asset of the wrong kind for its slot, and refuses to retire its asset', async () => {
-		const retiring = await ingestImage(sourceEventId, 'template-library-kind', authorCookie);
-		const sourceScreen = await $fetch<ScreenResponse>(`/api/events/${sourceEventId}/screens`, {
-			method: 'POST',
-			body: { name: 'Kinds', slug: 'template-kinds-screen', currentMode: 'broadcast-graphics' },
-		});
-		expect((await patchStack(sourceEventId, sourceScreen.id, [
-			{
-				id: 'kinds-graphic',
-				name: 'Kinds',
-				items: [
-					mediaItem('plate', retiring),
-				],
-			},
-		])).status).toBe(200);
-		const saved = await request(TEMPLATES_PATH, {
-			method: 'POST',
-			cookie: authorCookie,
-			body: {
-				source: { eventId: sourceEventId, screenId: sourceScreen.id, graphicId: 'kinds-graphic' },
-			},
-		});
-		expect(saved.status).toBe(201);
-		const kindsTemplate = saved.data as BroadcastGraphicTemplateResponse;
-
-		const wrongKind = await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: {
-				document: {
-					...kindsTemplate.document,
-					items: [
-						{
-							...mediaItem('plate', retiring),
-							mediaKind: 'silent-video',
-							loop: true,
-							playbackRate: 1,
-						},
-					],
-				},
-				revision: kindsTemplate.revision,
-			},
-		});
-		expect(wrongKind.status).toBe(409);
-		expect(wrongKind.data.message).toContain('kinds-graphic.items.plate.asset (is an image, not a silent video)');
-
-		const retire = await $fetch<GraphicAssetLifecycleActionOutcome>(
-			`/api/graphics-assets/${retiring.assetId}/lifecycle-actions`,
-			{
-				method: 'POST',
-				headers: { cookie: authorCookie },
-				body: { action: 'retire' },
-			},
-		);
-		expect(retire).toMatchObject({
-			outcome: 'in-use',
-			usage: [
-				expect.objectContaining({
-					owner: expect.objectContaining({ kind: 'broadcast-graphic-template', id: kindsTemplate.id, name: 'Kinds' }),
-				}),
-			],
-		});
-		// Nothing a Screen holds is reported: the source Screen pins the asset too.
-		expect(retire.outcome === 'in-use' && retire.usage.map(entry => entry.owner.kind))
-			.toEqual(['broadcast-graphic-template']);
-
-		// Still active, so the template stays revisable.
-		const renamed = await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: { name: 'Renamed', revision: kindsTemplate.revision },
-		});
-		expect(renamed.status).toBe(200);
-
-		await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, { method: 'DELETE', cookie: authorCookie });
 	});
 
 	it('removes a template from the library without touching the copies placed from it', async () => {

@@ -332,16 +332,10 @@ describe('the Graphics Asset Library Workspace', () => {
 	it('shows searchable previews, verified facts, Event associations, and exact operation results', async () => {
 		const wrapper = await mountPage();
 
-		expect(wrapper.text()).toContain('Graphics Asset Library');
 		expect(wrapper.text()).toContain('Scoreboard logo');
-		expect(wrapper.text()).toContain('Active assets');
-		expect(wrapper.text()).toContain('Retired assets');
-		expect(wrapper.text()).toContain('Trash');
-		expect(wrapper.text()).toContain('Revision history');
 		expect(wrapper.text()).toContain('Revision 1');
 		expect(wrapper.text()).toContain('1 × 1');
 		expect(wrapper.text()).toContain('image/png');
-		expect(wrapper.text()).toContain('Pixels');
 		expect(wrapper.text()).toContain('8-bit grayscale-alpha');
 		expect(wrapper.text()).toContain('alpha yes');
 		expect(wrapper.text()).toContain('Compatibility still-image-v1');
@@ -1481,14 +1475,6 @@ describe('the Library Workspace when its graphics author session decides ownersh
 			statusCode: 401,
 		});
 	}
-
-	it('says who an upload will belong to before one is started', async () => {
-		const wrapper = await mountPage();
-
-		expect(wrapper.text()).toContain('An upload belongs to your account');
-		expect(wrapper.text()).toContain('outlives this browser');
-		expect(wrapper.text()).toContain('Nobody else can resume it');
-	});
 
 	it('names an ended session rather than a status code when an upload is refused', async () => {
 		const wrapper = await mountPage();

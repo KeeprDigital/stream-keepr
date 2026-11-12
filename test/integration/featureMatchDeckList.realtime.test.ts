@@ -2,6 +2,7 @@ import type { InboundMessage } from 'ably';
 import Ably from 'ably';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
+import { LOAD_TOLERANT_WAIT_MS } from '../helpers/loadTolerantBounds';
 import { $fetch } from './client';
 import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './realtimeKey';
 
@@ -100,7 +101,7 @@ describe('a Feature Match Slot side\'s Deck List', () => {
 			const message = await Promise.race([
 				announced,
 				new Promise<never>((_resolve, reject) => {
-					timeout = setTimeout(() => reject(new Error('Timed out waiting for the Deck List announcement')), 10_000);
+					timeout = setTimeout(() => reject(new Error('Timed out waiting for the Deck List announcement')), LOAD_TOLERANT_WAIT_MS);
 				}),
 			]);
 

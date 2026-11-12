@@ -450,19 +450,6 @@ describe('useDeckModeData', () => {
 			expect(result.cardDataDegraded.value).toBe(false);
 			expect(result.pendingSwapVersion.value).toBe(2);
 		});
-
-		it('re-reads the selected list once its Event channel is attached again', async () => {
-			mockGetSelectedBroadcastDeckList.mockResolvedValue(createBroadcastList(1, 'Feature Table'));
-			mountDeckModeData();
-			await flushPromises();
-
-			mockRealtime.connectionState = 'disconnected';
-			await nextTick();
-			reattachEventChannel();
-			await flushPromises();
-
-			expect(mockGetSelectedBroadcastDeckList).toHaveBeenCalledTimes(2);
-		});
 	});
 
 	describe('staged swaps', () => {
@@ -772,14 +759,11 @@ describe('useDeckModeData', () => {
 			expect(result.pendingSwapVersion.value).toBe(1);
 		});
 
-		it.each([
-			['a Melee decklist sync', 'melee:decklistsSynced'],
-			['a TCG+ Import', 'tcgplus:imported'],
-		] as const)('re-reads on %s, and on a deck review of the selected Player only', async (_label, synced) => {
+		it('re-reads on a Melee decklist sync, and on a deck review of the selected Player only', async () => {
 			mountDeckModeData();
 			await flushPromises();
 
-			deliver(synced, { playerCount: 1, deckCount: 1 });
+			deliver('melee:decklistsSynced', { playerCount: 1, deckCount: 1 });
 			deliver('playerDeck:reviewed', {
 				deck: { playerId: 6 },
 			});
@@ -844,22 +828,6 @@ describe('useDeckModeData', () => {
 					deckIds: [3],
 					playerIds: [5],
 				});
-				await flushPromises();
-
-				expect(result.pendingSwapVersion.value).toBe(1);
-				result.commitPendingDeck();
-				await nextTick();
-				expect(mainboardNames(result)).toEqual(['Lightning Bolt']);
-			});
-
-			it('shows a resolution missed while disconnected once its channel is attached again', async () => {
-				const result = mountDeckModeData();
-				await flushPromises();
-
-				mockRealtime.connectionState = 'disconnected';
-				await nextTick();
-				resolved = true;
-				reattachEventChannel();
 				await flushPromises();
 
 				expect(result.pendingSwapVersion.value).toBe(1);

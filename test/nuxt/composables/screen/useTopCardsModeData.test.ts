@@ -347,33 +347,6 @@ describe('useTopCardsModeData', () => {
 			expect(usePlayerStore().dataVersion).toBe(0);
 		});
 
-		it('re-reads when a deck review lands elsewhere', async () => {
-			await showingCards();
-
-			deliver('playerDeck:reviewed', {
-				deck: { id: 3, playerId: 2 },
-			});
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(mockFetch).toHaveBeenLastCalledWith('/api/screen-output/events/1/screens/1/top-cards', expect.anything());
-			expect(usePlayerStore().dataVersion).toBe(0);
-		});
-
-		it('re-reads when an Archetype is edited or its key cards change', async () => {
-			await showingCards();
-
-			deliver('archetype:updated', {
-				archetype: { id: 4, name: 'Mono Red' },
-			});
-			await flushPromises();
-			deliver('archetype:keyCardsUpdated', { archetypeId: 4, keyCards: [] });
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(2);
-			expect(usePlayerStore().dataVersion).toBe(0);
-		});
-
 		it('re-reads when the Player List driving it gains or loses a member, and not for another list', async () => {
 			mutableConfig.scope = 'playerList';
 			mutableConfig.playerListId = 5;
@@ -404,51 +377,6 @@ describe('useTopCardsModeData', () => {
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 			expect(usePlayerStore().dataVersion).toBe(0);
-		});
-
-		it('ignores Player List membership while scoped to the full field', async () => {
-			mutableConfig.playerListId = 5;
-			await showingCards();
-
-			deliver('playerList:membersChanged', {
-				listId: 5,
-				playerIds: [2],
-				action: 'added',
-				memberCount: 3,
-			});
-			await flushPromises();
-
-			expect(mockFetch).not.toHaveBeenCalled();
-		});
-
-		it('re-reads when Melee stores new Round Standings', async () => {
-			mutableConfig.scope = 'topN';
-			await showingCards();
-
-			deliver('melee:roundStandingsSynced', { roundId: 31 });
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-		});
-
-		it('shows cards missed while disconnected once its channel is attached again', async () => {
-			const { entries } = await showingCards();
-
-			realtime.transport.connectionState = 'disconnected';
-			await nextTick();
-			mockFetch.mockResolvedValue({
-				entries: [
-					{ id: 1, name: 'Lightning Bolt' },
-				],
-				totalDecks: 4,
-				scope: 'all',
-			});
-			realtime.transport.connectionState = 'connected';
-			realtime.reattach();
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(entries.value.map(entry => entry.name)).toEqual(['Lightning Bolt']);
 		});
 	});
 

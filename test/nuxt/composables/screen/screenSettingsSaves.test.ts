@@ -231,8 +231,8 @@ describe('screen settings saves', () => {
 
 	/**
 	 * Clearing an optional field: nonempty to empty, through the request, the merge,
-	 * the answer and a reload. Each row is a field one of these modes' settings let an
-	 * operator clear, with an unrelated field beside it that must survive.
+	 * the answer and a reload, with an unrelated field beside it that must survive. One
+	 * field stands for all: every mode's PATCH form and merge are derived the same way.
 	 */
 	describe.each<[ScreenMode, string, unknown, Record<string, unknown>]>([
 		[
@@ -240,102 +240,6 @@ describe('screen settings saves', () => {
 			'archetypeFilter',
 			'Rakdos Midrange',
 			{ topN: 16 },
-		],
-		[
-			'metagame',
-			'headerText',
-			'Day 2 Metagame',
-			{ topN: 16 },
-		],
-		[
-			'metagame',
-			'playerListId',
-			7,
-			{ topN: 16 },
-		],
-		[
-			'top-cards',
-			'archetypeFilter',
-			'Azorius Control',
-			{ topN: 4 },
-		],
-		[
-			'top-cards',
-			'headerText',
-			'Top Cards',
-			{ topN: 4 },
-		],
-		[
-			'top-cards',
-			'playerListId',
-			7,
-			{ topN: 4 },
-		],
-		[
-			'standings',
-			'headerText',
-			'Final Standings',
-			{ rowsPerPage: 6 },
-		],
-		[
-			'standings',
-			'playerListId',
-			7,
-			{ rowsPerPage: 6 },
-		],
-		[
-			'player-history',
-			'headerText',
-			'Match History',
-			{ rowsPerPage: 6 },
-		],
-		[
-			'player-history',
-			'playerId',
-			5,
-			{ rowsPerPage: 6 },
-		],
-		[
-			'pairings',
-			'headerText',
-			'Top Tables',
-			{ rowsPerPage: 6 },
-		],
-		[
-			'pairings',
-			'roundId',
-			31,
-			{ rowsPerPage: 6 },
-		],
-		[
-			'archetype-spotlight',
-			'headerText',
-			'Deck to Beat',
-			{ rowsPerPage: 6 },
-		],
-		[
-			'archetype-spotlight',
-			'archetypeId',
-			4,
-			{ rowsPerPage: 6 },
-		],
-		[
-			'head-to-head',
-			'headerText',
-			'Feature Match Preview',
-			{ featureMatchId: 4 },
-		],
-		[
-			'head-to-head',
-			'player1Id',
-			7,
-			{ playerSource: 'players' },
-		],
-		[
-			'talent',
-			'talentId',
-			7,
-			{ layout: 'fullPanel' },
 		],
 	])('clearing %s %s', (mode, field, storedValue, unrelated) => {
 		it.each([

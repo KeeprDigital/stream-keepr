@@ -505,56 +505,6 @@ describe('template Package preflight through the API boundary', () => {
 		expect(retried.status).toBe(409);
 	});
 
-	it('cancels a paused package idempotently', async () => {
-		const parts = readTemplatePackageParts(exportedPackage);
-		const packaged = parts.manifest.packagedAssets[0]!;
-		parts.manifest.packagedAssets = [
-			{
-				...packaged,
-				origin: {
-					...packaged.origin,
-					sourceRevisionId: testGraphicAssetRevisionId('another-unseen-revision'),
-				},
-			},
-		];
-		parts.template = {
-			...(parts.template as Record<string, unknown>),
-			frame: {
-				...((parts.template as { frame: Record<string, unknown> }).frame),
-				backgroundImage: {
-					kind: 'asset',
-					assetId: packaged.origin.sourceAssetId,
-					revisionId: 'another-unseen-revision',
-				},
-			},
-		};
-		const operation = await receivePackage(writeTemplatePackage(parts));
-		expect(operation.stage).toBe('awaiting-confirmation');
-
-		const cancelled = await $fetch<GraphicsIngestionOperation>(
-			`/api/graphics-assets/ingestion-operations/${operation.id}`,
-			{ method: 'DELETE', headers: authorHeaders },
-		);
-		const again = await $fetch<GraphicsIngestionOperation>(
-			`/api/graphics-assets/ingestion-operations/${operation.id}`,
-			{ method: 'DELETE', headers: authorHeaders },
-		);
-
-		expect(cancelled.stage).toBe('cancelled');
-		expect(again.stage).toBe('cancelled');
-		const confirmAfterCancel = await fetch(
-			`/api/graphics-assets/ingestion-operations/${operation.id}/template-package-confirmation`,
-			{
-				method: 'POST',
-				headers: { ...authorHeaders, 'content-type': 'application/json' },
-				body: JSON.stringify({
-					fingerprint: operation.templatePackagePreflight!.fingerprint,
-				}),
-			},
-		);
-		expect(confirmAfterCancel.status).toBe(409);
-	});
-
 	it('refuses to initiate a package beyond the received archive limit', async () => {
 		const response = await fetch('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',

@@ -232,24 +232,6 @@ describe('useMetagameModeData', () => {
 				'Arch4',
 			]);
 		});
-
-		it('projects a rotating page from server time on a rendering, and never writes', async () => {
-			vi.useFakeTimers();
-			mockFetch.mockResolvedValue(twelveArchetypes);
-			const { currentPage } = makeMetagameModeData();
-			await flushPromises();
-
-			Object.assign(mutableConfig, { autoPageEnabled: true, autoPageIntervalMs: 5000, rotationAnchor: mockServerNow });
-			await nextTick();
-			expect(currentPage.value).toBe(1);
-
-			mockServerNow += 5000;
-			vi.advanceTimersByTime(5000);
-			await nextTick();
-
-			expect(currentPage.value).toBe(2);
-			expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
-		});
 	});
 
 	describe('chart display', () => {
@@ -405,46 +387,8 @@ describe('useMetagameModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
 
-		it('ignores another Player List\'s membership', async () => {
-			Object.assign(mutableConfig, { scope: 'playerList', playerListId: 5 });
-			await showingMetagame();
-
-			deliver('playerList:membersChanged', {
-				listId: 6,
-				playerIds: [2],
-				action: 'added',
-				memberCount: 1,
-			});
-			deliver('playerList:deleted', { listId: 6 });
-			await flushPromises();
-
-			expect(mockFetch).not.toHaveBeenCalled();
-		});
-
+		// Which kinds a Metagame follows is `screenOutputInterest`'s own test.
 		it.each([
-			[
-				'an unresolved deck card is resolved elsewhere (#648)',
-				[
-					[
-						'playerDeck:cardsResolved',
-						{
-							deckIds: [3, 9],
-							playerIds: [2, 7],
-						},
-					],
-				],
-			],
-			[
-				'a deck review lands elsewhere',
-				[
-					[
-						'playerDeck:reviewed',
-						{
-							deck: { id: 3, playerId: 2 },
-						},
-					],
-				],
-			],
 			[
 				'an Archetype is created, edited or deleted',
 				[
@@ -466,15 +410,6 @@ describe('useMetagameModeData', () => {
 					],
 				],
 			],
-			[
-				'Melee stores new Round Standings',
-				[
-					[
-						'melee:roundStandingsSynced',
-						{ roundId: 31 },
-					],
-				],
-			],
 		] as const)('re-reads when %s', async (_, messages) => {
 			await showingMetagame();
 
@@ -485,49 +420,6 @@ describe('useMetagameModeData', () => {
 
 			expect(mockFetch).toHaveBeenCalledTimes(messages.length);
 			expect(usePlayerStore().dataVersion).toBe(0);
-		});
-
-		// Standing comes from Round Standings, not a Match Result as it is
-		// reported.
-		it.each([
-			[
-				'melee:matchResultsSynced',
-				{
-					roundId: 31,
-					matchIds: [9],
-				},
-			],
-			[
-				'melee:pairingsSynced',
-				{ roundId: 31 },
-			],
-		] as const)('does not re-read on %s', async (type, payload) => {
-			await showingMetagame();
-
-			deliver(type, payload);
-			await flushPromises();
-
-			expect(mockFetch).not.toHaveBeenCalled();
-		});
-
-		it('shows a breakdown missed while disconnected once its channel is attached again', async () => {
-			const { displayRows } = await showingMetagame();
-
-			realtime.transport.connectionState = 'disconnected';
-			await nextTick();
-			mockFetch.mockResolvedValue(archetypeRead({
-				entries: [
-					{ name: 'Mono Red', count: 1, metaShare: 100 },
-				],
-				totalPlayers: 1,
-				scope: 'all',
-			}));
-			realtime.transport.connectionState = 'connected';
-			realtime.reattach();
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledOnce();
-			expect(displayRows.value).toHaveLength(1);
 		});
 	});
 });

@@ -164,6 +164,7 @@ describe('useRoundClockModeData', () => {
 		expect(clock.value.display).toBe('49:59');
 	});
 
+	// The Round it picks reaches the rule; what a Round Clock follows is `screenOutputInterest`'s own test.
 	it.each([
 		[
 			'a picked Round, another Round\'s update',
@@ -175,15 +176,6 @@ describe('useRoundClockModeData', () => {
 			false,
 		],
 		[
-			'a picked Round, its own update',
-			31,
-			'round:updated',
-			{
-				round: { id: 31 },
-			},
-			true,
-		],
-		[
 			'the Current Round, any Round\'s update',
 			undefined,
 			'round:updated',
@@ -191,35 +183,6 @@ describe('useRoundClockModeData', () => {
 				round: { id: 32 },
 			},
 			true,
-		],
-		[
-			'the Current Round, new pairings',
-			undefined,
-			'melee:pairingsSynced',
-			{ roundId: 32 },
-			true,
-		],
-		[
-			'a picked Round, new pairings',
-			31,
-			'melee:pairingsSynced',
-			{ roundId: 32 },
-			false,
-		],
-		// Deleting a Round's only Melee Match can move the Current Round back.
-		[
-			'the Current Round, a deleted Match',
-			undefined,
-			'match:deleted',
-			{ matchId: 5 },
-			true,
-		],
-		[
-			'a picked Round, a deleted Match',
-			31,
-			'match:deleted',
-			{ matchId: 5 },
-			false,
 		],
 	] as const)('%s: re-reads or not', async (_case, roundId, type, data, rereads) => {
 		config.roundId = roundId;

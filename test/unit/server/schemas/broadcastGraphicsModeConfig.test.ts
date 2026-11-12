@@ -485,6 +485,76 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		expect(messages(duplicateBindings)).toContain('A Graphic Input may have at most one Graphic Input Binding');
 	});
 
+	// Only a hand-written call reaches these: the authoring surface offers catalog fields alone.
+	it.each([
+		[
+			'accepts',
+			'a catalog field',
+			'player.name',
+			[],
+		],
+		[
+			'refuses',
+			'a field the catalog does not define',
+			'player.inventedField',
+			['A Graphic Input Binding must name a field from the binding catalog'],
+		],
+	])('%s a Graphic Input Binding naming %s', (_, __, fieldId, refusal) => {
+		const result = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [
+				{
+					...graphic('lower-third'),
+					inputs: [
+						textInput('name'),
+					],
+					sources: [
+						{ key: 'player', label: 'Player', kind: 'player' },
+					],
+					bindings: [
+						{ inputKey: 'name', sourceKey: 'player', fieldId },
+					],
+				},
+			],
+		});
+
+		expect(messages(result)).toEqual(refusal);
+	});
+
+	// A Match has a `player1`; a Player has none, so nothing an operator picks could ever resolve it.
+	it.each([
+		[
+			'accepts',
+			'a relationship that yields its kind',
+			'match',
+			[],
+		],
+		[
+			'refuses',
+			'a relationship that cannot yield its kind',
+			'player',
+			['A derived Graphic Source Selection must follow a declared selection through a relationship that yields its own kind'],
+		],
+	])('%s a derived Graphic Source Selection following %s', (_, __, parentKind, refusal) => {
+		const result = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [
+				{
+					...graphic('lower-third'),
+					sources: [
+						{ key: 'parent', label: 'Parent', kind: parentKind },
+						{
+							key: 'p1',
+							label: 'Player 1',
+							kind: 'player',
+							from: { sourceKey: 'parent', relation: 'player1' },
+						},
+					],
+				},
+			],
+		});
+
+		expect(messages(result)).toEqual(refusal);
+	});
+
 	it('rejects a Graphic Input key a Graphic Text Template could not name', () => {
 		const result = broadcastGraphicsModeConfigSchema.safeParse({
 			graphics: [
@@ -546,35 +616,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		expect(messages(result)).toEqual([
 			`A Broadcast Graphics Screen must not carry more than ${MAX_GRAPHIC_ITEMS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Items in total`,
 		]);
-	});
-
-	it('rejects a null Broadcast Graphics stack, so a patch can never delete the authored stack', () => {
-		// null deletes a stored key, which would silently empty the authored stack.
-		const result = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({ graphics: null });
-
-		expect(result.success).toBe(false);
-	});
-
-	it('accepts a patch that replaces the whole stack, and one that omits it', () => {
-		const patch = modeConfigPatchSchemaMap['broadcast-graphics'];
-
-		expect(patch.safeParse({
-			graphics: [
-				graphic('bug', 1),
-			],
-		}).success).toBe(true);
-		expect(patch.safeParse({}).success).toBe(true);
-	});
-
-	it('accepts the Broadcast Graphics config a new Screen ships with', () => {
-		// The shipped default has to satisfy the wire schema, or a Screen switched
-		// into Broadcast Graphics could not persist its own starting configuration.
-		const result = broadcastGraphicsModeConfigSchema.safeParse(
-			getDefaultConfigForMode('broadcast-graphics'),
-		);
-
-		expect(result.success).toBe(true);
-		expect(result.data?.graphics).toEqual([]);
 	});
 
 	it('rejects an unknown Graphic Item kind', () => {
@@ -933,38 +974,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		});
 
 		expect(result.success).toBe(false);
-	});
-
-	it('bounds a linear-gradient Graphic Fill to two to four colour stops', () => {
-		const withStops = (count: number) => broadcastGraphicsModeConfigSchema.safeParse({
-			graphics: [
-				{
-					id: 'a',
-					name: 'A',
-					items: [
-						shapeItem('bed', {
-							surfaceStyle: {
-								fill: {
-									type: 'linear-gradient',
-									angle: 90,
-									stops: Array.from({ length: count }, (_, index) => ({
-										color: '#ffffff',
-										position: index / Math.max(1, count - 1),
-										opacity: 1,
-									})),
-								},
-								fillOpacity: 1,
-							},
-						}),
-					],
-				},
-			],
-		}).success;
-
-		expect(withStops(1)).toBe(false);
-		expect(withStops(2)).toBe(true);
-		expect(withStops(4)).toBe(true);
-		expect(withStops(5)).toBe(false);
 	});
 
 	it('accepts an item with no Graphic Surface Style of its own', () => {

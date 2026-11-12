@@ -4,6 +4,7 @@ import type { BroadcastDeckListResponse } from '~~/shared/types/broadcastDeckLis
 import Ably from 'ably';
 import { describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
+import { LOAD_TOLERANT_WAIT_MS } from '../helpers/loadTolerantBounds';
 import { $fetch, anonymousFetch, fetch } from './client';
 import { queryIntegrationD1 } from './integrationD1';
 import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './realtimeKey';
@@ -338,7 +339,7 @@ describe('the Broadcast Deck List merged-result acceptance', () => {
 				const notice = await Promise.race([
 					updateNotice,
 					new Promise<never>((_resolve, reject) => {
-						setTimeout(() => reject(new Error('Timed out waiting for Broadcast Deck List update notification')), 10_000);
+						setTimeout(() => reject(new Error('Timed out waiting for Broadcast Deck List update notification')), LOAD_TOLERANT_WAIT_MS);
 					}),
 				]);
 				unsubscribeUpdateNotice?.();

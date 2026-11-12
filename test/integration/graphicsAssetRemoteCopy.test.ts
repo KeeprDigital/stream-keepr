@@ -91,27 +91,9 @@ describe('the approved remote HTTPS copy API', () => {
 		expect(response.status).toBe(400);
 	});
 
+	// The copy's own refusals and every address range are unit-owned; these prove the
+	// approved-destination check and the report's secret hygiene hold behind the route.
 	it.each([
-		{
-			label: 'a plaintext HTTP destination',
-			sourceUrl: 'http://cdn.example.test/scoreboard.png',
-			code: 'remote-source-not-https',
-		},
-		{
-			label: 'the loopback interface',
-			sourceUrl: 'https://127.0.0.1/scoreboard.png',
-			code: 'remote-source-destination-not-public',
-		},
-		{
-			label: 'the loopback hostname',
-			sourceUrl: 'https://localhost:3000/api/graphics-assets',
-			code: 'remote-source-destination-not-public',
-		},
-		{
-			label: 'a private network address',
-			sourceUrl: 'https://192.168.1.1/scoreboard.png',
-			code: 'remote-source-destination-not-public',
-		},
 		{
 			label: 'the cloud metadata address',
 			sourceUrl: 'https://169.254.169.254/latest/meta-data/iam/security-credentials/',

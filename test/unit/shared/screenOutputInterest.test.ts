@@ -4,7 +4,6 @@ import type { MessageType } from '~~/shared/types/messages';
 import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import { OUTPUT_CHANGE_KINDS, outputChangeOf, screenHears, slotNarrowingOf } from '~~/shared/screenOutputInterest';
-import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { eventMessageSamples } from '~~/test/helpers/eventMessageSamples';
 
@@ -476,13 +475,14 @@ describe('screenHears', () => {
 			: { kind };
 	}
 
-	describe.each(SCREEN_MODE_VALUES)('a %s Screen', (mode) => {
+	// Decided before the mode is read: Background, which declares nothing, shows it.
+	describe('a Screen whose mode follows nothing', () => {
 		it.each(EVERY_SCREEN_FOLLOWS)('hears its own %s change', (kind) => {
-			expect(screenHears(screenIn(mode), wholeKind(kind))).toBe(true);
+			expect(screenHears(screenIn('background'), wholeKind(kind))).toBe(true);
 		});
 
-		it.each(SCREEN_ADDRESSED)('does not hear another Screen\'s %s change', (kind) => {
-			expect(screenHears(screenIn(mode), wholeKind(kind, OTHER_SCREEN))).toBe(false);
+		it('does not hear another Screen\'s screen change', () => {
+			expect(screenHears(screenIn('background'), wholeKind('screen', OTHER_SCREEN))).toBe(false);
 		});
 	});
 

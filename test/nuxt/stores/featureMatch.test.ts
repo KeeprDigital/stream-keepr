@@ -294,16 +294,9 @@ describe('useFeatureMatchStore', () => {
 	});
 
 	// A Slot write is answered for the Event it was made in; it adds, primes and restores nothing in another (#606).
-	describe.each([
-		[
-			'Event B',
-			[2],
-		],
-		[
-			'Event A, loaded again since',
-			[2, 1],
-		],
-	])('a Slot write answered after the operator moved on to %s', (_, switches) => {
+	// Back in the same Event is the case an Event-id comparison would miss.
+	describe('a Slot write answered after the operator moved on to Event A, loaded again since', () => {
+		const switches = [2, 1];
 		const stateStore = () => useFeatureMatchStateStore();
 
 		/** Ends on Slots 1 and 2, as Event A's own are when loaded again. */

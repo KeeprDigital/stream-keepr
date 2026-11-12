@@ -20,7 +20,6 @@ import {
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 	getGraphicItemDefinition,
-	GRAPHIC_ITEM_KINDS,
 	isGraphicItemDefinitionAvailable,
 	resolveGraphicThemeTokens,
 	squareShapeGeometry,
@@ -2575,7 +2574,7 @@ describe('graphicsCompositorInspector', () => {
 		it('offers a Game Wins Item its box layout only while it renders boxes', async () => {
 			// The `number` display mode paints a win count: there is no box to orient or
 			// size, and the authored values survive the switch. Its box surfaces and box
-			// geometry are covered over every Definition below.
+			// geometry are covered with what a Definition declares, below.
 			const boxes = await mountKind('game-wins');
 			expect(boxes.find('[data-testid="game-wins-box-orientation"]').exists()).toBe(true);
 
@@ -2653,8 +2652,7 @@ describe('graphicsCompositorInspector', () => {
 	});
 });
 
-// Typography and the Text Overflow Policy, over every Graphic Item Definition.
-/** One Graphic Item Definition as a table row places it, in one display mode. */
+/** One Graphic Item Definition as a case places it, in one display mode. */
 interface DefinitionRow {
 	name: string;
 	kind: GraphicItemKind;
@@ -2692,307 +2690,138 @@ function mountDefinition(row: DefinitionRow, overrides: Partial<GraphicItemConfi
 	});
 }
 
-describe('typography and the Text Overflow Policy for every Graphic Item Definition', () => {
-	interface Row extends DefinitionRow {
-		typography: boolean;
-		textOverflowPolicy: boolean;
-	}
+const TEXT: DefinitionRow = { name: 'text', kind: 'text' };
+const SHAPE: DefinitionRow = { name: 'shape', kind: 'shape' };
+const PLAYER_LIFE: DefinitionRow = { name: 'player-life', kind: 'player-life' };
+const DECK_LIST: DefinitionRow = { name: 'deck-list', kind: 'deck-list' };
+const GAME_WINS_BOXES: DefinitionRow = { name: 'game-wins as boxes', kind: 'game-wins' };
+/** Paints a win count: typography, but no win box and no text that can outgrow its bounds. */
+const GAME_WINS_NUMBER: DefinitionRow = {
+	name: 'game-wins as a number',
+	kind: 'game-wins',
+	variant: item => ({ ...item, displayMode: 'number' }) as GraphicItemConfig,
+};
 
-	const ROWS: Row[] = [
-		{
-			name: 'text',
-			kind: 'text',
-			typography: true,
-			textOverflowPolicy: true,
-		},
-		{
-			name: 'shape',
-			kind: 'shape',
-			typography: false,
-			textOverflowPolicy: false,
-		},
-		{
-			name: 'media',
-			kind: 'media',
-			typography: false,
-			textOverflowPolicy: false,
-		},
-		{
-			name: 'social-network-icon',
-			kind: 'social-network-icon',
-			typography: false,
-			textOverflowPolicy: false,
-		},
-		{
-			name: 'group',
-			kind: 'group',
-			typography: false,
-			textOverflowPolicy: false,
-		},
-		{
-			name: 'clock',
-			kind: 'clock',
-			typography: true,
-			textOverflowPolicy: true,
-		},
-		{
-			name: 'player-life',
-			kind: 'player-life',
-			typography: true,
-			textOverflowPolicy: true,
-		},
-		{
-			name: 'game-wins as boxes',
-			kind: 'game-wins',
-			typography: false,
-			textOverflowPolicy: false,
-		},
-		{
-			name: 'game-wins as a number',
-			kind: 'game-wins',
-			variant: item => ({ ...item, displayMode: 'number' }) as GraphicItemConfig,
-			typography: true,
-			textOverflowPolicy: false,
-		},
-		{
-			name: 'deck-list as a list',
-			kind: 'deck-list',
-			typography: true,
-			textOverflowPolicy: false,
-		},
-		{
-			name: 'deck-list as a grid',
-			kind: 'deck-list',
-			variant: item => ({ ...item, view: 'grid' }) as GraphicItemConfig,
-			typography: false,
-			textOverflowPolicy: false,
-		},
-	];
+// The Inspector offers what the selected Definition declares. Which Definition
+// declares what is `graphicItemDefinitions.test.ts`'s table, over every kind.
+describe('typography and the Text Overflow Policy a Graphic Item Definition declares', () => {
+	it('offers a Definition that paints text its typography, and writes the edit', async () => {
+		const wrapper = await mountDefinition(TEXT);
 
-	function mountRow(row: Row, overrides: Partial<GraphicItemConfig> = {}) {
-		return mountDefinition(row, overrides);
-	}
-
-	it('covers every Definition', () => {
-		expect([
-			...new Set(ROWS.map(row => row.kind)),
-		].sort()).toEqual([...GRAPHIC_ITEM_KINDS].sort());
-	});
-
-	it.each(ROWS)('offers $name exactly the typography it paints with', async (row) => {
-		const wrapper = await mountRow(row);
-		const fontSize = findControl(wrapper, 'UInputNumber', 'aria-label', 'Font size');
-
-		expect(fontSize !== undefined).toBe(row.typography);
-		if (!fontSize)
-			return;
-
-		fontSize.vm.$emit('update:modelValue', 96);
+		control(wrapper, 'UInputNumber', 'aria-label', 'Font size').vm.$emit('update:modelValue', 96);
 		await nextTick();
+
 		const patched = itemOf(emittedGraphics(wrapper));
 		expect(patched && 'typography' in patched && patched.typography.fontSize).toBe(96);
 	});
 
-	it.each(ROWS)('bounds $name with a Text Overflow Policy only where its text can outgrow its bounds', async (row) => {
-		const wrapper = await mountRow(row);
-		const policy = findControl(wrapper, 'USelect', 'data-testid', 'text-overflow-policy');
+	it('offers a Definition that paints no text no typography', async () => {
+		const wrapper = await mountDefinition(SHAPE);
 
-		expect(policy !== undefined).toBe(row.textOverflowPolicy);
-		if (!policy)
-			return;
+		expect(findControl(wrapper, 'UInputNumber', 'aria-label', 'Font size')).toBeUndefined();
+	});
 
-		policy.vm.$emit('update:modelValue', 'shrink');
+	it('bounds text that can outgrow its bounds with a Text Overflow Policy, and a floor once it shrinks', async () => {
+		const wrapper = await mountDefinition(TEXT);
+
+		control(wrapper, 'USelect', 'data-testid', 'text-overflow-policy').vm.$emit('update:modelValue', 'shrink');
 		await nextTick();
 		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ overflowPolicy: 'shrink' });
 
 		// The floor a shrink policy stops at appears once shrinking is what happens.
-		const shrinking = await mountRow(row, { overflowPolicy: 'shrink' } as Partial<GraphicItemConfig>);
+		const shrinking = await mountDefinition(TEXT, { overflowPolicy: 'shrink' } as Partial<GraphicItemConfig>);
 		numberFieldByTestId(shrinking, 'text-min-font-size').vm.$emit('update:modelValue', 30);
 		await nextTick();
 		expect(itemOf(emittedGraphics(shrinking))).toMatchObject({ minFontSize: 30 });
 	});
+
+	it('offers typography without a Text Overflow Policy where the text cannot outgrow its bounds', async () => {
+		const wrapper = await mountDefinition(GAME_WINS_NUMBER);
+
+		expect(findControl(wrapper, 'UInputNumber', 'aria-label', 'Font size')).toBeDefined();
+		expect(findControl(wrapper, 'USelect', 'data-testid', 'text-overflow-policy')).toBeUndefined();
+	});
 });
 
-// Graphic Surface Styles, the Shape Geometry, and the Player, over every Graphic Item Definition.
-describe('surfaces, Shape Geometry, and the Player for every Graphic Item Definition', () => {
-	type BoxSurfaceSlot = 'boxSurfaceStyle' | 'wonBoxSurfaceStyle';
-
-	interface Row extends DefinitionRow {
-		ownSurface: boolean;
-		boxSurfaces: BoxSurfaceSlot[];
-		geometry: { slot: 'geometry' | 'clipGeometry' | 'boxGeometry'; title: string } | null;
-		playerSide: boolean;
-	}
-
-	const SHAPE = 'Shape Geometry';
+describe('surfaces, Shape Geometry, and the Player a Graphic Item Definition declares', () => {
 	const WIN_BOX = 'Win box Shape Geometry';
-
-	const ROWS: Row[] = [
-		{
-			name: 'text',
-			kind: 'text',
-			ownSurface: true,
-			boxSurfaces: [],
-			geometry: null,
-			playerSide: false,
-		},
-		{
-			name: 'shape',
-			kind: 'shape',
-			ownSurface: true,
-			boxSurfaces: [],
-			geometry: { slot: 'geometry', title: SHAPE },
-			playerSide: false,
-		},
-		{
-			name: 'media, unclipped',
-			kind: 'media',
-			ownSurface: false,
-			boxSurfaces: [],
-			geometry: null,
-			playerSide: false,
-		},
-		{
-			name: 'media, clipped',
-			kind: 'media',
-			variant: item => ({
-				...item,
-				clipGeometry: squareShapeGeometry(),
-			}) as GraphicItemConfig,
-			ownSurface: false,
-			boxSurfaces: [],
-			geometry: { slot: 'clipGeometry', title: SHAPE },
-			playerSide: false,
-		},
-		{
-			name: 'social-network-icon',
-			kind: 'social-network-icon',
-			ownSurface: false,
-			boxSurfaces: [],
-			geometry: null,
-			playerSide: false,
-		},
-		{
-			name: 'group',
-			kind: 'group',
-			ownSurface: true,
-			boxSurfaces: [],
-			geometry: { slot: 'geometry', title: SHAPE },
-			playerSide: false,
-		},
-		{
-			name: 'clock',
-			kind: 'clock',
-			ownSurface: true,
-			boxSurfaces: [],
-			geometry: null,
-			playerSide: false,
-		},
-		{
-			name: 'player-life',
-			kind: 'player-life',
-			ownSurface: true,
-			boxSurfaces: [],
-			geometry: null,
-			playerSide: true,
-		},
-		{
-			name: 'game-wins as boxes',
-			kind: 'game-wins',
-			ownSurface: true,
-			boxSurfaces: ['boxSurfaceStyle', 'wonBoxSurfaceStyle'],
-			geometry: { slot: 'boxGeometry', title: WIN_BOX },
-			playerSide: true,
-		},
-		{
-			name: 'game-wins as a number',
-			kind: 'game-wins',
-			variant: item => ({ ...item, displayMode: 'number' }) as GraphicItemConfig,
-			ownSurface: true,
-			boxSurfaces: [],
-			geometry: null,
-			playerSide: true,
-		},
-		{
-			name: 'deck-list',
-			kind: 'deck-list',
-			ownSurface: false,
-			boxSurfaces: [],
-			geometry: null,
-			playerSide: true,
-		},
-	];
-
-	const BOX_TEST_ID_PREFIX: Record<BoxSurfaceSlot, string> = {
+	const BOX_SURFACE_TEST_IDS = {
 		boxSurfaceStyle: 'game-wins-box',
 		wonBoxSurfaceStyle: 'game-wins-won-box',
-	};
+	} as const;
 
-	it('covers every Definition', () => {
-		expect([
-			...new Set(ROWS.map(row => row.kind)),
-		].sort()).toEqual([...GRAPHIC_ITEM_KINDS].sort());
-	});
+	it('offers the Player to a Definition that reads one, and writes the side chosen', async () => {
+		const wrapper = await mountDefinition(PLAYER_LIFE);
 
-	it.each(ROWS)('offers $name the Player only where it reads one', async (row) => {
-		const wrapper = await mountDefinition(row);
-		const side = findControl(wrapper, 'USelect', 'data-testid', 'graphic-item-player-side');
-
-		expect(side !== undefined).toBe(row.playerSide);
-		if (!side)
-			return;
-
-		side.vm.$emit('update:modelValue', 'player2');
+		control(wrapper, 'USelect', 'data-testid', 'graphic-item-player-side').vm.$emit('update:modelValue', 'player2');
 		await nextTick();
+
 		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ playerSide: 'player2' });
 	});
 
-	it.each(ROWS)('offers $name Shape Geometry controls for exactly the geometry on screen', async (row) => {
-		const wrapper = await mountDefinition(row);
+	it('offers no Player to a Definition that reads none', async () => {
+		const wrapper = await mountDefinition(TEXT);
 
-		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(row.geometry !== null);
-		expect(wrapper.text().includes(WIN_BOX)).toBe(row.geometry?.title === WIN_BOX);
-		if (!row.geometry)
-			return;
-
-		await wrapper.get('[data-testid="shape-corner-topRight"] [data-treatment-option="cut"]').trigger('click');
-		await nextTick();
-		const patched = itemOf(emittedGraphics(wrapper)) as unknown as Record<string, ShapeGeometry | undefined>;
-		expect(patched[row.geometry.slot]?.topRight.treatment).toBe('cut');
+		expect(findControl(wrapper, 'USelect', 'data-testid', 'graphic-item-player-side')).toBeUndefined();
 	});
 
-	it.each(ROWS)('offers $name a surface of its own only where it can paint one', async (row) => {
+	// A win box's geometry is not the item's own bounds, so its controls are titled for what they shape.
+	it.each([
+		{ row: SHAPE, slot: 'geometry', titledWinBox: false },
+		{ row: GAME_WINS_BOXES, slot: 'boxGeometry', titledWinBox: true },
+	])('edits the Shape Geometry $row.name keeps in $slot', async ({ row, slot, titledWinBox }) => {
 		const wrapper = await mountDefinition(row);
-		const presence = findControl(wrapper, 'USwitch', 'data-testid', 'surface-style-own');
 
-		expect(presence !== undefined).toBe(row.ownSurface);
-		if (!presence) {
-			// Nor any surface control beside it: an item that paints none is offered none.
-			expect(wrapper.find('[data-testid="graphic-glow-enabled"]').exists()).toBe(false);
-			return;
-		}
+		expect(wrapper.text().includes(WIN_BOX)).toBe(titledWinBox);
+		await wrapper.get('[data-testid="shape-corner-topRight"] [data-treatment-option="cut"]').trigger('click');
+		await nextTick();
 
-		const before = placedRow(row);
-		await presence.trigger('click');
-		const patched = itemOf(emittedGraphics(wrapper));
+		const patched = itemOf(emittedGraphics(wrapper)) as unknown as Record<string, ShapeGeometry | undefined>;
+		expect(patched[slot]?.topRight.treatment).toBe('cut');
+	});
+
+	it('offers no Shape Geometry controls while a Game Wins Item renders its win count', async () => {
+		const wrapper = await mountDefinition(GAME_WINS_NUMBER);
+
+		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
+		expect(wrapper.text()).not.toContain(WIN_BOX);
+	});
+
+	it('switches a surface of its own on or off for a Definition that can paint one', async () => {
+		const wrapper = await mountDefinition(SHAPE);
+		const before = placedRow(SHAPE);
+
+		await control(wrapper, 'USwitch', 'data-testid', 'surface-style-own').trigger('click');
+
 		// The switch gives an item without a surface one, and takes one away again.
+		const patched = itemOf(emittedGraphics(wrapper));
 		expect(patched && 'surfaceStyle' in patched && patched.surfaceStyle !== undefined)
 			.toBe(!('surfaceStyle' in before && before.surfaceStyle !== undefined));
 	});
 
-	it.each(ROWS)('offers $name win box surfaces only while it renders win boxes', async (row) => {
-		for (const slot of ['boxSurfaceStyle', 'wonBoxSurfaceStyle'] as const) {
-			const wrapper = await mountDefinition(row);
-			const glow = findControl(wrapper, 'USwitch', 'data-testid', `${BOX_TEST_ID_PREFIX[slot]}-graphic-glow-enabled`);
+	it('offers no surface control to a Definition that paints no surface', async () => {
+		const wrapper = await mountDefinition(DECK_LIST);
 
-			expect(glow !== undefined, slot).toBe(row.boxSurfaces.includes(slot));
-			if (!glow)
-				continue;
+		expect(findControl(wrapper, 'USwitch', 'data-testid', 'surface-style-own')).toBeUndefined();
+		expect(wrapper.find('[data-testid="graphic-glow-enabled"]').exists()).toBe(false);
+	});
 
-			await glow.trigger('click');
+	it('gives each win box surface its own glow while a Game Wins Item renders win boxes', async () => {
+		for (const [slot, prefix] of Object.entries(BOX_SURFACE_TEST_IDS)) {
+			const wrapper = await mountDefinition(GAME_WINS_BOXES);
+
+			await control(wrapper, 'USwitch', 'data-testid', `${prefix}-graphic-glow-enabled`).trigger('click');
+
 			const patched = itemOf(emittedGraphics(wrapper)) as unknown as Record<string, GraphicSurfaceStyle>;
 			expect(patched[slot]?.glow, slot).toBeDefined();
 		}
+	});
+
+	it('offers no win box surface while a Game Wins Item renders its win count', async () => {
+		const wrapper = await mountDefinition(GAME_WINS_NUMBER);
+
+		for (const prefix of Object.values(BOX_SURFACE_TEST_IDS))
+			expect(findControl(wrapper, 'USwitch', 'data-testid', `${prefix}-graphic-glow-enabled`), prefix).toBeUndefined();
 	});
 });
 

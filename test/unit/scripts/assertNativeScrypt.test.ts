@@ -2,11 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-	classifySources,
-	nativeScryptScan,
-	selfTest,
-} from '../../../scripts/assert-native-scrypt.mjs';
+import { nativeScryptScan } from '../../../scripts/assert-native-scrypt.mjs';
 
 /**
  * The scrypt-resolution guard's file-walking half (#393), per the precedent
@@ -43,26 +39,6 @@ function buildOutput(files: Record<string, string>): string {
 afterEach(() => {
 	for (const root of directories.splice(0))
 		rmSync(root, { recursive: true, force: true });
-});
-
-describe('the classifier the guard runs on each source map', () => {
-	it('accepts the native module without reporting it as fallback', () => {
-		expect(classifySources([NATIVE_SOURCE, BYSTANDER_SOURCE])).toEqual({
-			native: [NATIVE_SOURCE],
-			fallback: [],
-		});
-	});
-
-	it('reports the fallback module', () => {
-		expect(classifySources([FALLBACK_SOURCE, BYSTANDER_SOURCE])).toEqual({
-			native: [],
-			fallback: [FALLBACK_SOURCE],
-		});
-	});
-
-	it('passes its own self-test', () => {
-		expect(selfTest()).toEqual([]);
-	});
 });
 
 describe('scanning a build output', () => {

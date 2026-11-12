@@ -281,21 +281,6 @@ describe('usePairingsModeData', () => {
 		expect(pageData.value.map(row => row.tableNumber)).toEqual([3]);
 	});
 
-	it('never writes mode config from a rendering, even with auto-page on', async () => {
-		mutableConfig.roundId = 31;
-		mutableConfig.autoPageEnabled = true;
-		mockInteractive.value = true;
-		mockFetch.mockResolvedValue(answer([
-			pairing({ matchId: 1 }),
-			pairing({ matchId: 2 }),
-		]));
-
-		makePairingsModeData();
-		await flushPromises();
-
-		expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
-	});
-
 	describe('freshness', () => {
 		// The Event, the selected Round and the Screen configuration are held
 		// constant throughout: only Event Data changes under the output.
@@ -351,89 +336,6 @@ describe('usePairingsModeData', () => {
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(3);
-		});
-
-		it('follows its own Round being renamed or re-paired, and no other', async () => {
-			await showingPendingPairings();
-
-			deliver('round:updated', {
-				round: { id: 40 },
-			});
-			deliver('round:deleted', { roundId: 40 });
-			await flushPromises();
-			expect(mockFetch).not.toHaveBeenCalled();
-
-			deliver('round:updated', {
-				round: { id: 31 },
-			});
-			await flushPromises();
-			deliver('round:matchesRefreshed', {
-				roundId: 31,
-				matchCount: 8,
-				created: 1,
-				updated: 0,
-				staleDeleted: 0,
-			});
-			await flushPromises();
-			expect(mockFetch).toHaveBeenCalledTimes(2);
-		});
-
-		// Melee Sync fills in Match Results as they are reported; Round Standings
-		// are not on the Screen.
-		it.each([
-			{
-				type: 'melee:matchResultsSynced',
-				payload: {
-					roundId: 31,
-					matchIds: [1],
-				},
-				rereads: true,
-			},
-			{
-				type: 'melee:pairingsSynced',
-				payload: { roundId: 31 },
-				rereads: true,
-			},
-			{
-				type: 'melee:roundStandingsSynced',
-				payload: { roundId: 31 },
-				rereads: false,
-			},
-		])('$type for Round $payload.roundId re-reads: $rereads', async ({ type, payload, rereads }) => {
-			const { pageData, formatResult } = await showingPendingPairings();
-			mockFetch.mockResolvedValue(answer([reported]));
-
-			deliver(type, payload);
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(rereads ? 1 : 0);
-			expect(formatResult(pageData.value[0]!)).toBe(rereads ? '2–0' : 'Pending');
-		});
-
-		it('follows a rename of a Player it shows', async () => {
-			await showingPendingPairings();
-
-			deliver('player:updated', {
-				player: { id: 8 },
-			});
-			await flushPromises();
-			deliver('player:deleted', { playerId: 7 });
-			await flushPromises();
-			expect(mockFetch).toHaveBeenCalledTimes(2);
-		});
-
-		it('shows a result missed while disconnected once its channel is attached again', async () => {
-			const { pageData, formatResult } = await showingPendingPairings();
-
-			realtime.transport.connectionState = 'disconnected';
-			await nextTick();
-			mockFetch.mockResolvedValue(answer([reported]));
-			realtime.transport.connectionState = 'connected';
-			realtime.reattach();
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(formatResult(pageData.value[0]!)).toBe('2–0');
 		});
 	});
 });

@@ -2,6 +2,7 @@ import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/t
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { settleUntil } from '~~/test/helpers/settle';
 import { useScreenStore } from '~/stores/screen';
 
 /**
@@ -182,11 +183,7 @@ async function mountOutputRoute(route: string) {
 	 * on a microtask — so this waits for the canvas the mode renders rather than
 	 * guessing at a number of ticks.
 	 */
-	for (let round = 0; round < 200 && !wrapper.find('.broadcast-graphics').exists(); round++) {
-		await flushPromises();
-		await nextTick();
-		await new Promise(resolve => setTimeout(resolve, 5));
-	}
+	await settleUntil(() => wrapper.find('.broadcast-graphics').exists());
 	await flushPromises();
 	await nextTick();
 	return wrapper;

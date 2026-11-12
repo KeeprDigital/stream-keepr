@@ -163,10 +163,12 @@ describe('a Melee sync message', () => {
 	});
 
 	// A rendering of a Screen holds no Session, so these private reads would each answer 401 (#604).
-	it.each(meleeMessages)('$sent.0 $sent.1 re-reads nothing where no operator Event is held', async ({ sent }) => {
+	it('re-reads nothing, whichever of them arrives, where no operator Event is held', async () => {
 		const { metagameVersion } = await stage({ operator: false });
 
-		await send(sent);
+		for (const { sent: [type, payload] } of meleeMessages)
+			deliver(type, payload as never, { eventId: EVENT_ID });
+		await settleUntilStill(() => reads);
 
 		expect(reads).toEqual([]);
 		expect(useMetagameStore().invalidationVersion).toBe(metagameVersion);

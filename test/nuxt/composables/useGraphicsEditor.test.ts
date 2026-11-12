@@ -11,7 +11,6 @@ import {
 	GRAPHICS_EDITOR_HOSTS,
 	OTHER_GRAPHIC_ID,
 } from '~~/test/nuxt/helpers/graphicsEditorHosts';
-import { copyGraphicStyle } from '~/modules/graphics/clipboard';
 
 /**
  * The shared graphics editor, run against every host's contract: its writes are
@@ -69,81 +68,27 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 	const SELECTED = ['a', 'b', 'c'];
 
 	describe('without the lease', () => {
-		it.each<[string, (editor: Editor, at: Editing['layer']) => void]>([
+		// Every verb writes through the one funnel, which only a lease holder passes;
+		// a checkpoint writes nothing, and has its own refusal to record a step.
+		it.each<[string, (editor: Editor) => void]>([
 			[
-				'edit',
+				'an edit',
 				editor => editor.setLayersGeometry({ x: 5 }),
 			],
 			[
-				'add a Graphic Item',
-				editor => editor.addItem('text'),
-			],
-			[
-				'remove',
-				editor => editor.remove(),
-			],
-			[
-				'paste layers',
-				editor => editor.paste(editor.copy()!),
-			],
-			[
-				'paste a style',
-				editor => editor.pasteStyle(copyGraphicStyle(host.hostId, shape('from'))),
-			],
-			[
-				'duplicate',
-				editor => editor.duplicate(),
-			],
-			[
-				'reorder',
-				(editor, at) => editor.moveToEdge(at('a'), 'front'),
-			],
-			[
-				'hide',
-				editor => editor.toggleVisible(),
-			],
-			[
-				'lock',
-				editor => editor.toggleLock(),
-			],
-			[
-				'rename',
-				(editor, at) => editor.rename(at('a'), 'Renamed'),
-			],
-			[
-				'move on the canvas',
-				(editor, at) => editor.setRect(at('a'), { x: 1, y: 2, width: 3, height: 4 }),
-			],
-			[
-				'nudge',
-				editor => editor.nudge({ x: 1, y: 0 }),
-			],
-			[
-				'record a checkpoint',
+				'a checkpoint',
 				editor => editor.checkpoint(),
 			],
-			[
-				'align',
-				editor => editor.align('right'),
-			],
-			[
-				'group',
-				(editor, at) => {
-					editor.toggleSelect(at('b'));
-					editor.group();
-				},
-			],
-			[
-				'ungroup',
-				(editor, at) => editor.ungroup(at('g')),
-			],
-		])('writes nothing on %s', async (_, verb) => {
+		])('writes nothing and records no undo step on %s', async (_, verb) => {
 			const harness = editing(false);
 
-			verb(harness.editor, harness.layer);
+			verb(harness.editor);
 			await nextTick();
-
 			expect(harness.writes).toEqual([]);
+
+			// Regaining the lease finds nothing recorded meanwhile.
+			harness.leased.value = true;
+			await nextTick();
 			expect(harness.editor.canUndo.value).toBe(false);
 		});
 

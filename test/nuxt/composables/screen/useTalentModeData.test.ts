@@ -186,23 +186,11 @@ describe('useTalentModeData', () => {
 			1,
 		],
 		[
-			'the delete of a Talent it shows',
-			'talent:deleted',
-			{ talentId: HOST },
-			1,
-		],
-		[
 			'an edit of another Talent',
 			'talent:updated',
 			{
 				talent: { id: CASTER },
 			},
-			0,
-		],
-		[
-			'the delete of another Talent',
-			'talent:deleted',
-			{ talentId: CASTER },
 			0,
 		],
 	])('re-reads on %s: %i', async (_case, type, payload, reads) => {

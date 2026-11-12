@@ -46,22 +46,6 @@ describe('phases API', () => {
 		phaseId = res._data.id;
 	});
 
-	it('rejects forged Phase provenance on create', async () => {
-		const res = await $fetchRaw(`/api/events/${eventId}/phases`, {
-			method: 'POST',
-			body: {
-				name: 'Forged Phase',
-				sortOrder: 1,
-				externalId: 'forged-phase',
-				externalSource: 'melee',
-				formatExternalId: 'forged-format',
-			},
-		});
-
-		expect(res.status).toBeGreaterThanOrEqual(400);
-		expect(res.status).toBeLessThan(500);
-	});
-
 	it('lists phases including the created one', async () => {
 		const data = await $fetch(`/api/events/${eventId}/phases`);
 
@@ -96,20 +80,6 @@ describe('phases API', () => {
 		expect(updated.name).toBe('Top 8 Draft');
 		expect(updated.externalId).toBeNull();
 		expect(updated.externalSource).toBe('manual');
-	});
-
-	it('rejects forged Phase provenance on update', async () => {
-		const res = await $fetchRaw(`/api/events/${eventId}/phases/${phaseId}`, {
-			method: 'PATCH',
-			body: {
-				name: 'Forged Update',
-				externalId: 'forged-update',
-				externalSource: 'melee',
-			},
-		});
-
-		expect(res.status).toBeGreaterThanOrEqual(400);
-		expect(res.status).toBeLessThan(500);
 	});
 
 	it('deletes a phase', async () => {

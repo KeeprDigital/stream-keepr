@@ -188,26 +188,9 @@ describe('useTopCutModeData', () => {
 			mockFetch.mockClear();
 		}
 
+		// Which message says which kind changed, and which kinds a bracket follows, is
+		// `screenOutputInterest`'s own test. These are what only its read can narrow.
 		it.each([
-			[
-				'a result reported in a Round it shows',
-				'match:updated',
-				{
-					match: { id: 102, roundId: 31 },
-				},
-			],
-			[
-				'a Match paired in a Round it shows',
-				'match:created',
-				{
-					match: { id: 103, roundId: 31 },
-				},
-			],
-			[
-				'a Match deleted from it',
-				'match:deleted',
-				{ matchId: 101 },
-			],
 			[
 				'a Match moved out of it',
 				'match:updated',
@@ -223,50 +206,12 @@ describe('useTopCutModeData', () => {
 				},
 			],
 			[
-				'a Round of it renamed',
-				'round:updated',
-				{
-					round: { id: 31, phaseId: 3 },
-				},
-			],
-			[
-				'a Round of it deleted',
-				'round:deleted',
-				{ roundId: 31 },
-			],
-			[
-				'Match Results synced from Melee in a Round it shows',
-				'melee:matchResultsSynced',
-				{
-					roundId: 31,
-					matchIds: [102],
-				},
-			],
-			[
-				'a Round it shows re-paired from Melee',
-				'melee:pairingsSynced',
-				{ roundId: 31 },
-			],
-			[
-				'its Phase renamed',
-				'phase:updated',
-				{
-					phase: { id: 3 },
-				},
-			],
-			[
-				'its Phase deleted',
-				'phase:deleted',
-				{ phaseId: 3 },
-			],
-			[
 				'an entrant renamed',
 				'player:updated',
 				{
 					player: { id: 9 },
 				},
 			],
-			['Melee\'s structure synced', 'melee:structureSynced', {}],
 		])('re-reads on %s', async (_, type, payload) => {
 			await following();
 			deliver(type, payload);
@@ -292,21 +237,11 @@ describe('useTopCutModeData', () => {
 				},
 			],
 			[
-				'an earlier Round deleted',
-				'round:deleted',
-				{ roundId: 20 },
-			],
-			[
 				'another Phase reordered',
 				'phase:updated',
 				{
 					phase: { id: 2 },
 				},
-			],
-			[
-				'another Phase deleted',
-				'phase:deleted',
-				{ phaseId: 2 },
 			],
 		] as const;
 
@@ -314,18 +249,10 @@ describe('useTopCutModeData', () => {
 		// is a Player message.
 		const archetypeChanges = [
 			[
-				'an Archetype renamed',
-				'archetype:updated',
-				{
-					archetype: { id: 5 },
-				},
-			],
-			[
 				'an Archetype deleted',
 				'archetype:deleted',
 				{ archetypeId: 5 },
 			],
-			['Melee\'s Deck Lists synced', 'melee:decklistsSynced', {}],
 		] as const;
 
 		it.each(seedChanges)('re-reads on %s, whether or not seeds show', async (_, type, payload) => {
@@ -433,39 +360,11 @@ describe('useTopCutModeData', () => {
 				},
 			],
 			[
-				'an entrant deleted',
-				1,
-				'player:deleted',
-				{ playerId: 7 },
-			],
-			[
-				'a TCG+ Import',
-				1,
-				'tcgplus:imported',
-				{ playerCount: 4, deckCount: 4 },
-			],
-			[
 				'a Player it does not seat renamed',
 				0,
 				'player:updated',
 				{
 					player: { id: 50 },
-				},
-			],
-			[
-				'a Round renamed',
-				0,
-				'round:updated',
-				{
-					round: { id: 31, phaseId: 3 },
-				},
-			],
-			[
-				'a result reported',
-				0,
-				'match:updated',
-				{
-					match: { id: 101, roundId: 31 },
 				},
 			],
 		] as const)('on %s, re-reads %i times', async (_, reads, type, payload) => {

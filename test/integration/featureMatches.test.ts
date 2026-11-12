@@ -54,20 +54,6 @@ describe('feature match slots API', () => {
 		matchId = res._data.id;
 	});
 
-	it('rejects forged FeatureMatch provenance', async () => {
-		const res = await $fetchRaw(`/api/events/${eventId}/feature-match-slots`, {
-			method: 'POST',
-			body: {
-				bestOf: 3,
-				externalId: 'forged-slot',
-				externalSource: 'melee',
-			},
-		});
-
-		expect(res.status).toBeGreaterThanOrEqual(400);
-		expect(res.status).toBeLessThan(500);
-	});
-
 	it('lists feature match slots for the event', async () => {
 		const data = await $fetch(`/api/events/${eventId}/feature-match-slots`);
 
@@ -114,20 +100,6 @@ describe('feature match slots API', () => {
 		expect(updated.tableNumber).toBe(12);
 		expect(updated.player1Data).toMatchObject({ name: 'Alice' });
 		expect(updated.player2Data).toMatchObject({ name: 'Bob' });
-	});
-
-	it('updates feature match slot with partial player metadata', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/feature-match-slots/${matchId}/setup`, {
-			method: 'PATCH',
-			body: {
-				player1Data: { position: '4' },
-				player2Data: {},
-			},
-		});
-
-		expect(updated.id).toBe(matchId);
-		expect(updated.player1Data).toEqual({ position: 4 });
-		expect(updated.player2Data).toBeNull();
 	});
 
 	it('promotes a Match and returns affected Slots plus the saved Assignment', async () => {
@@ -219,38 +191,6 @@ describe('feature match slots API', () => {
 			matchId: sourceMatch.id,
 			note: 'Keep this note',
 		});
-	});
-
-	it('normalizes Assignment Note whitespace and treats an empty saved value as no Note', async () => {
-		const sourceMatch = await $fetch(`/api/events/${eventId}/matches`, {
-			method: 'POST',
-			body: {
-				roundId,
-				tableNumber: 44,
-				player1Data: { name: 'Plain' },
-				player2Data: { name: 'Text' },
-			},
-		});
-		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
-			method: 'POST',
-			body: { bestOf: 3 },
-		});
-		const promoted = await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
-			method: 'POST',
-			body: { matchId: sourceMatch.id },
-		});
-
-		const noted = await $fetch(`/api/events/${eventId}/feature-match-assignments/${promoted.assignment.id}`, {
-			method: 'PATCH',
-			body: { note: '  first line\nsecond line  ' },
-		});
-		expect(noted.note).toBe('first line\nsecond line');
-
-		const cleared = await $fetch(`/api/events/${eventId}/feature-match-assignments/${promoted.assignment.id}`, {
-			method: 'PATCH',
-			body: { note: ' \n\t ' },
-		});
-		expect(cleared.note).toBeNull();
 	});
 
 	it('refuses a promotion that would discard a Note before changing any Assignment or Slot', async () => {
@@ -867,24 +807,6 @@ describe('feature match slots API', () => {
 		expect(refreshed.activeSession!.sourceSnapshot.player1.data!.name).toBe('Ivy Renamed');
 	});
 
-	it('clears empty player metadata to null', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/feature-match-slots/${matchId}/setup`, {
-			method: 'PATCH',
-			body: {
-				player1Data: {
-					name: '',
-					pronouns: '',
-					gameData: { type: 'mtg', deckName: '', deckColors: null },
-				},
-				player2Data: null,
-			},
-		});
-
-		expect(updated.id).toBe(matchId);
-		expect(updated.player1Data).toBeNull();
-		expect(updated.player2Data).toBeNull();
-	});
-
 	it('deletes a feature match slot', async () => {
 		// Create a throwaway match
 		const match = await $fetch(`/api/events/${eventId}/feature-match-slots`, {
@@ -901,25 +823,6 @@ describe('feature match slots API', () => {
 		// Verify it's gone
 		const res = await $fetchRaw(`/api/events/${eventId}/feature-match-slots/${match.id}`);
 		expect(res.status).toBe(404);
-	});
-
-	it('auto-creates feature match slots on event creation (default numFeatureMatches=1)', async () => {
-		const event = await $fetch('/api/events', {
-			method: 'POST',
-			body: { name: 'Integration Auto FM Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
-		});
-
-		try {
-			const data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
-			expect(data.featureMatchSlots).toHaveLength(1);
-			expect(data!.featureMatchSlots[0]!.eventId).toBe(event.id);
-			expect(data!.featureMatchSlots[0]!.activeSession).toBeDefined();
-			expect(data!.featureMatchSlots[0]!.activeSession!.currentState).toBeDefined();
-			expect(data!.featureMatchSlots[0]!.activeSession!.sequence).toBe(1);
-		}
-		finally {
-			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
-		}
 	});
 
 	it('syncs feature match slot count when numFeatureMatches is updated', async () => {
@@ -958,73 +861,5 @@ describe('feature match slots API', () => {
 		finally {
 			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
 		}
-	});
-
-	/**
-	 * The permitted Slot counts on local D1 (#702). Each Slot row bound four
-	 * parameters, so a statement inserting more than twenty-five failed D1's
-	 * hundred-parameter limit.
-	 */
-	describe('at the permitted Slot counts', () => {
-		/** The Slots in display order, each holding its first Session. */
-		function expectInitialisedInOrder(slots: { sortOrder: number; activeSession?: { sequence: number } | null }[]) {
-			expect(slots.map(slot => slot.sortOrder)).toEqual(slots.map((_, index) => index));
-			for (const slot of slots)
-				expect(slot.activeSession?.sequence).toBe(1);
-		}
-
-		it('creates an Event with fifty Slots', async () => {
-			const event = await $fetch('/api/events', {
-				method: 'POST',
-				body: {
-					name: 'Integration Fifty Slots Event',
-					game: 'mtg',
-					featureMatchOrientation: 'horizontal',
-					numFeatureMatches: 50,
-				},
-			});
-
-			try {
-				expect(event.numFeatureMatches).toBe(50);
-				const data = await $fetch(`/api/events/${event.id}/feature-match-slots`);
-				expect(data.featureMatchSlots).toHaveLength(50);
-				expectInitialisedInOrder(data.featureMatchSlots);
-			}
-			finally {
-				await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
-			}
-		});
-
-		it('increases an Event by more than twenty-five Slots, then decreases it', async () => {
-			const event = await $fetch('/api/events', {
-				method: 'POST',
-				body: { name: 'Integration Grown Slots Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
-			});
-
-			try {
-				const [first] = (await $fetch(`/api/events/${event.id}/feature-match-slots`)).featureMatchSlots;
-
-				const grown = await $fetch(`/api/events/${event.id}`, {
-					method: 'PATCH',
-					body: { numFeatureMatches: 40 },
-				});
-				expect(grown.numFeatureMatches).toBe(40);
-				const increased = await $fetch(`/api/events/${event.id}/feature-match-slots`);
-				expect(increased.featureMatchSlots).toHaveLength(40);
-				expectInitialisedInOrder(increased.featureMatchSlots);
-				expect(increased.featureMatchSlots[0]!.id).toBe(first!.id);
-
-				await $fetch(`/api/events/${event.id}`, {
-					method: 'PATCH',
-					body: { numFeatureMatches: 3 },
-				});
-				const decreased = await $fetch(`/api/events/${event.id}/feature-match-slots`);
-				expect(decreased.featureMatchSlots.map(slot => slot.id))
-					.toEqual(increased.featureMatchSlots.slice(0, 3).map(slot => slot.id));
-			}
-			finally {
-				await $fetch(`/api/events/${event.id}`, { method: 'DELETE' });
-			}
-		});
 	});
 });

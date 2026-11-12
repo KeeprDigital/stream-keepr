@@ -381,39 +381,6 @@ describe('background Screen exact Graphic Asset References', () => {
 		]);
 	});
 
-	it('rejects a newly introduced missing reference without changing configuration or usage', async () => {
-		const current = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
-		const layers = structuredClone(current!.modeConfigs!.background!.layers) as Array<Record<string, unknown>>;
-		layers.push({
-			id: 'ghost',
-			type: 'image',
-			enabled: true,
-			opacity: 1,
-			source: {
-				kind: 'asset',
-				assetId: testGraphicAssetId('missing-asset'),
-				revisionId: testGraphicAssetRevisionId('missing-revision'),
-			},
-			fit: 'cover',
-		});
-
-		await expect($fetch(
-			`/api/events/${eventId}/screens/${screenId}/config/background`,
-			{
-				method: 'PATCH',
-				body: { layers },
-			},
-		)).rejects.toMatchObject({ statusCode: 409 });
-		const unchanged = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
-		expect(unchanged!.modeConfigs!.background!.layers).toHaveLength(2);
-		await expect($fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-			{
-				headers: { cookie: graphicsAuthorCookie },
-			},
-		)).resolves.toHaveLength(1);
-	});
-
 	it('refuses a second animation layer at the write path', async () => {
 		const current = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		const layers = structuredClone(current!.modeConfigs!.background!.layers) as Array<Record<string, unknown>>;
@@ -538,57 +505,25 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 		catch {}
 	});
 
-	it('indexes a Deck List Screen’s asset-sourced layer under the `deck` mode’s own namespace', async () => {
-		await $fetch(
-			`/api/events/${eventId}/screens/${screenId}/config/deck`,
-			{
-				method: 'PATCH',
-				body: {
-					backgroundLayers: [
-						plate(),
-					],
-				},
-			},
-		);
-
-		expect(await usageSlots()).toEqual(['deck.backgroundLayers.plate.source']);
-	});
-
 	it('keeps the Deck’s row when the same Screen’s Card stack is written', async () => {
-		await $fetch(
-			`/api/events/${eventId}/screens/${screenId}/config/card`,
-			{
-				method: 'PATCH',
-				body: {
-					backgroundLayers: [
-						plate(),
-					],
+		for (const mode of ['deck', 'card']) {
+			await $fetch(
+				`/api/events/${eventId}/screens/${screenId}/config/${mode}`,
+				{
+					method: 'PATCH',
+					body: {
+						backgroundLayers: [
+							plate(),
+						],
+					},
 				},
-			},
-		);
+			);
+		}
 
 		expect(await usageSlots()).toEqual([
 			'card.backgroundLayers.plate.source',
 			'deck.backgroundLayers.plate.source',
 		]);
-	});
-
-	it('delivers the layer’s revision to the Screen’s Output while the Deck is showing', async () => {
-		const { assetCapability } = await $fetch<{ assetCapability: string }>(
-			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
-			{
-				headers: { cookie: graphicsAuthorCookie },
-			},
-		);
-
-		const response = await fetch(
-			`/api/screen-output/screens/${screenId}/assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
-			{
-				headers: { authorization: `Bearer ${assetCapability}` },
-			},
-		);
-
-		expect(response.status).toBe(200);
 	});
 
 	it('stops indexing a layer once the stack drops it', async () => {

@@ -451,10 +451,9 @@ describe('broadcastGraphicsSettings', () => {
 		const wrapper = await mountComponent();
 		await flushPromises();
 
-		// The Live workspace is rendered, carries the whole Screen stack, and its
-		// interactions work — for an operator holding no lease at all.
+		// The Live workspace is rendered and its interactions work, for an
+		// operator holding no lease at all.
 		const live = wrapper.get('[data-testid="live-workspace"]');
-		expect(wrapper.getComponent(LiveWorkspaceStub).props('graphics')).toHaveLength(2);
 		expect(wrapper.find('[data-testid="edit-lease-notice"]').exists()).toBe(false);
 
 		await live.trigger('click');

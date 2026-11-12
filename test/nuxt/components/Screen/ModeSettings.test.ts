@@ -430,21 +430,9 @@ describe('the generic settings renderer', () => {
 		].filter(path => !unusable.includes(path)).sort());
 	});
 
+	// The renderer's side of a field's condition; each condition's own cases sit with its contract
+	// (`test/unit/shared/screenModeSettingsFields.test.ts`), and the rows here are the ones only this page proves.
 	it.each([
-		{
-			mode: 'round-clock',
-			config: { countUpAfterEnd: false },
-			event: {},
-			field: 'countUpLimitMinutes',
-			shown: false,
-		},
-		{
-			mode: 'round-clock',
-			config: { countUpAfterEnd: true },
-			event: {},
-			field: 'countUpLimitMinutes',
-			shown: true,
-		},
 		{
 			mode: 'pairings',
 			config: { showHeader: false },
@@ -467,20 +455,6 @@ describe('the generic settings renderer', () => {
 			shown: false,
 		},
 		{
-			mode: 'head-to-head',
-			config: { playerSource: 'players' },
-			event: {},
-			field: 'featureMatchId',
-			shown: false,
-		},
-		{
-			mode: 'head-to-head',
-			config: {},
-			event: { pronounsEnabled: false },
-			field: 'showPronouns',
-			shown: false,
-		},
-		{
 			mode: 'feature-match',
 			config: {},
 			event: { pronounsEnabled: false },
@@ -492,13 +466,6 @@ describe('the generic settings renderer', () => {
 			config: {},
 			event: { standingsEnabled: false },
 			field: 'showRecords',
-			shown: false,
-		},
-		{
-			mode: 'feature-match',
-			config: {},
-			event: { lgsEnabled: false },
-			field: 'showLgs',
 			shown: false,
 		},
 		{
@@ -534,13 +501,6 @@ describe('the generic settings renderer', () => {
 			config: { selection: 'one' },
 			event: {},
 			field: 'talentIds',
-			shown: false,
-		},
-		{
-			mode: 'talent',
-			config: { selection: 'lineup' },
-			event: {},
-			field: 'talentId',
 			shown: false,
 		},
 		{
@@ -601,15 +561,6 @@ describe('the generic settings renderer', () => {
 			config: {},
 			event: { pointsSystem: null },
 			field: 'showHighlanderPoints',
-			shown: false,
-		},
-		{
-			mode: 'deck',
-			config: {
-				deckSource: { type: 'broadcast', broadcastDeckListId: 23 },
-			},
-			event: {},
-			field: 'showHighlanderTotal',
 			shown: false,
 		},
 	] as { mode: RenderedMode; config: Record<string, unknown>; event: Partial<DbEvent>; field: string; shown: boolean }[])(
@@ -891,7 +842,14 @@ describe('the generic settings renderer', () => {
 		expect(points.filter(point => point.attributes('disabled') !== undefined).map(point => point.attributes('data-point'))).toEqual(['center']);
 	});
 
-	it.each(RENDERED_MODES)('hands the page the %s settings\' reset and saving state', async (mode) => {
+	// One mode per settings component: the renderer itself, and each mode's own wrapping of it,
+	// which has to hand on what the renderer exposes for the page's reset to reach it.
+	it.each([
+		...new Map(RENDERED_MODES.map(mode => [
+			getScreenModeSettingsComponent(mode),
+			mode,
+		] as const)).values(),
+	])('hands the page the %s settings\' reset and saving state', async (mode) => {
 		await mountPage(mode);
 		resetConfig.mockClear();
 

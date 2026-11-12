@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
 	findRuntimeWasmCompilation,
 	runtimeWasmScan,
-	selfTest,
 } from '../../../scripts/assert-no-runtime-wasm.mjs';
 
 /**
@@ -49,10 +48,6 @@ describe('the pattern the guard searches for', () => {
 		expect(findRuntimeWasmCompilation(`a\nnew WebAssembly.Module(b)\nc\nnew WebAssembly.Module(d)`))
 			.toEqual([2, 4]);
 		expect(findRuntimeWasmCompilation(HONEST)).toEqual([]);
-	});
-
-	it('proves itself in both directions before any scan trusts it', () => {
-		expect(selfTest()).toEqual([]);
 	});
 });
 

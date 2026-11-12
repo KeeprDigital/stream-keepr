@@ -61,38 +61,6 @@ describe('matches API', () => {
 		matchId = res._data.id;
 	});
 
-	it('rejects forged Match provenance', async () => {
-		const res = await $fetchRaw(`/api/events/${eventId}/matches`, {
-			method: 'POST',
-			body: {
-				roundId,
-				tableNumber: 1,
-				externalId: 'forged-match',
-				externalSource: 'melee',
-			},
-		});
-
-		expect(res.status).toBeGreaterThanOrEqual(400);
-		expect(res.status).toBeLessThan(500);
-	});
-
-	it('rejects forged nested Player provenance', async () => {
-		const res = await $fetchRaw(`/api/events/${eventId}/matches`, {
-			method: 'POST',
-			body: {
-				roundId,
-				player1Data: {
-					name: 'Forged Player',
-					externalId: 'forged-player',
-					externalSource: 'melee',
-				},
-			},
-		});
-
-		expect(res.status).toBeGreaterThanOrEqual(400);
-		expect(res.status).toBeLessThan(500);
-	});
-
 	it('lists matches for the event', async () => {
 		const data = await $fetch(`/api/events/${eventId}/matches`);
 

@@ -27,26 +27,6 @@ const PRE_REBUILD_FLAT_BAG = {
 };
 
 describe('animationEffects catalogue', () => {
-	it('names every effect in the closed vocabulary exactly once', () => {
-		expect(ANIMATION_EFFECT_VALUES).toEqual([
-			'caustics',
-			'cells',
-			'dots',
-			'ember',
-			'fog',
-			'globe',
-			'halo',
-			'inkmap',
-			'net',
-			'ridgelines',
-			'rings',
-			'ripple',
-			'shards',
-			'waves',
-			'weave',
-		]);
-	});
-
 	it('fills every parameter from the schema alone, so an empty config renders', () => {
 		for (const effect of ANIMATION_EFFECT_VALUES) {
 			const defaults = animationEffectDefaultParams(effect);

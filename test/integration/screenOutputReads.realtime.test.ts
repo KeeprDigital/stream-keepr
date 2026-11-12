@@ -6,7 +6,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { screenRealtimeChannel } from '../../shared/utils/realtimeChannels';
 import { LOAD_TOLERANT_WAIT_MS } from '../helpers/loadTolerantBounds';
 import { $fetch, anonymousFetch } from './client';
-import { $fetchRaw } from './helpers';
 import { executeIntegrationD1 } from './integrationD1';
 import { integrationRealtimeConfigured } from './realtimeKey';
 
@@ -293,11 +292,8 @@ describe('capability-only Screen Output reads', () => {
 		interface IssuedOutputAccess { assetCapability: string; outputLink: string }
 		interface ExchangedOutputAccess { eventId: number; screenId: number; assetCapability: string }
 
-		async function issue(screenId: number, method: 'GET' | 'POST' = 'GET') {
-			return await $fetch<IssuedOutputAccess>(
-				`/api/events/${eventId}/screens/${screenId}/asset-capability`,
-				{ method },
-			);
+		async function issue(screenId: number) {
+			return await $fetch<IssuedOutputAccess>(`/api/events/${eventId}/screens/${screenId}/asset-capability`);
 		}
 
 		async function exchange(body: string | undefined, contentType = 'application/json') {
@@ -332,18 +328,6 @@ describe('capability-only Screen Output reads', () => {
 			});
 			expect((await output.read('event', exchanged.data.assetCapability)).status).toBe(200);
 			expect((await asOutput('event', exchanged.data.assetCapability)).status).toBe(404);
-		});
-
-		it('stops exchanging a link once its capability is regenerated, and exchanges the new one', async () => {
-			const output = await outputScreen('card', 'link-regenerated');
-			const before = await issue(output.screen.id);
-			const after = await issue(output.screen.id, 'POST');
-
-			expect(after.outputLink).not.toBe(before.outputLink);
-			expect((await exchange(JSON.stringify({ link: before.outputLink }))).status).toBe(404);
-			const exchanged = await exchange(JSON.stringify({ link: after.outputLink }));
-			expect(exchanged.data.assetCapability).toBe(after.assetCapability);
-			expect((await output.read('event', exchanged.data.assetCapability)).status).toBe(200);
 		});
 
 		it('refuses everything that is not a current link as a Screen Output read refuses', async () => {
@@ -984,27 +968,6 @@ describe('capability-only Screen Output reads', () => {
 			const sized = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
 			expect(sized.data.bracket.size).toBe(8);
 			expect(sized.data.bracket.columns.map(column => column.positions.length)).toEqual([4, 2, 1]);
-		});
-
-		it('refuses to name another Event\'s Phase', async () => {
-			const otherEvent = await $fetch<{ id: number }>('/api/events', {
-				method: 'POST',
-				body: { name: 'Top Cut Other Event', game: 'mtg', featureMatchOrientation: 'vertical' },
-			});
-			try {
-				const foreignPhase = await $fetch<{ id: number }>(`/api/events/${otherEvent.id}/phases`, {
-					method: 'POST',
-					body: { name: 'Foreign Top 8' },
-				});
-				const res = await $fetchRaw(`/api/events/${eventId}/screens/${screen.id}/config/top-cut`, {
-					method: 'PATCH',
-					body: { phaseId: foreignPhase.id },
-				});
-				expect(res.status).toBe(404);
-			}
-			finally {
-				await $fetch(`/api/events/${otherEvent.id}`, { method: 'DELETE' });
-			}
 		});
 	});
 });

@@ -1,7 +1,6 @@
 import type { ScreenResponse } from '~~/shared/api';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '../../shared/builtInFeatureMatchLayoutTemplates';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { createCommandHarness } from './featureMatchSessionHelpers';
 import { anotherBrowser } from './identities';
@@ -263,26 +262,6 @@ describe('graphics Authoring Leases', () => {
 		expect((await authoredStack()).map(entry => entry.id)).toEqual(['holder-stack']);
 	});
 
-	// The Feature Match Layout is the same Edit workspace; its Slot is live operation (#738).
-	it('refuses an observer\'s Feature Match Layout write, and admits their Feature Match Slot change', async () => {
-		await askForLease(browserA);
-		const patchOverlayModeConfig = (body: Record<string, unknown>, cookie: string) =>
-			request(`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`, { method: 'PATCH', body, cookie });
-
-		const layoutOf = (id: string) => BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.find(builtIn => builtIn.id === id)!.config.layout;
-
-		expect((await patchOverlayModeConfig({
-			layout: layoutOf('full-table'),
-		}, browserA)).status).toBe(200);
-		expect((await patchOverlayModeConfig({
-			layout: layoutOf('neon-feature-match'),
-		}, browserB)).status).toBe(409);
-		expect((await patchOverlayModeConfig({ featureMatchId: null }, browserB)).status).toBe(200);
-
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		expect(screen.modeConfigs?.['feature-match-overlay']?.layout).toEqual(JSON.parse(JSON.stringify(layoutOf('full-table'))));
-	});
-
 	it('lets an observer read every accepted authoring change', async () => {
 		await askForLease(browserA);
 		await patchStack(browserA, [
@@ -390,42 +369,6 @@ describe('graphics Authoring Leases', () => {
 		expect(refused.status).toBe(409);
 		expect((await authoredStack()).map(entry => entry.id)).toEqual(['holder-stack']);
 		expect((await currentScreen()).stateVersion).toBe(before.stateVersion);
-	});
-
-	it('leaves an observer\'s rename open when it carries the leased fields back unchanged', async () => {
-		// What the Edit Screen dialog sends: the name it changed, and the mode
-		// configuration exactly as it read it.
-		await askForLease(browserA);
-		await patchStack(browserA, [
-			graphic('holder-stack'),
-		]);
-		const before = await currentScreen();
-
-		const renamed = await patchScreen(browserB, {
-			name: 'Renamed While Leased',
-			modeConfigs: before.modeConfigs,
-		});
-
-		expect(renamed.status).toBe(200);
-		expect((await currentScreen()).name).toBe('Renamed While Leased');
-		expect((await authoredStack()).map(entry => entry.id)).toEqual(['holder-stack']);
-	});
-
-	it('admits the holder\'s own edit through the generic Screen write', async () => {
-		await askForLease(browserA);
-
-		const accepted = await patchScreen(browserA, {
-			modeConfigs: {
-				'broadcast-graphics': {
-					graphics: [
-						graphic('holder-generic'),
-					],
-				},
-			},
-		});
-
-		expect(accepted.status).toBe(200);
-		expect((await authoredStack()).map(entry => entry.id)).toEqual(['holder-generic']);
 	});
 
 	it('hands the artifact over on an explicit takeover and demotes the previous holder', async () => {

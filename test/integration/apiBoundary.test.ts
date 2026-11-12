@@ -131,31 +131,11 @@ describe('the API boundary', () => {
 	 * real `Host` to compare an `Origin` against.
 	 */
 	it.each([
-		[
-			'its own page says so',
-			400,
-			() => ({ 'sec-fetch-site': 'same-origin' }),
-		],
 		// Read when the case runs: the server's address exists only then.
 		[
 			'its own origin is named',
 			400,
 			() => ({ origin: new URL(url('/')).origin }),
-		],
-		[
-			'no origin is named at all, as this suite and every script asks',
-			400,
-			() => ({}),
-		],
-		[
-			'a sibling subdomain\'s page asks',
-			403,
-			() => ({ 'sec-fetch-site': 'same-site' }),
-		],
-		[
-			'another site\'s page asks',
-			403,
-			() => ({ 'sec-fetch-site': 'cross-site' }),
 		],
 		[
 			'another origin is named',

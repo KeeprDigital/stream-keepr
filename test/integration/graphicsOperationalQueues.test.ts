@@ -1,5 +1,4 @@
 import type {
-	GraphicAssetPurgeOutcome,
 	GraphicsIngestionOperation,
 	GraphicsOperationalQueuesOverview,
 	GraphicsQueueInspection,
@@ -34,7 +33,6 @@ function pngWithTextChunks(count: number) {
 }
 
 const queuesRetiredPng = pngWithTextChunks(60);
-const queuesTrashedPng = pngWithTextChunks(61);
 const queuesReferencedPng = pngWithTextChunks(62);
 
 function decodeEvidence(bytes: Uint8Array) {
@@ -249,40 +247,6 @@ describe('the Graphics Asset Library operational queues API', () => {
 		finally {
 			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' }).catch(() => {});
 		}
-	});
-
-	it('requires an explicit confirmation before an early purge', async () => {
-		const operation = await ingest('Queues trashed logo', 'queues-trashed', queuesTrashedPng);
-		const assetId = operation.result!.assetId;
-		expect(await authorLifecycleAction(assetId, 'trash')).toMatchObject({ outcome: 'trashed' });
-
-		// The queue's purge action goes to the existing fresh-proof endpoint, and
-		// that endpoint refuses anything but the exact confirmation.
-		const unconfirmed = await fetch(`/api/admin/graphics-assets/${assetId}/purge`, {
-			method: 'POST',
-			headers: { ...administratorHeaders, 'content-type': 'application/json' },
-			body: JSON.stringify({ confirmation: 'yes' }),
-		});
-		expect(unconfirmed.status).toBe(400);
-
-		const purged = await $fetch<GraphicAssetPurgeOutcome>(
-			`/api/admin/graphics-assets/${assetId}/purge`,
-			{
-				method: 'POST',
-				headers: administratorHeaders,
-				body: { confirmation: 'purge-now' },
-			},
-		);
-		expect(purged).toMatchObject({ outcome: 'purged', referenceCount: 0 });
-
-		// Purging again finds nothing left to purge; the local identity is retired
-		// permanently rather than reused.
-		const again = await fetch(`/api/admin/graphics-assets/${assetId}/purge`, {
-			method: 'POST',
-			headers: { ...administratorHeaders, 'content-type': 'application/json' },
-			body: JSON.stringify({ confirmation: 'purge-now' }),
-		});
-		expect(again.status).toBe(404);
 	});
 
 	it('reports an ingestion retry that has nothing left to resume', async () => {

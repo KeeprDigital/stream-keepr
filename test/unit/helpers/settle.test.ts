@@ -14,13 +14,34 @@ function passTheBound() {
 	vi.setSystemTime(Date.now() + LOAD_TOLERANT_WAIT_MS);
 }
 
+/**
+ * Settles on a faked clock that only the kit's own round timers move, so the
+ * settle takes as many rounds as the time it waits for, without the sleeping.
+ */
+async function onTheRoundClock(settling: () => Promise<void>) {
+	vi.useFakeTimers({
+		toFake: ['setTimeout', 'Date'],
+	});
+	const settled = settling().then(() => 'settled' as const);
+	for (;;) {
+		vi.advanceTimersToNextTimer();
+		// One real turn of the event loop, for the promises between two round timers.
+		const turned = new Promise<'turned'>(resolve => setImmediate(resolve, 'turned'));
+		if (await Promise.race([settled, turned]) === 'settled')
+			return;
+	}
+}
+
 describe('settleUntil', () => {
 	// A slow machine delays a settle, it does not end it: the bound is time, far
 	// past the half second a fixed count of rounds used to allow.
 	it('outlasts a condition slower than a second', async () => {
-		const readyAt = Date.now() + 1_200;
+		let readyAt = Number.POSITIVE_INFINITY;
 
-		await settleUntil(() => Date.now() >= readyAt);
+		await onTheRoundClock(() => {
+			readyAt = Date.now() + 1_200;
+			return settleUntil(() => Date.now() >= readyAt);
+		});
 
 		expect(Date.now()).toBeGreaterThanOrEqual(readyAt);
 	});

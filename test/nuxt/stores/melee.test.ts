@@ -1,5 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '~~/test/helpers/deferred';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 import { transportFailure } from '~~/test/helpers/transportFailure';
@@ -169,6 +169,11 @@ describe('useMeleeStore', () => {
 		mockMatchStore.loadedRoundId = null;
 		mockPlayerStore.players = [];
 		mockPlayerDeckStore.loadByEventId = vi.fn();
+	});
+
+	// A test that fails before its last line must not leave fake timers to the ones after it.
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	function setEvent(extra?: Record<string, any>) {
@@ -543,7 +548,6 @@ describe('useMeleeStore', () => {
 				warnings: [],
 			});
 			await newerSync;
-			vi.useRealTimers();
 		});
 	});
 
@@ -679,8 +683,6 @@ describe('useMeleeStore', () => {
 
 			vi.advanceTimersByTime(1500);
 			expect(store.setupStep).toBeNull();
-
-			vi.useRealTimers();
 		});
 	});
 

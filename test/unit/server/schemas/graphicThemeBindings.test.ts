@@ -1,19 +1,13 @@
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
-import type { GraphicItemConfig } from '~~/shared/types/graphics';
 import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
 import { describe, expect, it } from 'vitest';
 import { broadcastGraphicConfigSchema } from '~~/server/schemas/api/screen';
-import {
-	bindGraphicThemeOwner,
-	graphicThemeOwnerSupportsSlot,
-	graphicThemeSlotTokens,
-	resolveGraphicThemeTokens,
-} from '~~/shared/modules/graphics';
-import { GRAPHIC_THEME_SLOT_VALUES } from '~~/shared/types/graphicThemeBindings';
-import { gameWins, graphic, group, media, shape, socialIcon, text } from '~~/test/helpers/graphicsComposition';
+import { bindGraphicThemeOwner, resolveGraphicThemeTokens } from '~~/shared/modules/graphics';
+import { graphic, shape } from '~~/test/helpers/graphicsComposition';
 
 // Cross-path parity: a composite token's write bounds (`composites.ts`) sit within the
 // Screen schema's, so a binding never paints in a value a Screen write would refuse.
+// One row per bounded composite type; every item kind shares that type's one schema.
 
 const corner = { treatment: 'rounded', size: 10_000 } as const;
 const EXTREME: StoredThemeTokens = {
@@ -47,22 +41,14 @@ const EXTREME: StoredThemeTokens = {
 	},
 };
 
-const OWNERS: GraphicItemConfig[] = [
-	text('t'),
-	shape('s'),
-	group('g', []),
-	gameWins('w'),
-	media('m', { clipGeometry: shape('x').geometry }),
-	socialIcon('i'),
-];
-
-const CASES = GRAPHIC_THEME_SLOT_VALUES.flatMap(slot => OWNERS
-	.filter(owner => graphicThemeOwnerSupportsSlot(owner, slot))
-	.flatMap(owner => graphicThemeSlotTokens(slot).map(token => ({ slot, kind: owner.type, owner, token }))));
-
-describe('a Graphic Item bound to a Foundation Token', () => {
-	it.each(CASES)('stays a valid Screen write with $slot of a $kind bound to $token at its bounds', ({ slot, owner, token }) => {
-		const bound = bindGraphicThemeOwner(owner, slot as GraphicThemeSlot, token, resolveGraphicThemeTokens(EXTREME));
+describe('a Shape Graphic Item bound to a composite Foundation Token stored at its write bounds', () => {
+	it.each<[GraphicThemeSlot, string]>([
+		['surfaceStyle.fill', 'accent-fill'],
+		['surfaceStyle', 'panel'],
+		['geometry', 'panel-shape'],
+		['animation.enter', 'motion-enter'],
+	])('stays a valid Screen write with its %s bound to %s', (slot, token) => {
+		const bound = bindGraphicThemeOwner(shape('s'), slot, token, resolveGraphicThemeTokens(EXTREME));
 
 		expect(bound.themeBindings).toEqual({ [slot]: token });
 		expect(broadcastGraphicConfigSchema.safeParse(graphic('lower-third', [bound])).error?.issues).toBeUndefined();

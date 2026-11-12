@@ -303,28 +303,6 @@ describe('usePlayerHistoryModeData', () => {
 		expect(pageData.value).toHaveLength(1);
 	});
 
-	it('never writes mode config from a rendering, even with auto-page on', async () => {
-		// The persist callbacks handed to the pagination runtime fire only from
-		// setPage/nextPage/prevPage, which this composable does not expose: a
-		// rendering of a Page Rotation computes its page and writes nothing.
-		mutableConfig.playerId = 7;
-		mutableConfig.autoPageEnabled = true;
-		mockInteractive.value = true;
-		mockFetch.mockResolvedValue({
-			player: mockPlayer,
-			history: [
-				historyEntry({ id: 1 }),
-				historyEntry({ id: 2 }),
-			],
-		});
-
-		const { pageData } = makePlayerHistoryModeData();
-		await flushPromises();
-
-		expect(pageData.value).toHaveLength(2);
-		expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
-	});
-
 	it('pages rows by the configured page size and current page', async () => {
 		mutableConfig.playerId = 7;
 		mutableConfig.rowsPerPage = 2;
@@ -399,90 +377,6 @@ describe('usePlayerHistoryModeData', () => {
 			expect(formatOutcome(pageData.value[0]!)).toBe('WIN 2–0');
 		});
 
-		it('picks up a new Match for the selected Player', async () => {
-			await showingPendingHistory();
-
-			deliver('match:created', {
-				match: match({
-					id: 5,
-					roundId: 32,
-					player1Id: 3,
-					player2Id: 7,
-				}),
-			});
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-		});
-
-		it('drops a held Match that is deleted or re-paired away from the Player', async () => {
-			await showingPendingHistory();
-
-			deliver('match:deleted', { matchId: 1 });
-			await flushPromises();
-			deliver('match:updated', {
-				match: match({ player1Id: 3, player2Id: 4 }),
-			});
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(2);
-		});
-
-		it('re-reads when a held Round changes', async () => {
-			await showingPendingHistory();
-
-			deliver('round:updated', {
-				round: { id: 31 },
-			});
-			await flushPromises();
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-
-			deliver('round:matchesRefreshed', {
-				roundId: 40,
-				matchCount: 8,
-				created: 1,
-				updated: 0,
-				staleDeleted: 0,
-			});
-			await flushPromises();
-			expect(mockFetch).toHaveBeenCalledTimes(2);
-		});
-
-		// A history row names no Melee Round sync, so any synced Match Result or
-		// pairing re-reads; the history shows no Round Standings.
-		it.each([
-			{
-				type: 'melee:matchResultsSynced',
-				payload: {
-					roundId: 40,
-					matchIds: [9],
-				},
-				rereads: true,
-			},
-			{
-				type: 'melee:pairingsSynced',
-				payload: { roundId: 40 },
-				rereads: true,
-			},
-			{
-				type: 'melee:roundStandingsSynced',
-				payload: { roundId: 31 },
-				rereads: false,
-			},
-		])('$type re-reads: $rereads', async ({ type, payload, rereads }) => {
-			const { pageData, formatOutcome } = await showingPendingHistory();
-			mockFetch.mockResolvedValue({
-				player: mockPlayer,
-				history: [recorded],
-			});
-
-			deliver(type, payload);
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(rereads ? 1 : 0);
-			expect(formatOutcome(pageData.value[0]!)).toBe(rereads ? 'WIN 2–0' : 'Pending');
-		});
-
 		it('follows an edit to the selected Player\'s record or an opponent\'s', async () => {
 			const { player } = await showingPendingHistory();
 			mockFetch.mockResolvedValue({
@@ -505,23 +399,6 @@ describe('usePlayerHistoryModeData', () => {
 			deliver('player:deleted', { playerId: 7 });
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(3);
-		});
-
-		it('shows a result missed while disconnected once its channel is attached again', async () => {
-			const { pageData, formatOutcome } = await showingPendingHistory();
-
-			realtime.transport.connectionState = 'disconnected';
-			await nextTick();
-			mockFetch.mockResolvedValue({
-				player: mockPlayer,
-				history: [recorded],
-			});
-			realtime.transport.connectionState = 'connected';
-			realtime.reattach();
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(formatOutcome(pageData.value[0]!)).toBe('WIN 2–0');
 		});
 	});
 });
