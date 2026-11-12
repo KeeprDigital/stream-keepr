@@ -26,7 +26,8 @@
  */
 
 import type { Client, InStatement, ResultSet } from '@libsql/client';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
@@ -173,15 +174,6 @@ export interface SqliteD1HarnessOptions {
 export async function createSqliteD1Harness(
 	options: SqliteD1HarnessOptions = {},
 ): Promise<SqliteD1Harness> {
-	const directory = mkdtempSync(join(tmpdir(), 'stream-keepr-d1-'));
-	const client = createClient({ url: `file:${join(directory, 'catalogue.sqlite')}` });
-	await client.execute('PRAGMA foreign_keys = ON');
-	// Cascade and RESTRICT behaviour is load-bearing for the reachability and
-	// race proofs these tests make, so never let them run without it.
-	const [foreignKeys] = (await client.execute('PRAGMA foreign_keys')).rows;
-	if (Number(foreignKeys?.foreign_keys) !== 1)
-		throw new Error('SQLite foreign key enforcement could not be enabled');
-
 	const migrations = readdirSync(migrationsDirectory)
 		.filter(entry => entry.endsWith('.sql'))
 		.toSorted();
@@ -191,19 +183,82 @@ export async function createSqliteD1Harness(
 	if (heldBackFrom === 0)
 		throw new Error(`No migration matches ${options.throughMigration}`);
 
-	async function applyMigrations(entries: readonly string[]) {
-		for (const migration of entries) {
-			const contents = readFileSync(join(migrationsDirectory, migration), 'utf8');
-			for (const statement of contents.split('--> statement-breakpoint')) {
-				const trimmed = statement.trim().replace(/;$/, '');
-				if (trimmed)
-					await client.execute(trimmed);
-			}
+	const directory = mkdtempSync(join(tmpdir(), 'stream-keepr-d1-'));
+	const file = join(directory, 'catalogue.sqlite');
+	copyFileSync(await migratedTemplate(migrations.slice(0, heldBackFrom)), file);
+	const client = await openWithForeignKeys(file);
+
+	return harnessOver(client, directory, () => applyMigrations(client, migrations.slice(heldBackFrom)));
+}
+
+async function openWithForeignKeys(file: string): Promise<Client> {
+	const client = createClient({ url: `file:${file}` });
+	await client.execute('PRAGMA foreign_keys = ON');
+	// Cascade and RESTRICT behaviour is load-bearing for the reachability and
+	// race proofs these tests make, so never let them run without it.
+	const [foreignKeys] = (await client.execute('PRAGMA foreign_keys')).rows;
+	if (Number(foreignKeys?.foreign_keys) !== 1)
+		throw new Error('SQLite foreign key enforcement could not be enabled');
+	return client;
+}
+
+async function applyMigrations(client: Client, entries: readonly string[]) {
+	for (const migration of entries) {
+		const contents = readFileSync(join(migrationsDirectory, migration), 'utf8');
+		for (const statement of contents.split('--> statement-breakpoint')) {
+			const trimmed = statement.trim().replace(/;$/, '');
+			if (trimmed)
+				await client.execute(trimmed);
 		}
 	}
+}
 
-	await applyMigrations(migrations.slice(0, heldBackFrom));
+/** Bump when how a template is built changes, so no checkout reuses one built the old way. */
+const TEMPLATE_BUILD = 1;
+const templateDirectory = resolve(process.cwd(), 'node_modules/.cache/sqlite-d1-templates');
+const templates = new Map<string, Promise<string>>();
 
+/**
+ * A database file with `entries` applied, to copy rather than build: replaying
+ * every migration statement cost each harness about a tenth of a second, and
+ * most tests make one. Named by the migrations' own bytes, so an edited or new
+ * migration is a different template, and kept across runs. Built beside its
+ * final name and renamed into place, so two processes building the same
+ * template at once each leave a whole file.
+ */
+function migratedTemplate(entries: readonly string[]): Promise<string> {
+	const hash = createHash('sha256').update(`build ${TEMPLATE_BUILD}\n`);
+	for (const migration of entries)
+		hash.update(migration).update('\0').update(readFileSync(join(migrationsDirectory, migration))).update('\0');
+	const template = join(templateDirectory, `${hash.digest('hex').slice(0, 32)}.sqlite`);
+
+	let ready = templates.get(template);
+	if (!ready) {
+		ready = existsSync(template)
+			? Promise.resolve(template)
+			: buildTemplate(template, entries);
+		templates.set(template, ready);
+	}
+	return ready;
+}
+
+async function buildTemplate(template: string, entries: readonly string[]): Promise<string> {
+	mkdirSync(templateDirectory, { recursive: true });
+	const building = mkdtempSync(join(templateDirectory, 'building-'));
+	try {
+		const file = join(building, 'template.sqlite');
+		const client = await openWithForeignKeys(file);
+		await applyMigrations(client, entries);
+		client.close();
+		renameSync(file, template);
+	}
+	finally {
+		rmSync(building, { recursive: true, force: true });
+	}
+	return template;
+}
+
+function harnessOver(client: Client, directory: string, applyRemainingMigrations: () => Promise<void>): SqliteD1Harness {
 	const counter: RoundTripCounter = { count: 0 };
 	const database = {
 		prepare(sql: string) {
@@ -226,9 +281,7 @@ export async function createSqliteD1Harness(
 		database,
 		client,
 		roundTrips: () => counter.count,
-		async applyRemainingMigrations() {
-			await applyMigrations(migrations.slice(heldBackFrom));
-		},
+		applyRemainingMigrations,
 		async close() {
 			client.close();
 			rmSync(directory, { recursive: true, force: true });
