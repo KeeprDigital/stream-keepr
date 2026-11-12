@@ -84,9 +84,9 @@ function makeEntry(overrides: Partial<ArchetypePlayerEntry> = {}): ArchetypePlay
 	};
 }
 
-async function mountComponent(players: ArchetypePlayerEntry[]) {
+async function mountComponent(players: ArchetypePlayerEntry[], props: { reviewable?: boolean } = {}) {
 	return mount(PlayersTable, {
-		props: { players },
+		props: { players, ...props },
 		global: {
 			stubs: {
 				UCard: UCardStub,
@@ -114,6 +114,30 @@ describe('metagame players table', () => {
 				player,
 			],
 		]);
+	});
+
+	// On an Archetype's page a Player's deck is reassigned in Archetype Review, opened from their row.
+	it.each([
+		['offers to reassign a Player\'s deck where its table says so', true, 1],
+		['offers none elsewhere', false, 0],
+	])('%s', async (_case, reviewable, offered) => {
+		mockPlayerStore.players = [
+			makePlayer(),
+		];
+		const wrapper = await mountComponent([
+			makeEntry(),
+		], { reviewable });
+		const action = wrapper.findAll('[aria-label="Reassign deck"]');
+
+		expect(action).toHaveLength(offered);
+		await action[0]?.trigger('click');
+		expect(wrapper.emitted('reviewDeck') ?? []).toEqual(reviewable
+			? [
+					[
+						makeEntry(),
+					],
+				]
+			: []);
 	});
 
 	it('renders player text without a deck-list action until the full player is loaded', async () => {

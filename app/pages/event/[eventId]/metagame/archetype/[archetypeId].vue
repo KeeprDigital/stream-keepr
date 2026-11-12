@@ -17,6 +17,7 @@ const metagameStore = useMetagameStore();
 const metagameClient = useMetagameClient();
 const { openPlayerDeckList } = usePlayerDeckListModal();
 const { runRequest } = useRequestFeedback();
+const playerDeckStore = usePlayerDeckStore();
 const { mergeInto } = useArchetypeManagement(() => eventStore.eventId!, () => Number(route.params.archetypeId));
 
 const game = computed(() => eventStore.event?.game);
@@ -96,6 +97,15 @@ async function setActiveSection(section: string | number) {
 			tab: section,
 		},
 	});
+}
+
+/** Opens Archetype Review on the deck the Player holds in this Archetype: they can hold several. */
+function reviewDeck(player: { id: number }) {
+	const held = playerDeckStore.decks.filter(deck => deck.playerId === player.id && deck.archetypeId === archetypeId.value);
+	const deck = held.find(candidate => candidate.isPrimary) ?? held[0];
+	void navigateTo(deck
+		? `/event/${eventStore.eventId}/archetype-review?deckId=${deck.id}`
+		: `/event/${eventStore.eventId}/archetype-review`);
 }
 
 // ── Stat strip ──
@@ -293,7 +303,9 @@ watch(
 			:players="detail.players"
 			title="Players"
 			empty-message="No players in this archetype for the current scope"
+			:reviewable="isMtg"
 			@view-deck-list="openPlayerDeckList"
+			@review-deck="reviewDeck"
 		/>
 	</div>
 </template>

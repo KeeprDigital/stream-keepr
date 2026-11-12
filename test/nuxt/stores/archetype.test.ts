@@ -350,6 +350,24 @@ describe('useArchetypeStore', () => {
 			expect(store.findByNameAndColors('Control', query)).toEqual(archetype);
 		});
 
+		// Review matches a typed name as the Archetype write does: neither case nor surrounding spaces make another.
+		it.each([
+			[
+				'findByName',
+				(name: string) => store.findByName(name),
+			],
+			[
+				'findByNameAndColors',
+				(name: string) => store.findByNameAndColors(name, ['W', 'U']),
+			],
+		])('%s finds a name typed in another case, with spaces around it', (_method, find) => {
+			const archetype = createMockUiArchetype({ id: 1, name: 'Azorius Control', colors: 'WU' });
+			store.archetypes = [archetype];
+
+			expect(find('  azorius CONTROL ')).toEqual(archetype);
+			expect(find('Azorius')).toBeUndefined();
+		});
+
 		it('finds nothing when the colours differ', () => {
 			store.archetypes = [
 				createMockUiArchetype({ id: 1, name: 'Control', colors: 'WU' }),

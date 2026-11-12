@@ -10,6 +10,10 @@ const props = defineProps<{
 	matchesExistingArchetype: Archetype | null;
 	matchingArchetypeId: number | null;
 	buttonLabel: string;
+	/** A new name on a reviewed deck renames its Archetype; this offers the deck an Archetype of its own instead. */
+	canSplit: boolean;
+	/** What the save changes beyond this deck, or null. */
+	impactNote: string | null;
 	sortedArchetypes: Archetype[];
 	archetypePlayerCounts: Map<number, number>;
 	archetypeKeyCardMatches: Map<number, Set<string>>;
@@ -21,6 +25,8 @@ const emit = defineEmits<{
 	(e: 'update:nameInput', value: string): void;
 	(e: 'update:colorsInput', value: string[]): void;
 	(e: 'accept'): void;
+	(e: 'createForDeck'): void;
+	(e: 'clearAssignment'): void;
 	(e: 'chipClick', archetype: Archetype): void;
 }>();
 
@@ -77,6 +83,34 @@ const filteredArchetypes = computed(() => {
 						@click="emit('accept')"
 					>
 						{{ buttonLabel }}
+					</UButton>
+
+					<UButton
+						v-if="canSplit"
+						color="neutral"
+						variant="outline"
+						block
+						:disabled="!isNameValid || saving"
+						@click="emit('createForDeck')"
+					>
+						New archetype for this deck
+					</UButton>
+
+					<p v-if="impactNote" class="text-xs text-warning" data-impact-note>
+						{{ impactNote }}
+					</p>
+
+					<UButton
+						v-if="isEditMode"
+						color="neutral"
+						variant="ghost"
+						size="xs"
+						block
+						icon="i-lucide-eraser"
+						:disabled="saving"
+						@click="emit('clearAssignment')"
+					>
+						Clear assignment
 					</UButton>
 				</div>
 			</UCard>

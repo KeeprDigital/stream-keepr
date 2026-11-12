@@ -62,9 +62,34 @@ export function useArchetypeAssignment({
 
 	const isNameValid = computed(() => nameInput.value.trim().length > 0);
 
-	/** True if key card selection differs from what's stored on the matched archetype */
+	/** The Archetype the deck under review is reviewed as. */
+	const currentArchetype = computed(() => isEditMode.value
+		? archetypeStore.archetypes.find(archetype => archetype.id === currentEntry.value?.deck.archetypeId) ?? null
+		: null);
+
+	/**
+	 * A name no Archetype holds, typed on a deck already reviewed: accepting it
+	 * renames the deck's Archetype, for every deck it holds. Giving this deck a
+	 * new Archetype of that name instead is `createForDeck`.
+	 */
+	const renamesArchetype = computed(() => isNameValid.value && currentArchetype.value != null && existingArchetypeByName.value == null);
+
+	/** How many decks hold the deck's own Archetype, this one among them. */
+	const currentArchetypeDeckCount = computed(() => currentArchetype.value
+		? archetypePlayerCounts.value.get(currentArchetype.value.id) ?? 1
+		: 0);
+
+	/** Whether the rename can instead be a new Archetype for this deck: only while other decks would keep the old one. */
+	const canSplit = computed(() => renamesArchetype.value && currentArchetypeDeckCount.value > 1);
+
+	/** The Archetype a save writes to: the one renamed, or the one the typed name holds. */
+	const targetArchetype = computed(() => renamesArchetype.value
+		? currentArchetype.value
+		: archetypeForAssignment.value);
+
+	/** True if key card selection differs from what's stored on the Archetype the save writes to */
 	const hasKeyCardChanges = computed(() => {
-		const archetype = archetypeForAssignment.value;
+		const archetype = targetArchetype.value;
 		if (!archetype)
 			return false;
 		const stored = new Set((archetype.keyCards ?? []).map(kc => kc.name));
@@ -78,6 +103,11 @@ export function useArchetypeAssignment({
 	});
 
 	const buttonLabel = computed(() => {
+		if (renamesArchetype.value) {
+			return currentArchetypeDeckCount.value > 1
+				? `Rename for all ${currentArchetypeDeckCount.value} decks`
+				: 'Rename archetype';
+		}
 		if (!existingArchetypeByName.value)
 			return 'Create & Assign';
 		if (hasColorMismatch.value)
@@ -88,6 +118,26 @@ export function useArchetypeAssignment({
 			return 'Reassign';
 		}
 		return 'Assign';
+	});
+
+	/**
+	 * What a save changes beyond this deck: colours and key cards are the
+	 * Archetype's, so changing them changes them for every other deck it holds.
+	 * A rename says so on its button.
+	 */
+	const impactNote = computed(() => {
+		const archetype = archetypeForAssignment.value;
+		if (renamesArchetype.value || !archetype || !(hasColorMismatch.value || hasKeyCardChanges.value))
+			return null;
+		const held = archetypePlayerCounts.value.get(archetype.id) ?? 0;
+		const others = currentArchetype.value?.id === archetype.id
+			? held - 1
+			: held;
+		return others > 0
+			? `Also updates “${archetype.name}” for ${others} other ${others === 1
+				? 'deck'
+				: 'decks'}.`
+			: null;
 	});
 
 	// ── Archetype picker data ──
@@ -238,7 +288,36 @@ export function useArchetypeAssignment({
 		}
 	}
 
+	/** Accepts the typed name: renames the deck's Archetype where the name is new to a reviewed deck, else assigns. */
 	async function acceptName() {
+		await save(renamesArchetype.value ? 'rename' : 'assign');
+	}
+
+	/** Gives this deck a new Archetype of the typed name, leaving its old one to the decks that keep it. */
+	async function createForDeck() {
+		await save('assign');
+	}
+
+	/** Returns a reviewed deck to unreviewed, staying on it. Its Archetype stays, empty or not. */
+	async function clearAssignment() {
+		const entry = currentEntry.value;
+		if (!eventId.value || !entry || saving.value || !isEditMode.value)
+			return;
+		const currentEventId = eventId.value;
+		await runRequest(async () => {
+			await playerDeckStore.clearDeckReview(currentEventId, entry.player.id, entry.deck.id);
+			return true;
+		}, {
+			loadingRef: saving,
+			success: false,
+			error: ({ message }) => ({
+				title: message,
+				color: 'error',
+			}),
+		});
+	}
+
+	async function save(intent: 'rename' | 'assign') {
 		const currentEventId = eventId.value;
 		if (!currentEventId || !currentEntry.value || saving.value || !isNameValid.value)
 			return;
@@ -253,6 +332,17 @@ export function useArchetypeAssignment({
 			const colors = colorsInput.value.length > 0
 				? colorsInput.value.join('')
 				: null;
+
+			const renamed = currentArchetype.value;
+			if (intent === 'rename' && renamed) {
+				const keyCardsChanged = hasKeyCardChanges.value;
+				const updated = await archetypeStore.updateArchetype(currentEventId, renamed.id, { name, colors });
+				if (!updated)
+					throw new Error(archetypeStore.error ?? 'Failed to rename archetype');
+				if (keyCardsChanged)
+					await saveKeyCards(renamed.id);
+				return true;
+			}
 
 			const existing = matchesExistingArchetype.value;
 			if (existing) {
@@ -319,11 +409,15 @@ export function useArchetypeAssignment({
 		matchingArchetypeId,
 		isNameValid,
 		hasKeyCardChanges,
+		canSplit,
+		impactNote,
 		buttonLabel,
 		archetypeKeyCardMatches,
 		sortedArchetypes,
 		toggleKeyCard,
 		acceptName,
+		createForDeck,
+		clearAssignment,
 		assignArchetype,
 		selectArchetype,
 		handleChipClick,
