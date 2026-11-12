@@ -1,12 +1,46 @@
 import type {
 	GraphicAssetId,
 	GraphicAssetRevisionId,
+	GraphicsAssetLibraryCapacity,
 	GraphicsIngestionOperation,
 	GraphicsIngestionOperationId,
 	TemplatePackageInstallationResult,
 } from '~~/shared/types/graphicsAsset';
 import type { InstallTemplatePackageCatalogueInput } from '.';
 import { graphicsObjectIdentity } from './object-store';
+
+/**
+ * The Graphics Ingestion Operation lifecycle every pipeline runs on, whatever
+ * it publishes: Graphic Asset ingestion and Template Packages share this one
+ * interface rather than each declaring its own copy (ADR-0073).
+ *
+ * `claimGraphicsIngestion` is what keeps one active attempt per operation: it
+ * answers the operation only to the caller whose compare-and-set landed, and
+ * takes a working operation only once its last write is older than
+ * `staleBefore`. `updateIngestionOperation` commits against `expectedUpdatedAt`
+ * and answers the authoritative row.
+ */
+export interface GraphicsIngestionOperationCatalogue {
+	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
+	getIngestionOperation: (
+		operationId: GraphicsIngestionOperationId,
+		initiatedBy: string,
+	) => Promise<GraphicsIngestionOperation | undefined>;
+	updateIngestionOperation: (
+		operation: GraphicsIngestionOperation,
+		expectedUpdatedAt: string,
+	) => Promise<GraphicsIngestionOperation>;
+	claimGraphicsIngestion: (input: {
+		operation: GraphicsIngestionOperation;
+		claimedAt: string;
+		staleBefore: string;
+	}) => Promise<GraphicsIngestionOperation | undefined>;
+	recordCanonicalWrites: (input: {
+		operation: GraphicsIngestionOperation;
+		contents: readonly { digest: string; byteLength: number }[];
+		recordedAt: string;
+	}) => Promise<void>;
+}
 
 /**
  * Installation always creates a Template rather than revising one: a package
