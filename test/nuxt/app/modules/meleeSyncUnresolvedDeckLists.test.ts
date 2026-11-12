@@ -22,7 +22,15 @@ const mockPlayerStore = {
 const mockMetagameStore = {
 	applyRemoteInvalidated: vi.fn(),
 };
-const mockRunRequest = vi.fn(async (action: () => Promise<unknown>) => await action());
+/** The toast the workflow asked for once its last request succeeded. */
+let successToast: unknown;
+/** A request that succeeds unless its action fails, showing the success toast it was given. */
+async function runAndShow(action: () => Promise<unknown>, options?: { success?: (result: any) => unknown }) {
+	const result = await action();
+	successToast = options?.success?.(result);
+	return result;
+}
+const mockRunRequest = vi.fn(runAndShow);
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
@@ -68,7 +76,8 @@ describe('melee Sync unresolved Deck List module', () => {
 		mockEventRepo.listUnresolvedDeckCards.mockResolvedValue([]);
 		mockEventRepo.resolveUnresolvedDeckCard.mockResolvedValue({ success: true, message: 'Resolved card' });
 		mockPlayerStore.loadPlayersByEventId.mockResolvedValue(undefined);
-		mockRunRequest.mockImplementation(async (action: () => Promise<unknown>) => await action());
+		mockRunRequest.mockImplementation(runAndShow);
+		successToast = undefined;
 		mockFetch.mockResolvedValue({ data: [] });
 	});
 
@@ -280,10 +289,38 @@ describe('melee Sync unresolved Deck List module', () => {
 		await workflow.resolveUnresolvedDeckCard({ id: 'scryfall-1', name: 'Lightning Bolt', set: 'm11' });
 
 		expect(mockEventRepo.resolveUnresolvedDeckCard).toHaveBeenCalledWith(1, 10, { scryfallId: 'scryfall-1' });
-		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
+		expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1, { failure: 'raise' });
 		expect(mockEventRepo.listUnresolvedDeckCards).toHaveBeenCalledTimes(2);
 		expect(workflow.resolveModalOpen.value).toBe(false);
 		expect(workflow.resolvingScryfallId.value).toBeNull();
+		expect(successToast).toEqual({ title: 'Deck Card Resolved', description: 'Resolved card', color: 'success' });
+	});
+
+	// The resolution is stored, so a Players reload that fails is this browser's to
+	// report. The store raises a failed load only to a caller that asks.
+	it('says Reload Needed when the Players reload fails after the resolution is stored, and still reloads the unresolved entries', async () => {
+		mockEventRepo.listUnresolvedDeckCards
+			.mockResolvedValueOnce([
+				unresolved({ id: 10 }),
+			])
+			.mockResolvedValueOnce([]);
+		mockPlayerStore.loadPlayersByEventId.mockImplementation(async (_eventId: number, load?: { failure?: 'raise' }) => {
+			if (load?.failure === 'raise')
+				throw new Error('players offline');
+			return null;
+		});
+		const workflow = useMeleeSyncUnresolvedDeckListResolution({
+			eventId: ref(1),
+			isSetupComplete: ref(true),
+		});
+		await flushAsyncWork();
+		workflow.openResolveModal();
+
+		await workflow.resolveUnresolvedDeckCard({ id: 'scryfall-1', name: 'Lightning Bolt', set: 'm11' });
+
+		expect(successToast).toMatchObject({ title: 'Deck Card Resolved — Reload Needed', color: 'warning' });
+		expect(mockEventRepo.listUnresolvedDeckCards).toHaveBeenCalledTimes(2);
+		expect(workflow.resolveModalOpen.value).toBe(false);
 	});
 
 	it('refreshes this browser\'s Metagame pages, which its own Event message skips as self-origin (#648)', async () => {

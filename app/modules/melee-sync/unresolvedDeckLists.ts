@@ -330,7 +330,9 @@ export function useMeleeSyncUnresolvedDeckListResolution(
 			// Every other browser hears `playerDeck:cardsResolved`; this one is its
 			// origin, so it skips the message and refreshes here (#648).
 			useMetagameStore().applyRemoteInvalidated();
-			await playerStore.loadPlayersByEventId(currentEventId);
+			// The resolution is stored. A Players reload that fails is this browser's
+			// to report, not the request's: failing it would invite a second resolve.
+			const reloaded = await playerStore.loadPlayersByEventId(currentEventId, { failure: 'raise' }).then(() => true, () => false);
 			await loadUnresolvedDeckCards();
 
 			if (unresolvedDeckCardGroups.value.length === 0) {
@@ -340,13 +342,14 @@ export function useMeleeSyncUnresolvedDeckListResolution(
 				selectedUnresolvedGroupKey.value = unresolvedDeckCardGroups.value[Math.min(previousIndex, unresolvedDeckCardGroups.value.length - 1)]!.key;
 			}
 
-			return response;
+			return { ...response, reloaded };
 		}, {
-			success: response => ({
-				title: 'Deck Card Resolved',
-				description: response.message,
-				color: 'success',
-			}),
+			success: ({ message, reloaded }) => {
+				const resolved = { title: 'Deck Card Resolved', description: message };
+				return reloaded
+					? { ...resolved, color: 'success' }
+					: reloadNeededToast(resolved);
+			},
 			error: ({ message }) => ({
 				title: 'Resolution Failed',
 				description: message,

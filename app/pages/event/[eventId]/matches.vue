@@ -20,6 +20,7 @@ const playerStore = usePlayerStore();
 const router = useRouter();
 const { openPlayerDeckList } = usePlayerDeckListModal();
 const { runRequest } = useRequestFeedback();
+const { reportMeleeOperation } = useMeleeOperationFeedback();
 
 const route = useRoute();
 
@@ -205,23 +206,15 @@ async function handleSyncSelectedRound() {
 	if (!eventId.value || !selectedRound.value)
 		return;
 
-	await runRequest(
-		async () => {
-			const result = await meleeStore.syncSpecificRound(selectedRound.value!.id);
-			if (!result.success)
-				throw new Error(result.error ?? 'Failed to sync round matches');
-
+	const roundId = selectedRound.value.id;
+	await reportMeleeOperation(() => meleeStore.syncSpecificRound(roundId), {
+		onSuccess: async () => {
 			await Promise.all([
-				matchStore.loadMatchesByRoundId(eventId.value!, selectedRound.value!.id),
+				matchStore.loadMatchesByRoundId(eventId.value!, roundId),
 				roundStore.loadRoundsByEventId(eventId.value!),
 			]);
-			return true;
 		},
-		{
-			success: { title: 'Round Synced', description: `${selectedRound.value.name} matches synced`, color: 'success' },
-			error: ({ message }) => ({ title: 'Round Sync Failed', description: message, color: 'error' }),
-		},
-	);
+	});
 }
 
 async function handleAssignmentNoteBlur(assignmentId: number, note: string) {

@@ -15,6 +15,7 @@ const roundStore = useRoundStore();
 const meleeStore = useMeleeStore();
 const overlay = useOverlay();
 const { runRequest } = useRequestFeedback();
+const { reportMeleeOperation } = useMeleeOperationFeedback();
 const { refreshAfterPhaseDelete, refreshAfterRoundDelete } = useTournamentStructureRefresh();
 
 const isMeleeEvent = computed(() => !!eventStore.event?.meleeEnabled);
@@ -155,14 +156,9 @@ async function handleDeleteRound(round: Round) {
 async function handleSyncRoundMatches(round: Round) {
 	if (!eventId.value)
 		return;
-	await runRequest(
-		() => meleeStore.syncSpecificRound(round.id),
-		{
-			success: { title: 'Matches Synced', description: `Synced matches for ${round.name}`, color: 'success' },
-			error: ({ message }) => ({ title: 'Sync Failed', description: message, color: 'error' }),
-			onSuccess: async () => { await roundStore.loadRoundsByEventId(eventId.value!); },
-		},
-	);
+	await reportMeleeOperation(() => meleeStore.syncSpecificRound(round.id), {
+		onSuccess: async () => { await roundStore.loadRoundsByEventId(eventId.value!); },
+	});
 }
 
 async function handleEnableManualOverride(round: Round) {
@@ -185,10 +181,17 @@ async function handleEnableManualOverride(round: Round) {
 			method: 'POST',
 			headers: useApiHeaders().getHeaders(),
 		});
-		await roundStore.loadRoundsByEventId(eventId.value!);
-		return true;
+		// The override is stored. A Rounds reload that fails is this browser's to
+		// report, not the request's: failing it would invite a second override.
+		const reloaded = await roundStore.loadRoundsByEventId(eventId.value!, { failure: 'raise' }).then(() => true, () => false);
+		return { reloaded };
 	}, {
-		success: { title: 'Manual Override Enabled', description: `${round.name} now uses local pairings and results.`, color: 'success' },
+		success: ({ reloaded }) => {
+			const enabled = { title: 'Manual Override Enabled', description: `${round.name} now uses local pairings and results.` };
+			return reloaded
+				? { ...enabled, color: 'success' }
+				: reloadNeededToast(enabled);
+		},
 		error: ({ message }) => ({ title: 'Failed to Enable Manual Override', description: message, color: 'error' }),
 	});
 }

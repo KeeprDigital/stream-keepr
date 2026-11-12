@@ -26,6 +26,7 @@ usePlayerMatchHistoryLink(() => playerStore.players);
 const { sendToFirstDeckScreen, sendToScreen: sendDeckToScreen } = useSendDeckToScreen();
 const { sendToFirstPlayerHistoryScreen, sendToScreen: sendPlayerHistoryToScreen } = useSendPlayerHistoryToScreen();
 const { runRequest } = useRequestFeedback();
+const { reportMeleeOperation } = useMeleeOperationFeedback();
 
 // Active list tab tracking
 const activeListId = ref<number | null>(null);
@@ -251,22 +252,15 @@ async function handleSyncSelectedRound() {
 	if (!eventId.value || !selectedRound.value)
 		return;
 
-	await runRequest(
-		async () => {
-			const result = await meleeStore.syncSpecificRound(selectedRound.value!.id);
-			if (!result.success)
-				throw new Error(result.error ?? 'Failed to sync round');
+	const roundId = selectedRound.value.id;
+	await reportMeleeOperation(() => meleeStore.syncSpecificRound(roundId), {
+		onSuccess: async () => {
 			await Promise.all([
 				roundStore.loadRoundsByEventId(eventId.value!),
 				loadSelectedRoundStandings(),
 			]);
-			return true;
 		},
-		{
-			success: { title: 'Round synced', description: `${selectedRound.value.name} standings loaded`, color: 'success' },
-			error: ({ message }) => ({ title: 'Failed to sync round', description: message, color: 'error' }),
-		},
-	);
+	});
 }
 
 async function handleSendDeckToScreen(playerId: number, screenId?: number) {

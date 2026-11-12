@@ -20,6 +20,13 @@ interface LocalProjectionRefresh {
 	run: () => unknown | Promise<unknown>;
 }
 
+/**
+ * How a reload after a committed command loads Event Data: its failure is raised,
+ * for the operation to report as "Reload Needed". Left to answer `null`, a failed
+ * reload reads as one that landed, and as one something newer superseded.
+ */
+const raisingFailure = { failure: 'raise' } as const;
+
 function operationErrorMessage(error: unknown): string {
 	if (typeof error === 'string' && error.trim())
 		return error;
@@ -225,7 +232,7 @@ export const useMeleeStore = defineStore('melee', () => {
 	async function refreshLoadedMatches(eventId: number, roundIds: number[]) {
 		const loadedRoundId = matchStore.loadedRoundId;
 		if (loadedRoundId != null && roundIds.includes(loadedRoundId))
-			await matchStore.loadMatchesByRoundId(eventId, loadedRoundId);
+			await matchStore.loadMatchesByRoundId(eventId, loadedRoundId, raisingFailure);
 	}
 
 	interface MeleeOperationStepHooks<TResponse> {
@@ -385,7 +392,7 @@ export const useMeleeStore = defineStore('melee', () => {
 				},
 				{
 					label: 'players',
-					run: () => playerStore.loadPlayersByEventId(eventId),
+					run: () => playerStore.loadPlayersByEventId(eventId, raisingFailure),
 				},
 				{
 					label: 'deck lists',
@@ -393,7 +400,7 @@ export const useMeleeStore = defineStore('melee', () => {
 				},
 				{
 					label: 'event structure',
-					run: () => refreshMeleeStructureData(eventId),
+					run: () => refreshMeleeStructureData(eventId, raisingFailure),
 				},
 			],
 			isSuccess: result => result.success,
@@ -454,7 +461,7 @@ export const useMeleeStore = defineStore('melee', () => {
 				},
 				{
 					label: 'event structure',
-					run: () => refreshMeleeStructureData(eventId),
+					run: () => refreshMeleeStructureData(eventId, raisingFailure),
 				},
 			],
 			isSuccess: response => response.success,
@@ -501,11 +508,11 @@ export const useMeleeStore = defineStore('melee', () => {
 				},
 				{
 					label: 'players',
-					run: () => playerStore.loadPlayersByEventId(eventId),
+					run: () => playerStore.loadPlayersByEventId(eventId, raisingFailure),
 				},
 				{
 					label: 'feature matches',
-					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId),
+					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId, raisingFailure),
 				},
 			],
 			isSuccess: response => response.success,
@@ -561,7 +568,7 @@ export const useMeleeStore = defineStore('melee', () => {
 				},
 				{
 					label: 'players',
-					run: () => playerStore.loadPlayersByEventId(eventId),
+					run: () => playerStore.loadPlayersByEventId(eventId, raisingFailure),
 				},
 				{
 					label: 'deck lists',
@@ -569,7 +576,7 @@ export const useMeleeStore = defineStore('melee', () => {
 				},
 				{
 					label: 'feature matches',
-					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId),
+					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId, raisingFailure),
 				},
 			],
 			isSuccess: response => response.success,
@@ -640,15 +647,15 @@ export const useMeleeStore = defineStore('melee', () => {
 				},
 				{
 					label: 'players',
-					run: () => playerStore.loadPlayersByEventId(eventId),
+					run: () => playerStore.loadPlayersByEventId(eventId, raisingFailure),
 				},
 				{
 					label: 'rounds',
-					run: () => roundStore.loadRoundsByEventId(eventId),
+					run: () => roundStore.loadRoundsByEventId(eventId, raisingFailure),
 				},
 				{
 					label: 'feature matches',
-					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId),
+					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId, raisingFailure),
 				},
 				{
 					label: 'matches',
@@ -729,15 +736,15 @@ export const useMeleeStore = defineStore('melee', () => {
 				},
 				{
 					label: 'phases',
-					run: () => phaseStore.loadPhasesByEventId(eventId),
+					run: () => phaseStore.loadPhasesByEventId(eventId, raisingFailure),
 				},
 				{
 					label: 'rounds',
-					run: () => roundStore.loadRoundsByEventId(eventId),
+					run: () => roundStore.loadRoundsByEventId(eventId, raisingFailure),
 				},
 				{
 					label: 'players',
-					run: () => playerStore.loadPlayersByEventId(eventId),
+					run: () => playerStore.loadPlayersByEventId(eventId, raisingFailure),
 				},
 				{
 					label: 'deck lists',
@@ -745,7 +752,7 @@ export const useMeleeStore = defineStore('melee', () => {
 				},
 				{
 					label: 'feature matches',
-					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId),
+					run: () => featureMatchStore.loadFeatureMatchesByEventId(eventId, raisingFailure),
 				},
 			],
 			isSuccess: response => response.success,

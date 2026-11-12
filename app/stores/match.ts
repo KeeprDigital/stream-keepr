@@ -1,3 +1,4 @@
+import type { EventDataLoadOptions } from '~/modules/event-data/lifecycle';
 import type {
 	CreateMatchInput,
 	Match,
@@ -24,14 +25,14 @@ export const useMatchStore = defineStore('match', () => {
 	const isLoaded = lifecycle.isLoaded;
 	const currentEventId = lifecycle.currentEventId;
 
-	async function loadMatchesByRoundId(eventId: number, roundId: number) {
+	async function loadMatchesByRoundId(eventId: number, roundId: number, load?: EventDataLoadOptions) {
 		loadedRoundId.value = roundId;
-		return lifecycle.loadFrom(eventId, () => matchRepo.list(eventId, roundId));
+		return lifecycle.loadFrom(eventId, () => matchRepo.list(eventId, roundId), load);
 	}
 
-	async function loadMatchesByEventId(eventId: number) {
+	async function loadMatchesByEventId(eventId: number, load?: EventDataLoadOptions) {
 		loadedRoundId.value = null;
-		return lifecycle.loadByEventId(eventId);
+		return lifecycle.loadByEventId(eventId, load);
 	}
 
 	const createMatch = lifecycle.create;

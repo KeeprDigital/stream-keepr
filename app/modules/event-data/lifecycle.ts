@@ -26,6 +26,17 @@ export interface EventDataLifecycleOptions<T extends { id: number; eventId?: num
 	onReset?: () => void;
 }
 
+/**
+ * How a load answers its failure. Left out, the failure is the collection's to show:
+ * the load sets `error` and answers `null`, as a superseded load also answers `null`.
+ * `'raise'` is for a caller that reports the failure itself, such as a reload after
+ * its own committed command, and so must tell the two apart. The collection still
+ * shows the failure, and a superseded load still answers `null`, failed or not.
+ */
+export interface EventDataLoadOptions {
+	failure?: 'raise';
+}
+
 type EventDataLifecycleReset = () => void;
 
 const eventDataLifecycleResets = new Set<EventDataLifecycleReset>();
@@ -81,7 +92,7 @@ export function useEventDataLifecycle<
 	const lifetimes = createGuardedSequence();
 	let lifetime = lifetimes.begin();
 
-	async function loadFrom(eventId: number, loader: (eventId: number) => Promise<T[]>) {
+	async function loadFrom(eventId: number, loader: (eventId: number) => Promise<T[]>, { failure }: EventDataLoadOptions = {}) {
 		const generation = ++loadGeneration;
 		currentEventId.value = eventId;
 		listLoading.value = true;
@@ -104,11 +115,15 @@ export function useEventDataLifecycle<
 			return loaded;
 		}
 		catch (caughtError) {
-			if (generation === loadGeneration) {
-				error.value = caughtError instanceof Error
-					? caughtError.message
-					: `Failed to load ${options.entityLabel.toLowerCase()}`;
-			}
+			// A newer load or a reset superseded this one, so what the collection holds
+			// now is not its to speak for: it shows nothing and raises nothing.
+			if (generation !== loadGeneration)
+				return null;
+			error.value = caughtError instanceof Error
+				? caughtError.message
+				: `Failed to load ${options.entityLabel.toLowerCase()}`;
+			if (failure === 'raise')
+				throw caughtError;
 			return null;
 		}
 		finally {
@@ -127,8 +142,8 @@ export function useEventDataLifecycle<
 			: getById(item.id) ?? item);
 	}
 
-	async function loadByEventId(eventId: number) {
-		return loadFrom(eventId, options.repository.list);
+	async function loadByEventId(eventId: number, load?: EventDataLoadOptions) {
+		return loadFrom(eventId, options.repository.list, load);
 	}
 
 	async function create(eventId: number, input: TCreate) {

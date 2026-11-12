@@ -1,3 +1,4 @@
+import type { EventDataLoadOptions } from '~/modules/event-data/lifecycle';
 import type {
 	CreateFeatureMatchInput,
 	FeatureMatch,
@@ -36,8 +37,8 @@ export const useFeatureMatchStore = defineStore('featureMatch', () => {
 	const currentEventId = lifecycle.currentEventId;
 	const isLoaded = lifecycle.isLoaded;
 
-	async function loadFeatureMatchesByEventId(eventId: number) {
-		return lifecycle.loadByEventId(eventId);
+	async function loadFeatureMatchesByEventId(eventId: number, load?: EventDataLoadOptions) {
+		return lifecycle.loadByEventId(eventId, load);
 	}
 
 	/**
