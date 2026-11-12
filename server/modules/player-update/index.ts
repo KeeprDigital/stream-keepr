@@ -295,11 +295,50 @@ export function playerUpdateModule() {
 		return { deck, player };
 	}
 
+	/** Returns one reviewed Deck List to unreviewed, announced as its review is. */
+	async function clearPlayerDeckReview({
+		eventId,
+		playerId,
+		deckId,
+		originConnectionId,
+	}: Omit<ReviewPlayerDeckParams, 'archetypeId'>): Promise<ReviewPlayerDeckResult> {
+		if (await eventGame(eventId) === 'op')
+			throw createError({ statusCode: 400, statusMessage: 'A One Piece Card Game Player\'s Archetype follows their Leader, so is not reviewed' });
+
+		const cleared = await playerDeckService().clearDeckReview(eventId, playerId, deckId);
+		if (!cleared) {
+			throw createError({ statusCode: 404, statusMessage: 'Player deck not found' });
+		}
+
+		const deck = await publication.playerDeckReviewed({
+			eventId,
+			entity: cleared.deck,
+			archetype: null,
+			originConnectionId,
+		});
+		let player: PlayerResponse | null = null;
+		if (cleared.player) {
+			player = await publication.playerUpdated({
+				eventId,
+				entity: cleared.player,
+				originConnectionId,
+			});
+		}
+		await publishPlayerSnapshotUpdates({
+			eventId,
+			playerIds: [playerId],
+			originConnectionId,
+		});
+
+		return { deck, player };
+	}
+
 	return {
 		updatePlayer,
 		createPlayer,
 		deletePlayer,
 		reviewPlayerDeck,
+		clearPlayerDeckReview,
 		publishPlayerSnapshotUpdates,
 		reconcileDeckProjections,
 	};

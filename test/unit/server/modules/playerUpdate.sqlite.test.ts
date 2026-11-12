@@ -361,6 +361,72 @@ describe('reviewing a Deck List', () => {
 	});
 });
 
+describe('clearing a Deck List\'s review', () => {
+	async function stageReviewed(isPrimary: boolean) {
+		const eventId = await createEvent();
+		const archetype = await createArchetype(eventId, 'Azorius Control');
+		const player = await createPlayer(eventId);
+		const deck = await createDeck(eventId, player.id, { isPrimary, name: 'Imported Deck', colors: 'G' });
+		await playerUpdateModule().reviewPlayerDeck({
+			eventId,
+			playerId: player.id,
+			deckId: deck.id,
+			archetypeId: archetype.id,
+		});
+		vi.clearAllMocks();
+		return { eventId, archetype, player, deck };
+	}
+
+	it('returns a primary Deck List to unreviewed, the Player to its submitted deck, and keeps the Archetype', async () => {
+		const { eventId, archetype, player, deck } = await stageReviewed(true);
+
+		const result = await playerUpdateModule().clearPlayerDeckReview({
+			eventId,
+			playerId: player.id,
+			deckId: deck.id,
+			originConnectionId: 'origin-1',
+		});
+
+		const [stored] = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.id, deck.id));
+		expect(stored).toMatchObject({ archetypeId: null, reviewedAt: null });
+		expect(await readPlayer(player.id)).toMatchObject({
+			archetypeId: null,
+			gameData: expect.objectContaining({ deckName: 'Imported Deck', deckColors: 'G' }),
+		});
+		expect(result.player).toMatchObject({ archetypeId: null });
+		// An emptied MTG Archetype stays until an operator removes it (ADR-0085).
+		expect(await db.select().from(schema.archetypes).where(eq(schema.archetypes.id, archetype.id))).toHaveLength(1);
+		expect(publication.playerDeckReviewed).toHaveBeenCalledWith(expect.objectContaining({
+			entity: expect.objectContaining({ id: deck.id, archetypeId: null }),
+			originConnectionId: 'origin-1',
+		}));
+	});
+
+	it('leaves the Player\'s projection alone for a secondary Deck List', async () => {
+		const { eventId, player, deck } = await stageReviewed(false);
+
+		const result = await playerUpdateModule().clearPlayerDeckReview({ eventId, playerId: player.id, deckId: deck.id });
+
+		const [stored] = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.id, deck.id));
+		expect(stored?.reviewedAt).toBeNull();
+		expect(result.player).toBeNull();
+		expect(publication.playerUpdated).not.toHaveBeenCalled();
+	});
+
+	it('refuses a Deck List another Player submitted, leaving it reviewed', async () => {
+		const { eventId, deck } = await stageReviewed(true);
+		const other = await createPlayer(eventId);
+
+		await expect(playerUpdateModule().clearPlayerDeckReview({ eventId, playerId: other.id, deckId: deck.id }))
+			.rejects
+			.toMatchObject({ statusCode: 404 });
+
+		const [stored] = await db.select().from(schema.playerDecks).where(eq(schema.playerDecks.id, deck.id));
+		expect(stored?.reviewedAt).toBeInstanceOf(Date);
+		expect(publication.playerDeckReviewed).not.toHaveBeenCalled();
+	});
+});
+
 // The OP Deck List write owns a One Piece Player's game data and Archetype (ADR-0074).
 describe('a One Piece Card Game Player\'s Deck List reference and Archetype', () => {
 	const held = {

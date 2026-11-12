@@ -173,22 +173,18 @@ export const useArchetypeStore = defineStore('archetype', () => {
 		return archetypes.value.find(archetype => archetype.id !== renamedArchetypeId && sameArchetypeName(archetype.name, name));
 	}
 
-	/** Find an archetype by name (case-sensitive) */
+	/** The Event's Archetype of a name, ignoring case and surrounding spaces, as the write compares them. */
 	function findByName(name: string): Archetype | undefined {
-		return archetypes.value.find(a => a.name === name);
+		return findNameHolder(name);
 	}
 
-	/** Find an archetype by name and color identity (order-independent, case-sensitive) */
+	/** That Archetype, when its colour identity is also the one given, in any order. */
 	function findByNameAndColors(name: string, colors: string[]): Archetype | undefined {
-		const inputColors = [...colors].sort().join(',');
-		return archetypes.value.find((a) => {
-			if (a.name !== name)
-				return false;
-			const archetypeColors = [
-				...(a.colors ?? []),
-			].sort().join(',');
-			return archetypeColors === inputColors;
-		});
+		const archetype = findNameHolder(name);
+		const sorted = (identity: Iterable<string>) => [...identity].sort().join(',');
+		return archetype && sorted(archetype.colors ?? '') === sorted(colors)
+			? archetype
+			: undefined;
 	}
 
 	// ── Realtime Handlers ──

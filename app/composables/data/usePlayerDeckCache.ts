@@ -133,6 +133,22 @@ export function usePlayerDeckCache() {
 		}
 	}
 
+	/** A review's answer, or a cleared review's, written onto the cached deck. */
+	function applyReviewAnswer(playerId: number, deckId: number, result: PlayerDeckReviewResponse) {
+		const cachedDeck = cache.get(playerId)?.collection.decks.find(deck => deck.id === deckId);
+		if (cachedDeck) {
+			Object.assign(cachedDeck, {
+				name: result.deck.name,
+				colors: result.deck.colors,
+				submittedName: result.deck.submittedName,
+				submittedColors: result.deck.submittedColors,
+				archetypeId: result.deck.archetypeId,
+				reviewedAt: result.deck.reviewedAt,
+			});
+		}
+		return result;
+	}
+
 	async function reviewDeck(
 		eventId: number,
 		playerId: number,
@@ -146,18 +162,16 @@ export function usePlayerDeckCache() {
 				body: { archetypeId },
 			},
 		);
-		const cachedDeck = cache.get(playerId)?.collection.decks.find(deck => deck.id === deckId);
-		if (cachedDeck) {
-			Object.assign(cachedDeck, {
-				name: result.deck.name,
-				colors: result.deck.colors,
-				submittedName: result.deck.submittedName,
-				submittedColors: result.deck.submittedColors,
-				archetypeId: result.deck.archetypeId,
-				reviewedAt: result.deck.reviewedAt,
-			});
-		}
-		return result;
+		return applyReviewAnswer(playerId, deckId, result);
+	}
+
+	/** Returns a reviewed deck to unreviewed; its Archetype stays. */
+	async function clearDeckReview(eventId: number, playerId: number, deckId: number): Promise<PlayerDeckReviewResponse> {
+		const result = await $fetch<PlayerDeckReviewResponse>(
+			`/api/events/${eventId}/players/${playerId}/decks/${deckId}/review`,
+			{ method: 'DELETE' },
+		);
+		return applyReviewAnswer(playerId, deckId, result);
 	}
 
 	function applyArchetypeUpdated(archetype: Archetype) {
@@ -246,6 +260,7 @@ export function usePlayerDeckCache() {
 		getCachedDeck,
 		clearCachedDeck,
 		reviewDeck,
+		clearDeckReview,
 		applyArchetypeUpdated,
 		applyArchetypeMerged,
 		applyArchetypeDeleted,

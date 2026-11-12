@@ -79,10 +79,14 @@ const {
 	matchingArchetypeId,
 	isNameValid,
 	buttonLabel,
+	canSplit,
+	impactNote,
 	archetypeKeyCardMatches,
 	sortedArchetypes,
 	toggleKeyCard,
 	acceptName,
+	createForDeck,
+	clearAssignment,
 	handleChipClick,
 } = useArchetypeAssignment({
 	currentEntry,
@@ -157,6 +161,8 @@ const {
 				:matches-existing-archetype="matchesExistingArchetype"
 				:matching-archetype-id="matchingArchetypeId"
 				:button-label="buttonLabel"
+				:can-split="canSplit"
+				:impact-note="impactNote"
 				:sorted-archetypes="sortedArchetypes"
 				:archetype-player-counts="archetypePlayerCounts"
 				:archetype-key-card-matches="archetypeKeyCardMatches"
@@ -164,6 +170,8 @@ const {
 				@update:name-input="nameInput = $event"
 				@update:colors-input="colorsInput = $event"
 				@accept="acceptName"
+				@create-for-deck="createForDeck"
+				@clear-assignment="clearAssignment"
 				@chip-click="handleChipClick"
 			/>
 		</div>

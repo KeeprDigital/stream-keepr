@@ -1,5 +1,5 @@
 import type { MessagePayload } from '~~/shared/types/messages';
-import type { PlayerDeckSummaryResponse } from '~~/shared/types/metagame';
+import type { PlayerDeckReviewResponse, PlayerDeckSummaryResponse } from '~~/shared/types/metagame';
 import type { Archetype } from '~/types';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 
@@ -56,9 +56,8 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 		}
 	}
 
-	async function reviewDeck(eventId: number, playerId: number, deckId: number, archetypeId: number) {
-		const flight = lifetime;
-		const result = await deckCache.reviewDeck(eventId, playerId, deckId, archetypeId);
+	/** Holds a review's answer, or a cleared review's, and follows up on what a deck's Archetype touches. */
+	async function holdReviewAnswer(eventId: number, deckId: number, result: PlayerDeckReviewResponse, flight: { stale: boolean }) {
 		if (flight.stale)
 			return result;
 		const deckIndex = decks.value.findIndex(deck => deck.id === deckId);
@@ -75,6 +74,17 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 			useFeatureMatchStore().loadFeatureMatchesByEventId(eventId),
 		]);
 		return result;
+	}
+
+	async function reviewDeck(eventId: number, playerId: number, deckId: number, archetypeId: number) {
+		const flight = lifetime;
+		return holdReviewAnswer(eventId, deckId, await deckCache.reviewDeck(eventId, playerId, deckId, archetypeId), flight);
+	}
+
+	/** Returns a reviewed deck to unreviewed; its Archetype stays. */
+	async function clearDeckReview(eventId: number, playerId: number, deckId: number) {
+		const flight = lifetime;
+		return holdReviewAnswer(eventId, deckId, await deckCache.clearDeckReview(eventId, playerId, deckId), flight);
 	}
 
 	function applyRemoteReviewed(data: { deck: PlayerDeckSummaryResponse }) {
@@ -166,6 +176,7 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 		isLoaded,
 		loadByEventId,
 		reviewDeck,
+		clearDeckReview,
 		applyRemoteReviewed,
 		applyRemoteCardsResolved,
 		applyArchetypeUpdated,

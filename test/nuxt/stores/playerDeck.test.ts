@@ -11,6 +11,7 @@ const mockReviewDeck = vi.fn();
 const mockApplyArchetypeUpdated = vi.fn();
 const mockApplyArchetypeDeleted = vi.fn();
 const mockApplyArchetypeMerged = vi.fn();
+const mockClearDeckReview = vi.fn();
 const mockApplyReviewedDeck = vi.fn();
 const mockClearCachedDeck = vi.fn();
 const mockPlayerStore = reactive({ players: [] as any[] });
@@ -26,6 +27,7 @@ mockNuxtImport('useApiHeaders', () => () => ({
 }));
 mockNuxtImport('usePlayerDeckCache', () => () => ({
 	reviewDeck: mockReviewDeck,
+	clearDeckReview: mockClearDeckReview,
 	applyArchetypeUpdated: mockApplyArchetypeUpdated,
 	applyArchetypeDeleted: mockApplyArchetypeDeleted,
 	applyArchetypeMerged: mockApplyArchetypeMerged,
@@ -238,6 +240,32 @@ describe('usePlayerDeckStore', () => {
 			gameData: { type: 'mtg', deckName: 'Reviewed Control', deckColors: 'WU' },
 		});
 		expect(mockApplyArchetypeUpdated).toHaveBeenCalledOnce();
+	});
+
+	it('clears a deck\'s review, returning it and its Player to the submitted deck, and follows up as a review does', async () => {
+		const cleared = deck({ archetypeId: null, reviewedAt: null });
+		const player = { id: 2, archetypeId: 5 };
+		mockPlayerStore.players = [player];
+		mockClearDeckReview.mockResolvedValue({
+			deck: cleared,
+			player: { id: 2, archetypeId: null },
+		});
+		const store = usePlayerDeckStore();
+		store.decks = [
+			deck({
+				archetypeId: 5,
+				reviewedAt: new Date(),
+				name: 'Reviewed Control',
+			}),
+		] as any;
+
+		await store.clearDeckReview(1, 2, 10);
+
+		expect(mockClearDeckReview).toHaveBeenCalledWith(1, 2, 10);
+		expect(store.decks).toEqual([cleared]);
+		expect(player.archetypeId).toBeNull();
+		expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
+		expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
 	});
 
 	it('moves a merged Archetype\'s decks to its survivor, still reviewed, everywhere', () => {

@@ -804,6 +804,37 @@ export function playerDeckService() {
 		return { deck, player };
 	};
 
+	/**
+	 * Returns one reviewed deck to unreviewed, and a primary deck's Player to
+	 * their submitted deck. The Archetype it held is left as it is.
+	 */
+	const clearDeckReview = async (
+		eventId: number,
+		playerId: number,
+		deckId: number,
+	): Promise<{ deck: DbPlayerDeck; player: DbPlayer | null } | null> => {
+		const [deck] = await db
+			.update(playerDecks)
+			.set({
+				archetypeId: null,
+				reviewedAt: null,
+				updatedAt: new Date(),
+			})
+			.where(and(
+				eq(playerDecks.id, deckId),
+				eq(playerDecks.eventId, eventId),
+				eq(playerDecks.playerId, playerId),
+			))
+			.returning();
+		if (!deck)
+			return null;
+
+		const player = deck.isPrimary
+			? await reconcilePrimaryArchetype(eventId, playerId)
+			: null;
+		return { deck, player };
+	};
+
 	const getFormatExternalIdForSelection = async (
 		eventId: number,
 		selection: PlayerDeckSelection,
@@ -880,6 +911,7 @@ export function playerDeckService() {
 		listPrimaryPlayerIdsByArchetype,
 		buildClearReviewsByArchetypeQuery,
 		buildMoveReviewsQuery,
+		clearDeckReview,
 		reviewDeck,
 		selectFromDecks,
 		findManyByIds,

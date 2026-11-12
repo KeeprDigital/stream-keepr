@@ -259,6 +259,41 @@ describe('usePlayerDeckCache', () => {
 		});
 	});
 
+	it('clears a cached deck\'s review with the server\'s answer', async () => {
+		const reviewedAt = new Date('2026-01-01').toISOString() as never;
+		mockFetch.mockResolvedValueOnce(collection([
+			deck({
+				archetypeId: 5,
+				reviewedAt,
+				name: 'Burn',
+				colors: 'R',
+			}),
+		]));
+		const cache = usePlayerDeckCache();
+		const player = createMockPlayer({ id: 1 });
+		await cache.fetchDeck(player.id, 1, player.updatedAt);
+		mockFetch.mockResolvedValueOnce({
+			deck: {
+				...deck(),
+				archetypeId: null,
+				reviewedAt: null,
+			},
+			player: null,
+		});
+
+		await cache.clearDeckReview(1, 1, 10);
+
+		expect(mockFetch).toHaveBeenLastCalledWith('/api/events/1/players/1/decks/10/review', { method: 'DELETE' });
+		expect(cache.getDeckLists(player as never)).toMatchObject([
+			{
+				deckId: 10,
+				name: 'Main Deck',
+				colors: 'UR',
+				reviewed: false,
+			},
+		]);
+	});
+
 	it('moves a merged Archetype\'s cached decks to its survivor, still reviewed', async () => {
 		const reviewedAt = new Date('2026-01-01').toISOString() as never;
 		mockFetch.mockResolvedValue(collection([

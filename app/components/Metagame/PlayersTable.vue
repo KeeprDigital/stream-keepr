@@ -13,10 +13,14 @@ const props = defineProps<{
 	showDeckName?: boolean;
 	/** Show copies column — pass for card context */
 	showCopies?: boolean;
+	/** Offer each row a reassignment of the Player's deck, on an Archetype's page. */
+	reviewable?: boolean;
 }>();
 
 const emit = defineEmits<{
 	viewDeckList: [player: Player];
+	/** The operator asked to reassign this Player's deck in Archetype Review. */
+	reviewDeck: [player: AnyPlayer];
 }>();
 
 const playerStore = usePlayerStore();
@@ -145,6 +149,16 @@ const columns = computed<TableColumn<AnyPlayer>[]>(() => [
 				</span>
 			</template>
 			<template #deckList-cell="{ row }">
+				<UButton
+					v-if="reviewable"
+					icon="i-lucide-list-checks"
+					color="neutral"
+					variant="ghost"
+					size="xs"
+					aria-label="Reassign deck"
+					title="Reassign this deck in Archetype Review"
+					@click="emit('reviewDeck', row.original)"
+				/>
 				<UButton
 					v-if="resolvePlayer(row.original)"
 					icon="i-lucide-list"

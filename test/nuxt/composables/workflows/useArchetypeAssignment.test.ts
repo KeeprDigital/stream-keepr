@@ -1,10 +1,11 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 
 // ── Mock stores ──
 
 const mockReviewDeck = vi.fn();
+const mockClearDeckReview = vi.fn();
 const mockCreateArchetype = vi.fn();
 const mockUpdateArchetype = vi.fn();
 const mockLoadByEventId = vi.fn();
@@ -31,7 +32,7 @@ const mockPlayerStore = reactive({
 
 mockNuxtImport('useArchetypeStore', () => () => mockArchetypeStore);
 mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
-mockNuxtImport('usePlayerDeckStore', () => () => ({ reviewDeck: mockReviewDeck }));
+mockNuxtImport('usePlayerDeckStore', () => () => ({ reviewDeck: mockReviewDeck, clearDeckReview: mockClearDeckReview }));
 mockNuxtImport('useToast', () => () => mockToast);
 
 // ── Mock $fetch for key card PATCH ──
@@ -166,6 +167,177 @@ describe('useArchetypeAssignment', () => {
 		mockLoadByEventId.mockResolvedValue(undefined);
 		mockSetKeyCards.mockResolvedValue([]);
 		mockFetch.mockResolvedValue({});
+	});
+
+	// A rename changes the Archetype for every deck it holds; a reassignment moves this deck alone.
+	describe('a new name on a deck already reviewed', () => {
+		const BURN = makeArchetype({ id: 5, name: 'Burn', colors: 'R' });
+
+		function reviewedAsBurn(deckCount: number) {
+			mockArchetypeStore.archetypes = [BURN];
+			mockUpdateArchetype.mockResolvedValue({ ...BURN, name: 'Boros Burn' });
+			const opts = makeOptions(
+				makeEntry({
+					playerId: 10,
+					archetypeId: 5,
+					deckReviewed: true,
+					deckName: 'Burn',
+					deckColors: 'R',
+				}),
+				undefined,
+				new Map([
+					[5, deckCount],
+				]),
+			);
+			const assignment = useArchetypeAssignment(opts);
+			assignment.nameInput.value = 'Boros Burn';
+			return assignment;
+		}
+
+		it.each([
+			[
+				'says how many decks the rename reaches, and offers this deck an Archetype of its own',
+				3,
+				'Rename for all 3 decks',
+				true,
+			],
+			[
+				'offers the rename alone for an Archetype\'s only deck',
+				1,
+				'Rename archetype',
+				false,
+			],
+		])('%s', (_case, deckCount, label, canSplit) => {
+			const assignment = reviewedAsBurn(deckCount);
+
+			expect(assignment.buttonLabel.value).toBe(label);
+			expect(assignment.canSplit.value).toBe(canSplit);
+		});
+
+		it('renames the Archetype, reviewing no deck and creating none', async () => {
+			const assignment = reviewedAsBurn(3);
+
+			await assignment.acceptName();
+
+			expect(mockUpdateArchetype).toHaveBeenCalledWith(1, 5, { name: 'Boros Burn', colors: 'R' });
+			expect(mockCreateArchetype).not.toHaveBeenCalled();
+			expect(mockReviewDeck).not.toHaveBeenCalled();
+		});
+
+		it('makes a new Archetype for this deck alone when asked, leaving the old one its name', async () => {
+			mockCreateArchetype.mockResolvedValue(makeArchetype({ id: 9, name: 'Boros Burn', colors: 'R' }));
+			const assignment = reviewedAsBurn(3);
+
+			await assignment.createForDeck();
+
+			expect(mockCreateArchetype).toHaveBeenCalledWith(1, { name: 'Boros Burn', colors: 'R' });
+			expect(mockReviewDeck).toHaveBeenCalledWith(1, 10, 1, 9);
+			expect(mockUpdateArchetype).not.toHaveBeenCalled();
+		});
+	});
+
+	// Colours and key cards belong to the Archetype: changing them while assigning one deck changes them for all.
+	describe('saying what else a save changes', () => {
+		const CONTROL = makeArchetype({
+			id: 5,
+			name: 'Control',
+			colors: 'WU',
+			keyCards: [
+				makeKeyCard('Counterspell', 1),
+			],
+		});
+
+		it.each([
+			[
+				'new colours, for an Archetype other decks hold',
+				{ archetypeId: null },
+				['U', 'B'],
+				['Counterspell'],
+				3,
+				'Also updates “Control” for 3 other decks.',
+			],
+			[
+				'new key cards, counting the other decks of the deck\'s own Archetype',
+				{ archetypeId: 5, deckReviewed: true },
+				['W', 'U'],
+				['Counterspell', 'Opt'],
+				3,
+				'Also updates “Control” for 2 other decks.',
+			],
+			[
+				'one other deck',
+				{ archetypeId: null },
+				['U', 'B'],
+				['Counterspell'],
+				1,
+				'Also updates “Control” for 1 other deck.',
+			],
+			[
+				'nothing, when colours and key cards are the Archetype\'s',
+				{ archetypeId: null },
+				['W', 'U'],
+				['Counterspell'],
+				3,
+				null,
+			],
+			[
+				'nothing, when no other deck holds the Archetype',
+				{ archetypeId: 5, deckReviewed: true },
+				['U', 'B'],
+				['Counterspell'],
+				1,
+				null,
+			],
+		])('names %s', async (_case, entry, colors, keyCards, deckCount, note) => {
+			mockArchetypeStore.archetypes = [CONTROL];
+			mockFindByName.mockReturnValue(CONTROL);
+			mockFindByNameAndColors.mockImplementation((_name: string, typed: string[]) => [...typed].sort().join('') === 'UW'
+				? CONTROL
+				: undefined);
+			const assignment = useArchetypeAssignment(makeOptions(
+				makeEntry({
+					playerId: 10,
+					deckName: 'Control',
+					deckColors: 'WU',
+					...entry,
+				}),
+				undefined,
+				new Map([
+					[5, deckCount],
+				]),
+			));
+			await nextTick();
+
+			assignment.colorsInput.value = colors;
+			assignment.selectedKeyCards.value = new Set(keyCards);
+
+			expect(assignment.impactNote.value).toBe(note);
+		});
+	});
+
+	describe('clearing an assignment', () => {
+		it('returns a reviewed deck to unreviewed and stays on it', async () => {
+			const advance = vi.fn();
+			const assignment = useArchetypeAssignment(makeOptions(makeEntry({
+				playerId: 10,
+				deckId: 4,
+				archetypeId: 5,
+				deckReviewed: true,
+			}), advance));
+
+			await assignment.clearAssignment();
+
+			expect(mockClearDeckReview).toHaveBeenCalledWith(1, 10, 4);
+			expect(advance).not.toHaveBeenCalled();
+		});
+
+		it('does nothing for a deck not yet reviewed', async () => {
+			const assignment = useArchetypeAssignment(makeOptions(makeEntry({ playerId: 10, deckId: 4 })));
+
+			await assignment.clearAssignment();
+
+			expect(mockClearDeckReview).not.toHaveBeenCalled();
+		});
 	});
 
 	// ── acceptName — existing archetype ──

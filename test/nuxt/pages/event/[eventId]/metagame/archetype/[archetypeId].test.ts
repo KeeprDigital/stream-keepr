@@ -60,6 +60,10 @@ mockNuxtImport('usePlayerStore', () => () => reactive({
 	isLoaded: true,
 	loadPlayersByEventId: vi.fn(),
 }));
+const { navigateTo } = vi.hoisted(() => ({
+	navigateTo: vi.fn(),
+}));
+mockNuxtImport('navigateTo', () => navigateTo);
 mockNuxtImport('useToast', () => () => ({
 	add: vi.fn(),
 }));
@@ -167,5 +171,39 @@ describe('archetype metagame detail page', () => {
 		expect(wrapper.findComponent({ name: 'MetagameArchetypeActions' }).exists()).toBe(managed);
 		wrapper.unmount();
 		mockEventStore.event.game = 'mtg';
+	});
+
+	// A Player can hold several Deck Lists: the one reviewed as this Archetype is the one reassigned.
+	it('opens Archetype Review on the deck a Player holds in this Archetype', async () => {
+		const wrapper = await mountPage();
+		await flushPromises();
+		// The route names Archetype 7.
+		usePlayerDeckStore().decks = [
+			{
+				id: 40,
+				playerId: 5,
+				archetypeId: 2,
+				isPrimary: true,
+			},
+			{
+				id: 41,
+				playerId: 5,
+				archetypeId: 7,
+				isPrimary: false,
+			},
+			{
+				id: 42,
+				playerId: 6,
+				archetypeId: 7,
+				isPrimary: true,
+			},
+		] as never;
+		const table = wrapper.findComponent({ name: 'MetagamePlayersTable' });
+
+		expect(table.props('reviewable')).toBe(true);
+		table.vm.$emit('reviewDeck', { id: 5 });
+
+		expect(navigateTo).toHaveBeenCalledWith('/event/99/archetype-review?deckId=41');
+		wrapper.unmount();
 	});
 });
