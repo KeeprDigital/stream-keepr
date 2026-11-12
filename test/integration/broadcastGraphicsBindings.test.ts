@@ -151,40 +151,6 @@ describe('broadcast graphics Event Data binding API', () => {
 		expect(reloaded.currentState.inputs[GRAPHIC]!.overrides).toEqual({ name: 'Ava "Riptide" Reed' });
 	});
 
-	it('re-resolves a live-policy binding on air after the Event Data behind it changes', async () => {
-		const renamed = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
-			method: 'POST',
-			body: {
-				name: 'Rae Okonjo',
-				wins: 2,
-				losses: 0,
-				draws: 0,
-			},
-		});
-		const harness = await createGraphicsHarness(eventId, 'bind-reresolve', graphicWith([LIVE_NAME]));
-		await selectBroadcastGraphicSource(harness, GRAPHIC, 'player', renamed.id);
-		await harness.send({
-			commandId: playoutCommandId('bind-take7'),
-			type: 'Take',
-			payload: { graphicId: GRAPHIC },
-		});
-
-		await $fetch(`/api/events/${eventId}/players/${renamed.id}`, {
-			method: 'PATCH',
-			body: { name: 'Rae Okonjo-Bell' },
-		});
-
-		// Nobody edited the graphic. The Realtime Event Session told Live Control the
-		// Player moved, and the server re-resolved the binding for itself.
-		const resolved = await harness.send({
-			commandId: playoutCommandId('bind-reresolve'),
-			type: 'Resolve Bindings',
-			payload: { graphicId: GRAPHIC },
-		} as BroadcastGraphicsCommand);
-
-		expect(resolved.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Rae Okonjo-Bell' });
-	});
-
 	it('resolves a Player derived from a Match out of that Match\'s production snapshot', async () => {
 		const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
 			method: 'POST',

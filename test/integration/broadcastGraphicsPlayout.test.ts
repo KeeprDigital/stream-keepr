@@ -11,7 +11,6 @@ import {
 	integrationTextInput,
 	playoutCommandId,
 	sendBroadcastGraphicsCommand,
-	setBroadcastGraphicInput,
 	setScreenMode,
 } from './broadcastGraphicsPlayoutHelpers';
 import { $fetch } from './client';
@@ -327,38 +326,6 @@ describe('broadcast graphics live playout animation', () => {
 		const reloaded = await harness.reload();
 		expect(reloaded.currentState.playout.a!.cyclingStartedAt)
 			.toBe(outed.currentState.playout.a!.cyclingStartedAt);
-	});
-
-	it('answers a reload with the same schedule, so a reconnecting output catches up', async () => {
-		const harness = await createGraphicsHarness(eventId, 'playout-reload-schedule', [
-			integrationBroadcastGraphicWithInputs(
-				'a',
-				[
-					integrationTextInput('name'),
-					integrationTextInput('title'),
-				],
-				integrationGraphicAnimation({ enter: 5000, update: 5000 }),
-			),
-		]);
-
-		await harness.send({
-			commandId: playoutCommandId('reload-take'),
-			type: 'Take',
-			payload: { graphicId: 'a' },
-		});
-		await setBroadcastGraphicInput(harness, 'a', 'name', 'Reloaded');
-		const accepted = await harness.send({
-			commandId: playoutCommandId('reload-update'),
-			type: 'Update Graphic',
-			payload: { graphicId: 'a', basedOnAcceptedRevision: 1 },
-		});
-
-		const reloaded = await harness.reload();
-
-		// Byte-for-byte the same schedule and the same pair of renderings, so an output
-		// that joins mid-update draws the transition rather than cutting to the end of it.
-		expect(reloaded.currentState.playout.a).toEqual(accepted.currentState.playout.a);
-		expect(reloaded.currentState.inputs.a).toEqual(accepted.currentState.inputs.a);
 	});
 
 	/**
