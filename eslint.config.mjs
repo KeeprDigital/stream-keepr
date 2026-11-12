@@ -23,6 +23,44 @@ const testSyntax = [
 		selector: 'CallExpression[callee.object.name=\'vi\'][callee.property.name=\'mock\'] > Literal[value=/^(?:drizzle-orm|~~\\/server\\/db\\/schema)$/]',
 		message: 'Run persistence on createSqliteD1Harness rather than mocking Drizzle or the schema.',
 	},
+	{
+		selector: 'CallExpression[callee.property.name=/^to(?:Be|Equal|StrictEqual)$/][callee.object.callee.name=\'expect\'][callee.object.arguments.0.name=/^[A-Z][A-Z\\d_]*$/][arguments.0.type=\'Literal\']',
+		message: 'Assert what the constant decides, not the value its declaration already states.',
+	},
+	{
+		// Anywhere in the file: an afterEach, a `finally`, or an afterAll for a file faked throughout.
+		selector: 'Program:not(:has(CallExpression[callee.object.name=\'vi\'][callee.property.name=\'useRealTimers\'])) CallExpression[callee.object.name=\'vi\'][callee.property.name=\'useFakeTimers\']',
+		message: 'Restore real timers (`vi.useRealTimers()`) in the file that fakes them, or the next test inherits the fake clock.',
+	},
+];
+// A server module or route test runs its own services on real rows. A stand-in is for a port:
+// realtime publication and the binding refresh it triggers, the Graphics Asset Library and
+// Screen Output capability runtimes (object storage, signing key), Melee and the card provider.
+const ownServiceMockSyntax = [
+	{
+		selector: 'CallExpression[callee.object.name=\'vi\'][callee.property.name=\'mock\'] > Literal[value=/^~~\\/server\\/(?:services|modules)\\//]:not([value=/^~~\\/server\\/(?:modules\\/(?:broadcast-graphics-live-session|event-data-publication|graphics-asset-library\\/runtime|screen-output-assets\\/(?:runtime|capability|authorizer))|services\\/(?:melee|meleeIntegration|importedMtgCardResolver))$/])',
+		message: 'Run the module\'s own services on createSqliteD1Harness; stand in only for a port (the list is in eslint.config.mjs).',
+	},
+];
+// Force a failure only a stand-in can force: a stage that throws mid-command, a lost lease, a keyring fault.
+const forcedFailureTests = [
+	'test/unit/server/modules/meleeSyncCommand.test.ts',
+	'test/unit/server/modules/meleeSyncWorkflows.test.ts',
+	'test/unit/server/api/**/melee-config.put.test.ts',
+];
+// Still on a stand-in for a D1-backed service, each asserting an outcome (#1119). The list only shrinks.
+const serviceMockTestsToRehome = [
+	'test/unit/server/modules/broadcastDeckListWrite.test.ts',
+	'test/unit/server/modules/eventDataPublication.test.ts',
+	'test/unit/server/api/events/index.post.test.ts',
+	'test/unit/server/api/events/*/index.get.test.ts',
+	'test/unit/server/api/events/*/melee-config.get.test.ts',
+	'test/unit/server/api/events/*/broadcast-deck-lists/routes.test.ts',
+	'test/unit/server/api/events/*/melee/unresolved-deck-cards/*.put.test.ts',
+	'test/unit/server/api/events/*/screens/*/command.post.test.ts',
+	'test/unit/server/api/realtime/token.get.test.ts',
+	'test/unit/server/api/screen-output/broadcastDeckList.test.ts',
+	'test/unit/server/api/screen-output/screenBySlug.test.ts',
 ];
 // Unit and Nuxt bounds are hang detectors, set once in test/helpers/loadTolerantBounds.ts
 // (README § Testing). A number written on one test, hook or wait can only undercut them.
@@ -192,6 +230,21 @@ export default withNuxt(
 				'error',
 				...testSyntax,
 				...explicitBoundSyntax,
+			],
+		},
+	},
+	{
+		files: ['test/unit/server/{modules,api}/**/*.ts'],
+		ignores: [
+			...forcedFailureTests,
+			...serviceMockTestsToRehome,
+		],
+		rules: {
+			'no-restricted-syntax': [
+				'error',
+				...testSyntax,
+				...explicitBoundSyntax,
+				...ownServiceMockSyntax,
 			],
 		},
 	},
