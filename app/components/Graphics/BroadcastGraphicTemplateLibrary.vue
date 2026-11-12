@@ -26,7 +26,12 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
  *
  * Browsing, revising, deleting, and receiving a Template Package are the same in this
  * library and in the Feature Match Layout Template library, because a Template Package
- * means the same thing in both, so they share `useGraphicsTemplateLibrary`.
+ * means the same thing in both, so they share `useGraphicsTemplateLibrary` and draw
+ * the one `GraphicsTemplateLibrarySurface`.
+ *
+ * Beside the stack it is a section that starts closed and says how many designs the
+ * library holds. A closed section keeps the library mounted, so a placement under way
+ * still finishes and releases `placing`.
  */
 const props = defineProps<{
 	eventId: number;
@@ -80,6 +85,19 @@ const {
 	remove,
 	packageImport,
 } = library;
+
+/**
+ * The closed section in one line: how many designs the library holds. Nothing
+ * until the library has been read, so it never says "None" of one it has not seen.
+ */
+const summary = computed(() => {
+	const count = templates.value.length;
+	if (count === 0)
+		return loading.value ? undefined : 'None';
+	return `${count} ${count === 1
+		? 'template'
+		: 'templates'}`;
+});
 
 const saving = ref(false);
 
@@ -144,47 +162,44 @@ async function place(templateId: string) {
 </script>
 
 <template>
-	<ScreenSettingsCard title="Template library" :default-open="true" data-testid="template-library">
-		<div class="space-y-3">
-			<p class="text-xs text-muted">
+	<ScreenSettingsSection
+		id="broadcast-graphics-templates"
+		density="row"
+		title="Templates"
+		:summary="summary"
+		data-testid="template-library"
+	>
+		<GraphicsTemplateLibrarySurface
+			kind="skgraphic"
+			test-id="template-library"
+			:writable="canAuthor"
+			:package-import="packageImport"
+			:error="error"
+			:signed-out="signedOut"
+			error-title="Template library action failed"
+			:empty="templates.length === 0 && !loading"
+			empty-title="No Broadcast Graphic Templates"
+			empty-description="Save a finished Broadcast Graphic to reuse it on any Screen."
+		>
+			<template #intro>
 				Reusable Broadcast Graphic Templates, shared across every Event in this installation.
 				Placing one creates an independent copy.
-			</p>
+			</template>
 
-			<UButton
-				v-if="canAuthor"
-				size="xs"
-				variant="soft"
-				icon="i-lucide-bookmark-plus"
-				:disabled="!canSave"
-				data-testid="template-library-save"
-				@click="save"
-			>
-				Save {{ selectedGraphic ? selectedGraphic.name : 'Broadcast Graphic' }} as a template
-			</UButton>
+			<template v-if="canAuthor" #save>
+				<UButton
+					size="xs"
+					variant="soft"
+					icon="i-lucide-bookmark-plus"
+					:disabled="!canSave"
+					data-testid="template-library-save"
+					@click="save"
+				>
+					Save {{ selectedGraphic ? selectedGraphic.name : 'Broadcast Graphic' }} as a template
+				</UButton>
+			</template>
 
-			<GraphicsTemplateLibraryImport
-				kind="skgraphic"
-				test-id="template-library-import"
-				:writable="canAuthor"
-				:state="packageImport"
-			/>
-
-			<GraphicsReusableLibraryError
-				title="Template library action failed"
-				:message="error"
-				:signed-out="signedOut"
-				test-id="template-library-error"
-			/>
-
-			<UIEmptyState
-				v-if="templates.length === 0 && !loading"
-				icon="i-lucide-library"
-				title="No Broadcast Graphic Templates"
-				description="Save a finished Broadcast Graphic to reuse it on any Screen."
-			/>
-
-			<div v-else class="space-y-1.5">
+			<template #default>
 				<GraphicsTemplateLibraryEntry
 					v-for="template in templates"
 					:key="template.id"
@@ -269,7 +284,7 @@ async function place(templateId: string) {
 						Broadcast Graphics already placed from it are not affected.
 					</GraphicsTemplateLibraryConfirmation>
 				</GraphicsTemplateLibraryEntry>
-			</div>
-		</div>
-	</ScreenSettingsCard>
+			</template>
+		</GraphicsTemplateLibrarySurface>
+	</ScreenSettingsSection>
 </template>

@@ -202,11 +202,6 @@ describe('a bound Graphic Item property', () => {
 
 	it.each([
 		[
-			'a Screen Theme Override',
-			resolveGraphicThemeTokens({ accent: '#111111' }, { accent: '#222222' }),
-			'#222222',
-		],
-		[
 			'the Theme',
 			resolveGraphicThemeTokens({ accent: '#111111' }),
 			'#111111',

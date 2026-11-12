@@ -72,6 +72,8 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 const mockLeaseWritable = ref(true);
 /** Set to tell "not writable" apart from "held by another Session"; `null` follows `writable`. */
 const mockLeaseHeldByAnother = ref<boolean | null>(null);
+/** Whether the lease was lost, to another Session or its deadline, rather than merely not held. */
+const mockLeaseLost = ref(false);
 const mockLeaseEnabled = ref<boolean | null>(null);
 const mockTakeOver = vi.fn();
 mockNuxtImport('useGraphicsAuthoringLease', () => (options: { enabled?: () => boolean }) => {
@@ -81,6 +83,7 @@ mockNuxtImport('useGraphicsAuthoringLease', () => (options: { enabled?: () => bo
 		status: ref('ready'),
 		writable: mockLeaseWritable,
 		heldByAnotherSession: computed(() => mockLeaseHeldByAnother.value ?? !mockLeaseWritable.value),
+		lost: mockLeaseLost,
 		// Who holds it, where the server resolved their session to a person (#398).
 		// Named here rather than left `null`, so this file proves the settings
 		// surface passes it on rather than only that it compiles.
@@ -220,6 +223,7 @@ describe('broadcastGraphicsSettings', () => {
 		mockRoute.query = {};
 		mockLeaseWritable.value = true;
 		mockLeaseHeldByAnother.value = null;
+		mockLeaseLost.value = false;
 		mockLeaseEnabled.value = null;
 		mockSaveState.value = 'idle';
 		mockSaveError.value = null;
@@ -337,23 +341,23 @@ describe('broadcastGraphicsSettings', () => {
 		expect(mockUpdateConfig).not.toHaveBeenCalled();
 	});
 
-	// A stack kept after another Session takes the lease would hide that Session's
-	// accepted changes, then be written over them. A lease merely not held (the
-	// Edit workspace closed, an ask that failed) refuses nothing, so the edit stays.
+	// A stack kept once the lease is lost, to another Session or its deadline, would
+	// hide the next holder's changes, then be written over them. A lease merely not
+	// held, as after the Edit workspace closes, refuses nothing, so the edit stays.
 	it.each([
 		{
-			lease: 'taken by another Session',
-			heldByAnother: true,
+			lease: 'lost',
+			lost: true,
 			shown: ['lower-third', 'slate'],
 			channels: [],
 		},
 		{
-			lease: 'no longer held by anyone',
-			heldByAnother: false,
+			lease: 'merely not held',
+			lost: false,
 			shown: ['bug'],
 			channels: ['lane'],
 		},
-	])('shows $shown as the stack once the lease is $lease', async ({ heldByAnother, shown, channels }) => {
+	])('shows $shown as the stack once the lease is $lease', async ({ lost, shown, channels }) => {
 		mockRoute.query = { workspace: 'edit' };
 		const wrapper = await mountComponent();
 		await flushPromises();
@@ -369,7 +373,7 @@ describe('broadcastGraphicsSettings', () => {
 		await nextTick();
 		expect((workspace.props('graphics') as Array<{ id: string }>).map(graphic => graphic.id)).toEqual(['bug']);
 
-		mockLeaseHeldByAnother.value = heldByAnother;
+		mockLeaseLost.value = lost;
 		mockLeaseWritable.value = false;
 		await nextTick();
 

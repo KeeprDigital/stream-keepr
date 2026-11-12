@@ -174,4 +174,37 @@ describe('broadcastGraphicsChannels', () => {
 			(wrapper.get('[data-graphic-channel-membership="bravo"] select').element as unknown as HTMLSelectElement).value,
 		).toBe('');
 	});
+
+	// Beside the stack the section is closed, saying what it holds in one line.
+	it.each([
+		{
+			holds: 'no Graphic Channel',
+			channels: [],
+			graphics: [lowerThirdA, lowerThirdB],
+			summary: 'None',
+		},
+		{
+			holds: 'one Graphic Channel with one member',
+			channels: [thirds],
+			graphics: [lowerThirdA, lowerThirdB],
+			summary: '1 channel · 1 of 2 graphics assigned',
+		},
+		{
+			holds: 'a membership of a Graphic Channel the Screen no longer declares',
+			channels: [
+				{ id: 'other', name: 'Other' },
+				{ id: 'bugs', name: 'Bugs' },
+			],
+			graphics: [lowerThirdA, lowerThirdB],
+			summary: '2 channels · 0 of 2 graphics assigned',
+		},
+	])('starts closed, summarising $holds', async ({ channels, graphics, summary }) => {
+		localStorage.clear();
+		const wrapper = await mountPanel({ channels, graphics });
+
+		const toggle = wrapper.get('[data-testid="graphic-channels"] button[aria-expanded]');
+		expect(toggle.attributes('aria-expanded')).toBe('false');
+		expect(toggle.text()).toContain('Graphic Channels');
+		expect(toggle.text()).toContain(summary);
+	});
 });

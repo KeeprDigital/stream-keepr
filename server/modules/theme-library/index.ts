@@ -16,10 +16,6 @@ interface TokenWriteParams {
 	originConnectionId?: string;
 }
 
-function isReference(value: unknown): value is { token: string } {
-	return typeof value === 'object' && value !== null && 'token' in value;
-}
-
 function themeNotFound(): never {
 	throw createError({
 		statusCode: 404,
@@ -89,7 +85,8 @@ export function themeLibraryModule() {
 	}
 
 	/**
-	 * Set a token. A value naming library content holds it as the Theme's own
+	 * Set a Foundation Token; a Mode Token or a former token is accepted and
+	 * answers the Theme as it stands. A value naming library content holds it as the Theme's own
 	 * Graphic Asset References (ADR-0050): each must be one an author could
 	 * select now, asked of the library first so a refusal names the slot, and
 	 * again in the statement that commits.
@@ -106,9 +103,10 @@ export function themeLibraryModule() {
 				data: { code: write.refusal },
 			});
 		}
-		const references = isReference(write.value)
-			? []
-			: themeTokenValueGraphicAssetReferences(themeTokenDefinition(token)!.definition.type, write.value, token);
+		// A Mode Token or a former token: accepted, with nothing to store, version or announce.
+		if (write.dropped)
+			return await get(themeId);
+		const references = themeTokenValueGraphicAssetReferences(themeTokenDefinition(token)!.definition.type, write.value, token);
 		if (references.length > 0)
 			await assertGraphicsTemplateReferencesSelectable(graphicsAssets(), references, 'Theme');
 		let written: DbTheme | undefined;
@@ -129,7 +127,12 @@ export function themeLibraryModule() {
 		return mapThemeToResponse(theme);
 	}
 
-	/** Clear a token, so the Theme reads its default again. One it does not set is cleared already, and announces nothing. */
+	/**
+	 * Clear a token, so the Theme reads its default again. One it does not set
+	 * is cleared already, and announces nothing. Any stored name clears, so a
+	 * Mode Token stored before a Theme held Foundation Tokens only releases its
+	 * Graphic Asset References here.
+	 */
 	async function clearToken({ themeId, token, originConnectionId }: TokenWriteParams): Promise<ThemeResponse> {
 		const { theme, cleared } = await themes.clearToken(themeId, token) ?? themeNotFound();
 		if (cleared)

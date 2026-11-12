@@ -6,6 +6,7 @@ import type {
 	TemplatePackageKind,
 	TemplatePackagePreflightMapping,
 } from '~~/shared/types/templatePackage';
+import { isPlainObject } from '~~/shared/utils/plainObject';
 
 /**
  * The provider-independent half of Template Package installation: which local
@@ -47,13 +48,6 @@ export function packagedOriginKey(input: {
 	sourceRevisionId: string;
 }): string {
 	return JSON.stringify([input.sourceAssetId, input.sourceRevisionId]);
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		return false;
-	const prototype = Object.getPrototypeOf(value);
-	return prototype === Object.prototype || prototype === null;
 }
 
 /** One Graphic Asset Reference a Template document holds, at the owner slot its path names. */

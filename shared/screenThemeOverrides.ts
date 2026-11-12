@@ -1,16 +1,12 @@
 // Which Theme Tokens a Screen may override, and what an override write may
-// store (ADR-0049). It sits beside `themeTokens.ts`, whose Theme write rules a
-// Screen Theme Override shares.
+// store (ADR-0049). It sits beside `themeTokens.ts`, whose value rules a
+// Screen Theme Override shares with a Theme.
 
-import type { ThemeTokenReference, ThemeTokenType, ThemeTokenValue } from './modules/theme/tokens';
-import type { FoundationTokenName } from './modules/theme/vocabulary';
+import type { ThemeTokenValue } from './modules/theme/tokens';
 import type { ScreenMode } from './types/enums';
-import { GRAPHIC_THEME_SLOT_TOKEN_TYPES } from './modules/graphics/themeBindings';
-import { resolveThemeTokens } from './modules/theme/resolution';
-import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
 import { screenModeHostTokens } from './screenModeDefinitions';
-import { SCREEN_MODES, screenModeSupportsBackgroundLayers, screenModeTokens } from './screenModes';
-import { parseThemeTokenWrite, themeTokenDefinition } from './themeTokens';
+import { screenModeTokens } from './screenModes';
+import { isFormerThemeToken, parseThemeTokenValue, themeTokenDefinition } from './themeTokens';
 import { THEME_TOKEN_WRITE_REFUSALS } from './types/theme';
 
 /** Why a Screen Theme Override write was refused. */
@@ -21,135 +17,65 @@ export const SCREEN_THEME_OVERRIDE_REFUSALS = {
 
 export type ScreenThemeOverrideRefusal = keyof typeof SCREEN_THEME_OVERRIDE_REFUSALS;
 
-const NOTHING_STORED = Object.freeze({});
-
-const GRAPHIC_BINDABLE_TYPES: ReadonlySet<ThemeTokenType> = new Set(Object.values(GRAPHIC_THEME_SLOT_TOKEN_TYPES));
-
-/**
- * The Foundation Tokens a graphics host's Graphic Items may bind, in
- * vocabulary order: every one of a type some binding slot takes. None for a
- * mode that is not a graphics host.
- */
-export function screenModeBindableFoundationTokens(mode: ScreenMode): FoundationTokenName[] {
-	if (!SCREEN_MODES[mode].graphicsHost)
-		return [];
-	return (Object.keys(FOUNDATION_TOKENS) as FoundationTokenName[])
-		.filter(name => GRAPHIC_BINDABLE_TYPES.has(FOUNDATION_TOKENS[name].type));
-}
-
-/**
- * The Theme Tokens a Screen's settings page lists for `mode`, each once: what
- * the mode's declaration consumes (`resolveThemeTokens`'s `consumed`, which no
- * stored value changes), then any further Foundation Token its Graphic Items
- * may bind.
- */
-function screenThemeListedTokens(mode: ScreenMode): string[] {
-	const { consumed } = resolveThemeTokens({
-		vocabulary: FOUNDATION_TOKENS,
-		modeTokens: screenModeTokens(mode),
-		theme: NOTHING_STORED,
-		overrides: NOTHING_STORED,
-		hostTokens: screenModeHostTokens(mode),
-	});
-	const bindable = screenModeBindableFoundationTokens(mode).filter(name => !consumed.includes(name));
-	return [
-		...consumed,
-		...bindable,
-	];
-}
-
-/** Where a Screen's settings page renders each Theme Token it lists (ADR-0072). */
+/** Where a Screen's settings page renders each Theme Token it may override (ADR-0072). */
 export interface ScreenThemeTokenPlacement {
-	/** Each settings group the mode's Mode Tokens declare, with its Mode Tokens in declaration order. */
+	/** Each Screen Settings Group the mode's Mode Tokens name, with its Mode Tokens in declaration order. */
 	groups: Readonly<Record<string, readonly string[]>>;
 	/** Background & Placement: the Foundation Tokens the Screen's host consumes itself, a plain mode's `inset` and `alignment`. */
 	placement: readonly string[];
-	/**
-	 * The residual Screen-wide look: each Mode Token whose group is not mounted
-	 * on the page, then every other listed Foundation Token.
-	 */
-	screenWide: {
-		modeTokens: readonly string[];
-		foundationTokens: readonly string[];
-	};
 }
 
 /**
- * Where each Theme Token a Screen in `mode` lists renders, given the settings
- * groups mounted on its page. Each lands in exactly one place: a Mode Token in
- * its mounted group, else the Screen-wide look, so it never disappears or
- * doubles while its group is not yet mounted.
+ * Where each Theme Token a Screen in `mode` may override renders: a Mode
+ * Token in the group it names, a host token in Background & Placement. Every
+ * other Foundation Token comes from the Theme alone, so none is listed.
  */
-export function placeScreenThemeTokens(mode: ScreenMode, mountedGroups: Iterable<string>): ScreenThemeTokenPlacement {
-	const mounted = new Set(mountedGroups);
-	const modeTokens = screenModeTokens(mode);
-	const hostTokens = screenModeHostTokens(mode);
+export function placeScreenThemeTokens(mode: ScreenMode): ScreenThemeTokenPlacement {
 	const groups: Record<string, string[]> = {};
-	const unplacedModeTokens: string[] = [];
-	const foundationTokens: string[] = [];
-	const placement: string[] = [];
-	for (const name of screenThemeListedTokens(mode)) {
-		if (!Object.hasOwn(modeTokens, name)) {
-			(hostTokens.includes(name)
-				? placement
-				: foundationTokens).push(name);
-			continue;
-		}
-		const group = modeTokens[name as keyof typeof modeTokens]!.settingsGroup;
-		(groups[group] ??= []).push(name);
-		if (!mounted.has(group))
-			unplacedModeTokens.push(name);
-	}
+	for (const [name, definition] of Object.entries(screenModeTokens(mode)))
+		(groups[definition.settingsGroup] ??= []).push(name);
 	return {
 		groups,
-		placement,
-		screenWide: { modeTokens: unplacedModeTokens, foundationTokens },
+		placement: screenModeHostTokens(mode),
 	};
 }
 
 /**
- * Whether a Screen in `mode` can consume `name`: one of the mode's own Mode
- * Tokens, a Foundation Token its host consumes itself, or a Foundation Token
- * one of its Mode Tokens could follow. A Mode Token may be pointed at any
- * Foundation Token of its type, so that is every Foundation Token of a type
- * the mode declares, not only those its defaults name. A graphics host's
- * Graphic Items may bind any Foundation Token a binding slot takes, so it
- * consumes those too (#831). The `background` stack is consumed by the Screen
- * host rather than a Mode Token, on the Background Screen and every mode
- * declaring a Background Layer stack.
+ * Whether a Screen in `mode` may override `name`: one of the mode's own Mode
+ * Tokens, or a Foundation Token its host consumes itself (a plain mode's
+ * `inset` and `alignment`).
  */
-export function screenModeCanConsume(mode: ScreenMode, name: string): boolean {
-	const modeTokens = screenModeTokens(mode);
-	if (Object.hasOwn(modeTokens, name))
-		return true;
-	if (screenModeHostTokens(mode).includes(name))
-		return true;
-	if (name === 'background' && (mode === 'background' || screenModeSupportsBackgroundLayers(mode)))
-		return true;
-	if (!Object.hasOwn(FOUNDATION_TOKENS, name))
-		return false;
-	if ((screenModeBindableFoundationTokens(mode) as string[]).includes(name))
-		return true;
-	const { type } = FOUNDATION_TOKENS[name as keyof typeof FOUNDATION_TOKENS];
-	return Object.values(modeTokens).some(definition => definition.type === type);
+function screenThemeOverrideAdmits(mode: ScreenMode, name: string): boolean {
+	return Object.hasOwn(screenModeTokens(mode), name)
+		|| screenModeHostTokens(mode).includes(name);
 }
 
 export type ScreenThemeOverrideWrite
-	= | { ok: true; value: ThemeTokenValue | ThemeTokenReference | null }
+	= | { ok: true; dropped?: false; value: ThemeTokenValue | null }
+		| { ok: true; dropped: true }
 		| { ok: false; refusal: ScreenThemeOverrideRefusal };
 
 /**
  * What a Screen in `mode` may store as its override of `name`, or why not. A
- * `null` value clears the override. A set holds what a Theme may hold for the
- * token (`parseThemeTokenWrite`); a set or clear of a token the mode cannot
- * consume is refused, while one stored for another mode stays dormant.
+ * `null` value clears the override. A set holds a value the token may be
+ * stored as (`parseThemeTokenValue`). Any other Foundation Token, which a
+ * Screen takes from its Theme alone, and a former token, whichever mode
+ * declared it, are accepted and `dropped`: nothing is stored or removed for
+ * them. Another mode's Mode Token is refused, while one stored for it stays
+ * dormant.
  */
 export function parseScreenThemeOverrideWrite(mode: ScreenMode, name: string, value: unknown): ScreenThemeOverrideWrite {
-	if (!themeTokenDefinition(name))
+	if (isFormerThemeToken(name))
+		return { ok: true, dropped: true };
+	const token = themeTokenDefinition(name);
+	if (!token)
 		return { ok: false, refusal: 'unknown-token' };
-	if (!screenModeCanConsume(mode, name))
-		return { ok: false, refusal: 'unconsumable-token' };
+	if (!screenThemeOverrideAdmits(mode, name)) {
+		return token.tier === 'foundation'
+			? { ok: true, dropped: true }
+			: { ok: false, refusal: 'unconsumable-token' };
+	}
 	if (value === null)
 		return { ok: true, value: null };
-	return parseThemeTokenWrite(name, value);
+	return parseThemeTokenValue(name, value);
 }

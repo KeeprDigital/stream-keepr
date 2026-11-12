@@ -1,85 +1,46 @@
-import type { ScreenMode } from '~~/shared/types/enums';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, resolveThemeTokens } from '~~/shared/modules/theme';
-import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
-import { screenModeTokens } from '~~/shared/screenModes';
-import { placeScreenThemeTokens, screenModeBindableFoundationTokens } from '~~/shared/screenThemeOverrides';
+import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
+import { screenModeConfigContract, screenModeTokens } from '~~/shared/screenModes';
+import { parseScreenThemeOverrideWrite, placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
-// A Screen settings page renders every Theme Token its Screen may override
-// exactly once: in the mounted settings group its Mode Token declares, in
-// Background & Placement, or in the residual Screen-wide look (ADR-0072).
-
-/** What the page lists, from the mode's declaration alone. */
-function overridable(mode: ScreenMode): string[] {
-	const { consumed } = resolveThemeTokens({
-		vocabulary: FOUNDATION_TOKENS,
-		modeTokens: screenModeTokens(mode),
-		theme: DEFAULT_THEME_TOKENS,
-		overrides: DEFAULT_THEME_TOKENS,
-		hostTokens: screenModeHostTokens(mode),
-	});
-	return [
-		...new Set([
-			...consumed,
-			...screenModeBindableFoundationTokens(mode),
-		]),
-	];
-}
-
-function declaredGroups(mode: ScreenMode): string[] {
-	return [
-		...new Set(Object.values(screenModeTokens(mode)).map(definition => definition.settingsGroup)),
-	];
-}
-
-/** Every token the page renders for `mode` with `mounted` groups on it, duplicates kept. */
-function rendered(mode: ScreenMode, mounted: readonly string[]): string[] {
-	const placement = placeScreenThemeTokens(mode, mounted);
-	return [
-		...mounted.flatMap(group => placement.groups[group] ?? []),
-		...placement.placement,
-		...placement.screenWide.modeTokens,
-		...placement.screenWide.foundationTokens,
-	];
-}
+// A Screen settings page renders exactly the Theme Tokens an override write
+// stores, each once: a Mode Token in the Screen Settings Group it names, a
+// host token in Background & Placement (ADR-0072).
 
 const MODES = SCREEN_MODE_VALUES.map(mode => [mode] as const);
 
 describe('where a Screen settings page renders each Theme Token', () => {
-	// Every Mode Token names a group, so mounting each group its mode names
-	// leaves the Screen-wide look with Foundation Tokens only.
-	it.each(MODES)('leaves no %s Mode Token in the Screen-wide look once every group is mounted', (mode) => {
-		expect(placeScreenThemeTokens(mode, declaredGroups(mode)).screenWide.modeTokens).toEqual([]);
-	});
-
-	it.each(SCREEN_MODE_VALUES.flatMap(mode => [
-		[mode, 'no group mounted', [] as string[]],
-		[
-			mode,
-			'every group mounted',
-			declaredGroups(mode),
-		],
-		[
-			mode,
-			'its first group mounted',
-			declaredGroups(mode).slice(0, 1),
-		],
-	] as const))('places each %s token exactly once with %s', (mode, _case, mounted) => {
-		const tokens = rendered(mode, mounted);
+	it.each(MODES)('places each %s token an override write stores, exactly once', (mode) => {
+		const placed = placeScreenThemeTokens(mode);
+		const tokens = [
+			...Object.values(placed.groups).flat(),
+			...placed.placement,
+		];
+		const stored = [
+			...Object.keys(screenModeTokens(mode)),
+			...Object.keys(FOUNDATION_TOKENS),
+		].filter((name) => {
+			const write = parseScreenThemeOverrideWrite(mode, name, null);
+			return write.ok && !write.dropped;
+		});
 
 		expect(tokens).toHaveLength(new Set(tokens).size);
-		expect([...tokens].sort()).toEqual(overridable(mode).sort());
+		expect([...tokens].sort()).toEqual(stored.sort());
 	});
 
-	it('keeps a Mode Token in the Screen-wide look until its group is mounted', () => {
-		expect(placeScreenThemeTokens('standings', []).screenWide.modeTokens).toContain('standings.title-text');
+	it.each(MODES)('places every %s Mode Token in a group its config contract declares', (mode) => {
+		const declared = Object.keys(screenModeConfigContract(mode).groups);
 
-		const mounted = placeScreenThemeTokens('standings', ['header']);
+		expect(declared).toEqual(expect.arrayContaining(Object.keys(placeScreenThemeTokens(mode).groups)));
+	});
 
-		expect(mounted.groups.header).toEqual(['standings.title-typography', 'standings.title-text', 'standings.title-divider']);
-		expect(mounted.screenWide.modeTokens).not.toContain('standings.title-text');
-		expect(mounted.screenWide.modeTokens).toContain('standings.surface');
+	it('places a Mode Token in the group it names, in declaration order', () => {
+		const placed = placeScreenThemeTokens('pairings');
+
+		expect(placed.groups).toEqual({
+			'result-badge': ['pairings.result-reported', 'pairings.result-pending', 'pairings.result-bye'],
+		});
 	});
 
 	it.each([
@@ -91,9 +52,6 @@ describe('where a Screen settings page renders each Theme Token', () => {
 		['a graphics host', 'broadcast-graphics', []],
 		['an operator surface', 'feature-match', []],
 	] as const)('puts the Screen inset and alignment in Background & Placement on %s', (_case, mode, placement) => {
-		const placed = placeScreenThemeTokens(mode, []);
-
-		expect(placed.placement).toEqual(placement);
-		expect(placed.screenWide.foundationTokens).not.toContain('alignment');
+		expect(placeScreenThemeTokens(mode).placement).toEqual(placement);
 	});
 });

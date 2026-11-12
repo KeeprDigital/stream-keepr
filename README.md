@@ -1259,11 +1259,11 @@ only through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding (no
 
 - **Feature Match Overlay runs on the Shared Graphics Foundation.** The legacy
   widget / widget-group / z-index model was deleted without a migration.
-  `test/unit/shared/featureMatchOverlayPresets.test.ts` pins the invariants of
-  the recreated built-in presets (`full-table`,
+  `test/unit/shared/builtInFeatureMatchLayoutTemplates.test.ts` pins the invariants of
+  the built-in Feature Match Layout Templates (`full-table`,
   `left-stacked-player-cams`, `neon-feature-match`). Dropped by design: per-side
   borders on a Surface Style (compose with rule-preset Shape items), the
   `visible` text-overflow option, and per-child offsets and clamps.
 - **The Deck List Graphic Item renders only in Feature Match Overlay.** Broadcast
   Graphics has no feature-match context and no deck data source, so the palette
-  withholds it (ADR-0015). No built-in preset places one.
+  withholds it (ADR-0015). No built-in template places one.

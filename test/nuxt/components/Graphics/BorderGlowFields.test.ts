@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { defineComponent, h } from 'vue';
 import BorderGlowFields from '~/components/Graphics/BorderGlowFields.vue';
 
-// The one border and glow fields control, shared by the Feature Match Overlay Frame, Source Item
-// framing, and a Graphic Surface Style: what…
+// The one border and glow fields control, shared by every editor of a Graphic Surface Style's
+// outline and glow: what it shows for a value and the edit it reports for each change.
 
 enableAutoUnmount(afterEach);
 
@@ -38,29 +38,11 @@ const UInputNumberStub = defineComponent({
 	template: '<input type="number" :value="modelValue" />',
 });
 
-const UButtonStub = defineComponent({
-	props: {
-		label: { type: String, required: false },
-	},
-	emits: ['click'],
-	template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
-});
-
 const global = {
 	stubs: {
 		UFormField: UFormFieldStub,
 		USwitch: USwitchStub,
 		UInputNumber: UInputNumberStub,
-		UButton: UButtonStub,
-		USelect: defineComponent({
-			name: 'USelect',
-			props: {
-				modelValue: { type: String, required: false },
-				items: { type: Array, required: false },
-			},
-			emits: ['update:modelValue'],
-			template: '<select />',
-		}),
 		UIColorPicker: defineComponent({
 			name: 'UIColorPicker',
 			props: {
@@ -216,52 +198,6 @@ describe('border and glow fields', () => {
 			kind: 'glow',
 			patch: { color: 'brand' },
 		});
-	});
-
-	it('offers per-side borders only where the host does, a missing side counting as shown', async () => {
-		expect(mountFields().text()).not.toContain('Top');
-
-		const wrapper = mountFields({
-			perSide: true,
-			border: {
-				...border,
-				sides: { right: false },
-			},
-		});
-		const sideButton = (label: string) => wrapper.findAll('button').find(button => button.text() === label)!;
-
-		expect(sideButton('Top').attributes('aria-pressed')).toBe('true');
-		expect(sideButton('Right').attributes('aria-pressed')).toBe('false');
-
-		await sideButton('Top').trigger('click');
-		expect(lastEdit(wrapper)).toEqual({ kind: 'border-side', side: 'top', visible: false });
-
-		await sideButton('Right').trigger('click');
-		expect(lastEdit(wrapper)).toEqual({ kind: 'border-side', side: 'right', visible: true });
-	});
-
-	it('offers a glow position only where the host does, absent meaning both', async () => {
-		expect(input(mountFields(), 'USelect', 'Glow position')).toBeUndefined();
-
-		const wrapper = mountFields({ glowPosition: true });
-		const select = input(wrapper, 'USelect', 'Glow position')!;
-		expect(select.props('modelValue')).toBe('both');
-
-		select.vm.$emit('update:modelValue', 'inside');
-		await flushPromises();
-		expect(lastEdit(wrapper)).toEqual({
-			kind: 'glow',
-			patch: { position: 'inside' },
-		});
-	});
-
-	it('hides the glow while the border is off where the host only glows a border', () => {
-		const gated = mountFields({ glowGatedOnBorder: true, border: null });
-		expect(switchFor(gated, 'Glow')).toBeUndefined();
-		expect(input(gated, 'UInputNumber', 'Glow size')).toBeUndefined();
-
-		expect(input(mountFields({ glowGatedOnBorder: true }), 'UInputNumber', 'Glow size')).toBeDefined();
-		expect(input(mountFields({ border: null }), 'UInputNumber', 'Glow size')).toBeDefined();
 	});
 
 	it('prefixes accessible names where several surfaces share one form', () => {

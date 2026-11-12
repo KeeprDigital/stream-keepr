@@ -1,6 +1,7 @@
 import { findFeatureMatchLayoutTemplateLibraryEntry } from '~~/server/modules/feature-match-layout-template-library';
 import { featureMatchLayoutTemplateParamsSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
 import { requireUserId } from '~~/server/utils/auth';
+import { refuseBuiltInFeatureMatchLayoutTemplate } from '~~/server/utils/featureMatchLayoutTemplateWrites';
 import { exportFeatureMatchLayoutTemplatePackage } from '~~/server/utils/templatePackageExportApi';
 
 /**
@@ -26,6 +27,10 @@ export default defineEventHandler(async (event) => {
 		event,
 		featureMatchLayoutTemplateParamsSchema.parse,
 	);
+
+	// A built-in is on every installation already, so a package of one would only
+	// install a second copy of it.
+	refuseBuiltInFeatureMatchLayoutTemplate(templateId, 'exported');
 
 	// An imported layout exports as readily as an authored one. Nothing about a
 	// package depends on where its Template came from, and refusing would strand a

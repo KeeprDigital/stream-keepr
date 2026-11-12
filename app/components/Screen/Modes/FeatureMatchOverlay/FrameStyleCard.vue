@@ -6,9 +6,7 @@ import type { Screen } from '~/types';
 import { parseFrameAnimationConfig } from '~~/shared/animationEffects';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from '~~/shared/types/screenConfig';
 import { MEDIA_FIT_OPTIONS } from '~/utils/mediaFields';
-import { OPACITY_INPUT } from '~/utils/opacityInput';
 import FeatureMatchOverlayBorderSidesControl from './BorderSidesControl.vue';
-import FeatureMatchOverlayControlSection from './ControlSection.vue';
 
 /**
  * The Frame's own fields, each section ending with the Look of what it styles:
@@ -68,11 +66,15 @@ const backgroundSummary = computed(() => {
 
 <template>
 	<div class="min-w-0">
-		<FeatureMatchOverlayControlSection title="Background" :summary="backgroundSummary" default-open>
+		<ScreenSettingsSection
+			id="feature-match-overlay-background"
+			density="row"
+			title="Background"
+			:summary="backgroundSummary"
+		>
 			<div class="space-y-3">
-				<GraphicsNumberField
+				<GraphicsOpacityField
 					label="Opacity"
-					v-bind="OPACITY_INPUT"
 					:model-value="config.layout.frame.opacity"
 					size="sm"
 					data-testid="frame-opacity"
@@ -88,7 +90,7 @@ const backgroundSummary = computed(() => {
 							@update:model-value="updateFrame({ backgroundImage: $event ?? undefined })"
 						/>
 					</div>
-					<UFormField label="Image fit">
+					<ScreenSettingsField label="Image fit" stacked>
 						<USelect
 							:model-value="config.layout.frame.backgroundImageFit"
 							:items="MEDIA_FIT_OPTIONS"
@@ -97,12 +99,17 @@ const backgroundSummary = computed(() => {
 							class="w-full"
 							@update:model-value="updateFrame({ backgroundImageFit: $event as MediaFit })"
 						/>
-					</UFormField>
+					</ScreenSettingsField>
 				</div>
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection title="Video" :summary="mediaBackground.enabled ? 'On' : 'Off'">
+		<ScreenSettingsSection
+			id="feature-match-overlay-video"
+			density="row"
+			title="Video"
+			:summary="mediaBackground.enabled ? 'On' : 'Off'"
+		>
 			<div class="space-y-4">
 				<ScreenMediaBackgroundFields
 					:media="mediaBackground"
@@ -111,9 +118,14 @@ const backgroundSummary = computed(() => {
 				/>
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="frame-video" />
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection title="Animation" :summary="animation.enabled ? `opacity ${animation.opacity}` : 'Off'">
+		<ScreenSettingsSection
+			id="feature-match-overlay-animation"
+			density="row"
+			title="Animation"
+			:summary="animation.enabled ? `opacity ${animation.opacity}` : 'Off'"
+		>
 			<div class="space-y-4">
 				<ScreenSettingsToggle
 					label="Animation"
@@ -121,20 +133,25 @@ const backgroundSummary = computed(() => {
 					@update:model-value="updateAnimation({ enabled: $event })"
 				/>
 
-				<GraphicsNumberField
+				<GraphicsOpacityField
 					v-if="animation.enabled"
 					label="Layer opacity"
-					v-bind="OPACITY_INPUT"
 					:model-value="animation.opacity"
 					size="sm"
+					data-testid="frame-animation-opacity"
 					@update:model-value="updateAnimation({ opacity: Number($event) })"
 				/>
 
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="frame-animation" />
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 
-		<FeatureMatchOverlayControlSection title="Surface" summary="Fill, border and glow">
+		<ScreenSettingsSection
+			id="feature-match-overlay-surface"
+			density="row"
+			title="Surface"
+			summary="Fill, border and glow"
+		>
 			<div class="space-y-4">
 				<FeatureMatchOverlayBorderSidesControl
 					label="Frame border sides"
@@ -143,6 +160,6 @@ const backgroundSummary = computed(() => {
 				/>
 				<ScreenThemeTokenGroup :screen="screen" :event-id="eventId" group="frame-surface" />
 			</div>
-		</FeatureMatchOverlayControlSection>
+		</ScreenSettingsSection>
 	</div>
 </template>

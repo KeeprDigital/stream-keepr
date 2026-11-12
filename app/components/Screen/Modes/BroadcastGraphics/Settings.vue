@@ -62,14 +62,14 @@ const editLease = useGraphicsAuthoringLease({
 });
 
 /**
- * Another Session taking the lease drops this one's unsaved authoring edits. The
- * server refuses them now, and kept on screen they would hide the new holder's
+ * Losing the lease, to another Session or to its deadline, drops this one's
+ * unsaved authoring edits, as the Feature Match Overlay editor does (#1100). The
+ * fence may refuse them, and kept on screen they would hide the next holder's
  * changes, then be written over them by a retry or a later take-over (#1026).
- * Merely not holding it (the Edit workspace closed, an ask that failed) refuses
- * nothing, so a save still pending then is left to land.
+ * Closing the Edit workspace loses nothing, so a save still pending then lands.
  */
-watch(editLease.heldByAnotherSession, (heldByAnother) => {
-	if (heldByAnother)
+watch(editLease.lost, (lost) => {
+	if (lost)
 		discard(['graphics', 'channels', 'background']);
 });
 
@@ -164,7 +164,7 @@ function updateBackground(next: BroadcastGraphicsBackgroundConfig) {
 	<div class="space-y-6">
 		<section class="rounded-lg border border-default/70 bg-default p-3">
 			<div class="grid gap-3">
-				<UFormField label="Workspace" size="sm">
+				<ScreenSettingsField label="Workspace" size="sm" stacked>
 					<div class="flex flex-wrap items-center gap-2">
 						<UFieldGroup size="sm">
 							<UButton
@@ -183,7 +183,7 @@ function updateBackground(next: BroadcastGraphicsBackgroundConfig) {
 						<!-- Editor Focus Mode is the Edit workspace's alone (#744): Live keeps the page as it is. -->
 						<GraphicsEditorFocusModeToggle v-if="workspace === 'edit'" />
 					</div>
-				</UFormField>
+				</ScreenSettingsField>
 			</div>
 		</section>
 

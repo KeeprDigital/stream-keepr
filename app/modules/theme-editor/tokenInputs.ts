@@ -1,7 +1,8 @@
 import type { Component } from 'vue';
-import type { ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
+import type { ThemeColor, ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
 import { ANIMATION_EFFECT_CATALOGUE } from '~~/shared/animationEffects';
 import { getGraphicFontDefinition } from '~~/shared/modules/graphics/typography';
+import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { HORIZONTAL_ALIGN_SELECT_OPTIONS, VERTICAL_ALIGN_SELECT_OPTIONS } from '~~/shared/utils/selectOptions';
 import AlignmentTokenInput from '~/components/Theme/AlignmentTokenInput.vue';
 import AnimationEffectTokenInput from '~/components/Theme/AnimationEffectTokenInput.vue';
@@ -14,7 +15,6 @@ import FillTokenInput from '~/components/Theme/FillTokenInput.vue';
 import ShapeGeometryTokenInput from '~/components/Theme/ShapeGeometryTokenInput.vue';
 import SurfaceStyleTokenInput from '~/components/Theme/SurfaceStyleTokenInput.vue';
 import TypographyTokenInput from '~/components/Theme/TypographyTokenInput.vue';
-import { themeColorText } from '~/modules/theme-editor/themeColor';
 
 /**
  * How the Theme editor edits each Theme Token type. A new type adds its input
@@ -49,7 +49,7 @@ export const THEME_TOKEN_INPUTS = {
  */
 export const THEME_TOKEN_COMMITS_IN_STEPS = {
 	'color': false,
-	'dimension': false,
+	'dimension': true,
 	'typography': true,
 	'backgroundLayers': true,
 	'animationEffect': true,
@@ -128,6 +128,16 @@ const THEME_TOKEN_VALUE_TEXT: { [T in ThemeTokenType]: (value: ThemeTokenValueTy
 		HORIZONTAL_ALIGN_SELECT_OPTIONS.find(option => option.value === value.horizontal)!.label,
 	].join(' ').toLowerCase(),
 };
+
+/** A composite's colour as the editor states it: a literal, or the colour Foundation Token a shipped default names. */
+function themeColorText(color: ThemeColor): string {
+	if (typeof color === 'string')
+		return color;
+	const token = FOUNDATION_TOKENS[color.token as keyof typeof FOUNDATION_TOKENS];
+	return token
+		? token.label
+		: color.token;
+}
 
 function fillText(fill: ThemeTokenValueTypes['fill']): string {
 	return fill.type === 'solid'

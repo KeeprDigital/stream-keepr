@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3';
+import type { BuiltInFeatureMatchLayoutTemplate } from '~~/shared/builtInFeatureMatchLayoutTemplates';
 import type {
 	FeatureMatchLayoutTemplateOrigin,
 	FeatureMatchLayoutTemplateSummary,
@@ -8,14 +9,16 @@ import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { readInstalledFeatureMatchLayoutDocument } from '~~/server/modules/template-package-payload/featureMatchLayout';
 import { featureMatchLayoutTemplateService } from '~~/server/services/featureMatchLayoutTemplate';
+import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '~~/shared/builtInFeatureMatchLayoutTemplates';
 import { flattenGraphicItems } from '~~/shared/modules/graphics';
 
 /**
- * The installation's Feature Match Layout Template library, from both the places
- * its entries come from.
+ * The installation's Feature Match Layout Template library, from every place its
+ * entries come from.
  *
  * A layout enters the library one of two ways: an author saves a Screen's layout
- * here, or a `.sklayout` Template Package installs one. They are stored apart
+ * here, or a `.sklayout` Template Package installs one. The built-in layouts are
+ * in it from the start, and are described below. The first two are stored apart
  * because they are *published* apart — a saved layout is an ordinary library write,
  * while an imported one is published by Template Package Installation inside the
  * transaction that also publishes its Graphic Assets, origins, and rewritten
@@ -34,6 +37,12 @@ import { flattenGraphicItems } from '~~/shared/modules/graphics';
  * browsed, placed, exported, and removed, the removal going through the Graphics Asset
  * Library (ADR-0068). An author who wants to change one places it and saves the placed
  * layout.
+ *
+ * A built-in entry is one of the layouts the application ships, the former Feature
+ * Match Overlay Presets. It is stored nowhere: it is the same on every installation
+ * and changes only with the application, so it is browsed and placed and nothing
+ * else. It cannot be revised or removed, because there is no record to write, and it
+ * is not exported, because every installation already has it.
  */
 
 export interface FeatureMatchLayoutTemplateLibraryEntry {
@@ -46,6 +55,10 @@ export interface FeatureMatchLayoutTemplateLibraryEntry {
 	provenance?: FeatureMatchLayoutTemplateOrigin;
 	/** Whether this installation authored the entry, and so may rename or revise it. */
 	authored: boolean;
+	/** Present, and true, only on an entry the application ships. */
+	builtIn?: true;
+	/** The canvas aspect ratio the layout was drawn for, where the entry states one. */
+	aspectRatio?: number;
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -78,7 +91,44 @@ function installedEntry(
 }
 
 /**
- * Every entry in the library, authored and imported together, ordered by name.
+ * A built-in entry's identity is its own id behind a prefix no generated
+ * identifier can hold, so it collides with neither store's.
+ */
+const BUILT_IN_ID_PREFIX = 'builtin:';
+
+/** A built-in has shipped unrevised since the application has existed. */
+const BUILT_IN_SINCE = new Date(0);
+
+function builtInEntry(builtIn: BuiltInFeatureMatchLayoutTemplate): FeatureMatchLayoutTemplateLibraryEntry {
+	return {
+		id: `${BUILT_IN_ID_PREFIX}${builtIn.id}`,
+		name: builtIn.label,
+		description: builtIn.description,
+		revision: 1,
+		// Copied, so nothing a caller does to an entry reaches the layout every
+		// later read is answered from.
+		document: structuredClone(builtIn.config.layout),
+		authored: false,
+		builtIn: true,
+		aspectRatio: builtIn.aspectRatio,
+		createdAt: BUILT_IN_SINCE,
+		updatedAt: BUILT_IN_SINCE,
+	};
+}
+
+/** The built-in entry an identity names, if it names one: that layout alone is copied. */
+export function findBuiltInFeatureMatchLayoutTemplate(
+	templateId: string,
+): FeatureMatchLayoutTemplateLibraryEntry | undefined {
+	if (!templateId.startsWith(BUILT_IN_ID_PREFIX))
+		return undefined;
+	const builtIn = BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.find(entry => entry.id === templateId.slice(BUILT_IN_ID_PREFIX.length));
+	return builtIn && builtInEntry(builtIn);
+}
+
+/**
+ * Every entry in the library, built-in, authored and imported together, ordered by
+ * name.
  *
  * One listing rather than two, because "the layouts available to place" is one
  * question. Where a given layout came from is a property of the entry, not a reason
@@ -94,6 +144,7 @@ export async function listFeatureMatchLayoutTemplateLibrary(
 		}),
 	]);
 	return [
+		...BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.map(builtInEntry),
 		...authored.map(template => ({
 			id: template.id,
 			name: template.name,
@@ -111,14 +162,18 @@ export async function listFeatureMatchLayoutTemplateLibrary(
 /**
  * One entry by identity, from whichever store holds it.
  *
- * The two identity spaces cannot collide: both are generated identifiers, and an
- * Installed Graphics Template's is minted by the installation that published it.
- * The authored store is asked first because it is the one an author writes to.
+ * The identity spaces cannot collide: the stores' are generated identifiers, an
+ * Installed Graphics Template's minted by the installation that published it, and
+ * a built-in's carries a prefix neither generates. A built-in is answered without
+ * a read; the authored store is asked next because it is the one an author writes to.
  */
 export async function findFeatureMatchLayoutTemplateLibraryEntry(
 	event: H3Event,
 	templateId: string,
 ): Promise<FeatureMatchLayoutTemplateLibraryEntry | undefined> {
+	const builtIn = findBuiltInFeatureMatchLayoutTemplate(templateId);
+	if (builtIn)
+		return builtIn;
 	const authored = await featureMatchLayoutTemplateService().findById(templateId);
 	if (authored) {
 		return {
@@ -153,6 +208,8 @@ export function featureMatchLayoutTemplateLibrarySummary(
 		revision: entry.revision,
 		provenance: entry.provenance,
 		authored: entry.authored,
+		builtIn: entry.builtIn,
+		aspectRatio: entry.aspectRatio,
 		itemCount: flattenGraphicItems(entry.document.composition).length,
 		sourceCount: entry.document.sources.length,
 		createdAt: entry.createdAt,

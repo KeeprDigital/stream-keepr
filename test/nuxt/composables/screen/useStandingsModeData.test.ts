@@ -9,7 +9,6 @@ import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 
 const defaultConfig = {
 	viewMode: 'all' as string,
-	topNCount: 8,
 	columns: [
 		{ key: 'position', visible: true },
 		{ key: 'name', visible: true },
@@ -25,12 +24,11 @@ const defaultConfig = {
 	autoPageIntervalMs: 5000,
 	rotationAnchor: undefined as number | undefined,
 	headerText: '',
-	sliceStart: 1,
-	sliceEnd: 16,
+	rangeStart: 1,
+	rangeEnd: 16,
 	revealCount: 8,
 	revealedCount: 0,
 	revealOrder: 'bottomUp' as string,
-	revealTrigger: 'manual',
 	playerListId: null as number | null,
 };
 
@@ -220,13 +218,13 @@ describe('useStandingsModeData', () => {
 				],
 			],
 			[
-				'topN',
-				{ topNCount: 3 },
+				'a range from the top',
+				{ viewMode: 'range', rangeStart: 1, rangeEnd: 3 },
 				['Alice', 'Bob', 'Charlie'],
 			],
 			[
-				'slice',
-				{ sliceStart: 3, sliceEnd: 5 },
+				'a range further down',
+				{ viewMode: 'range', rangeStart: 3, rangeEnd: 5 },
 				['Charlie', 'Diana', 'Ethan'],
 			],
 			[
@@ -274,16 +272,48 @@ describe('useStandingsModeData', () => {
 			expect(displayRows.value.map(row => row.id)).toEqual([4, 5, 7, 9]);
 		});
 
-		it('leaves Players without a position out of a slice', async () => {
-			Object.assign(mutableConfig, { viewMode: 'slice', sliceStart: 1, sliceEnd: 10 });
-			serverPlayers = [
-				...players,
-				createMockPlayer({ id: 99, name: 'NoPos', position: null }),
-			];
+		// An unplaced Player counts from its place in the order, after every placed one.
+		it.each([
+			{
+				name: 'before any Player is placed, a range from the top shows the first rows',
+				placed: 0,
+				range: [1, 3],
+				shown: ['Alice', 'Bob', 'Charlie'],
+			},
+			{
+				name: 'an unplaced Player follows the placed ones',
+				placed: 2,
+				range: [2, 3],
+				shown: ['Bob', 'Charlie'],
+			},
+			{
+				name: 'an unplaced Player past the range end is left out',
+				placed: 2,
+				range: [1, 2],
+				shown: ['Alice', 'Bob'],
+			},
+		])('$name', async ({ placed, range, shown }) => {
+			Object.assign(mutableConfig, { viewMode: 'range', rangeStart: range[0], rangeEnd: range[1] });
+			serverPlayers = players.slice(0, 4).map((player, index) => index < placed
+				? player
+				: { ...player, position: null });
 
 			const { displayRows } = await mountStandings();
 
-			expect(names(displayRows.value)).not.toContain('NoPos');
+			expect(names(displayRows.value)).toEqual(shown);
+		});
+
+		// A range names positions, not a row count: Players sharing its last position all show.
+		it('shows every Player tied at the last position of a range', async () => {
+			Object.assign(mutableConfig, { viewMode: 'range', rangeStart: 1, rangeEnd: 2 });
+			serverPlayers = players.slice(0, 4).map((player, index) => ({
+				...player,
+				position: Math.min(index + 1, 2),
+			}));
+
+			const { displayRows } = await mountStandings();
+
+			expect(names(displayRows.value)).toEqual(['Alice', 'Bob', 'Charlie', 'Diana']);
 		});
 
 		it('filters to the watchlist members the read answers', async () => {
@@ -332,14 +362,14 @@ describe('useStandingsModeData', () => {
 				'Standings',
 			],
 			[
-				'the count for topN',
-				{ viewMode: 'topN', topNCount: 16 },
+				'the count for a range from the top',
+				{ viewMode: 'range', rangeStart: 1, rangeEnd: 16 },
 				{},
 				'Top 16 Standings',
 			],
 			[
-				'the range for a slice',
-				{ viewMode: 'slice', sliceStart: 9, sliceEnd: 16 },
+				'both ends for a range further down',
+				{ viewMode: 'range', rangeStart: 9, rangeEnd: 16 },
 				{},
 				'Standings (9-16)',
 			],
@@ -772,16 +802,16 @@ describe('useStandingsModeData', () => {
 				],
 			],
 			[
-				'topN',
-				{ topNCount: 2 },
+				'range',
+				{ rangeStart: 1, rangeEnd: 2 },
 				[
 					['Charlie', '▲3'],
 					['Alice', '▼1'],
 				],
 			],
 			[
-				'slice',
-				{ sliceStart: 2, sliceEnd: 3 },
+				'range',
+				{ rangeStart: 2, rangeEnd: 3 },
 				[
 					['Alice', '▼1'],
 					['Bob', '–'],

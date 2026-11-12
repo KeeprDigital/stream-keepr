@@ -49,8 +49,6 @@ export const RECORD_SEPARATOR_VALUES = ['-', '/', ' | ', ' '] as const;
 // A sideboard stacks only as the strip beside the mainboard (ADR-0054).
 export const MAINBOARD_VIEW_VALUES = ['grid', 'list'] as const;
 export const SIDEBOARD_VIEW_VALUES = ['grid', 'stack', 'list'] as const;
-// Fixed: cards take their width Mode Token and may overflow. Fit: every card fits the Event Canvas.
-export const CARD_SIZING_VALUES = ['fixed', 'fit'] as const;
 // Where a badge sits on a Deck List Screen card: the nine points less the centre,
 // spelled as `NINE_POINTS` (`shared/utils/ninePoints.ts`) so the nine-point picker
 // edits it directly (#543).
@@ -123,8 +121,7 @@ export const METAGAME_CARD_COLUMN_KEY_VALUES = [
 ] as const;
 export const STANDINGS_VIEW_MODE_VALUES = [
 	'all',
-	'topN',
-	'slice',
+	'range',
 	'watchlist',
 	'reveal',
 ] as const;
@@ -145,7 +142,6 @@ export const PLAYER_HISTORY_COLUMN_KEY_VALUES = [
 	'gameScore',
 ] as const;
 export const REVEAL_ORDER_VALUES = ['bottomUp', 'topDown'] as const;
-export const REVEAL_TRIGGER_VALUES = ['manual', 'auto'] as const;
 export const ROUND_CONTROL_MODE_VALUES = ['default', 'manual_override'] as const;
 /** Why Live Results switched itself off: 12 hours without a change, or Melee refused the credentials. */
 export const MELEE_LIVE_RESULTS_STOP_REASON_VALUES = ['idle', 'auth'] as const;
@@ -168,7 +164,6 @@ export type ScreenCommand = typeof SCREEN_COMMAND_VALUES[number];
 export type RecordSeparator = typeof RECORD_SEPARATOR_VALUES[number];
 export type MainboardView = typeof MAINBOARD_VIEW_VALUES[number];
 export type SideboardView = typeof SIDEBOARD_VIEW_VALUES[number];
-export type CardSizing = typeof CARD_SIZING_VALUES[number];
 export type QuantityPosition = typeof QUANTITY_POSITION_VALUES[number];
 export type SideboardPlacement = typeof SIDEBOARD_PLACEMENT_VALUES[number];
 export type BoardSelection = typeof BOARD_SELECTION_VALUES[number];
@@ -191,6 +186,5 @@ export type TopCardsStat = typeof TOP_CARDS_STAT_VALUES[number];
 export type MetagameArchetypeColumnKey = typeof METAGAME_ARCHETYPE_COLUMN_KEY_VALUES[number];
 export type MetagameCardColumnKey = typeof METAGAME_CARD_COLUMN_KEY_VALUES[number];
 export type RevealOrder = typeof REVEAL_ORDER_VALUES[number];
-export type RevealTrigger = typeof REVEAL_TRIGGER_VALUES[number];
 export type RoundControlMode = typeof ROUND_CONTROL_MODE_VALUES[number];
 export type MeleeLiveResultsStopReason = typeof MELEE_LIVE_RESULTS_STOP_REASON_VALUES[number];

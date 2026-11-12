@@ -1,57 +1,33 @@
 import type { FeatureMatchSourceFramingStyle } from '~~/shared/types/screenConfig';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { defineComponent } from 'vue';
+import { nuxtUiStubs, UFormFieldBesideStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import SourceFramingStyleFields from '~/components/Screen/Modes/FeatureMatchOverlay/SourceFramingStyleFields.vue';
 
-// A Source Item edits its shape: radii, which border sides show and where its glow
-// falls. Its fill, border and glow are the Theme's `source-surface` (#831).
+// A Source Item edits its shape: corner radii, through the shared corner editor,
+// which border sides show and where its glow falls. Its fill, border and glow
+// are the Theme's `source-surface`.
 
 enableAutoUnmount(afterEach);
 
-const global = {
-	stubs: {
-		FeatureMatchOverlayBorderRadiusControl: true,
-		UFormField: defineComponent({ template: '<div><slot /></div>' }),
-		USwitch: defineComponent({
-			name: 'USwitch',
-			props: {
-				modelValue: { type: Boolean, required: false },
-			},
-			emits: ['update:modelValue'],
-			template: '<button type="button" role="switch" :aria-checked="String(modelValue)" @click="$emit(\'update:modelValue\', !modelValue)" />',
-		}),
-		UButton: defineComponent({ template: '<button type="button"><slot /></button>' }),
-		UInputNumber: defineComponent({ name: 'UInputNumber', template: '<input />' }),
-		UIOpacityInput: true,
-		USelect: defineComponent({
-			name: 'USelect',
-			emits: ['update:modelValue'],
-			template: '<select />',
-		}),
-		UIColorPicker: defineComponent({
-			name: 'UIColorPicker',
-			props: {
-				modelValue: { type: String, required: false },
-				hexOnly: { type: Boolean, required: false },
-			},
-			template: '<button type="button" />',
-		}),
-	},
-};
-
 function mountFields(framingStyle: FeatureMatchSourceFramingStyle) {
 	return mount(SourceFramingStyleFields, {
-		global,
+		global: {
+			stubs: { ...nuxtUiStubs, UFormField: UFormFieldBesideStub },
+		},
 		props: { framingStyle },
 	});
 }
+
+type Wrapper = ReturnType<typeof mountFields>;
+
+const cornerSize = (wrapper: Wrapper, corner: string) => wrapper.get(`input[aria-label="${corner} size"]`);
 
 describe('source framing style fields', () => {
 	it('offers no colour, border or glow of the Source Item\'s own', () => {
 		const wrapper = mountFields({});
 
-		expect(wrapper.findComponent({ name: 'UIColorPicker' }).exists()).toBe(false);
+		expect(wrapper.find('[data-color-part]').exists()).toBe(false);
 		expect(wrapper.find('[role="switch"]').exists()).toBe(false);
 	});
 
@@ -63,9 +39,56 @@ describe('source framing style fields', () => {
 		await top.trigger('click');
 		expect(wrapper.emitted('update')?.at(-1)?.[0]).toEqual({ borderTopVisible: true });
 
-		const position = wrapper.findAllComponents({ name: 'USelect' }).find(select => select.attributes('aria-label') === 'Glow position')!;
-		position.vm.$emit('update:modelValue', 'outside');
+		await wrapper.get('select[aria-label="Glow position"]').setValue('outside');
 		await flushPromises();
 		expect(wrapper.emitted('update')?.at(-1)?.[0]).toEqual({ glowPosition: 'outside' });
+	});
+
+	// A Source Item stores radii, so the corner editor offers what a radius can be:
+	// a rounded corner of any size, 0 being square.
+	it('reads each corner\'s stored radius, falling back to the shared one', () => {
+		const wrapper = mountFields({ borderRadius: 8, borderRadiusTopLeft: 20 });
+
+		expect([
+			'Top left',
+			'Top right',
+			'Bottom left',
+			'Bottom right',
+		].map(corner => (cornerSize(wrapper, corner).element as HTMLInputElement).value)).toEqual(['20', '8', '8', '8']);
+	});
+
+	it('offers no cut corner, edge slant or shape preset, which a radius cannot hold', () => {
+		const wrapper = mountFields({});
+
+		expect(wrapper.find('[data-treatment-option="cut"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="shape-left-slant"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
+	});
+
+	it.each([
+		{
+			case: 'one corner',
+			linked: false,
+			written: { borderRadiusTopRight: 12 },
+		},
+		{
+			case: 'all four corners while they are linked',
+			linked: true,
+			written: {
+				borderRadiusTopLeft: 12,
+				borderRadiusTopRight: 12,
+				borderRadiusBottomLeft: 12,
+				borderRadiusBottomRight: 12,
+			},
+		},
+	])('writes $case as stored radii', async ({ linked, written }) => {
+		const wrapper = mountFields({ borderRadius: 8 });
+		if (linked)
+			await wrapper.get('[data-testid="shape-corners-linked"]').trigger('click');
+
+		await cornerSize(wrapper, 'Top right').setValue('12');
+		await flushPromises();
+
+		expect(wrapper.emitted('update')?.at(-1)?.[0]).toEqual(written);
 	});
 });

@@ -6,6 +6,7 @@ import { SCREEN_MODES } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 import { usePaginatedScreenMode, useScreenModePagination } from '~/modules/screen-mode/pagination';
+import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 
 /**
  * The Page Rotation contract: with auto-page on, the current page is a
@@ -213,5 +214,58 @@ describe('usePaginatedScreenMode', () => {
 
 		expect(pageSize.value).toBe(3);
 		expect(pageData.value).toEqual([0, 1, 2]);
+	});
+
+	// A page size is Auto while absent: one page of every row, in the editor as on the Screen Output.
+	it.each([
+		{
+			cardsPerPage: undefined,
+			rowCount: 12,
+			pages: 1,
+			firstPage: 12,
+		},
+		{
+			cardsPerPage: undefined,
+			rowCount: 0,
+			pages: 1,
+			firstPage: 0,
+		},
+		{
+			cardsPerPage: 4,
+			rowCount: 12,
+			pages: 3,
+			firstPage: 4,
+		},
+		{
+			cardsPerPage: 5,
+			rowCount: 12,
+			pages: 3,
+			firstPage: 5,
+		},
+		{
+			cardsPerPage: 60,
+			rowCount: 12,
+			pages: 1,
+			firstPage: 12,
+		},
+	])('a Screen Output and its editor page $rowCount cards at $cardsPerPage a page into $pages', ({ cardsPerPage, rowCount, pages, firstPage }) => {
+		const config = computed(() => ({ ...DEFAULT_PAGE_ROTATION, autoPageEnabled: false, cardsPerPage }) as never);
+
+		const output = usePaginatedScreenMode(screenContext, {
+			mode: 'top-cards',
+			config,
+			rows: rows(rowCount),
+		});
+		const editor = useRotationConfigWrites({
+			mode: 'top-cards',
+			config,
+			rowCount: output.rowCount,
+			saveConfig: vi.fn(),
+		});
+
+		expect(output.totalPages.value).toBe(pages);
+		expect(editor.totalPages.value).toBe(pages);
+		expect(output.pageData.value).toHaveLength(firstPage);
+		expect(editor.pageSize.value).toBe(cardsPerPage);
 	});
 });

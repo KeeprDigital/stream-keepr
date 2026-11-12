@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 import LayerInspector from '~/components/Screen/Modes/FeatureMatchOverlay/LayerInspector.vue';
 
 // The host-owned half of the Feature Match Overlay property panel: the Frame and the Source Items.
@@ -18,15 +19,6 @@ const ScreenSettingsToggleStub = defineComponent({
 	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" data-testid="settings-toggle" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
-});
-
-const ControlSectionStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-		summary: { type: String, required: false },
-		badge: { type: String, required: false },
-	},
-	template: '<section data-testid="control-section"><h3>{{ title }}</h3><p v-if="summary">{{ summary }}</p><span v-if="badge">{{ badge }}</span><slot /></section>',
 });
 
 const UFormFieldStub = defineComponent({
@@ -84,7 +76,7 @@ async function mountComponent(overrides: Partial<{
 		global: {
 			stubs: {
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
-				FeatureMatchOverlayControlSection: ControlSectionStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				FeatureMatchOverlayFrameStyleCard: defineComponent({ template: '<div data-testid="frame-style-card" />' }),
 				GraphicsGeometryFields: GeometryFieldsStub,
 				FeatureMatchOverlaySourceFramingStyleFields: defineComponent({
@@ -185,26 +177,6 @@ describe('featureMatchOverlayLayerInspector', () => {
 		const patch = updateConfig.mock.calls.at(-1)?.[0] as Partial<FeatureMatchOverlayModeConfig>;
 		expect(patch.layout?.sources.find(source => source.id === 'main-source')?.framingStyle)
 			.toMatchObject({ borderWidth: 6 });
-	});
-
-	it('asks the editor to duplicate or remove the selected Source Item', async () => {
-		const updateConfig = vi.fn();
-		const wrapper = await mountComponent({
-			updateConfig,
-			selectedTarget: { type: 'source', itemId: 'main-source' },
-		});
-
-		await wrapper.find('[data-testid="source-duplicate"]').trigger('click');
-		await wrapper.find('[data-testid="source-remove"]').trigger('click');
-
-		// The editor owns the layer list and the selection, so it does both.
-		expect(wrapper.emitted('duplicate')).toEqual([
-			['main-source'],
-		]);
-		expect(wrapper.emitted('remove')).toEqual([
-			['main-source'],
-		]);
-		expect(updateConfig).not.toHaveBeenCalled();
 	});
 
 	it('persists a Source Item anchor selection', async () => {

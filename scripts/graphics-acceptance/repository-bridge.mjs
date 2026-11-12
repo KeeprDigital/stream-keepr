@@ -37,7 +37,7 @@ registerHooks({
 });
 
 const { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } = await import(
-	new URL('shared/featureMatchOverlayPresets.ts', repositoryRoot).href,
+	new URL('shared/builtInFeatureMatchLayoutTemplates.ts', repositoryRoot).href,
 );
 
 /** The same stored-ZIP reader and writer the Template Package tests rewrite packages with. */

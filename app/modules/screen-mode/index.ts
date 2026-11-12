@@ -16,10 +16,11 @@ import {
 } from '~~/shared/screenModeDefinitions';
 import { screenLayoutTokens } from './modeTokens';
 
+// A mode whose settings page its contract describes entirely mounts the generic renderer (#1094).
+const ScreenModeSettings = defineAsyncComponent(() => import('~/components/Screen/ModeSettings.vue'));
 const ScreenModesBackgroundDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Background/Display.vue'));
 const ScreenModesBackgroundSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Background/Settings.vue'));
 const ScreenModesCardDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Card/Display.vue'));
-const ScreenModesCardSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Card/Settings.vue'));
 const ScreenModesDeckDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Deck/Display.vue'));
 const ScreenModesDeckSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Deck/Settings.vue'));
 const ScreenModesStandingsDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Standings/Display.vue'));
@@ -27,7 +28,6 @@ const ScreenModesStandingsSettings = defineAsyncComponent(() => import('~/compon
 const ScreenModesTopCutDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/TopCut/Display.vue'));
 const ScreenModesTopCutSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/TopCut/Settings.vue'));
 const ScreenModesFeatureMatchDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/FeatureMatch/Display.vue'));
-const ScreenModesFeatureMatchSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/FeatureMatch/Settings.vue'));
 const ScreenModesFeatureMatchOverlayDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/FeatureMatchOverlay/Display.vue'));
 const ScreenModesFeatureMatchOverlaySettings = defineAsyncComponent(() => import('~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue'));
 const ScreenModesBroadcastGraphicsDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/BroadcastGraphics/Display.vue'));
@@ -37,15 +37,11 @@ const ScreenModesMetagameSettings = defineAsyncComponent(() => import('~/compone
 const ScreenModesTopCardsDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/TopCards/Display.vue'));
 const ScreenModesTopCardsSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/TopCards/Settings.vue'));
 const ScreenModesPlayerHistoryDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/PlayerHistory/Display.vue'));
-const ScreenModesPlayerHistorySettings = defineAsyncComponent(() => import('~/components/Screen/Modes/PlayerHistory/Settings.vue'));
 const ScreenModesPairingsDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Pairings/Display.vue'));
-const ScreenModesPairingsSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Pairings/Settings.vue'));
 const ScreenModesArchetypeSpotlightDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/ArchetypeSpotlight/Display.vue'));
 const ScreenModesArchetypeSpotlightSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/ArchetypeSpotlight/Settings.vue'));
 const ScreenModesHeadToHeadDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/HeadToHead/Display.vue'));
-const ScreenModesHeadToHeadSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/HeadToHead/Settings.vue'));
 const ScreenModesRoundClockDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/RoundClock/Display.vue'));
-const ScreenModesRoundClockSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/RoundClock/Settings.vue'));
 const ScreenModesTalentDisplay = defineAsyncComponent(() => import('~/components/Screen/Modes/Talent/Display.vue'));
 const ScreenModesTalentSettings = defineAsyncComponent(() => import('~/components/Screen/Modes/Talent/Settings.vue'));
 
@@ -77,20 +73,20 @@ export interface ScreenModeDefinitionWithComponents extends SharedScreenModeDefi
 
 export const SCREEN_MODE_RUNTIME = {
 	'background': { displayComponent: ScreenModesBackgroundDisplay, settingsComponent: ScreenModesBackgroundSettings },
-	'card': { displayComponent: ScreenModesCardDisplay, settingsComponent: ScreenModesCardSettings },
+	'card': { displayComponent: ScreenModesCardDisplay, settingsComponent: ScreenModeSettings },
 	'deck': { displayComponent: ScreenModesDeckDisplay, settingsComponent: ScreenModesDeckSettings },
 	'standings': { displayComponent: ScreenModesStandingsDisplay, settingsComponent: ScreenModesStandingsSettings },
 	'top-cut': { displayComponent: ScreenModesTopCutDisplay, settingsComponent: ScreenModesTopCutSettings },
-	'feature-match': { displayComponent: ScreenModesFeatureMatchDisplay, settingsComponent: ScreenModesFeatureMatchSettings },
+	'feature-match': { displayComponent: ScreenModesFeatureMatchDisplay, settingsComponent: ScreenModeSettings },
 	'feature-match-overlay': { displayComponent: ScreenModesFeatureMatchOverlayDisplay, settingsComponent: ScreenModesFeatureMatchOverlaySettings },
 	'broadcast-graphics': { displayComponent: ScreenModesBroadcastGraphicsDisplay, settingsComponent: ScreenModesBroadcastGraphicsSettings },
 	'metagame': { displayComponent: ScreenModesMetagameDisplay, settingsComponent: ScreenModesMetagameSettings },
 	'top-cards': { displayComponent: ScreenModesTopCardsDisplay, settingsComponent: ScreenModesTopCardsSettings },
-	'player-history': { displayComponent: ScreenModesPlayerHistoryDisplay, settingsComponent: ScreenModesPlayerHistorySettings },
-	'pairings': { displayComponent: ScreenModesPairingsDisplay, settingsComponent: ScreenModesPairingsSettings },
+	'player-history': { displayComponent: ScreenModesPlayerHistoryDisplay, settingsComponent: ScreenModeSettings },
+	'pairings': { displayComponent: ScreenModesPairingsDisplay, settingsComponent: ScreenModeSettings },
 	'archetype-spotlight': { displayComponent: ScreenModesArchetypeSpotlightDisplay, settingsComponent: ScreenModesArchetypeSpotlightSettings },
-	'head-to-head': { displayComponent: ScreenModesHeadToHeadDisplay, settingsComponent: ScreenModesHeadToHeadSettings },
-	'round-clock': { displayComponent: ScreenModesRoundClockDisplay, settingsComponent: ScreenModesRoundClockSettings },
+	'head-to-head': { displayComponent: ScreenModesHeadToHeadDisplay, settingsComponent: ScreenModeSettings },
+	'round-clock': { displayComponent: ScreenModesRoundClockDisplay, settingsComponent: ScreenModeSettings },
 	'talent': { displayComponent: ScreenModesTalentDisplay, settingsComponent: ScreenModesTalentSettings },
 } satisfies { [M in ScreenMode]: ScreenModeRuntimeDefinition };
 
@@ -201,7 +197,7 @@ export function isControlScreenMode(mode: ScreenMode): boolean {
 	return getScreenModeDisplayType(mode) === 'control';
 }
 
-export { modeMotionVars, modeTokenVar, modeTypographyStyle, screenBackgroundLayers, screenLayoutTokens, screenModeThemeFontReferences, screenModeThemeTokenStyle } from './modeTokens';
+export { foundationMotionVars, foundationTokenVar, foundationTypographyStyle, modeMotionVars, modeTokenVar, screenBackgroundLayers, screenLayoutTokens, screenModeThemeFontReferences, screenModeThemeTokenStyle } from './modeTokens';
 export { usePaginatedScreenMode, useProjectedRotationPage, useScreenModePagination } from './pagination';
 export type { ProjectedRotationPageOptions, ScreenModePaginationOptions } from './pagination';
 export { provideScreenModeReadiness, SCREEN_MODE_READY_TIMEOUT_MS, useScreenModeReady, useStagedScreenContent } from './readiness';

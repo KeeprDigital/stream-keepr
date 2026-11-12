@@ -106,78 +106,6 @@ const publishesMedia = computed(() =>
 );
 
 /**
- * The two hand-outs of this Screen's real Overlay Output, offered where the operator
- * is already watching it.
- *
- * Before #237 the Live workspace had neither, so an operator who needed a URL for a
- * capture browser either walked to the Screen settings page or typed
- * `/event/{id}/screen/{slug}` from what they could see — and a hand-typed URL carries
- * no Screen Output Asset Capability, so the output it opens renders every graphic
- * except its images, video and library fonts, with nothing on either side saying so
- * (#231).
- *
- * Both go through `useScreenOutputAccessUrl`, which obtains the capability at the
- * moment of the hand-out and refuses rather than degrading. That is the whole point:
- * a capability read from page state is absent while its load is in flight, absent
- * forever if it failed, and stale the instant anyone rotates it, and every one of
- * those produces a URL indistinguishable from a bare one.
- */
-const toast = useToast();
-const { copyToClipboard } = useCopyToClipboard();
-const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
-
-function outputAccessUrlOptions() {
-	return {
-		eventId: props.eventId,
-		screenId: props.screen.id,
-		screenSlug: props.screen.slug,
-		output: 'overlay' as const,
-	};
-}
-
-async function copyOutputUrl() {
-	// An empty URL is what the composable answers with when it could not obtain a
-	// capability, and the clipboard helper reports having nothing rather than putting a
-	// media-losing URL on the operator's clipboard.
-	await copyToClipboard(await screenOutputAccessUrl(outputAccessUrlOptions()), {
-		successTitle: 'Output URL copied',
-		successDescription: 'It carries asset access, so the output resolves this Screen\'s media.',
-		nothingToCopyTitle: 'Nothing copied',
-		nothingToCopyDescription: 'Asset access for this Screen could not be obtained, so the URL would have opened an output without its media. Try again.',
-	});
-}
-
-/**
- * The two ways an open fails are two different things for the operator to do, so they
- * are said in two different sets of words.
- *
- * Both used to arrive as one `false` and both were reported as an asset access
- * refusal — which asks the operator to try again, and a blocked tab is blocked again
- * identically. What that operator needs is their browser's pop-up setting, and until
- * #258 nothing here could tell them so.
- */
-async function openOutput() {
-	const result = await openScreenOutput(outputAccessUrlOptions());
-	if (result === 'opened')
-		return;
-
-	// A refused open opened a tab and closed it again unpointed, so the operator is
-	// looking at nothing having happened either way. Said, rather than left to be read
-	// as whichever of the two the operator guesses at.
-	toast.add(result === 'window-blocked'
-		? {
-				title: 'Output not opened',
-				description: 'This browser blocked the new tab. Allow pop-ups for this site, then open the output again.',
-				color: 'error',
-			}
-		: {
-				title: 'Output not opened',
-				description: 'Asset access for this Screen could not be obtained, so the output would have rendered without its media. Try again.',
-				color: 'error',
-			});
-}
-
-/**
  * The operator's own view of program: live in every way an output is, and not one.
  *
  * `embed: 'monitor'` is the whole of that distinction. It is what keeps this frame
@@ -239,13 +167,7 @@ const programBackgroundStyle = computed(() => {
 		Never collapsible: a Program monitor that can be hidden is not persistent, and
 		absent exactly when the mistake it guards against happens (#335).
 	-->
-	<ScreenSettingsCard title="Program" :collapsible="false">
-		<!--
-			Named by what they hand out and by what the hand-out carries, rather
-			than by a bare icon: the alternative an operator reaches for is the
-			address in their own browser's bar, and nothing distinguishes that one
-			from these until a control says what it is putting in the URL.
-		-->
+	<ScreenSettingsSection title="Program" :collapsible="false">
 		<template #actions>
 			<div class="flex flex-wrap items-center gap-2">
 				<UFieldGroup size="xs">
@@ -268,28 +190,12 @@ const programBackgroundStyle = computed(() => {
 					class="w-32"
 					aria-label="Program monitor background"
 				/>
-				<UFieldGroup size="xs">
-					<UButton
-						color="neutral"
-						variant="soft"
-						icon="i-lucide-external-link"
-						title="Open this Screen's Overlay Output in a new tab, with the asset access that resolves its media"
-						data-testid="open-screen-output"
-						@click="openOutput"
-					>
-						Open output
-					</UButton>
-					<UButton
-						color="neutral"
-						variant="soft"
-						icon="i-lucide-copy"
-						title="Copy this Screen's Overlay Output URL, with the asset access that resolves its media"
-						data-testid="copy-screen-output-url"
-						@click="copyOutputUrl"
-					>
-						Copy output URL
-					</UButton>
-				</UFieldGroup>
+				<!--
+					The hand-out of this Screen's real Overlay Output, offered where the operator
+					is already watching it (#237): before it, a URL for a capture browser meant
+					walking to the Screen header or typing one, without asset access (#231).
+				-->
+				<ScreenOutputHandOut :event-id="eventId" :screen="screen" size="xs" />
 			</div>
 		</template>
 		<!--
@@ -308,7 +214,7 @@ const programBackgroundStyle = computed(() => {
 			:title="outputsWithoutAssetAccess === 1
 				? 'One Screen Output cannot resolve this Screen\'s assets'
 				: `${outputsWithoutAssetAccess} Screen Outputs cannot resolve this Screen's assets`"
-			description="It is rendering everything except images, video and library fonts. Re-open it with Open output above, which is what puts asset access in the URL."
+			description="It is rendering everything except images, video and library fonts. Re-open it with Open above, which is what puts asset access in the URL."
 		/>
 		<!--
 			Asset access could not be obtained, so there is no monitor to show. Stated
@@ -342,5 +248,5 @@ const programBackgroundStyle = computed(() => {
 				/>
 			</div>
 		</div>
-	</ScreenSettingsCard>
+	</ScreenSettingsSection>
 </template>

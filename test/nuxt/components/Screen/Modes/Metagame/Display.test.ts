@@ -133,6 +133,17 @@ describe('screenMetagameDisplay', () => {
 		game.value = 'mtg';
 	});
 
+	// Auto fills the Screen; a set max width caps the content, in Event Canvas pixels.
+	it.each([
+		['Auto', undefined, ''],
+		['a set max width', 1200, '1200px'],
+	])('runs as wide as %s allows', async (_case, maxWidth, painted) => {
+		config.value = { ...config.value, maxWidth };
+		const wrapper = await mountComponent();
+
+		expect((wrapper.get('[data-testid="metagame-content"]').element as HTMLElement).style.maxWidth).toBe(painted);
+	});
+
 	it('sizes rows for the page size before the rows are measured', async () => {
 		config.value = { ...config.value, pageSize: 10 };
 
@@ -353,13 +364,13 @@ describe('screenMetagameDisplay', () => {
 			]);
 		});
 
-		it('fills each bar from its colour slot\'s chart series, and Other from the neutral fill', async () => {
+		it('fills each bar from its colour slot\'s Foundation series, and Other from the Foundation neutral fill', async () => {
 			const wrapper = await mountComponent();
 
 			const fills = wrapper.findAll('[data-testid="metagame-chart-fill"]');
 			expect(fills.map(fill => fill.attributes('data-color-slot'))).toEqual(['4', '1', 'other']);
-			expect(fills[0]!.attributes('style')).toContain('chart-series-4');
-			expect(fills[2]!.attributes('style')).toContain('chart-other');
+			expect(fills[0]!.attributes('style')).toContain('var(--theme-series-4)');
+			expect(fills[2]!.attributes('style')).toContain('var(--theme-series-other)');
 		});
 
 		it('shows each Archetype\'s mana colours beside its name', async () => {

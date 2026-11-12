@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 
 const {
 	config,
@@ -19,49 +19,49 @@ const {
 } = useArchetypeSpotlightModeData(useScreenContext());
 
 const primaryTextStyle = {
-	color: modeTokenVar('archetype-spotlight', 'primary-text'),
+	color: foundationTokenVar('text-primary'),
 };
 const secondaryTextStyle = {
-	color: modeTokenVar('archetype-spotlight', 'secondary-text'),
+	color: foundationTokenVar('text-secondary'),
 };
 const titleStyle = {
-	...modeTypographyStyle('archetype-spotlight', 'title-typography'),
-	color: modeTokenVar('archetype-spotlight', 'title-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-primary'),
 };
 const titleDividerStyle = {
-	borderBottomColor: modeTokenVar('archetype-spotlight', 'title-divider'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 const headlineStyle = {
-	...modeTypographyStyle('archetype-spotlight', 'headline-typography'),
+	...foundationTypographyStyle('heading'),
 	...primaryTextStyle,
 };
 const labelStyle = {
-	...modeTypographyStyle('archetype-spotlight', 'label-typography'),
+	...foundationTypographyStyle('heading'),
 	...secondaryTextStyle,
 };
 /** Over the shared header row's own face, colour and rule. */
 const columnHeaderStyle = {
 	...labelStyle,
-	borderBottomColor: modeTokenVar('archetype-spotlight', 'row-divider'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 /** On each row too, over the shared row chrome's own line height. */
 const rowStyle = {
-	...modeTypographyStyle('archetype-spotlight', 'row-typography'),
-	borderBottomColor: modeTokenVar('archetype-spotlight', 'row-divider'),
+	...foundationTypographyStyle('body'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 /** Over the shared page indicator's own face. */
 const pageIndicatorStyle = {
-	...modeTypographyStyle('archetype-spotlight', 'row-typography'),
+	...foundationTypographyStyle('body'),
 	...secondaryTextStyle,
 };
 const surfaceStyle = {
-	backgroundColor: modeTokenVar('archetype-spotlight', 'surface'),
+	backgroundColor: foundationTokenVar('surface'),
 };
 
 /** Set on the root, over the shared broadcast table chrome's own colour and face. */
 const displayStyle = {
-	...modeTypographyStyle('archetype-spotlight', 'row-typography'),
-	color: modeTokenVar('archetype-spotlight', 'primary-text'),
+	...foundationTypographyStyle('body'),
+	color: foundationTokenVar('text-primary'),
 };
 
 // The archetype page's stat strip, for the numbers a spotlight shows.
@@ -92,13 +92,13 @@ const stats = computed(() => {
 // Cards carry no rank badge here: their order is the ranking. The face is
 // set over the card's own, and the badge lifts off its art as Most Played Cards' does.
 const statBadgeStyle = {
-	...modeTypographyStyle('archetype-spotlight', 'row-typography'),
+	...foundationTypographyStyle('body'),
 	color: modeTokenVar('archetype-spotlight', 'stat-badge-text'),
 	backgroundColor: modeTokenVar('archetype-spotlight', 'stat-badge-surface'),
-	boxShadow: `0 4px 6px -1px ${modeTokenVar('archetype-spotlight', 'badge-shadow')}`,
+	boxShadow: `0 4px 6px -1px ${foundationTokenVar('shadow')}`,
 };
 const cardStyle = {
-	backgroundColor: modeTokenVar('archetype-spotlight', 'card-placeholder-surface'),
+	backgroundColor: foundationTokenVar('surface-raised'),
 };
 </script>
 

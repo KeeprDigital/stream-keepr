@@ -1,34 +1,12 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { roundClockModeConfigContract } from '../screenModeConfigs/roundClock';
 
-/** The Round Clock settings groups its Mode Tokens may name (ADR-0072). */
-export type RoundClockSettingsGroup = 'round-name' | 'clock';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type RoundClockSettingsGroup = ScreenSettingsGroupOf<typeof roundClockModeConfigContract>;
 
 /** How the Round Clock Screen Mode looks: its Mode Tokens, by name within the mode. */
 export const roundClockModeTokens = {
-	'surface': {
-		type: 'color',
-		label: 'Clock surface',
-		settingsGroup: 'clock',
-		default: { token: 'surface' },
-	},
-	'round-name-typography': {
-		type: 'typography',
-		label: 'Round name type',
-		settingsGroup: 'round-name',
-		default: { token: 'heading' },
-	},
-	'round-name-text': {
-		type: 'color',
-		label: 'Round name text',
-		settingsGroup: 'round-name',
-		default: { token: 'text-secondary' },
-	},
-	'clock-typography': {
-		type: 'typography',
-		label: 'Clock type',
-		settingsGroup: 'clock',
-		default: { token: 'heading' },
-	},
 	'running-clock-text': {
 		type: 'color',
 		label: 'Running clock text',
@@ -48,3 +26,14 @@ export const roundClockModeTokens = {
 		default: { token: 'caution' },
 	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition<RoundClockSettingsGroup>>>;
+
+/**
+ * The Mode Tokens Round Clock once declared: its type and shared chrome, which only
+ * repeated the Foundation Tokens its display now reads directly.
+ */
+export const roundClockFormerModeTokens = [
+	'surface',
+	'round-name-typography',
+	'round-name-text',
+	'clock-typography',
+] as const;

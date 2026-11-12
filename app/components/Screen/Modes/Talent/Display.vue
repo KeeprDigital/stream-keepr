@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '~~/shared/socialProfiles';
-import { modeTokenVar, modeTypographyStyle } from '~/modules/screen-mode';
+import { foundationTokenVar, foundationTypographyStyle } from '~/modules/screen-mode';
 
 const { config, error, ready, isEmpty, headerText, talents } = useTalentModeData(useScreenContext());
 
@@ -12,30 +12,30 @@ const photos = computed<GraphicAssetReference[]>(() => talents.value.flatMap(tal
 const { contentUrl, contentUrlsSettled } = useScreenGraphicAssetContentUrls(() => photos.value);
 
 const titleStyle = {
-	...modeTypographyStyle('talent', 'title-typography'),
-	color: modeTokenVar('talent', 'title-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-primary'),
 };
 const titleDividerStyle = {
-	borderBottomColor: modeTokenVar('talent', 'title-divider'),
+	borderBottomColor: foundationTokenVar('divider'),
 };
 const cardStyle = {
-	backgroundColor: modeTokenVar('talent', 'surface'),
-	borderColor: modeTokenVar('talent', 'accent'),
+	backgroundColor: foundationTokenVar('surface'),
+	borderColor: foundationTokenVar('accent'),
 };
 const photoStyle = {
-	borderColor: modeTokenVar('talent', 'accent'),
+	borderColor: foundationTokenVar('accent'),
 };
 const nameStyle = {
-	...modeTypographyStyle('talent', 'name-typography'),
-	color: modeTokenVar('talent', 'name-text'),
+	...foundationTypographyStyle('heading'),
+	color: foundationTokenVar('text-primary'),
 };
 const roleStyle = {
-	...modeTypographyStyle('talent', 'detail-typography'),
-	color: modeTokenVar('talent', 'role-text'),
+	...foundationTypographyStyle('body'),
+	color: foundationTokenVar('text-secondary'),
 };
 const profileStyle = {
-	...modeTypographyStyle('talent', 'detail-typography'),
-	color: modeTokenVar('talent', 'profile-text'),
+	...foundationTypographyStyle('body'),
+	color: foundationTokenVar('text-primary'),
 };
 
 /** A name's initials, shown where a Talent has no photo. */

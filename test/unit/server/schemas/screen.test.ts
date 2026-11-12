@@ -18,7 +18,7 @@ import {
 	topCardsModeConfigSchema,
 	updateScreenSchema,
 } from '~~/server/schemas/api/screen';
-import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
+import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '~~/shared/builtInFeatureMatchLayoutTemplates';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, getDefaultConfigForMode, getDisplayDefaultsForMode, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { maximalFeatureMatchLayoutDocument } from '~~/test/helpers/featureMatchLayoutDocument';
 
@@ -59,8 +59,7 @@ describe('deckModeConfigSchema', () => {
 			view: 'grid' as const,
 			columns: 4,
 			listColumns: 2,
-			cardSizing: 'fixed' as const,
-			autoColumns: false,
+			maxCardSize: 144,
 		},
 		sideboard: {
 			view: 'stack' as const,
@@ -158,14 +157,14 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('accepts every built-in Feature Match Overlay Preset', () => {
-		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS) {
+	it('accepts every built-in Feature Match Layout Template', () => {
+		for (const builtIn of BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES) {
 			const result = featureMatchOverlayModeConfigSchema.safeParse({
 				featureMatchId: null,
-				...preset.config,
+				...builtIn.config,
 			});
 
-			expect(result.success, `${preset.id}: ${result.success
+			expect(result.success, `${builtIn.id}: ${result.success
 				? ''
 				: JSON.stringify(result.error.issues)}`).toBe(true);
 		}
@@ -900,9 +899,7 @@ describe('topCardsModeConfigSchema', () => {
 		pointsBadgePosition: 'top-right' as const,
 		pointsBadgeTextSize: 14,
 		columns: 5,
-		cardSizing: 'fit' as const,
-		autoColumns: false,
-		cardWidth: 160,
+		maxCardSize: 160,
 		cardGap: 12,
 		cardsPerPage: 60,
 		autoPageEnabled: false,
@@ -937,6 +934,31 @@ describe('topCardsModeConfigSchema', () => {
 
 	it('rejects the stat badge showing an unknown metric', () => {
 		expect(topCardsModeConfigSchema.safeParse({ ...validConfig, statBadge: 'winRate' }).success).toBe(false);
+	});
+
+	// Cards per page is Auto while absent, or a number up to the most cards a Screen ranks.
+	it.each([
+		{ cardsPerPage: 0, accepted: false },
+		{ cardsPerPage: 1, accepted: true },
+		{ cardsPerPage: 60, accepted: true },
+		{ cardsPerPage: 61, accepted: false },
+		{ cardsPerPage: null, accepted: true },
+	])('a write of $cardsPerPage cards per page is accepted: $accepted', ({ cardsPerPage, accepted }) => {
+		expect(modeConfigPatchSchemaMap['top-cards'].safeParse({ cardsPerPage }).success).toBe(accepted);
+	});
+
+	it('pages by Auto until a page size is set, and a write of Auto clears a set one', () => {
+		const { cardsPerPage: _auto, ...unset } = validConfig;
+		expect(topCardsModeConfigSchema.safeParse(unset).success).toBe(true);
+		expect(resolveScreenModeConfig({}, 'top-cards').cardsPerPage).toBeUndefined();
+
+		const patch = modeConfigPatchSchemaMap['top-cards'].parse({ cardsPerPage: null }) as Record<string, unknown>;
+		expect(parseModeConfigPatchResult({
+			'top-cards': { cardsPerPage: 4, limit: 12 },
+		}, 'top-cards', patch))
+			.toEqual({
+				'top-cards': { limit: 12 },
+			});
 	});
 
 	it('rejects a page of more grid rows than the shared page size bound', () => {

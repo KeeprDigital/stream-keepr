@@ -1,5 +1,5 @@
 import type { VueWrapper } from '@vue/test-utils';
-import type { StoredThemeTokens, ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
+import type { FoundationTokenName, StoredThemeTokens, ThemeTokenType, ThemeTokenValueTypes } from '~~/shared/modules/theme';
 import type { BracketEntrant, BracketPosition, TopCutBracket } from '~~/shared/modules/top-cut-bracket';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicApplicationFontSelection } from '~~/shared/types/graphics';
@@ -8,7 +8,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, ref } from 'vue';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
-import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
+import { FOUNDATION_TOKENS, resolveThemeTokens } from '~~/shared/modules/theme';
 import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
 import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
@@ -21,11 +21,11 @@ import { stubCapabilitySession, stubFontFaces } from '~~/test/nuxt/helpers/fontF
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import Renderer from '~/components/Screen/Renderer.vue';
 
-// Each Screen Mode's display, mounted by its Screen host under a resolved
-// token set, paints every Mode Token it declares, and a plain mode's host
-// insets and aligns it by the Theme (ADR-0049, ADR-0051).
+// Each Screen Mode's display, under its Screen host, paints every Mode Token it declares
+// and its chrome from the Foundation Tokens; a plain mode's host insets and aligns it by
+// the Theme (ADR-0049, ADR-0051).
 
-type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize' | 'maxWidth';
+type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize';
 
 /** Where a display paints one Mode Token: an element, and for a colour the property it sets. */
 interface Probe {
@@ -45,17 +45,8 @@ const CHART_SLOTS = Array.from({ length: METAGAME_CHART_MAX_ARCHETYPES }, (_, in
 /** Each themed mode's probes, one per Mode Token it declares, by the token's name within the mode. */
 const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 	'standings': {
-		'surface': { selector: '.standings-table', property: 'backgroundColor' },
-		'title-typography': { selector: '.standings-header h2' },
-		'title-text': { selector: '.standings-header h2', property: 'color' },
-		'title-divider': { selector: '.standings-header', property: 'borderBottomColor' },
-		'row-typography': { selector: '.cell-position' },
-		'row-divider': { selector: '.standings-row', property: 'borderBottomColor' },
-		'primary-text': { selector: '.cell-name', property: 'color' },
-		'secondary-text': { selector: '.cell-record', property: 'color' },
 		'rise': { selector: '[data-position-change="up"]', property: 'color' },
 		'fall': { selector: '[data-position-change="down"]', property: 'color' },
-		'max-width': { selector: '[data-testid="standings-content"]', property: 'maxWidth' },
 		'row-motion': { selector: '.standings-row', motionProperties: '--standings-row' },
 		'reveal-motion': {
 			selector: '.standings-row',
@@ -64,52 +55,19 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		},
 	},
 	'pairings': {
-		'surface': { selector: '.pairings-rows', property: 'backgroundColor' },
-		'title-typography': { selector: '.pairings-header h2' },
-		'title-text': { selector: '.pairings-header h2', property: 'color' },
-		'title-divider': { selector: '.pairings-header', property: 'borderBottomColor' },
-		'row-typography': { selector: '.pairing-row .table' },
-		'row-divider': { selector: '.pairing-row', property: 'borderBottomColor' },
-		'primary-text': { selector: '.player-1', property: 'color' },
-		'secondary-text': { selector: '.versus', property: 'color' },
-		'result-typography': { selector: '[data-result="reported"]' },
 		'result-reported': { selector: '[data-result="reported"]', property: 'color' },
 		'result-pending': { selector: '[data-result="pending"]', property: 'color' },
 		'result-bye': { selector: '[data-result="bye"]', property: 'color' },
 	},
 	'player-history': {
-		'surface': { selector: '.history-rows', property: 'backgroundColor' },
-		'title-typography': { selector: '.history-header h2' },
-		'title-text': { selector: '.history-header h2', property: 'color' },
-		'title-divider': { selector: '.history-header', property: 'borderBottomColor' },
-		'row-typography': { selector: '.history-row .round' },
-		'row-divider': { selector: '.history-row', property: 'borderBottomColor' },
-		'primary-text': { selector: '.opponent', property: 'color' },
-		'secondary-text': { selector: '.round', property: 'color' },
-		'outcome-typography': { selector: '[data-outcome="win"]' },
 		'outcome-win': { selector: '[data-outcome="win"]', property: 'color' },
 		'outcome-loss': { selector: '[data-outcome="loss"]', property: 'color' },
 		'outcome-draw': { selector: '[data-outcome="draw"]', property: 'color' },
 		'outcome-pending': { selector: '[data-outcome="pending"]', property: 'color' },
 	},
-	'head-to-head': {
-		'title-typography': { selector: '.head-to-head-header h2' },
-		'title-text': { selector: '.head-to-head-header h2', property: 'color' },
-		'title-divider': { selector: '.head-to-head-header', property: 'borderBottomColor' },
-		'name-typography': { selector: '.name' },
-		'label-typography': { selector: '.earlier-matches-title' },
-		'surface': { selector: '.head-to-head-earlier-matches', property: 'backgroundColor' },
-		'row-typography': { selector: '.earlier-match .round' },
-		'row-divider': { selector: '.earlier-match', property: 'borderBottomColor' },
-		'primary-text': { selector: '.name', property: 'color' },
-		'secondary-text': { selector: '.versus', property: 'color' },
-	},
+	'head-to-head': {},
 	// The clock's colour follows its state, which the mocked data takes from `clockState`.
 	'round-clock': {
-		'surface': { selector: '.round-clock-display', property: 'backgroundColor' },
-		'round-name-typography': { selector: '.round-clock-name' },
-		'round-name-text': { selector: '.round-clock-name', property: 'color' },
-		'clock-typography': { selector: '.round-clock-time' },
 		'running-clock-text': { selector: '[data-clock-state="running"] .round-clock-time', property: 'color' },
 		'pending-clock-text': {
 			selector: '[data-clock-state="pending"] .round-clock-time',
@@ -122,100 +80,28 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 			config: { clockState: 'ended' },
 		},
 	},
-	'talent': {
-		'title-typography': { selector: '.talent-header h2' },
-		'title-text': { selector: '.talent-header h2', property: 'color' },
-		'title-divider': { selector: '.talent-header', property: 'borderBottomColor' },
-		'surface': { selector: '.talent-card', property: 'backgroundColor' },
-		'accent': { selector: '.talent-photo', property: 'borderColor' },
-		'name-typography': { selector: '.talent-name' },
-		'name-text': { selector: '.talent-name', property: 'color' },
-		'detail-typography': { selector: '.talent-role' },
-		'role-text': { selector: '.talent-role', property: 'color' },
-		'profile-text': { selector: '.talent-profile', property: 'color' },
-	},
+	'talent': {},
 	'archetype-spotlight': {
-		'title-typography': { selector: '.spotlight-header h2' },
-		'title-text': { selector: '.spotlight-header h2', property: 'color' },
-		'title-divider': { selector: '.spotlight-header', property: 'borderBottomColor' },
-		'headline-typography': { selector: '.spotlight-name' },
-		'label-typography': { selector: '.stat-label' },
-		'surface': { selector: '.spotlight-pilots', property: 'backgroundColor' },
-		'row-typography': { selector: '.pilot-name' },
-		'row-divider': { selector: '.pilot-row', property: 'borderBottomColor' },
-		'primary-text': { selector: '.pilot-name', property: 'color' },
-		'secondary-text': { selector: '.stat-label', property: 'color' },
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
 		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
-		'card-placeholder-surface': { selector: '.mtg-card', property: 'backgroundColor' },
-		'badge-shadow': { selector: '[data-testid="top-cards-stat-badge"]', property: 'boxShadow' },
 	},
 	'top-cut': {
-		'title-typography': { selector: '.broadcast-table-title h2' },
-		'title-text': { selector: '.broadcast-table-title h2', property: 'color' },
-		'title-divider': { selector: '.broadcast-table-title', property: 'borderBottomColor' },
-		'round-name-typography': { selector: '.bracket-column-name' },
-		'round-name-text': { selector: '.bracket-column-name', property: 'color' },
-		'entrant-typography': { selector: '.bracket-entrant-name' },
-		'primary-text': { selector: '.is-winner .bracket-entrant-name', property: 'color' },
-		'secondary-text': { selector: '.is-eliminated .bracket-entrant-name', property: 'color' },
 		'position-surface': { selector: '[data-status="reported"]', property: 'backgroundColor' },
-		'position-border': { selector: '[data-status="reported"]', property: 'borderTopColor' },
 		'pending-position-border': { selector: '[data-status="awaiting"]', property: 'borderTopColor' },
-		'entrant-divider': { selector: '.bracket-entrant + .bracket-entrant', property: 'borderTopColor' },
 		'winner-surface': { selector: '.bracket-entrant.is-winner', property: 'backgroundColor' },
 		'connector': { selector: '.bracket-connector', property: 'borderTopColor' },
-		'champion-typography': { selector: '.bracket-champion-name' },
 		'champion-border': { selector: '.bracket-champion-name', property: 'borderTopColor' },
 	},
 	'metagame': {
-		'surface': { selector: '.metagame-table', property: 'backgroundColor' },
-		'title-typography': { selector: '.metagame-title h2' },
-		'title-text': { selector: '.metagame-title h2', property: 'color' },
-		'title-divider': { selector: '.metagame-title', property: 'borderBottomColor' },
-		'header-typography': { selector: '.metagame-header-cell' },
-		'header-text': { selector: '.metagame-header-row', property: 'color' },
-		'header-divider': { selector: '.metagame-header-row', property: 'borderBottomColor' },
-		'row-typography': { selector: '.metagame-cell' },
-		'row-divider': { selector: '.metagame-row', property: 'borderBottomColor' },
-		'primary-text': { selector: '.metagame-cell.is-name', property: 'color' },
-		'secondary-text': { selector: '.metagame-cell:not(.is-name):not(.is-primary-metric)', property: 'color' },
-		'chart-baseline': {
-			selector: '.metagame-chart-track',
-			property: 'borderLeftColor',
-			config: { viewMode: 'chart' },
-		},
-		...Object.fromEntries(CHART_SLOTS.map(slot => [
-			`chart-series-${slot}`,
-			{
-				selector: `[data-color-slot="${slot}"]`,
-				property: 'backgroundColor',
-				config: { viewMode: 'chart' },
-			},
-		])),
-		'chart-other': {
-			selector: '[data-color-slot="other"]',
-			property: 'backgroundColor',
-			config: { viewMode: 'chart' },
-		},
-		'max-width': { selector: '[data-testid="metagame-content"]', property: 'maxWidth' },
 		'row-motion': { selector: '.metagame-row', motionProperties: '--metagame-row' },
 	},
 	'top-cards': {
-		'title-typography': { selector: '.top-cards-title h2' },
-		'title-text': { selector: '.top-cards-title h2', property: 'color' },
-		'name-typography': { selector: '.top-cards-display' },
-		'name-text': { selector: '.top-cards-display', property: 'color' },
-		'card-placeholder-surface': { selector: '.mtg-card', property: 'backgroundColor' },
-		'badge-typography': { selector: '[data-testid="top-cards-stat-badge"]' },
-		'badge-shadow': { selector: '[data-testid="top-cards-rank-badge"]', property: 'boxShadow' },
 		'rank-badge-surface': { selector: '[data-testid="top-cards-rank-badge"]', property: 'backgroundColor' },
 		'rank-badge-text': { selector: '[data-testid="top-cards-rank-badge"]', property: 'color' },
 		'stat-badge-surface': { selector: '[data-testid="top-cards-stat-badge"]', property: 'backgroundColor' },
 		'stat-badge-text': { selector: '[data-testid="top-cards-stat-badge"]', property: 'color' },
 		'points-badge-surface': { selector: '[data-testid="top-cards-points-badge"]', property: 'backgroundColor' },
 		'points-badge-text': { selector: '[data-testid="top-cards-points-badge"]', property: 'color' },
-		'page-indicator-text': { selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
 	},
 	'card': {
 		motion: { selector: '.card-image-wrapper' },
@@ -228,11 +114,6 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'source-surface': { selector: '[data-graphic-item-id="main-source"]', property: 'borderTopColor' },
 	},
 	'deck': {
-		'title-typography': { selector: '.deck-header h2' },
-		'body-typography': { selector: '.deck-header p' },
-		'primary-text': { selector: '.deck-header h2', property: 'color' },
-		'secondary-text': { selector: '.deck-header p', property: 'color' },
-		'card-placeholder': { selector: '.mtg-card', property: 'backgroundColor' },
 		'quantity-badge-text': { selector: '.quantity-badge', property: 'color' },
 		'quantity-badge-surface': { selector: '.quantity-badge', property: 'backgroundColor' },
 		'points-badge-text': { selector: '[data-testid="highlander-card-badge"]', property: 'color' },
@@ -245,7 +126,142 @@ const THEMED_DISPLAYS: Partial<Record<ScreenMode, Record<string, Probe>>> = {
 		'pointed-card-surface': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'backgroundColor' },
 		'pointed-card-accent': { selector: '[data-testid="highlander-pointed-card-chip"] span', property: 'color' },
 		'pointed-card-border': { selector: '[data-testid="highlander-pointed-card-chip"]', property: 'borderColor' },
-		'badge-shadow': { selector: '[data-testid="highlander-card-badge"]', property: 'boxShadow' },
+	},
+};
+
+/** A part of a display's shared chrome: where it paints, and the Foundation Token it reads. */
+type ChromeProbe = Probe & { token: FoundationTokenName };
+
+/**
+ * Each culled mode's shared chrome, by the former Mode Token that styled each
+ * part: the display reads the Theme's Foundation Token for it directly.
+ */
+const FOUNDATION_CHROME: Partial<Record<ScreenMode, Record<string, ChromeProbe>>> = {
+	'standings': {
+		'surface': { token: 'surface', selector: '.standings-table', property: 'backgroundColor' },
+		'title-typography': { token: 'heading', selector: '.standings-header h2' },
+		'title-text': { token: 'text-primary', selector: '.standings-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.standings-header', property: 'borderBottomColor' },
+		'row-typography': { token: 'body', selector: '.cell-position' },
+		'row-divider': { token: 'divider', selector: '.standings-row', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.cell-name', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.cell-record', property: 'color' },
+	},
+	'pairings': {
+		'surface': { token: 'surface', selector: '.pairings-rows', property: 'backgroundColor' },
+		'title-typography': { token: 'heading', selector: '.pairings-header h2' },
+		'title-text': { token: 'text-primary', selector: '.pairings-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.pairings-header', property: 'borderBottomColor' },
+		'row-typography': { token: 'body', selector: '.pairing-row .table' },
+		'row-divider': { token: 'divider', selector: '.pairing-row', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.player-1', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.versus', property: 'color' },
+		'result-typography': { token: 'heading', selector: '[data-result="reported"]' },
+	},
+	'player-history': {
+		'surface': { token: 'surface', selector: '.history-rows', property: 'backgroundColor' },
+		'title-typography': { token: 'heading', selector: '.history-header h2' },
+		'title-text': { token: 'text-primary', selector: '.history-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.history-header', property: 'borderBottomColor' },
+		'row-typography': { token: 'body', selector: '.history-row .round' },
+		'row-divider': { token: 'divider', selector: '.history-row', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.opponent', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.round', property: 'color' },
+		'outcome-typography': { token: 'heading', selector: '[data-outcome="win"]' },
+	},
+	'head-to-head': {
+		'title-typography': { token: 'heading', selector: '.head-to-head-header h2' },
+		'title-text': { token: 'text-primary', selector: '.head-to-head-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.head-to-head-header', property: 'borderBottomColor' },
+		'name-typography': { token: 'heading', selector: '.name' },
+		'label-typography': { token: 'heading', selector: '.earlier-matches-title' },
+		'surface': { token: 'surface', selector: '.head-to-head-earlier-matches', property: 'backgroundColor' },
+		'row-typography': { token: 'body', selector: '.earlier-match .round' },
+		'row-divider': { token: 'divider', selector: '.earlier-match', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.name', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.versus', property: 'color' },
+	},
+	'round-clock': {
+		'surface': { token: 'surface', selector: '.round-clock-display', property: 'backgroundColor' },
+		'round-name-typography': { token: 'heading', selector: '.round-clock-name' },
+		'round-name-text': { token: 'text-secondary', selector: '.round-clock-name', property: 'color' },
+		'clock-typography': { token: 'heading', selector: '.round-clock-time' },
+	},
+	'metagame': {
+		'surface': { token: 'surface', selector: '.metagame-table', property: 'backgroundColor' },
+		'title-typography': { token: 'heading', selector: '.metagame-title h2' },
+		'title-text': { token: 'text-primary', selector: '.metagame-title h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.metagame-title', property: 'borderBottomColor' },
+		'header-typography': { token: 'heading', selector: '.metagame-header-cell' },
+		'header-text': { token: 'text-secondary', selector: '.metagame-header-row', property: 'color' },
+		'header-divider': { token: 'divider', selector: '.metagame-header-row', property: 'borderBottomColor' },
+		'row-typography': { token: 'body', selector: '.metagame-cell' },
+		'row-divider': { token: 'divider', selector: '.metagame-row', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.metagame-cell.is-name', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.metagame-cell:not(.is-name):not(.is-primary-metric)', property: 'color' },
+		'chart-baseline': {
+			token: 'divider',
+			selector: '.metagame-chart-track',
+			property: 'borderLeftColor',
+			config: { viewMode: 'chart' },
+		},
+	},
+	'archetype-spotlight': {
+		'title-typography': { token: 'heading', selector: '.spotlight-header h2' },
+		'title-text': { token: 'text-primary', selector: '.spotlight-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.spotlight-header', property: 'borderBottomColor' },
+		'headline-typography': { token: 'heading', selector: '.spotlight-name' },
+		'label-typography': { token: 'heading', selector: '.stat-label' },
+		'surface': { token: 'surface', selector: '.spotlight-pilots', property: 'backgroundColor' },
+		'row-typography': { token: 'body', selector: '.pilot-name' },
+		'row-divider': { token: 'divider', selector: '.pilot-row', property: 'borderBottomColor' },
+		'primary-text': { token: 'text-primary', selector: '.pilot-name', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.stat-label', property: 'color' },
+		'card-placeholder-surface': { token: 'surface-raised', selector: '.mtg-card', property: 'backgroundColor' },
+		'badge-shadow': { token: 'shadow', selector: '[data-testid="top-cards-stat-badge"]', property: 'boxShadow' },
+	},
+	'top-cards': {
+		'title-typography': { token: 'heading', selector: '.top-cards-title h2' },
+		'title-text': { token: 'text-primary', selector: '.top-cards-title h2', property: 'color' },
+		'name-typography': { token: 'body', selector: '.top-cards-display' },
+		'name-text': { token: 'text-primary', selector: '.top-cards-display', property: 'color' },
+		'card-placeholder-surface': { token: 'surface-raised', selector: '.mtg-card', property: 'backgroundColor' },
+		'badge-typography': { token: 'heading', selector: '[data-testid="top-cards-stat-badge"]' },
+		'badge-shadow': { token: 'shadow', selector: '[data-testid="top-cards-rank-badge"]', property: 'boxShadow' },
+		'page-indicator-text': { token: 'text-secondary', selector: '[data-testid="top-cards-page-indicator"]', property: 'color' },
+	},
+	'top-cut': {
+		'title-typography': { token: 'heading', selector: '.broadcast-table-title h2' },
+		'title-text': { token: 'text-primary', selector: '.broadcast-table-title h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.broadcast-table-title', property: 'borderBottomColor' },
+		'round-name-typography': { token: 'heading', selector: '.bracket-column-name' },
+		'round-name-text': { token: 'text-secondary', selector: '.bracket-column-name', property: 'color' },
+		'entrant-typography': { token: 'body', selector: '.bracket-entrant-name' },
+		'primary-text': { token: 'text-primary', selector: '.is-winner .bracket-entrant-name', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.is-eliminated .bracket-entrant-name', property: 'color' },
+		'position-border': { token: 'divider', selector: '[data-status="reported"]', property: 'borderTopColor' },
+		'entrant-divider': { token: 'divider', selector: '.bracket-entrant + .bracket-entrant', property: 'borderTopColor' },
+		'champion-typography': { token: 'heading', selector: '.bracket-champion-name' },
+	},
+	'talent': {
+		'title-typography': { token: 'heading', selector: '.talent-header h2' },
+		'title-text': { token: 'text-primary', selector: '.talent-header h2', property: 'color' },
+		'title-divider': { token: 'divider', selector: '.talent-header', property: 'borderBottomColor' },
+		'surface': { token: 'surface', selector: '.talent-card', property: 'backgroundColor' },
+		'accent': { token: 'accent', selector: '.talent-photo', property: 'borderColor' },
+		'name-typography': { token: 'heading', selector: '.talent-name' },
+		'name-text': { token: 'text-primary', selector: '.talent-name', property: 'color' },
+		'detail-typography': { token: 'body', selector: '.talent-role' },
+		'role-text': { token: 'text-secondary', selector: '.talent-role', property: 'color' },
+		'profile-text': { token: 'text-primary', selector: '.talent-profile', property: 'color' },
+	},
+	'deck': {
+		'title-typography': { token: 'heading', selector: '.deck-header h2' },
+		'body-typography': { token: 'body', selector: '.deck-header p' },
+		'primary-text': { token: 'text-primary', selector: '.deck-header h2', property: 'color' },
+		'secondary-text': { token: 'text-secondary', selector: '.deck-header p', property: 'color' },
+		'card-placeholder': { token: 'surface-raised', selector: '.mtg-card', property: 'backgroundColor' },
+		'badge-shadow': { token: 'shadow', selector: '[data-testid="highlander-card-badge"]', property: 'boxShadow' },
 	},
 };
 
@@ -677,7 +693,6 @@ mockNuxtImport('useTopCardsModeData', () => () => {
 	return {
 		config: computed(() => ({
 			columns: 5,
-			cardSizing: 'fit',
 			showHeader: true,
 			showRankBadges: true,
 			rankBadgePosition: 'top-left',
@@ -720,7 +735,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	config: computed(() => ({
 		board: 'full',
 		sideboardPlacement: 'beside',
-		mainboard: { view: 'grid', columns: 4, cardSizing: 'fixed' },
+		mainboard: { view: 'grid', columns: 4 },
 		sideboard: { view: 'stack' },
 		showQuantities: true,
 		showDeckName: true,
@@ -771,10 +786,6 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	displayedDeckVersion: ref(1),
 	pendingSwapVersion: ref(0),
 	commitPendingDeck: () => {},
-	boardColumns: {
-		mainboard: computed(() => 4),
-		sideboard: computed(() => 2),
-	},
 }));
 
 const spotlightCard = {
@@ -1007,12 +1018,13 @@ describe.each(GRAPHICS_HOSTS)('the %s display', (mode) => {
 		expect(boundColor()).toBe(FOUNDATION_TOKENS['text-primary'].default);
 	});
 
-	it('paints it from the Screen\'s own override of its Foundation Token, over the Theme', async () => {
+	// A Screen cannot swap the Foundation Tokens its Graphic Items bind; one stored before is read by nothing.
+	it('paints it from the Theme, never a Screen\'s stored override of its Foundation Token', async () => {
 		await mountMode(mode, { 'text-primary': 'rgb(12, 34, 56)' }, {
 			themeOverrides: { 'text-primary': 'rgb(65, 43, 21)' },
 		});
 
-		expect(boundColor()).toBe('rgb(65, 43, 21)');
+		expect(boundColor()).toBe('rgb(12, 34, 56)');
 	});
 });
 
@@ -1039,34 +1051,65 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 		expect(Object.keys(probes ?? {}).map(token => screenModeTokenName(mode, token)).sort()).toEqual(Object.keys(declared).sort());
 	});
 
-	if (!probes)
-		return;
-
 	const tokens = Object.entries(SCREEN_MODES[mode].modeTokens ?? {}).map(([token, definition]) => ({
 		name: screenModeTokenName(mode, token),
 		definition,
-		probe: probes[token]!,
+		probe: probes?.[token] as Probe,
 	}));
+	if (!probes || !tokens.length)
+		return;
 
-	it.each(tokens)('paints $name from the Theme', async ({ name, definition, probe }) => {
-		// A dimension sample sits within the token's bounds, which a stored value outside reads clamped to.
-		const sample = definition.type === 'dimension' && definition.bounds
-			? Math.min(definition.bounds.max, Math.max(definition.bounds.min + 1, SAMPLES.dimension))
-			: SAMPLES[definition.type];
-		await mountMode(mode, { [name]: sample }, { config: probe.config });
+	it.each(tokens)('paints $name from the Screen\'s override', async ({ name, definition, probe }) => {
+		const sample = SAMPLES[definition.type];
+		await mountMode(mode, undefined, {
+			config: probe.config,
+			themeOverrides: { [name]: sample },
+		});
 		await shown(probe);
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, sample));
 	});
 
-	it.each(tokens)('paints $name as the Default Theme ships it when its Event has no Theme', async ({ definition, probe }) => {
-		const shipped = typeof definition.default === 'object' && definition.default !== null && 'token' in definition.default
-			? FOUNDATION_TOKENS[definition.default.token].default
-			: definition.default;
+	// What each default resolves to under the Default Theme is pinned where it resolves.
+	it.each(tokens)('paints $name as the Default Theme ships it when its Event has no Theme', async ({ name, definition, probe }) => {
+		const shipped = resolveThemeTokens({
+			vocabulary: FOUNDATION_TOKENS,
+			modeTokens: declared,
+			theme: {},
+			overrides: {},
+		}).values[name]!;
 		await mountMode(mode, undefined, { config: probe.config });
 		await shown(probe);
 
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, shipped));
+	});
+});
+
+// A display reads the Theme's Foundation Token for each part of its shared
+// chrome. The Mode Token that styled the part is a former token, read by
+// nothing wherever it is still stored.
+describe.each(Object.entries(FOUNDATION_CHROME) as [ScreenMode, Record<string, ChromeProbe>][])('the %s display\'s shared chrome', (mode, chrome) => {
+	const STORED_FORMER = {
+		color: 'rgb(9, 9, 9)',
+		typography: {
+			...SAMPLES.typography,
+			font: { kind: 'application', fontId: 'saira-condensed' },
+			weight: 900,
+		},
+	} as const;
+	const parts = Object.entries(chrome).map(([former, probe]) => ({
+		former,
+		token: probe.token,
+		type: FOUNDATION_TOKENS[probe.token].type as keyof typeof STORED_FORMER,
+		probe,
+	}));
+
+	it.each(parts)('paints what $former styled from the Theme\'s $token, whatever is stored under the former token', async ({ former, token, type, probe }) => {
+		const stored = { [screenModeTokenName(mode, former)]: STORED_FORMER[type] };
+		await mountMode(mode, { ...stored, [token]: SAMPLES[type] }, { config: probe.config, themeOverrides: stored });
+		await shown(probe);
+
+		expect(painted(probe, type)).toEqual(expectedPaint(type, SAMPLES[type]));
 	});
 });
 
@@ -1094,25 +1137,72 @@ describe('a light Theme', () => {
 	});
 });
 
-// Every badge's shadow reads the one `shadow` Foundation Token, so a Theme sets it once.
-describe('a Theme\'s shadow', () => {
-	it.each(['top-cards', 'deck', 'archetype-spotlight'] as const)('lifts the %s badges', async (mode) => {
-		const probe = THEMED_DISPLAYS[mode]!['badge-shadow']!;
-		await mountMode(mode, { shadow: 'rgb(1, 2, 3)' }, { config: probe.config });
+// Metagame's chart reads the Theme's chart palette directly, the `series-1` …
+// `series-8` and `series-other` Foundation Tokens its Screen host sets, and its
+// bars grow and shrink on its rows' motion timing.
+describe('a Metagame Screen\'s chart', () => {
+	const SERIES = [
+		...CHART_SLOTS.map(slot => ({
+			token: `series-${slot}`,
+			slot: String(slot),
+		})),
+		{ token: 'series-other', slot: 'other' },
+	];
+	const fill = (slot: string): Probe => ({
+		selector: `[data-color-slot="${slot}"]`,
+		property: 'backgroundColor',
+		config: { viewMode: 'chart' },
+	});
+
+	it.each(SERIES)('fills slot $slot from the Theme\'s $token', async ({ token, slot }) => {
+		const probe = fill(slot);
+		await mountMode('metagame', { [token]: 'rgb(12, 34, 56)' }, { config: probe.config });
 		await shown(probe);
 
-		expect(painted(probe, 'color')).toBe('rgb(1, 2, 3)');
+		expect(painted(probe, 'color')).toBe('rgb(12, 34, 56)');
 	});
-});
 
-// Metagame's chart bars grow and shrink on its rows' motion timing.
-describe('a Metagame Screen\'s chart', () => {
+	it.each(SERIES)('fills slot $slot as the Default Theme ships $token when its Event has no Theme', async ({ token, slot }) => {
+		const probe = fill(slot);
+		await mountMode('metagame', undefined, { config: probe.config });
+		await shown(probe);
+
+		expect(painted(probe, 'color')).toBe(FOUNDATION_TOKENS[token as 'series-1'].default);
+	});
+
+	// A former token is read by nothing, wherever it is still stored.
+	it.each([
+		[
+			'its Theme',
+			{
+				theme: { 'metagame.chart-series-1': 'rgb(9, 9, 9)' },
+				themeOverrides: {},
+			},
+		],
+		[
+			'its Screen Theme Overrides',
+			{
+				theme: {},
+				themeOverrides: { 'metagame.chart-series-1': 'rgb(9, 9, 9)' },
+			},
+		],
+	])('ignores a former chart Mode Token stored in %s', async (_case, { theme, themeOverrides }) => {
+		const probe = fill('1');
+		await mountMode('metagame', { ...theme, 'series-1': 'rgb(12, 34, 56)' }, { config: probe.config, themeOverrides });
+		await shown(probe);
+
+		expect(painted(probe, 'color')).toBe('rgb(12, 34, 56)');
+	});
+
 	it('times its bars by row-motion', async () => {
 		const bar = {
 			selector: '[data-color-slot="1"]',
 			config: { viewMode: 'chart' },
 		};
-		await mountMode('metagame', { 'metagame.row-motion': SAMPLES['animation-recipe'] }, { config: bar.config });
+		await mountMode('metagame', undefined, {
+			config: bar.config,
+			themeOverrides: { 'metagame.row-motion': SAMPLES['animation-recipe'] },
+		});
 		await shown(bar);
 
 		expect(painted(bar, 'animation-recipe')).toEqual(expectedPaint('animation-recipe', SAMPLES['animation-recipe']));
@@ -1122,24 +1212,14 @@ describe('a Metagame Screen\'s chart', () => {
 // A Mode Token defaulting to a Foundation Token, or to a composite whose colour
 // names one, follows a Theme setting only that Foundation Token.
 describe('a Foundation Token a Mode Token\'s default names', () => {
-	const CASES = [
+	const CASES: Array<{ mode: ScreenMode; token: string; part: string; probe: Probe }> = [
 		{
 			mode: 'feature-match-overlay',
 			token: 'surface',
 			part: 'a built-in preset\'s Frame',
 			probe: { selector: '.feature-match-overlay__frame-fill', attribute: 'fill' },
 		},
-		{
-			mode: 'metagame',
-			token: 'series-1',
-			part: 'the first chart series',
-			probe: {
-				selector: '[data-color-slot="1"]',
-				property: 'backgroundColor',
-				config: { viewMode: 'chart' },
-			},
-		},
-	] satisfies Array<{ mode: ScreenMode; token: string; part: string; probe: Probe }>;
+	];
 
 	it.each(CASES)('restyles $part when a Theme sets $token', async ({ mode, token, probe }) => {
 		await mountMode(mode, { [token]: 'rgb(12, 34, 56)' }, { config: probe.config });
@@ -1150,16 +1230,13 @@ describe('a Foundation Token a Mode Token\'s default names', () => {
 });
 
 describe('a Screen Theme Override', () => {
-	const dividers = [THEMED_DISPLAYS.standings!['title-divider']!, THEMED_DISPLAYS.standings!['row-divider']!];
+	const dividers = [FOUNDATION_CHROME.standings!['title-divider']!, FOUNDATION_CHROME.standings!['row-divider']!];
 
-	it('paints over the Theme wherever its Foundation Token is named, and the Theme again once cleared', async () => {
+	// A Screen takes its Foundation chrome from the Theme alone; one stored before is read by nothing.
+	it('of a Foundation Token is dormant: the display paints the Theme\'s value wherever it is read', async () => {
 		await mountMode('standings', { divider: 'rgb(1, 2, 3)' }, {
 			themeOverrides: { divider: 'rgb(4, 5, 6)' },
 		});
-		expect(dividers.map(probe => painted(probe, 'color'))).toEqual(['rgb(4, 5, 6)', 'rgb(4, 5, 6)']);
-
-		screen.value = { ...screen.value, themeOverrides: {} };
-		await flushPromises();
 
 		expect(dividers.map(probe => painted(probe, 'color'))).toEqual(['rgb(1, 2, 3)', 'rgb(1, 2, 3)']);
 	});
@@ -1168,7 +1245,7 @@ describe('a Screen Theme Override', () => {
 // A library font in the Theme is loaded on the output as a `FontFace` through the
 // Screen Output Asset Capability, and a Theme edit restyles live text (ADR-0050).
 describe('a library font in the Theme', () => {
-	const title = THEMED_DISPLAYS.standings!['title-typography']!;
+	const title = FOUNDATION_CHROME.standings!['title-typography']!;
 	const heading = (revisionId: string) => ({
 		...FOUNDATION_TOKENS.heading.default,
 		font: {
@@ -1212,6 +1289,22 @@ describe('a library font in the Theme', () => {
 
 		expect(painted(title, 'typography')).toMatchObject({ fontFamily: 'stream-keepr-graphic-asset-asset-brand-face-revision-2' });
 	});
+
+	// The fonts a display may read are the Theme's `heading` and `body`, whichever Mode Tokens its mode declares.
+	it.each(['heading', 'body'] as const)('loads the Theme\'s %s face on a mode declaring no typography Mode Token', async (token) => {
+		await mountMode('card', {
+			[token]: {
+				...FOUNDATION_TOKENS[token].default,
+				font: {
+					kind: 'asset',
+					reference: testGraphicAssetReference('asset-brand-face', 'revision-1'),
+				},
+			},
+		});
+		await vi.waitFor(() => expect(wrapper!.get('.screen-renderer').attributes('data-font-ready')).toBe('true'));
+
+		expect(fonts.constructed.map(face => face.family)).toEqual(['stream-keepr-graphic-asset-asset-brand-face-revision-1']);
+	});
 });
 
 describe('the Screen inset and alignment', () => {
@@ -1228,5 +1321,17 @@ describe('the Screen inset and alignment', () => {
 		await mountMode(mode, LAYOUT);
 
 		expect(placement()).toEqual({ padding: '40px', justifyItems: 'end', alignItems: 'end' });
+	});
+
+	// The two Foundation Tokens a Screen may override.
+	it('places a Screen by its own override of the inset and alignment, over the Theme', async () => {
+		await mountMode('standings', LAYOUT, {
+			themeOverrides: {
+				inset: 12,
+				alignment: { horizontal: 'left', vertical: 'top' },
+			},
+		});
+
+		expect(placement()).toEqual({ padding: '12px', justifyItems: 'start', alignItems: 'start' });
 	});
 });

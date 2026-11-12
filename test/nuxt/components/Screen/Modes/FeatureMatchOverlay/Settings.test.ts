@@ -2,16 +2,16 @@ import type { Screen } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, h, nextTick, reactive, ref } from 'vue';
+import { computed, defineComponent, nextTick, reactive, ref } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { media } from '~~/test/helpers/graphicsComposition';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
-import NumberField from '~/components/Graphics/NumberField.vue';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
+import OpacityField from '~/components/Graphics/OpacityField.vue';
 import PreviewOutputAside from '~/components/Screen/Modes/FeatureMatchOverlay/PreviewOutputAside.vue';
 import Settings from '~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
-import { OPACITY_INPUT } from '~/utils/opacityInput';
 
 enableAutoUnmount(afterEach);
 
@@ -81,6 +81,7 @@ mockNuxtImport('useGraphicsAuthoringLease', () => (options: { endpoint: () => st
 		status: ref('ready'),
 		writable: mockLeaseWritable,
 		heldByAnotherSession: computed(() => !mockLeaseWritable.value),
+		lost: computed(() => !mockLeaseWritable.value),
 		holderName: computed(() => mockLeaseWritable.value ? null : 'Marcus Angel'),
 		canTakeOver: computed(() => !mockLeaseWritable.value),
 		refresh: vi.fn(),
@@ -109,13 +110,6 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 mockNuxtImport('$fetch', () => mockApiFetch);
 
-const ScreenSettingsCardStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-	},
-	template: '<section data-testid="settings-card"><h2>{{ title }}</h2><slot /></section>',
-});
-
 const LayerInspectorStub = defineComponent({
 	props: {
 		selectedTarget: { type: Object, required: true },
@@ -142,18 +136,24 @@ const CompositorInspectorStub = defineComponent({
 
 const MultiLayerInspectorStub = defineComponent({
 	props: {
-		layers: { type: Array, required: true },
+		rects: { type: Array, required: true },
 		writable: { type: Boolean, required: false },
 		groupRefusal: { type: String, required: false },
 	},
-	emits: ['update', 'group'],
-	template: '<div data-testid="multi-layer-inspector" :data-layers="JSON.stringify(layers)" :data-writable="String(writable)" :data-group-refusal="groupRefusal" />',
+	emits: [
+		'update',
+		'group',
+		'align',
+		'distribute',
+	],
+	template: '<div data-testid="multi-layer-inspector" :data-rects="JSON.stringify(rects)" :data-writable="String(writable)" :data-group-refusal="groupRefusal" />',
 });
 
 const TemplateLibraryStub = defineComponent({
 	props: {
 		writable: { type: Boolean, required: false },
 		flushEdits: { type: Function, default: undefined },
+		canvasAspectRatio: { type: Number, default: undefined },
 	},
 	emits: ['placing', 'placed', 'update:placing'],
 	template: '<div data-testid="template-library" :data-writable="String(writable)" />',
@@ -219,11 +219,11 @@ const UButtonStub = defineComponent({
 });
 
 const SETTINGS_STUBS = {
-	ScreenSettingsCard: ScreenSettingsCardStub,
+	ScreenSettingsSection: ScreenSettingsSectionStub,
 	FeatureMatchOverlayLayerInspector: LayerInspectorStub,
 	FeatureMatchOverlayLayerList: LayerListStub,
 	FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
-	FeatureMatchOverlayMultiLayerInspector: MultiLayerInspectorStub,
+	GraphicsMultiLayerInspector: MultiLayerInspectorStub,
 	FeatureMatchOverlayPreviewOutputAside: PreviewOutputAsideStub,
 	// The Feature Match Layout Template library reads the installation's
 	// library on mount. It has its own suite; here it is only a neighbour of
@@ -318,7 +318,7 @@ describe('featureMatchOverlaySettings', () => {
 		expect(selectedTarget(wrapper)).toEqual({ type: 'source', itemId: 'main-source' });
 		expect(previewSelectedTarget(wrapper)).toEqual({ type: 'source', itemId: 'main-source' });
 		expect(compositorTarget(wrapper)).toEqual({ type: 'canvas' });
-		expect(previewConfig(wrapper).presetId).toBe(mockConfig.value.presetId);
+		expect(previewConfig(wrapper).layout).toEqual(mockConfig.value.layout);
 	});
 
 	// ADR-0051: the canvas is the Event's, set in Event Presentation Settings, not here.
@@ -476,10 +476,6 @@ describe('featureMatchOverlaySettings', () => {
 	// #740: ⌘-click in the preview builds a selection of several, and every verb takes all of it.
 	describe('several layers', () => {
 		const ITEM_ID = 'player1-game-wins';
-		const SELECTED = [
-			{ type: 'source', itemId: 'main-source' },
-			{ type: 'item', itemId: ITEM_ID },
-		];
 
 		async function mountWithTwo() {
 			const wrapper = await mountComponent();
@@ -501,7 +497,7 @@ describe('featureMatchOverlaySettings', () => {
 		it('shows the multi-layer panel, and no single layer as selected in the preview', async () => {
 			const wrapper = await mountWithTwo();
 
-			expect(JSON.parse(wrapper.get('[data-testid="multi-layer-inspector"]').attributes('data-layers')!)).toEqual(SELECTED);
+			expect(JSON.parse(wrapper.get('[data-testid="multi-layer-inspector"]').attributes('data-rects')!)).toMatchObject(positions());
 			expect(wrapper.find('[data-testid="layer-inspector"]').exists()).toBe(false);
 			expect(wrapper.find('[data-testid="compositor-inspector"]').exists()).toBe(false);
 			expect(previewSelectedTarget(wrapper)).toEqual({ type: 'canvas' });
@@ -567,7 +563,8 @@ describe('featureMatchOverlaySettings', () => {
 		it('aligns them from the property panel', async () => {
 			const wrapper = await mountWithTwo();
 
-			await wrapper.get('[data-testid="layer-align-controls"] button[aria-label="Align top"]').trigger('click');
+			wrapper.getComponent(MultiLayerInspectorStub).vm.$emit('align', 'top');
+			await nextTick();
 
 			expect(positions().map(position => position?.y)).toEqual([90, 90]);
 		});
@@ -584,41 +581,6 @@ describe('featureMatchOverlaySettings', () => {
 		});
 	});
 
-	describe('whole-layout replacement', () => {
-		it('asks before resetting the layout to its preset', async () => {
-			const wrapper = await mountComponent();
-			await flushPromises();
-
-			await wrapper.get('[data-testid="reset-preset"]').trigger('click');
-
-			expect(mockUpdateConfig).not.toHaveBeenCalled();
-			expect(wrapper.get('[data-testid="modal"]').text()).toContain('Reset to preset?');
-
-			await wrapper.get('[data-testid="confirm-preset"]').trigger('click');
-
-			expect(mockUpdateConfig).toHaveBeenCalledTimes(1);
-			expect(wrapper.find('[data-testid="modal"]').exists()).toBe(false);
-		});
-
-		it('can undo a preset reset', async () => {
-			const wrapper = await mountComponent();
-			await flushPromises();
-			mockConfig.value = {
-				...mockConfig.value,
-				layout: { ...mockConfig.value.layout, sources: [] },
-			};
-			await nextTick();
-
-			await wrapper.get('[data-testid="reset-preset"]').trigger('click');
-			await wrapper.get('[data-testid="confirm-preset"]').trigger('click');
-			expect(sourceIds().length).toBeGreaterThan(0);
-
-			await wrapper.get('[data-testid="layout-undo"]').trigger('click');
-
-			expect(sourceIds()).toEqual([]);
-		});
-	});
-
 	// A placement rewrites the stored layout and the Screen is then reloaded, so an
 	// edit sent across it would write the layout from before it over the placed one.
 	describe('a Feature Match Layout Template placement', () => {
@@ -632,6 +594,13 @@ describe('featureMatchOverlaySettings', () => {
 				library: wrapper.getComponent(TemplateLibraryStub),
 			};
 		}
+
+		// A built-in template warns against this shape when it is placed.
+		it('hands the library the Event Canvas\'s aspect ratio', async () => {
+			const { library } = await mountWithLibrary();
+
+			expect(library.props('canvasAspectRatio')).toBeCloseTo(1280 / 720);
+		});
 
 		it('hands the library the flush of the layout\'s unsaved edits', async () => {
 			const { library } = await mountWithLibrary();
@@ -650,7 +619,6 @@ describe('featureMatchOverlaySettings', () => {
 			await nextTick();
 			expect(authoring()).toBe('false');
 			expect(preview(wrapper).props('selectionFrame')).toBeNull();
-			expect(wrapper.get('[data-testid="reset-preset"]').attributes('disabled')).toBeDefined();
 			expect(exposed.resetBlocked).toBe(true);
 			preview(wrapper).vm.$emit('manipulate', { x: 1, y: 2, width: 3, height: 4 }, 1);
 			exposed.resetConfig();
@@ -693,15 +661,13 @@ describe('featureMatchOverlaySettings', () => {
 	describe('number field scrubs', () => {
 		/** A property panel holding one real number field: the Frame's opacity. */
 		const FrameOpacityPanelStub = defineComponent({
-			components: { GraphicsNumberField: NumberField },
+			components: { GraphicsOpacityField: OpacityField },
 			props: {
 				config: { type: Object, required: true },
 				updateConfig: { type: Function, required: true },
 			},
-			setup: () => ({ OPACITY_INPUT }),
-			template: `<GraphicsNumberField
+			template: `<GraphicsOpacityField
 				label="Opacity"
-				v-bind="OPACITY_INPUT"
 				:model-value="config.layout.frame.opacity"
 				@update:model-value="opacity => updateConfig({ layout: { ...config.layout, frame: { ...config.layout.frame, opacity } } })"
 			/>`,
@@ -930,16 +896,16 @@ describe('featureMatchOverlaySettings', () => {
 		it('says whether the layout is saved, and offers a retry when it is not', async () => {
 			const wrapper = await mountComponent();
 			await flushPromises();
-			expect(wrapper.find('[data-testid="layout-save-state"]').exists()).toBe(false);
+			expect(wrapper.find('[data-testid="graphics-save-state"]').exists()).toBe(false);
 
 			mockSaveState.value = 'committed';
 			await nextTick();
-			expect(wrapper.get('[data-testid="layout-save-state"]').text()).toContain('Saved');
+			expect(wrapper.get('[data-testid="graphics-save-state"]').text()).toContain('Saved');
 
 			mockSaveState.value = 'failed';
 			await nextTick();
-			expect(wrapper.get('[data-testid="layout-save-state"]').attributes('title')).toBe('Screen refused the layout');
-			await wrapper.get('[data-testid="layout-save-retry"]').trigger('click');
+			expect(wrapper.get('[data-testid="graphics-save-state"]').text()).toContain('Screen refused the layout');
+			await wrapper.get('[data-testid="graphics-save-retry"]').trigger('click');
 			expect(mockRetry).toHaveBeenCalledTimes(1);
 		});
 	});
@@ -1025,7 +991,7 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 		mockLeaseWritable.value = false;
 		await nextTick();
 
-		expect(mockDiscard).toHaveBeenCalledWith(['layout', 'presetId']);
+		expect(mockDiscard).toHaveBeenCalledWith(['layout']);
 	});
 
 	it('hands every other write path a read-only state', async () => {
@@ -1034,7 +1000,6 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 		expect(preview(wrapper).props('selectionFrame')).toBeNull();
 		expect(wrapper.get('[data-testid="layer-inspector"]').attributes('data-writable')).toBe('false');
 		expect(wrapper.get('[data-testid="template-library"]').attributes('data-writable')).toBe('false');
-		expect(wrapper.get('[data-testid="reset-preset"]').attributes('disabled')).toBeDefined();
 		expect(wrapper.get('[data-testid="layout-undo"]').attributes('disabled')).toBeDefined();
 		expect((wrapper.vm as unknown as { resetBlocked: boolean }).resetBlocked).toBe(true);
 
@@ -1049,7 +1014,7 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 			FeatureMatchOverlayPreviewOutputAside: false,
 			GraphicsCanvasManipulationOverlay: true,
 			// The real preview panel, whose toolbar is its card's actions.
-			ScreenSettingsCard: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
+			ScreenSettingsSection: ScreenSettingsSectionStub,
 		});
 		await flushPromises();
 		const toggle = wrapper.get('[data-testid="preview-stress-dataset"]');
@@ -1199,44 +1164,5 @@ describe('featureMatchOverlaySettings — Layer Locks', () => {
 			frame: null,
 		});
 		expect(sourceX()).toBe(start);
-	});
-});
-
-/**
- * The inspector shows one layer's sections at a time, so the editor holds every
- * Look group its inspector can show; the Screen-wide look never takes them (#982).
- */
-describe('featureMatchOverlaySettings — Look groups', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		mockConfig.value = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		mockApiFetch.mockReset();
-		mockApiFetch.mockResolvedValue({ outcome: 'available', lifecycleState: 'active' });
-		mockLeaseWritable.value = true;
-	});
-
-	it('holds the Frame\'s and the Source Items\' Look groups while open', async () => {
-		let groups: ReturnType<typeof provideScreenSettingsGroups> | undefined;
-		const Host = defineComponent(() => {
-			groups = provideScreenSettingsGroups();
-			return () => h(Settings, {
-				screen: { id: 1, slug: 'main' } as Screen,
-				eventId: 1,
-			});
-		});
-		const wrapper = mount(Host, {
-			global: { stubs: SETTINGS_STUBS },
-		});
-		await flushPromises();
-
-		expect([...groups!.mounted.value].sort()).toEqual([
-			'frame-animation',
-			'frame-surface',
-			'frame-video',
-			'source-appearance',
-		]);
-
-		wrapper.unmount();
-		expect(groups!.mounted.value.size).toBe(0);
 	});
 });

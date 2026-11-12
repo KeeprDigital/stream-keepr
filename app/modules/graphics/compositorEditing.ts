@@ -16,8 +16,7 @@ import { resolveGraphicsSelection } from '~/modules/graphics/selection';
 
 /**
  * The compositor editing module: one editing chain for a compositor panel's edits to
- * a Broadcast Graphic stack. Every compositor panel edits through it: the stack tree,
- * the item Inspector, the Animation panel, Graphic Input Bindings, and Social Profile
+ * a Broadcast Graphic stack. Every compositor panel edits through it: the item Inspector, the Animation panel, Graphic Input Bindings, and Social Profile
  * Projections (#598). A source scan in its test holds them to that.
  *
  * 1. The fail-closed Graphics Authoring Lease check.
@@ -74,8 +73,8 @@ export type BroadcastGraphicOperation<A extends unknown[] = []> = (
  * `author` says what to do for each kind of selection it applies to; a selection it
  * has nothing for refuses the edit. The Theme binding edits aim at whichever owner is
  * selected: the Broadcast Graphic itself, or one Graphic Item. `stack` and
- * `named-graphic` follow no selection: the stack tree's edits are aimed at the stack,
- * or at the graphic it shows whether that graphic or one of its items is selected.
+ * `named-graphic` follow no selection: they are aimed at the stack, or at a graphic
+ * a panel names whether that graphic or one of its items is selected.
  */
 export type CompositorEdit
 	= | {
@@ -98,8 +97,7 @@ export type CompositorEdit
 	| {
 		/**
 		 * An operation on one Broadcast Graphic the panel names, whatever is selected:
-		 * the stack tree's edits to the Graphic Layer Order of the graphic it shows,
-		 * and Social Profile Projections' edits to the graphic it shows, whose shared
+		 * Social Profile Projections' edits to the graphic it shows, whose shared
 		 * operations take one graphic rather than the stack. A graphic the stack no
 		 * longer carries refuses the edit.
 		 */

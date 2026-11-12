@@ -136,18 +136,20 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(composition).toBeGreaterThan(source);
 		});
 
-		it('draws the Frame border and glow its Theme\'s surface resolves, in the Key Output too', async () => {
+		it('draws the Frame border and glow its Screen\'s surface override resolves, in the Key Output too', async () => {
 			// What the Frame paints is decided by the render model and tested there;
-			// this pins only that the component draws what the Theme gives it.
+			// this pins only that the component draws what the Screen's tokens give it.
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.frame = { ...config.layout.frame, borderLeftVisible: false };
 			mockConfig.value = config;
-			mockTheme.value = {
-				'feature-match-overlay.frame-surface': {
-					fill: { type: 'solid', color: '#111111' },
-					fillOpacity: 1,
-					outline: { color: '#0077a3', width: 4 },
-					glow: { color: '#0077a3', size: 12, opacity: 0.5 },
+			mockScreen.value = {
+				themeOverrides: {
+					'feature-match-overlay.frame-surface': {
+						fill: { type: 'solid', color: '#111111' },
+						fillOpacity: 1,
+						outline: { color: '#0077a3', width: 4 },
+						glow: { color: '#0077a3', size: 12, opacity: 0.5 },
+					},
 				},
 			};
 			mockOutputMode.value = 'key';
@@ -162,7 +164,7 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(shadow.attributes()).toMatchObject({ 'stdDeviation': '6', 'flood-color': '#ffffff', 'flood-opacity': '0.5' });
 		});
 
-		it('draws a Source Item glow its Theme\'s surface resolves, in the Key Output too', async () => {
+		it('draws a Source Item glow its Screen\'s surface override resolves, in the Key Output too', async () => {
 			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 			config.layout.sources = [
 				{
@@ -178,12 +180,14 @@ describe('featureMatchOverlayDisplay', () => {
 				},
 			];
 			mockConfig.value = config;
-			mockTheme.value = {
-				'feature-match-overlay.source-surface': {
-					fill: { type: 'solid', color: '#000000' },
-					fillOpacity: 0,
-					outline: { color: '#0077a3', width: 4 },
-					glow: { color: '#0077a3', size: 10, opacity: 0.5 },
+			mockScreen.value = {
+				themeOverrides: {
+					'feature-match-overlay.source-surface': {
+						fill: { type: 'solid', color: '#000000' },
+						fillOpacity: 0,
+						outline: { color: '#0077a3', width: 4 },
+						glow: { color: '#0077a3', size: 10, opacity: 0.5 },
+					},
 				},
 			};
 			mockOutputMode.value = 'key';
@@ -1177,7 +1181,8 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(panelFill(wrapper)).toBe(panel);
 		});
 
-		it('restyles them from the Screen\'s own override of the accent over its Theme\'s', async () => {
+		// A Screen takes the accent from its Theme alone; an override stored before is read by nothing.
+		it('restyles them from its Theme\'s accent, never a stored override of it', async () => {
 			mockTheme.value = { accent: '#123456' };
 			mockScreen.value = {
 				themeOverrides: { accent: '#654321' },
@@ -1185,20 +1190,23 @@ describe('featureMatchOverlayDisplay', () => {
 
 			const wrapper = await mountComponent();
 
-			expect(frameStroke(wrapper)).toBe('#654321');
-			expect(panelFill(wrapper)).toBe('#654321');
+			expect(frameStroke(wrapper)).toBe('#123456');
+			expect(panelFill(wrapper)).toBe('#123456');
 		});
 
-		it('fills the Frame from the Theme\'s Frame surface', async () => {
-			mockTheme.value = {
-				'feature-match-overlay.frame-surface': {
-					fill: {
-						type: 'solid',
-						color: { token: 'accent' },
+		// The override is in the form stored before writes were literal-only: its colour names the Theme's accent.
+		it('fills the Frame from the Screen\'s Frame surface override', async () => {
+			mockTheme.value = { accent: '#abcdef' };
+			mockScreen.value = {
+				themeOverrides: {
+					'feature-match-overlay.frame-surface': {
+						fill: {
+							type: 'solid',
+							color: { token: 'accent' },
+						},
+						fillOpacity: 0.5,
 					},
-					fillOpacity: 0.5,
 				},
-				'accent': '#abcdef',
 			};
 
 			const fill = (await mountComponent()).get('.feature-match-overlay__frame-fill');
@@ -1217,9 +1225,11 @@ describe('featureMatchOverlayDisplay', () => {
 				.toBe('/private-assets/logo-asset/logo-revision');
 		});
 
-		it('draws the Theme\'s Frame media beneath the Frame\'s own', async () => {
-			mockTheme.value = {
-				'feature-match-overlay.frame-media': { kind: 'image', assetId: 'backdrop', revisionId: 'backdrop-1' },
+		it('draws the Screen\'s Frame media beneath the Frame\'s own', async () => {
+			mockScreen.value = {
+				themeOverrides: {
+					'feature-match-overlay.frame-media': { kind: 'image', assetId: 'backdrop', revisionId: 'backdrop-1' },
+				},
 			};
 
 			const image = (await mountComponent()).get('.feature-match-overlay__theme-frame-image');

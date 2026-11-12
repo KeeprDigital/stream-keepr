@@ -1041,6 +1041,14 @@ describe('media Graphic Input values on air', () => {
 		});
 		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(200);
 
+		// A graphic on air is not edited (ADR-0081); off air, what it accepted is still published.
+		await command(screenId, session.id, {
+			commandId: `media-input-undeclared-out-${runId}`,
+			type: 'Out',
+			payload: { graphicId: 'promo', cut: true },
+		});
+		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(200);
+
 		// The declaration goes; nothing else about the Live Session changes.
 		await declare(screenId, []);
 
@@ -1066,6 +1074,14 @@ describe('media Graphic Input values on air', () => {
 			commandId: `media-input-unplaced-take-${runId}`,
 			type: 'Take',
 			payload: { graphicId: 'promo' },
+		});
+		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(200);
+
+		// A graphic on air is not edited (ADR-0081); off air, what it accepted is still published.
+		await command(screenId, session.id, {
+			commandId: `media-input-unplaced-out-${runId}`,
+			type: 'Out',
+			payload: { graphicId: 'promo', cut: true },
 		});
 		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(200);
 
@@ -1106,6 +1122,14 @@ describe('media Graphic Input values on air', () => {
 			commandId: `media-input-generic-take-${runId}`,
 			type: 'Take',
 			payload: { graphicId: 'promo' },
+		});
+		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(200);
+
+		// A graphic on air is not edited (ADR-0081); off air, what it accepted is still published.
+		await command(screenId, session.id, {
+			commandId: `media-input-generic-out-${runId}`,
+			type: 'Out',
+			payload: { graphicId: 'promo', cut: true },
 		});
 		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(200);
 

@@ -5,9 +5,10 @@
 import type { StoredThemeTokens, ThemeTokenType, ThemeTokenValue, ThemeTokenValueTypes } from './modules/theme/tokens';
 import type { ScreenMode } from './types/enums';
 import type { ScreenGraphicAssetReference } from './utils/graphicsAssetReferences';
-import { resolveFoundationToken, resolveThemeTokens } from './modules/theme/resolution';
+import { resolveFoundationToken } from './modules/theme/resolution';
 import { readTokenLiteral } from './modules/theme/tokens';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
+import { resolveScreenThemeTokens } from './screenModeDefinitions';
 import { screenModeTokens } from './screenModes';
 import { themeTokenDefinition } from './themeTokens';
 import { screenMediaSourceReference } from './utils/graphicsAssetReferences';
@@ -73,8 +74,9 @@ export function themeTokenValueGraphicAssetReferences(
 
 /**
  * Every Graphic Asset Revision a stored token map pins: a Theme's, or a
- * Screen's overrides. Slots are `<prefix><token name>…`. A token that names a
- * Foundation Token, or that no longer reads as its type, pins nothing.
+ * Screen's overrides. Slots are `<prefix><token name>…`. A token stored
+ * naming a Foundation Token, as one written before values were literals may,
+ * or one that no longer reads as its type, pins nothing.
  */
 export function storedThemeTokenGraphicAssetReferences(
 	tokens: StoredThemeTokens,
@@ -94,9 +96,10 @@ export function storedThemeTokenGraphicAssetReferences(
 /**
  * The Graphic Asset Revisions a Screen's resolved Theme Tokens supply, which
  * its Screen Output Asset Capability admits: every Foundation Token, which any
- * Screen may consume, and the Mode Tokens of the mode it shows, each from its
- * override, else its Theme, else its default. A value an override shadows, and
- * a dormant override of another mode's Mode Token, supply nothing.
+ * Screen may consume, from its Theme, else its default, and the Mode Tokens of
+ * the mode it shows, from its override, else its default. A value an override
+ * shadows, a Mode Token its Theme stored before, and a dormant override (of
+ * another mode's Mode Token, or of a Foundation Token) supply nothing.
  */
 export function screenThemeGraphicAssetReferences(
 	mode: ScreenMode,
@@ -104,16 +107,11 @@ export function screenThemeGraphicAssetReferences(
 	overrides: StoredThemeTokens,
 ): ScreenGraphicAssetReference[] {
 	const modeTokens = screenModeTokens(mode);
-	const { values } = resolveThemeTokens({
-		vocabulary: FOUNDATION_TOKENS,
-		modeTokens,
-		theme,
-		overrides,
-	});
+	const { values } = resolveScreenThemeTokens(mode, theme, overrides);
 	const foundation = Object.entries(FOUNDATION_TOKENS).flatMap(([name, definition]) =>
 		themeTokenValueGraphicAssetReferences(
 			definition.type,
-			resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme, overrides }, name),
+			resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme, overrides: {} }, name),
 			name,
 		));
 	const own = Object.entries(modeTokens).flatMap(([name, definition]) =>

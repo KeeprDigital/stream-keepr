@@ -34,7 +34,7 @@ function toggle(side: FeatureMatchOverlayBorderSide) {
 </script>
 
 <template>
-	<UFormField :label="label" size="sm">
+	<ScreenSettingsField :label="label" size="sm" stacked>
 		<div class="inline-flex overflow-hidden rounded-md border border-default/70 bg-default/40">
 			<UButton
 				v-for="side in FEATURE_MATCH_OVERLAY_BORDER_SIDES"
@@ -51,5 +51,5 @@ function toggle(side: FeatureMatchOverlayBorderSide) {
 				{{ side }}
 			</UButton>
 		</div>
-	</UFormField>
+	</ScreenSettingsField>
 </template>

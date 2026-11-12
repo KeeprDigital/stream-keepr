@@ -1,41 +1,39 @@
 <script setup lang="ts">
 import type { GraphicFillEdit } from '~~/shared/modules/graphics';
-import type { ThemeFill } from '~~/shared/modules/theme';
 import type { GraphicFill } from '~~/shared/types/graphics';
 import { applyGraphicFillEdit } from '~~/shared/modules/graphics';
-import { decodeThemeFill, encodeThemeColor, encodeThemeFill } from '~/modules/theme-editor/themeColor';
+import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 
-// A Graphic Fill token: solid or a gradient, each colour following a colour
-// token or holding its own. Edits go through the compositor's own fill rules.
+// A Graphic Fill token: solid or a gradient, every colour a literal. Edits go
+// through the compositor's own fill rules.
 
 const props = defineProps<{
-	modelValue: ThemeFill;
+	/** The fill as it resolves: every colour a literal. */
+	modelValue: GraphicFill;
 	label: string;
 }>();
 
 const emit = defineEmits<{
-	commit: [value: ThemeFill];
+	commit: [value: GraphicFill];
 }>();
 
-const encoded = computed(() => encodeThemeFill(props.modelValue) as GraphicFill);
-
 function edit(change: GraphicFillEdit) {
-	emit('commit', decodeThemeFill(applyGraphicFillEdit(encoded.value, change, {
-		gradientEndColor: encodeThemeColor({ token: 'surface-raised' }),
-	})));
+	emit('commit', applyGraphicFillEdit(props.modelValue, change, {
+		gradientEndColor: FOUNDATION_TOKENS['surface-raised'].default,
+	}));
 }
 </script>
 
 <template>
 	<GraphicsFillFields
-		:fill="encoded"
+		:fill="modelValue"
 		size="xs"
 		:aria-label-prefix="label"
 		test-id-prefix="theme-fill"
 		@edit="edit"
 	>
 		<template #color="{ target, value, label: colorLabel, testId, update }">
-			<ThemeColorSourceField
+			<ThemeColorField
 				:value="value"
 				:label="colorLabel"
 				:alpha="target === 'solid'"

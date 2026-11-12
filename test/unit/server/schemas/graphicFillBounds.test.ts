@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { broadcastGraphicsModeConfigSchema } from '~~/server/schemas/api/screen';
+import { backgroundModeConfigSchema, broadcastGraphicsModeConfigSchema } from '~~/server/schemas/api/screen';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
 import { parseThemeTokenWrite } from '~~/shared/themeTokens';
 
 /**
- * One stop bound for every Graphic Fill: a Graphic Item's own and a Theme's fill
- * token both hold two to four gradient stops. The one fill fields control offers
- * add and remove within those bounds for both, so a fill the editor builds is one
- * either write accepts.
+ * One stop bound for every Graphic Fill: a Graphic Item's own, a Theme's fill
+ * token and a gradient Background Layer all hold two to four gradient stops. The
+ * one fill fields control offers add and remove within those bounds for each, so
+ * a fill the editor builds is one every write accepts.
  */
 
 function stops(count: number, color: Record<string, string>) {
@@ -59,11 +59,62 @@ function tokenAccepts(count: number) {
 	}).ok;
 }
 
+function gradientLayers(gradient: unknown) {
+	return [
+		{
+			id: 'grad',
+			type: 'gradient',
+			enabled: true,
+			opacity: 1,
+			gradient,
+		},
+	];
+}
+
+function gradientFill(count: number) {
+	return {
+		type: 'linear-gradient',
+		angle: 180,
+		stops: stops(count, { color: '#0f172a' }),
+	};
+}
+
+function screenLayerAccepts(count: number) {
+	return backgroundModeConfigSchema.safeParse({
+		layers: gradientLayers(gradientFill(count)),
+	}).success;
+}
+
+function themeLayerAccepts(count: number) {
+	return parseThemeTokenWrite('background', gradientLayers(gradientFill(count))).ok;
+}
+
 describe('graphic fill stop bounds', () => {
 	it.each([
 		['a Graphic Item\'s fill', itemAccepts],
 		['a Theme fill token', tokenAccepts],
+		['a Screen\'s gradient Background Layer', screenLayerAccepts],
+		['a Theme\'s gradient Background Layer', themeLayerAccepts],
 	])('holds %s to two to four stops', (_, accepts) => {
 		expect([1, 2, 3, 4, 5].map(accepts)).toEqual([false, true, true, true, false]);
+	});
+});
+
+// A gradient Background Layer stored before it held a Graphic Fill is a CSS string, which a
+// re-sent stack still carries; a solid fill is a colour layer's job.
+describe('a gradient Background Layer', () => {
+	it.each([
+		['a stored CSS gradient string', 'linear-gradient(180deg, #000, #123)', true],
+		['an empty string', '', false],
+		[
+			'a solid Graphic Fill',
+			{ type: 'solid', color: '#0f172a' },
+			false,
+		],
+	])('given %s', (_, gradient, accepted) => {
+		expect(backgroundModeConfigSchema.safeParse({
+			layers: gradientLayers(gradient),
+		}).success).toBe(accepted);
+		expect(parseThemeTokenWrite('background', gradientLayers(gradient)).ok).toBe(accepted);
 	});
 });

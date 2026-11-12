@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
-import { parseThemeTokenWrite } from '~~/shared/themeTokens';
+import { parseThemeTokenValue, parseThemeTokenWrite } from '~~/shared/themeTokens';
 
-// A Theme write is strict where a read forgives: a wrong type or an out-of-bounds value is
-// refused, never clamped, and a Mode Token may name only a same-type Foundation Token.
+// A stored value is checked strictly where a read forgives: a wrong type or an out-of-bounds
+// value is refused, never clamped, and a value that names another token is refused whole.
 
 const typography = {
 	font: { kind: 'application', fontId: 'inter' },
@@ -39,23 +39,13 @@ const remoteVideoLayer = {
 	source: { kind: 'url', url: 'https://example.com/loop.webm' },
 } as const;
 
-describe('a Theme Token write', () => {
+describe('a Theme Token value', () => {
 	it.each([
 		['a Foundation colour', 'accent', 'rgba(255, 0, 0, 0.5)'],
 		['a Foundation dimension at its lower bound', 'inset', 0],
 		['a Foundation dimension at its upper bound', 'inset', insetMax],
 		['a Foundation typography', 'heading', typography],
-		['a Mode Token literal', 'standings.row-divider', '#ff0000'],
-		[
-			'a Mode Token naming a same-type Foundation Token',
-			'standings.row-divider',
-			{ token: 'accent' },
-		],
-		[
-			'a typography Mode Token naming a typography Foundation Token',
-			'standings.title-typography',
-			{ token: 'body' },
-		],
+		['a Mode Token literal', 'standings.rise', '#ff0000'],
 		[
 			'a background of colour, gradient, Remote Media URL and animation layers',
 			'background',
@@ -111,14 +101,6 @@ describe('a Theme Token write', () => {
 			],
 		],
 		[
-			'a fill whose colour follows a colour token',
-			'accent-fill',
-			{
-				type: 'solid',
-				color: { token: 'positive' },
-			},
-		],
-		[
 			'a gradient at its fewest stops',
 			'accent-fill',
 			{
@@ -126,60 +108,33 @@ describe('a Theme Token write', () => {
 				angle: 0,
 				stops: [
 					{ color: '#fff', position: 0, opacity: 1 },
-					{
-						color: { token: 'accent' },
-						position: 1,
-						opacity: 0.5,
-					},
+					{ color: '#123456', position: 1, opacity: 0.5 },
 				],
 			},
 		],
 		[
-			'a surface with a literal fill and an outline following a colour token',
+			'a surface with a fill and an outline',
 			'panel',
 			{
 				fill: { type: 'solid', color: '#123456' },
 				fillOpacity: 0.5,
-				outline: {
-					color: { token: 'divider' },
-					width: 2,
-				},
+				outline: { color: '#abcdef', width: 2 },
 			},
 		],
 		[
-			'a background whose colour layer names a colour Foundation Token',
-			'background',
-			[
-				{
-					...colorLayer,
-					color: { token: 'accent' },
-				},
-			],
-		],
-		[
-			'a Feature Match Overlay surface whose colours name Foundation Tokens',
+			'a Feature Match Overlay surface with an outline and a glow',
 			'feature-match-overlay.frame-surface',
 			{
-				fill: {
-					type: 'solid',
-					color: { token: 'surface-raised' },
-				},
+				fill: { type: 'solid', color: '#202020' },
 				fillOpacity: 1,
-				outline: {
-					color: { token: 'accent' },
-					width: 3,
-				},
-				glow: {
-					color: { token: 'accent' },
-					size: 8,
-					opacity: 0.5,
-				},
+				outline: { color: '#ff0000', width: 3 },
+				glow: { color: '#ff0000', size: 8, opacity: 0.5 },
 			},
 		],
 		[
-			'a Feature Match Overlay Frame media naming the logo',
+			'a Feature Match Overlay Frame media',
 			'feature-match-overlay.frame-media',
-			{ token: 'logo' },
+			{ kind: 'image', ...libraryRevision },
 		],
 		[
 			'a Shape Geometry',
@@ -201,8 +156,8 @@ describe('a Theme Token write', () => {
 			'alignment',
 			{ horizontal: 'left', vertical: 'bottom' },
 		],
-	])('stores %s', (_case, name, value) => {
-		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, value });
+	])('admits %s', (_case, name, value) => {
+		expect(parseThemeTokenValue(name, value)).toEqual({ ok: true, value });
 	});
 
 	it.each([
@@ -213,7 +168,7 @@ describe('a Theme Token write', () => {
 			'unknown-token',
 		],
 		[
-			'a former or misspelt Mode Token',
+			'a misspelt Mode Token',
 			'standings.nonsense',
 			'#fff',
 			'unknown-token',
@@ -261,21 +216,15 @@ describe('a Theme Token write', () => {
 			'invalid-value',
 		],
 		[
-			'a Mode Token naming a Foundation Token of another type',
-			'standings.row-divider',
-			{ token: 'heading' },
+			'a Mode Token naming a Foundation Token of its type',
+			'standings.rise',
+			{ token: 'accent' },
 			'invalid-value',
 		],
 		[
-			'a Mode Token naming a Mode Token',
-			'standings.row-divider',
-			{ token: 'standings.title-divider' },
-			'invalid-value',
-		],
-		[
-			'a Mode Token naming no token',
-			'standings.row-divider',
-			{ token: 'nonsense' },
+			'an asset Mode Token naming the logo',
+			'feature-match-overlay.frame-media',
+			{ token: 'logo' },
 			'invalid-value',
 		],
 		[
@@ -297,32 +246,67 @@ describe('a Theme Token write', () => {
 			'invalid-value',
 		],
 		[
-			'a fill whose colour names a token of another type',
+			'a fill whose colour names a colour Foundation Token',
 			'accent-fill',
 			{
 				type: 'solid',
-				color: { token: 'heading' },
+				color: { token: 'positive' },
 			},
 			'invalid-value',
 		],
 		[
-			'a background whose colour layer names a token of another type',
+			'a gradient whose stop names a colour Foundation Token',
+			'accent-fill',
+			{
+				type: 'linear-gradient',
+				angle: 0,
+				stops: [
+					{ color: '#fff', position: 0, opacity: 1 },
+					{
+						color: { token: 'accent' },
+						position: 1,
+						opacity: 0.5,
+					},
+				],
+			},
+			'invalid-value',
+		],
+		[
+			'a surface whose outline names a colour Foundation Token',
+			'panel',
+			{
+				fill: { type: 'solid', color: '#123456' },
+				fillOpacity: 0.5,
+				outline: {
+					color: { token: 'divider' },
+					width: 2,
+				},
+			},
+			'invalid-value',
+		],
+		[
+			'a Mode Token surface whose glow names a colour Foundation Token',
+			'feature-match-overlay.frame-surface',
+			{
+				fill: { type: 'solid', color: '#202020' },
+				fillOpacity: 1,
+				glow: {
+					color: { token: 'accent' },
+					size: 8,
+					opacity: 0.5,
+				},
+			},
+			'invalid-value',
+		],
+		[
+			'a background whose colour layer names a colour Foundation Token',
 			'background',
 			[
 				{
 					...colorLayer,
-					color: { token: 'heading' },
+					color: { token: 'accent' },
 				},
 			],
-			'invalid-value',
-		],
-		[
-			'a fill whose colour names no token',
-			'accent-fill',
-			{
-				type: 'solid',
-				color: { token: 'nonsense' },
-			},
 			'invalid-value',
 		],
 		[
@@ -344,6 +328,166 @@ describe('a Theme Token write', () => {
 			'invalid-value',
 		],
 	])('refuses %s', (_case, name, value, refusal) => {
-		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: false, refusal });
+		expect(parseThemeTokenValue(name, value)).toEqual({ ok: false, refusal });
+	});
+});
+
+describe('a Theme Token write', () => {
+	it('stores a Foundation Token\'s value', () => {
+		expect(parseThemeTokenWrite('accent', '#ff0000')).toEqual({ ok: true, value: '#ff0000' });
+	});
+
+	it('refuses a Foundation Token\'s invalid value', () => {
+		expect(parseThemeTokenWrite('accent', 12)).toEqual({ ok: false, refusal: 'invalid-value' });
+	});
+
+	// A Theme stores Foundation Tokens only: a Mode Token is set per Screen.
+	it.each([
+		['a value it may hold', 'standings.rise', '#ff0000'],
+		['a value it could never hold', 'standings.rise', 12],
+		[
+			'an asset',
+			'feature-match-overlay.frame-media',
+			{ kind: 'image', assetId: 'asset-brand', revisionId: 'revision-brand' },
+		],
+	])('accepts a Mode Token given %s, and drops it', (_case, name, value) => {
+		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, dropped: true });
+	});
+
+	it('refuses a name no token has', () => {
+		expect(parseThemeTokenWrite('standings.nonsense', '#fff')).toEqual({ ok: false, refusal: 'unknown-token' });
+	});
+
+	// A former token is one its mode declared once: accepted whatever it holds, and never stored.
+	it.each([
+		['a value it once held', 'metagame.chart-series-1', '#ff0000'],
+		[
+			'a reference it once held',
+			'metagame.chart-other',
+			{ token: 'accent' },
+		],
+		['a value it could never hold', 'metagame.chart-series-8', 12],
+	])('accepts a former token given %s, and drops it', (_case, name, value) => {
+		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, dropped: true });
+	});
+
+	// A table's max width is its mode's config.
+	it.each(['standings.max-width', 'metagame.max-width'])('accepts %s, once a Mode Token, and drops it', (name) => {
+		expect(parseThemeTokenWrite(name, 1200)).toEqual({ ok: true, dropped: true });
+	});
+
+	// The table modes' type and shared chrome read Foundation Tokens.
+	const SHARED_CHROME = [
+		'surface',
+		'title-typography',
+		'title-text',
+		'title-divider',
+		'row-typography',
+		'row-divider',
+		'primary-text',
+		'secondary-text',
+	];
+	it.each([
+		['standings', SHARED_CHROME],
+		[
+			'metagame',
+			[
+				...SHARED_CHROME,
+				'header-typography',
+				'header-text',
+				'header-divider',
+				'chart-baseline',
+			],
+		],
+		[
+			'pairings',
+			[...SHARED_CHROME, 'result-typography'],
+		],
+		[
+			'player-history',
+			[...SHARED_CHROME, 'outcome-typography'],
+		],
+		[
+			'head-to-head',
+			[...SHARED_CHROME, 'name-typography', 'label-typography'],
+		],
+		[
+			'round-clock',
+			[
+				'surface',
+				'round-name-typography',
+				'round-name-text',
+				'clock-typography',
+			],
+		],
+		// The card modes' too, with their placeholder surface and badge shadow.
+		[
+			'deck',
+			[
+				'title-typography',
+				'body-typography',
+				'primary-text',
+				'secondary-text',
+				'card-placeholder',
+				'badge-shadow',
+			],
+		],
+		[
+			'top-cards',
+			[
+				'title-typography',
+				'title-text',
+				'name-typography',
+				'name-text',
+				'card-placeholder-surface',
+				'badge-typography',
+				'badge-shadow',
+				'page-indicator-text',
+			],
+		],
+		[
+			'archetype-spotlight',
+			[
+				...SHARED_CHROME,
+				'headline-typography',
+				'label-typography',
+				'card-placeholder-surface',
+				'badge-shadow',
+			],
+		],
+		// Top Cut Bracket's, with a settled Bracket Position's border and the rule between its entrants.
+		[
+			'top-cut',
+			[
+				'title-typography',
+				'title-text',
+				'title-divider',
+				'round-name-typography',
+				'round-name-text',
+				'entrant-typography',
+				'primary-text',
+				'secondary-text',
+				'position-border',
+				'entrant-divider',
+				'champion-typography',
+			],
+		],
+		[
+			'talent',
+			[
+				'title-typography',
+				'title-text',
+				'title-divider',
+				'surface',
+				'accent',
+				'name-typography',
+				'name-text',
+				'detail-typography',
+				'role-text',
+				'profile-text',
+			],
+		],
+	])('accepts each typography and shared chrome token %s once declared, and drops it', (mode, tokens) => {
+		expect(tokens.map(token => parseThemeTokenWrite(`${mode}.${token}`, '#ff0000'))).toEqual(tokens.map(() => ({ ok: true, dropped: true })));
 	});
 });

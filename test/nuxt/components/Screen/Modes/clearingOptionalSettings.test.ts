@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, inject, provide, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
@@ -125,18 +126,28 @@ afterEach(() => {
 	mounted = null;
 });
 
-async function mountEditor(editor: string) {
-	const { default: Settings } = await import(`../../../../../app/components/Screen/Modes/${editor}/Settings.vue`);
+/** The modes whose page the generic settings renderer draws. */
+const RENDERED: ReadonlySet<ScreenMode> = new Set([
+	'round-clock',
+	'pairings',
+	'card',
+	'player-history',
+	'head-to-head',
+	'feature-match',
+]);
+
+async function mountEditor(editor: string, mode: ScreenMode) {
+	const { default: Settings } = RENDERED.has(mode)
+		? await import('~/components/Screen/ModeSettings.vue')
+		: await import(`../../../../../app/components/Screen/Modes/${editor}/Settings.vue`);
 	const wrapper = mount(Settings, {
 		props: {
-			screen: { id: 1 } as Screen,
+			screen: { id: 1, currentMode: mode } as Screen,
 			eventId: 1,
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: defineComponent({
-					setup: (_, { slots }) => () => h('section', slots.default?.()),
-				}),
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				ScreenSettingsToggle: true,
 				ScreenColumnConfigEditor: true,
 				ScreenColumnVisibilityList: true,
@@ -145,7 +156,8 @@ async function mountEditor(editor: string) {
 				UInput: clearableStub(''),
 				USelect: clearableStub(null),
 				USelectMenu: clearableStub(null),
-				UInputNumber: true,
+				UInputMenu: clearableStub(null),
+				UInputNumber: clearableStub(null),
 				USwitch: true,
 				UButton: true,
 				USeparator: true,
@@ -153,6 +165,7 @@ async function mountEditor(editor: string) {
 				UBadge: true,
 				// A group's Look writes Screen Theme Overrides, never config (ADR-0072).
 				ScreenThemeTokenGroup: true,
+				ScreenSettingsLook: true,
 			},
 		},
 	});
@@ -170,8 +183,9 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		{ viewMode: 'cards', scope: 'playerList' },
 		[
 			['Archetype filter', 'archetypeFilter', 'Rakdos Midrange'],
-			['Custom header text', 'headerText', 'Day 2 Metagame'],
-			['Select list', 'playerListId', 7],
+			['Max width', 'maxWidth', 1200],
+			['Header text', 'headerText', 'Day 2 Metagame'],
+			['Player List', 'playerListId', 7],
 		],
 	],
 	[
@@ -180,8 +194,8 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		{ scope: 'playerList' },
 		[
 			['Archetype filter', 'archetypeFilter', 'Azorius Control'],
-			['Custom header text', 'headerText', 'Top Cards'],
-			['Select list', 'playerListId', 7],
+			['Header text', 'headerText', 'Top Cards'],
+			['Player List', 'playerListId', 7],
 		],
 	],
 	[
@@ -189,8 +203,9 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'standings',
 		{ viewMode: 'watchlist' },
 		[
-			['Custom header text', 'headerText', 'Final Standings'],
-			['Select list', 'playerListId', 7],
+			['Header text', 'headerText', 'Final Standings'],
+			['Max width', 'maxWidth', 1200],
+			['Player List', 'playerListId', 7],
 		],
 	],
 	[
@@ -198,7 +213,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'player-history',
 		{},
 		[
-			['Custom header text', 'headerText', 'Match History'],
+			['Header text', 'headerText', 'Match History'],
 			['Player', 'playerId', 5],
 		],
 	],
@@ -207,7 +222,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'pairings',
 		{},
 		[
-			['Custom header text', 'headerText', 'Top Tables'],
+			['Header text', 'headerText', 'Top Tables'],
 			['Round', 'roundId', 31],
 		],
 	],
@@ -216,7 +231,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'head-to-head',
 		{},
 		[
-			['Custom header text', 'headerText', 'Feature Match Preview'],
+			['Header text', 'headerText', 'Feature Match Preview'],
 			['Feature Match Slot', 'featureMatchId', 4],
 		],
 	],
@@ -234,7 +249,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'talent',
 		{},
 		[
-			['Custom header text', 'headerText', 'Your Casters'],
+			['Header text', 'headerText', 'Your Casters'],
 			['Talent', 'talentId', 7],
 		],
 	],
@@ -243,7 +258,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'top-cut',
 		{},
 		[
-			['Custom header text', 'headerText', 'Championship Bracket'],
+			['Header text', 'headerText', 'Championship Bracket'],
 			['Phase', 'phaseId', 3],
 			['Bracket size', 'bracketSizeOverride', 8],
 		],
@@ -262,9 +277,9 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		'archetype-spotlight',
 		{ scope: 'playerList' },
 		[
-			['Custom header text', 'headerText', 'Deck to Beat'],
+			['Header text', 'headerText', 'Deck to Beat'],
 			['Archetype', 'archetypeId', 4],
-			['Select list', 'playerListId', 7],
+			['Player List', 'playerListId', 7],
 		],
 	],
 ])('the %s settings editor', (editor, mode, variant, fields) => {
@@ -280,7 +295,7 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 			...variant,
 			[field]: storedValue,
 		};
-		await mountEditor(editor);
+		await mountEditor(editor, mode);
 
 		const clear = clearers.get(label);
 		expect(clear, `no "${label}" control rendered`).toBeDefined();

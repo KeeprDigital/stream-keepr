@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { broadcastGraphicsBackgroundConfigSchema } from '../animationEffects';
 import { GRAPHIC_CHANNEL_HANDOFF_POLICY_VALUES } from '../types/graphics';
 import { defineScreenModeConfigContract, serverValidatedField } from './contract';
+import { editorField } from './fields';
 
 /**
  * The Graphic Channel cap.
@@ -46,9 +47,13 @@ const graphicChannelConfigSchema = z.object({
  * state rather than authored configuration.
  */
 export const broadcastGraphicsModeConfigContract = defineScreenModeConfigContract({
-	graphics: serverValidatedField<BroadcastGraphicConfig[]>(),
+	graphics: serverValidatedField<BroadcastGraphicConfig[]>({
+		label: 'Broadcast Graphics',
+		card: 'content',
+		slot: 'broadcast-graphics',
+	}),
 	/** Absent declares no Graphic Channels, so every graphic runs concurrently. */
-	channels: z.array(graphicChannelConfigSchema)
+	channels: editorField(z.array(graphicChannelConfigSchema)
 		.max(
 			MAX_GRAPHIC_CHANNELS_PER_SCREEN,
 			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_CHANNELS_PER_SCREEN} Graphic Channels`,
@@ -60,7 +65,7 @@ export const broadcastGraphicsModeConfigContract = defineScreenModeConfigContrac
 			channels => new Set(channels.map(channel => channel.id)).size === channels.length,
 			'Graphic Channel ids must be unique within one Broadcast Graphics Screen',
 		)
-		.optional(),
+		.optional(), { label: 'Graphic Channels', card: 'content', slot: 'graphic-channels' }),
 	/**
 	 * The Screen's Broadcast Graphics Background: one Animation Effect the stack
 	 * composes over, shown or not, at an opacity. Absent is no background, which is
@@ -68,7 +73,11 @@ export const broadcastGraphicsModeConfigContract = defineScreenModeConfigContrac
 	 * its graphics. The schema is the catalogue's, so an effect this build does not
 	 * ship is refused rather than stored and silently rendering nothing.
 	 */
-	background: broadcastGraphicsBackgroundConfigSchema.optional(),
+	background: editorField(broadcastGraphicsBackgroundConfigSchema.optional(), {
+		label: 'Broadcast Graphics Background',
+		card: 'background-placement',
+		slot: 'broadcast-graphics-background',
+	}),
 }, {
 	graphics: [],
 }, {

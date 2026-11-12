@@ -592,7 +592,7 @@ watch(
 </script>
 
 <template>
-	<ScreenSettingsCard title="Live Control" :default-open="true">
+	<ScreenSettingsSection title="Live Control" :default-open="true">
 		<UIEmptyState
 			v-if="traces.length === 0 && pickers.length === 0 && socialProfileProjectionControls.length === 0"
 			icon="i-lucide-sliders-horizontal"
@@ -945,5 +945,5 @@ watch(
 				</UButton>
 			</UFieldGroup>
 		</div>
-	</ScreenSettingsCard>
+	</ScreenSettingsSection>
 </template>

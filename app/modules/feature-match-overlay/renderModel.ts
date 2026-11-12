@@ -12,7 +12,7 @@ import type { GraphicFillDescriptor } from '~/modules/graphics/renderModel';
 import type { FeatureMatchOverlayBorderSide } from '~/utils/featureMatchOverlayGeometry';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
 import { fillDescriptor } from '~/modules/graphics/renderModel';
-import { clampOpacity, colourAtOpacity, glowDropShadow, glowFlood, paintColour } from '~/modules/screen/outputPaint';
+import { glowDropShadow, glowFlood, graphicFillCss, paintColour } from '~/modules/screen/outputPaint';
 import {
 	FEATURE_MATCH_OVERLAY_BORDER_SIDES,
 	featureMatchOverlayBorderRadiusCss,
@@ -151,23 +151,6 @@ function rectStyle(rect: FeatureMatchOverlayRect): CSSProperties {
 		width: `${rect.width}px`,
 		height: `${rect.height}px`,
 	};
-}
-
-/**
- * A surface's fill as one CSS background. A gradient's stops keep their own
- * opacities, multiplied by the fill's; the Key Output paints each white at its
- * colour's alpha, so it keys as the Fill Output shows it.
- */
-function cssFill(output: FeatureMatchOverlayOutput, surface: FeatureMatchOverlaySurface): string {
-	const opacity = clampOpacity(surface.fillOpacity);
-	if (opacity <= 0)
-		return 'transparent';
-	const { fill } = surface;
-	if (fill.type === 'solid')
-		return colourAtOpacity(output, fill.color, opacity);
-	const stops = fill.stops.map(stop =>
-		`${colourAtOpacity(output, stop.color, clampOpacity(stop.opacity) * opacity)} ${Math.round(clampOpacity(stop.position) * 10000) / 100}%`);
-	return `linear-gradient(${fill.angle}deg, ${stops.join(', ')})`;
 }
 
 /** A surface's outline, which a Frame or Source Item draws as its border; none at zero width. */
@@ -397,7 +380,7 @@ function sourceItemStyle(
 		...rectStyle(item),
 		position: 'absolute',
 		boxSizing: 'border-box',
-		background: cssFill(output, surface),
+		background: graphicFillCss(output, surface.fill, surface.fillOpacity),
 		...cssBorderStyle(output, style, surface),
 		borderRadius: featureMatchOverlayBorderRadiusCss(style),
 		overflow: 'hidden',

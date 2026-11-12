@@ -135,8 +135,8 @@ export const FOUNDATION_TOKENS = {
 			case: 'none',
 		},
 	},
-	// What Graphic Items bind to (#829). A fill's or surface's colour names a
-	// colour token, so it follows the palette.
+	// What Graphic Items bind to (#829). A fill's or surface's default colour
+	// names a colour token, so one nobody has set follows the palette.
 	'accent-fill': {
 		type: 'fill',
 		label: 'Accent fill',
@@ -224,6 +224,61 @@ export const FOUNDATION_TOKENS = {
 
 export type FoundationTokenName = keyof typeof FOUNDATION_TOKENS;
 
+/**
+ * The kinds a Theme's Foundation Tokens are grouped by, in the order the Theme
+ * editor shows them. `background` holds what sits behind a Screen's content
+ * and how that content is placed on it: the stack, the Animation Effect, and
+ * the Screen inset and alignment.
+ */
+export const FOUNDATION_TOKEN_KINDS = [
+	'colours',
+	'type',
+	'motion',
+	'surfaces',
+	'background',
+	'assets',
+	'chart',
+] as const;
+
+export type FoundationTokenKind = typeof FOUNDATION_TOKEN_KINDS[number];
+
+/** Each Foundation Token's kind: a token added to the vocabulary names one here. */
+export const FOUNDATION_TOKEN_KIND: Readonly<Record<FoundationTokenName, FoundationTokenKind>> = {
+	'surface': 'colours',
+	'surface-raised': 'colours',
+	'text-primary': 'colours',
+	'text-secondary': 'colours',
+	'text-inverse': 'colours',
+	'accent': 'colours',
+	'positive': 'colours',
+	'negative': 'colours',
+	'caution': 'colours',
+	'divider': 'colours',
+	'shadow': 'colours',
+	'series-1': 'chart',
+	'series-2': 'chart',
+	'series-3': 'chart',
+	'series-4': 'chart',
+	'series-5': 'chart',
+	'series-6': 'chart',
+	'series-7': 'chart',
+	'series-8': 'chart',
+	'series-other': 'chart',
+	'logo': 'assets',
+	'heading': 'type',
+	'body': 'type',
+	'accent-fill': 'surfaces',
+	'panel': 'surfaces',
+	'panel-shape': 'surfaces',
+	'motion-enter': 'motion',
+	'motion-update': 'motion',
+	'motion-exit': 'motion',
+	'inset': 'background',
+	'alignment': 'background',
+	'background': 'background',
+	'animation-effect': 'background',
+};
+
 /** The Foundation Tokens of one type, which a Mode Token of that type may name. */
 export type FoundationTokenNameOfType<T extends ThemeTokenType> = {
 	[N in FoundationTokenName]: typeof FOUNDATION_TOKENS[N]['type'] extends T ? N : never;
@@ -236,8 +291,7 @@ export type FoundationTokenNameOfType<T extends ThemeTokenType> = {
  *
  * `settingsGroup` names the Screen Settings Group whose element it styles,
  * one of `Group`, the groups its mode declares. The group renders its Screen
- * Theme Override under "Look"; until the group is mounted on the page, it
- * renders in the residual Screen-wide look (ADR-0072).
+ * Theme Override under "Look", and nothing else does (ADR-0072).
  */
 export type DeclaredModeTokenDefinition<Group extends string> = {
 	[T in ThemeTokenType]: TokenDefinitionOf<T, ModeTokenValue<T, FoundationTokenNameOfType<T>>> & {

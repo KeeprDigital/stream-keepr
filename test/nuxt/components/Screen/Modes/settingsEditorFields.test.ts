@@ -5,11 +5,10 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, inject, nextTick, provide, ref } from 'vue';
-import { z } from 'zod';
-import { screenModeConfigFields, unwrapOptionalField } from '~~/shared/screenModeConfigs/fields';
-import { SCREEN_MODES, screenModeConfigContract } from '~~/shared/screenModes';
+import { screenModeConfigContract } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { DEFAULT_DECK_BOARD_LAYOUT, getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
@@ -17,25 +16,27 @@ vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/ed
 
 const MODES_WITHOUT_SCALAR_CONTROLS: Partial<Record<ScreenMode, string>> = {
 	'background': 'its editor is the Background Layer stack, an authored stack',
-	'feature-match-overlay': 'its editor picks a Feature Match Slot (an Event Reference), applies a preset, and edits the server-validated layout',
+	'feature-match-overlay': 'its editor picks a Feature Match Slot (an Event Reference) and edits the server-validated layout',
 	'broadcast-graphics': 'its editor edits the authored graphics stack, the Graphic Channels list, and the Broadcast Graphics Background: one Animation Effect selection, a union field the shared Animation Effect editor edits from its catalogue schema',
 };
 
 // Fields a scalar control writes without being that field's own control, and why.
-// A bespoke control counts as rendering its field.
+// A bespoke control counts as rendering its field. A field its contract gives a
+// named slot, such as Deck's board toggles, is that slot's widget's.
 const BESPOKE_CONTROLS: Record<string, string> = {
-	// Each board's own show toggle writes the one board selection both share.
-	'deck.board': 'the Mainboard and Sideboard show toggles',
-	// Paging on is a page smaller than the ranking, so its toggle and its page size both read the card count.
-	'top-cards.cardsPerPage': 'the Split into pages toggle, and a page size kept below the card count',
-	// Numeric sizes and an unset choice, which a string select field cannot hold; both
-	// the editor and the contract read them from TOP_CUT_BRACKET_SIZES.
-	'top-cut.bracketSizeOverride': 'the Bracket size select',
+	// A Card Layout's bounds follow its content (ADR-0054), tested at the generic renderer (`ModeSettings.test.ts`).
+	'top-cards.columns': 'a column count kept to the card count',
+	'top-cards.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',
+	'deck.mainboard.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',
+	'deck.sideboard.maxCardSize': 'a max card size kept to the largest card the Event Canvas holds',
 };
 
 // Values a contract's select field allows that its editor does not offer.
 const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 };
+
+/** A mode whose page the generic settings renderer draws from its contract. */
+const RENDERER = 'ModeSettings';
 
 /** Each mode's editor, and the config variants that between them render every scalar control. */
 /** An editor variant shown for a One Piece Card Game Event, whose editor may differ (ADR-0057). */
@@ -47,21 +48,23 @@ interface EditorVariants {
 
 const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	'feature-match': {
-		editor: 'FeatureMatch',
+		editor: RENDERER,
 		variants: [{}],
 	},
 	'card': {
-		editor: 'Card',
+		editor: RENDERER,
 		variants: [{}],
 	},
-	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard.
+	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard
+	// following its layout; a customised Sideboard shows its own layout fields.
 	'deck': {
-		editor: 'Deck',
+		editor: RENDERER,
 		variants: [
 			{},
 			{
 				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'list' },
 				sideboard: {
+					...DEFAULT_DECK_BOARD_LAYOUT,
 					...getDefaultConfigForMode('deck').sideboard,
 					view: 'grid',
 				},
@@ -69,6 +72,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 			{
 				mainboard: { ...DEFAULT_DECK_BOARD_LAYOUT, view: 'grid' },
 				sideboard: {
+					...DEFAULT_DECK_BOARD_LAYOUT,
 					...getDefaultConfigForMode('deck').sideboard,
 					view: 'list',
 				},
@@ -81,8 +85,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	'standings': {
 		editor: 'Standings',
 		variants: [
-			{ viewMode: 'topN' },
-			{ viewMode: 'slice' },
+			{ viewMode: 'range' },
 			{
 				viewMode: 'reveal',
 				autoPageEnabled: true,
@@ -107,13 +110,13 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 		],
 	},
 	'player-history': {
-		editor: 'PlayerHistory',
+		editor: RENDERER,
 		variants: [
 			{ autoPageEnabled: true },
 		],
 	},
 	'pairings': {
-		editor: 'Pairings',
+		editor: RENDERER,
 		variants: [
 			{ autoPageEnabled: true },
 		],
@@ -128,7 +131,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	},
 	// The Slot binding and the two Player pickers: both are Event References, so only the source, show toggles and header are scalar.
 	'head-to-head': {
-		editor: 'HeadToHead',
+		editor: RENDERER,
 		variants: [
 			{},
 			{ playerSource: 'players' },
@@ -136,7 +139,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	},
 	// The one-Talent and lineup pickers are Event References; rotating shows its dwell, and the header its text.
 	'talent': {
-		editor: 'Talent',
+		editor: RENDERER,
 		variants: [
 			{},
 			{ selection: 'lineup', rotateSocialProfiles: true, showHeader: true },
@@ -144,25 +147,24 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 	},
 	// A One Piece Card Game Event also offers showing Players by Nickname (ADR-0077).
 	'top-cut': {
-		editor: 'TopCut',
+		editor: RENDERER,
 		variants: [{}],
 		opVariants: [{}],
 	},
 	// Its Round picker is an Event Reference; counting up after the end shows its limit.
 	'round-clock': {
-		editor: 'RoundClock',
+		editor: RENDERER,
 		variants: [
 			{},
 			{ countUpAfterEnd: true },
 		],
 	},
-	// Each scope's own field, a Fixed card width, and auto-page.
+	// Each scope's own field, and auto-page.
 	'top-cards': {
 		editor: 'TopCards',
 		variants: [
 			{
 				scope: 'topN',
-				cardSizing: 'fixed',
 				autoPageEnabled: true,
 				cardsPerPage: 5,
 				showPointsBadges: true,
@@ -239,8 +241,18 @@ mockNuxtImport('useBroadcastDeckListStore', () => () => ({
 	summaries: [],
 	loadCollection: vi.fn(),
 }));
-// A points system, so the Deck editor offers its card point settings.
-const editorEvent = { id: 1, game: 'mtg', pointsSystem: '7ph' };
+// A points system, so the Deck editor offers its card point settings, and every
+// Feature Match Controls feature, so its page shows each toggle.
+const editorEvent = {
+	id: 1,
+	game: 'mtg',
+	pointsSystem: '7ph',
+	lgsEnabled: true,
+	tableNumberEnabled: true,
+	featureMatchDefaultTurnTrackingEnabled: true,
+	featureMatchDefaultExtraTurnsEnabled: true,
+	featureMatchDefaultMulliganTrackingEnabled: true,
+};
 mockNuxtImport('useEventStore', () => () => ({
 	event: editorEvent,
 	$reset: vi.fn(),
@@ -307,15 +319,15 @@ function differentItem(props: Record<string, any>) {
 }
 
 const stubs = {
-	ScreenSettingsCard: defineComponent({
-		setup: (_, { slots }) => () => h('section', slots.default?.()),
-	}),
+	ScreenSettingsSection: ScreenSettingsSectionStub,
 	ScreenSettingsToggle: controlStub('toggle', props => !props.modelValue),
+	// A bare switch, as a card badge's row shows it, named by its field.
+	USwitch: controlStub('toggle', props => !props.modelValue),
 	UFormField: UFormFieldStub,
 	UInputNumber: controlStub('number', props => (Number(props.modelValue) || 0) + 1),
 	USelect: controlStub('select', differentItem),
 	UISegmentedTabs: controlStub('select', differentItem),
-	UINinePointPicker: controlStub('select', props => (props.modelValue === 'bottom-left'
+	UINinePointPicker: controlStub('position', props => (props.modelValue === 'bottom-left'
 		? 'bottom-right'
 		: 'bottom-left')),
 	UIColorPicker: controlStub('color', () => '#010203'),
@@ -329,6 +341,7 @@ const stubs = {
 	MtgManaColorDisplay: true,
 	// A group's Look writes Screen Theme Overrides, never config (ADR-0072).
 	ScreenThemeTokenGroup: true,
+	ScreenSettingsLook: true,
 };
 
 // ── Reading which contract field a control wrote ──
@@ -360,20 +373,36 @@ function writtenPath(before: Record<string, unknown>, patch: Record<string, unkn
 	return [key];
 }
 
-/** Every editor field of a mode's contract, nested blocks included, by path. */
+/** The controls this guard drives: one value each. A set, a picker, a block or a slot's widget is tested where it lives. */
+const SCALAR_CONTROLS: ReadonlySet<ScreenModeConfigField['control']> = new Set([
+	'number',
+	'toggle',
+	'select',
+	'position',
+	'color',
+	'text',
+]);
+
+/** Every scalar editor field of a mode's contract, nested blocks included, by path. */
 function contractEditorFields(mode: ScreenMode): Map<string, ScreenModeConfigField> {
-	const contract = screenModeConfigContract(mode);
-	const fields = new Map<string, ScreenModeConfigField>(
-		Object.entries(contract.fields as Record<string, ScreenModeConfigField>),
-	);
-	for (const [key, field] of Object.entries(contract.shape)) {
-		const inner = unwrapOptionalField(field as z.ZodType);
-		if (inner instanceof z.ZodObject) {
-			for (const [innerKey, innerField] of Object.entries(screenModeConfigFields(inner.shape)))
-				fields.set(`${key}.${innerKey}`, innerField as ScreenModeConfigField);
+	const fields = new Map<string, ScreenModeConfigField>();
+	const visit = (views: Readonly<Record<string, ScreenModeConfigField>>, path: string[]) => {
+		for (const field of Object.values(views)) {
+			if (field.fields)
+				visit(field.fields, [...path, field.key]);
+			else if (SCALAR_CONTROLS.has(field.control))
+				fields.set([...path, field.key].join('.'), field);
 		}
-	}
+	};
+	visit(screenModeConfigContract(mode).fields as Record<string, ScreenModeConfigField>, []);
 	return fields;
+}
+
+/** A mode's fields a bespoke widget edits: its Event References and named slots. */
+function bespokeFields(mode: ScreenMode): Set<string> {
+	return new Set(Object.values(screenModeConfigContract(mode).fields as Record<string, ScreenModeConfigField>)
+		.filter(field => field.control === 'reference' || field.control === 'slot')
+		.map(field => field.key));
 }
 
 function numberAttr(value: string | undefined): number | undefined {
@@ -382,11 +411,13 @@ function numberAttr(value: string | undefined): number | undefined {
 		: Number(value);
 }
 
-async function mountEditor(editor: string) {
-	const { default: Settings } = await import(`../../../../../app/components/Screen/Modes/${editor}/Settings.vue`);
+async function mountEditor(editor: string, mode: ScreenMode) {
+	const { default: Settings } = editor === RENDERER
+		? await import('~/components/Screen/ModeSettings.vue')
+		: await import(`../../../../../app/components/Screen/Modes/${editor}/Settings.vue`);
 	const wrapper = mount(Settings, {
 		props: {
-			screen: { id: 1 } as Screen,
+			screen: { id: 1, currentMode: mode } as Screen,
 			eventId: 1,
 		},
 		global: { stubs },
@@ -404,7 +435,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 	});
 
 	if (reason) {
-		it(`declares no editor field, since ${reason}`, () => {
+		it(`declares no scalar editor field, since ${reason}`, () => {
 			expect(contractEditorFields(mode).size).toBe(0);
 		});
 		return;
@@ -414,7 +445,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 
 	it('renders every scalar control from its contract field, and every editor field', async () => {
 		const fields = contractEditorFields(mode);
-		const eventReferences = new Set(Object.keys(SCREEN_MODES[mode].eventReferences));
+		const bespoke = bespokeFields(mode);
 		const rendered = new Set<string>();
 
 		const variants = [
@@ -428,7 +459,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 				...variant,
 			} as Record<string, unknown>;
 			config.value = structuredClone(initial);
-			const wrapper = await mountEditor(entry.editor);
+			const wrapper = await mountEditor(entry.editor, mode);
 			const count = wrapper.findAll('[data-guard-control]').length;
 
 			// A declared field rendered by `ScreenConfigField` is found by its key.
@@ -448,9 +479,9 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 				if (!patch)
 					continue; // not a write of this mode's config, such as a Screen's alignment
 
-				const path = writtenPath(initial, patch, eventReferences);
-				if (path.length === 1 && eventReferences.has(path[0]!))
-					continue; // an Event Reference picker stays bespoke (ADR-0038)
+				const path = writtenPath(initial, patch, bespoke);
+				if (path.length === 1 && bespoke.has(path[0]!))
+					continue; // an Event Reference's picker or a named slot's widget (ADR-0038)
 
 				const key = path.join('.');
 				if (BESPOKE_CONTROLS[`${mode}.${key}`]) {

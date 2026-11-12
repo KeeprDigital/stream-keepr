@@ -10,8 +10,8 @@ import { clampToShapeBounds } from '../../screenModeConfigs/fields';
 import { HORIZONTAL_ALIGN_VALUES, VERTICAL_ALIGN_VALUES } from '../../types/enums';
 import { GRAPHIC_TEXT_TRANSFORM_VALUES } from '../../types/graphics';
 import { GRAPHIC_FONT_IDS } from '../graphics/typography';
-import { graphicAssetReferenceSchema, themeBackgroundLayerStackSchema } from './background';
-import { THEME_COMPOSITE_VALUE_SCHEMAS } from './composites';
+import { backgroundLayerStackSchema, graphicAssetReferenceSchema, storedThemeBackgroundLayerStackSchema } from './background';
+import { STORED_THEME_COMPOSITE_VALUE_SCHEMAS, THEME_COMPOSITE_VALUE_SCHEMAS } from './composites';
 
 /**
  * A typography Theme Token: a face and how it is set, never a size. Each
@@ -99,14 +99,30 @@ export type FoundationTokenDefinition = {
 /** The whole Foundation Token vocabulary, by token name. */
 export type FoundationTokenVocabulary = Readonly<Record<string, FoundationTokenDefinition>>;
 
-/** A same-type Foundation Token a Mode Token names, as declared or stored. */
+/**
+ * A Foundation Token another token names. A Mode Token's shipped default may be
+ * one, and so may a colour inside a shipped composite default. No write stores
+ * one; a read still resolves one stored before writes were literal-only.
+ */
 export interface ThemeTokenReference<Name extends string = string> {
 	token: Name;
 }
 
-/** A Mode Token's default, or a stored Mode Token value: a Foundation Token it names, or a literal. */
+/**
+ * A motion Mode Token's default that follows a motion Foundation Token: its
+ * timing (duration, easing, delay) from the Foundation Token as the Screen
+ * resolves it, its movement (fade, slide, scale, reveal) its own, so the
+ * mode keeps the way it moves while the Theme sets the pace.
+ */
+export interface ThemeMotionFollow<Name extends string = string> {
+	token: Name;
+	movement: Omit<ThemeTokenValueTypes['animation-recipe'], 'duration' | 'easing' | 'delay'>;
+}
+
+/** A Mode Token's default: a Foundation Token it names or, for motion, follows, or a literal. */
 export type ModeTokenValue<T extends ThemeTokenType = ThemeTokenType, Name extends string = string>
 	= | ThemeTokenReference<Name>
+		| (T extends 'animation-recipe' ? ThemeMotionFollow<Name> : never)
 		| ThemeTokenValueTypes[T];
 
 /**
@@ -128,6 +144,13 @@ export type ModeTokenDeclarations = Readonly<Record<string, ModeTokenDefinition>
  */
 export type StoredThemeTokens = Readonly<Record<string, unknown>>;
 
+/** What a typography token's numbers accept: its write schema's bounds, and the typography editor's. */
+export const THEME_TYPOGRAPHY_BOUNDS = {
+	weight: { min: 100, max: 900 },
+	lineHeight: { min: 0.5, max: 3 },
+	tracking: { min: -0.5, max: 1 },
+} as const;
+
 const typographySchema = z.object({
 	font: z.discriminatedUnion('kind', [
 		z.object({
@@ -139,9 +162,9 @@ const typographySchema = z.object({
 			reference: graphicAssetReferenceSchema,
 		}).strict(),
 	]),
-	weight: z.number().int().min(100).max(900),
-	lineHeight: z.number().min(0.5).max(3),
-	tracking: z.number().min(-0.5).max(1),
+	weight: z.number().int().min(THEME_TYPOGRAPHY_BOUNDS.weight.min).max(THEME_TYPOGRAPHY_BOUNDS.weight.max),
+	lineHeight: z.number().min(THEME_TYPOGRAPHY_BOUNDS.lineHeight.min).max(THEME_TYPOGRAPHY_BOUNDS.lineHeight.max),
+	tracking: z.number().min(THEME_TYPOGRAPHY_BOUNDS.tracking.min).max(THEME_TYPOGRAPHY_BOUNDS.tracking.max),
 	case: z.enum(GRAPHIC_TEXT_TRANSFORM_VALUES),
 }).strict();
 
@@ -150,8 +173,13 @@ const alignmentSchema = z.object({
 	vertical: z.enum(VERTICAL_ALIGN_VALUES),
 }).strict();
 
-/** The literals a token of `definition`'s type holds, within its bounds. */
-export function themeTokenValueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition): z.ZodType {
+/**
+ * A token of `definition`'s type within its bounds, in one of two forms. A
+ * `written` value names no other token. A `stored` one is what a read accepts:
+ * the same, and a composite or background colour naming a colour Foundation
+ * Token, which a write once admitted.
+ */
+function tokenValueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition, form: 'written' | 'stored'): z.ZodType {
 	switch (definition.type) {
 		case 'color':
 			return z.string().min(1).max(500);
@@ -162,7 +190,9 @@ export function themeTokenValueSchema(definition: FoundationTokenDefinition | Mo
 		case 'typography':
 			return typographySchema;
 		case 'backgroundLayers':
-			return themeBackgroundLayerStackSchema;
+			return form === 'written'
+				? backgroundLayerStackSchema
+				: storedThemeBackgroundLayerStackSchema;
 		case 'animationEffect':
 			return animationEffectSelectionSchema;
 		case 'asset':
@@ -174,22 +204,30 @@ export function themeTokenValueSchema(definition: FoundationTokenDefinition | Mo
 		case 'surface-style':
 		case 'shape-geometry':
 		case 'animation-recipe':
-			return THEME_COMPOSITE_VALUE_SCHEMAS[definition.type];
+			return (form === 'written'
+				? THEME_COMPOSITE_VALUE_SCHEMAS
+				: STORED_THEME_COMPOSITE_VALUE_SCHEMAS)[definition.type];
 		case 'alignment':
 			return alignmentSchema;
 	}
+}
+
+/** What a write may store for a token of `definition`'s type: a literal within its bounds, naming no other token. */
+export function themeTokenValueSchema(definition: FoundationTokenDefinition | ModeTokenDefinition): z.ZodType {
+	return tokenValueSchema(definition, 'written');
 }
 
 /**
  * A stored literal read as `definition`'s type, or undefined when it is not
  * one. A number outside a bound that has since tightened reads as the nearest
  * bound, as a Screen Mode's stored config does (ADR-0037); anything else that
- * does not fit is ignored, so the read falls through to the next source.
+ * does not fit is ignored, so the read falls through to the next source. A
+ * colour naming a colour Foundation Token is kept for the resolver to read.
  */
 export function readTokenLiteral(definition: FoundationTokenDefinition | ModeTokenDefinition, stored: unknown): ThemeTokenValue | undefined {
 	if (stored === undefined)
 		return undefined;
-	const schema = themeTokenValueSchema(definition);
+	const schema = tokenValueSchema(definition, 'stored');
 	const { value } = clampToShapeBounds({ value: schema }, { value: stored });
 	const parsed = schema.safeParse(value);
 	return parsed.success

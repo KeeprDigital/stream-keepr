@@ -2,7 +2,6 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, ref } from 'vue';
-import { fitColumns } from '~~/shared/utils/cardGrid';
 import Display from '~/components/Screen/Modes/TopCards/Display.vue';
 import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
@@ -26,11 +25,6 @@ const defaultConfig = {
 	sortBy: 'inclusionRate',
 	limit: 10,
 	excludedCardTypes: ['Land'],
-	columns: 5,
-	autoColumns: false,
-	cardSizing: 'fit',
-	cardWidth: 160,
-	cardGap: 12,
 	showHeader: true,
 	headerText: undefined,
 	showRankBadges: true,
@@ -106,8 +100,6 @@ const TopCardsCardStub = defineComponent({
 		showName: { type: Boolean, required: true },
 		showRank: { type: Boolean, required: true },
 		statText: { type: String, required: false },
-		sizing: { type: String, required: true },
-		width: { type: String, required: false },
 		rankBadgeClass: { type: String, required: true },
 		rankBadgeStyle: { type: Object, required: true },
 		statBadgeClass: { type: String, required: true },
@@ -118,8 +110,6 @@ const TopCardsCardStub = defineComponent({
 	},
 	template: `<div
 		data-testid="top-cards-item"
-		:data-sizing="sizing"
-		:data-width="width"
 		:data-rank-badge-class="rankBadgeClass"
 		:data-rank-badge-size="rankBadgeStyle.fontSize"
 		:data-stat-badge-class="statBadgeClass"
@@ -217,74 +207,77 @@ describe('screenTopCardsDisplay', () => {
 		expect(wrapper.find('.top-cards-title').exists()).toBe(false);
 	});
 
-	// Columns come from the space the grid measures: Fit picks the largest cards for a
-	// full page, Fixed fits as many as there is room for, and set columns stay set.
+	// Wiring: the grid is the one the solver returns for the Screen's Card Layout
+	// and the space it measures. The solver's own rules are tested at its home.
 	it.each([
 		{
-			name: 'set columns',
-			cardSizing: 'fit',
-			autoColumns: false,
-			size: [1920, 900],
+			name: 'every value Auto',
+			layout: {},
+			size: [848, 223],
 			columns: '5',
-			rows: '2',
+			rows: '1',
+			cardWidth: 160,
+			gap: 12,
 		},
 		{
-			name: 'Fit auto columns, measured',
-			cardSizing: 'fit',
-			autoColumns: true,
-			size: [600, 1400],
-			columns: String(fitColumns({
-				count: 10,
-				width: 600,
-				height: 1400,
-				gap: 12,
-			})),
-			rows: undefined,
+			name: 'set columns and gap',
+			layout: { columns: 5, cardGap: 9 },
+			size: [1036, 5000],
+			columns: '5',
+			rows: '1',
+			cardWidth: 200,
+			gap: 9,
 		},
 		{
-			name: 'Fit auto columns, before the grid is measured',
-			cardSizing: 'fit',
-			autoColumns: true,
+			name: 'a max card size',
+			layout: { columns: 5, cardGap: 9, maxCardSize: 120 },
+			size: [1036, 5000],
+			columns: '5',
+			rows: '1',
+			cardWidth: 120,
+			gap: 9,
+		},
+		{
+			name: 'before the grid is measured',
+			layout: { columns: 5 },
 			size: [0, 0],
 			columns: '5',
-			rows: '2',
+			rows: '1',
+			cardWidth: 0,
+			gap: 0,
 		},
-		{
-			name: 'Fixed auto columns',
-			cardSizing: 'fixed',
-			autoColumns: true,
-			size: [1920, 900],
-			columns: 'auto-fill',
-			rows: undefined,
-		},
-	])('lays the grid out in its columns: $name', async ({ cardSizing, autoColumns, size, columns, rows }) => {
-		config.value = { ...config.value, cardSizing, autoColumns };
-		pageCapacity.value = 10;
+	])('lays the grid out as its Card Layout solves: $name', async ({ layout, size, columns, rows, cardWidth, gap }) => {
+		config.value = {
+			...config.value,
+			...layout,
+		};
+		pageCapacity.value = 5;
 		[measured.width, measured.height] = size as [number, number];
 
 		const wrapper = await mountComponent();
 
 		const grid = wrapper.get('[data-testid="top-cards-grid"]');
-		expect(grid.attributes('data-card-sizing')).toBe(cardSizing);
 		expect(grid.attributes('data-columns')).toBe(columns);
-		if (rows)
-			expect(grid.attributes('data-rows')).toBe(rows);
-		expect(wrapper.findAll('[data-testid="top-cards-item"]').map(item => item.attributes('data-sizing'))).toEqual([cardSizing, cardSizing]);
+		expect(grid.attributes('data-rows')).toBe(rows);
+		const style = (grid.get('.grid').element as HTMLElement).style;
+		const [, tracks, trackWidth] = style.gridTemplateColumns.match(/^repeat\((\d+), ([\d.]+)px\)$/)!;
+		expect(tracks).toBe(columns);
+		expect(Number(trackWidth)).toBeCloseTo(cardWidth);
+		expect(Number.parseFloat(style.gap)).toBeCloseTo(gap);
 	});
 
-	// The Screen's own sizes, not the Theme's, size its cards and gap (ADR-0054).
-	it('sizes its cards and gap from its config', async () => {
-		config.value = {
-			...config.value,
-			cardSizing: 'fixed',
-			cardWidth: 200,
-			cardGap: 30,
-		};
+	// A page is laid out at a full page's capacity, so a short last page keeps its card size.
+	it('lays a short last page out as a full one', async () => {
+		config.value = { ...config.value, columns: 5, cardGap: 9 };
+		pageCapacity.value = 10;
+		[measured.width, measured.height] = [1036, 5000];
+		pageEntries.value = [
+			{ entry: entries.value[1], rank: 7 },
+		];
 
 		const wrapper = await mountComponent();
 
-		expect((wrapper.get('[data-testid="top-cards-grid"]').element as HTMLElement).style.gap).toBe('30px');
-		expect(wrapper.get('[data-testid="top-cards-item"]').attributes('data-width')).toBe('200px');
+		expect(wrapper.get('[data-testid="top-cards-grid"]').attributes('data-rows')).toBe('2');
 	});
 
 	// Each badge takes its own place and text size, as a Deck List Screen's badges do.
@@ -314,6 +307,32 @@ describe('screenTopCardsDisplay', () => {
 		expect(card.attributes('data-rank-badge-size')).toBe(`${badges.rankBadgeTextSize}px`);
 		expect(card.attributes('data-stat-badge-class')).toBe(CARD_BADGE_POSITION_CLASSES[badges.statBadgePosition]);
 		expect(card.attributes('data-stat-badge-size')).toBe(`${badges.statBadgeTextSize}px`);
+	});
+
+	// An Auto badge follows its card's solved width: 14 px, today's size, on the former default 160 px card.
+	it.each([
+		{ maxCardSize: 160, size: '14px' },
+		{ maxCardSize: 320, size: '28px' },
+	])('sizes Auto badges on a $maxCardSize px card at $size', async ({ maxCardSize, size }) => {
+		config.value = {
+			...config.value,
+			columns: 2,
+			cardGap: 0,
+			maxCardSize,
+			showPointsBadges: true,
+			rankBadgeTextSize: undefined,
+			statBadgeTextSize: undefined,
+			pointsBadgeTextSize: undefined,
+		};
+		[measured.width, measured.height] = [2000, 2000];
+
+		const card = (await mountComponent()).get('[data-testid="top-cards-item"]');
+
+		expect([
+			card.attributes('data-rank-badge-size'),
+			card.attributes('data-stat-badge-size'),
+			card.attributes('data-points-badge-size'),
+		]).toEqual([size, size, size]);
 	});
 
 	// Points come from the Event's points system: a card it leaves out, or a Screen not badging them, shows none.

@@ -3,10 +3,13 @@ import type { FeatureMatchLayoutFrameConfig, FeatureMatchOverlayModeConfig } fro
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent } from 'vue';
+import { defineComponent, h } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
-import { fakeScreenThemeNetwork, overrideWrites, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
+import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import FrameStyleCard from '~/components/Screen/Modes/FeatureMatchOverlay/FrameStyleCard.vue';
+import SurfaceStyleTokenInput from '~/components/Theme/SurfaceStyleTokenInput.vue';
+import { THEME_TOKEN_DRAFT_COMMIT_MS } from '~/modules/theme-editor/draft';
 
 const { mockApiFetch } = vi.hoisted(() => ({
 	mockApiFetch: vi.fn(),
@@ -15,8 +18,19 @@ mockNuxtImport('$fetch', () => mockApiFetch);
 
 enableAutoUnmount(afterEach);
 
+/** A surface as a Screen Theme Override holds it: every colour a literal. */
+const SURFACE = {
+	fill: { type: 'solid', color: '#101010' },
+	fillOpacity: 1,
+	outline: { color: '#ff0000', width: 4 },
+} as const;
+
 beforeEach(() => {
 	fakeScreenThemeNetwork(mockApiFetch, 'feature-match-overlay');
+});
+
+afterEach(() => {
+	vi.useRealTimers();
 });
 
 const UFormFieldStub = defineComponent({
@@ -77,13 +91,6 @@ const ScreenSettingsToggleStub = defineComponent({
 	template: '<button type="button" data-testid="settings-toggle" :data-description="description" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
 });
 
-const ControlSectionStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-	},
-	template: '<section data-testid="control-section" :data-section="title"><h3>{{ title }}</h3><slot /></section>',
-});
-
 const USwitchStub = defineComponent({
 	name: 'USwitch',
 	props: {
@@ -99,13 +106,14 @@ async function mountComponent(options: Partial<{
 	themeOverrides: StoredThemeTokens;
 }> = {}) {
 	const screen = seedThemedScreen('feature-match-overlay', options.themeOverrides);
-	const wrapper = mount(FrameStyleCard, {
-		props: {
-			config: options.config ?? structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG),
-			patchFrame: options.patchFrame ?? vi.fn<(updates: Partial<FeatureMatchLayoutFrameConfig>) => void>(),
-			screen: screen(),
-			eventId: 1,
-		},
+	const config = options.config ?? structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+	const patchFrame = options.patchFrame ?? vi.fn<(updates: Partial<FeatureMatchLayoutFrameConfig>) => void>();
+	const wrapper = mount(screenSettingsPage(screen, () => h(FrameStyleCard, {
+		config,
+		patchFrame,
+		screen: screen(),
+		eventId: 1,
+	})), {
 		global: {
 			stubs: {
 				UFormField: UFormFieldStub,
@@ -115,10 +123,9 @@ async function mountComponent(options: Partial<{
 				USelect: USelectStub,
 				ScreenMediaBackgroundFields: defineComponent({ template: '<div data-testid="media-background-fields" />' }),
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
-				FeatureMatchOverlayControlSection: ControlSectionStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				USwitch: USwitchStub,
 				UButton: defineComponent({ template: '<button type="button"><slot /></button>' }),
-				UIOpacityInput: defineComponent({ template: '<input />' }),
 				UBadge: defineComponent({
 					props: {
 						label: { type: String, required: false },
@@ -144,6 +151,20 @@ describe('featureMatchOverlayFrameStyleCard', () => {
 		expect(outsideRows('[role="switch"]')).toHaveLength(0);
 	});
 
+	// The Frame has no position or content of its own, so every section starts closed behind a summary.
+	it.each([
+		['Background', 'opacity 1'],
+		['Video', 'Off'],
+		['Animation', 'Off'],
+		['Surface', 'Fill, border and glow'],
+	])('starts %s closed, summarised as "%s"', async (section, summary) => {
+		const wrapper = await mountComponent();
+		const found = wrapper.get(`[data-section="${section}"]`);
+
+		expect(found.attributes('data-default-open')).toBe('false');
+		expect(found.attributes('data-summary')).toBe(summary);
+	});
+
 	// Each Frame Mode Token's override sits in the section for what it styles (#982).
 	it.each([
 		['Surface', 'feature-match-overlay.frame-surface'],
@@ -156,31 +177,60 @@ describe('featureMatchOverlayFrameStyleCard', () => {
 		expect(wrapper.get(`[data-section="${section}"]`).findAll('[data-token]').map(row => row.attributes('data-token'))).toEqual([token]);
 	});
 
+	// A Frame setting stored partly in the layout and partly as a Mode Token is edited in one section.
+	it.each([
+		[
+			'Video',
+			['[data-testid="media-background-fields"]'],
+			'feature-match-overlay.frame-media',
+		],
+		[
+			'Animation',
+			['[data-testid="settings-toggle"]', '[data-testid="frame-animation-opacity"]'],
+			'feature-match-overlay.frame-animation-effect',
+		],
+	] as const)('edits the Frame\'s %s, its layout fields and its Mode Token, in that one section', async (section, selectors, token) => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.frame = {
+			...config.layout.frame,
+			animation: { enabled: true, opacity: 0.45 },
+		};
+		const wrapper = await mountComponent({ config });
+		const sections = wrapper.findAll('[data-section]');
+		const holding = (has: (found: (typeof sections)[number]) => boolean) =>
+			sections.filter(has).map(found => found.attributes('data-section'));
+
+		for (const selector of selectors)
+			expect(holding(found => found.find(selector).exists())).toEqual([section]);
+		expect(holding(found => found.find(`[data-token="${token}"]`).exists())).toEqual([section]);
+	});
+
 	it.each([
 		[
 			'writes',
 			'feature-match-overlay.frame-surface',
 			{},
-			{
-				'feature-match-overlay.frame-surface': { token: 'panel' },
-			},
+			{ 'feature-match-overlay.frame-surface': SURFACE },
 		],
 		[
 			'clears',
 			'feature-match-overlay.frame-surface',
-			{
-				'feature-match-overlay.frame-surface': { token: 'panel' },
-			},
+			{ 'feature-match-overlay.frame-surface': SURFACE },
 			{ 'feature-match-overlay.frame-surface': null },
 		],
 	] as const)('%s a Frame row\'s Screen Theme Override', async (action, token, stored, written) => {
 		const wrapper = await mountComponent({ themeOverrides: stored });
+		// A surface commits once its edits pause.
+		vi.useFakeTimers({
+			toFake: ['setTimeout', 'clearTimeout'],
+		});
 		const row = wrapper.get(`[data-token="${token}"]`);
 
 		if (action === 'clears')
 			await row.findAll('button').find(button => button.text() === 'Clear')!.trigger('click');
 		else
-			await row.get('[data-token-part="source"]').setValue('panel');
+			wrapper.getComponent(SurfaceStyleTokenInput).vm.$emit('commit', SURFACE);
+		await vi.advanceTimersByTimeAsync(THEME_TOKEN_DRAFT_COMMIT_MS);
 		await flushPromises();
 
 		expect(overrideWrites(mockApiFetch)).toEqual([written]);

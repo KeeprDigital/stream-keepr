@@ -449,6 +449,7 @@ export const UPopoverStub = defineComponent({
 
 interface DropdownItem {
 	label?: string;
+	description?: string;
 	type?: 'label' | 'separator' | 'checkbox' | 'link';
 	disabled?: boolean;
 	checked?: boolean;
@@ -460,7 +461,8 @@ interface DropdownItem {
 /**
  * Trigger slot, then while open a `role="menu"` of `role="menuitem"` buttons
  * (`menuitemcheckbox` for checkbox items). Choosing calls `onSelect` and closes,
- * unless `onSelect` calls `event.preventDefault()`. An item with `children` is an
+ * unless `onSelect` calls `event.preventDefault()`. An item's `description` is its
+ * `aria-description`. An item with `children` is an
  * `aria-haspopup="menu"` item that toggles its own nested `role="menu"`.
  */
 export const UDropdownMenuStub = defineComponent({
@@ -507,7 +509,7 @@ export const UDropdownMenuStub = defineComponent({
 					<button v-for="(child, childIndex) in childrenOf(item)" :key="childIndex" type="button" role="menuitem" :disabled="child.disabled" @click="choose(child, $event)">{{ child.label }}</button>
 				</div>
 			</div>
-			<button v-else type="button" :role="item.type === 'checkbox' ? 'menuitemcheckbox' : 'menuitem'" :aria-checked="item.type === 'checkbox' ? String(!!item.checked) : undefined" :disabled="item.disabled" @click="choose(item, $event)"><slot name="item-label" :item="item" :index="index">{{ item.label }}</slot></button>
+			<button v-else type="button" :role="item.type === 'checkbox' ? 'menuitemcheckbox' : 'menuitem'" :aria-checked="item.type === 'checkbox' ? String(!!item.checked) : undefined" :aria-description="item.description" :disabled="item.disabled" @click="choose(item, $event)"><slot name="item-label" :item="item" :index="index">{{ item.label }}</slot></button>
 		</template>
 	</div></div>`,
 });
@@ -587,8 +589,8 @@ interface InputMenuItemLike {
 /**
  * A `<input role="combobox">` for the search term over `<button role="option">`s, one per item;
  * clicking one emits its `value-key` value (else the item). Without `ignore-filter` it filters by
- * label, as `UInputMenu` does. Kept out of `nuxtUiStubs`, which suites rendering the real menu
- * spread: pass `{ ...nuxtUiStubs, UInputMenu: UInputMenuStub }`.
+ * label, as `UInputMenu` does. With `clear`, a held value shows a "Clear" button emitting `null`.
+ * Kept out of `nuxtUiStubs`, which suites rendering the real menu spread: pass `{ ...nuxtUiStubs, UInputMenu: UInputMenuStub }`.
  */
 export const UInputMenuStub = defineComponent({
 	name: 'UInputMenu',
@@ -625,6 +627,7 @@ export const UInputMenuStub = defineComponent({
 	template: `<div>
 		<input v-bind="$attrs" role="combobox" :aria-label="placeholder" :value="term" @input="term = $event.target.value; $emit('update:searchTerm', term)">
 		<button v-for="(item, index) in shown" :key="index" type="button" role="option" @click="$emit('update:modelValue', valueKey ? item[valueKey] : item)">{{ item.label }}</button>
+		<button v-if="clear && modelValue != null" type="button" aria-label="Clear" @click="$emit('update:modelValue', null)" />
 	</div>`,
 });
 

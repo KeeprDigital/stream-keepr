@@ -1,7 +1,9 @@
 import type { DeclaredModeTokenDefinition } from '../modules/theme/vocabulary';
+import type { ScreenSettingsGroupOf } from '../screenModeConfigs/contract';
+import type { topCardsModeConfigContract } from '../screenModeConfigs/topCards';
 
-/** The Most Played Cards settings groups its Mode Tokens may name (ADR-0072). */
-export type TopCardsSettingsGroup = 'header' | 'ranking-and-pages' | 'layout' | 'card-badges' | 'rank-badge' | 'stat-badge' | 'points-badge';
+/** The groups its Mode Tokens may name: the Screen Settings Groups its config contract declares (ADR-0072). */
+export type TopCardsSettingsGroup = ScreenSettingsGroupOf<typeof topCardsModeConfigContract>;
 
 /**
  * How the Most Played Cards Screen Mode looks: its Mode Tokens, by name within
@@ -9,48 +11,6 @@ export type TopCardsSettingsGroup = 'header' | 'ranking-and-pages' | 'layout' | 
  * config, now former fields.
  */
 export const topCardsModeTokens = {
-	'title-typography': {
-		type: 'typography',
-		label: 'Title type',
-		settingsGroup: 'header',
-		default: { token: 'heading' },
-	},
-	'title-text': {
-		type: 'color',
-		label: 'Title text',
-		settingsGroup: 'header',
-		default: { token: 'text-primary' },
-	},
-	'name-typography': {
-		type: 'typography',
-		label: 'Card name type',
-		settingsGroup: 'layout',
-		default: { token: 'body' },
-	},
-	'name-text': {
-		type: 'color',
-		label: 'Card name text',
-		settingsGroup: 'layout',
-		default: { token: 'text-primary' },
-	},
-	'card-placeholder-surface': {
-		type: 'color',
-		label: 'Card without an image',
-		settingsGroup: 'layout',
-		default: { token: 'surface-raised' },
-	},
-	'badge-typography': {
-		type: 'typography',
-		label: 'Badge type',
-		settingsGroup: 'card-badges',
-		default: { token: 'heading' },
-	},
-	'badge-shadow': {
-		type: 'color',
-		label: 'Badge shadow',
-		settingsGroup: 'card-badges',
-		default: { token: 'shadow' },
-	},
 	'rank-badge-surface': {
 		type: 'color',
 		label: 'Rank badge background',
@@ -87,10 +47,20 @@ export const topCardsModeTokens = {
 		settingsGroup: 'points-badge',
 		default: { token: 'text-primary' },
 	},
-	'page-indicator-text': {
-		type: 'color',
-		label: 'Page indicator text',
-		settingsGroup: 'ranking-and-pages',
-		default: { token: 'text-secondary' },
-	},
 } as const satisfies Readonly<Record<string, DeclaredModeTokenDefinition<TopCardsSettingsGroup>>>;
+
+/**
+ * The Mode Tokens Most Played Cards once declared: its type, shared chrome, placeholder
+ * surface and badge shadow, which only repeated the Foundation Tokens its display now
+ * reads directly.
+ */
+export const topCardsFormerModeTokens = [
+	'title-typography',
+	'title-text',
+	'name-typography',
+	'name-text',
+	'card-placeholder-surface',
+	'badge-typography',
+	'badge-shadow',
+	'page-indicator-text',
+] as const;

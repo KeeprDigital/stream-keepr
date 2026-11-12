@@ -45,6 +45,7 @@ import {
 	clearMediaGraphicItemAsset,
 	DEFAULT_GRAPHIC_FONT_ID,
 	deleteGraphicInput,
+	GRAPHIC_ANIMATION_PHASE_LABELS,
 	graphicItemIcon,
 	graphicItemKindLabel,
 	graphicItemSummary,
@@ -85,6 +86,7 @@ import {
 	DECK_LIST_VIEW_VALUES,
 	GAME_WINS_BOX_ORIENTATION_VALUES,
 	GAME_WINS_DISPLAY_MODE_VALUES,
+	GRAPHIC_ANIMATION_PHASE_VALUES,
 	GRAPHIC_GROUP_ALIGN_VALUES,
 	GRAPHIC_GROUP_ARRANGEMENT_VALUES,
 	GRAPHIC_GROUP_JUSTIFY_VALUES,
@@ -102,13 +104,10 @@ import {
 	PLAYER_LIFE_ANIMATION_VALUES,
 	SOCIAL_PROFILE_PROJECTED_TEXT_VALUE_VALUES,
 } from '~~/shared/types/graphics';
-import { useInspectorSections } from '~/composables/ui/useInspectorSections';
 import { useCompositorEditing } from '~/modules/graphics/compositorEditing';
 import { graphicsSelectionKey, resolveGraphicsSelection } from '~/modules/graphics/selection';
 import { resolveMediaFieldsPatch } from '~/utils/mediaFields';
-import { OPACITY_INPUT } from '~/utils/opacityInput';
 import GraphicsGeometryFields from '../GeometryFields.vue';
-import GraphicsInspectorSection from '../InspectorSection.vue';
 import GraphicsShapeGeometryFields from '../ShapeGeometryFields.vue';
 import GraphicsCompositorAnimation from './Animation.vue';
 import GraphicsCompositorBindings from './Bindings.vue';
@@ -513,16 +512,19 @@ const surfaceSummary = computed(() => {
 		: fill;
 });
 
-const INSPECTOR_SECTION_IDS = [
-	'layout',
-	'group',
-	'content',
-	'typography',
-	'shape',
-	'surface',
-	'animation',
-] as const;
-const inspectorSections = useInspectorSections();
+/** The lifecycle phases the selection animates, in lifecycle order. */
+const animationSummary = computed(() => {
+	const current = selection.value;
+	const animation = current.kind === 'graphic'
+		? current.graphic.animation
+		: current.kind === 'item'
+			? current.item.animation
+			: undefined;
+	const phases = GRAPHIC_ANIMATION_PHASE_VALUES.filter(phase => animation?.[phase]);
+	return phases.length > 0
+		? phases.map(phase => GRAPHIC_ANIMATION_PHASE_LABELS[phase]).join(' · ')
+		: 'None';
+});
 
 /** A Geometry Unit projects against the containing canvas — a Graphic Group for its children. */
 const geometryContainer = computed(() => parentGroup.value
@@ -979,28 +981,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						{{ header.summary }}
 					</p>
 				</div>
-				<div v-if="selectedItem" class="flex shrink-0">
-					<UButton
-						size="xs"
-						variant="ghost"
-						color="neutral"
-						icon="i-lucide-chevrons-down-up"
-						aria-label="Collapse all sections"
-						title="Collapse all sections"
-						data-testid="inspector-collapse-all"
-						@click="inspectorSections.setAll(INSPECTOR_SECTION_IDS, false)"
-					/>
-					<UButton
-						size="xs"
-						variant="ghost"
-						color="neutral"
-						icon="i-lucide-chevrons-up-down"
-						aria-label="Expand all sections"
-						title="Expand all sections"
-						data-testid="inspector-expand-all"
-						@click="inspectorSections.setAll(INSPECTOR_SECTION_IDS, true)"
-					/>
-				</div>
 			</div>
 		</div>
 
@@ -1246,20 +1226,15 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					@update:model-value="relabelItem(String($event))"
 				/>
 			</UFormField>
-			<UFormField label="Visible" size="sm">
-				<USwitch
-					:model-value="selectedItem.visible"
-					data-testid="graphic-item-visible"
-					@update:model-value="editItem(patchGraphicItem, { visible: $event })"
-				/>
-			</UFormField>
 		</div>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="selectedItem"
 			id="layout"
+			density="row"
 			title="Position and size"
 			icon="i-lucide-move"
+			default-open
 			:summary="layoutSummary"
 		>
 			<GraphicsGeometryFields
@@ -1321,11 +1296,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="selectedGroup"
 			id="group"
+			density="row"
 			title="Group layout"
 			icon="i-lucide-group"
 			:summary="groupSummary"
@@ -1401,11 +1377,10 @@ function clearPlaceholderFontAsset(inputKey: string) {
 						@bind="token => bindThemeToken('defaultChildSurfaceStyle', token)"
 						@detach="detachThemeToken('defaultChildSurfaceStyle')"
 					/>
-					<GraphicsNumberField
+					<GraphicsOpacityField
 						v-if="selectedGroup.defaultChildSurfaceStyle"
 						label="Child fill opacity"
 						size="sm"
-						v-bind="OPACITY_INPUT"
 						:model-value="selectedGroup.defaultChildSurfaceStyle.fillOpacity"
 						aria-label="Child fill opacity"
 						@update:model-value="editItem(patchGraphicGroupDefaultChildSurfaceStyle, { fillOpacity: $event ?? 1 })"
@@ -1423,13 +1398,15 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</UFormField>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="hasContentSection"
 			id="content"
+			density="row"
 			:title="contentTitle"
 			icon="i-lucide-file-text"
+			default-open
 		>
 			<!--
 				The Player an item reads, wherever its Definition declares one. Its own
@@ -1714,10 +1691,9 @@ function clearPlaceholderFontAsset(inputKey: string) {
 								@update:model-value="color => color && editItem(patchGraphicItem, { color })"
 							/>
 						</UFormField>
-						<GraphicsNumberField
+						<GraphicsOpacityField
 							label="Opacity"
 							size="sm"
-							v-bind="OPACITY_INPUT"
 							:model-value="selectedSocialNetworkIcon.opacity"
 							data-testid="social-network-icon-opacity"
 							aria-label="Social network icon opacity"
@@ -1783,11 +1759,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</UFormField>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="selectedTypography || selectedTextOverflow"
 			id="typography"
+			density="row"
 			title="Text style"
 			icon="i-lucide-type"
 			:summary="typographySummary"
@@ -1933,7 +1910,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 							</div>
 							<GraphicsTypographyFields
 								:typography="placeholderStyleFor(inputKey)"
-								inheritable
+								variant="placeholder"
 								size="xs"
 								test-id-prefix="graphic-placeholder-style"
 								@update="editItem(patchGraphicPlaceholderStyle, inputKey, $event)"
@@ -1976,11 +1953,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</template>
 				</UCollapsible>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="selectedShapeGeometry"
 			id="shape"
+			density="row"
 			:title="geometryTitle"
 			icon="i-lucide-shapes"
 			:summary="shapeSummary"
@@ -2002,11 +1980,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					/>
 				</div>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="hasSurfaceSection"
 			id="surface"
+			density="row"
 			title="Fill and outline"
 			icon="i-lucide-paint-bucket"
 			:summary="surfaceSummary"
@@ -2091,14 +2070,15 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					</template>
 				</GraphicsCompositorSurfaceStyleFields>
 			</template>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 
-		<GraphicsInspectorSection
+		<ScreenSettingsSection
 			v-if="selection.kind === 'graphic' || selection.kind === 'item'"
 			id="animation"
+			density="row"
 			title="Animation"
 			icon="i-lucide-wand-sparkles"
-			:default-open="false"
+			:summary="animationSummary"
 		>
 			<GraphicsCompositorAnimation
 				headless
@@ -2110,6 +2090,6 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:canvas-height="canvasHeight"
 				@update:graphics="emit('update:graphics', $event)"
 			/>
-		</GraphicsInspectorSection>
+		</ScreenSettingsSection>
 	</fieldset>
 </template>

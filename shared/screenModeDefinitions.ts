@@ -1,10 +1,12 @@
+import type { ResolvedThemeTokens, StoredThemeTokens } from './modules/theme';
 import type { FoundationTokenName } from './modules/theme/vocabulary';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
 import type { DisplayType, Game, ScreenMode } from './types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from './types/screenConfig';
 import { isOfferedToCardGame } from './config/games';
 import { pageRotationEdit } from './modules/page-rotation';
-import { SCREEN_MODES, screenModeSupportsBackgroundLayers } from './screenModes';
+import { FOUNDATION_TOKENS, resolveThemeTokens } from './modules/theme';
+import { SCREEN_MODES, screenModeSupportsBackgroundLayers, screenModeTokens } from './screenModes';
 import {
 	getDefaultConfigForMode,
 	getDisplayDefaultsForMode,
@@ -24,15 +26,10 @@ export interface ScreenModeHostDefinition {
 	foundationTokens: readonly FoundationTokenName[];
 }
 
-export interface ScreenModeOutputOption {
-	value: ScreenOutput;
-	label: string;
-	icon: string;
-}
-
 export interface ScreenModeConfigurationPolicy {
 	displayType: DisplayType;
-	outputOptions: ScreenModeOutputOption[];
+	/** The mode's own Screen Outputs, which the output hand-out offers by name. */
+	outputs: readonly ScreenOutput[];
 	/**
 	 * Whether the Screen configuration page gives this mode the full page width.
 	 * A graphics host embeds the compositor's tree, preview, and inspector side
@@ -61,13 +58,13 @@ export interface ScreenModeSelectOption {
 }
 
 /** What a plain overlay mode's host consumes: it insets and aligns the mode's content. */
-const PLAIN_HOST_TOKENS = ['inset', 'alignment'] as const satisfies readonly FoundationTokenName[];
+export const PLAIN_HOST_TOKENS = ['inset', 'alignment'] as const satisfies readonly FoundationTokenName[];
 
 /**
  * The graphics Screen Outputs, in the order an editor names, previews and hands them
  * out. One list so a Screen Output looks the same wherever it is offered: the
- * preview's output switch shows these labels, and the Screen's "Open … output"
- * actions are named from them.
+ * preview's output switch shows these labels, and the output hand-out names its
+ * Open and Copy actions from them.
  */
 export const SCREEN_OUTPUT_OPTIONS = [
 	{ label: 'Overlay', value: 'overlay', icon: 'i-lucide-layers' },
@@ -75,12 +72,8 @@ export const SCREEN_OUTPUT_OPTIONS = [
 	{ label: 'Key', value: 'key', icon: 'i-lucide-contrast' },
 ] as const satisfies ReadonlyArray<{ label: string; value: ScreenOutput; icon: string }>;
 
-/** The "Open … output" actions every graphics host exposes. */
-const OPEN_SCREEN_OUTPUT_OPTIONS: ScreenModeOutputOption[] = SCREEN_OUTPUT_OPTIONS.map(option => ({
-	value: option.value,
-	label: `Open ${option.label.toLowerCase()} output`,
-	icon: option.icon,
-}));
+/** The Screen Outputs every graphics host hands out. */
+const GRAPHICS_HOST_OUTPUTS: readonly ScreenOutput[] = SCREEN_OUTPUT_OPTIONS.map(option => option.value);
 
 /**
  * How a Screen Mode is hosted.
@@ -110,14 +103,34 @@ export function screenModeHostTokens(mode: ScreenMode): readonly string[] {
 	return getScreenModeHostDefinition(mode).foundationTokens;
 }
 
+/**
+ * A Screen's Theme Tokens as they resolve for the mode it shows (ADR-0049):
+ * the mode's Mode Tokens and every Foundation Token they or its host consume,
+ * from `overrides`, the Screen's Screen Theme Overrides, over `theme`, its
+ * Event's Theme. With no mode it consumes no token.
+ */
+export function resolveScreenThemeTokens(mode: ScreenMode | undefined, theme: StoredThemeTokens, overrides: StoredThemeTokens): ResolvedThemeTokens {
+	return resolveThemeTokens({
+		vocabulary: FOUNDATION_TOKENS,
+		modeTokens: mode
+			? screenModeTokens(mode)
+			: {},
+		theme,
+		overrides,
+		hostTokens: mode
+			? screenModeHostTokens(mode)
+			: [],
+	});
+}
+
 export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeConfigurationPolicy {
 	const sharedDefinition = SCREEN_MODES[mode];
 	const graphicsHost = sharedDefinition.graphicsHost;
 
 	return {
 		displayType: sharedDefinition.displayType,
-		outputOptions: graphicsHost
-			? OPEN_SCREEN_OUTPUT_OPTIONS
+		outputs: graphicsHost
+			? GRAPHICS_HOST_OUTPUTS
 			: [],
 		fullWidthConfiguration: Boolean(graphicsHost),
 	};

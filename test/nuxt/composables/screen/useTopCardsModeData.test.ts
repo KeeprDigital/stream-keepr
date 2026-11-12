@@ -29,12 +29,8 @@ const defaultConfig = {
 	limit: 10,
 	excludedCardTypes: ['Land'] as string[],
 	pointedOnly: false,
-	columns: 5,
-	autoColumns: false,
-	cardSizing: 'fit' as 'fit' | 'fixed',
-	cardWidth: 160,
-	cardGap: 12,
-	cardsPerPage: 60,
+	columns: undefined as number | undefined,
+	cardsPerPage: undefined as number | undefined,
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 	currentPage: undefined as number | undefined,
@@ -213,11 +209,12 @@ describe('useTopCardsModeData', () => {
 			});
 			mutableConfig.columns = 1;
 
-			const { pageEntries, totalPages } = makeTopCardsModeData();
+			const { pageEntries, totalPages, pageCapacity } = makeTopCardsModeData();
 			await flushPromises();
 
 			expect(totalPages.value).toBe(1);
 			expect(pageEntries.value).toHaveLength(12);
+			expect(pageCapacity.value).toBe(12);
 			expect(shown(pageEntries.value).at(-1)).toBe('12:Card 12');
 		});
 
@@ -254,9 +251,9 @@ describe('useTopCardsModeData', () => {
 
 		// Columns never move a card to another page; every page lays out as a full one would.
 		it.each([
-			{ columns: 1, autoColumns: false },
-			{ columns: 6, autoColumns: true },
-		])('pages the same cards in $columns columns, auto: $autoColumns', async ({ columns, autoColumns }) => {
+			{ columns: 1 },
+			{ columns: undefined },
+		])('pages the same cards in $columns columns', async ({ columns }) => {
 			mockFetch.mockResolvedValue({
 				entries: rankedCards(10),
 				totalDecks: 5,
@@ -264,7 +261,6 @@ describe('useTopCardsModeData', () => {
 			});
 			Object.assign(mutableConfig, {
 				columns,
-				autoColumns,
 				cardsPerPage: 4,
 				currentPage: 3,
 			});

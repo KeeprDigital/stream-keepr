@@ -1,12 +1,15 @@
+import type { DbScreen } from '~~/server/db/schema';
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import type { ScreenOutputAssetCapabilityManager } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/server/schemas/api/screen';
 import type { ScreenResponse } from '~~/shared/api';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events } from '~~/server/db/schema';
+import { mapScreenToResponse } from '~~/server/mappers/screen';
 import { broadcastGraphicsLiveSessionModule } from '~~/server/modules/broadcast-graphics-live-session';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import {
@@ -26,7 +29,7 @@ import {
 } from '~~/server/utils/routeGuards';
 import { parseScreenThemeOverrideWrite, SCREEN_THEME_OVERRIDE_REFUSALS } from '~~/shared/screenThemeOverrides';
 import { storedThemeTokenGraphicAssetReferences } from '~~/shared/themeAssetReferences';
-import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
+import { mergeScreenModeConfig, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
 	isGraphicAssetReferencingScreenMode,
@@ -167,14 +170,14 @@ function sameJson(left: unknown, right: unknown): boolean {
 /**
  * The part of each Screen Mode's configuration that is the Screen's graphics Edit
  * workspace: the whole Broadcast Graphics stack, and a Feature Match Overlay's
- * Feature Match Layout as authored, its layout and the preset it started from.
+ * Feature Match Layout.
  * The Feature Match Slot is what the Screen points at, live operation the lease
  * never restricts (#738). The canvas is the Event's (ADR-0051), so no Screen
  * field is one.
  */
 const EDIT_WORKSPACE_FIELDS: Partial<Record<ScreenMode, 'whole' | readonly string[]>> = {
 	'broadcast-graphics': 'whole',
-	'feature-match-overlay': ['layout', 'presetId'],
+	'feature-match-overlay': ['layout'],
 };
 
 function editWorkspaceOf(mode: ScreenMode, config: unknown): unknown {
@@ -213,6 +216,28 @@ function modeConfigWriteEditsWorkspace(mode: ScreenMode, config: Record<string, 
 	if (fields === 'whole')
 		return true;
 	return fields?.some(field => Object.hasOwn(config, field)) ?? false;
+}
+
+/** A Broadcast Graphic as the on-air rule compares it: its Graphic Channel is set beside the stack, on air or off. */
+function withoutChannel({ channelId: _channelId, ...graphic }: BroadcastGraphicConfig) {
+	return graphic;
+}
+
+/**
+ * The Broadcast Graphic on air that a rewritten stack would change, remove, or
+ * move among the others on air, which composite in stack order; none when it
+ * leaves them all as they are.
+ */
+export function editedOnAirBroadcastGraphic(
+	current: readonly BroadcastGraphicConfig[],
+	next: readonly BroadcastGraphicConfig[],
+	onAirIds: readonly string[],
+): BroadcastGraphicConfig | undefined {
+	const onAir = current.filter(graphic => onAirIds.includes(graphic.id));
+	const after = next.filter(graphic => onAirIds.includes(graphic.id));
+	return onAir.find((graphic, index) => !after[index]
+		|| after[index].id !== graphic.id
+		|| !sameJson(withoutChannel(after[index]), withoutChannel(graphic)));
 }
 
 /**
@@ -255,6 +280,27 @@ async function withOpDeckSourceDefault(
 export function screenWriteModule() {
 	const publication = eventDataPublicationModule();
 	const screens = screenService();
+
+	/**
+	 * Refuse a write of the Broadcast Graphics stack that edits a graphic on air
+	 * (ADR-0081): it would reach program at once. The editor refuses it first; this
+	 * holds for a stale client, a second tab, and a save that a Take overtook.
+	 */
+	async function refuseOnAirGraphicEdit(existing: DbScreen, nextConfigs: ModeConfigsMap | null | undefined): Promise<void> {
+		const current = resolveScreenModeConfig(existing.modeConfigs, 'broadcast-graphics').graphics;
+		const next = resolveScreenModeConfig(nextConfigs, 'broadcast-graphics').graphics;
+		if (sameJson(current, next))
+			return;
+		const onAirIds = await broadcastGraphicsLiveSessionModule().onAirGraphicIds(existing);
+		const edited = editedOnAirBroadcastGraphic(current, next, onAirIds);
+		if (edited) {
+			throw createError({
+				statusCode: 409,
+				statusMessage: 'Conflict',
+				message: `Broadcast Graphic "${edited.name}" is on air and cannot be edited. Take it off air first.`,
+			});
+		}
+	}
 
 	async function createScreen({ eventId, input, originConnectionId, screenOutputAssetCapabilities }: CreateScreenParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigsReferences(eventId, input.modeConfigs);
@@ -302,6 +348,9 @@ export function screenWriteModule() {
 		const leaseFence = genericWriteEditsWorkspace(existingScreen, data)
 			? await admitScreenGraphicsEditWrite(eventId, screenId, authoringSessionId)
 			: undefined;
+
+		if (data.modeConfigs !== undefined)
+			await refuseOnAirGraphicEdit(existingScreen, data.modeConfigs);
 
 		await validateScreenModeConfigsReferences(eventId, data.modeConfigs);
 		rejectChangedGraphicAssetReferencesOnGenericUpdate(
@@ -453,6 +502,9 @@ export function screenWriteModule() {
 		 */
 		parseModeConfigPatchResult(existing.modeConfigs, mode, config);
 
+		if (mode === 'broadcast-graphics')
+			await refuseOnAirGraphicEdit(existing, mergeScreenModeConfig(existing.modeConfigs ?? {}, mode, config));
+
 		if (isGraphicAssetReferencingScreenMode(mode)) {
 			const nextConfigs = mergeScreenModeConfig(existing.modeConfigs ?? {}, mode, config);
 			const currentReferences = new Map(
@@ -532,7 +584,8 @@ export function screenWriteModule() {
 	 * checked against the mode the Screen shows, read here; the write is
 	 * versioned on that read (or the client's `stateVersion`), so a mode change
 	 * landing first refuses it as a conflict rather than letting the check go
-	 * stale. An override of another mode's Mode Token is left as stored.
+	 * stale. An override of another mode's Mode Token is left as stored, and a
+	 * former token named is dropped.
 	 */
 	async function updateThemeOverrides({ eventId, screenId, tokens, stateVersion, originConnectionId, graphicsAssets }: UpdateThemeOverridesParams): Promise<ScreenResponse> {
 		const existing = await screens.findById(screenId, eventId);
@@ -540,6 +593,7 @@ export function screenWriteModule() {
 			throw createError({ statusCode: 404, message: 'Screen not found' });
 
 		const next: Record<string, unknown> = { ...existing.themeOverrides };
+		let applied = 0;
 		for (const [token, value] of Object.entries(tokens)) {
 			const write = parseScreenThemeOverrideWrite(existing.currentMode, token, value);
 			if (!write.ok) {
@@ -549,11 +603,17 @@ export function screenWriteModule() {
 					data: { code: write.refusal, token },
 				});
 			}
+			if (write.dropped)
+				continue;
+			applied += 1;
 			if (write.value === null)
 				delete next[token];
 			else
 				next[token] = write.value;
 		}
+		// Every token named was a former one: accepted, with nothing to store, version or announce.
+		if (applied === 0)
+			return mapScreenToResponse(existing);
 
 		// A newly named Graphic Asset Revision must be one an author could select
 		// now (ADR-0050); one the override already held is not asked again.

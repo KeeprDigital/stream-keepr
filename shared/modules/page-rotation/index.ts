@@ -59,7 +59,8 @@ export function msUntilNextRotationFlip(inputs: PageRotationInputs): number | nu
 /**
  * What a paginated Screen Mode Definition declares about its Page Rotation
  * (`pageRotation` in `shared/screenModes.ts`): the config field holding how
- * many rows a page holds. The rotation's own fields are the shared
+ * many rows a page holds, a number, or Auto while a mode that lets it be
+ * absent holds none. The rotation's own fields are the shared
  * `pageRotationShape`, which every declaring mode's config carries.
  */
 export interface PageRotationDeclaration {
@@ -68,11 +69,22 @@ export interface PageRotationDeclaration {
 
 /**
  * How many rows a page holds in a paginated mode's config, read from the field
- * its declaration names. The Screen Mode Definitions fail to compile unless
- * that field is a number.
+ * its declaration names, or undefined while it is Auto. The Screen Mode
+ * Definitions fail to compile unless that field is a number, or an optional one.
  */
-export function rotationPageSize(declaration: PageRotationDeclaration, config: object): number {
-	return (config as Record<string, unknown>)[declaration.pageSize] as number;
+export function rotationPageSize(declaration: PageRotationDeclaration, config: object): number | undefined {
+	return (config as Record<string, unknown>)[declaration.pageSize] as number | undefined;
+}
+
+/**
+ * How many pages a Page Rotation turns `rowCount` rows into: at least one, and
+ * exactly one at an Auto page size, which holds every row. The one count every
+ * rendering and operator surface pages by, so they agree by construction (#780).
+ */
+export function rotationPageCount(rowCount: number, pageSize: number | undefined): number {
+	return pageSize === undefined
+		? 1
+		: Math.max(1, Math.ceil(rowCount / pageSize));
 }
 
 /**

@@ -126,15 +126,13 @@ export function useStandingsModeData(context: ScreenContext) {
 		const mode = config.value.viewMode;
 		let rows = [...standingsRows.value];
 
-		if (mode === 'topN') {
-			rows = rows.slice(0, config.value.topNCount);
-		}
-		else if (mode === 'slice') {
-			rows = rows.filter(p =>
-				p.position != null
-				&& p.position >= config.value.sliceStart
-				&& p.position <= config.value.sliceEnd,
-			);
+		if (mode === 'range') {
+			// A Player without a position counts from its place in the order, after
+			// every placed Player, so a range still shows rows before standings exist.
+			rows = rows.filter((p, index) => {
+				const position = p.position ?? index + 1;
+				return position >= config.value.rangeStart && position <= config.value.rangeEnd;
+			});
 		}
 		else if (mode === 'watchlist') {
 			rows = rows.filter(p => watchlistPlayerIds.value.has(p.id));
@@ -177,10 +175,10 @@ export function useStandingsModeData(context: ScreenContext) {
 		}
 
 		switch (config.value.viewMode) {
-			case 'topN':
-				return `Top ${config.value.topNCount} Standings`;
-			case 'slice':
-				return `Standings (${config.value.sliceStart}-${config.value.sliceEnd})`;
+			case 'range':
+				return config.value.rangeStart === 1
+					? `Top ${config.value.rangeEnd} Standings`
+					: `Standings (${config.value.rangeStart}-${config.value.rangeEnd})`;
 			case 'watchlist': {
 				return watchlist.value?.name ?? 'Players to Watch';
 			}

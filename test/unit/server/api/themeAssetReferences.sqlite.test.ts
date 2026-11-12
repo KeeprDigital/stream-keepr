@@ -153,8 +153,34 @@ beforeEach(async () => {
 		})
 		.returning({ id: schema.events.id });
 	eventId = event!.id;
-	screenId = (await createScreen('main')).id;
+	screenId = (await createScreen('main', 'top-cut')).id;
 });
+
+/** A Theme storing the Feature Match Overlay's Frame media, as one written before a Theme held Foundation Tokens only did. */
+async function storeThemeFrameMedia(revision: Revision) {
+	await db.update(schema.themes)
+		.set({
+			tokens: {
+				'feature-match-overlay.frame-media': { kind: 'image', ...revision },
+			},
+		})
+		.where(eq(schema.themes.id, themeId));
+	await db.insert(graphicAssetReferences).values({
+		id: 'theme-frame-media',
+		assetId: revision.assetId,
+		revisionId: revision.revisionId,
+		ownerKind: 'theme',
+		ownerId: themeId,
+		ownerSlot: 'feature-match-overlay.frame-media',
+		eventId: null,
+	} as never);
+}
+
+/** Overrides on the main Screen, showing `mode`. */
+async function overrideOn(mode: string, tokens: Record<string, unknown>) {
+	await db.update(schema.screens).set({ currentMode: mode as never }).where(eq(schema.screens.id, screenId));
+	await call(patchOverrides, { id: eventId, screenId }, { tokens });
+}
 
 const retire = (revision: Revision) => context.library.retireGraphicAsset({ assetId: revision.assetId, actor: 'author' });
 const trash = (revision: Revision) => context.library.trashGraphicAsset({ assetId: revision.assetId, actor: 'author' });
@@ -183,17 +209,10 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 			() => face,
 		],
 		[
-			'an override\'s library font',
+			'an override\'s Frame media',
 			'screen',
-			'heading',
-			() => libraryFont(face),
-			() => face,
-		],
-		[
-			'an override\'s background layer',
-			'screen',
-			'background',
-			() => libraryImageLayer(plate),
+			'feature-match-overlay.frame-media',
+			() => ({ kind: 'image', ...plate }),
 			() => plate,
 		],
 	])('refuses Retire and Trash while %s references it, naming the referrer', async (_case, owner, token, value, revision) => {
@@ -203,10 +222,8 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 			});
 		}
 		else {
-			await call(patchOverrides, { id: eventId, screenId }, {
-				tokens: {
-					[token]: value(),
-				},
+			await overrideOn('feature-match-overlay', {
+				[token]: value(),
 			});
 		}
 		const named = owner === 'theme'
@@ -251,14 +268,10 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 		[
 			'clearing the override',
 			async () => {
-				await call(patchOverrides, { id: eventId, screenId }, {
-					tokens: {
-						background: libraryImageLayer(logo),
-					},
+				await overrideOn('feature-match-overlay', {
+					'feature-match-overlay.frame-media': { kind: 'image', ...logo },
 				});
-				await call(patchOverrides, { id: eventId, screenId }, {
-					tokens: { background: null },
-				});
+				await overrideOn('feature-match-overlay', { 'feature-match-overlay.frame-media': null });
 			},
 		],
 		[
@@ -355,13 +368,29 @@ describe('a Graphic Asset a Theme or Screen Theme Override references', () => {
 		expect((await db.select().from(graphicAssetReferences)).map(row => row.ownerSlot)).toEqual(['background.plate']);
 	});
 
+	// A Theme stores Foundation Tokens only: a Mode Token is set per Screen.
+	it('pins nothing for a Mode Token a Theme write names', async () => {
+		await call(setToken, { themeId, token: 'feature-match-overlay.frame-media' }, {
+			value: { kind: 'image', ...plate },
+		});
+
+		expect((await retire(plate)).outcome).toBe('retired');
+	});
+
+	it('keeps the reference of a Mode Token a Theme stored before until that token is cleared', async () => {
+		await storeThemeFrameMedia(plate);
+		expect((await retire(plate)).outcome).toBe('in-use');
+
+		await call(clearToken, { themeId, token: 'feature-match-overlay.frame-media' });
+
+		expect((await retire(plate)).outcome).toBe('retired');
+	});
+
 	it('refuses an override naming a retired asset, storing nothing', async () => {
 		await retire(unrelated);
 
-		const refused = await refusal(call(patchOverrides, { id: eventId, screenId }, {
-			tokens: {
-				background: libraryImageLayer(unrelated),
-			},
+		const refused = await refusal(overrideOn('feature-match-overlay', {
+			'feature-match-overlay.frame-media': { kind: 'image', ...unrelated },
 		}));
 
 		expect(refused.statusCode).toBe(409);
@@ -402,31 +431,70 @@ describe('a Screen Output\'s capability over its Theme\'s content', () => {
 		]).toEqual([true, true, false]);
 	});
 
-	it('resolves an override\'s content in place of the Theme value it shadows', async () => {
-		await call(setToken, { themeId, token: 'background' }, {
-			value: libraryImageLayer(plate),
+	it('resolves the content of an override of its mode\'s Mode Token', async () => {
+		await overrideOn('feature-match-overlay', {
+			'feature-match-overlay.frame-media': { kind: 'image', ...plate },
 		});
-		await call(patchOverrides, { id: eventId, screenId }, {
-			tokens: {
-				background: libraryImageLayer(logo),
-			},
+
+		expect(await resolves(await screenRow(screenId), plate)).toBe(true);
+	});
+
+	// A Screen takes these from its Theme alone; one stored before is read by nothing.
+	it.each([
+		[
+			'a plain mode\'s background',
+			'top-cut',
+			'background',
+			(revision: Revision) => libraryImageLayer(revision),
+		],
+		[
+			'a graphics host\'s logo',
+			'broadcast-graphics',
+			'logo',
+			(revision: Revision) => ({ kind: 'image', ...revision }),
+		],
+	])('resolves the Theme\'s content for %s, never a stored override of it', async (_case, mode, token, value) => {
+		await call(setToken, { themeId, token }, {
+			value: value(plate),
 		});
+		await db.update(schema.screens)
+			.set({
+				currentMode: mode as never,
+				themeOverrides: {
+					[token]: value(logo),
+				},
+			})
+			.where(eq(schema.screens.id, screenId));
+		await db.insert(graphicAssetReferences).values({
+			id: 'stored-foundation-override',
+			assetId: logo.assetId,
+			revisionId: logo.revisionId,
+			ownerKind: 'screen',
+			ownerId: String(screenId),
+			ownerSlot: `themeOverrides.${token}`,
+			eventId,
+		} as never);
 		const screen = await screenRow(screenId);
 
-		expect([await resolves(screen, logo), await resolves(screen, plate)]).toEqual([true, false]);
+		expect([await resolves(screen, plate), await resolves(screen, logo)]).toEqual([true, false]);
 	});
 
 	it('resolves a dormant override of another mode\'s Mode Token only once the Screen shows that mode again', async () => {
-		await call(patchOverrides, { id: eventId, screenId }, {
-			tokens: {
-				'standings.title-typography': libraryFont(face),
-			},
+		await overrideOn('feature-match-overlay', {
+			'feature-match-overlay.frame-media': { kind: 'image', ...plate },
 		});
 		await db.update(schema.screens).set({ currentMode: 'card' }).where(eq(schema.screens.id, screenId));
-		expect(await resolves(await screenRow(screenId), face)).toBe(false);
+		expect(await resolves(await screenRow(screenId), plate)).toBe(false);
 
-		await db.update(schema.screens).set({ currentMode: 'standings' }).where(eq(schema.screens.id, screenId));
-		expect(await resolves(await screenRow(screenId), face)).toBe(true);
+		await db.update(schema.screens).set({ currentMode: 'feature-match-overlay' }).where(eq(schema.screens.id, screenId));
+		expect(await resolves(await screenRow(screenId), plate)).toBe(true);
+	});
+
+	it('resolves nothing of a Mode Token its Theme stored before', async () => {
+		await storeThemeFrameMedia(plate);
+		await db.update(schema.screens).set({ currentMode: 'feature-match-overlay' }).where(eq(schema.screens.id, screenId));
+
+		expect(await resolves(await screenRow(screenId), plate)).toBe(false);
 	});
 
 	it('resolves nothing of a Theme its Event does not use', async () => {

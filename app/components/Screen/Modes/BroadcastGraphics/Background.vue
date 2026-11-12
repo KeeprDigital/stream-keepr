@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AnimationEffectSelection, BroadcastGraphicsBackgroundConfig } from '~~/shared/animationEffects';
-import { parseBroadcastGraphicsBackgroundConfig } from '~~/shared/animationEffects';
+import { ANIMATION_EFFECT_CATALOGUE, parseBroadcastGraphicsBackgroundConfig } from '~~/shared/animationEffects';
 import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND } from '~~/shared/types/screenConfig';
 
 /**
@@ -9,7 +9,8 @@ import { DEFAULT_BROADCAST_GRAPHICS_BACKGROUND } from '~~/shared/types/screenCon
  *
  * It sits beside the stack rather than in it, for the reason Graphic Channels do:
  * a background is a Screen-level decision about the show and changes nothing
- * about any design or about Graphic Layer Order. It lives in the Edit workspace
+ * about any design or about Graphic Layer Order. There it is a section that
+ * starts closed and says whether a background shows. It lives in the Edit workspace
  * because it is authoring, and so is covered by the same Graphics Authoring Lease
  * every other control there is — an observer reads the background without being
  * able to change it.
@@ -48,6 +49,11 @@ const background = computed<BroadcastGraphicsBackgroundConfig>(() =>
 		: DEFAULT_BROADCAST_GRAPHICS_BACKGROUND,
 );
 
+/** The closed section in one line: off, or the effect that shows and how opaque it is. */
+const summary = computed(() => (background.value.enabled
+	? `${ANIMATION_EFFECT_CATALOGUE[background.value.effect].label} · ${Math.round(background.value.opacity * 100)}%`
+	: 'Off'));
+
 function write(next: BroadcastGraphicsBackgroundConfig) {
 	if (!canAuthor.value)
 		return;
@@ -81,16 +87,18 @@ const selection = computed<AnimationEffectSelection>(() => ({
 </script>
 
 <template>
-	<section data-testid="broadcast-graphics-background-settings">
-		<h3 class="mb-2 text-sm font-medium">
-			Background
-		</h3>
-
-		<p class="mb-2 text-xs text-muted">
+	<ScreenSettingsSection
+		id="broadcast-graphics-background"
+		density="row"
+		title="Background"
+		:summary="summary"
+		data-testid="broadcast-graphics-background-settings"
+	>
+		<ScreenSettingsHint>
 			One Animation Effect behind every Broadcast Graphic on this Screen. It renders in
 			the Overlay and Fill Outputs and never in the Key Output, which stays an alpha
 			matte.
-		</p>
+		</ScreenSettingsHint>
 
 		<fieldset :disabled="!canAuthor" class="space-y-3">
 			<ScreenSettingsToggle
@@ -100,14 +108,12 @@ const selection = computed<AnimationEffectSelection>(() => ({
 			/>
 
 			<template v-if="background.enabled">
-				<UFormField label="Opacity" data-testid="broadcast-graphics-background-opacity">
-					<UIOpacityInput
-						:model-value="background.opacity"
-						size="sm"
-						class="w-full"
-						@update:model-value="updateEnabledOrOpacity({ opacity: Number($event) })"
-					/>
-				</UFormField>
+				<GraphicsOpacityField
+					label="Opacity"
+					:model-value="background.opacity"
+					data-testid="broadcast-graphics-background-opacity"
+					@update:model-value="updateEnabledOrOpacity({ opacity: Number($event) })"
+				/>
 
 				<ScreenAnimationEffectFields
 					:selection="selection"
@@ -115,5 +121,5 @@ const selection = computed<AnimationEffectSelection>(() => ({
 				/>
 			</template>
 		</fieldset>
-	</section>
+	</ScreenSettingsSection>
 </template>

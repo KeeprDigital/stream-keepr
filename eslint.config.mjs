@@ -41,6 +41,14 @@ const pageSizeFieldSyntax = [
 	{ selector: 'MemberExpression[property.name=/^(?:pageSize|\\w+PerPage)$/]:matches([object.name=\'config\'], [object.property.name=/^(?:value|config)$/])', message: pageSizeFieldMessage },
 	{ selector: 'VariableDeclarator:not([init.callee.name=/^use\\w+ModeData$/]) > ObjectPattern > Property[key.name=/^(?:pageSize|\\w+PerPage)$/]', message: pageSizeFieldMessage },
 ];
+// #1102: the graphics inspector and the Theme editor share one number field (GraphicsNumberField,
+// which GraphicsOpacityField and every shared field control build on).
+const sharedFieldTemplateSyntax = [
+	'DebuggerStatement',
+	'LabeledStatement',
+	'WithStatement',
+	{ selector: 'VElement[rawName=/^(?:UInputNumber|u-input-number)$/]', message: 'Use GraphicsNumberField (or GraphicsOpacityField), the one number field the inspector and the Theme editor share.' },
+];
 const sampleDatasetImport = { regex: 'screen-mode/sample(Screen|Dataset)$', message: 'The Screen Mode Sample Dataset is a Theme preview\'s alone (components/Theme).' };
 // Rendering code: what a Screen Output, a Program monitor or a preview runs.
 const renderingFiles = [
@@ -265,6 +273,12 @@ export default withNuxt(
 		},
 	},
 	{
+		files: ['app/components/Graphics/**/*.vue', 'app/components/Theme/**/*.vue'],
+		rules: {
+			'vue/no-restricted-syntax': ['error', ...sharedFieldTemplateSyntax],
+		},
+	},
+	{
 		// A live rendering of a Screen follows only its Screen's own channel. Rendering code names
 		// the Event channel through one seam, so nothing a Screen Output runs comes to depend on it.
 		files: renderingFiles,
@@ -298,6 +312,7 @@ export default withNuxt(
 			'no-restricted-syntax': ['error', ...compositorPanelSyntax],
 			'vue/no-restricted-syntax': [
 				'error',
+				...sharedFieldTemplateSyntax,
 				{
 					selector: 'CallExpression[callee.name=/^\\$?emit$/][arguments.0.value=\'update:graphics\'][arguments.1.name!=\'$event\']',
 					message: 'A template may only forward a child\'s update:graphics $event unchanged.',
@@ -307,7 +322,7 @@ export default withNuxt(
 	},
 	{
 		// The panels only; StyleRef.vue reads its own writable prop.
-		files: ['app/components/Graphics/Compositor/{Animation,Bindings,Inspector,SocialProfileProjections,StackTree}.vue'],
+		files: ['app/components/Graphics/Compositor/{Animation,Bindings,Inspector,SocialProfileProjections}.vue'],
 		rules: {
 			'no-restricted-syntax': [
 				'error',

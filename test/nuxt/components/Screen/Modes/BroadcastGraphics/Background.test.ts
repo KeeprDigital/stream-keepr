@@ -21,7 +21,7 @@ function backgroundEmits(wrapper: Awaited<ReturnType<typeof mountCard>>): Emitte
 }
 
 async function setOpacity(wrapper: Awaited<ReturnType<typeof mountCard>>, value: string) {
-	const input = wrapper.get('[data-testid="broadcast-graphics-background-opacity"] input');
+	const input = wrapper.get('input[data-testid="broadcast-graphics-background-opacity"]');
 	await input.setValue(value);
 	await input.trigger('change');
 	await input.trigger('blur');
@@ -127,5 +127,32 @@ describe('screenModesBroadcastGraphicsBackground', () => {
 		await setOpacity(wrapper, '0.25');
 
 		expect(backgroundEmits(wrapper)).toHaveLength(0);
+	});
+
+	// Beside the stack the section is closed, saying what it holds in one line.
+	it.each<{ holds: string; background?: BroadcastGraphicsBackgroundConfig; summary: string }>([
+		{
+			holds: 'no background',
+			background: undefined,
+			summary: 'Off',
+		},
+		{
+			holds: 'a background switched off',
+			background: { enabled: false, effect: 'caustics', opacity: 0.4 },
+			summary: 'Off',
+		},
+		{
+			holds: 'a background that shows',
+			background: { enabled: true, effect: 'caustics', opacity: 0.4 },
+			summary: 'Caustics · 40%',
+		},
+	])('starts closed, summarising $holds', async ({ background, summary }) => {
+		localStorage.clear();
+		const wrapper = await mountCard({ background });
+
+		const toggle = wrapper.get('[data-testid="broadcast-graphics-background-settings"] button[aria-expanded]');
+		expect(toggle.attributes('aria-expanded')).toBe('false');
+		expect(toggle.text()).toContain('Background');
+		expect(toggle.text()).toContain(summary);
 	});
 });

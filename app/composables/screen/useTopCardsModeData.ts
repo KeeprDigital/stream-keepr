@@ -46,8 +46,9 @@ export function useTopCardsModeData(context: ScreenContext) {
 
 	// ── Pagination ──
 	// A Page Rotation over the ranked cards, `cardsPerPage` (the declared page
-	// size) a page. Columns are the Screen's to lay out in the space it measures;
-	// they never change which cards a page holds (ADR-0054).
+	// size) a page, or every card on one while it is Auto. Columns are the
+	// Screen's to lay out in the space it measures; they never change which
+	// cards a page holds (ADR-0054).
 	const rankedCards = computed(() => entries.value.map((entry, index) => ({ entry, rank: index + 1 })));
 	const {
 		rowCount,

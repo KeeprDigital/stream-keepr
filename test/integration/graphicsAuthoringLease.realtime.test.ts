@@ -1,6 +1,7 @@
 import type { ScreenResponse } from '~~/shared/api';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '../../shared/builtInFeatureMatchLayoutTemplates';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { createCommandHarness } from './featureMatchSessionHelpers';
 import { anotherBrowser } from './identities';
@@ -268,12 +269,18 @@ describe('graphics Authoring Leases', () => {
 		const patchOverlayModeConfig = (body: Record<string, unknown>, cookie: string) =>
 			request(`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`, { method: 'PATCH', body, cookie });
 
-		expect((await patchOverlayModeConfig({ presetId: 'full-table' }, browserA)).status).toBe(200);
-		expect((await patchOverlayModeConfig({ presetId: 'neon-feature-match' }, browserB)).status).toBe(409);
+		const layoutOf = (id: string) => BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.find(builtIn => builtIn.id === id)!.config.layout;
+
+		expect((await patchOverlayModeConfig({
+			layout: layoutOf('full-table'),
+		}, browserA)).status).toBe(200);
+		expect((await patchOverlayModeConfig({
+			layout: layoutOf('neon-feature-match'),
+		}, browserB)).status).toBe(409);
 		expect((await patchOverlayModeConfig({ featureMatchId: null }, browserB)).status).toBe(200);
 
 		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		expect(screen.modeConfigs?.['feature-match-overlay']?.presetId).toBe('full-table');
+		expect(screen.modeConfigs?.['feature-match-overlay']?.layout).toEqual(JSON.parse(JSON.stringify(layoutOf('full-table'))));
 	});
 
 	it('lets an observer read every accepted authoring change', async () => {

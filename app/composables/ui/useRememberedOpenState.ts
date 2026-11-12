@@ -29,12 +29,5 @@ export function useRememberedOpenState(storageKey: string) {
 		stored.value = { ...stored.value, [id]: open };
 	}
 
-	function setAll(ids: readonly string[], open: boolean) {
-		stored.value = {
-			...stored.value,
-			...Object.fromEntries(ids.map(id => [id, open])),
-		};
-	}
-
-	return { isOpen, setOpen, setAll };
+	return { isOpen, setOpen };
 }

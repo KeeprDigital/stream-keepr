@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<{
 	locked?: MetagameCardTypeBucket[];
 	/** The Event's Card Game, whose card types the chips name. */
 	game?: Game;
-	description: string;
+	description?: string;
 	/** Each chip's test id is this prefix and its type. */
 	testIdPrefix: string;
 }>(), {
@@ -53,7 +53,8 @@ function label(bucket: MetagameCardTypeBucket): string {
 </script>
 
 <template>
-	<UFormField
+	<ScreenSettingsField
+		stacked
 		label="Card types"
 		:description="description"
 		class="flex flex-col gap-3"
@@ -72,5 +73,5 @@ function label(bucket: MetagameCardTypeBucket): string {
 				@click="toggle(bucket)"
 			/>
 		</div>
-	</UFormField>
+	</ScreenSettingsField>
 </template>

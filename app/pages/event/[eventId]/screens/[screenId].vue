@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { BackgroundLayersCapableMode } from '~~/shared/screenModes';
-import type { FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
 import type { Screen, ScreenCommand, ScreenMode } from '~/types';
 import { screenModeSupportsBackgroundLayers } from '~~/shared/screenModes';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
@@ -14,9 +13,6 @@ definePageMeta({
 const route = useRoute();
 const eventStore = useEventStore();
 const screenStore = useScreenStore();
-const toast = useToast();
-const { copyToClipboard } = useCopyToClipboard();
-const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
 const { runRequest } = useRequestFeedback();
 
 const event = computed(() => eventStore.event);
@@ -27,18 +23,18 @@ const screen = ref<Screen | null>(null);
 const loading = ref(true);
 const isUpdating = ref(false);
 
+// The Screen's Screen Theme Overrides and its one read of the Event's Theme,
+// for every card below: a group's Look shows in Editor Focus Mode too.
+provideScreenThemeOverrides(screen, eventId);
+
 /**
  * Editor Focus Mode (#744): while a graphics editor's Edit workspace offers it
  * and it is on, the editor gets the page. The layout drops the app sidebar and
- * this page drops the Screen-level cards around the editor — the header,
- * Background & Placement and the Screen-wide look — keeping the save failure,
+ * this page drops the Screen-level cards around the editor — the header and
+ * Background & Placement — keeping the save failure,
  * the way back to Screens, and the Screen's name in the navbar.
  */
 const { active: editorFocus } = useEditorFocusMode();
-
-// The settings groups the mode's settings mount, each rendering its own Mode
-// Tokens, so the Screen-wide look after them leaves those out (ADR-0072).
-provideScreenSettingsGroups();
 
 const screenModeConfigurationPolicy = computed(() => {
 	const mode = screen.value?.currentMode;
@@ -91,6 +87,8 @@ const isSaving = computed(() =>
 	|| backgroundLayersControlsRef.value?.saving === true,
 );
 
+const resetBlocked = computed(() => modeControlsRef.value?.resetBlocked === true);
+
 function confirmResetAll() {
 	modeControlsRef.value?.resetConfig?.();
 	showResetConfirm.value = false;
@@ -110,15 +108,6 @@ const screenUrl = computed(() => {
 	const baseUrl = window.location.origin;
 	return `${baseUrl}/event/${eventId.value}/screen/${screen.value.slug}`;
 });
-
-function accessUrlOptions(output?: FeatureMatchOverlayOutput) {
-	return {
-		eventId: eventId.value,
-		screenId: screen.value!.id,
-		screenSlug: screen.value!.slug,
-		output,
-	};
-}
 
 const modeOptions = useEventScreenModeSelectOptions();
 
@@ -211,23 +200,6 @@ async function setMode(mode: ScreenMode) {
 	);
 }
 
-async function copyUrl() {
-	if (!screen.value)
-		return;
-	// An empty URL is what the composable answers with when it could not obtain a
-	// capability, and the clipboard helper reports having nothing rather than putting a
-	// media-losing URL on the operator's clipboard. The reason for having nothing is
-	// this page's to name — "copy failed" sends an operator to the address in their own
-	// browser's bar, which is the URL this refusal exists to withhold — and since #257
-	// naming it can no longer mis-name a clipboard that refused the write.
-	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions()), {
-		successTitle: 'Output URL copied',
-		successDescription: 'It carries asset access, so the output resolves this Screen\'s media.',
-		nothingToCopyTitle: 'Nothing copied',
-		nothingToCopyDescription: 'Asset access for this Screen could not be obtained, so the URL would have opened an output without its media. Try again.',
-	});
-}
-
 async function rotateAssetCapability() {
 	if (!screen.value)
 		return;
@@ -256,71 +228,51 @@ async function rotateAssetCapability() {
 }
 
 /**
- * Hands out a Screen Output in a new tab, and says which of the two ways it could not.
- *
- * `openScreenOutput` opens the tab on the click and closes it again unpointed when
- * asset access could not be obtained, so an operator whose open was refused is looking
- * at nothing having happened. Discarding that answer, which this page did until #250,
- * left the refusal reading as a popup blocker rather than as the media-losing hand-out
- * it declined to make (#231, #237).
- *
- * And then blamed asset access for the popup blocker itself, because one boolean
- * covered both. They are opposite instructions — retry, or change a browser setting —
- * so since #258 they are separate answers and separate sentences.
- *
- * One reporter for both open controls: the default output and a Screen Mode's own
- * outputs fail the same way, and an operator must not meet two vocabularies for it.
+ * The Screen Mode's own Screen Outputs, which the hand-out offers after the Screen's
+ * output, each named by the output it is (#266, #1104).
  */
-async function openOutput(output?: FeatureMatchOverlayOutput) {
-	if (!screen.value)
-		return;
-	const result = await openScreenOutput(accessUrlOptions(output));
-	if (result === 'opened')
-		return;
-
-	toast.add(result === 'window-blocked'
-		? {
-				title: 'Output not opened',
-				description: 'This browser blocked the new tab. Allow pop-ups for this site, then open the output again.',
-				color: 'error',
-			}
-		: {
-				title: 'Output not opened',
-				description: 'Asset access for this Screen could not be obtained, so the output would have rendered without its media. Try again.',
-				color: 'error',
-			});
-}
-
-function openInNewTab() {
-	void openOutput();
-}
-
-function openOutputInNewTab(output: FeatureMatchOverlayOutput) {
-	void openOutput(output);
-}
+const ownOutputs = computed(() => screenModeConfigurationPolicy.value?.outputs ?? []);
 
 /**
- * Named for the thing handed out, not for the tab it appears in.
- *
- * "Open default screen" said neither what it opens nor that what it opens resolves
- * media — a Screen is not an output, and the address printed a few pixels away is a
- * Screen too. The Live workspace's control settled the voice in #234/#237, and this
- * is the same hand-out (#266). The Screen Mode's own outputs sit in the group below,
- * each named by the output it is.
+ * The actions an operator rarely needs, and the two that destroy something, kept
+ * away from Refresh. Rotate and Reset only ask here: a menu closes on a choice, so
+ * each confirms in a dialog, and the write is that dialog's button.
  */
-const openOutputItems = computed(() => [
+const moreActionItems = computed(() => [
 	[
-		{ label: 'Open output', icon: 'i-lucide-external-link', onSelect: openInNewTab },
+		{
+			label: 'Identify',
+			icon: 'i-lucide-scan-eye',
+			onSelect: () => void sendCommand('identify'),
+		},
+		{
+			label: 'Debug',
+			icon: 'i-lucide-bug',
+			onSelect: () => void sendCommand('debug'),
+		},
 	],
-	...(screenModeConfigurationPolicy.value?.outputOptions.length
-		? [
-				screenModeConfigurationPolicy.value.outputOptions.map(option => ({
-					label: option.label,
-					icon: option.icon,
-					onSelect: () => openOutputInNewTab(option.value),
-				})),
-			]
-		: []),
+	[
+		{
+			label: 'Rotate Asset Access',
+			icon: 'i-lucide-key-round',
+			color: 'warning' as const,
+			onSelect: () => {
+				showCapabilityRotationConfirm.value = true;
+			},
+		},
+		{
+			label: 'Reset mode settings',
+			icon: 'i-lucide-rotate-ccw',
+			color: 'error' as const,
+			disabled: resetBlocked.value,
+			description: resetBlocked.value
+				? 'Another session is editing this Screen\'s graphics'
+				: undefined,
+			onSelect: () => {
+				showResetConfirm.value = true;
+			},
+		},
+	],
 ]);
 
 async function sendCommand(command: ScreenCommand) {
@@ -402,21 +354,6 @@ async function sendCommand(command: ScreenCommand) {
 								</div>
 								<div class="flex items-center gap-2 mt-1 text-sm text-muted">
 									<span class="truncate">{{ screenUrl }}</span>
-									<!--
-										Named for what it hands out rather than for the text it sits
-										beside, which is the one thing it does not copy: this control
-										produces the Overlay Output's URL carrying asset access, and
-										the address above resolves no media at all (#231, #266).
-									-->
-									<UTooltip text="Copy this Screen's Overlay Output URL, with the asset access that resolves its media">
-										<UButton
-											variant="ghost"
-											size="xs"
-											icon="i-lucide-copy"
-											aria-label="Copy output URL"
-											@click="copyUrl"
-										/>
-									</UTooltip>
 								</div>
 							</div>
 
@@ -435,116 +372,33 @@ async function sendCommand(command: ScreenCommand) {
 
 						<!-- Controls Row -->
 						<div class="flex items-center gap-3">
+							<ScreenOutputHandOut
+								:event-id="eventId"
+								:screen="screen"
+								:outputs="ownOutputs"
+								data-header-action="hand-out"
+							/>
 							<UFieldGroup size="sm">
-								<UDropdownMenu :items="openOutputItems">
-									<UButton
-										variant="soft"
-										color="neutral"
-										icon="i-lucide-external-link"
-										trailing-icon="i-lucide-chevron-down"
-										label="Open"
-										title="Open a Screen Output in a new tab, with the asset access that resolves its media"
-										data-testid="open-output-menu"
-									/>
-								</UDropdownMenu>
 								<UTooltip text="Refresh all clients">
 									<UButton
 										variant="soft"
 										color="neutral"
 										icon="i-lucide-refresh-cw"
 										label="Refresh"
+										data-header-action="refresh"
 										@click="sendCommand('refresh')"
 									/>
 								</UTooltip>
-								<UTooltip text="Flash screen identifier">
+								<UDropdownMenu :items="moreActionItems">
 									<UButton
 										variant="soft"
 										color="neutral"
-										icon="i-lucide-scan-eye"
-										label="Identify"
-										@click="sendCommand('identify')"
+										icon="i-lucide-ellipsis"
+										aria-label="More Screen actions"
+										data-header-action="more"
+										data-testid="screen-actions-menu"
 									/>
-								</UTooltip>
-								<UTooltip text="Toggle debug overlay">
-									<UButton
-										variant="soft"
-										color="neutral"
-										icon="i-lucide-bug"
-										label="Debug"
-										@click="sendCommand('debug')"
-									/>
-								</UTooltip>
-
-								<UPopover v-model:open="showCapabilityRotationConfirm">
-									<UTooltip text="Revoke previously copied Screen URLs">
-										<UButton
-											variant="soft"
-											color="warning"
-											icon="i-lucide-key-round"
-											label="Rotate Asset Access"
-											:loading="rotatingCapability"
-										/>
-									</UTooltip>
-									<template #content>
-										<div class="p-3 flex flex-col gap-3 w-72">
-											<p class="text-sm">
-												Rotate this Screen Output's asset access? Previously copied URLs will stop resolving Graphic Assets immediately.
-											</p>
-											<div class="flex justify-end gap-2">
-												<UButton
-													size="xs"
-													variant="ghost"
-													color="neutral"
-													label="Cancel"
-													@click="() => { showCapabilityRotationConfirm = false }"
-												/>
-												<UButton
-													size="xs"
-													color="warning"
-													label="Rotate Access"
-													:loading="rotatingCapability"
-													@click="rotateAssetCapability"
-												/>
-											</div>
-										</div>
-									</template>
-								</UPopover>
-
-								<USeparator orientation="vertical" class="h-6" />
-
-								<UPopover v-model:open="showResetConfirm">
-									<UTooltip :text="modeControlsRef?.resetBlocked ? 'Another session is editing this Screen\'s graphics' : 'Reset all display settings'">
-										<UButton
-											variant="soft"
-											color="error"
-											icon="i-lucide-rotate-ccw"
-											label="Reset"
-											:disabled="modeControlsRef?.resetBlocked === true"
-										/>
-									</UTooltip>
-									<template #content>
-										<div class="p-3 flex flex-col gap-3 w-64">
-											<p class="text-sm">
-												Reset this mode's display settings to defaults? Theme overrides and bindings will be preserved.
-											</p>
-											<div class="flex justify-end gap-2">
-												<UButton
-													size="xs"
-													variant="ghost"
-													color="neutral"
-													label="Cancel"
-													@click="() => { showResetConfirm = false }"
-												/>
-												<UButton
-													size="xs"
-													color="error"
-													label="Reset"
-													@click="confirmResetAll"
-												/>
-											</div>
-										</div>
-									</template>
-								</UPopover>
+								</UDropdownMenu>
 							</UFieldGroup>
 
 							<!-- Status Indicators -->
@@ -579,12 +433,57 @@ async function sendCommand(command: ScreenCommand) {
 							</span>
 						</div>
 					</div>
+
+					<UModal
+						v-model:open="showCapabilityRotationConfirm"
+						title="Rotate Asset Access"
+						description="Rotate this Screen Output's asset access? Previously copied URLs will stop resolving Graphic Assets immediately."
+						:ui="{ footer: 'justify-end' }"
+					>
+						<template #footer>
+							<UButton
+								variant="ghost"
+								color="neutral"
+								label="Cancel"
+								:disabled="rotatingCapability"
+								@click="() => { showCapabilityRotationConfirm = false }"
+							/>
+							<UButton
+								color="warning"
+								label="Rotate Access"
+								:loading="rotatingCapability"
+								@click="rotateAssetCapability"
+							/>
+						</template>
+					</UModal>
+
+					<UModal
+						v-model:open="showResetConfirm"
+						title="Reset mode settings"
+						description="Reset this mode's display settings to defaults? Theme overrides and bindings will be preserved."
+						:ui="{ footer: 'justify-end' }"
+					>
+						<template #footer>
+							<UButton
+								variant="ghost"
+								color="neutral"
+								label="Cancel"
+								@click="() => { showResetConfirm = false }"
+							/>
+							<UButton
+								color="error"
+								label="Reset"
+								@click="confirmResetAll"
+							/>
+						</template>
+					</UModal>
 				</UCard>
 
 				<!-- Mode-specific Settings -->
 				<component
 					:is="modeSettingsComponent"
 					v-if="modeSettingsComponent"
+					:key="screen.currentMode"
 					ref="modeControlsRef"
 					:screen="screen"
 					:event-id="eventId"
@@ -598,14 +497,6 @@ async function sendCommand(command: ScreenCommand) {
 					:screen="screen"
 					:event-id="eventId"
 					:mode="backgroundLayersMode"
-				/>
-
-				<!-- Screen-wide look: what no mounted settings group renders -->
-				<ScreenThemeTokensSettings
-					v-if="!editorFocus"
-					:key="screen.currentMode"
-					:screen="screen"
-					:event-id="eventId"
 				/>
 			</div>
 		</UContainer>

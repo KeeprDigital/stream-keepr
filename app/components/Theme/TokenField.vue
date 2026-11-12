@@ -2,16 +2,16 @@
 import type { Component } from 'vue';
 import type { FoundationTokenName, ThemeTokenType, ThemeTokenValue } from '~~/shared/modules/theme';
 import type { ThemeTokenDefinitionOf } from '~~/shared/themeTokens';
-import { FOUNDATION_TOKENS, isThemeCompositeTokenType } from '~~/shared/modules/theme';
+import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
 import { themeTokenDefinition } from '~~/shared/themeTokens';
 import { useThemeTokenDraft } from '~/modules/theme-editor/draft';
 import { THEME_TOKEN_COMMITS_IN_STEPS, THEME_TOKEN_INPUTS, themeTokenValueText } from '~/modules/theme-editor/tokenInputs';
 
 // One Theme Token in the Theme editor, or in a Screen's token section: its
-// control, what it inherits when left unset, and a reset that clears it. A Mode
-// Token may also follow any Foundation Token of its type instead of holding its
-// own value. Its input edits a draft, so each edit builds on the last one made
-// here, whether or not its write has answered.
+// control, what it inherits when left unset, and a reset that clears it. Its
+// input edits the token's resolved value, so what an edit writes names no other
+// token, and edits a draft, so each edit builds on the last one made here,
+// whether or not its write has answered.
 
 const props = defineProps<{
 	name: string;
@@ -24,16 +24,17 @@ const props = defineProps<{
 	writing?: boolean;
 	/**
 	 * Where it is set: in a Theme, inheriting its default (the default), or as
-	 * a Screen Theme Override, inheriting `inherited` from the Event's Theme.
+	 * a Screen Theme Override, inheriting `inherited`: a Foundation Token's from
+	 * the Event's Theme, a Mode Token's default.
 	 */
 	scope?: 'theme' | 'screen';
-	/** What it reads when unset, as stored: a literal, or a Foundation Token it follows. */
+	/** What it reads when unset: a literal, or the Foundation Token its default names. */
 	inherited?: unknown;
 	/** The Event whose adopted library assets a picker offers first; a Theme has none. */
 	eventId?: number;
 	/**
 	 * One row, as a Screen settings group's Look shows it (ADR-0072): label,
-	 * source, control, state badge and reset. What it inherits is announced only.
+	 * control, state badge and reset. What it inherits is announced only.
 	 */
 	compact?: boolean;
 }>();
@@ -42,8 +43,6 @@ const emit = defineEmits<{
 	set: [value: unknown];
 	clear: [];
 }>();
-
-const OWN_VALUE = '__own__';
 
 const definition = computed(() => props.token.definition);
 const isSet = computed(() => props.stored !== undefined);
@@ -82,7 +81,13 @@ const SCOPE_TEXT = {
 		resetLabel: (label: string) => `Clear the ${label} override`,
 	},
 } as const;
-const text = computed(() => SCOPE_TEXT[props.scope ?? 'theme']);
+const text = computed(() => {
+	const scoped = SCOPE_TEXT[props.scope ?? 'theme'];
+	// A Theme stores Foundation Tokens only, so a Mode Token inherits its default wherever it is set.
+	return props.token.tier === 'mode'
+		? { ...scoped, inherited: SCOPE_TEXT.theme.inherited }
+		: scoped;
+});
 const inheritedValue = computed(() => props.inherited ?? definition.value.default);
 const inherited = computed(() => `${text.value.inherited}: ${valueText(inheritedValue.value)}`);
 const badge = computed(() => {
@@ -91,38 +96,8 @@ const badge = computed(() => {
 	return isSet.value ? text.value.compactSet : text.value.inherited;
 });
 
-/** The Foundation Tokens of this token's type, which a Mode Token may follow. */
-const sourceItems = computed(() => [
-	...Object.entries(FOUNDATION_TOKENS)
-		.filter(([, foundation]) => foundation.type === definition.value.type)
-		.map(([foundationName, foundation]) => ({ label: `Follow ${foundation.label}`, value: foundationName })),
-	{ label: 'Own value', value: OWN_VALUE },
-]);
-
-const source = computed(() => {
-	if (isSet.value)
-		return referenceOf(props.stored) ?? OWN_VALUE;
-	return referenceOf(inheritedValue.value) ?? OWN_VALUE;
-});
-
-/**
- * What the input edits. A composite's colours, and a background colour
- * layer's, may follow colour tokens, which its resolved value no longer
- * shows, so it edits the literal as stored, or as it is inherited.
- */
-const editable = computed(() => {
-	const type = definition.value.type;
-	if (!isThemeCompositeTokenType(type) && type !== 'backgroundLayers')
-		return props.resolved;
-	if (isSet.value && !referenceOf(props.stored))
-		return props.stored as ThemeTokenValue;
-	return referenceOf(inheritedValue.value)
-		? props.resolved
-		: inheritedValue.value as ThemeTokenValue;
-});
-
 const { draft, edit, commitNow, cancel } = useThemeTokenDraft(
-	() => editable.value,
+	() => props.resolved,
 	value => emit('set', value),
 	() => props.writing === true,
 );
@@ -134,19 +109,10 @@ function take(value: ThemeTokenValue) {
 		commitNow(value);
 }
 
-/** A Reset, or a new source, replaces an edit still waiting to be written. */
+/** A Reset replaces an edit still waiting to be written. */
 function clear() {
 	cancel();
 	emit('clear');
-}
-
-function chooseSource(value: string) {
-	if (value === source.value)
-		return;
-	cancel();
-	emit('set', value === OWN_VALUE
-		? props.resolved
-		: { token: value });
 }
 </script>
 
@@ -189,17 +155,6 @@ function chooseSource(value: string) {
 			</div>
 		</div>
 		<div :class="compact ? 'flex flex-wrap items-center gap-2' : 'flex flex-col gap-3'">
-			<USelect
-				v-if="token.tier === 'mode'"
-				:model-value="source"
-				:items="sourceItems"
-				size="sm"
-				:class="compact ? 'w-48' : 'w-64'"
-				:disabled="writing"
-				:aria-label="`${definition.label} source`"
-				data-token-part="source"
-				@update:model-value="chooseSource"
-			/>
 			<component
 				:is="input"
 				:model-value="draft"

@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { BOARD_SELECTION_VALUES } from '../types/enums';
 import { METAGAME_CARD_TYPE_BUCKETS } from '../utils/metagame';
 import { defineScreenModeConfigContract } from './contract';
-import { editorField } from './fields';
-import { DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, headerConfigShape, metagameScopeShape, pageRotationPageSize, pageRotationShape } from './subShapes';
+import { editorField, withEditorMeta } from './fields';
+import { BOARD_SELECTION_LABELS, DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, hasSideboard, headerConfigShape, metagameScopeShape, pageRotationPageSize, pageRotationShape, returnsToFirstPage } from './subShapes';
 
 /**
  * The Archetype Spotlight Screen Mode's config contract (#761): one Archetype's
@@ -17,21 +17,50 @@ import { DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, h
  */
 export const archetypeSpotlightModeConfigContract = defineScreenModeConfigContract({
 	/** The spotlit Archetype; an Event Reference (ADR-0038). */
-	archetypeId: z.number().int().positive().optional(),
+	archetypeId: editorField(z.number().int().positive().optional(), {
+		label: 'Archetype',
+		card: 'source',
+		reference: 'archetype',
+		description: 'The archetype to spotlight.',
+	}),
 
 	// Scoping
 	...metagameScopeShape,
 
 	// Top included cards
-	board: editorField(z.enum(BOARD_SELECTION_VALUES), { label: 'Board' }),
-	cardLimit: editorField(z.number().int().min(1).max(20), { label: 'Top cards' }),
-	excludedCardTypes: z.array(z.enum(METAGAME_CARD_TYPE_BUCKETS)).max(METAGAME_CARD_TYPE_BUCKETS.length),
+	board: editorField(z.enum(BOARD_SELECTION_VALUES), {
+		label: 'Board',
+		card: 'content',
+		group: 'top-cards',
+		description: 'Count cards from this part of each deck.',
+		options: BOARD_SELECTION_LABELS,
+		showWhen: hasSideboard,
+	}),
+	cardLimit: editorField(z.number().int().min(1).max(20), {
+		label: 'Limit',
+		card: 'content',
+		group: 'top-cards',
+		description: 'How many of the archetype\'s most-included cards to show.',
+		...returnsToFirstPage,
+	}),
+	excludedCardTypes: editorField(z.array(z.enum(METAGAME_CARD_TYPE_BUCKETS)).max(METAGAME_CARD_TYPE_BUCKETS.length), {
+		label: 'Card types',
+		card: 'content',
+		group: 'top-cards',
+		slot: 'card-type-filter',
+		description: ({ event }) => event?.game === 'op'
+			? 'The card types the top cards may include; Leaders never are.'
+			: 'The card types the top cards may include; basic lands never are.',
+	}),
 
 	// Header
-	...headerConfigShape,
+	...headerConfigShape({
+		shows: 'Show the title above the spotlight.',
+		auto: 'Empty shows the archetype\'s name and scope.',
+	}),
 
 	// Pagination: pilots per page
-	rowsPerPage: pageRotationPageSize,
+	rowsPerPage: withEditorMeta(pageRotationPageSize, { label: 'Pilots per page' }),
 	...pageRotationShape,
 }, {
 	archetypeId: undefined,
@@ -44,8 +73,9 @@ export const archetypeSpotlightModeConfigContract = defineScreenModeConfigContra
 	rowsPerPage: 8,
 	...DEFAULT_PAGE_ROTATION,
 }, {
-	// The Conversion Target is the Event's (ADR-0061).
-	formerFields: ['conversionMetric', 'conversionThreshold'],
+	groups: {
+		'top-cards': { title: 'Top cards', card: 'content' },
+	},
 });
 
 export type ArchetypeSpotlightModeConfig = ScreenModeConfigOf<typeof archetypeSpotlightModeConfigContract>;

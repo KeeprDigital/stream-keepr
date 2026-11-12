@@ -76,7 +76,7 @@ Which Players a Metagame read counts: every Player, the top N by placement, thos
 A strategic Deck classification assigned to Players and used for Metagame analysis. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand. An operator renaming one or pinning its series customises it, and a customised Archetype stays when its last Player leaves (ADR-0074).
 
 **Pinned Chart Series**:
-One of the Theme's eight chart series, `chart-series-1` to `chart-series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme, or a Screen Theme Override, decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).
+One of the Theme's eight chart series, the Foundation Tokens `series-1` to `series-8`, that an operator gives an Archetype on its Metagame page, so every chart colouring Archetypes gives it that series first and it keeps it whichever others enter or leave. It names a series, never a colour: the Theme decides the look. Two shown Archetypes pinning one series leave it to the one created first. Only an operator writes it; Melee Sync never does (ADR-0069).
 _Avoid_: archetype colour, chart colour (an Archetype's mana colours are its colours).
 
 **Pilot**:
@@ -172,7 +172,7 @@ _Avoid_: Top Cards for the Most Played Cards mode (one word from Top Cut); Featu
 The definition of a Screen Mode: its defaults and configuration shape (held as one config contract, ADR-0037, which also names its Authored Stacks), data preparation, rendering contract, Screen host contract (overlay or control surface), and what it declares it carries, such as its Mode Tokens, its own Background Layer stack, its Event References, its Page Rotation, or the Output Changes its Screen Output follows. A mode that declares it carries something gets all of that thing's behaviour from the declaration alone. Generic Screen configuration UI policy belongs here rather than on the Screen configuration page.
 
 **Event Reference**:
-A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, an Archetype, a Talent, a Talent lineup, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, and a Screen write refuses one naming something outside the Event (ADR-0038). Deleting the Phase, Round, Archetype or Talent one names unsets it, deleting a Talent drops it from a lineup, and deleting the Feature Match Slot one names sets it to none (ADR-0060, ADR-0070).
+A field in a Screen Mode's configuration naming something that must belong to the Screen's Event: a Phase, a Round, a Player, a Player List, a Feature Match Slot, an Archetype, a Talent, a Talent lineup, or a Deck Source. Every Screen Mode Definition declares its Event References, declaring none if it has none, each field naming its kind on its config contract, and a Screen write refuses one naming something outside the Event (ADR-0038). An operator sets one through its kind's one picker, which loads what it lists. Deleting the Phase, Round, Archetype or Talent one names unsets it, deleting a Talent drops it from a lineup, and deleting the Feature Match Slot one names sets it to none (ADR-0060, ADR-0070).
 _Avoid_: data binding (a Graphic Input Binding is a Broadcast Graphics concept), Graphic Asset Reference (an installation-wide library link, not Event data)
 
 **Output Change**:
@@ -199,7 +199,7 @@ A Screen Mode rendering an ordered stack of Background Layers (ADR-0016).
 _Avoid_: Idle screen, empty state
 
 **Background Layer**:
-One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent. A Screen whose stack is empty paints its Theme's `background` Foundation Token, a stack of the same layers.
+One entry in an ordered Background Layer stack — a colour, gradient, image, video, or Animation Effect — owning its own enabled state and opacity. The Background Screen's configuration is such a stack, and every mode whose Screen Mode Definition declares one carries its own optional stack behind its content. Every plain overlay mode declares one; the graphics hosts do not, as they own their backgrounds and keep their outputs transparent. A Screen's background has two sources: its own stack, else, while that is empty, its Theme's `background` Foundation Token, a stack of the same layers; no Screen Theme Override supplies one. While a Screen holds none, its settings show its Theme's stack read-only; customising writes a copy of it as the Screen's own, and Reset to Theme empties the Screen's stack again (ADR-0016). A gradient layer holds a Graphic Fill gradient, edited with the one fill control; one stored earlier as a CSS gradient string paints as stored until an edit replaces it.
 _Avoid_: background type, media background (when meaning a layer)
 
 **Screen Media Source**:
@@ -219,7 +219,7 @@ A Screen Mode showing a Round's name and the time left in it, projected from the
 _Avoid_: round timer (the Feature Match Session clock is a Match's, not a Round's).
 
 **Page Rotation**:
-The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field; an edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
+The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field, which holds a number of rows or, where the mode allows, is absent for Auto: every row on one page. An edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).
 _Avoid_: Auto-paging when naming the projection itself — auto-page is the operator toggle that turns rotation on.
 
 **Top Cut Bracket**:
@@ -270,20 +270,24 @@ _Avoid_: Beauty when naming product concepts.
 A Screen Output that renders the final composed opacity as a grayscale alpha matte.
 _Avoid_: Black-and-white export, chroma key.
 
-**Card Sizing**:
-How a card grid on a Most Played Cards or Deck List Screen sizes its cards. Fixed width: each card takes the grid's own card width, and the grid may run off the Event Canvas. Fit to screen: every card on the page takes the largest size at which all of them fit the space the grid is given, so none overflow. Either may take auto columns, chosen from the card count and the Event Canvas (ADR-0054).
-_Avoid_: dynamic card size, card size presets.
+**Card Layout**:
+How a card grid on a Most Played Cards Screen or a Deck List board lays out its cards: columns, max card size and gap, each a number or Auto. The cards always fit the space the grid is given, so none leave the Event Canvas. Auto columns are the count at which the cards are largest, a max card size is the widest a card may be, and an Auto gap follows the card's size, as an Auto card badge size does. A Deck's boards share one card size, and its Sideboard takes the Mainboard's Card Layout and alignment unless customised, keeping its own view and stack reveal (ADR-0054).
+_Avoid_: Card Sizing, Fit, Fixed width, auto columns, card width, dynamic card size.
 
 **Program monitor**:
 A control surface's own live rendering of the Screen it drives. It composes what playout has taken, resolving media exactly as a Screen Output does, but is not a Screen Output.
 _Avoid_: Preview — which composes the authored state its embedder pushes in and resolves media as the author. Confidence monitor.
 
 **Screen Output Asset Capability**:
-An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, its resolved Theme Tokens' included (ADR-0050) and, on a Talent Screen showing photos, its Talents' photos (ADR-0070), never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
+An opaque, long-lived, revocable right that lets one Screen Output resolve only the exact Graphic Asset Revisions its Screen currently publishes, its resolved Theme Tokens' included — its Theme's Foundation Tokens and its own overrides of its mode's Mode Tokens (ADR-0050) — and, on a Talent Screen showing photos, its Talents' photos (ADR-0070), never Graphics Asset Library discovery. It is also the output's whole identity to the installation: it admits the lookup of its Screen, the reads of what that Screen publishes — its Event context and its mode's data, derived from the Screen's saved configuration — and a realtime grant narrowed to that Screen and its Event, in place of a Session (ADR-0010, ADR-0022).
 
 **Screen Output Link**:
 A short text, about 16 characters, that names one Screen and proves the right to its Screen Output Asset Capability. It is not presented on reads: it is exchanged once for the capability, which then does everything a capability does. It is derived from what the capability is derived from, never stored, so regenerating the capability regenerates the link and the former link stops exchanging. No Session stands in for it.
 _Avoid_: short link, output token, output code, share link.
+
+**Output Hand-out**:
+The one place an operator is handed a Screen Output's URL: Open and Copy URL side by side, each carrying a Screen Output Asset Capability obtained at the moment of the hand-out, and refusing rather than handing out a URL without one. The Screen header, the Feature Match Overlay editor and the Program monitor each show the same one; a graphics host's own Screen Outputs are offered by name behind each control. The Screen's address printed beside it carries no capability and is not a hand-out.
+_Avoid_: Outputs popover, share button.
 
 ### Client and live-state infrastructure
 
@@ -372,7 +376,7 @@ The exclusive, Session-scoped right to edit one graphics authoring artifact: a S
 ### Theming
 
 **Theme**:
-A named, installation-scoped set of Theme Token values giving every Screen of an Event one look and feel, whatever its Screen Mode. It holds values, never compositions: it may supply a logo a Broadcast Graphic shows, but the Broadcast Graphic itself is a template's. An Event uses one Theme; a Theme may serve many Events. An edit reaches every Screen using it at once, with no draft or publish step. It themes what Screens render, never the operator app.
+A named, installation-scoped set of Foundation Token values giving every Screen of an Event one look and feel, whatever its Screen Mode. It holds Foundation Tokens only: a Mode Token is set per Screen, so a Theme never styles one Screen Mode differently from another. It holds values, never compositions: it may supply a logo a Broadcast Graphic shows, but the Broadcast Graphic itself is a template's. An Event uses one Theme; a Theme may serve many Events. An edit reaches every Screen using it at once, with no draft or publish step. It themes what Screens render, never the operator app.
 _Avoid_: Style Set, brand, skin, palette (when naming the whole)
 
 **Default Theme**:
@@ -380,22 +384,22 @@ The built-in Theme that ships with Stream Keepr, used by every Event that picks 
 _Avoid_: base theme, fallback theme
 
 **Theme Token**:
-One named value a Screen may consume from its Theme, such as a colour, font, or Graphic Asset. Stream Keepr owns every token's name, type, and where it may be consumed; users set values, never names.
+One named value a Screen may consume from its Theme, such as a colour, font, or Graphic Asset. Stream Keepr owns every token's name, type, and where it may be consumed; users set values, never names. A token Stream Keepr removes is a former token: a write naming one is accepted and the token dropped, and a stored one is read by nothing.
 _Avoid_: variable, style entry
 
 **Foundation Token**:
-A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr.
+A Theme Token naming an application-wide role any Screen Mode may consume, such as the accent colour, the heading font, or the screen inset. Every one has a default value shipped with Stream Keepr. A Screen Mode's display reads one directly for its shared chrome: its type from `heading` and `body`, its title, surface, text and dividers from the colour of that role, as the Metagame chart reads the chart series.
 
 **Mode Token**:
-A Theme Token a Screen Mode Definition declares for its own rendering, such as a Standings row's surface. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. Where no Foundation Token fills its role, such as a badge shadow's colour or Card Spotlight's zoom, it defaults to a literal; a composite literal's colours still name Foundation Tokens where they can, as the Feature Match Overlay Frame's fill names `surface`.
+A Theme Token a Screen Mode Definition declares for an element of its rendering that has no Foundation role, such as Standings' Position Change climb colour or a Pairings result badge's colours. A mode whose every element has a Foundation role declares none, as Head-to-Head and Talent do. Its default is a Foundation Token, so a new Screen Mode follows every existing Theme unchanged. A motion one follows a Foundation motion's timing and keeps its own movement, as the row motion Standings and Metagame share takes the enter motion's pace and its own slide. Where no Foundation Token fills its role, such as Card Spotlight's zoom, whose pace matches no Foundation motion, it defaults to a literal; a composite default's colours still name Foundation Tokens where they can, as the Feature Match Overlay Frame's fill names `surface`. Only its default names a token: a value set for it is a literal. It is set per Screen, as a Screen Theme Override, never in a Theme; unset, it reads its default.
 _Avoid_: component token
 
 **Screen Theme Override**:
-A Screen's own value for one Theme Token, used by that Screen in place of its Theme's. Clearing it returns the Screen to the Theme's value.
+A Screen's own value for one of its mode's Mode Tokens, used by that Screen in place of the token's default, or, on a plain overlay mode, for the `inset` or `alignment` Foundation Token its host places content by, in place of its Theme's value. Every other Foundation Token, Graphic Items' bindings and the logo included, comes from the Theme alone: a write naming one is accepted and the token dropped, and one stored before is read by nothing. Clearing it returns the Screen to what the token inherits.
 _Avoid_: local style, pin
 
 **Screen Settings Group**:
-One element or decision on a Screen's settings page, such as its Header, Table or Card Badges, holding the controls for it and, under "Look", the Screen Theme Overrides of the Mode Tokens that style it. A Mode Token names its group. The Foundation Tokens, and any Mode Token whose group is not on the page, sit in the closing "Screen-wide look" card, after "Background & Placement" (ADR-0072).
+One element or decision on a Screen's settings page, such as its Table or a card badge, holding the controls for it and, under its heading in its card's "Look", the Screen Theme Overrides of the Mode Tokens that style it. A Screen Mode declares its groups once, on its config contract, each in one of the page's fixed cards (Live, Source, Content, Header, Paging, Background & Placement), so the page opens on the controls an operator uses during a show and closes on Background & Placement, with nothing after it; a config field and a Mode Token each name the group they sit in, and a Mode Token renders nowhere else, so it is hidden while its group is. The Screen's `inset` and `alignment` sit in the closing "Background & Placement" card; no card lists a Foundation Token a Screen takes from its Theme alone (ADR-0072).
 
 **Event Canvas**:
 The pixel coordinate space every overlay Screen of an Event is authored and rendered in, default 1920 × 1080. A Screen Output scales it uniformly to fit its window, so output resolution is not the canvas's to set. Feature Match Controls, an operator surface, fills its window instead (ADR-0051).
@@ -652,7 +656,7 @@ The vocabulary every Operational Queue action reports in: completed, already-in-
 The Graphic Item, geometry, styling, grouping, animation, definition, and rendering vocabulary used by both Broadcast Graphics and Feature Match Overlay, unifying their composition model without merging their Screen Modes, live context, or template artifacts.
 
 **Host Contract**:
-The declaration a graphics Screen Mode supplies when embedding the shared compositor: available context kinds, top-level host extras, canvas rules, and write semantics. Capability outside it stays host-owned.
+The declaration a graphics Screen Mode supplies when embedding the shared compositor and the shared graphics editor: available context kinds, top-level host extras and canvas rules for the compositor; and for the editor, what its item tree holds, which document its edits write, and which edits are forbidden (no Graphics Authoring Lease, a placement in flight, a composition that may not be written now, such as a Broadcast Graphic on air, which undo and redo also leave as it is). Capability outside it stays host-owned.
 
 **Graphic Item**:
 A visual part within a Broadcast Graphic or Feature Match Layout, such as text, media, or a shape. Items are edited individually but never taken on or off air independently of their composition; an item whose live data is empty renders nothing while remaining on air.
@@ -701,7 +705,7 @@ A context-gated Graphic Item that renders one Player's life total.
 A context-gated Graphic Item that renders one Player's game-win indicators.
 
 **Shape Geometry**:
-A parameterised rectangle with independently square, rounded, or cut corners and bounded left or right edge slant. Rectangle, rule, slanted-edge, and corner-cut presets initialise the same geometry rather than distinct types.
+A parameterised rectangle with independently square, rounded, or cut corners and bounded left or right edge slant. Rectangle, rule, slanted-edge, and corner-cut presets initialise the same geometry rather than distinct types. One corner editor edits it wherever it appears, and edits a Source Item's corner radii as rounded corners only.
 
 **Graphic Group**:
 A structural Graphic Item arranging direct context-available Graphic Items as a row, column, or canvas, optionally coordinating clipping or animation and supplying overridable local style defaults. Graphic Groups do not nest. A Graphic Item moved into or out of a group keeps where it is drawn, its geometry rebased between canvas and group space; a row or column group refuses a rotated item rather than straightening it.
@@ -710,7 +714,7 @@ A structural Graphic Item arranging direct context-available Graphic Items as a 
 The shared visual treatment for the Graphic Items that paint a surface (Text, Shape, Graphic Group, Clock, Player Life, and Game Wins, which paints its win boxes with two more): fill, fill opacity, a uniform outline around the Shape Geometry, and glow. An independently styled edge is a separate Shape Graphic Item from the rule preset.
 
 **Graphic Fill**:
-A solid colour or a linear gradient with an angle and two to four positioned stops with opacity. Complex surfaces are Media Graphic Items.
+A solid colour or a linear gradient with an angle and two to four positioned stops with opacity. Complex surfaces are Media Graphic Items. A gradient Background Layer holds the gradient form.
 _Avoid_: Raw CSS gradient
 
 **Graphic Layer Order**:
@@ -770,16 +774,16 @@ A host-owned Feature Match Overlay element placing an external video source, wit
 _Avoid_: Source Region, camera box, Source Graphic Item
 
 **Layer Lock**:
-An author's lock on one layer of a Feature Match Layout, a Graphic Item or a Source Item, against canvas edits: the canvas neither moves, resizes nor rotates it, arrow nudges skip it, and a click on it falls through to the layer beneath. It stays selectable from the layer list and editable in its property panel. Locking a Graphic Group locks its children. It is stored on the layer in the Feature Match Layout, so every operator of the Screen sees it and it travels with a Feature Match Layout Template; a copy of a locked layer arrives unlocked (ADR-0063).
+An author's lock on one layer of a Feature Match Layout or a Broadcast Graphic, a Graphic Item or a Source Item, against canvas edits: the canvas neither moves, resizes nor rotates it, arrow nudges skip it, and a click on it falls through to the layer beneath. It stays selectable from the layer list and editable in its property panel. Locking a Graphic Group locks its children. It is stored on the layer itself, so every operator of the Screen sees it and it travels with a Feature Match Layout Template or a Broadcast Graphic Template; a copy of a locked layer arrives unlocked (ADR-0063).
 _Avoid_: Frozen layer, pinned layer
 
 **Feature Match Overlay Preset**:
-A built-in starting point that initializes a Feature Match Layout.
-_Avoid_: Template when referring to the whole layout preset.
+Former term. The built-in starting layouts are built-in **Feature Match Layout Templates** now, and a Screen records none of them.
+_Avoid_: Preset for a built-in layout; say built-in Feature Match Layout Template.
 
 **Feature Match Layout Template**:
-A user-created reusable Feature Match Layout that can be copied into a Screen's Feature Match Overlay configuration. It carries no Feature Match Slot assignment, and placing one replaces the Screen's whole layout as an unlinked copy.
-_Avoid_: Preset when referring to user-owned reusable layouts.
+A reusable Feature Match Layout that can be copied into a Screen's Feature Match Overlay configuration: one an author saved, one a Template Package installed, or a built-in one the application ships. It carries no Feature Match Slot assignment, and placing one replaces the Screen's whole layout as an unlinked copy. A built-in one is marked as such, is placed like any other, and cannot be revised, removed or exported.
+_Avoid_: Preset
 
 **Feature Match Layout Host Vocabulary**:
 The terms a Feature Match Layout uses whose meaning the installation supplies: Source Roles and Feature Match tokens a Graphic Text Template binds. Each is closed and pinned by the layout format version, so a package naming an unimplemented term is refused. The Frame's Animation Effect was one until it became a Mode Token; its identity is still recognised.
@@ -841,18 +845,20 @@ _Avoid_: worst-case data, overflow data
 - A **Screen Output** reads everything it renders through its **Screen**, never through an operator's Event reads, and never changes live state by reading it (ADR-0022)
 - A **Program monitor** or preview without a capability renders everything but media, is admitted by its operator's **Session**, and reports its missing asset access so a control surface states the loss
 - **Screen Outputs** and authoring run on Chromium, the only engine transparent video is supported on; another browser may flatten its alpha, and nothing detects or refuses it (ADR-0020)
-- **Broadcast Graphics Screen** and **Feature Match Overlay** previews share output selection, zoom and pan, item selection, guides, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items. Zoom and pan are view state: they never write, need no **Graphics Authoring Lease**, and start at Fit on every visit
+- **Broadcast Graphics Screen** and **Feature Match Overlay** previews are one preview shell: output selection, zoom and pan, item selection (a ⌘-click adds an item or takes it out), canvas handles for what the editor may move, guides that skip a locked layer, and advisory action-safe (5%) and title-safe (10%) guides; guides never appear in live **Screen Outputs** and never clip items. Zoom and pan are view state: they never write, need no **Graphics Authoring Lease**, and start at Fit on every visit
 
 ### Theming
 
 - An **Event** uses exactly one **Theme**; an Event that chose none uses the **Default Theme**, which ships with Stream Keepr and cannot be edited or deleted
 - A **Theme** in use by any **Event** cannot be deleted, and the refusal names those Events
-- A **Theme** stores only the **Theme Tokens** it sets; every other token reads its shipped default
-- A **Foundation Token** holds a value, in which a fill's, surface's or background colour layer's colour may name a colour **Foundation Token**; a **Mode Token** holds a value or names a **Foundation Token** of its type; nothing names a **Mode Token**, and a colour names nothing, so every token resolves in at most two steps
-- A **Screen** resolves each **Theme Token** from its own **Screen Theme Override**, else its **Event**'s **Theme**, else the token's default; overriding a **Foundation Token** reaches every **Mode Token** and **Graphic Item** on that Screen that names it
+- A **Theme** stores only the **Foundation Tokens** it sets; every other token reads its shipped default. A write naming a **Mode Token** is accepted and the token dropped, and one stored before is read by nothing
+- A value a **Theme** or a **Screen Theme Override** stores for a **Theme Token** never names another token: it is a literal, and so is every colour inside a fill, a surface or a background colour layer
+- Only a shipped default names a token: a **Mode Token**'s default may name a **Foundation Token** of its type, a motion one may follow a motion **Foundation Token**'s timing with its own movement, and a colour inside a composite default may name a colour **Foundation Token**; nothing names a **Mode Token**, and a colour's default names nothing
+- A stored value that names a token, written before values were literals, still reads as the literal it resolves to, and the next edit of its token stores that literal
+- A **Screen** resolves a **Mode Token** from its own **Screen Theme Override**, else the token's default, and a **Foundation Token** from its **Event**'s **Theme**, else the token's default; only a plain overlay mode's `inset` and `alignment` read the Screen's own **Screen Theme Override** first
 - A **Screen Theme Override** of another mode's **Mode Token** is kept while the **Screen** shows a different **Screen Mode**, and applies again on its return
 - A **Graphic Item** property either names a whole **Foundation Token** of its type or holds its own value; detaching copies the token's resolved value in
-- A typography **Theme Token** carries no size; the consuming **Graphic Item** or **Mode Token** owns it
+- A typography **Theme Token** carries no size; the consuming **Graphic Item** or **Screen Mode** display owns it
 - A colour **Theme Token** may be translucent; a consumer's own opacity multiplies it
 - A **Graphic Asset** a **Theme** or **Screen Theme Override** references cannot be retired or trashed, and the refusal names its referrers
 - A **Broadcast Graphic Template** or **Feature Match Layout Template** carries **Graphic Item** token names, never a **Theme**, and renders under whichever Theme it is placed in; its editor previews under a Theme its author picks
@@ -874,6 +880,7 @@ _Avoid_: worst-case data, overflow data
 - An empty **Broadcast Graphics Screen** is transparent in its **Overlay Output** and black in its **Fill Output** and **Key Output**
 - A **Broadcast Graphic Template** initializes a copy of a **Broadcast Graphic** on a **Broadcast Graphics Screen**
 - A **Broadcast Graphic** contains one or more **Graphic Items**
+- A **Broadcast Graphic** that is on a program output, or may be while playout cannot be known, is not edited in the Edit workspace, and undo leaves it as it is; **Live Control** still acts on it
 
 ### Shared Graphics Foundation
 
@@ -1007,5 +1014,5 @@ _Avoid_: worst-case data, overflow data
 - A **Feature Match Overlay** renders exactly one **Feature Match Layout** for exactly one **Feature Match Slot**
 - A **Feature Match Layout** has exactly one **Feature Match Overlay Frame** and one or more **Graphic Items**
 - A **Source Item** may cut through the **Feature Match Overlay Frame**
-- A **Feature Match Overlay Preset** initializes a **Feature Match Layout**; a **Feature Match Layout Template** stores a reusable one
+- A **Feature Match Layout Template** stores a reusable **Feature Match Layout**; a built-in one ships with the application and is stored nowhere
 - A **Feature Match Layout** declares its **Feature Match Layout Host Vocabulary** to a **Template Package** and never carries an Event identity

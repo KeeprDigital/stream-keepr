@@ -16,6 +16,7 @@ import {
 import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
 import { createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { liveSessionSelectors } from '~~/test/nuxt/helpers/broadcastGraphicsLiveSessionReads';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 import LiveWorkspace from '~/components/Screen/Modes/BroadcastGraphics/LiveWorkspace.vue';
 
 enableAutoUnmount(afterEach);
@@ -129,13 +130,6 @@ const UAlertStub = defineComponent({
 	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
 });
 
-const ScreenSettingsCardStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-	},
-	template: '<section><h2>{{ title }}</h2><slot name="actions" :open="true" /><slot /></section>',
-});
-
 const UIEmptyStateStub = defineComponent({
 	props: {
 		title: { type: String, required: false },
@@ -175,7 +169,7 @@ async function mountComponent(
 		},
 		global: {
 			stubs: {
-				ScreenSettingsCard: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				UIEmptyState: UIEmptyStateStub,
 				UBadge: UBadgeStub,
 				UIcon: UIconStub,

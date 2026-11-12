@@ -4,26 +4,22 @@ import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
 
 // A Screen settings group's Look (ADR-0072): the Mode Tokens declaring
 // `group` as their `settingsGroup`, under a "Look" subheading after the
-// group's config controls. It registers `group` with the page for as long as
-// its card is on it, collapsed or not, so the residual Screen-wide look leaves
-// those tokens out.
+// group's config controls, or `heading` where one card holds several Looks.
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	screen: Screen;
 	eventId: number;
 	group: string;
-}>();
+	heading?: string;
+}>(), { heading: 'Look' });
 
-useScreenSettingsGroup(props.group);
-
-const names = computed(() => placeScreenThemeTokens(props.screen.currentMode, [props.group]).groups[props.group] ?? []);
+const names = computed(() => placeScreenThemeTokens(props.screen.currentMode).groups[props.group] ?? []);
 </script>
 
 <template>
 	<ScreenThemeTokenRows
-		:screen="screen"
 		:event-id="eventId"
-		heading="Look"
+		:heading="heading"
 		:names="names"
 		:data-settings-group="group"
 	/>

@@ -16,6 +16,7 @@ import { defineComponent, nextTick } from 'vue';
 import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
 import {
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
+	createDefaultGraphicAnimationRecipe,
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
 	getGraphicItemDefinition,
@@ -293,6 +294,14 @@ function control(wrapper: Wrapper, name: string, attribute: string, value: strin
 	return found;
 }
 
+/** Each section the panel shows, by id, with its toggle's `aria-expanded`. */
+function openSections(wrapper: Wrapper) {
+	return Object.fromEntries(wrapper.findAll('[data-inspector-section]').map(section => [
+		section.attributes('data-inspector-section'),
+		section.get('button').attributes('aria-expanded'),
+	]));
+}
+
 function numberField(wrapper: Wrapper, ariaLabel: string) {
 	return control(wrapper, 'UInputNumber', 'aria-label', ariaLabel);
 }
@@ -383,6 +392,83 @@ function numberFieldByTestId(wrapper: Wrapper, testId: string) {
 
 describe('graphicsCompositorInspector', () => {
 	beforeAll(stubPointerCapture);
+
+	// Position and size, and the kind's own content, start open; every other section starts closed.
+	it.each([
+		[
+			'a Text Graphic Item',
+			textItem,
+			{
+				layout: 'true',
+				content: 'true',
+				typography: 'false',
+				surface: 'false',
+				animation: 'false',
+			},
+		],
+		[
+			'a Shape',
+			shapeItem,
+			{
+				layout: 'true',
+				shape: 'false',
+				surface: 'false',
+				animation: 'false',
+			},
+		],
+		[
+			'a Graphic Group',
+			groupItem,
+			{
+				layout: 'true',
+				group: 'false',
+				shape: 'false',
+				surface: 'false',
+				animation: 'false',
+			},
+		],
+	])('opens only position and content for %s', async (_case, item, expected) => {
+		const wrapper = await mountComponent({
+			graphics: stack([item]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: item.id },
+		});
+		await nextTick();
+
+		expect(openSections(wrapper)).toEqual(expected);
+	});
+
+	it.each([
+		[
+			'a Shape',
+			shapeItem,
+			{ shape: 'square corners', surface: '#0077a3', animation: 'None' },
+		],
+		[
+			'a Text Graphic Item that enters and exits',
+			{
+				...textItem,
+				animation: {
+					enter: createDefaultGraphicAnimationRecipe('enter'),
+					exit: createDefaultGraphicAnimationRecipe('exit'),
+				},
+			},
+			{ typography: '64px · 700 · left', animation: 'Enter · Exit' },
+		],
+		[
+			'a Graphic Group',
+			groupWith([textItem]),
+			{ group: 'row · gap 16 · 1 items', animation: 'None' },
+		],
+	])('summarises each closed section of %s in one line', async (_case, item, summaries) => {
+		const wrapper = await mountComponent({
+			graphics: stack([item]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: item.id },
+		});
+		await nextTick();
+
+		for (const [id, summary] of Object.entries(summaries))
+			expect(wrapper.get(`[data-testid="inspector-section-${id}-toggle"]`).text()).toContain(summary);
+	});
 
 	it('offers no Graphic Item controls while the canvas is selected', async () => {
 		const wrapper = await mountComponent({
@@ -521,16 +607,18 @@ describe('graphicsCompositorInspector', () => {
 		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
 	});
 
-	it('hides a Graphic Item without removing it from the Graphic Layer Order', async () => {
+	// Each action once: both hosts hide a layer from its layer row, not here.
+	it.each([
+		['Broadcast Graphics', BROADCAST_GRAPHICS_HOST_CONTRACT],
+		['the Feature Match Overlay', FEATURE_MATCH_OVERLAY_HOST_CONTRACT],
+	])('offers no Visible switch in %s', async (_host, contract) => {
 		const wrapper = await mountComponent({
 			graphics: stack([shapeItem]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'bar' },
+			contract,
 		});
 
-		await wrapper.get('[data-testid="graphic-item-visible"]').trigger('click');
-
-		expect(emittedGraphics(wrapper)[0]?.items).toHaveLength(1);
-		expect(emittedGraphics(wrapper)[0]?.items[0]?.visible).toBe(false);
+		expect(wrapper.find('[data-testid="graphic-item-visible"]').exists()).toBe(false);
 	});
 
 	it('explains a selection the Screen stack no longer carries', async () => {
@@ -1198,7 +1286,7 @@ describe('graphicsCompositorInspector', () => {
 				.toContain('outside that projection\'s Presentation Group');
 		});
 
-		it('edits colour and opacity independently of the shared geometry and visibility controls', async () => {
+		it('edits colour and opacity independently of the shared geometry controls', async () => {
 			const wrapper = await selectedIcon();
 
 			colorPicker(wrapper, 'social-network-icon-color').vm.$emit('update:modelValue', '#ffcc00');
@@ -1212,7 +1300,6 @@ describe('graphicsCompositorInspector', () => {
 			await nextTick();
 			expect(itemOf(emittedGraphics(wrapper, 1))).toMatchObject({ color: '#ffcc00', opacity: 0.4 });
 
-			expect(wrapper.find('[data-testid="graphic-item-visible"]').exists()).toBe(true);
 			expect(wrapper.find('[data-testid="graphic-item-rotation"]').exists()).toBe(true);
 		});
 	});

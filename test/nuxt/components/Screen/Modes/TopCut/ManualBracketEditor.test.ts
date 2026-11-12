@@ -3,7 +3,6 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { UButtonStub, UFormFieldStub, UInputMenuStub, UInputStub, USelectStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import { screenSettingsLayoutStubs } from '~~/test/nuxt/helpers/screenSettingsLayout';
 import ManualBracketEditor from '~/components/Screen/Modes/TopCut/ManualBracketEditor.vue';
 
 enableAutoUnmount(afterEach);
@@ -51,7 +50,6 @@ function mountEditor(manual: ManualBracket) {
 		props: { manual },
 		global: {
 			stubs: {
-				...screenSettingsLayoutStubs,
 				UFormField: UFormFieldStub,
 				USelect: USelectStub,
 				UInputMenu: UInputMenuStub,

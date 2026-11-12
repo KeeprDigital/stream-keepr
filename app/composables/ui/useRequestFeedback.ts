@@ -1,3 +1,5 @@
+import { isPlainRecord } from '~~/shared/utils/plainObject';
+
 type MaybePromise<T> = T | Promise<T>;
 type ToastOptions = Parameters<ReturnType<typeof useToast>['add']>[0];
 type SuccessfulResult<T> = Exclude<T, null | undefined | false>;
@@ -21,10 +23,6 @@ interface RunRequestOptions<T> {
 	latestKey?: string | symbol;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === 'object';
-}
-
 function readString(value: unknown): string | null {
 	return typeof value === 'string' && value.trim().length > 0
 		? value
@@ -36,7 +34,7 @@ function readRecordString(record: Record<string, unknown>, key: string): string 
 }
 
 function resolveResultErrorMessage(result: unknown): string {
-	if (isRecord(result)) {
+	if (isPlainRecord(result)) {
 		return readRecordString(result, 'error')
 			?? readRecordString(result, 'message')
 			?? 'Request failed';
@@ -49,7 +47,7 @@ function isDefaultSuccess(result: unknown): boolean {
 	if (result === null || result === undefined || result === false)
 		return false;
 
-	return !(isRecord(result) && result.success === false);
+	return !(isPlainRecord(result) && result.success === false);
 }
 
 function resolveToast<TPayload>(
@@ -116,7 +114,7 @@ export function useRequestFeedback() {
 		if (typeof error === 'string' && error.trim().length > 0)
 			return error;
 
-		if (!isRecord(error))
+		if (!isPlainRecord(error))
 			return fallback;
 
 		const sentence = readString(failureSentence(error));
@@ -127,7 +125,7 @@ export function useRequestFeedback() {
 			return readRecordString(error, 'message') ?? fallback;
 
 		const data = error.data;
-		if (isRecord(data)) {
+		if (isPlainRecord(data)) {
 			const dataMessage = readRecordString(data, 'statusMessage')
 				?? readRecordString(data, 'error');
 			if (dataMessage)

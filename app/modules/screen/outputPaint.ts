@@ -1,3 +1,4 @@
+import type { GraphicFill } from '~~/shared/types/graphics';
 import type { ScreenOutput } from '~~/shared/types/screenConfig';
 
 /**
@@ -96,6 +97,23 @@ export function colourAtOpacity(output: ScreenOutput, colour: string, opacity: n
 	if (hex)
 		return `#${hex[1]}${hex[2]}${hex[3]}${channel}`.toLowerCase();
 	return `color-mix(in srgb, ${colour} ${Math.round(alpha * 100)}%, transparent)`;
+}
+
+/**
+ * A Graphic Fill as one CSS background, for whatever paints one in CSS: a Feature
+ * Match Overlay surface and a gradient Background Layer. A gradient's stops keep
+ * their own opacities, multiplied by `opacity`; the Key Output paints each white
+ * at its colour's alpha, so it keys as the Fill Output shows it.
+ */
+export function graphicFillCss(output: ScreenOutput, fill: GraphicFill, opacity = 1): string {
+	const fillOpacity = clampOpacity(opacity);
+	if (fillOpacity <= 0)
+		return 'transparent';
+	if (fill.type === 'solid')
+		return colourAtOpacity(output, fill.color, fillOpacity);
+	const stops = fill.stops.map(stop =>
+		`${colourAtOpacity(output, stop.color, clampOpacity(stop.opacity) * fillOpacity)} ${Math.round(clampOpacity(stop.position) * 10000) / 100}%`);
+	return `linear-gradient(${fill.angle}deg, ${stops.join(', ')})`;
 }
 
 /** A glow as either render model paints it: a blur of the element's own alpha. */

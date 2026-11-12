@@ -7,7 +7,6 @@ import type { DeckSource } from '~~/shared/types/screenConfig';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { Player } from '~/types';
 import type { DeckListCardWithData } from '~/types/card/deckList';
-import { resolveDeckBoards } from '~~/shared/types/screenConfig';
 import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
@@ -252,27 +251,6 @@ export function useDeckModeData(context: ScreenContext) {
 	const displayedDeckVersion = computed(() => displayedDeck.value?.version ?? 0);
 	const hasDisplayedDeck = computed(() => displayedDeck.value !== null);
 
-	// Each grid board's columns: its own count, or with auto columns, chosen from
-	// its own cards and the Event Canvas (ADR-0054).
-	const boards = computed(() => resolveDeckBoards(config.value));
-	const boardColumns = {
-		mainboard: useCardGridColumns(context, {
-			sizing: () => boards.value.mainboard.cardSizing,
-			autoColumns: () => boards.value.mainboard.autoColumns,
-			columns: () => boards.value.mainboard.columns,
-			count: () => mainboard.value.length,
-			cardWidth: () => boards.value.mainboard.cardWidth,
-			gap: () => boards.value.mainboard.cardGap,
-		}),
-		sideboard: useCardGridColumns(context, {
-			sizing: () => boards.value.sideboard.cardSizing,
-			autoColumns: () => boards.value.sideboard.autoColumns,
-			columns: () => boards.value.sideboard.columns,
-			count: () => sideboard.value.length,
-			cardWidth: () => boards.value.sideboard.cardWidth,
-			gap: () => boards.value.sideboard.cardGap,
-		}),
-	};
 	const loading = freshness.loading;
 
 	/** Program never blanks for an error: one shows only while nothing is on air. */
@@ -526,7 +504,6 @@ export function useDeckModeData(context: ScreenContext) {
 		deckStats,
 		mainboard,
 		sideboard,
-		boardColumns,
 		loading,
 		error,
 		ready,

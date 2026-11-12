@@ -1,6 +1,7 @@
-import type { ScreenModeConfigFields } from './fields';
+import type { ConfigFieldMeta, EditorField, ScreenModeConfigField, ScreenModeConfigFields, ScreenSettingsGroupDeclaration, ShapeEventReferences } from './fields';
 import { z } from 'zod';
-import { clampToShapeBounds, screenModeConfigFields, unwrapOptionalField } from './fields';
+import { isPlainRecord } from '../utils/plainObject';
+import { assertFieldGroupsDeclared, clampToShapeBounds, EDITOR_META_KEY, screenModeConfigFields, unwrapOptionalField } from './fields';
 
 /** Refuses a field carrying a zod default: a default lives only in `defaults` (ADR-0037). */
 type FieldsWithoutDefaults<Shape extends z.ZodRawShape> = {
@@ -29,8 +30,16 @@ export type ServerValidatedKeys<Shape extends z.ZodRawShape> = {
 
 const serverValidatedFields = new WeakSet<z.ZodType>();
 
-export function serverValidatedField<T>(): ServerValidatedField<T> {
-	const field = z.custom<T>(() => false, 'Validated only on the server');
+/** `meta` is the field's editor description: a server-validated field is edited by a named slot's widget. */
+export function serverValidatedField<T>(meta: ConfigFieldMeta): EditorField<ServerValidatedField<T>>;
+export function serverValidatedField<T>(): ServerValidatedField<T>;
+export function serverValidatedField<T>(meta?: ConfigFieldMeta): ServerValidatedField<T> {
+	const custom = z.custom<T>(() => false, 'Validated only on the server');
+	const field = meta
+		? custom.meta({
+				[EDITOR_META_KEY]: { ...meta },
+			})
+		: custom;
 	serverValidatedFields.add(field);
 	return field as ServerValidatedField<T>;
 }
@@ -68,12 +77,25 @@ type ListKeys<Shape extends z.ZodRawShape> = {
  *   which would empty it.
  * - `fields` is the editor-facing view of every field marked `editorField`: its
  *   label, control kind, and bounds read back from the schema, so the mode's
- *   editor offers exactly the range the contract accepts (#498).
+ *   editor offers exactly the range the contract accepts (#498), and the rest
+ *   of its editor description: its settings card and group, description, show
+ *   condition, option labels, and Event Reference kind or named slot (#1093).
+ * - `groups` declares the mode's Screen Settings Groups once, each with its
+ *   heading and card, in the order its page shows them. Every field naming a
+ *   group, and every Mode Token of the mode, names one declared here
+ *   (ADR-0072).
+ * - `eventReferences` lists the fields naming an Event Reference, with the
+ *   kind each names (ADR-0038), read from the fields themselves.
  * - `formerFields` names the fields an earlier version of the contract held,
  *   which storage may still carry, such as Top Cut Bracket's placeholder `bracketSize`
  *   (#752). A field of a nested block is named by its path, such as
  *   `mainboard.cardGap`. No reader sees one, a write naming one is accepted without storing
  *   it, and the next PATCH of the mode's config removes it from storage.
+ * - `upgradeFormerFields`, given to `defineScreenModeConfigContract`, maps what
+ *   an earlier version of the contract stored to the fields that replaced it,
+ *   such as a count to the range it meant. It runs wherever former fields are
+ *   dropped, before they are: on every read, on a write a stale client sends,
+ *   and on the stored fragment a PATCH merges into (`upgradeStored`).
  *
  * The write forms are derived from `shape` on the server without special cases
  * (`configContractModeForms`): a full write validates a fragment of the complete
@@ -83,48 +105,82 @@ type ListKeys<Shape extends z.ZodRawShape> = {
 export interface ScreenModeConfigContract<
 	Shape extends z.ZodRawShape = z.ZodRawShape,
 	AuthoredStack extends string = string,
+	Group extends string = string,
 > {
 	readonly shape: Shape;
 	readonly schema: z.ZodObject<Shape, z.core.$strict>;
 	readonly defaults: z.input<z.ZodObject<Shape, z.core.$strict>>;
 	readonly authoredStacks: readonly AuthoredStack[];
 	readonly fields: ScreenModeConfigFields<Shape>;
+	readonly groups: Readonly<Record<Group, ScreenSettingsGroupDeclaration>>;
+	readonly eventReferences: ShapeEventReferences<Shape>;
 	readonly formerFields: readonly string[];
 	/**
-	 * A stored fragment as a reader reads it: without its former fields, and
+	 * A stored fragment as a reader reads it: upgraded (`upgradeStored`), and
 	 * every number outside its field's bounds pulled to the nearest bound
 	 * (`clampToShapeBounds`). Reads only, so a tightened bound never resets or
 	 * refuses a stored config; writes are refused. A fragment needing neither is
 	 * returned as it is.
 	 */
 	readonly readStored: <T extends Record<string, unknown>>(fragment: T) => T;
-	/** A fragment without the contract's former fields; returned as it is when it names none. */
-	readonly withoutFormerFields: <T>(fragment: T) => T;
+	/**
+	 * A fragment an earlier version of the contract may have written, as this
+	 * version holds it: its former fields mapped to the current fields that
+	 * replaced them (`upgradeFormerFields`), then dropped. Returned as it is when
+	 * it needs neither, or is no fragment at all.
+	 */
+	readonly upgradeStored: <T>(fragment: T) => T;
 }
 
+/**
+ * Maps a fragment an earlier version of a contract wrote to the current fields.
+ * It sees the fragment before its former fields are dropped, and may read them,
+ * set current fields from them, and rewrite a current field holding a value
+ * only the earlier version allowed. It returns the fragment itself when it has
+ * nothing to map, and must map its own output to itself, since a fragment is
+ * upgraded on every read. A PATCH body is a fragment too: one naming only part
+ * of what a mapping needs is the hook's to map or leave to be dropped.
+ */
+export type UpgradeFormerFields = (fragment: Readonly<Record<string, unknown>>) => Record<string, unknown>;
+
 /** The config type a contract defines: what a rendering of its mode reads. */
-export type ScreenModeConfigOf<Contract extends ScreenModeConfigContract<any, any>> = Contract['defaults'];
+export type ScreenModeConfigOf<Contract extends ScreenModeConfigContract<any, any, any>> = Contract['defaults'];
+
+/** The Screen Settings Groups a contract declares: the groups its Mode Tokens may name (ADR-0072). */
+export type ScreenSettingsGroupOf<Contract extends ScreenModeConfigContract<any, any, any>> = keyof Contract['groups'] & string;
 
 export function defineScreenModeConfigContract<
 	const Shape extends z.ZodRawShape,
 	const AuthoredStack extends ListKeys<Shape> = never,
+	const Group extends string = never,
 >(
 	shape: Shape & FieldsWithoutDefaults<Shape>,
 	defaults: z.input<z.ZodObject<Shape, z.core.$strict>>,
-	options: { authoredStacks?: readonly AuthoredStack[]; formerFields?: readonly string[] } = {},
-): ScreenModeConfigContract<Shape, AuthoredStack> {
+	options: {
+		authoredStacks?: readonly AuthoredStack[];
+		groups?: Readonly<Record<Group, ScreenSettingsGroupDeclaration>>;
+		formerFields?: readonly string[];
+		upgradeFormerFields?: UpgradeFormerFields;
+	} = {},
+): ScreenModeConfigContract<Shape, AuthoredStack, Group> {
 	const formerFields = options.formerFields ?? [];
 	const formerPaths = formerFields.map(field => field.split('.'));
 	for (const path of formerPaths) {
 		if (shapeHoldsPath(shape, path))
 			throw new Error(`Config field "${path.join('.')}" cannot be both a field and a former field of one contract.`);
 	}
+	const groups = options.groups ?? {} as Readonly<Record<Group, ScreenSettingsGroupDeclaration>>;
+	const fields = screenModeConfigFields(shape);
+	assertFieldGroupsDeclared(fields, groups);
 
-	function withoutFormerFields<T>(fragment: T): T {
+	function upgradeStored<T>(fragment: T): T {
+		const upgraded = options.upgradeFormerFields && isPlainRecord(fragment)
+			? options.upgradeFormerFields(fragment)
+			: fragment;
 		let kept: Record<string, unknown> | undefined;
 		for (const path of formerPaths)
-			kept = withoutPath(kept ?? fragment, path) ?? kept;
-		return (kept ?? fragment) as T;
+			kept = withoutPath(kept ?? upgraded, path) ?? kept;
+		return (kept ?? upgraded) as T;
 	}
 
 	return {
@@ -132,11 +188,23 @@ export function defineScreenModeConfigContract<
 		schema: z.object(shape).strict(),
 		defaults,
 		authoredStacks: options.authoredStacks ?? [],
-		fields: screenModeConfigFields(shape),
+		fields,
+		groups,
+		eventReferences: eventReferencesOf(fields) as ShapeEventReferences<Shape>,
 		formerFields,
-		readStored: fragment => clampToShapeBounds(shape, withoutFormerFields(fragment)),
-		withoutFormerFields,
+		readStored: fragment => clampToShapeBounds(shape, upgradeStored(fragment)),
+		upgradeStored,
 	};
+}
+
+/** Each field naming an Event Reference, with its kind. */
+function eventReferencesOf(fields: Readonly<Record<string, ScreenModeConfigField>>): Record<string, string> {
+	return Object.fromEntries(Object.values(fields)
+		.flatMap(field => field.reference === undefined
+			? []
+			: [
+					[field.key, field.reference],
+				]));
 }
 
 /** Whether `shape` declares the field at `path`, through its nested blocks. */
@@ -150,10 +218,6 @@ function shapeHoldsPath(shape: z.ZodRawShape, [key, ...rest]: readonly string[])
 		return true;
 	const inner = unwrapOptionalField(field);
 	return inner instanceof z.ZodObject && shapeHoldsPath(inner.shape, rest);
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 /** A copy of `fragment` without the field at `path`, or undefined when it holds none. */

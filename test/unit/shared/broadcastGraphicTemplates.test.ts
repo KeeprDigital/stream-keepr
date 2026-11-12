@@ -70,6 +70,47 @@ describe('broadcastGraphicTemplateDocument', () => {
 	});
 });
 
+/** A Layer Lock travels with the graphic: saved and placed, it stays (ADR-0063). */
+describe('a Layer Lock on a Broadcast Graphic', () => {
+	function locked(): BroadcastGraphicConfig {
+		const graphic = composed();
+		graphic.items[1]!.locked = true;
+		groupOf(graphic).children[0]!.locked = true;
+		return graphic;
+	}
+
+	function locks(config: BroadcastGraphicConfig) {
+		return {
+			item: config.items[1]!.locked,
+			group: groupOf(config).locked,
+			child: groupOf(config).children[0]!.locked,
+		};
+	}
+
+	it.each<[string, () => BroadcastGraphicConfig]>([
+		[
+			'a saved Broadcast Graphic Template',
+			() => broadcastGraphicTemplateDocument(locked()),
+		],
+		[
+			'a placed copy of one',
+			() => placeBroadcastGraphicTemplate(
+				{
+					id: 'template-1',
+					name: 'Lower third',
+					document: locked(),
+				},
+				{
+					generateId: sequentialIds(),
+					existing: [],
+				},
+			),
+		],
+	])('stays on %s', (_, travelled) => {
+		expect(locks(travelled())).toEqual({ item: true, group: undefined, child: true });
+	});
+});
+
 describe('placeBroadcastGraphicTemplate', () => {
 	it('places a copy under a new Broadcast Graphic identity', () => {
 		const template = {

@@ -1,31 +1,26 @@
 <script setup lang="ts">
 import type { GraphicRect } from '~~/shared/types/graphics';
-import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayPresetId } from '~~/shared/types/screenConfig';
+import type { FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
-import { useEventListener } from '@vueuse/core';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
-import { applyFeatureMatchOverlayPreset, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
-import { featureMatchOverlayModeTokens } from '~~/shared/screenModeTokens/featureMatchOverlay';
-import { useFeatureMatchLayoutEditor } from '~/composables/screen/useFeatureMatchLayoutEditor';
-import { hasTextSelection, useGraphicsClipboard } from '~/composables/useGraphicsClipboard';
-import { useConsumedEventData } from '~/modules/event-data/resync';
+import { useGraphicsEditor } from '~/composables/useGraphicsEditor';
+import { useGraphicsEditorKeyboard } from '~/composables/useGraphicsEditorKeyboard';
+import { featureMatchLayoutEditorHost } from '~/modules/feature-match-overlay/editorHost';
 import {
-	CANVAS_SELECTION,
 	compositorSelectionTarget,
 	editorSelectionLabel,
+	editorSelectionLayer,
 	fromCompositorSelectionTarget,
 	fromHostSelectionTarget,
 	hostSelectionTarget,
 } from '~/modules/feature-match-overlay/editorSelection';
-import { LAYER_GROUP_REFUSAL_REASONS } from '~/modules/feature-match-overlay/layerGrouping';
+import { CANVAS_SELECTION } from '~/modules/graphics/editor/host';
+import { GRAPHICS_EDITOR_SHORTCUTS } from '~/modules/graphics/editor/shortcuts';
 import { NUMBER_SCRUB_GESTURE } from '~/modules/graphics/numberScrubGesture';
-import { isTypingTarget } from '~/utils/typingTarget';
 import FeatureMatchOverlayCompositorInspector from './CompositorInspector.vue';
-import FeatureMatchOverlayLayerAlignControls from './LayerAlignControls.vue';
 import FeatureMatchOverlayLayerInspector from './LayerInspector.vue';
 import FeatureMatchOverlayLayerList from './LayerList.vue';
-import FeatureMatchOverlayMultiLayerInspector from './MultiLayerInspector.vue';
 import FeatureMatchOverlayPreviewOutputAside from './PreviewOutputAside.vue';
 
 const props = defineProps<{ screen: Screen; eventId: number }>();
@@ -37,16 +32,6 @@ const props = defineProps<{ screen: Screen; eventId: number }>();
 const previewEventStore = useEventStore();
 const previewTheme = useGraphicsPreviewTheme(() => previewEventStore.event?.themeId);
 
-/**
- * Every Mode Token's Look sits in an inspector section (#982), but the
- * inspector shows one layer's sections at a time. The editor holds each group
- * while open, so selecting a Source Item or a Graphic Item never moves the
- * Frame's rows into the Screen-wide look (ADR-0072).
- */
-for (const group of new Set(Object.values(featureMatchOverlayModeTokens).map(token => token.settingsGroup)))
-	useScreenSettingsGroup(group);
-
-const featureMatchStore = useFeatureMatchStore();
 const screenStore = useScreenStore();
 const eventStore = useEventStore();
 
@@ -68,12 +53,14 @@ const editLease = useGraphicsAuthoringLease({
 const { writable } = editLease;
 
 /**
- * Losing the lease drops this session's unsaved layout. The server refuses it now,
- * and kept on screen it would hide the new holder's changes, then be built on.
+ * Losing the lease, to another Session or to its deadline, drops this session's
+ * unsaved layout, as the Broadcast Graphics editor does (#1100). The fence may
+ * refuse it, and kept on screen it would hide the next holder's changes, then be
+ * built on.
  */
-watch(writable, (isWritable) => {
-	if (!isWritable)
-		discard(['layout', 'presetId']);
+watch(editLease.lost, (lost) => {
+	if (lost)
+		discard(['layout']);
 });
 
 /**
@@ -105,39 +92,23 @@ defineExpose({
 	saving,
 });
 
-// What the pickers below load, re-read on Reconnect Resync (#610).
-useConsumedEventData(['featureMatchSlots']);
-
-onMounted(async () => {
-	await featureMatchStore.loadFeatureMatchesByEventId(props.eventId);
-});
-
-const matchOptions = useFeatureMatchMenuItems();
-const presetOptions = FEATURE_MATCH_OVERLAY_PRESETS.map(preset => ({ label: preset.label, value: preset.id, description: preset.description }));
 /** The overlay is authored in its Event's canvas, set in Event Presentation Settings (ADR-0051). */
 const eventCanvas = computed(() => eventCanvasOf(eventStore.event));
 const canvasWidth = computed(() => eventCanvas.value.width);
 const canvasHeight = computed(() => eventCanvas.value.height);
-const selectedPreset = computed(() => FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === config.value.presetId));
-const aspectMismatch = computed(() => {
-	if (!selectedPreset.value)
-		return false;
-	const actual = canvasWidth.value / canvasHeight.value;
-	return Math.abs(actual - selectedPreset.value.aspectRatio) > 0.05;
-});
 
 /* ────────────────────────────────────────────────
  * The editor: one selection of layers, one history
  * ──────────────────────────────────────────────── */
 
-const editor = useFeatureMatchLayoutEditor({
+const editor = useGraphicsEditor(featureMatchLayoutEditorHost({
 	config,
 	updateConfig,
 	canvasWidth,
 	canvasHeight,
 	writable,
 	held: placing,
-});
+}));
 const { selection, layers } = editor;
 /** Several layers selected: the panel edits what they share, and the preview marks none alone (#740). */
 const severalSelected = computed(() => layers.value.length > 1);
@@ -170,6 +141,13 @@ function selectCompositorTarget(target: GraphicsSelectionTarget, toggle = false)
 const selectionFrame = computed(() => canAuthor.value
 	? editor.selectionFrame.value
 	: null);
+/** Each selected layer's stored rectangle, for the panel that edits several. */
+const selectedRects = computed(() => layers.value.flatMap((layer) => {
+	const rect = editorSelectionLayer(config.value.layout, layer);
+	return rect
+		? [rect]
+		: [];
+}));
 const selectionLabel = computed(() => severalSelected.value
 	? `${layers.value.length} layers`
 	: editorSelectionLabel(config.value.layout, selection.value));
@@ -214,7 +192,7 @@ onBeforeUnmount(stopWatchingRemoteUpdates);
 
 /** Property panel edits: undoable, one step per burst of typing. */
 function updateFields(partial: Partial<FeatureMatchOverlayModeConfig>) {
-	editor.editFields(partial);
+	editor.commit(() => updateConfig(partial), { coalesce: 'fields' });
 }
 
 /** A drag on a property panel's number label undoes as one step, however long it pauses. */
@@ -227,32 +205,6 @@ provide(NUMBER_SCRUB_GESTURE, {
  * Whole-layout actions
  * ──────────────────────────────────────────────── */
 
-/** A whole-layout replacement awaiting confirmation: a different preset, or the current one again. */
-const pendingPreset = ref<{ id: FeatureMatchOverlayPresetId; reset: boolean } | null>(null);
-
-const showPresetConfirm = computed({
-	get: () => pendingPreset.value !== null,
-	set: (value: boolean) => {
-		if (!value)
-			pendingPreset.value = null;
-	},
-});
-
-function askToApplyPreset(id: FeatureMatchOverlayPresetId) {
-	if (!canAuthor.value)
-		return;
-	pendingPreset.value = { id, reset: id === config.value.presetId };
-}
-
-function applyPreset() {
-	const pending = pendingPreset.value;
-	if (!pending)
-		return;
-	editor.edit(applyFeatureMatchOverlayPreset(config.value, pending.id));
-	editor.select(CANVAS_SELECTION);
-	pendingPreset.value = null;
-}
-
 const templatesOpen = ref(false);
 
 function templatePlaced() {
@@ -264,233 +216,11 @@ function templatePlaced() {
  * Keyboard
  * ──────────────────────────────────────────────── */
 
-const SHORTCUTS = [
-	{
-		keys: ['⌘', 'Z'],
-		label: 'Undo',
-	},
-	{
-		keys: ['⌘', '⇧', 'Z'],
-		label: 'Redo',
-	},
-	{
-		keys: ['⌘', 'D'],
-		label: 'Duplicate',
-	},
-	{
-		keys: ['⌘', 'C'],
-		label: 'Copy',
-	},
-	{
-		keys: ['⌘', 'V'],
-		label: 'Paste, here or on another Screen',
-	},
-	{
-		keys: ['⌘', '⌥', 'C'],
-		label: 'Copy style',
-	},
-	{
-		keys: ['⌘', '⌥', 'V'],
-		label: 'Paste style',
-	},
-	{
-		keys: ['⌫'],
-		label: 'Delete',
-	},
-	{
-		keys: ['←↑↓→'],
-		label: 'Nudge 1px (⇧ 10px)',
-	},
-	{
-		keys: ['⌘', ']'],
-		label: 'Bring forward (⇧ to front)',
-	},
-	{
-		keys: ['⌘', '['],
-		label: 'Send backward (⇧ to back)',
-	},
-	{
-		keys: ['⌘', '⇧', 'H'],
-		label: 'Hide or show',
-	},
-	{
-		keys: ['⌘', 'G'],
-		label: 'Group the selected layers',
-	},
-	{
-		keys: ['⌘', '⇧', 'G'],
-		label: 'Ungroup the selected group',
-	},
-	{
-		keys: ['F2'],
-		label: 'Rename the focused layer (or double-click it)',
-	},
-	{
-		keys: ['⌘', '⇧', 'L'],
-		label: 'Lock or unlock against canvas edits',
-	},
-	{
-		keys: ['⌘ click'],
-		label: 'Add or remove a layer from the selection',
-	},
-	{
-		keys: ['⇧ click'],
-		label: 'Select a run of layers in the list',
-	},
-	{
-		keys: ['Esc'],
-		label: 'Select one layer, then the canvas',
-	},
-	{
-		keys: ['⇧ drag'],
-		label: 'Keep aspect ratio (rotate in 15° steps)',
-	},
-	{
-		keys: ['⌥ drag'],
-		label: 'Turn off snapping',
-	},
-	{
-		keys: ['⌘ scroll'],
-		label: 'Zoom the preview',
-	},
-	{
-		keys: ['Space drag'],
-		label: 'Pan the preview (or middle-drag)',
-	},
-	{
-		keys: ['⌘', '0'],
-		label: 'Fit the preview',
-	},
-	{
-		keys: ['⌘', '1'],
-		label: 'Preview at 100%',
-	},
-] as const;
+const SHORTCUTS = GRAPHICS_EDITOR_SHORTCUTS;
 
-const NUDGE: Record<string, { x: number; y: number }> = {
-	ArrowLeft: { x: -1, y: 0 },
-	ArrowRight: { x: 1, y: 0 },
-	ArrowUp: { x: 0, y: -1 },
-	ArrowDown: { x: 0, y: 1 },
-};
-
-/** ⌘G: group the selection, or say why it cannot be grouped (#920, E8). */
-function groupSelection() {
-	const refusal = editor.groupRefusal.value;
-	if (!refusal) {
-		editor.group();
-		return;
-	}
-	toast.add({
-		title: 'Can\'t group these layers',
-		description: LAYER_GROUP_REFUSAL_REASONS[refusal],
-		color: 'warning',
-	});
-}
-
-/**
- * Copy and paste (#746) keep what is copied in this browser, so it pastes into
- * another Screen's layout too. Copying is not a write; pasting is.
- */
-const clipboard = useGraphicsClipboard('feature-match-overlay');
-
-async function pasteLayers() {
-	const copied = await clipboard.layersToPaste();
-	const refusal = copied && editor.paste(copied);
-	if (refusal)
-		clipboard.refuse(refusal);
-}
-
-async function pasteStyle() {
-	const copied = await clipboard.styleToPaste();
-	const refusal = copied && editor.pasteStyle(copied);
-	if (refusal)
-		clipboard.refuse(refusal);
-}
-
-function handleKeydown(event: KeyboardEvent) {
-	if (event.defaultPrevented || isTypingTarget(event.target) || pendingPreset.value || templatesOpen.value)
-		return;
-
-	const mod = event.metaKey || event.ctrlKey;
-	const key = event.key.toLowerCase();
-	const current = selection.value;
-	let handled = true;
-
-	// By code: ⌥ changes the character a key types.
-	if (mod && !event.shiftKey && event.code === 'KeyC' && !hasTextSelection()) {
-		const copied = event.altKey
-			? clipboard.copyStyle(editor.copyStyle())
-			: clipboard.copyLayers(editor.copy());
-		if (copied)
-			event.preventDefault();
-		return;
-	}
-
-	// The editor writes nothing without the lease anyway. This keeps an observer's
-	// keys from being swallowed, so ⌘Z or ⌘D reach the browser; Escape still selects.
-	if (!canAuthor.value && event.key !== 'Escape')
-		return;
-
-	if (mod && key === 'z' && !event.shiftKey) {
-		editor.undo();
-	}
-	else if (mod && ((key === 'z' && event.shiftKey) || key === 'y')) {
-		editor.redo();
-	}
-	else if (mod && key === 'd') {
-		editor.duplicate();
-	}
-	else if (mod && !event.shiftKey && event.code === 'KeyV') {
-		void (event.altKey
-			? pasteStyle()
-			: pasteLayers());
-	}
-	else if (mod && (event.code === 'BracketRight' || event.code === 'BracketLeft')) {
-		const forward = event.code === 'BracketRight';
-		if (event.shiftKey) {
-			editor.moveToEdge(current, forward ? 'front' : 'back');
-		}
-		else {
-			editor.move(current, forward
-				? 1
-				: -1);
-		}
-	}
-	else if (mod && event.shiftKey && key === 'h') {
-		editor.toggleVisible();
-	}
-	else if (mod && event.shiftKey && key === 'g') {
-		editor.ungroup();
-	}
-	else if (mod && key === 'g' && layers.value.length > 0) {
-		groupSelection();
-	}
-	else if (mod && event.shiftKey && key === 'l') {
-		editor.toggleLock();
-	}
-	else if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) {
-		editor.remove();
-	}
-	else if (!mod && event.key in NUDGE && layers.value.length > 0) {
-		const step = event.shiftKey ? 10 : 1;
-		const direction = NUDGE[event.key]!;
-		editor.nudge({ x: direction.x * step, y: direction.y * step });
-	}
-	else if (event.key === 'Escape' && layers.value.length > 0) {
-		editor.collapseSelection();
-	}
-	else {
-		handled = false;
-	}
-
-	if (handled)
-		event.preventDefault();
-}
-
-useEventListener(import.meta.client
-	? window
-	: undefined, 'keydown', handleKeydown);
+useGraphicsEditorKeyboard(editor, 'feature-match-overlay', {
+	suspended: () => templatesOpen.value,
+});
 </script>
 
 <template>
@@ -505,74 +235,23 @@ useEventListener(import.meta.client
 
 		<section class="rounded-lg border border-default/70 bg-default p-3" data-testid="overlay-toolbar">
 			<div class="flex flex-wrap items-end gap-3">
-				<UFormField label="Feature Match Slot" size="sm" class="min-w-56 flex-1">
-					<USelect
-						:model-value="config.featureMatchId ?? undefined"
-						:items="matchOptions"
-						value-key="value"
-						placeholder="Select a slot..."
-						class="w-full"
-						@update:model-value="updateConfig({ featureMatchId: $event })"
-					/>
-				</UFormField>
-				<UFormField label="Preset" size="sm" class="min-w-64 flex-1">
-					<UFieldGroup class="w-full">
-						<USelect
-							:model-value="config.presetId"
-							:items="presetOptions"
-							value-key="value"
-							class="min-w-0 flex-1"
-							:disabled="!canAuthor"
-							@update:model-value="askToApplyPreset($event)"
-						/>
-						<UButton
-							size="sm"
-							variant="soft"
-							color="neutral"
-							icon="i-lucide-rotate-ccw"
-							:disabled="!canAuthor"
-							data-testid="reset-preset"
-							title="Reset the layout to this preset"
-							@click="askToApplyPreset(config.presetId)"
-						>
-							Reset
-						</UButton>
-					</UFieldGroup>
-				</UFormField>
+				<ScreenFeatureMatchSlotField
+					:model-value="config.featureMatchId"
+					:event-id="eventId"
+					stacked
+					size="sm"
+					class="min-w-56 flex-1"
+					@update:model-value="updateConfig({ featureMatchId: $event })"
+				/>
 
 				<div class="ml-auto flex items-center gap-1">
-					<div
-						v-if="writable && saveState !== 'idle'"
-						class="mr-1 flex items-center gap-1.5 text-xs"
-						:class="saveState === 'failed' ? 'text-error' : 'text-muted'"
-						:title="saveState === 'failed' ? (saveError ?? undefined) : undefined"
-						role="status"
-						data-testid="layout-save-state"
-						:data-save-state="saveState"
-					>
-						<template v-if="saveState === 'saving'">
-							<UIcon name="i-lucide-loader-circle" class="size-3.5 animate-spin" />
-							Saving…
-						</template>
-						<template v-else-if="saveState === 'committed'">
-							<UIcon name="i-lucide-check" class="size-3.5 text-success" />
-							Saved
-						</template>
-						<template v-else>
-							<UIcon name="i-lucide-triangle-alert" class="size-3.5" />
-							Not saved
-							<UButton
-								size="xs"
-								color="error"
-								variant="soft"
-								icon="i-lucide-rotate-cw"
-								data-testid="layout-save-retry"
-								@click="retrySave()"
-							>
-								Retry
-							</UButton>
-						</template>
-					</div>
+					<GraphicsSaveState
+						class="mr-1"
+						:save-state="saveState"
+						:save-error="saveError"
+						:writable="writable"
+						@retry="retrySave()"
+					/>
 					<UFieldGroup size="sm">
 						<UButton
 							variant="soft"
@@ -638,15 +317,6 @@ useEventListener(import.meta.client
 				</div>
 			</div>
 
-			<UAlert
-				v-if="aspectMismatch"
-				class="mt-3"
-				color="warning"
-				variant="soft"
-				icon="i-lucide-triangle-alert"
-				title="Preset aspect ratio mismatch"
-				description="This preset was designed for 16:9. You can still use it, but geometry may need adjustment."
-			/>
 			<UAlert
 				v-if="assetPublicationBlocked"
 				data-testid="graphic-asset-publication-block"
@@ -714,19 +384,17 @@ useEventListener(import.meta.client
 			</section>
 
 			<section class="min-w-0 rounded-lg border border-default/70 bg-default p-3 xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto">
-				<FeatureMatchOverlayLayerAlignControls
-					v-if="layers.length > 0"
-					:editor="editor"
-					class="mb-3 border-b border-default/70 pb-2"
-				/>
-				<FeatureMatchOverlayMultiLayerInspector
+				<GraphicsMultiLayerInspector
 					v-if="severalSelected"
-					:layout="config.layout"
-					:layers="layers"
+					:rects="selectedRects"
 					:writable="canAuthor"
 					:group-refusal="editor.groupRefusal.value"
+					:can-align="editor.canAlign()"
+					:can-distribute="editor.canDistribute()"
 					@update="editor.setLayersGeometry"
 					@group="editor.group()"
+					@align="edge => editor.align(edge)"
+					@distribute="axis => editor.distribute(axis)"
 				/>
 				<FeatureMatchOverlayCompositorInspector
 					v-else-if="selection.type === 'item'"
@@ -749,8 +417,6 @@ useEventListener(import.meta.client
 					:screen="screen"
 					:event-id="eventId"
 					:writable="canAuthor"
-					@remove="itemId => editor.remove({ type: 'source', itemId })"
-					@duplicate="itemId => editor.duplicate({ type: 'source', itemId })"
 				/>
 			</section>
 		</div>
@@ -758,7 +424,7 @@ useEventListener(import.meta.client
 		<!--
 			The installation's reusable Feature Match Layouts. They act on the whole
 			layout — saving copies this Screen's layout out, placing replaces it — so
-			they open from the toolbar beside the preset rather than from the layer list.
+			they open from the toolbar rather than from the layer list.
 
 			Writable while this session holds the Graphics Authoring Lease; an observer
 			still browses the library. Its place and save land this editor's unsaved
@@ -772,33 +438,12 @@ useEventListener(import.meta.client
 					:screen-id="screen.id"
 					:writable="writable"
 					:flush-edits="flush"
+					:canvas-aspect-ratio="canvasWidth / canvasHeight"
 					bare
 					@placing="editor.checkpoint()"
 					@placed="templatePlaced"
 				/>
 			</template>
 		</USlideover>
-
-		<UModal v-model:open="showPresetConfirm">
-			<template #content>
-				<div class="p-6 space-y-4">
-					<h3 class="text-lg font-semibold">
-						{{ pendingPreset?.reset ? 'Reset to preset?' : 'Apply preset?' }}
-					</h3>
-					<p class="text-sm text-muted">
-						This replaces the Frame, every Source Item, and every Graphic Item with the preset's,
-						keeping the selected Feature Match Slot. You can undo it.
-					</p>
-					<div class="flex justify-end gap-2">
-						<UButton variant="soft" color="neutral" @click="() => { pendingPreset = null }">
-							Cancel
-						</UButton>
-						<UButton color="primary" data-testid="confirm-preset" @click="applyPreset">
-							{{ pendingPreset?.reset ? 'Reset' : 'Apply' }}
-						</UButton>
-					</div>
-				</div>
-			</template>
-		</UModal>
 	</div>
 </template>

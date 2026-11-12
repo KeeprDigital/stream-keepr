@@ -166,18 +166,18 @@ describe('screen mode host', () => {
 	describe('configuration policy', () => {
 		it('offers the Feature Match Overlay fill and key outputs', () => {
 			expect(getScreenModeConfigurationPolicy('feature-match-overlay')).toMatchObject({ displayType: 'overlay' });
-			expect(getScreenModeConfigurationPolicy('feature-match-overlay').outputOptions.map(option => option.value)).toEqual(['overlay', 'fill', 'key']);
+			expect(getScreenModeConfigurationPolicy('feature-match-overlay').outputs).toEqual(['overlay', 'fill', 'key']);
 		});
 
 		it('keeps a generic overlay output-free', () => {
 			expect(getScreenModeConfigurationPolicy('card')).toMatchObject({
 				displayType: 'overlay',
-				outputOptions: [],
+				outputs: [],
 			});
 		});
 
 		it('offers a control host no outputs', () => {
-			expect(getScreenModeConfigurationPolicy('feature-match')).toMatchObject({ displayType: 'control', outputOptions: [] });
+			expect(getScreenModeConfigurationPolicy('feature-match')).toMatchObject({ displayType: 'control', outputs: [] });
 		});
 	});
 });

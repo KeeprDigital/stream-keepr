@@ -1,5 +1,7 @@
 <script setup lang="ts" generic="Value extends string | number | boolean">
 import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
+import { NINE_POINT_VALUES } from '~~/shared/utils/ninePoints';
+import ScreenSettingsField from '~/components/Screen/SettingsField.vue';
 
 /**
  * One Screen Mode config field, rendered from its contract metadata (ADR-0037):
@@ -13,9 +15,13 @@ import type { ScreenModeConfigField } from '~~/shared/screenModeConfigs/fields';
  * (ADR-0041); without it, an emptied number or colour emits nothing, and
  * emptied text emits `''`.
  *
- * A toggle may be feature-gated (`enabled`), as `ScreenSettingsToggle` gates it.
+ * A control that cannot have an effect is not rendered at all (#1060): its
+ * page leaves the field out rather than disabling it.
+ *
+ * `inline` draws the control alone, named by its label, for a row its group's
+ * title labels (a card badge's show, position and size).
  */
-const props = withDefaults(defineProps<{
+const props = defineProps<{
 	field: ScreenModeConfigField;
 	modelValue?: Value | null;
 	description?: string;
@@ -25,13 +31,8 @@ const props = withDefaults(defineProps<{
 	nullable?: boolean;
 	/** A tighter upper bound than the field's own, in displayed units, such as a page smaller than the ranking. */
 	max?: number;
-	/** A toggle's feature gate: when `false` it shows off, disabled, with `disabledDescription`, and never writes. */
-	enabled?: boolean;
-	disabledDescription?: string;
-}>(), {
-	// Absent is ungated, not a boolean prop's `false`.
-	enabled: undefined,
-});
+	inline?: boolean;
+}>();
 
 const emit = defineEmits<{
 	'update:modelValue': [value: Value | null];
@@ -56,6 +57,11 @@ const selectItems = computed(() => props.items
 // `USelect` infers its value type from its items, which a generic `Value` defeats.
 const selectValue = computed(() => (props.modelValue ?? null) as never);
 
+/** A position's points its field does not allow, such as a badge's centre: offered, but not to be picked. */
+const disabledPoints = computed(() => props.field.values
+	? NINE_POINT_VALUES.filter(point => !props.field.values!.includes(point))
+	: []);
+
 const numberMax = computed(() => {
 	const own = props.field.max;
 	if (props.max === undefined)
@@ -64,18 +70,6 @@ const numberMax = computed(() => {
 		? props.max
 		: Math.min(own, props.max);
 });
-
-const displayedNumber = computed(() => typeof props.modelValue === 'number'
-	? props.modelValue / props.field.displayScale
-	: undefined);
-
-/** Displayed units back to stored ones, without the float noise a scale adds (4.1 s is 4100 ms). */
-function toStored(displayed: number): number {
-	const scale = props.field.displayScale;
-	return scale === 1
-		? displayed
-		: Number((displayed * scale).toPrecision(12));
-}
 
 function isEmpty(value: unknown): boolean {
 	return value === null || value === undefined || value === '' || (typeof value === 'number' && Number.isNaN(value));
@@ -93,7 +87,7 @@ function updateNumber(value: number | null | undefined) {
 	if (isEmpty(value))
 		emitEmpty();
 	else
-		emit('update:modelValue', toStored(Number(value)) as Value);
+		emit('update:modelValue', Number(value) as Value);
 }
 
 function updateValue(value: unknown) {
@@ -121,50 +115,66 @@ function updateText(value: unknown) {
 
 <template>
 	<ScreenSettingsToggle
-		v-if="field.control === 'toggle'"
+		v-if="field.control === 'toggle' && !inline"
 		:data-config-field="field.key"
 		:label="field.label"
 		:description="description"
-		:enabled="enabled"
-		:disabled-description="disabledDescription"
 		:model-value="modelValue === null || modelValue === undefined ? undefined : Boolean(modelValue)"
 		@update:model-value="updateValue($event)"
 	/>
-	<ScreenSettingsField
+	<component
+		:is="inline ? 'div' : ScreenSettingsField"
 		v-else
 		:data-config-field="field.key"
-		:label="field.label"
-		:description="description"
+		v-bind="inline ? {} : { label: field.label, description }"
 	>
-		<UInputNumber
-			v-if="field.control === 'number'"
-			:model-value="displayedNumber"
+		<USwitch
+			v-if="field.control === 'toggle'"
+			:aria-label="field.label"
+			:model-value="Boolean(modelValue)"
+			@update:model-value="updateValue($event)"
+		/>
+		<ScreenSettingsNumberField
+			v-else-if="field.control === 'number'"
+			:aria-label="inline ? field.label : undefined"
+			:model-value="typeof modelValue === 'number' ? modelValue : undefined"
 			:min="field.min"
 			:max="numberMax"
 			:step="field.step"
-			class="w-32"
+			:display-scale="field.displayScale"
+			:placeholder="placeholder"
 			@update:model-value="updateNumber($event)"
 		/>
 		<USelect
 			v-else-if="field.control === 'select'"
+			:aria-label="inline ? field.label : undefined"
 			:model-value="selectValue"
 			:items="selectItems"
 			:placeholder="placeholder"
 			class="w-48"
 			@update:model-value="updateSelect($event)"
 		/>
+		<UINinePointPicker
+			v-else-if="field.control === 'position'"
+			:aria-label="field.label"
+			:model-value="selectValue"
+			:disabled-points="disabledPoints"
+			@update:model-value="updateValue($event)"
+		/>
 		<UIColorPicker
 			v-else-if="field.control === 'color'"
+			:aria-label="inline ? field.label : undefined"
 			:model-value="typeof modelValue === 'string' ? modelValue : undefined"
 			:placeholder="placeholder"
 			@update:model-value="updateValue($event)"
 		/>
 		<UInput
 			v-else
+			:aria-label="inline ? field.label : undefined"
 			:model-value="modelValue === null || modelValue === undefined ? '' : String(modelValue)"
 			:placeholder="placeholder"
 			class="w-64"
 			@update:model-value="updateText($event)"
 		/>
-	</ScreenSettingsField>
+	</component>
 </template>

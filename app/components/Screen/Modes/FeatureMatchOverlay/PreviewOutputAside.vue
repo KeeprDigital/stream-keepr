@@ -2,13 +2,12 @@
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { GraphicRect } from '~~/shared/types/graphics';
 import type { FeatureMatchOverlayModeConfig, FeatureMatchOverlayOutput } from '~~/shared/types/screenConfig';
-import type { EditorSelectionFrame } from '~/modules/feature-match-overlay/editorSelection';
-import type { GraphicsPreviewAnimationPlan } from '~/modules/graphics/previewMessages';
+import type { EditorSelectionFrame } from '~/modules/graphics/editor/layerFrame';
+import type { ExpectedSender, GraphicsPreviewAnimationPlan, MessageEnvelope } from '~/modules/graphics/previewMessages';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget, Screen } from '~/types';
 import { FEATURE_MATCH_LAYOUT_ANIMATION_PHASES, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { SCREEN_OUTPUT_OPTIONS } from '~~/shared/screenModeDefinitions';
-import { screenOutputPath } from '~~/shared/utils/screenOutput';
 import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_CONFIG_MESSAGE,
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE,
@@ -18,14 +17,13 @@ import {
 	GRAPHICS_PREVIEW_ANIMATION_MESSAGE,
 	GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
 	GRAPHICS_PREVIEW_THEME_MESSAGE,
-	isGraphicsPreviewReadyMessage,
-	isGraphicsPreviewSelectMessage,
 } from '~/modules/graphics/previewMessages';
 
 /**
- * The Feature Match Overlay editor preview: the shared preview panel (output
- * selection, zoom, item guides, advisory action-safe and title-safe guides), plus
- * output URL hand-out, PNG capture, and Graphic Animation Preview.
+ * The Feature Match Overlay editor preview: the shared editor preview shell
+ * (`GraphicsEditorPreview`: frame, guides, zoom, canvas handles, Graphic
+ * Animation Preview), plus the shared output hand-out, this host's PNG capture,
+ * stress dataset and animation subjects.
  *
  * Two selections travel through it, because the page has two authoring surfaces.
  * The host-owned one names the Frame or a Source Item; the
@@ -33,10 +31,10 @@ import {
  * the frame and reported back in its own vocabulary, and the editor keeps at most
  * one of them non-canvas.
  *
- * Guides are asked for on the preview's own URL, so a live Screen Output — which
- * never carries the preview embed role — can never draw one. So is the Feature
- * Match Stress Dataset (#743): editor state, never written, and offered whether or
- * not this session may author, since it changes nothing but what the preview shows.
+ * The Feature Match Stress Dataset (#743) is asked for on the preview's own URL,
+ * as the guides are, so a live Screen Output can never resolve against it: editor
+ * state, never written, and offered whether or not this session may author, since
+ * it changes nothing but what the preview shows.
  */
 
 const props = defineProps<{
@@ -78,97 +76,8 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
-const { copyToClipboard } = useCopyToClipboard();
-const { screenOutputAccessUrl, openScreenOutput } = useScreenOutputAccessUrl();
-const requestUrl = useRequestURL();
-const previewOutput = ref<FeatureMatchOverlayOutput>('overlay');
-const itemGuides = ref(true);
-const safeAreaGuides = ref(false);
+const { openScreenOutput } = useScreenOutputAccessUrl();
 const stressDataset = ref(false);
-const previewFrame = ref<HTMLIFrameElement | null>(null);
-
-const outputBaseUrl = computed(() => import.meta.client
-	? window.location.origin
-	: requestUrl.origin);
-const previewUrl = computed(() => screenOutputPath({
-	eventId: props.eventId,
-	screenSlug: props.screen.slug,
-	output: previewOutput.value,
-	embed: 'preview',
-	itemGuides: itemGuides.value,
-	safeAreaGuides: safeAreaGuides.value,
-	stressDataset: stressDataset.value,
-}));
-
-/**
- * The output's address, shown so an operator can read where it lives.
- *
- * Deliberately without this Screen's Screen Output Asset Capability, which is a
- * secret and does not belong in a field on a page anyone can be standing behind.
- * The copy and download controls beside it obtain one and carry it; this is the
- * address, not the hand-out (#231).
- */
-function outputUrl(output: FeatureMatchOverlayOutput) {
-	return `${outputBaseUrl.value}${screenOutputPath({
-		eventId: props.eventId,
-		screenSlug: props.screen.slug,
-		output,
-	})}`;
-}
-
-function accessUrlOptions(output: FeatureMatchOverlayOutput, download = false) {
-	return {
-		eventId: props.eventId,
-		screenId: props.screen.id,
-		screenSlug: props.screen.slug,
-		output,
-		download,
-	};
-}
-
-function syncSelectedTargetToPreview() {
-	if (!import.meta.client || !previewFrame.value?.contentWindow)
-		return;
-
-	const target = { ...props.selectedTarget };
-
-	previewFrame.value.contentWindow.postMessage({
-		type: FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE,
-		target,
-	}, window.location.origin);
-}
-
-function syncConfigToPreview() {
-	if (!import.meta.client || !previewFrame.value?.contentWindow)
-		return;
-
-	previewFrame.value.contentWindow.postMessage({
-		type: FEATURE_MATCH_OVERLAY_PREVIEW_CONFIG_MESSAGE,
-		config: JSON.parse(JSON.stringify(props.config)),
-	}, window.location.origin);
-}
-
-function syncCompositorTargetToPreview() {
-	if (!import.meta.client || !previewFrame.value?.contentWindow)
-		return;
-
-	previewFrame.value.contentWindow.postMessage({
-		type: GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE,
-		target: { ...props.compositorTarget },
-	}, window.location.origin);
-}
-
-function syncThemeToPreview() {
-	if (!import.meta.client || !previewFrame.value?.contentWindow || props.previewThemeValues === undefined)
-		return;
-
-	previewFrame.value.contentWindow.postMessage({
-		type: GRAPHICS_PREVIEW_THEME_MESSAGE,
-		tokens: props.previewThemeValues && JSON.parse(JSON.stringify(props.previewThemeValues)),
-	}, window.location.origin);
-}
-
-watch(() => props.previewThemeValues, syncThemeToPreview);
 
 /**
  * Graphic Animation Preview (#749): a run plays the whole Feature Match Layout —
@@ -191,136 +100,39 @@ const animationTarget = computed(() => {
 		: null;
 });
 
-function syncAnimationToPreview() {
-	if (!import.meta.client || !previewFrame.value?.contentWindow)
-		return;
-
-	previewFrame.value.contentWindow.postMessage({
-		type: GRAPHICS_PREVIEW_ANIMATION_MESSAGE,
-		plan: animationPlan.value && { ...animationPlan.value },
-	}, window.location.origin);
-}
-
-watch(animationPlan, syncAnimationToPreview);
-
-function syncPreviewState() {
-	syncConfigToPreview();
-	syncSelectedTargetToPreview();
-	syncCompositorTargetToPreview();
-	syncThemeToPreview();
-	syncAnimationToPreview();
-}
+/**
+ * What the frame is told: the whole working mode config, the host-owned
+ * selection and the compositor's, the Theme previewed under once there is one to
+ * name, and the run in play.
+ */
+const previewMessages = computed(() => [
+	{ type: FEATURE_MATCH_OVERLAY_PREVIEW_CONFIG_MESSAGE, config: props.config },
+	{ type: FEATURE_MATCH_OVERLAY_PREVIEW_SELECTED_TARGET_MESSAGE, target: props.selectedTarget },
+	{ type: GRAPHICS_PREVIEW_SELECTED_TARGET_MESSAGE, target: props.compositorTarget },
+	...(props.previewThemeValues === undefined
+		? []
+		: [
+				{ type: GRAPHICS_PREVIEW_THEME_MESSAGE, tokens: props.previewThemeValues },
+			]),
+	{ type: GRAPHICS_PREVIEW_ANIMATION_MESSAGE, plan: animationPlan.value },
+]);
 
 /**
  * The host-owned selection reported back by the frame, through this host's own
- * guard — which is built on the same shared sender check its two siblings below
- * use (#260).
+ * guard — which is built on the same shared sender check the shell uses for
+ * everything else it hears (#260).
  *
  * It hand-rolled that check until #252. The copy compared `message.source`
- * against `previewFrame.value?.contentWindow` and nothing else, so once the
- * frame was gone — null `contentWindow`, and a `MessageEvent` carries a null
- * source unless a window sent it — the two matched and a selection from nobody
- * was emitted as the frame's own.
+ * against the frame's `contentWindow` and nothing else, so once the frame was
+ * gone — null `contentWindow`, and a `MessageEvent` carries a null source unless
+ * a window sent it — the two matched and a selection from nobody was emitted as
+ * the frame's own.
  */
-function handlePreviewSelection(message: MessageEvent) {
-	if (!isFeatureMatchOverlayPreviewSelectMessage(message, {
-		origin: window.location.origin,
-		source: previewFrame.value?.contentWindow ?? null,
-	})) {
-		return;
-	}
-
-	releaseFrameFocus();
+function receiveHostSelection(message: MessageEnvelope, expected: ExpectedSender) {
+	if (!isFeatureMatchOverlayPreviewSelectMessage(message, expected))
+		return false;
 	emit('selectTarget', message.data.target, message.data.toggle === true);
-}
-
-/**
- * Hand keyboard focus back to the editor after a click in the preview.
- *
- * A click inside the frame focuses the frame's own document, whose key presses
- * never reach this one, so the editor's shortcuts would stop working the moment
- * an author picked something on the canvas.
- */
-function releaseFrameFocus() {
-	if (import.meta.client && previewFrame.value && document.activeElement === previewFrame.value)
-		previewFrame.value.blur();
-}
-
-/**
- * The frame reporting that it is listening, answered with a full push.
- *
- * The `@load` push below happens before the frame's own app has mounted as often
- * as after it, and a push that lost that race was dropped in silence, leaving the
- * preview rendering the Screen's stored configuration with nothing to say it had
- * missed anything. Answering the announcement makes the initial exchange a
- * handshake rather than a race, and costs one duplicate push where `load` did
- * win (#235).
- */
-function handlePreviewReady(message: MessageEvent) {
-	if (!isGraphicsPreviewReadyMessage(message, {
-		origin: window.location.origin,
-		source: previewFrame.value?.contentWindow ?? null,
-	})) {
-		return;
-	}
-
-	syncPreviewState();
-}
-
-function handleCompositorPreviewSelection(message: MessageEvent) {
-	if (!isGraphicsPreviewSelectMessage(message, {
-		origin: window.location.origin,
-		source: previewFrame.value?.contentWindow ?? null,
-	})) {
-		return;
-	}
-
-	releaseFrameFocus();
-	emit('selectCompositorTarget', message.data.target, message.data.toggle === true);
-}
-
-onMounted(() => {
-	window.addEventListener('message', handlePreviewSelection);
-	window.addEventListener('message', handleCompositorPreviewSelection);
-	window.addEventListener('message', handlePreviewReady);
-});
-
-onBeforeUnmount(() => {
-	window.removeEventListener('message', handlePreviewSelection);
-	window.removeEventListener('message', handleCompositorPreviewSelection);
-	window.removeEventListener('message', handlePreviewReady);
-});
-
-watch(() => props.selectedTarget, () => {
-	syncSelectedTargetToPreview();
-}, { deep: true });
-
-watch(() => props.compositorTarget, () => {
-	syncCompositorTargetToPreview();
-}, { deep: true });
-
-watch(() => props.config, () => {
-	syncConfigToPreview();
-}, { deep: true });
-
-// Each switch changes the preview URL, which reloads the frame; the working
-// state has to be pushed into the new document once it exists.
-watch([itemGuides, safeAreaGuides, stressDataset], () => {
-	void nextTick(syncPreviewState);
-});
-
-async function copyOutputUrl(output: FeatureMatchOverlayOutput) {
-	if (props.publicationBlocked)
-		return;
-	await copyToClipboard(await screenOutputAccessUrl(accessUrlOptions(output)), {
-		successTitle: 'URL copied',
-		successDescription: `${output.toUpperCase()} output URL copied.`,
-		// The empty string means asset access was refused, not that the clipboard
-		// declined the write — and an operator told the latter reaches for the address
-		// in their browser's bar, which resolves no media at all (#231, #257).
-		nothingToCopyTitle: 'Nothing copied',
-		nothingToCopyDescription: `Asset access for this Screen could not be obtained, so the ${output.toUpperCase()} output URL would have opened an output without its media. Try again.`,
-	});
+	return true;
 }
 
 async function downloadOutput(output: FeatureMatchOverlayOutput) {
@@ -330,7 +142,13 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 	// A capture browser that cannot resolve this Screen's assets produces a PNG that
 	// looks finished and is missing every image, video and library font in it, so a
 	// capture that cannot carry a capability is refused rather than exported (#231).
-	const result = await openScreenOutput(accessUrlOptions(output, true));
+	const result = await openScreenOutput({
+		eventId: props.eventId,
+		screenId: props.screen.id,
+		screenSlug: props.screen.slug,
+		output,
+		download: true,
+	});
 	if (result === 'access-refused') {
 		toast.add({
 			title: 'Download unavailable',
@@ -350,18 +168,41 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 		});
 	}
 }
+
+/** The PNG capture stays the editor's own, beside the shared hand-out (#1104). */
+const OUTPUT_VALUES = SCREEN_OUTPUT_OPTIONS.map(option => option.value);
+const downloadItems = SCREEN_OUTPUT_OPTIONS.map(option => ({
+	label: `${option.label} PNG`,
+	icon: option.icon,
+	onSelect: () => void downloadOutput(option.value),
+}));
 </script>
 
 <template>
 	<div class="space-y-6 min-w-0">
-		<GraphicsPreviewPanel
-			v-model:output="previewOutput"
-			v-model:item-guides="itemGuides"
-			v-model:safe-area-guides="safeAreaGuides"
-			:collapsible="false"
-			:fit-height="fitHeight"
+		<GraphicsEditorPreview
+			v-model:animation-plan="animationPlan"
+			:event-id="eventId"
+			:screen-slug="screen.slug"
 			:canvas-width="canvasWidth"
 			:canvas-height="canvasHeight"
+			title="Feature Match Overlay preview"
+			:messages="previewMessages"
+			:url-options="{ stressDataset }"
+			:receive="receiveHostSelection"
+			:animation-target="animationTarget"
+			:animation-phases="FEATURE_MATCH_LAYOUT_ANIMATION_PHASES"
+			animation-hint="Select a Graphic Item to preview its animation alone."
+			:selection-frame="selectionFrame"
+			:selection-label="selectionLabel"
+			:locked-boxes="lockedBoxes"
+			:collapsible="false"
+			:fit-height="fitHeight"
+			@select="(target, toggle) => emit('selectCompositorTarget', target, toggle)"
+			@manipulate="(rect, gesture) => emit('manipulate', rect, gesture)"
+			@rotate="(rotation, gesture) => emit('rotate', rotation, gesture)"
+			@gesture-start="emit('gestureStart')"
+			@gesture-end="emit('gestureEnd')"
 		>
 			<template #controls>
 				<UButton
@@ -376,79 +217,29 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 				>
 					Stress test
 				</UButton>
-				<UPopover>
+				<ScreenOutputHandOut
+					:event-id="eventId"
+					:screen="screen"
+					:outputs="OUTPUT_VALUES"
+					:disabled="publicationBlocked"
+					:disabled-reason="publicationBlockReason"
+				/>
+				<UDropdownMenu :items="downloadItems" :disabled="publicationBlocked">
 					<UButton
 						size="sm"
 						variant="soft"
 						color="neutral"
-						icon="i-lucide-link"
+						icon="i-lucide-download"
 						trailing-icon="i-lucide-chevron-down"
+						label="PNG"
 						:disabled="publicationBlocked"
-						:title="publicationBlockReason"
-					>
-						Outputs
-					</UButton>
-					<template #content>
-						<div class="w-[min(38rem,calc(100vw-2rem))] space-y-3 p-3">
-							<div class="flex items-start justify-between gap-3">
-								<div>
-									<p class="text-sm font-medium">
-										Output URLs
-									</p>
-									<p class="text-xs text-muted">
-										Copy broadcast URLs or download PNG captures.
-									</p>
-								</div>
-							</div>
-							<div class="space-y-2">
-								<div
-									v-for="output in SCREEN_OUTPUT_OPTIONS"
-									:key="output.value"
-									class="grid gap-2 rounded-lg border border-default/70 bg-muted/20 p-2 sm:grid-cols-[4.5rem_minmax(0,1fr)_auto_auto] sm:items-center"
-								>
-									<UBadge variant="soft" class="justify-center uppercase">
-										{{ output.value }}
-									</UBadge>
-									<UInput
-										:model-value="outputUrl(output.value)"
-										readonly
-										size="sm"
-										class="min-w-0"
-									/>
-									<UButton
-										size="sm"
-										variant="soft"
-										icon="i-lucide-copy"
-										:disabled="publicationBlocked"
-										:title="publicationBlockReason"
-										:data-testid="`copy-output-${output.value}`"
-										@click="copyOutputUrl(output.value)"
-									>
-										Copy
-									</UButton>
-									<UButton
-										size="sm"
-										icon="i-lucide-download"
-										:disabled="publicationBlocked"
-										:title="publicationBlockReason"
-										:data-testid="`download-output-${output.value}`"
-										@click="downloadOutput(output.value)"
-									>
-										PNG
-									</UButton>
-								</div>
-							</div>
-						</div>
-					</template>
-				</UPopover>
+						:title="publicationBlocked ? publicationBlockReason : 'Download a Screen Output as a PNG, captured with the asset access that resolves its media'"
+						data-testid="download-output"
+					/>
+				</UDropdownMenu>
 			</template>
 
-			<GraphicsAnimationPreviewControls
-				:target="animationTarget"
-				:phases="FEATURE_MATCH_LAYOUT_ANIMATION_PHASES"
-				hint="Select a Graphic Item to preview its animation alone."
-				@update:plan="plan => { animationPlan = plan }"
-			>
+			<template #animation>
 				<UFieldGroup size="xs">
 					<UButton
 						v-for="subject in ANIMATION_SUBJECTS"
@@ -462,34 +253,7 @@ async function downloadOutput(output: FeatureMatchOverlayOutput) {
 						{{ subject.label }}
 					</UButton>
 				</UFieldGroup>
-			</GraphicsAnimationPreviewControls>
-
-			<template #viewport>
-				<iframe
-					ref="previewFrame"
-					:key="previewUrl"
-					:src="previewUrl"
-					class="absolute inset-0 size-full border-0"
-					title="Feature Match Overlay preview"
-					@load="syncPreviewState"
-				/>
-				<GraphicsCanvasManipulationOverlay
-					:rect="selectionFrame?.rect ?? null"
-					:origin="selectionFrame?.origin"
-					:snap-lines="selectionFrame?.snapLines"
-					:members="selectionFrame?.members"
-					:rotation="selectionFrame?.rotation"
-					:anchor="selectionFrame?.anchor"
-					:canvas-width="canvasWidth"
-					:canvas-height="canvasHeight"
-					:label="selectionLabel"
-					:locked="lockedBoxes"
-					@change="(rect, gesture) => emit('manipulate', rect, gesture)"
-					@rotate="(rotation, gesture) => emit('rotate', rotation, gesture)"
-					@gesture-start="emit('gestureStart')"
-					@gesture-end="emit('gestureEnd')"
-				/>
 			</template>
-		</GraphicsPreviewPanel>
+		</GraphicsEditorPreview>
 	</div>
 </template>

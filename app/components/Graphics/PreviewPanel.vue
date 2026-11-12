@@ -17,10 +17,17 @@ import { isTypingTarget } from '~/utils/typingTarget';
  * editors: output selection, zoom and pan, a viewport sized to the canvas aspect
  * ratio, and the item and advisory safe-area guide switches.
  *
- * The host owns the preview iframe (the `viewport` slot) and everything said to
- * it: it builds the preview URL from `output`, `itemGuides` and `safeAreaGuides`,
- * and keeps its own state in sync. The `controls` slot adds host controls to the
- * toolbar; the default slot sits between the toolbar and the viewport.
+ * The one editor preview shell (`GraphicsEditorPreview`) mounts it and owns the
+ * preview iframe (the `viewport` slot) and everything said to it: it builds the
+ * preview URL from `output`, `itemGuides` and `safeAreaGuides`, and keeps the
+ * frame in sync. The `controls` slot adds host controls to the toolbar; the
+ * default slot sits between the toolbar and the viewport.
+ *
+ * The `animation` slot holds the host's Graphic Animation Preview controls,
+ * behind one toolbar control that shows and hides them. They stay mounted while
+ * hidden, because they hold the run: a loop keeps playing with its controls
+ * closed, and `animationPlaying` marks the control so an author can tell why the
+ * preview is moving.
  *
  * ## Zoom and pan
  *
@@ -47,6 +54,8 @@ const props = withDefaults(defineProps<{
 	fitHeight?: string;
 	/** Whether the panel can be collapsed. Default: true. */
 	collapsible?: boolean;
+	/** Whether the host's Graphic Animation Preview has a run playing. */
+	animationPlaying?: boolean;
 }>(), {
 	collapsible: true,
 });
@@ -54,6 +63,10 @@ const props = withDefaults(defineProps<{
 const output = defineModel<ScreenOutput>('output', { default: 'overlay' });
 const itemGuides = defineModel<boolean>('itemGuides', { default: true });
 const safeAreaGuides = defineModel<boolean>('safeAreaGuides', { default: false });
+
+/** View state, like zoom: every visit starts with the animation controls closed. */
+const animationOpen = ref(false);
+const animationRegionId = useId();
 
 const stage = ref<HTMLElement | null>(null);
 const scroller = ref<HTMLElement | null>(null);
@@ -322,7 +335,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-	<ScreenSettingsCard title="Preview" :default-open="true" :collapsible="collapsible">
+	<ScreenSettingsSection title="Preview" :default-open="true" :collapsible="collapsible">
 		<template #actions="{ open }">
 			<div v-if="open" class="flex flex-wrap items-center gap-3">
 				<UFieldGroup size="sm">
@@ -380,9 +393,35 @@ onBeforeUnmount(() => {
 						data-testid="preview-zoom-level"
 					>{{ zoomLevel }}</span>
 				</div>
+				<UButton
+					v-if="$slots.animation"
+					size="sm"
+					:icon="animationPlaying ? 'i-lucide-circle-play' : 'i-lucide-clapperboard'"
+					:trailing-icon="animationOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+					:color="animationOpen || animationPlaying ? 'primary' : 'neutral'"
+					:variant="animationOpen || animationPlaying ? 'subtle' : 'outline'"
+					:aria-label="animationPlaying ? 'Animation, playing' : 'Animation'"
+					:aria-expanded="animationOpen"
+					:aria-controls="animationRegionId"
+					:title="animationPlaying ? 'An animation preview is playing' : 'Preview animation'"
+					:data-playing="animationPlaying"
+					data-testid="preview-animation-toggle"
+					@click="() => { animationOpen = !animationOpen }"
+				>
+					Animation
+				</UButton>
 				<slot name="controls" />
 			</div>
 		</template>
+
+		<div
+			v-if="$slots.animation"
+			v-show="animationOpen"
+			:id="animationRegionId"
+			data-testid="preview-animation-region"
+		>
+			<slot name="animation" />
+		</div>
 
 		<slot />
 
@@ -422,5 +461,5 @@ onBeforeUnmount(() => {
 				@pointerdown="startSurfacePan"
 			/>
 		</div>
-	</ScreenSettingsCard>
+	</ScreenSettingsSection>
 </template>

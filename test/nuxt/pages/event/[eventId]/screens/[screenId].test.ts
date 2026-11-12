@@ -1,10 +1,12 @@
-import type { PropType } from 'vue';
+import type { VueWrapper } from '@vue/test-utils';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computed, defineComponent, nextTick, reactive } from 'vue';
-import { ScreenSettingsCardStub } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { defineComponent, nextTick, reactive } from 'vue';
+import { UButtonStub, UDropdownMenuStub, UModalStub, UTooltipStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 import EditorFocusModeToggle from '~/components/Graphics/EditorFocusModeToggle.vue';
+import ScreenModeSettings from '~/components/Screen/ModeSettings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
 import { getScreenModeConfigurationPolicy, getScreenModeSettingsComponent } from '~/modules/screen-mode';
 
@@ -24,7 +26,9 @@ const route = reactive({
 });
 
 const mockEventStore = reactive({
-	event: { id: 1 },
+	event: { id: 1 } as { id: number; themeId?: string },
+	eventTheme: null,
+	holdEventTheme: vi.fn(),
 });
 
 interface PendingLoad {
@@ -40,6 +44,7 @@ const mockScreenStore = reactive({
 	subscribeToScreenPresence: vi.fn(),
 	unsubscribeFromScreenPresence: vi.fn(),
 	getConnectedCount: vi.fn(() => 0),
+	sendScreenCommand: vi.fn(async () => {}),
 	getScreenById: vi.fn((_eventId: number, screenId: number) => new Promise((resolve) => {
 		pendingLoads.push({ screenId, resolve });
 	})),
@@ -77,11 +82,6 @@ const UContainerStub = defineComponent({
 	template: '<div><slot /></div>',
 });
 
-/** The Screen-wide look, which loads its Event's Theme; here it only has to be on the page or not. */
-const ThemeTokensSettingsStub = defineComponent({
-	template: '<div data-settings-card="Screen-wide look" />',
-});
-
 /** The empty state's title, so a test can tell "not found" from the Screen's own cards. */
 const EmptyStateStub = defineComponent({
 	props: {
@@ -99,55 +99,18 @@ const SlotStub = defineComponent({
 	template: '<div><slot /></div>',
 });
 
-/**
- * The same, plus the tooltip's own words in the DOM.
- *
- * On this page the sentence saying what a hand-out carries lives in the tooltip
- * rather than on the button, so a naming test has no way to read it otherwise (#266).
- */
-const UTooltipStub = defineComponent({
-	props: {
-		text: { type: String, default: '' },
-	},
-	template: '<div :data-tooltip="text"><slot /></div>',
-});
+/** Opens the header menu behind `trigger` and chooses the item labelled `label`. */
+async function chooseMenuItem(page: VueWrapper, trigger: string, label: string) {
+	await page.get(trigger).trigger('click');
+	const item = page.findAll('[role="menuitem"]').find(entry => entry.text() === label);
+	if (!item)
+		throw new Error(`No menu item "${label}" behind ${trigger}`);
+	await item.trigger('click');
+	await flushPromises();
+}
 
-const UButtonStub = defineComponent({
-	name: 'UButton',
-	props: {
-		label: { type: String, default: '' },
-	},
-	emits: ['click'],
-	template: '<button type="button" @click="$emit(\'click\')">{{ label }}<slot /></button>',
-});
-
-/**
- * The Open menu's items as buttons, since what the page decides is the item list and
- * every hand-out reaches `openScreenOutput` through one of its `onSelect`s.
- */
-const UDropdownMenuStub = defineComponent({
-	props: {
-		items: {
-			type: Array as PropType<Array<Array<{ label: string; onSelect: (event: Event) => void }>>>,
-			default: () => [],
-		},
-	},
-	setup(props) {
-		return {
-			entries: computed(() => props.items.flat()),
-		};
-	},
-	template: `<div>
-		<button
-			v-for="entry in entries"
-			:key="entry.label"
-			type="button"
-			:data-open-output="entry.label"
-			@click="entry.onSelect($event)"
-		>{{ entry.label }}</button>
-		<slot />
-	</div>`,
-});
+const OPEN_MENU = '[data-hand-out="open"]';
+const MORE_MENU = '[data-testid="screen-actions-menu"]';
 
 function makeScreen(id: number) {
 	return {
@@ -195,10 +158,9 @@ async function mountPage(stubOverrides: Record<string, unknown> = {}) {
 				UFieldGroup: SlotStub,
 				UDropdownMenu: UDropdownMenuStub,
 				USeparator: true,
-				UPopover: true,
+				UModal: UModalStub,
 				UAlert: true,
-				ScreenSettingsCard: ScreenSettingsCardStub,
-				ScreenThemeTokensSettings: ThemeTokensSettingsStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				...stubOverrides,
 			},
 		},
@@ -416,8 +378,8 @@ describe('screen config page — degraded card data on connected outputs', () =>
 });
 
 /**
- * Wiring only: each hand-out control reaches `useScreenOutputAccessUrl`, whose own
- * suite owns fresh-per-hand-out capabilities, refusals and blocked pop-ups (#231).
+ * Wiring only: the shared hand-out owns its controls and their words, and
+ * `useScreenOutputAccessUrl` fresh-per-hand-out capabilities.
  */
 describe('screen config page — handing out this Screen’s output', () => {
 	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
@@ -479,27 +441,10 @@ describe('screen config page — handing out this Screen’s output', () => {
 		expect(mockCopyToClipboard).toHaveBeenCalledWith(accessUrl('rotated-capability'), expect.anything());
 	});
 
-	it('opens the default output in a tab it points only once asset access is in hand', async () => {
-		const outputWindow = stubOutputWindow();
-		wrapper = await mountLoadedPage();
-		mockCapabilityResponse.value = 'rotated-capability';
-
-		await wrapper.get('[data-open-output="Open output"]').trigger('click');
-		await flushPromises();
-
-		expect(window.open).toHaveBeenCalledWith('', '_blank');
-		expect(outputWindow.opener).toBeNull();
-		expect(outputWindow.location.href).toBe(accessUrl('rotated-capability'));
-		expect(outputWindow.close).not.toHaveBeenCalled();
-	});
-
-	// A Screen Mode's own outputs are handed out by a second function on this page.
 	describe('a Screen Mode’s own outputs', () => {
 		beforeEach(() => {
 			stubModePolicy({
-				outputOptions: [
-					{ label: 'Open fill output', icon: 'i-lucide-square', value: 'fill' },
-				],
+				outputs: ['fill'],
 			});
 		});
 
@@ -508,11 +453,175 @@ describe('screen config page — handing out this Screen’s output', () => {
 			wrapper = await mountLoadedPage();
 			mockCapabilityResponse.value = 'rotated-capability';
 
-			await wrapper.get('[data-open-output="Open fill output"]').trigger('click');
-			await flushPromises();
+			await chooseMenuItem(wrapper, OPEN_MENU, 'Open fill output');
 
 			expect(outputWindow.location.href).toBe(accessUrl('rotated-capability', 'fill'));
 		});
+	});
+});
+
+/**
+ * The header keeps what an operator reaches for at the top level and puts the rare
+ * and destructive actions in one menu, where Rotate and Reset still confirm.
+ */
+describe('screen config page — the Screen header', () => {
+	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
+
+	const resetConfig = vi.fn();
+	const modeSettings = { resetBlocked: false };
+
+	/** A mode's settings, exposing what the header's Reset reaches. */
+	const ModeSettingsStub = defineComponent({
+		setup(_, { expose }) {
+			expose({ resetConfig, resetBlocked: modeSettings.resetBlocked, saving: false });
+			return {};
+		},
+		template: '<div data-testid="mode-editor" />',
+	});
+
+	beforeEach(() => {
+		pendingLoads = [];
+		route.params.screenId = '1';
+		mockScreenStore.screens = [];
+		mockScreenStore.sendScreenCommand.mockClear();
+		modeSettings.resetBlocked = false;
+		resetConfig.mockClear();
+		stubModePolicy({ displayType: 'overlay', outputs: [] });
+		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => ModeSettingsStub as never);
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({ assetCapability: 'rotated-capability' });
+	});
+
+	afterEach(() => {
+		wrapper?.unmount();
+		wrapper = null;
+		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => null);
+	});
+
+	async function mountLoadedPage() {
+		wrapper = await mountPage();
+		await flushPromises();
+		resolveLoad(1, makeScreen(1));
+		await flushPromises();
+		return wrapper;
+	}
+
+	function rotations() {
+		return mockApiFetch.mock.calls.filter(([path, options]) =>
+			path === '/api/events/1/screens/1/asset-capability' && options?.method === 'POST');
+	}
+
+	function dialogButton(page: VueWrapper, label: string) {
+		const button = page.findAll('[role="dialog"] button').find(entry => entry.text() === label);
+		if (!button)
+			throw new Error(`No "${label}" button in an open dialog`);
+		return button;
+	}
+
+	it('offers the output hand-out, Refresh and one menu at the top level, in that order', async () => {
+		const page = await mountLoadedPage();
+
+		expect(page.findAll('[data-header-action]').map(action => action.attributes('data-header-action'))).toEqual([
+			'hand-out',
+			'refresh',
+			'more',
+		]);
+	});
+
+	it('holds Identify, Debug, Rotate Asset Access and Reset mode settings in the one menu', async () => {
+		const page = await mountLoadedPage();
+
+		await page.get(MORE_MENU).trigger('click');
+
+		expect(page.findAll('[role="menuitem"]').map(item => item.text())).toEqual([
+			'Identify',
+			'Debug',
+			'Rotate Asset Access',
+			'Reset mode settings',
+		]);
+	});
+
+	it('refreshes the Screen\'s outputs on one click', async () => {
+		const page = await mountLoadedPage();
+
+		await page.get('[data-header-action="refresh"]').trigger('click');
+		await flushPromises();
+
+		expect(mockScreenStore.sendScreenCommand).toHaveBeenCalledExactlyOnceWith(1, 'refresh');
+	});
+
+	it.each([
+		{ item: 'Identify', command: 'identify' },
+		{ item: 'Debug', command: 'debug' },
+	])('sends $command when $item is chosen from the menu', async ({ item, command }) => {
+		const page = await mountLoadedPage();
+
+		await chooseMenuItem(page, MORE_MENU, item);
+
+		expect(mockScreenStore.sendScreenCommand).toHaveBeenCalledExactlyOnceWith(1, command);
+	});
+
+	// Choosing a destructive item only asks; the write waits for the dialog's own button.
+	describe.each([
+		{
+			item: 'Rotate Asset Access',
+			confirm: 'Rotate Access',
+			writes: () => rotations().length,
+		},
+		{
+			item: 'Reset mode settings',
+			confirm: 'Reset',
+			writes: () => resetConfig.mock.calls.length,
+		},
+	])('$item', ({ item, confirm, writes }) => {
+		it('asks before it writes, and writes once confirmed', async () => {
+			const page = await mountLoadedPage();
+
+			await chooseMenuItem(page, MORE_MENU, item);
+
+			expect(page.get('[role="dialog"]').attributes('aria-label')).toBe(item);
+			expect(writes()).toBe(0);
+
+			await dialogButton(page, confirm).trigger('click');
+			await flushPromises();
+
+			expect(writes()).toBe(1);
+			expect(page.find('[role="dialog"]').exists()).toBe(false);
+		});
+
+		it('writes nothing when cancelled', async () => {
+			const page = await mountLoadedPage();
+
+			await chooseMenuItem(page, MORE_MENU, item);
+			await dialogButton(page, 'Cancel').trigger('click');
+			await flushPromises();
+
+			expect(page.find('[role="dialog"]').exists()).toBe(false);
+			expect(writes()).toBe(0);
+		});
+	});
+
+	it('keeps the rotation dialog open when the rotation fails, so it can be retried', async () => {
+		mockApiFetch.mockRejectedValue(new Error('offline'));
+		const page = await mountLoadedPage();
+
+		await chooseMenuItem(page, MORE_MENU, 'Rotate Asset Access');
+		await dialogButton(page, 'Rotate Access').trigger('click');
+		await flushPromises();
+
+		expect(page.find('[role="dialog"]').exists()).toBe(true);
+	});
+
+	// A graphics host's reset is an authoring write: without the lease it is not offered.
+	it('disables Reset mode settings, with the reason, while the mode\'s settings block it', async () => {
+		modeSettings.resetBlocked = true;
+		const page = await mountLoadedPage();
+
+		await page.get(MORE_MENU).trigger('click');
+		const reset = page.findAll('[role="menuitem"]').find(entry => entry.text() === 'Reset mode settings')!;
+
+		expect(reset.attributes('disabled')).toBeDefined();
+		expect(reset.attributes('aria-description')).toBe('Another session is editing this Screen\'s graphics');
 	});
 });
 
@@ -543,7 +652,7 @@ describe('screen config page — Editor Focus Mode', () => {
 		mockScreenStore.screens = [];
 		mockScreenStore.screenPresence = new Map();
 		focusMode.enabled.value = false;
-		stubModePolicy({ displayType: 'overlay', outputOptions: [] });
+		stubModePolicy({ displayType: 'overlay', outputs: [] });
 	});
 
 	afterEach(() => {
@@ -567,14 +676,12 @@ describe('screen config page — Editor Focus Mode', () => {
 		const page = await mountLoadedPage(GraphicsEditorStub);
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
-		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
-		expect(page.find('[data-settings-card="Screen-wide look"]').exists()).toBe(true);
+		expect(page.find('[data-testid="output-hand-out"]').exists()).toBe(true);
 
 		await page.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('true');
-		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(false);
-		expect(page.find('[data-settings-card="Screen-wide look"]').exists()).toBe(false);
+		expect(page.find('[data-testid="output-hand-out"]').exists()).toBe(false);
 		expect(page.find('[data-testid="mode-editor"]').exists()).toBe(true);
 		expect(page.get('[data-testid="focused-screen-name"]').text()).toBe('Screen 1');
 		expect(page.text()).toContain('Back to Screens');
@@ -585,7 +692,7 @@ describe('screen config page — Editor Focus Mode', () => {
 		const page = await mountLoadedPage(GraphicsEditorStub);
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('true');
-		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(false);
+		expect(page.find('[data-testid="output-hand-out"]').exists()).toBe(false);
 	});
 
 	it('exits Focus Mode from the same toggle', async () => {
@@ -595,7 +702,7 @@ describe('screen config page — Editor Focus Mode', () => {
 		await page.get('[data-testid="editor-focus-mode-toggle"]').trigger('click');
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
-		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
+		expect(page.find('[data-testid="output-hand-out"]').exists()).toBe(true);
 	});
 
 	it('ignores the remembered choice for a mode whose settings offer no Focus Mode', async () => {
@@ -603,27 +710,28 @@ describe('screen config page — Editor Focus Mode', () => {
 		const page = await mountLoadedPage(PlainSettingsStub);
 
 		expect(page.get('[data-testid="layout"]').attributes('data-focus')).toBe('false');
-		expect(page.find('[data-testid="open-output-menu"]').exists()).toBe(true);
+		expect(page.find('[data-testid="output-hand-out"]').exists()).toBe(true);
 		expect(page.find('[data-testid="focused-screen-name"]').exists()).toBe(false);
 	});
 });
 
 /**
- * A plain overlay mode's page ends with Background & Placement, then the
- * Screen-wide look, each closed unless it holds a layer or an override (#970).
+ * A plain overlay mode's page ends with Background & Placement, closed unless
+ * it holds a layer or an override. No card lists the Foundation Tokens a
+ * Screen takes from its Theme alone.
  */
-describe('screen config page — Background & Placement, then the Screen-wide look', () => {
+describe('screen config page — live actions first, Background & Placement last', () => {
 	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
 
 	const ModeSettingsStub = defineComponent({
-		template: '<section data-settings-card="Mode settings" />',
+		template: '<section data-section="Mode settings" />',
 	});
 
 	beforeEach(() => {
 		pendingLoads = [];
 		route.params.screenId = '1';
 		mockScreenStore.screenPresence = new Map();
-		stubModePolicy({ displayType: 'overlay', outputOptions: [] });
+		stubModePolicy({ displayType: 'overlay', outputs: [] });
 		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => ModeSettingsStub as never);
 	});
 
@@ -631,10 +739,20 @@ describe('screen config page — Background & Placement, then the Screen-wide lo
 		wrapper?.unmount();
 		wrapper = null;
 		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => null);
+		mockEventStore.event = { id: 1 };
 	});
 
-	// Each card's own open rule is tested at its home; this shows the page wires the Screen to both.
-	it('orders the cards after the mode\'s settings, each opening on what it holds', async () => {
+	// The card's own open rule is tested at its home; this shows the page wires the Screen to it,
+	// and holds the one Screen Theme Override instance it reads the Event's Theme through.
+	it('ends with Background & Placement, opening on what it holds, over one read of the Event\'s Theme', async () => {
+		mockEventStore.event = { id: 1, themeId: 'brand' };
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({
+			id: 'brand',
+			name: 'Brand',
+			tokens: {},
+			revision: 1,
+		});
 		const themeOverrides = { inset: 40 };
 		const screen = {
 			...makeScreen(1),
@@ -643,19 +761,51 @@ describe('screen config page — Background & Placement, then the Screen-wide lo
 			themeOverrides,
 		};
 		mockScreenStore.screens = [screen];
-		wrapper = await mountPage({ ScreenThemeTokensSettings: false });
+		wrapper = await mountPage();
 		await flushPromises();
 		resolveLoad(1, screen);
 		await flushPromises();
 
-		const cards = wrapper.findAll('[data-settings-card]');
-		expect(cards.map(card => card.attributes('data-settings-card'))).toEqual([
+		const cards = wrapper.findAll('[data-section]');
+		expect(cards.map(card => card.attributes('data-section'))).toEqual([
 			'Mode settings',
 			'Background & Placement',
-			'Screen-wide look',
 		]);
-		expect(cards.slice(1).map(card => card.attributes('data-default-open'))).toEqual(['true', 'false']);
+		expect(cards[1]!.attributes('data-default-open')).toBe('true');
 		expect(wrapper.findAll('[data-token="inset"]')).toHaveLength(1);
 		expect(wrapper.findAll('[data-token="alignment"]')).toHaveLength(1);
+		expect(mockApiFetch.mock.calls.filter(([path]) => path === '/api/themes/brand')).toHaveLength(1);
+	});
+
+	// The cards' order is the renderer's to test; this shows the page adds no card before
+	// the mode's Live card, and none, such as a Screen-wide look, after Background & Placement.
+	it('opens on the mode\'s live actions and closes on Background & Placement', async () => {
+		mockEventStore.event = { id: 1, themeId: 'brand' };
+		mockApiFetch.mockReset();
+		mockApiFetch.mockResolvedValue({
+			id: 'brand',
+			name: 'Brand',
+			tokens: {},
+			revision: 1,
+		});
+		vi.mocked(getScreenModeSettingsComponent).mockImplementation(() => ScreenModeSettings as never);
+		const screen = {
+			...makeScreen(1),
+			currentMode: 'top-cut',
+			modeConfigs: {
+				'top-cut': { bracketSource: 'manual' },
+			},
+			themeOverrides: {},
+		};
+		mockScreenStore.screens = [screen];
+		wrapper = await mountPage();
+		await flushPromises();
+		resolveLoad(1, screen);
+		await flushPromises();
+
+		const titles = wrapper.findAll('section[data-section]').map(card => card.attributes('data-section'));
+		expect(titles[0]).toBe('Live');
+		expect(titles.at(-1)).toBe('Background & Placement');
+		expect(titles.filter(title => title === 'Background & Placement')).toHaveLength(1);
 	});
 });
