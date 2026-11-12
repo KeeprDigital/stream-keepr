@@ -244,3 +244,89 @@ describe('a Feature Match Assignment', () => {
 		expect(publishMessage).not.toHaveBeenCalled();
 	});
 });
+
+// Saving a different Match over a Slot's Assignment ends it. A Note on it is
+// lost only to an operator who confirmed that very version.
+describe('saving over an Assignment carrying a Note', () => {
+	async function stageNotedSlot() {
+		const { stage, held } = await stageRoundHolding([
+			['slot1', 'matchM'],
+		]);
+		const noted = await featureMatchAssignmentModule().update(stage.eventId, held[0]!.id, { note: 'Protect direct saves too' }, ORIGIN);
+		publishMessage.mockClear();
+		return {
+			stage,
+			noted,
+			replacement: { roundId: stage.roundId, slotId: stage.slot1, matchId: stage.matchN },
+			reviewed: {
+				assignmentId: noted.id,
+				updatedAt: new Date(noted.updatedAt),
+			},
+		};
+	}
+
+	it('is refused, naming the Note and its Match, and stores and announces nothing', async () => {
+		const { stage, noted, replacement } = await stageNotedSlot();
+
+		await expect(featureMatchAssignmentModule().save(stage.eventId, replacement, ORIGIN)).rejects.toMatchObject({
+			statusCode: 409,
+			data: {
+				code: 'feature-match-note-discard-required',
+				assignments: [
+					{
+						assignment: { id: noted.id, note: 'Protect direct saves too' },
+						match: { id: stage.matchM },
+					},
+				],
+			},
+		});
+
+		expect(await featureMatchAssignmentModule().listByRound(stage.eventId, stage.roundId)).toMatchObject({
+			featureMatchAssignments: [
+				{ id: noted.id, matchId: stage.matchM, note: 'Protect direct saves too' },
+			],
+		});
+		expect(publishMessage).not.toHaveBeenCalled();
+	});
+
+	it('replaces it with an Assignment holding no Note, once exactly the version reviewed is confirmed', async () => {
+		const { stage, noted, replacement, reviewed } = await stageNotedSlot();
+
+		const saved = await featureMatchAssignmentModule().save(stage.eventId, {
+			...replacement,
+			confirmedNoteDiscards: [reviewed],
+		}, ORIGIN);
+
+		expect(saved).toMatchObject({ slotId: stage.slot1, matchId: stage.matchN, note: null });
+		expect(publishMessage.mock.calls).toEqual([
+			announced(stage.eventId, 'created', saved),
+			announcedDeleted(stage.eventId, noted.id),
+		]);
+	});
+
+	it('answers a confirmation of an earlier version with the Note as it now stands, announcing nothing', async () => {
+		const { stage, noted, replacement, reviewed } = await stageNotedSlot();
+		await db.update(schema.featureMatchAssignments)
+			.set({
+				note: 'Edited since',
+				updatedAt: new Date(reviewed.updatedAt.getTime() + 1000),
+			})
+			.where(eq(schema.featureMatchAssignments.id, noted.id));
+
+		await expect(featureMatchAssignmentModule().save(stage.eventId, {
+			...replacement,
+			confirmedNoteDiscards: [reviewed],
+		}, ORIGIN)).rejects.toMatchObject({
+			statusCode: 409,
+			data: {
+				code: 'feature-match-note-discard-required',
+				assignments: [
+					{
+						assignment: { id: noted.id, note: 'Edited since' },
+					},
+				],
+			},
+		});
+		expect(publishMessage).not.toHaveBeenCalled();
+	});
+});

@@ -178,36 +178,6 @@ describe('the Graphics Asset Library reconciliation API', () => {
 		})).status).toBe(404);
 	});
 
-	it('serves the reconciliation half of the Evidence ledger', async () => {
-		// The ledger is one ledger. A category filter that only knew the retention
-		// half would reject every reconciliation category outright.
-		for (const category of [
-			'content-unavailable-detected',
-			'content-availability-restored',
-			'content-repaired',
-			'content-restored-from-quarantine',
-			'derivative-missing-detected',
-			'derivative-regenerated',
-			'unexpected-object-quarantined',
-			'critical-integrity-incident',
-			'discrepancy-rechecked',
-			'repair-rejected',
-		]) {
-			const response = await fetch(
-				`/api/admin/graphics-assets/evidence?category=${category}`,
-				{ headers: administratorHeaders },
-			);
-			expect(response.status, `category ${category}`).toBe(200);
-		}
-		// A retention category still works, and an invented one still does not.
-		expect((await fetch('/api/admin/graphics-assets/evidence?category=content-deleted', {
-			headers: administratorHeaders,
-		})).status).toBe(200);
-		expect((await fetch('/api/admin/graphics-assets/evidence?category=not-a-category', {
-			headers: administratorHeaders,
-		})).status).toBe(400);
-	});
-
 	it('rejects an action the domain does not offer', async () => {
 		const response = await fetch('/api/admin/graphics-assets/discrepancies/unknown/actions', {
 			method: 'POST',

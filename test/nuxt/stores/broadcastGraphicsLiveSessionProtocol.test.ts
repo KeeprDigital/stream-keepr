@@ -7,7 +7,7 @@ import type { BroadcastGraphicsModeConfig } from '~~/shared/types/screenConfig';
 import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { drizzle } from 'drizzle-orm/d1';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import * as schema from '~~/server/db/schema';
 import { broadcastGraphicInputsState } from '~~/shared/modules/broadcast-graphics-live-session';
@@ -310,6 +310,10 @@ beforeAll(async () => {
 	sessionId = (await broadcastGraphicsLiveSessionModule().loadSession(eventId, screenId)).id;
 });
 
+afterEach(() => {
+	vi.useRealTimers();
+});
+
 afterAll(async () => await harness.close());
 
 describe('what a Broadcast Graphics Live Session publishes and what its store merges', () => {
@@ -379,12 +383,14 @@ describe('what a Broadcast Graphics Live Session publishes and what its store me
 		});
 		expect(notification.sequence).toBeGreaterThan(before);
 
+		// On the test's clock from here: whatever the handler started, promise or timer,
+		// is run to its end rather than waited for.
+		vi.useFakeTimers();
 		realtimeHandlersFor(ORIGIN_CONNECTION_ID)['broadcastGraphicsLiveSession:commandApplied'](
 			notification,
 			undefined,
 		);
-		// A macrotask, so anything the handler had started would have run by now.
-		await new Promise(resolve => setTimeout(resolve, 0));
+		await vi.runAllTimersAsync();
 
 		expect(store.sessions.get(screenId)?.sequence).toBe(before);
 		// Dropped rather than deferred: a drop that reloaded instead would hide itself

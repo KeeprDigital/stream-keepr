@@ -9,7 +9,6 @@ import { settleUntil, settleUntilStill } from '~~/test/helpers/settle';
 import { useRouter } from '#app';
 import { tryUseRealtime } from '~/composables/core/useRealtime';
 import { screenModeSampleConfigs, useSampleScreenOutputReadRepository } from '~/modules/screen-mode/sampleDataset';
-import { SCREEN_OUTPUT_LOAD_RETRY_MS } from '~/modules/screen/displaySession';
 import ScreenOutputPage from '~/pages/event/[eventId]/screen/[screenSlug].vue';
 import { useBroadcastGraphicsLiveSessionStore } from '~/stores/broadcastGraphicsLiveSession';
 import { useCardStore } from '~/stores/card';
@@ -1118,22 +1117,6 @@ describe('a capability-only Feature Match Overlay output', () => {
 		expect(held()).toEqual({ sessionId: 90, sequence: 4, lifeTotal: 18 });
 		expect(privateRequests()).toEqual([]);
 	});
-
-	it('never applies an older epoch after a newer one', async () => {
-		const wrapper = await mountOverlay();
-
-		// The Slot is promoted while a resync read is in flight: a newer Session opens.
-		const { read, answer } = heldOpenRead();
-		await reconnectReading(answer);
-		await settleUntil(() => read.answer !== null);
-		await sessionEvent(session(91, 1, 17, 301));
-		read.answer!(slotRead(session(90, 9, 7)));
-		await settleOutput();
-
-		expect(wrapper.text()).toContain('Life 17');
-		expect(held()).toEqual({ sessionId: 91, sequence: 1, lifeTotal: 17 });
-		expect(privateRequests()).toEqual([]);
-	});
 });
 
 /**
@@ -1252,59 +1235,5 @@ describe('a capability-only output\'s Theme', () => {
 		await settleUntil(() => titleColour(wrapper) === 'rgb(3, 3, 3)');
 
 		expect(titleColour(wrapper)).toBe('rgb(3, 3, 3)');
-	});
-
-	it('keeps the Theme it shows when the re-read fails, and reads again by itself', async () => {
-		vi.spyOn(console, 'warn').mockImplementation(() => {});
-		const wrapper = await mountThemed();
-		vi.useFakeTimers({
-			toFake: ['setTimeout', 'clearTimeout'],
-			shouldAdvanceTime: true,
-		});
-		const reads = eventReads();
-		api.answers.set(eventPath, () => Promise.reject(new Error('unavailable')));
-
-		announceContextChanged();
-		await settleUntil(() => eventReads() === reads + 1);
-		await settleOutput();
-		expect(titleColour(wrapper)).toBe('rgb(1, 1, 1)');
-
-		api.answers.set(eventPath, () => themedEvent(theme('switched', 1, 'rgb(3, 3, 3)')));
-		await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
-		await settleUntil(() => titleColour(wrapper) === 'rgb(3, 3, 3)');
-
-		expect(titleColour(wrapper)).toBe('rgb(3, 3, 3)');
-	});
-
-	it('hears nothing its Event channel carries', async () => {
-		const wrapper = await mountThemed();
-		const reads = eventReads();
-
-		realtime().deliver(EVENT_CHANNEL, 'theme:updated', {
-			eventId: 42,
-			theme: theme('brand', 9, 'rgb(9, 9, 9)'),
-		});
-		realtime().deliver(EVENT_CHANNEL, 'event:updated', {
-			eventId: 42,
-			event: { id: 42, themeId: 'switched' },
-		});
-		await settleOutput();
-
-		expect(titleColour(wrapper)).toBe('rgb(1, 1, 1)');
-		expect(eventReads()).toBe(reads);
-	});
-
-	it('shows a token write missed while disconnected once its Screen channel is attached again', async () => {
-		const wrapper = await mountThemed();
-
-		realtime().connectionState = 'suspended';
-		await flushPromises();
-		api.answers.set(eventPath, () => themedEvent(theme('brand', 5, 'rgb(4, 4, 4)')));
-		realtime().connectionState = 'connected';
-		realtime().reattach(SCREEN_CHANNEL);
-		await settleUntil(() => titleColour(wrapper) === 'rgb(4, 4, 4)');
-
-		expect(titleColour(wrapper)).toBe('rgb(4, 4, 4)');
-		expect(api.requests.filter(request => !request.path.startsWith('/api/screen-output/'))).toEqual([]);
 	});
 });

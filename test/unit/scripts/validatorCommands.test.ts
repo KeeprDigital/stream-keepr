@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises';
 import { describe, expect, it, vi } from 'vitest';
 import {
 	createWranglerCommands,
@@ -17,8 +18,13 @@ const TARGET = {
 	validatorConfigPath: '/repo/validator/wrangler.jsonc',
 };
 
+/** A stand-in Wrangler: it downloads an empty object to a `get`'s `--file`, and exits with `result`. */
 function adapter(result = { code: 0, stdout: '' }) {
-	const execute = vi.fn(async (_argv: string[], _options: { cwd: string; env: Record<string, string | undefined> }) => result);
+	const execute = vi.fn(async (argv: string[], _options: { cwd: string; env: Record<string, string | undefined> }) => {
+		if (argv.includes('get'))
+			await writeFile(argv[argv.indexOf('--file') + 1]!, '');
+		return result;
+	});
 	const commands = createWranglerCommands({
 		repoRoot: '/repo',
 		execute,
@@ -28,57 +34,64 @@ function adapter(result = { code: 0, stdout: '' }) {
 }
 
 describe('the validator command adapter', () => {
-	it('runs every remote command on the target\'s account, bucket, Workflow and config', async () => {
+	type Commands = ReturnType<typeof adapter>['commands'];
+
+	/** Each command as the gate calls it on a deployed target, and what its arguments must name: the target's bucket or Workflow, and for an object the remote store. */
+	const REMOTE: Record<string, { run: (commands: Commands) => Promise<unknown>; names: string[] }> = {
+		probeBucket: {
+			run: commands => commands.probeBucket({ target: TARGET }),
+			names: [TARGET.stagingBucket],
+		},
+		probeWorkflow: {
+			run: commands => commands.probeWorkflow({ target: TARGET }),
+			names: [TARGET.workflow],
+		},
+		putObject: {
+			run: commands => commands.putObject({
+				target: TARGET,
+				key: 'some/key',
+				bytes: new Uint8Array([1]),
+				contentType: 'video/mp4',
+			}),
+			names: [`${TARGET.stagingBucket}/some/key`, '--remote'],
+		},
+		getObject: {
+			run: commands => commands.getObject({ target: TARGET, key: 'some/key' }),
+			names: [`${TARGET.stagingBucket}/some/key`, '--remote'],
+		},
+		deleteObject: {
+			run: commands => commands.deleteObject({ target: TARGET, key: 'some/key' }),
+			names: [`${TARGET.stagingBucket}/some/key`, '--remote'],
+		},
+		triggerWorkflow: {
+			run: commands => commands.triggerWorkflow({
+				target: TARGET,
+				id: 'an-id',
+				params: { a: 1 },
+			}),
+			names: [TARGET.workflow],
+		},
+		describeInstance: {
+			run: commands => commands.describeInstance({ target: TARGET, id: 'an-id' }),
+			names: [TARGET.workflow],
+		},
+	};
+
+	// Every command the adapter has, so one added without a row here fails.
+	it.each(Object.keys(adapter().commands))('%s reaches a deployed target on its own account and config, naming its bucket or Workflow', async (command) => {
 		const { execute, commands } = adapter();
+		expect(REMOTE).toHaveProperty(command);
+		const { run, names } = REMOTE[command]!;
 
-		await commands.deleteObject({ target: TARGET, key: 'some/key' });
-		await commands.triggerWorkflow({
-			target: TARGET,
-			id: 'an-id',
-			params: { a: 1 },
-		});
-		await commands.probeBucket({ target: TARGET });
-		await commands.probeWorkflow({ target: TARGET });
+		await run(commands);
 
-		expect(execute.mock.calls.map(([argv]) => argv)).toEqual([
-			[
-				'r2',
-				'object',
-				'delete',
-				'a-staging-bucket/some/key',
-				'--remote',
-				'--config',
-				TARGET.validatorConfigPath,
-			],
-			[
-				'workflows',
-				'trigger',
-				'a-workflow',
-				'{"a":1}',
-				'--id',
-				'an-id',
-				'--config',
-				TARGET.validatorConfigPath,
-			],
-			[
-				'r2',
-				'bucket',
-				'info',
-				'a-staging-bucket',
-				'--config',
-				TARGET.validatorConfigPath,
-			],
-			[
-				'workflows',
-				'describe',
-				'a-workflow',
-				'--config',
-				TARGET.validatorConfigPath,
-			],
-		]);
-		for (const [, options] of execute.mock.calls) {
+		expect(execute).toHaveBeenCalled();
+		for (const [argv, options] of execute.mock.calls) {
 			expect(options.env.CLOUDFLARE_ACCOUNT_ID).toBe(TARGET.accountId);
 			expect(options.cwd).toBe('/repo');
+			expect(argv[argv.indexOf('--config') + 1]).toBe(TARGET.validatorConfigPath);
+			expect(argv).toEqual(expect.arrayContaining(names));
+			expect(argv).not.toContain('--local');
 		}
 	});
 

@@ -7,8 +7,7 @@
  */
 
 import { mountSuspended } from '@nuxt/test-utils/runtime';
-import { flushPromises } from '@vue/test-utils';
-import { describe, expect, it, onTestFailed, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFailed, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 import { UIcon } from '#components';
 import { assertEveryIconBundled } from './failOnUnbundledIcon';
@@ -16,14 +15,12 @@ import { assertEveryIconBundled } from './failOnUnbundledIcon';
 const UNBUNDLED = 'i-lucide-not-in-the-client-bundle';
 
 /**
- * Long enough for an unguarded load to have failed and logged: Iconify rejects
- * a missing icon within a few ticks, and without the guard this window caught
- * the `[Icon] failed to load icon` line every time.
+ * Past an unguarded load's failure: Iconify rejects a missing icon through
+ * zero-delay timers of its own, and `@nuxt/icon` then logs. On a fake clock
+ * started before the mount, so a loaded machine cannot outlast the window.
  */
 async function settle() {
-	await flushPromises();
-	await new Promise(resolve => setTimeout(resolve, 50));
-	await flushPromises();
+	await vi.advanceTimersByTimeAsync(50);
 }
 
 function iconHost(name: string) {
@@ -33,6 +30,10 @@ function iconHost(name: string) {
 }
 
 describe('unbundled icon guard', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it('names an icon the test client bundle lacks', async () => {
 		await mountSuspended(iconHost(UNBUNDLED));
 
@@ -47,6 +48,9 @@ describe('unbundled icon guard', () => {
 
 	it('keeps @nuxt/icon from logging the failure', async () => {
 		const warn = vi.spyOn(console, 'warn');
+		vi.useFakeTimers({
+			toFake: ['setTimeout', 'clearTimeout'],
+		});
 
 		await mountSuspended(iconHost(UNBUNDLED));
 		await settle();

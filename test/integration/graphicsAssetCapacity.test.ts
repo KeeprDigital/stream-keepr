@@ -42,18 +42,6 @@ describe('the Graphics Asset Library Capacity API', () => {
 		expect(response.status).toBe(403);
 	});
 
-	it('lets an administrator read the same occupancy an author reads', async () => {
-		const authorRead = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
-			headers: { cookie: authorCookie },
-		});
-		const administratorRead = await $fetch<GraphicsAssetLibraryCapacity>(
-			'/api/admin/graphics-assets/capacity',
-			{ headers: administratorHeaders },
-		);
-
-		expect(administratorRead).toEqual(authorRead);
-	});
-
 	it('exposes author-readable capacity while changes remain on the administrator surface', async () => {
 		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
 			headers: { cookie: authorCookie },
@@ -85,9 +73,15 @@ describe('the Graphics Asset Library Capacity API', () => {
 				canonical: { limitBytes: updatedLimits.canonicalLimitBytes },
 				staging: { limitBytes: updatedLimits.stagingLimitBytes },
 			});
+			// An author and an administrator read the one occupancy.
 			await expect(
 				$fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
 					headers: { cookie: authorCookie },
+				}),
+			).resolves.toEqual(updated);
+			await expect(
+				$fetch<GraphicsAssetLibraryCapacity>('/api/admin/graphics-assets/capacity', {
+					headers: administratorHeaders,
 				}),
 			).resolves.toEqual(updated);
 		}

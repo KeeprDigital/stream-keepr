@@ -8,31 +8,33 @@ import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 // stores, each once: a Mode Token in the Screen Settings Group it names, a
 // host token in Background & Placement (ADR-0072).
 
-const MODES = SCREEN_MODE_VALUES.map(mode => [mode] as const);
-
 describe('where a Screen settings page renders each Theme Token', () => {
-	it.each(MODES)('places each %s token an override write stores, exactly once', (mode) => {
-		const placed = placeScreenThemeTokens(mode);
-		const tokens = [
-			...Object.values(placed.groups).flat(),
-			...placed.placement,
-		];
-		const stored = [
-			...Object.keys(screenModeTokens(mode)),
-			...Object.keys(FOUNDATION_TOKENS),
-		].filter((name) => {
-			const write = parseScreenThemeOverrideWrite(mode, name, null);
-			return write.ok && !write.dropped;
-		});
+	it('places each token an override write stores, exactly once, in every mode', () => {
+		for (const mode of SCREEN_MODE_VALUES) {
+			const placed = placeScreenThemeTokens(mode);
+			const tokens = [
+				...Object.values(placed.groups).flat(),
+				...placed.placement,
+			];
+			const stored = [
+				...Object.keys(screenModeTokens(mode)),
+				...Object.keys(FOUNDATION_TOKENS),
+			].filter((name) => {
+				const write = parseScreenThemeOverrideWrite(mode, name, null);
+				return write.ok && !write.dropped;
+			});
 
-		expect(tokens).toHaveLength(new Set(tokens).size);
-		expect([...tokens].sort()).toEqual(stored.sort());
+			expect(tokens, mode).toHaveLength(new Set(tokens).size);
+			expect([...tokens].sort(), mode).toEqual(stored.sort());
+		}
 	});
 
-	it.each(MODES)('places every %s Mode Token in a group its config contract declares', (mode) => {
-		const declared = Object.keys(screenModeConfigContract(mode).groups);
+	it('places every Mode Token in a group its mode\'s config contract declares', () => {
+		for (const mode of SCREEN_MODE_VALUES) {
+			const declared = Object.keys(screenModeConfigContract(mode).groups);
 
-		expect(declared).toEqual(expect.arrayContaining(Object.keys(placeScreenThemeTokens(mode).groups)));
+			expect(declared, mode).toEqual(expect.arrayContaining(Object.keys(placeScreenThemeTokens(mode).groups)));
+		}
 	});
 
 	it('places a Mode Token in the group it names, in declaration order', () => {

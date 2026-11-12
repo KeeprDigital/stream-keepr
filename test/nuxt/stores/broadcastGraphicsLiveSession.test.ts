@@ -2,7 +2,7 @@ import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broad
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { MessageData } from '~/types/realtime';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { callsTo } from '~~/test/helpers/lastCallTo';
@@ -129,6 +129,16 @@ beforeEach(() => {
 	for (const call of Object.values(mockRepository))
 		call.mockReset();
 	mockRepository.getSession.mockResolvedValue(session());
+	// This browser's clock holds still, so every phase window is measured from one
+	// instant however long a test takes; only `mockServerTimeOffset` moves time.
+	vi.useFakeTimers({
+		toFake: ['Date'],
+		now: 1_700_000_000_000,
+	});
+});
+
+afterEach(() => {
+	vi.useRealTimers();
 });
 
 describe('broadcastGraphicsLiveSessionStore', () => {

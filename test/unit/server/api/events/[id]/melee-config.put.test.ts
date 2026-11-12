@@ -11,8 +11,6 @@ const mockUpdateMeleeConfig = vi.fn();
 const mockFetchMeleeEvent = vi.fn();
 const mockRequireMeleeIntegration = vi.fn();
 const mockPublishEventUpdated = vi.fn();
-const mockPublishMeleeDataReset = vi.fn();
-const mockPublishScreenUpdated = vi.fn();
 const mockGetOriginConnectionId = vi.fn();
 const mockAcquireMeleeSyncLease = vi.fn();
 const mockReleaseMeleeSyncLease = vi.fn();
@@ -55,8 +53,6 @@ vi.mock('~~/server/services/meleeIntegration', () => ({
 vi.mock('~~/server/modules/event-data-publication', () => ({
 	eventDataPublicationModule: () => ({
 		eventUpdated: mockPublishEventUpdated,
-		meleeDataReset: mockPublishMeleeDataReset,
-		screenUpdated: mockPublishScreenUpdated,
 	}),
 }));
 vi.mock('~~/server/utils/ably', () => ({
@@ -71,8 +67,9 @@ const handler = (await import('~~/server/api/events/[id]/melee-config.put')).def
 
 // Distinguishable from the bare `{}` other rows pass to `setResponseHeader`.
 const requestEvent = { __requestEventFor: 'melee-config' } as any;
-const noKeptStructure = { keptPhases: [], keptRounds: [] };
 
+// The upstream and keyring failures only a stand-in can force, and the answer each
+// becomes. What the route stores, resets and announces is `melee-config.put.sqlite.test.ts`'s.
 describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 	beforeEach(() => {
 		mockGetValidatedRouterParams.mockReset().mockResolvedValue({ id: 1 });
@@ -95,7 +92,10 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 				meleeEventId: '123',
 				meleeClientSecret: 'new-envelope',
 			});
-		mockUpdateMeleeConfig.mockReset().mockResolvedValue({ clearedScreens: [], keptStructure: noKeptStructure });
+		mockUpdateMeleeConfig.mockReset().mockResolvedValue({
+			clearedScreens: [],
+			keptStructure: { keptPhases: [], keptRounds: [] },
+		});
 		mockFetchMeleeEvent.mockReset().mockResolvedValue({ ID: 123, Game: 'Magic: The Gathering' });
 		mockRequireMeleeIntegration.mockReset().mockResolvedValue({
 			clientId: 'client-id',
@@ -103,7 +103,6 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 			eventId: '123',
 		});
 		mockPublishEventUpdated.mockReset().mockResolvedValue({ id: 1, meleeConfigured: true });
-		mockPublishMeleeDataReset.mockReset().mockResolvedValue(undefined);
 		mockGetOriginConnectionId.mockReset().mockReturnValue('origin-1');
 		mockAcquireMeleeSyncLease.mockReset().mockResolvedValue({
 			token: 'config-token',
@@ -112,175 +111,6 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		});
 		mockReleaseMeleeSyncLease.mockReset().mockResolvedValue(true);
 		mockSetResponseHeader.mockReset();
-	});
-
-	it('decrypts an existing envelope for validation and re-saves plaintext through the encrypting service boundary', async () => {
-		await expect(handler({} as any)).resolves.toEqual({ id: 1, meleeConfigured: true });
-		expect(mockRequireMeleeIntegration).toHaveBeenCalledWith({
-			meleeEnabled: true,
-			meleeEventId: '123',
-			meleeClientId: 'client-id',
-			meleeClientSecret: 'stored-envelope',
-		});
-		expect(mockUpdateMeleeConfig).toHaveBeenCalledWith(1, {
-			meleeEnabled: true,
-			meleeEventId: '123',
-			meleeClientId: 'client-id',
-			meleeClientSecret: 'decrypted-client-secret',
-		});
-		expect(mockAcquireMeleeSyncLease).toHaveBeenCalledWith(1, 'configuration');
-		expect(mockAcquireMeleeSyncLease.mock.invocationCallOrder[0]).toBeLessThan(
-			mockFindEvent.mock.invocationCallOrder[0]!,
-		);
-		expect(mockReleaseMeleeSyncLease).toHaveBeenCalledWith(1, 'config-token');
-		expect(mockPublishMeleeDataReset).not.toHaveBeenCalled();
-	});
-
-	it('publishes a reset delta after a successful Melee event change', async () => {
-		mockReadValidatedBody.mockResolvedValue({
-			meleeEnabled: true,
-			meleeEventId: '456',
-			meleeClientId: 'client-id',
-		});
-		mockFindEvent.mockReset()
-			.mockResolvedValueOnce({
-				id: 1,
-				game: 'mtg',
-				meleeEnabled: true,
-				meleeEventId: '123',
-				meleeClientSecret: 'stored-envelope',
-			})
-			.mockResolvedValueOnce({
-				id: 1,
-				meleeEnabled: true,
-				meleeEventId: '456',
-				meleeClientSecret: 'new-envelope',
-			});
-		mockRequireMeleeIntegration.mockResolvedValue({
-			clientId: 'client-id',
-			clientSecret: 'decrypted-client-secret',
-			eventId: '456',
-		});
-		mockFetchMeleeEvent.mockResolvedValue({ ID: 456, Game: 'Magic: The Gathering' });
-
-		await expect(handler({} as any)).resolves.toEqual({ id: 1, meleeConfigured: true });
-
-		expect(mockPublishMeleeDataReset).toHaveBeenCalledWith({
-			eventId: 1,
-			originConnectionId: 'origin-1',
-			reason: 'event-changed',
-		});
-	});
-
-	it('publishes a reset delta after disabling the integration', async () => {
-		mockReadValidatedBody.mockResolvedValue({
-			meleeEnabled: false,
-			meleeEventId: null,
-			meleeClientId: null,
-		});
-		mockFindEvent.mockReset()
-			.mockResolvedValueOnce({
-				id: 1,
-				meleeEnabled: true,
-				meleeEventId: '123',
-				meleeClientSecret: 'stored-envelope',
-			})
-			.mockResolvedValueOnce({
-				id: 1,
-				meleeEnabled: false,
-				meleeEventId: null,
-				meleeClientSecret: null,
-			});
-
-		await expect(handler({} as any)).resolves.toEqual({ id: 1, meleeConfigured: true });
-
-		expect(mockRequireMeleeIntegration).not.toHaveBeenCalled();
-		expect(mockPublishMeleeDataReset).toHaveBeenCalledWith({
-			eventId: 1,
-			originConnectionId: 'origin-1',
-			reason: 'disabled',
-		});
-	});
-
-	it('names the imported structure a reset kept because it holds manual Rounds or Matches', async () => {
-		mockReadValidatedBody.mockResolvedValue({
-			meleeEnabled: false,
-			meleeEventId: null,
-			meleeClientId: null,
-		});
-		mockFindEvent.mockReset()
-			.mockResolvedValueOnce({
-				id: 1,
-				meleeEnabled: true,
-				meleeEventId: '123',
-				meleeClientSecret: 'stored-envelope',
-			})
-			.mockResolvedValueOnce({
-				id: 1,
-				meleeEnabled: false,
-				meleeEventId: null,
-				meleeClientSecret: null,
-			});
-		mockUpdateMeleeConfig.mockResolvedValue({
-			clearedScreens: [],
-			keptStructure: {
-				keptPhases: [
-					{ id: 4, name: 'Swiss' },
-				],
-				keptRounds: [
-					{
-						id: 9,
-						name: 'Round 3',
-						phaseId: 5,
-						phaseName: 'Top Cut',
-					},
-				],
-			},
-		});
-
-		await expect(handler({} as any)).resolves.toEqual({
-			id: 1,
-			meleeConfigured: true,
-			warnings: [
-				'Phase "Swiss" was imported from Melee.gg and holds manual Rounds or Matches, so it was kept as a manual Phase',
-				'Round "Round 3" in "Top Cut" was imported from Melee.gg and holds manual Matches, so it was kept as a manual Round',
-			],
-		});
-	});
-
-	it('announces each Screen whose Deck Source the reset cleared, before the reset itself', async () => {
-		mockReadValidatedBody.mockResolvedValue({
-			meleeEnabled: false,
-			meleeEventId: null,
-			meleeClientId: null,
-		});
-		mockFindEvent.mockReset()
-			.mockResolvedValueOnce({
-				id: 1,
-				meleeEnabled: true,
-				meleeEventId: '123',
-				meleeClientSecret: 'stored-envelope',
-			})
-			.mockResolvedValueOnce({
-				id: 1,
-				meleeEnabled: false,
-				meleeEventId: null,
-				meleeClientSecret: null,
-			});
-		const cleared = { id: 7, eventId: 1, stateVersion: 3 };
-		mockUpdateMeleeConfig.mockResolvedValue({
-			clearedScreens: [cleared],
-			keptStructure: noKeptStructure,
-		});
-
-		await expect(handler({} as any)).resolves.toEqual({ id: 1, meleeConfigured: true });
-
-		expect(mockPublishScreenUpdated).toHaveBeenCalledOnce();
-		// Without an origin: the configuring client holds the Screen at its old version too.
-		expect(mockPublishScreenUpdated).toHaveBeenCalledWith({ eventId: 1, entity: cleared });
-		// A Deck List Screen that re-read on the reset first would ask for the deleted Player.
-		expect(mockPublishScreenUpdated.mock.invocationCallOrder[0])
-			.toBeLessThan(mockPublishMeleeDataReset.mock.invocationCallOrder[0]!);
 	});
 
 	it('does not replace a committed configuration result when lease cleanup fails', async () => {
@@ -430,17 +260,6 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		warn.mockRestore();
 	});
 
-	it('rejects a known upstream game mismatch before replacing the integration', async () => {
-		mockFetchMeleeEvent.mockResolvedValue({ ID: 123, Game: 'One Piece Card Game' });
-
-		await expect(handler({} as any)).rejects.toMatchObject({
-			statusCode: 422,
-			message: 'The selected Melee.gg tournament uses a different game than this Event',
-			data: { code: 'MELEE_GAME_MISMATCH' },
-		});
-		expect(mockUpdateMeleeConfig).not.toHaveBeenCalled();
-	});
-
 	it('preserves intentional client validation errors', async () => {
 		const validationError = new H3Error('Melee.gg credentials not configured for this event');
 		validationError.statusCode = 400;
@@ -464,19 +283,5 @@ describe('pUT /api/events/[id]/melee-config credential boundary', () => {
 		expect(mockUpdateMeleeConfig).not.toHaveBeenCalled();
 		expect(warn).not.toHaveBeenCalled();
 		warn.mockRestore();
-	});
-
-	it('rejects configuration changes while another sync command owns the event', async () => {
-		const conflict = Object.assign(new Error('Melee sync command "players" is already running for this event'), {
-			statusCode: 409,
-			data: { code: 'MELEE_SYNC_IN_PROGRESS' },
-		});
-		mockAcquireMeleeSyncLease.mockRejectedValue(conflict);
-
-		await expect(handler({} as any)).rejects.toBe(conflict);
-
-		expect(mockRequireMeleeIntegration).not.toHaveBeenCalled();
-		expect(mockUpdateMeleeConfig).not.toHaveBeenCalled();
-		expect(mockReleaseMeleeSyncLease).not.toHaveBeenCalled();
 	});
 });

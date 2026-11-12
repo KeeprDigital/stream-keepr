@@ -47,6 +47,33 @@ describe('updateScreenSchema', () => {
 	});
 });
 
+// ADR-0051: a Screen holds no look of its own, nor a canvas; it takes its Event's Theme and Event Canvas.
+describe('a Screen write', () => {
+	const look = {
+		background: '#000000',
+		paddingX: 12,
+		colorMode: 'dark',
+		width: 1920,
+		height: 1080,
+	};
+
+	it.each([
+		[
+			'create',
+			createScreenSchema,
+			{ name: 'Feature Match', slug: 'feature-match', currentMode: 'background' },
+		],
+		[
+			'update',
+			updateScreenSchema,
+			{ stateVersion: 0 },
+		],
+	])('refuses a look or a canvas of its own on %s', (_write, schema, body) => {
+		expect(schema.safeParse(body).success).toBe(true);
+		expect(schema.safeParse({ ...body, screenConfig: look }).success).toBe(false);
+	});
+});
+
 // ──────────────── deckModeConfigSchema ────────────────
 
 describe('deckModeConfigSchema', () => {
@@ -558,6 +585,18 @@ describe('backgroundModeConfigSchema', () => {
 		}) as { layers: Array<{ playbackRate?: number }> };
 
 		expect(result.layers.map(layer => layer.playbackRate)).toEqual([undefined, 4, 0.25]);
+	});
+
+	it('enforces the one-animation-layer rule on the PATCH path too, because it lives on the layers field', () => {
+		expect(modeConfigPatchSchemaMap.background.safeParse({
+			layers: [
+				animationLayer,
+				{ ...animationLayer, id: 'anim-2' },
+			],
+		}).success).toBe(false);
+		expect(modeConfigPatchSchemaMap.background.safeParse({
+			layers: [animationLayer],
+		}).success).toBe(true);
 	});
 });
 

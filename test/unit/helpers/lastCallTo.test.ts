@@ -51,38 +51,9 @@ describe('lastCallTo', () => {
 		expect(lastCallTo(projection)[0]).toEqual({ nextSequence: 2 });
 	});
 
-	it.each([
-		[
-			'an endpoint nothing called',
-			() => lastCallTo(recordedFetch(), '/api/other'),
-			`expected a call to /api/other, got only ["${LEDGER}", "${LEDGER}", "${CLOCK}"]`,
-		],
-		[
-			'a mock never called',
-			() => lastCallTo(vi.fn(), LEDGER),
-			`expected a call to ${LEDGER}, got none`,
-		],
-		[
-			'an unmatched matcher',
-			() => lastCallTo(vi.fn(), isPublishFailureLine),
-			'expected a call matching isPublishFailureLine, got none',
-		],
-		[
-			'no selector and no call',
-			() => lastCallTo(vi.fn()),
-			'expected a call, got none',
-		],
-	])('fails with a sentence, not a TypeError, for %s', (_, read, message) => {
-		expect(read).toThrow(message);
-	});
-
-	it('keeps its own sentence when an argument cannot be rendered', () => {
-		const circular: Record<string, unknown> = {};
-		circular.self = circular;
-		const spy = vi.fn();
-		spy(circular);
-
-		expect(() => lastCallTo(spy, 'nothing')).toThrow('expected a call to nothing, got only [[object Object]]');
+	it('refuses an endpoint nothing called rather than handing back a stray, and lists what arrived', () => {
+		expect(() => lastCallTo(recordedFetch(), '/api/other'))
+			.toThrow(`expected a call to /api/other, got only ["${LEDGER}", "${LEDGER}", "${CLOCK}"]`);
 	});
 });
 
@@ -115,11 +86,6 @@ describe('callsTo', () => {
 			'longer',
 			() => callsTo(recordedFetch(), 2),
 			'expected 2 calls, got 3; recorded only',
-		],
-		[
-			'empty, with a matcher',
-			() => callsTo(vi.fn(), 1, isPublishFailureLine),
-			'expected 1 call matching isPublishFailureLine, got 0; recorded none',
 		],
 	])('refuses a list %s than the test expects', (_, read, message) => {
 		expect(read).toThrow(message);

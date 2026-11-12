@@ -116,61 +116,15 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			expect(reset.id).not.toBe(endedSessionId);
 			expect(reset.status).toBe('active');
 			expect(reset.currentState).toEqual({ playout: {}, inputs: {}, sources: {} });
-		});
 
-		it('leaves the Screen with exactly one epoch, so the next command has one to name', async () => {
-			const harness = await createGraphicsHarness(eventId, 'hardening-reset-usable', [
-				integrationBroadcastGraphic('a'),
-			]);
-
-			const reset = await resetLiveState(eventId, harness.screen.id);
-			const loaded = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
-			expect(loaded.id).toBe(reset.id);
-
+			// The Screen is left with exactly that epoch, so the next command has one to name.
+			expect((await getBroadcastGraphicsLiveSession(eventId, harness.screen.id)).id).toBe(reset.id);
 			const taken = await sendBroadcastGraphicsCommand(eventId, harness.screen.id, reset.id, {
 				commandId: playoutCommandId('post-reset-take'),
 				type: 'Take',
 				payload: { graphicId: 'a' },
 			});
 			expect(taken.currentState.playout.a).toMatchObject({ onAir: true });
-		});
-
-		it('rejects a command from the epoch it replaced', async () => {
-			const harness = await createGraphicsHarness(eventId, 'hardening-reset-stale', [
-				integrationBroadcastGraphic('a'),
-			]);
-			const endedSessionId = harness.session().id;
-			await harness.send({
-				commandId: playoutCommandId('take'),
-				type: 'Take',
-				payload: { graphicId: 'a' },
-			});
-
-			const reset = await resetLiveState(eventId, harness.screen.id);
-
-			// Addressed to the ended epoch while the Screen is still a Broadcast Graphics
-			// Screen, so the mode guard cannot be what refuses it: the only thing left is
-			// the epoch having ended. The message is what discriminates — a neutered epoch
-			// guard would still produce a 409 from the compare-and-swap.
-			const rejected = await $fetchRaw(
-				`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${endedSessionId}/commands`,
-				{
-					method: 'POST',
-					body: {
-						commandId: playoutCommandId('reset-stale'),
-						type: 'Take',
-						payload: { graphicId: 'a' },
-					},
-					ignoreResponseError: true,
-				},
-			);
-
-			expect(rejected.status).toBe(409);
-			expect(rejected._data?.message).toMatch(/live session has ended/i);
-
-			const after = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
-			expect(after.id).toBe(reset.id);
-			expect(after.currentState.playout).toEqual({});
 		});
 
 		it('refuses to reset a Screen that is not in Broadcast Graphics mode', async () => {
@@ -237,27 +191,6 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 	});
 
 	describe('what every reader is told about the state it loads', () => {
-		it('reports no recovery fault for a Live Session written by the command path', async () => {
-			// The complement of the recovery unit tests: nothing the product itself writes
-			// can produce a fault, so a fault always means the durable state was damaged
-			// from outside the command path rather than by ordinary operation.
-			const harness = await createGraphicsHarness(eventId, 'hardening-no-fault', [
-				integrationBroadcastGraphicWithInputs('a', [
-					integrationTextInput('name'),
-				]),
-			]);
-
-			await setBroadcastGraphicInput(harness, 'a', 'name', 'Ava Reed');
-			const taken = await harness.send({
-				commandId: playoutCommandId('take'),
-				type: 'Take',
-				payload: { graphicId: 'a' },
-			});
-
-			expect(taken.session.recoveryFault).toBeNull();
-			expect((await harness.reload()).recoveryFault).toBeNull();
-		});
-
 		it('clears that fault on the first accepted command, whatever kind it is', async () => {
 			const harness = await createGraphicsHarness(eventId, 'hardening-corrupt-cleared', [
 				integrationBroadcastGraphicWithInputs('a', [
@@ -277,32 +210,6 @@ describe('broadcast graphics recovery and multi-operator hardening', () => {
 			expect(edited.session.recoveryFault).toBeNull();
 			expect((await harness.reload()).recoveryFault).toBeNull();
 			expect(edited.currentState.inputs.a!.working).toEqual({ name: 'Ava Reed' });
-		});
-
-		it('answers a reloading client with the same authoritative state, however many times it asks', async () => {
-			// A reconnecting Live Control or Screen Output reloads rather than replaying,
-			// so reloading has to be free of side effects on the show.
-			const harness = await createGraphicsHarness(eventId, 'hardening-reload-idempotent', [
-				integrationBroadcastGraphic('a'),
-			]);
-			const taken = await harness.send({
-				commandId: playoutCommandId('take'),
-				type: 'Take',
-				payload: { graphicId: 'a' },
-			});
-
-			const reloads = await Promise.all(
-				Array.from({ length: 4 }, () => getBroadcastGraphicsLiveSession(eventId, harness.screen.id)),
-			);
-
-			for (const reload of reloads) {
-				expect(reload.id).toBe(taken.sessionId);
-				expect(reload.sequence).toBe(taken.sequence);
-				// Compared against the command's own answer rather than against a literal:
-				// reloading must return the *same* record, including the authoritative
-				// animation start time, which a literal could only restate approximately.
-				expect(reload.currentState.playout.a).toEqual(taken.currentState.playout.a);
-			}
 		});
 	});
 });

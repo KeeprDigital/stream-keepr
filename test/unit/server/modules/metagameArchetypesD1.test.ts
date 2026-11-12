@@ -62,6 +62,7 @@ interface StagedPlayer {
 	wins: number;
 	losses: number;
 	position: number | null;
+	points?: number;
 }
 
 async function stagePlayers(eventId: number, players: StagedPlayer[]) {
@@ -266,5 +267,69 @@ describe('the Metagame Archetype breakdown on D1', () => {
 				avgPosition: 2,
 			},
 		]);
+	});
+
+	// A scope names its Players by a filter, never by their ids, so its width
+	// binds nothing: 120 Players of one Archetype, placed 1 to 120 on 120 points
+	// down to 1, all on one list.
+	describe('with a Player scope wider than a D1 statement binds', () => {
+		const WIDE = 120;
+		let eventId: number;
+		let archetypeId: number;
+		let playerListId: number;
+
+		beforeAll(async () => {
+			eventId = await stageEvent('Wide Scope Metagame');
+			archetypeId = (await stageArchetypes(eventId, ['Domain Ramp'])).get('Domain Ramp')!;
+			await stagePlayers(eventId, Array.from({ length: WIDE }, (_, index) => ({
+				archetypeId,
+				wins: 1,
+				losses: 0,
+				position: index + 1,
+				points: WIDE - index,
+			})));
+			const members = await db.query.players.findMany({
+				where: (players, { eq }) => eq(players.eventId, eventId),
+			});
+			const [list] = await db.insert(schema.playerLists).values({ eventId, name: 'Everybody' }).returning();
+			playerListId = list!.id;
+			await insertAll(members, (player, index) => db.insert(schema.playerListMembers).values({
+				listId: playerListId,
+				playerId: player.id,
+				sortOrder: index,
+			}));
+		});
+
+		it.each([
+			[
+				'the top 110 by position',
+				() => ({ scope: 'topN', topN: 110 }) as const,
+				110,
+			],
+			[
+				'the 110 holding at least 11 points',
+				() => ({ scope: 'minPoints', minPoints: 11 }) as const,
+				110,
+			],
+			[
+				'a Player List of all 120',
+				() => ({ scope: 'playerList', playerListId }) as const,
+				WIDE,
+			],
+		])('answers the breakdown of %s', async (_case, scope, players) => {
+			const breakdown = await metagameReadModel().getArchetypeBreakdown(eventId, scope());
+
+			expect(breakdown).toMatchObject({ totalPlayers: players, classifiedPlayers: players });
+			expect(breakdown.entries).toEqual([
+				expect.objectContaining({ name: 'Domain Ramp', count: players }),
+			]);
+		});
+
+		it('answers an Archetype\'s detail naming every one of its Players', async () => {
+			const detail = await metagameReadModel().getArchetypeDetail(eventId, { scope: 'all', archetypeId });
+
+			expect(detail?.playerCount).toBe(WIDE);
+			expect(detail?.players).toHaveLength(WIDE);
+		});
 	});
 });

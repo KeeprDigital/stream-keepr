@@ -298,7 +298,8 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		catch {}
 	});
 
-	it('saves the authored stack and every exact-revision usage in one write', async () => {
+	/** The stack every test here starts from: the logo at the top level, the badge inside a Graphic Group. */
+	async function pinLogoAndBadge(): Promise<ScreenResponse> {
 		const graphics = [
 			{
 				id: 'lower-third',
@@ -330,11 +331,15 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			},
 		];
 
-		const updated = await $fetch<ScreenResponse>(configPath(), {
+		return await $fetch<ScreenResponse>(configPath(), {
 			method: 'PATCH',
 			body: { graphics },
 			headers: { cookie: graphicsAuthorCookie },
 		});
+	}
+
+	it('saves the authored stack and every exact-revision usage in one write', async () => {
+		const updated = await pinLogoAndBadge();
 
 		const savedItem = updated.modeConfigs!['broadcast-graphics']!.graphics![0]!.items[0]!;
 		expect(savedItem.type === 'media' && savedItem.asset).toEqual(logo);
@@ -361,6 +366,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 	});
 
 	it('resolves an indexed revision through the Screen Output Asset Capability, and nothing else', async () => {
+		await pinLogoAndBadge();
 		const { assetCapability } = await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
 			{
@@ -470,31 +476,9 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		await $fetch(`/api/events/${eventId}/screens/${overlayScreen.id}`, { method: 'DELETE' });
 	});
 
-	it('rejects a Screen created with a reference nothing has indexed yet', async () => {
-		await expect($fetch(`/api/events/${eventId}/screens`, {
-			method: 'POST',
-			body: {
-				name: 'Prepinned',
-				slug: 'prepinned',
-				currentMode: 'broadcast-graphics',
-				modeConfigs: {
-					'broadcast-graphics': {
-						graphics: [
-							{
-								id: 'g',
-								name: 'G',
-								items: [
-									mediaItem('logo', { asset: logo }),
-								],
-							},
-						],
-					},
-				},
-			},
-		})).rejects.toMatchObject({ statusCode: 400 });
-	});
-
 	it('removes a reference from the index when its Graphic Item stops pinning one', async () => {
+		await pinLogoAndBadge();
+
 		await $fetch(configPath(), {
 			method: 'PATCH',
 			body: {

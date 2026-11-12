@@ -280,7 +280,7 @@ describe('broadcast Graphic Template Packages', () => {
 	 * document that never had it. `maximalBroadcastGraphicDocument` says why it
 	 * cannot be derived from the schema instead.
 	 */
-	it('imports the design as a library entry carrying every field it left with', async () => {
+	it('imports the design as an unlinked library entry carrying every field it left with', async () => {
 		const received = await receivePackage(exportedPackage);
 		expect(received.stage).toBe('awaiting-installation');
 
@@ -288,10 +288,11 @@ describe('broadcast Graphic Template Packages', () => {
 
 		expect(completed.stage).toBe('completed');
 		const installation = completed.templatePackageInstallation!;
-		installedTemplateIds.push(installation.templateId);
+		const templateId = installation.templateId;
+		installedTemplateIds.push(templateId);
 		expect(installation.templateKind).toBe('broadcast-graphic');
 
-		const imported = await request(`${TEMPLATES_PATH}/${installation.templateId}`, {
+		const imported = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			cookie: authorCookie,
 		});
 		expect(imported.status).toBe(200);
@@ -301,16 +302,6 @@ describe('broadcast Graphic Template Packages', () => {
 		// rewritten references land on the very revisions the design left with and
 		// nothing in the document is legitimately different.
 		expect(copy.document).toEqual(sourceTemplate.document);
-	});
-
-	it('imports an unlinked copy that keeps its source only as provenance', async () => {
-		const received = await receivePackage(exportedPackage);
-		const completed = await installPackage(received.id);
-		const templateId = completed.templatePackageInstallation!.templateId;
-		installedTemplateIds.push(templateId);
-
-		const copy = (await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateResponse;
 
 		expect(copy.id).not.toBe(sourceTemplate.id);
 		// Its own managed revision starts fresh; the source's identity and revision
@@ -328,19 +319,11 @@ describe('broadcast Graphic Template Packages', () => {
 		expect(source.name).toBe(sourceTemplate.name);
 		expect(source.provenance).toBeUndefined();
 		expect(source.authored).toBe(true);
-	});
-
-	it('lists an imported design alongside the ones authored here', async () => {
-		const received = await receivePackage(exportedPackage);
-		const completed = await installPackage(received.id);
-		const templateId = completed.templatePackageInstallation!.templateId;
-		installedTemplateIds.push(templateId);
-
-		const listed = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateListResponse;
 
 		// One library, one listing. Where a design came from is a property of the
 		// entry, not a reason for an author to look somewhere else for it.
+		const listed = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
+			.data as BroadcastGraphicTemplateListResponse;
 		const entry = listed.templates.find(template => template.id === templateId);
 		expect(entry).toMatchObject({ authored: false, name: sourceTemplate.name });
 		expect(entry!.itemCount).toBe(

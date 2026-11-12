@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { acceptanceProfilePrefix, checkoutProfileMarker } from '../../../scripts/graphics-acceptance/chromium-profile.mjs';
 import { launchChromium } from '../../../scripts/graphics-acceptance/chromium.mjs';
+import { LOAD_TOLERANT_WAIT_MS } from '../../helpers/loadTolerantBounds';
 import { fakeChrome } from './fixtures/fake-chrome';
 
 /**
@@ -26,6 +27,8 @@ chmodSync(STUBBORN_CHROME, 0o755);
 
 const strays = new Set<number>();
 const runners = new Set<ChildProcess>();
+/** A runner that goes at once, or exits, leaves its browser's profile where it was. */
+const runnerProfiles = new Set<string>();
 
 function alive(pid: number): boolean {
 	try {
@@ -37,15 +40,16 @@ function alive(pid: number): boolean {
 	}
 }
 
-async function gone(pid: number, withinMs: number): Promise<boolean> {
-	const deadline = Date.now() + withinMs;
-	while (Date.now() < deadline) {
-		if (!alive(pid))
-			return true;
-		await new Promise(resolve => setTimeout(resolve, 50));
-	}
-	return !alive(pid);
+/** Holds until `pid` is gone: a killed process goes when a busy machine gets round to it. */
+function gone(pid: number) {
+	return vi.waitFor(() => expect(alive(pid)).toBe(false));
 }
+
+/**
+ * The graces for a stand-in that ignores SIGTERM and dies of SIGKILL. The first
+ * is meant to run out; the second never is, so it is a hang bound and not a budget.
+ */
+const stubbornGraces = { terminateGraceMs: 200, killGraceMs: LOAD_TOLERANT_WAIT_MS };
 
 afterEach(() => {
 	for (const pid of strays) {
@@ -56,6 +60,9 @@ afterEach(() => {
 	for (const runner of runners)
 		runner.kill('SIGKILL');
 	runners.clear();
+	for (const profile of runnerProfiles)
+		rmSync(profile, { recursive: true, force: true });
+	runnerProfiles.clear();
 });
 
 /** Start the runner fixture and read the stand-in's pid and profile from it. */
@@ -77,6 +84,7 @@ async function startRunner(...args: string[]) {
 		runner.once('exit', () => reject(new Error(`runner exited before launching: ${output}`)));
 	});
 	strays.add(launched.pid);
+	runnerProfiles.add(launched.profile);
 	return {
 		runner,
 		exited,
@@ -87,7 +95,7 @@ async function startRunner(...args: string[]) {
 
 /** The stand-in, launched through the real launcher with a short SIGTERM grace. */
 async function launchStandIn() {
-	const browser = await launchChromium(STUBBORN_CHROME, [], { terminateGraceMs: 200 });
+	const browser = await launchChromium(STUBBORN_CHROME, [], stubbornGraces);
 	if (!browser?.pid)
 		throw new Error('the stand-in did not launch');
 	strays.add(browser.pid);
@@ -107,7 +115,7 @@ describe('the acceptance browser\'s shutdown', () => {
 	it('stops a browser that never announced itself rather than leaving it to run on', async () => {
 		const tag = `--stand-in=${process.pid}-${Date.now()}`;
 
-		await expect(launchChromium(STUBBORN_CHROME, ['--silent', tag], { startupTimeoutMs: 300, terminateGraceMs: 200 }))
+		await expect(launchChromium(STUBBORN_CHROME, ['--silent', tag], { ...stubbornGraces, startupTimeoutMs: 300 }))
 			.rejects
 			.toThrow('Chrome DevTools endpoint timed out.');
 
@@ -128,7 +136,7 @@ describe('the acceptance browser\'s shutdown', () => {
 		runner.kill(signal);
 
 		expect(await exited).toEqual({ code: null, signal });
-		expect(await gone(pid, 2_000)).toBe(true);
+		await gone(pid);
 		expect(existsSync(profile)).toBe(false);
 	});
 
@@ -138,25 +146,29 @@ describe('the acceptance browser\'s shutdown', () => {
 		runner.kill('SIGTERM');
 
 		expect(await exited).toEqual({ code: 0, signal: null });
-		expect(printed()).toContain('own cleanup finished');
-		expect(await gone(pid, 2_000)).toBe(true);
+		// Its exit can be seen before the last of what it printed has been read.
+		await vi.waitFor(() => expect(printed()).toContain('own cleanup finished'));
+		await gone(pid);
 	});
 
 	it('takes the browser down at once on a second signal', async () => {
 		const { runner, exited, pid } = await startRunner();
 
+		// Nothing says when the runner has taken the first, so the second follows
+		// at once. Every way the two can land ends the same: taken apart, the
+		// second skips the grace; merged into one by the system, the grace runs.
 		runner.kill('SIGINT');
 		runner.kill('SIGINT');
 
 		expect(await exited).toEqual({ code: null, signal: 'SIGINT' });
-		expect(await gone(pid, 1_000)).toBe(true);
+		await gone(pid);
 	});
 
 	it('takes the browser down with it when the runner exits without disposing it', async () => {
 		const { exited, pid } = await startRunner('exit');
 
 		expect(await exited).toEqual({ code: 3, signal: null });
-		expect(await gone(pid, 2_000)).toBe(true);
+		await gone(pid);
 	});
 });
 
@@ -172,12 +184,11 @@ describe('a browser that outlives SIGKILL', () => {
 
 	type ImmortalChrome = ReturnType<typeof immortalChrome>;
 
-	/** A Chrome no signal stops, launched with every grace short. */
+	/** A Chrome no signal stops, so both of its graces are short: each is meant to run out. */
 	function immortalChrome() {
 		const chrome = fakeChrome({ diesOn: [] });
 		held.push(chrome);
 		const options = {
-			startupTimeoutMs: 300,
 			terminateGraceMs: 100,
 			killGraceMs: 100,
 			spawnProcess: chrome.spawn,
@@ -197,7 +208,8 @@ describe('a browser that outlives SIGKILL', () => {
 	it.each([
 		{
 			stopping: 'a browser that never announced itself, in its startup report',
-			stop: async ({ options }: ImmortalChrome) => await launchChromium('chrome', [], options).then(
+			// It says nothing, so its startup bound is meant to run out as well.
+			stop: async ({ options }: ImmortalChrome) => await launchChromium('chrome', [], { ...options, startupTimeoutMs: 100 }).then(
 				() => { throw new Error('the stand-in launched'); },
 				(failure: Error) => failure.message,
 			),

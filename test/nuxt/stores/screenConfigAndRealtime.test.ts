@@ -60,8 +60,12 @@ describe('useScreenStore config and realtime', () => {
 	});
 
 	describe('updateModeConfig', () => {
-		it('shows rapid patches merged, nulls stripped, at once, and writes them as one per mode', async () => {
+		// The write is debounced, and the clock is the test's: nothing here waits in real time.
+		beforeEach(() => {
 			vi.useFakeTimers();
+		});
+
+		it('shows rapid patches merged, nulls stripped, at once, and writes them as one per mode', async () => {
 			store.screens = [
 				createMockScreen({
 					id: 1,
@@ -106,7 +110,9 @@ describe('useScreenStore config and realtime', () => {
 			});
 			mockRepo.updateModeConfig.mockResolvedValue(updated);
 
-			await store.updateModeConfig(1, 1, 'background', {});
+			const write = store.updateModeConfig(1, 1, 'background', {});
+			await vi.advanceTimersByTimeAsync(300);
+			await write;
 
 			expect(store.screens[0]).toEqual(updated);
 			expect(store.activeScreen).toEqual(updated);
@@ -123,7 +129,9 @@ describe('useScreenStore config and realtime', () => {
 			store.screens = [screen];
 			mockRepo.updateModeConfig.mockRejectedValue(new Error('Save failed'));
 
-			await expect(store.updateModeConfig(1, 1, 'deck', { showDeckName: false })).rejects.toThrow('Save failed');
+			const refused = expect(store.updateModeConfig(1, 1, 'deck', { showDeckName: false })).rejects.toThrow('Save failed');
+			await vi.advanceTimersByTimeAsync(300);
+			await refused;
 
 			expect(store.screens[0]).toEqual(screen);
 			expect(store.error).toBe('Save failed');
@@ -131,7 +139,6 @@ describe('useScreenStore config and realtime', () => {
 
 		// An edit already shown as saved is spent, not cancelled, when the operator leaves the Event (#308).
 		it('spends a pending write when the store resets for another Event', async () => {
-			vi.useFakeTimers();
 			store.screens = [
 				createMockScreen({ id: 1, modeConfigs: {}, stateVersion: 2 }),
 			];
@@ -174,7 +181,9 @@ describe('useScreenStore config and realtime', () => {
 				stateVersion: 3,
 			}));
 
-			await store.updateModeConfig(1, 1, 'deck', { showDeckName: false });
+			const write = store.updateModeConfig(1, 1, 'deck', { showDeckName: false });
+			await vi.advanceTimersByTimeAsync(300);
+			await write;
 
 			expect(mockRepo.getById).toHaveBeenCalledWith(1, 1);
 			expect(mockRepo.updateModeConfig).toHaveBeenNthCalledWith(1, 1, 1, 'deck', { showDeckName: false }, 2);
@@ -192,9 +201,11 @@ describe('useScreenStore config and realtime', () => {
 				data: { message: 'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable' },
 			});
 
-			await expect(store.updateModeConfig(1, 1, 'deck', { showDeckName: false })).rejects.toThrow(
+			const refused = expect(store.updateModeConfig(1, 1, 'deck', { showDeckName: false })).rejects.toThrow(
 				'Graphic Asset Reference at graphics.lower-third.items.logo.asset is not selectable',
 			);
+			await vi.advanceTimersByTimeAsync(300);
+			await refused;
 
 			expect(mockRepo.getById).not.toHaveBeenCalled();
 			expect(mockRepo.updateModeConfig).toHaveBeenCalledTimes(1);

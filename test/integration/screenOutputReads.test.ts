@@ -1,0 +1,906 @@
+import type { ScreenResponse } from '~~/shared/api';
+import type { ScreenOutputFeatureMatchResponse, ScreenOutputHeadToHeadResponse, ScreenOutputPairingsResponse, ScreenOutputPlayerDecksResponse, ScreenOutputRoundClockResponse, ScreenOutputStandingsResponse, ScreenOutputTalentResponse, ScreenOutputTopCutResponse } from '~~/shared/types/screenOutputReads';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { $fetch, anonymousFetch } from './client';
+import { executeIntegrationD1 } from './integrationD1';
+
+/**
+ * A Screen Output reads everything it renders with its Screen Output Asset
+ * Capability alone (#604). Every request here past the setup is anonymous: no
+ * session cookie, only the bearer an output's URL hash carries. What its Screen
+ * channel tells it is in `screenOutputReads.realtime.test.ts`, the only part that
+ * needs the Ably key.
+ */
+
+interface JsonResponse<T = unknown> {
+	status: number;
+	data: T;
+}
+
+async function readJson<T>(response: Response): Promise<JsonResponse<T>> {
+	const text = await response.text();
+	return {
+		status: response.status,
+		data: (text
+			? JSON.parse(text)
+			: null) as T,
+	};
+}
+
+/**
+ * Record a Match Result as Melee Sync would. No manual write carries one
+ * (ADR-0047), so it goes into the isolated D1 database directly, mirroring the
+ * internal sync boundary.
+ */
+async function recordMeleeResult(matchId: number, [player1GameWins, player2GameWins]: [number, number]) {
+	await executeIntegrationD1(`
+		UPDATE matches
+		SET external_id = 'result-${matchId}', external_source = 'melee', has_result = 1,
+			player1_game_wins = ${player1GameWins}, player2_game_wins = ${player2GameWins}, game_draws = 0
+		WHERE id = ${matchId};
+	`);
+}
+
+function bearer(capability: string): HeadersInit {
+	return { authorization: `Bearer ${capability}` };
+}
+
+describe('capability-only Screen Output reads', () => {
+	let eventId: number;
+	let screen: ScreenResponse;
+	let capability: string;
+	let neighbourCapability: string;
+
+	function outputPath(resource: string, screenId = screen.id) {
+		return `/api/screen-output/events/${eventId}/screens/${screenId}${resource
+			? `/${resource}`
+			: ''}`;
+	}
+
+	async function asOutput<T>(resource: string, credential: string | null = capability): Promise<JsonResponse<T>> {
+		return await readJson<T>(await anonymousFetch(outputPath(resource), {
+			headers: credential
+				? bearer(credential)
+				: undefined,
+		}));
+	}
+
+	/** Put the Screen in a mode: a capability reaches a mode's data only while its Screen is in that mode. */
+	async function setMode(mode: string) {
+		screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screen.id}`, {
+			method: 'PATCH',
+			body: { currentMode: mode, stateVersion: screen.stateVersion },
+		});
+	}
+
+	async function setModeConfig(mode: string, config: Record<string, unknown>) {
+		screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screen.id}/config/${mode}`, {
+			method: 'PATCH',
+			body: config,
+		});
+	}
+
+	/** A further Screen in its own mode, read through its own capability. */
+	async function outputScreen(mode: string, label = mode) {
+		const created = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: `Output ${label}`, slug: `output-reads-${label.toLowerCase()}-${eventId}`, currentMode: mode },
+		});
+		const ownCapability = (await $fetch<{ assetCapability: string }>(
+			`/api/events/${eventId}/screens/${created.id}/asset-capability`,
+		)).assetCapability;
+		return {
+			screen: created,
+			capability: ownCapability,
+			async configure(config: Record<string, unknown>) {
+				await $fetch(`/api/events/${eventId}/screens/${created.id}/config/${mode}`, { method: 'PATCH', body: config });
+			},
+			async read<T>(resource: string, credential: string | null = ownCapability, query = '') {
+				return await readJson<T>(await anonymousFetch(`${outputPath(resource, created.id)}${query}`, {
+					headers: credential
+						? bearer(credential)
+						: undefined,
+				}));
+			},
+		};
+	}
+
+	beforeAll(async () => {
+		const event = await $fetch<{ id: number }>('/api/events', {
+			method: 'POST',
+			body: { name: 'Screen Output Reads Event', game: 'mtg', featureMatchOrientation: 'vertical' },
+		});
+		eventId = event.id;
+		await $fetch(`/api/events/${eventId}`, {
+			method: 'PATCH',
+			body: { description: 'Operator notes', displayRecordSeparator: '/' },
+		});
+
+		screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Programme', slug: `output-reads-${eventId}`, currentMode: 'background' },
+		});
+		capability = (await $fetch<{ assetCapability: string }>(
+			`/api/events/${eventId}/screens/${screen.id}/asset-capability`,
+		)).assetCapability;
+
+		const neighbour = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Neighbour', slug: `output-reads-neighbour-${eventId}`, currentMode: 'background' },
+		});
+		neighbourCapability = (await $fetch<{ assetCapability: string }>(
+			`/api/events/${eventId}/screens/${neighbour.id}/asset-capability`,
+		)).assetCapability;
+	});
+
+	afterAll(async () => {
+		try {
+			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+		}
+		catch {}
+	});
+
+	describe('the Event context', () => {
+		it('answers the fields an output renders and nothing operator-only', async () => {
+			const { status, data } = await asOutput<Record<string, unknown>>('event');
+
+			expect(status).toBe(200);
+			expect(data).toMatchObject({
+				id: eventId,
+				name: 'Screen Output Reads Event',
+				game: 'mtg',
+				featureMatchOrientation: 'vertical',
+				displayRecordSeparator: '/',
+			});
+			for (const operatorOnly of [
+				'meleeConfigured',
+				'meleeEventId',
+				'lastSyncError',
+				'lastPlayersSyncedAt',
+				'talents',
+				'description',
+			])
+				expect(data).not.toHaveProperty(operatorOnly);
+		});
+
+		it.each([
+			['no credential', null],
+			['another Screen\'s capability', 'neighbour'],
+			['a malformed bearer', 'not a capability'],
+		] as const)('refuses %s with the one non-enumerating 404', async (_case, credential) => {
+			const presented = credential === 'neighbour'
+				? neighbourCapability
+				: credential;
+			const { status, data } = await asOutput<{ message?: string }>('event', presented);
+
+			expect(status).toBe(404);
+			expect(JSON.stringify(data)).not.toContain('Screen Output Reads Event');
+		});
+
+		it('keeps the ordinary Event read private', async () => {
+			const response = await anonymousFetch(`/api/events/${eventId}`, {
+				headers: bearer(capability),
+			});
+			expect(response.status).toBe(401);
+		});
+	});
+
+	describe('the Screen and its later changes', () => {
+		it('boots and follows an operator\'s change through capability reads alone', async () => {
+			const output = await outputScreen('background');
+			const lookup = async () => await readJson<ScreenResponse>(await anonymousFetch(
+				`/api/screen-output/events/${eventId}/screens/slug/${output.screen.slug}`,
+				{
+					headers: bearer(output.capability),
+				},
+			));
+			const player = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Later Player' },
+			});
+
+			const booted = await lookup();
+			expect(booted.status).toBe(200);
+			expect((await output.read('event')).status).toBe(200);
+
+			await $fetch(`/api/events/${eventId}/screens/${output.screen.id}`, {
+				method: 'PATCH',
+				body: { currentMode: 'player-history', stateVersion: booted.data.stateVersion },
+			});
+			await $fetch(`/api/events/${eventId}/screens/${output.screen.id}/config/player-history`, {
+				method: 'PATCH',
+				body: { playerId: player.id },
+			});
+
+			const byId = await output.read<ScreenResponse>('');
+			expect(byId.data).toMatchObject({ id: output.screen.id, currentMode: 'player-history' });
+
+			const refreshed = await lookup();
+			expect(refreshed.data).toMatchObject({
+				currentMode: 'player-history',
+				modeConfigs: {
+					'player-history': { playerId: player.id },
+				},
+			});
+			expect((await output.read<{ player: { id: number } }>('player-history')).data.player.id).toBe(player.id);
+		});
+
+		it('stops answering a capability once it is rotated', async () => {
+			const rotating = await outputScreen('card');
+			const before = rotating.capability;
+			const after = (await $fetch<{ assetCapability: string }>(
+				`/api/events/${eventId}/screens/${rotating.screen.id}/asset-capability`,
+				{ method: 'POST' },
+			)).assetCapability;
+
+			expect((await rotating.read('event', before)).status).toBe(404);
+			expect((await rotating.read('event', after)).status).toBe(200);
+		});
+	});
+
+	// An output holding only its Screen Output Link exchanges it, anonymously and
+	// naming no origin, for the capability every read above presents.
+	describe('exchanging a Screen Output Link', () => {
+		interface IssuedOutputAccess { assetCapability: string; outputLink: string }
+		interface ExchangedOutputAccess { eventId: number; screenId: number; assetCapability: string }
+
+		async function issue(screenId: number) {
+			return await $fetch<IssuedOutputAccess>(`/api/events/${eventId}/screens/${screenId}/asset-capability`);
+		}
+
+		async function exchange(body: string | undefined, contentType = 'application/json') {
+			const response = await anonymousFetch('/api/screen-output/link', {
+				method: 'POST',
+				headers: body === undefined
+					? undefined
+					: { 'content-type': contentType },
+				body,
+			});
+			return {
+				cacheControl: response.headers.get('cache-control'),
+				retryAfter: response.headers.get('retry-after'),
+				...await readJson<ExchangedOutputAccess & { statusCode?: number; message?: string }>(response),
+			};
+		}
+
+		it('answers the capability the operator was handed, which then reads through the Screen', async () => {
+			const output = await outputScreen('background', 'link-exchange');
+			const issued = await issue(output.screen.id);
+			expect(issued.assetCapability).toBe(output.capability);
+			expect(issued.outputLink).toMatch(/^[1-9A-HJ-NP-Za-km-z]{14,23}$/);
+
+			const exchanged = await exchange(JSON.stringify({ link: issued.outputLink }));
+
+			expect(exchanged.status).toBe(200);
+			expect(exchanged.cacheControl).toBe('private, no-store');
+			expect(exchanged.data).toEqual({
+				eventId,
+				screenId: output.screen.id,
+				assetCapability: output.capability,
+			});
+			expect((await output.read('event', exchanged.data.assetCapability)).status).toBe(200);
+			expect((await asOutput('event', exchanged.data.assetCapability)).status).toBe(404);
+		});
+
+		it('refuses everything that is not a current link as a Screen Output read refuses', async () => {
+			const { assetCapability } = await issue(screen.id);
+			const reference = await asOutput<{ statusCode: number; message: string }>('event', null);
+			expect(reference.status).toBe(404);
+
+			// Every way a link can be wrong is in
+			// `test/unit/server/api/screen-output/link.post.sqlite.test.ts`. These are the
+			// bodies only a real request carries, and one well-formed link that is not one.
+			const presented: Array<[body: string | undefined, contentType?: string]> = [
+				[undefined],
+				['not json'],
+				['not json', 'text/plain'],
+				[
+					JSON.stringify({ link: assetCapability }),
+				],
+			];
+			for (const [body, contentType] of presented) {
+				const refused = await exchange(body, contentType);
+				expect(refused.status, String(body)).toBe(404);
+				expect(refused.data.statusCode, String(body)).toBe(reference.data.statusCode);
+				expect(refused.data.message, String(body)).toBe(reference.data.message);
+				expect(refused.retryAfter, String(body)).toBeNull();
+			}
+		});
+
+		it('is not a read: the link in a query, or as a bearer, opens nothing', async () => {
+			const { outputLink, assetCapability } = await issue(screen.id);
+
+			// A GET has no handler here and is answered by the app shell: it hands nothing over.
+			const asked = await anonymousFetch(`/api/screen-output/link?link=${outputLink}`);
+			expect(await asked.text()).not.toContain(assetCapability);
+			expect((await asOutput('event', outputLink)).status).toBe(404);
+		});
+	});
+
+	describe('a Screen\'s own live state', () => {
+		it('reads the Card on the Screen', async () => {
+			await $fetch(`/api/events/${eventId}/screens/${screen.id}/card`, {
+				method: 'PUT',
+				body: {
+					id: 'output-card',
+					name: 'Lightning Bolt',
+					set: 'lea',
+					layout: 'normal',
+					imageData: {
+						front: { small: 'https://example.com/s.jpg', normal: 'https://example.com/n.jpg' },
+						back: null,
+					},
+					orientationData: {
+						flipable: false,
+						turnable: false,
+						rotateable: false,
+						counterRotateable: false,
+					},
+					displayData: {
+						flipped: false,
+						rotated: false,
+						counterRotated: false,
+						turnedOver: false,
+					},
+				},
+			});
+
+			expect((await asOutput('card')).status).toBe(404);
+			await setMode('card');
+			const { status, data } = await asOutput<{ card: { name: string }; revision: number }>('card');
+
+			expect(status).toBe(200);
+			// The Card with the revision it was read at, as the operator's read answers it (#734).
+			expect(data).toEqual({
+				card: expect.objectContaining({ id: 'output-card', name: 'Lightning Bolt' }),
+				revision: expect.any(Number),
+			});
+			expect((await asOutput('card', neighbourCapability)).status).toBe(404);
+		});
+
+		it('reads the Broadcast Graphics Live Session snapshot', async () => {
+			const graphics = await outputScreen('broadcast-graphics');
+			const operator = await $fetch<{ id: number; sequence: number }>(
+				`/api/events/${eventId}/screens/${graphics.screen.id}/broadcast-graphics/live-session`,
+			);
+			const read = (credential: string | null) => graphics.read<{ id: number; sequence: number }>('broadcast-graphics/live-session', credential);
+
+			const { status, data } = await read(graphics.capability);
+
+			expect(status).toBe(200);
+			expect(data).toMatchObject({ id: operator.id, sequence: operator.sequence });
+			expect((await read(capability)).status).toBe(404);
+			expect((await read(null)).status).toBe(404);
+		});
+	});
+
+	describe('standings', () => {
+		it('reads the roster, the fixed Round and the watchlist the saved configuration names', async () => {
+			const alpha = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Standings Alpha' },
+			});
+			const beta = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Standings Beta' },
+			});
+			const list = await $fetch<{ id: number }>(`/api/events/${eventId}/player-lists`, {
+				method: 'POST',
+				body: { name: 'Watch' },
+			});
+			await $fetch(`/api/events/${eventId}/player-lists/${list.id}/members`, {
+				method: 'POST',
+				body: {
+					playerIds: [beta.id],
+				},
+			});
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'Swiss' },
+			});
+			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: 'Round 1', roundNumber: 1 },
+			});
+
+			await setMode('standings');
+			await setModeConfig('standings', { viewMode: 'all' });
+			const current = await asOutput<ScreenOutputStandingsResponse>('standings');
+
+			expect(current.status).toBe(200);
+			expect(current.data.players.map(player => player.id)).toEqual(expect.arrayContaining([alpha.id, beta.id]));
+			expect(current.data).toMatchObject({
+				round: null,
+				roundStandings: null,
+				watchlist: null,
+				previousRoundPositions: null,
+			});
+
+			await setModeConfig('standings', { viewMode: 'watchlist', playerListId: list.id, roundId: round.id });
+			const fixed = await asOutput<ScreenOutputStandingsResponse>('standings');
+
+			expect(fixed.data).toMatchObject({
+				round: { id: round.id, name: 'Round 1' },
+				roundStandings: [],
+				watchlist: {
+					name: 'Watch',
+					playerIds: [beta.id],
+				},
+			});
+			expect((await asOutput('standings', null)).status).toBe(404);
+		});
+
+		it('measures a Position Change column against nothing when no earlier Round holds Round Standings', async () => {
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'Position Change Swiss' },
+			});
+			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: 'Round 1', roundNumber: 1 },
+			});
+
+			await setMode('standings');
+			await setModeConfig('standings', {
+				viewMode: 'all',
+				roundId: round.id,
+				columns: [
+					{ key: 'name', visible: true },
+					{ key: 'positionChange', visible: true },
+				],
+			});
+			const read = await asOutput<ScreenOutputStandingsResponse>('standings');
+
+			expect(read.status).toBe(200);
+			expect(read.data).toMatchObject({
+				round: { id: round.id },
+				previousRoundPositions: null,
+			});
+		});
+	});
+
+	describe('metagame and Most Played Cards', () => {
+		it('reads the breakdown the saved Metagame view renders, following a change of view', async () => {
+			await setMode('metagame');
+			await setModeConfig('metagame', { viewMode: 'archetype', scope: 'all' });
+			const archetypes = await asOutput<{ viewMode: string; breakdown: unknown }>('metagame');
+			const operatorArchetypes = await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
+				query: { scope: 'all', sortBy: 'metaShare' },
+			});
+
+			expect(archetypes).toEqual({
+				status: 200,
+				data: { viewMode: 'archetype', breakdown: operatorArchetypes },
+			});
+
+			await setModeConfig('metagame', { viewMode: 'cards', limit: 7 });
+			const cards = await asOutput<{ viewMode: string; breakdown: unknown }>('metagame');
+			const operatorCards = await $fetch(`/api/events/${eventId}/metagame/cards`, {
+				query: { scope: 'all', sortBy: 'inclusionRate', limit: 7 },
+			});
+
+			expect(cards).toEqual({
+				status: 200,
+				data: { viewMode: 'cards', breakdown: operatorCards },
+			});
+		});
+
+		it('reads the card breakdown the saved Most Played Cards configuration renders', async () => {
+			await setMode('top-cards');
+			await setModeConfig('top-cards', { scope: 'all', limit: 5 });
+			const { status, data } = await asOutput('top-cards');
+
+			expect(status).toBe(200);
+			expect(data).toMatchObject({ scope: 'all', entries: [] });
+			expect((await asOutput('top-cards', neighbourCapability)).status).toBe(404);
+		});
+	});
+
+	describe('feature Match', () => {
+		it('reads the shown Slot and its Players\' decks, and nothing the Screen does not show', async () => {
+			const playerOne = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Slot Player One' },
+			});
+			const playerTwo = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Slot Player Two' },
+			});
+			const bystander = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Bystander' },
+			});
+			const shown = await $fetch<{ id: number }>(`/api/events/${eventId}/feature-match-slots`, {
+				method: 'POST',
+				body: { player1Id: playerOne.id, player2Id: playerTwo.id },
+			});
+			const hidden = await $fetch<{ id: number }>(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: {} });
+			const overlay = await outputScreen('feature-match');
+			await overlay.configure({ featureMatchId: shown.id });
+
+			const slot = await overlay.read<ScreenOutputFeatureMatchResponse>(`feature-match-slots/${shown.id}`);
+			expect(slot.status).toBe(200);
+			expect(slot.data).toMatchObject({
+				slot: { id: shown.id, player1Id: playerOne.id, player2Id: playerTwo.id },
+				match: null,
+				round: null,
+				phase: null,
+			});
+
+			const decks = await overlay.read<ScreenOutputPlayerDecksResponse>(`players/${playerTwo.id}/decks`);
+			expect(decks.status).toBe(200);
+			expect(decks.data).toMatchObject({
+				player: { id: playerTwo.id, name: 'Slot Player Two' },
+				decks: { decks: [] },
+			});
+
+			expect((await overlay.read(`feature-match-slots/${hidden.id}`)).status).toBe(404);
+			expect((await overlay.read(`players/${bystander.id}/decks`)).status).toBe(404);
+			expect((await overlay.read(`feature-match-slots/${shown.id}`, capability)).status).toBe(404);
+		});
+
+		it('lets an operator\'s preview read a Slot it has not saved', async () => {
+			const unsaved = await $fetch<{ id: number }>(`/api/events/${eventId}/feature-match-slots`, { method: 'POST', body: {} });
+			const overlay = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+				method: 'POST',
+				body: { name: 'Preview', slug: `output-reads-preview-${eventId}`, currentMode: 'feature-match-overlay' },
+			});
+
+			const preview = await $fetch<ScreenOutputFeatureMatchResponse>(outputPath(`feature-match-slots/${unsaved.id}`, overlay.id));
+			expect(preview.slot.id).toBe(unsaved.id);
+		});
+	});
+
+	describe('deck', () => {
+		it('reads the selected Player\'s decks only while the Deck List mode selects them', async () => {
+			const selected = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'Deck Player' },
+			});
+			const deck = await outputScreen('deck');
+
+			expect((await deck.read(`players/${selected.id}/decks`)).status).toBe(404);
+
+			await deck.configure({
+				deckSource: { type: 'player', playerId: selected.id },
+			});
+			const read = await deck.read<ScreenOutputPlayerDecksResponse>(`players/${selected.id}/decks`);
+
+			expect(read.status).toBe(200);
+			expect(read.data.player).toMatchObject({ id: selected.id, name: 'Deck Player' });
+		});
+	});
+
+	describe('player History', () => {
+		it('reads the history of the Player the Screen names, and only while it names one', async () => {
+			const player = await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name: 'History Player' },
+			});
+
+			await setMode('player-history');
+			expect((await asOutput('player-history')).status).toBe(404);
+
+			await setModeConfig('player-history', { playerId: player.id });
+			const { status, data } = await asOutput<{ player: { id: number; name: string }; history: unknown[] }>('player-history');
+
+			expect(status).toBe(200);
+			expect(data.player).toMatchObject({ id: player.id, name: 'History Player' });
+			expect(data.history).toEqual([]);
+
+			// The configuration stays saved, but a Screen in another mode no longer
+			// publishes it.
+			await setMode('background');
+			expect((await asOutput('player-history')).status).toBe(404);
+			expect((await asOutput('standings')).status).toBe(404);
+		});
+	});
+
+	describe('pairings', () => {
+		it('reads the Matches of the Round the Screen names, with each result as last reported', async () => {
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'Pairings Swiss' },
+			});
+			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: 'Pairings Round', roundNumber: 1 },
+			});
+			const match = await $fetch<{ id: number }>(`/api/events/${eventId}/matches`, {
+				method: 'POST',
+				body: {
+					roundId: round.id,
+					tableNumber: 7,
+					player1Data: { name: 'Alice' },
+					player2Data: { name: 'Bob' },
+				},
+			});
+			const pairings = await outputScreen('pairings');
+
+			expect((await pairings.read('pairings')).status).toBe(404);
+
+			await pairings.configure({ roundId: round.id });
+			const pending = await pairings.read<ScreenOutputPairingsResponse>('pairings');
+			expect(pending.status).toBe(200);
+			expect(pending.data.round).toMatchObject({ id: round.id, name: 'Pairings Round' });
+			expect(pending.data.matches).toEqual([
+				expect.objectContaining({
+					matchId: match.id,
+					tableNumber: 7,
+					player1: { id: null, name: 'Alice' },
+					player2: { id: null, name: 'Bob' },
+					hasResult: false,
+				}),
+			]);
+
+			await recordMeleeResult(match.id, [2, 1]);
+			const reported = await pairings.read<ScreenOutputPairingsResponse>('pairings');
+			expect(reported.data.matches[0]).toMatchObject({ hasResult: true, player1GameWins: 2, player2GameWins: 1 });
+		});
+	});
+
+	describe('round-clock', () => {
+		it('reads the Round the Screen names with its timing, and follows "Start now" (ADR-0066)', async () => {
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'Clock Swiss' },
+			});
+			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: 'Clock Round', roundNumber: 1 },
+			});
+			await $fetch(`/api/events/${eventId}/rounds/${round.id}`, {
+				method: 'PATCH',
+				body: { durationMinutes: 50 },
+			});
+			const clock = await outputScreen('round-clock');
+
+			// No Round picked, and none paired from Melee: no Current Round to show.
+			expect((await clock.read<ScreenOutputRoundClockResponse>('round-clock')).data).toEqual({ round: null });
+
+			await clock.configure({ roundId: round.id });
+			const pending = await clock.read<ScreenOutputRoundClockResponse>('round-clock');
+			expect(pending.data.round).toEqual({
+				id: round.id,
+				name: 'Clock Round',
+				startedAt: null,
+				durationMinutes: 50,
+			});
+
+			await $fetch(`/api/events/${eventId}/rounds/${round.id}/start`, { method: 'POST' });
+			const started = await clock.read<ScreenOutputRoundClockResponse>('round-clock');
+			expect(started.data.round?.startedAt).toEqual(expect.any(String));
+		});
+	});
+
+	describe('head-to-head', () => {
+		it('reads the two Players its Feature Match Slot seats, and follows the Slot to its next Match', async () => {
+			const player = async (name: string) => await $fetch<{ id: number }>(`/api/events/${eventId}/players`, {
+				method: 'POST',
+				body: { name },
+			});
+			const alice = await player('H2H Alice');
+			const bob = await player('H2H Bob');
+			const carol = await player('H2H Carol');
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'H2H Swiss' },
+			});
+			const round = async (roundNumber: number) => await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: `H2H Round ${roundNumber}`, roundNumber },
+			});
+			const roundOne = await round(1);
+			const roundTwo = await round(2);
+			const match = async (body: Record<string, unknown>) => await $fetch<{ id: number }>(`/api/events/${eventId}/matches`, { method: 'POST', body });
+			const earlier = await match({
+				roundId: roundOne.id,
+				player1Id: bob.id,
+				player2Id: alice.id,
+			});
+			await recordMeleeResult(earlier.id, [2, 1]);
+			const upcoming = await match({
+				roundId: roundTwo.id,
+				tableNumber: 1,
+				player1Id: alice.id,
+				player2Id: bob.id,
+			});
+			const next = await match({
+				roundId: roundTwo.id,
+				tableNumber: 2,
+				player1Id: carol.id,
+				player2Id: alice.id,
+			});
+			const slot = await $fetch<{ id: number }>(`/api/events/${eventId}/feature-match-slots`, {
+				method: 'POST',
+				body: { bestOf: 3 },
+			});
+			await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+				method: 'POST',
+				body: { matchId: upcoming.id },
+			});
+
+			const headToHead = await outputScreen('head-to-head');
+			await headToHead.configure({ playerSource: 'featureMatchSlot', featureMatchId: slot.id });
+
+			const before = await headToHead.read<ScreenOutputHeadToHeadResponse>('head-to-head');
+			expect(before.status).toBe(200);
+			expect(before.data.player1).toMatchObject({ id: alice.id, name: 'H2H Alice' });
+			expect(before.data.player2).toMatchObject({ id: bob.id, name: 'H2H Bob' });
+			expect(before.data.earlierMatches).toEqual([
+				expect.objectContaining({
+					matchId: earlier.id,
+					roundName: 'H2H Round 1',
+					outcome: 'player2',
+					gameScore: '1–2',
+				}),
+			]);
+
+			await $fetch(`/api/events/${eventId}/feature-match-slots/${slot.id}/promote`, {
+				method: 'POST',
+				body: { matchId: next.id },
+			});
+			const after = await headToHead.read<ScreenOutputHeadToHeadResponse>('head-to-head');
+			expect(after.data.player1).toMatchObject({ id: carol.id });
+			expect(after.data.player2).toMatchObject({ id: alice.id });
+			expect(after.data.earlierMatches).toEqual([]);
+
+			expect((await headToHead.read('head-to-head', capability)).status).toBe(404);
+		});
+	});
+
+	describe('talent', () => {
+		it('reads its lineup in order, with each role and the Social Profiles on the networks it shows', async () => {
+			const talent = async (body: Record<string, unknown>) => await $fetch<{ id: number }>(`/api/events/${eventId}/talents`, {
+				method: 'POST',
+				body,
+			});
+			const host = await talent({
+				name: 'Talent Host',
+				role: 'Host',
+				socialProfiles: { twitch: 'host', x: 'host_x', bluesky: 'host.bsky.social' },
+			});
+			const caster = await talent({
+				name: 'Talent Caster',
+				socialProfiles: { youtube: 'caster' },
+			});
+
+			const output = await outputScreen('talent');
+			await output.configure({
+				selection: 'lineup',
+				talentIds: [caster.id, host.id],
+				socialNetworks: ['bluesky', 'twitch'],
+			});
+
+			const read = await output.read<ScreenOutputTalentResponse>('talent');
+			expect(read.status).toBe(200);
+			expect(read.data.talents).toEqual([
+				{
+					id: caster.id,
+					name: 'Talent Caster',
+					role: null,
+					photo: null,
+					socialProfiles: [],
+				},
+				{
+					id: host.id,
+					name: 'Talent Host',
+					role: 'Host',
+					photo: null,
+					socialProfiles: [
+						{
+							network: 'twitch',
+							networkLabel: 'Twitch',
+							handle: 'host',
+							profileUrl: 'https://www.twitch.tv/host',
+						},
+						{
+							network: 'bluesky',
+							networkLabel: 'Bluesky',
+							handle: 'host.bsky.social',
+							profileUrl: 'https://bsky.app/profile/host.bsky.social',
+						},
+					],
+				},
+			]);
+
+			await $fetch(`/api/events/${eventId}/talents/${caster.id}`, { method: 'DELETE' });
+			expect((await output.read<ScreenOutputTalentResponse>('talent')).data.talents.map(entry => entry.id)).toEqual([host.id]);
+
+			expect((await output.read('talent', capability)).status).toBe(404);
+		});
+	});
+
+	describe('top Cut', () => {
+		it('reads the bracket of the Phase the Screen names, with each result as last reported', async () => {
+			const phase = await $fetch<{ id: number }>(`/api/events/${eventId}/phases`, {
+				method: 'POST',
+				body: { name: 'Top 4' },
+			});
+			const round = await $fetch<{ id: number }>(`/api/events/${eventId}/rounds`, {
+				method: 'POST',
+				body: { phaseId: phase.id, name: 'Top 4 Semifinals', roundNumber: 1 },
+			});
+			const semifinal = await $fetch<{ id: number }>(`/api/events/${eventId}/matches`, {
+				method: 'POST',
+				body: {
+					roundId: round.id,
+					tableNumber: 1,
+					player1Data: { name: 'Alice' },
+					player2Data: { name: 'Bob' },
+				},
+			});
+			await $fetch(`/api/events/${eventId}/matches`, {
+				method: 'POST',
+				body: {
+					roundId: round.id,
+					tableNumber: 2,
+					player1Data: { name: 'Cara' },
+					player2Data: { name: 'Dan' },
+				},
+			});
+			const topCut = await outputScreen('top-cut');
+
+			const unconfigured = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
+			expect(unconfigured.status).toBe(200);
+			expect(unconfigured.data).toEqual({
+				phase: null,
+				bracket: { size: 0, columns: [], champion: null },
+			});
+
+			await topCut.configure({ phaseId: phase.id });
+			const pending = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
+			expect(pending.status).toBe(200);
+			expect(pending.data.phase).toMatchObject({ id: phase.id, name: 'Top 4' });
+			expect(pending.data.bracket.columns.map(column => [column.roundId, column.name, column.positions.length])).toEqual([
+				[round.id, 'Top 4 Semifinals', 2],
+				[null, 'Final', 1],
+			]);
+			expect(pending.data.bracket.columns[0]!.positions[0]).toMatchObject({
+				matchId: semifinal.id,
+				entrants: [
+					{ playerId: null, name: 'Alice' },
+					{ playerId: null, name: 'Bob' },
+				],
+				status: 'unreported',
+			});
+
+			await recordMeleeResult(semifinal.id, [1, 2]);
+			const reported = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
+			expect(reported.data.bracket.columns[0]!.positions[0]).toMatchObject({
+				status: 'reported',
+				winner: 1,
+				gameWins: [1, 2],
+			});
+			expect(reported.data.bracket.columns[1]!.positions[0]!.entrants).toEqual([
+				{ playerId: null, name: 'Bob' },
+				null,
+			]);
+
+			// Seeds and Archetypes are read only while the Screen shows them (#759);
+			// a side no Player holds has neither.
+			await topCut.configure({ showSeeds: true, showArchetypes: true });
+			const detailed = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
+			expect(detailed.data.bracket.columns[0]!.positions[0]!.entrants).toEqual([
+				{
+					playerId: null,
+					name: 'Alice',
+					seed: null,
+					deck: null,
+				},
+				{
+					playerId: null,
+					name: 'Bob',
+					seed: null,
+					deck: null,
+				},
+			]);
+
+			// A set size larger than the first Round implies sizes the bracket.
+			await topCut.configure({ bracketSizeOverride: 8 });
+			const sized = await topCut.read<ScreenOutputTopCutResponse>('top-cut');
+			expect(sized.data.bracket.size).toBe(8);
+			expect(sized.data.bracket.columns.map(column => column.positions.length)).toEqual([4, 2, 1]);
+		});
+	});
+});

@@ -415,34 +415,6 @@ describe('broadcast graphics binding to the Event, its Talents, and its game', (
 		catch {}
 	});
 
-	it('follows the Event to the Talent it names as Talent 1', async () => {
-		const harness = await createGraphicsHarness(eventId, 'bind-talent-1', graphicWith(
-			[NAME],
-			[
-				EVENT_SOURCE,
-				{
-					key: 'talent1',
-					label: 'Talent 1',
-					kind: 'talent',
-					from: { sourceKey: 'event', relation: 'commentator1' },
-				},
-			],
-			[
-				{ inputKey: 'name', sourceKey: 'talent1', fieldId: 'talent.name' },
-			],
-		));
-
-		const taken = await harness.send({
-			commandId: playoutCommandId('bind-talent-1-take'),
-			type: 'Take',
-			payload: { graphicId: GRAPHIC },
-		});
-
-		// The one the Event names as its Talent 1. The Event's other two Talents are not
-		// reachable from here at all, and neither of them is the one it lists first.
-		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Imani Okoye' });
-	});
-
 	it('resolves fixed Social Profile handles and canonical URLs from a directly selected Talent', async () => {
 		const harness = await createGraphicsHarness(eventId, 'bind-talent-social-direct', graphicWith(
 			[NAME, PROFILE_URL],

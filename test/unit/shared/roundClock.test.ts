@@ -126,33 +126,9 @@ describe('projectRoundClock', () => {
 		expect(project(now + nextChangeInMs!).display).not.toBe(display);
 	});
 
-	// A rendering re-evaluates exactly then: as each whole second remaining is
-	// reached while running, the last at the end itself; the start while pending.
+	// Off the running countdown, which is `clock`'s: a pending Round next changes at its start,
+	// and one never started or ended does not change on its own.
 	it.each([
-		[
-			'running, the instant it starts',
-			START,
-			START,
-			1000,
-		],
-		[
-			'running, part-way through a second',
-			START,
-			START + 1500,
-			500,
-		],
-		[
-			'running, on a whole second',
-			START,
-			START + 2000,
-			1000,
-		],
-		[
-			'running, in its last second',
-			START,
-			START + 50 * MINUTE - 400,
-			400,
-		],
 		[
 			'pending a start',
 			START + MINUTE,

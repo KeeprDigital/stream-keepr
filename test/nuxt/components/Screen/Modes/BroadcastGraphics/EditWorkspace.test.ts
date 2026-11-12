@@ -134,6 +134,11 @@ async function mountWorkspace(props: Record<string, unknown> = {}) {
 			canvasHeight: 1080,
 			writable: true,
 			leaseStatus: 'ready',
+			holderName: null,
+			playoutDisconnected: false,
+			saveState: 'idle',
+			saveError: null,
+			flushEdits: async () => true,
 			...props,
 		},
 		global: {

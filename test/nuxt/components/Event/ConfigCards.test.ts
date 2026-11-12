@@ -96,7 +96,7 @@ interface CardCase {
 	event?: Parameters<typeof createMockEvent>[0];
 	edit: (wrapper: Wrapper) => Promise<unknown>;
 	saved: object;
-	/** A colleague's concurrent change to a field this operator leaves alone, and what the card then shows. */
+	/** A colleague's concurrent change to a field this operator leaves alone, and what the card then shows: one per component. */
 	colleague?: { change: Parameters<typeof createMockEvent>[0]; shows: (wrapper: Wrapper) => unknown; expected: unknown };
 }
 
@@ -136,22 +136,12 @@ const CARDS: CardCase[] = [
 		component: PresentationSettings,
 		edit: wrapper => toggle(wrapper, 'displayHideZeroDraws').trigger('click'),
 		saved: { displayHideZeroDraws: false },
-		colleague: {
-			change: { displayPositionFormat: 'number' },
-			shows: wrapper => shown(wrapper, 'displayPositionFormat'),
-			expected: 'number',
-		},
 	},
 	{
 		card: 'presentation canvas',
 		component: PresentationSettings,
 		edit: wrapper => input(wrapper, 'canvasWidth').setValue('1280'),
 		saved: { canvasWidth: 1280 },
-		colleague: {
-			change: { canvasHeight: 1200 },
-			shows: wrapper => shown(wrapper, 'canvasHeight'),
-			expected: '1200',
-		},
 	},
 	{
 		card: 'presentation extra turns label',
@@ -206,13 +196,18 @@ const CARDS: CardCase[] = [
 	},
 ];
 
+/** One case per card component: the shared form tracks every field of a card one way. */
+function onePerComponent(cases: CardCase[]): CardCase[] {
+	return cases.filter((card, index) => cases.findIndex(other => other.component === card.component) === index);
+}
+
 beforeEach(() => {
 	handleSubmit.mockReset();
 	handleSubmit.mockResolvedValue(true);
 });
 
 describe('event config cards', () => {
-	it.each(CARDS)('the $card card tells its page it has unsaved changes until reset', async ({ component, event, edit }) => {
+	it.each(onePerComponent(CARDS))('the $card card tells its page it has unsaved changes until reset', async ({ component, event, edit }) => {
 		const { wrapper, pageIsDirty } = mountUnderPageGuard<Wrapper>(component, {
 			...mountOptions,
 			props: {

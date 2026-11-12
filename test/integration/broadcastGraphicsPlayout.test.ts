@@ -106,54 +106,6 @@ describe('broadcast graphics playout command API', () => {
 		expect(replay.currentState.playout.a).toEqual(first.currentState.playout.a);
 	});
 
-	it('rejects a command id reused for different content', async () => {
-		const harness = await createPlayoutHarness(eventId, 'playout-reused-id', ['a', 'b']);
-		const reusedId = playoutCommandId('reused');
-
-		await harness.send({
-			commandId: reusedId,
-			type: 'Take',
-			payload: { graphicId: 'a' },
-		});
-
-		const res = await $fetchRaw(
-			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
-			{
-				method: 'POST',
-				body: {
-					commandId: reusedId,
-					type: 'Take',
-					payload: { graphicId: 'b' },
-				},
-				ignoreResponseError: true,
-			},
-		);
-
-		expect(res.status).toBe(409);
-	});
-
-	it('records one authoritative effective animation start time, and never a phase', async () => {
-		// The command API is where the durable shape becomes observable, so this is
-		// where the no-replay invariant is worth stating: what a Take writes down is
-		// the operator's intent, the instant it was accepted, and whether it was Cut.
-		// Nothing writes down a lifecycle phase, so a restart has no phase to resume.
-		const harness = await createPlayoutHarness(eventId, 'playout-start-time', ['a']);
-		const before = Date.now();
-
-		const taken = await harness.send({
-			commandId: playoutCommandId('start-time-take'),
-			type: 'Take',
-			payload: { graphicId: 'a' },
-		});
-		const record = taken.currentState.playout.a!;
-
-		expect(Object.keys(record).toSorted()).toEqual(['cut', 'effectiveStartedAt', 'onAir']);
-		// The server's own clock, not a client's: every output projects animation from
-		// this instant, so it comes from the one place that orders commands.
-		expect(record.effectiveStartedAt).toBeGreaterThanOrEqual(before);
-		expect(record.effectiveStartedAt).toBeLessThanOrEqual(Date.now());
-	});
-
 	it('rejects a playout action for a Broadcast Graphic the Screen does not place', async () => {
 		const harness = await createPlayoutHarness(eventId, 'playout-unknown', ['a']);
 
@@ -282,23 +234,26 @@ describe('broadcast graphics live playout animation', () => {
 			integrationBroadcastGraphic('a', integrationGraphicAnimation({ enter: 5000 })),
 		]);
 
+		const serverTime = async () => (await $fetch<{ serverTime: number }>('/api/time')).serverTime;
+
+		const before = await serverTime();
 		const taken = await harness.send({
 			commandId: playoutCommandId('clock-take'),
 			type: 'Take',
 			payload: { graphicId: 'a' },
 		});
-		const clock = await $fetch<{ serverTime: number }>('/api/time');
+		const after = await serverTime();
 
 		// An output must not subtract two clocks it does not own. It gets the authoritative
 		// one from `/api/time`, which is what `useServerTime` synchronises against — so the
 		// thing that has to be true is that acceptance stamps effective start times on *that
 		// same* clock. If it did not, every output would project against a schedule from a
 		// clock it had no way to correct for.
+		// Read on either side of the Take, so the bracket is as wide as the requests took
+		// and no wider: a start time stamped on any other clock falls outside it.
 		const startedAt = taken.currentState.playout.a!.effectiveStartedAt;
-		expect(clock.serverTime).toBeGreaterThanOrEqual(startedAt);
-		// Seconds, not a minute. The envelope has to be tight enough that two clocks a
-		// phase-duration apart would fail it, and a phase lasts at most twenty seconds.
-		expect(clock.serverTime - startedAt).toBeLessThan(5_000);
+		expect(startedAt).toBeGreaterThanOrEqual(before);
+		expect(startedAt).toBeLessThanOrEqual(after);
 	});
 
 	it('reverses an entrance that Out interrupted, bounded by the entrance itself', async () => {

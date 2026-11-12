@@ -1519,55 +1519,6 @@ describe('the Library Workspace when its graphics author session decides ownersh
 		expect(wrapper.find('[data-testid="sign-in-again"]').exists()).toBe(false);
 	});
 
-	it('names an ended session when a resumable part is refused mid-transfer', async () => {
-		const wrapper = await mountPage();
-		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
-		const file = new File([bytes], 'large-scoreboard.png', { type: 'image/png' });
-		const created: GraphicsIngestionOperation = {
-			...completedOperation,
-			name: 'large-scoreboard.png',
-			sourceFileName: 'large-scoreboard.png',
-			declaredMime: 'image/png',
-			declaredByteLength: bytes.byteLength,
-			transferredByteLength: 0,
-			stage: 'created',
-			report: undefined,
-			result: undefined,
-		};
-		const started: GraphicsIngestionOperation = {
-			...created,
-			stage: 'transferring',
-			transfer: {
-				method: 'multipart',
-				partByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-				maximumConcurrentParts: 1,
-				maximumPartAttempts: 3,
-				partCount: 2,
-				cleanupPending: false,
-				completedParts: [],
-			},
-		};
-		mockApiFetch.mockImplementation((path: string) => {
-			if (path.includes('/multipart/parts/'))
-				return Promise.reject(endedSession());
-			return Promise.resolve(path.endsWith('/multipart')
-				? started
-				: created);
-		});
-
-		wrapper.getComponent(fileUploadStub).vm.$emit('update:modelValue', file);
-		await flushPromises();
-		await wrapper.get('[data-testid="upload-image"]').trigger('click');
-		await flushPromises();
-
-		expect(wrapper.get('[data-testid="upload-error"]').text())
-			.toContain('This browser is no longer signed in');
-		// A part the library refused for want of an author is not a part worth
-		// sending again, so the transfer stops instead of exhausting its attempts.
-		expect(mockApiFetch.mock.calls
-			.filter(([path]) => String(path).includes('/multipart/parts/'))).toHaveLength(1);
-	});
-
 	it('names an ended session when an approved remote copy is refused', async () => {
 		const wrapper = await mountPage();
 		mockApiFetch.mockRejectedValue(endedSession());

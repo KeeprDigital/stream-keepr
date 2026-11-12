@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer';
 import { createServer } from 'node:http';
 import { connect } from 'node:net';
 import { Writable } from 'node:stream';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installEarlyAnswerDrain } from '~~/test/integration/earlyAnswerDrain.mjs';
 
 /**
@@ -27,9 +27,24 @@ afterEach(async () => {
 async function serve(handler: Parameters<typeof createServer>[1]) {
 	cleanups.push(installEarlyAnswerDrain());
 	const server = createServer(handler);
+	// Nothing here closes a connection for being idle: Node would reset one 5 s
+	// after its last answer, which a busy enough machine spends between two requests.
+	server.keepAliveTimeout = 0;
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-	cleanups.push(() => new Promise(resolve => server.close(resolve)));
+	cleanups.push(() => new Promise((resolve) => {
+		server.close(resolve);
+		// One left with a body unread never sees its client go.
+		server.closeAllConnections();
+	}));
 	return (server.address() as AddressInfo).port;
+}
+
+/**
+ * Holds until `assertion` passes, on the suite's bound: an answer that never
+ * comes fails there, and one a busy machine delays does not.
+ */
+function arrived(assertion: () => void) {
+	return vi.waitFor(assertion, { interval: 10 });
 }
 
 /** One raw connection, so the test decides which bytes go out on it and when. */
@@ -40,12 +55,7 @@ function connection(port: number) {
 	socket.on('data', (chunk: string) => received += chunk);
 	socket.on('error', () => {});
 	cleanups.push(() => socket.destroy());
-	const answers = async (count: number, milliseconds: number) => {
-		const deadline = Date.now() + milliseconds;
-		while (received.split('HTTP/1.1 200 OK').length - 1 < count && Date.now() < deadline)
-			await new Promise(resolve => setTimeout(resolve, 10));
-		return received.split('HTTP/1.1 200 OK').length - 1;
-	};
+	const answers = () => received.split('HTTP/1.1 200 OK').length - 1;
 	return { socket, answers };
 }
 
@@ -68,10 +78,10 @@ describe('an integration server\'s early answer', () => {
 
 		socket.write('PUT /api/parts/1 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4194304\r\n\r\n');
 		socket.write(Buffer.alloc(4 * 1024 * 1024));
-		expect(await answers(1, 2_000)).toBe(1);
+		await arrived(() => expect(answers()).toBe(1));
 		socket.write('PUT /api/parts/2 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 1\r\n\r\nx');
 
-		expect(await answers(2, 2_000)).toBe(2);
+		await arrived(() => expect(answers()).toBe(2));
 	});
 
 	it('leaves alone a body its handler read to the end', async () => {
@@ -83,9 +93,9 @@ describe('an integration server\'s early answer', () => {
 		const { socket, answers } = connection(port);
 
 		socket.write('PUT /api/parts/1 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4\r\n\r\nabcd');
-		expect(await answers(1, 2_000)).toBe(1);
+		await arrived(() => expect(answers()).toBe(1));
 		socket.write('GET /api/parts HTTP/1.1\r\nHost: localhost\r\n\r\n');
 
-		expect(await answers(2, 2_000)).toBe(2);
+		await arrived(() => expect(answers()).toBe(2));
 	});
 });

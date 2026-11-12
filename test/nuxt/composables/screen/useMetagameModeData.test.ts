@@ -347,7 +347,8 @@ describe('useMetagameModeData', () => {
 
 	describe('freshness', () => {
 		// Only the aggregate's Event Data changes under the output, and nothing
-		// loads a roster to stand in for it (#602).
+		// loads a roster to stand in for it (#602). Which kinds a Metagame follows
+		// is `screenOutputInterest`'s own test.
 		async function showingMetagame() {
 			const data = makeMetagameModeData();
 			await flushPromises();
@@ -385,41 +386,6 @@ describe('useMetagameModeData', () => {
 			});
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(2);
-		});
-
-		// Which kinds a Metagame follows is `screenOutputInterest`'s own test.
-		it.each([
-			[
-				'an Archetype is created, edited or deleted',
-				[
-					[
-						'archetype:created',
-						{
-							archetype: { id: 4, name: 'Mono Red' },
-						},
-					],
-					[
-						'archetype:updated',
-						{
-							archetype: { id: 4, name: 'Boros' },
-						},
-					],
-					[
-						'archetype:deleted',
-						{ archetypeId: 4 },
-					],
-				],
-			],
-		] as const)('re-reads when %s', async (_, messages) => {
-			await showingMetagame();
-
-			for (const [type, payload] of messages) {
-				deliver(type, payload);
-				await flushPromises();
-			}
-
-			expect(mockFetch).toHaveBeenCalledTimes(messages.length);
-			expect(usePlayerStore().dataVersion).toBe(0);
 		});
 	});
 });

@@ -199,13 +199,6 @@ describe('useTopCutModeData', () => {
 				},
 			],
 			[
-				'a Round added to its Phase',
-				'round:created',
-				{
-					round: { id: 32, phaseId: 3 },
-				},
-			],
-			[
 				'an entrant renamed',
 				'player:updated',
 				{

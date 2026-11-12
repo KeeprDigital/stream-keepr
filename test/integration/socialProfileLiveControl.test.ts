@@ -15,6 +15,21 @@ import { executeIntegrationD1 } from './integrationD1';
 
 const GRAPHIC_ID = 'talent-lower-third';
 const PROJECTION_KEY = 'profile';
+const TRANSITION_DURATION_MS = 250;
+
+/**
+ * Resolves once the server's own clock, which stamps and ends every Social
+ * Profile Transition, has passed `at`: a transition is over when the server
+ * says so, not when this process has slept long enough.
+ */
+async function serverClockPast(at: number) {
+	for (;;) {
+		const { serverTime } = await $fetch<{ serverTime: number }>('/api/time');
+		if (serverTime > at)
+			return;
+		await new Promise(resolve => setTimeout(resolve, at - serverTime + 1));
+	}
+}
 
 function socialProfileGraphic(updatePolicy?: 'staged' | 'live'): BroadcastGraphicConfig {
 	const square = { treatment: 'square' as const, size: 0 };
@@ -25,7 +40,7 @@ function socialProfileGraphic(updatePolicy?: 'staged' | 'live'): BroadcastGraphi
 		presentationGroupId: 'profile-group',
 		dwellMs: 8_000,
 		transition: 'crossfade' as const,
-		transitionDurationMs: 250,
+		transitionDurationMs: TRANSITION_DURATION_MS,
 		...(updatePolicy
 			? { updatePolicy }
 			: {}),
@@ -217,8 +232,8 @@ describe('manual Social Profile Projection command API', () => {
 			}),
 		]));
 		expect(projection!.rotationAnchor!.anchoredAt)
-			.toBe(projection!.transitionAnchor!.startedAt + 250);
-		await new Promise(resolve => setTimeout(resolve, 300));
+			.toBe(projection!.transitionAnchor!.startedAt + TRANSITION_DURATION_MS);
+		await serverClockPast(projection!.transitionAnchor!.startedAt + TRANSITION_DURATION_MS);
 
 		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
 			method: 'PATCH',
@@ -238,7 +253,7 @@ describe('manual Social Profile Projection command API', () => {
 			},
 		});
 		expect(removed?.manualNetwork).toBeUndefined();
-		await new Promise(resolve => setTimeout(resolve, 300));
+		await serverClockPast(removed!.transitionAnchor!.startedAt + TRANSITION_DURATION_MS);
 
 		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
 			method: 'PATCH',
@@ -252,7 +267,7 @@ describe('manual Social Profile Projection command API', () => {
 				values: expect.objectContaining({ network: 'twitch' }),
 			}),
 		]);
-		await new Promise(resolve => setTimeout(resolve, 300));
+		await serverClockPast(unavailable!.transitionAnchor!.startedAt + TRANSITION_DURATION_MS);
 
 		await $fetch(`/api/events/${eventId}/talents/${talent.id}`, {
 			method: 'PATCH',
@@ -273,7 +288,7 @@ describe('manual Social Profile Projection command API', () => {
 			},
 		});
 		expect(repopulated!.rotationAnchor!.anchoredAt)
-			.toBe(repopulated!.transitionAnchor!.startedAt + 250);
+			.toBe(repopulated!.transitionAnchor!.startedAt + TRANSITION_DURATION_MS);
 	});
 
 	it('keeps a staged profile set off program and out of the picker until Update Graphic accepts it', async () => {
@@ -579,7 +594,7 @@ describe('manual Social Profile Projection command API', () => {
 		});
 		expect(projection?.manualNetwork).toBeUndefined();
 		expect(projection!.rotationAnchor!.anchoredAt)
-			.toBe(projection!.transitionAnchor!.startedAt + 250);
+			.toBe(projection!.transitionAnchor!.startedAt + TRANSITION_DURATION_MS);
 	});
 
 	it('serializes a manual profile choice racing the Event Data refresh without reviving a removed profile', async () => {

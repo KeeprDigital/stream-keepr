@@ -116,22 +116,19 @@ describe('matches API', () => {
 		expect(updated.hasResult).toBe(false);
 	});
 
+	// Each result field is refused in `test/unit/server/schemas/match.test.ts`;
+	// here one crosses each write route and leaves the Match as it was.
 	it('refuses a manual write carrying a result, which only Melee Sync records', async () => {
-		for (const body of [
-			{ hasResult: true, player1GameWins: 2, player2GameWins: 1 },
-			{ gameDraws: 1 },
-			{ isBye: true },
-			{ resultString: '2-1' },
-		]) {
-			const update = await $fetchRaw(`/api/events/${eventId}/matches/${matchId}`, { method: 'PATCH', body });
-			expect(update.status).toBe(400);
+		const result = { hasResult: true, player1GameWins: 2, player2GameWins: 1 };
 
-			const create = await $fetchRaw(`/api/events/${eventId}/matches`, {
-				method: 'POST',
-				body: { roundId, tableNumber: 98, ...body },
-			});
-			expect(create.status).toBe(400);
-		}
+		const update = await $fetchRaw(`/api/events/${eventId}/matches/${matchId}`, { method: 'PATCH', body: result });
+		expect(update.status).toBe(400);
+
+		const create = await $fetchRaw(`/api/events/${eventId}/matches`, {
+			method: 'POST',
+			body: { roundId, tableNumber: 98, ...result },
+		});
+		expect(create.status).toBe(400);
 
 		const match = await $fetch(`/api/events/${eventId}/matches/${matchId}`);
 		expect(match).toMatchObject({

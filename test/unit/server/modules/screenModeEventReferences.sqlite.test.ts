@@ -291,7 +291,10 @@ describe('screen Mode Event References', () => {
 		expect(mockPublication.screenUpdated).not.toHaveBeenCalled();
 	});
 
-	describe.each(declaredFields)('$declared', ({ mode, field, kind }) => {
+	// One check per kind reads every field declaring it, so the first field of each kind stands for the rest.
+	const firstOfEachKind = declaredFields.filter(({ kind }, index) => declaredFields.findIndex(other => other.kind === kind) === index);
+
+	describe.each(firstOfEachKind)('$declared', ({ mode, field, kind }) => {
 		it.each(SAMPLES[kind].map((sample, index) => ({ ...sample, index })))(
 			'refuses a $name from another Event on every Screen write',
 			async ({ naming, refusal, index }) => {

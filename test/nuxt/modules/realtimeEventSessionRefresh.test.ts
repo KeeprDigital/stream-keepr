@@ -1,9 +1,10 @@
 import type { MessagePayload, MessageType } from '~~/shared/types/messages';
 import type { FeatureMatchAssignment } from '~/types';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent, createMockFeatureMatchState, createMockRound } from '~~/test/helpers/fixtures';
-import { settleUntilStill } from '~~/test/helpers/settle';
+import { settleUntil, settleUntilStill } from '~~/test/helpers/settle';
 import { createSession, createSourceSnapshot } from '~~/test/nuxt/helpers/featureMatchStateHarness';
 import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
 
@@ -148,15 +149,20 @@ describe('a Melee sync message', () => {
 		return { metagameVersion: useMetagameStore().invalidationVersion };
 	}
 
-	async function send([type, payload]: Sent) {
+	/** Delivers one message and waits for the reads it should cause, or, for none, until nothing more happens. */
+	async function send([type, payload]: Sent, expected: number) {
 		deliver(type, payload as never, { eventId: EVENT_ID });
-		await settleUntilStill(() => reads);
+		if (expected === 0)
+			return settleUntilStill(() => reads);
+		await settleUntil(() => reads.length >= expected);
+		// A read the handler makes beyond these is in the same chain, and lands with this.
+		await flushPromises();
 	}
 
 	it.each(meleeMessages)('$sent.0 $sent.1 re-reads $reads for an operator', async ({ sent, reads: expected, invalidatesMetagame }) => {
 		const { metagameVersion } = await stage({ operator: true });
 
-		await send(sent);
+		await send(sent, expected.length);
 
 		expect(reads.toSorted()).toEqual(expected.toSorted());
 		expect(useMetagameStore().invalidationVersion - metagameVersion).toBe(invalidatesMetagame ? 1 : 0);
@@ -246,7 +252,7 @@ describe('a Feature Match message', () => {
 			sourceSnapshot: createSourceSnapshot(),
 			currentState: createMockFeatureMatchState({ turnNumber: 9 }),
 		});
-		await settleUntilStill(() => store.sessionSequenceBySlotId.get(session.slotId));
+		await settleUntil(() => store.sessionSequenceBySlotId.get(session.slotId) === session.sequence + 1);
 
 		expect(store.sessionSequenceBySlotId.get(session.slotId)).toBe(session.sequence + 1);
 		expect(store.featureMatchStates.get(session.slotId)?.turnNumber).toBe(9);

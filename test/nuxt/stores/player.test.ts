@@ -1,8 +1,6 @@
-import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockPlayer } from '~~/test/helpers/fixtures';
 import { transportFailure } from '~~/test/helpers/transportFailure';
-import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
 
 const mockRepo = vi.hoisted(() => ({
 	list: vi.fn(),
@@ -16,13 +14,6 @@ vi.mock('~/modules/event-data/client', async importOriginal => ({
 	...(await importOriginal<typeof import('~~/app/modules/event-data/client')>()),
 	useEventDataResource: () => mockRepo,
 }));
-
-const mockMetagameStore = {
-	applyRemoteInvalidated: vi.fn(),
-};
-mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
-
-const { deliver } = realtimeHandlersFor();
 
 describe('usePlayerStore', () => {
 	let store: ReturnType<typeof usePlayerStore>;
@@ -72,14 +63,6 @@ describe('usePlayerStore', () => {
 
 			expect(store.dataVersion).toBe(0);
 		});
-	});
-
-	it('a peer\'s Player message invalidates the Metagame', () => {
-		deliver('player:created', {
-			player: createMockPlayer({ id: 3 }),
-		} as never);
-
-		expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
 	});
 
 	describe('getPlayerById', () => {

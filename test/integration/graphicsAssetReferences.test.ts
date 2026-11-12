@@ -1,6 +1,8 @@
+import type { ScreenResponse } from '~~/shared/api';
 import type {
 	GraphicAssetUsage,
 	GraphicsIngestionOperation,
+	GraphicAssetReference as Reference,
 } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
@@ -26,8 +28,105 @@ const referencePixelPng = Uint8Array.from(Buffer.concat([
 describe('feature Match Overlay exact Graphic Asset References', () => {
 	let eventId: number;
 	let screenId: number;
-	let operation: GraphicsIngestionOperation;
+	let reference: Reference;
 	let graphicsAuthorCookie: string;
+
+	/** One Graphic Asset of a test's own: the same bytes under a fresh identity. */
+	async function ingest(idempotencyKey: string, name: string): Promise<Reference> {
+		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
+			method: 'POST',
+			headers: { cookie: graphicsAuthorCookie },
+			body: graphicsIngestionRequest({
+				idempotencyKey,
+				name,
+				defaultEventId: eventId,
+				browserDecodeEvidence: {
+					outcome: 'decoded',
+					sourceDigest: createHash('sha256').update(referencePixelPng).digest('hex'),
+					width: 1,
+					height: 1,
+				},
+				declaredByteLength: referencePixelPng.byteLength,
+			}),
+		});
+		const response = await fetch(
+			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
+			{
+				method: 'PUT',
+				headers: { cookie: graphicsAuthorCookie },
+				body: referencePixelPng,
+			},
+		);
+		const operation = await expectOperationResult(response);
+		return { assetId: operation.result.assetId, revisionId: operation.result.revisionId };
+	}
+
+	function usageOf(pinned: Reference) {
+		return $fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${pinned.assetId}/usage`,
+			{
+				headers: { cookie: graphicsAuthorCookie },
+			},
+		);
+	}
+
+	/** A layout pinning one asset three times: in the Frame, in the composition, and in a Graphic Group. */
+	function pinnedLayout(pinned: Reference) {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.frame.backgroundImage = { kind: 'asset', ...pinned };
+		config.layout.composition.items.push({
+			...getGraphicItemDefinition('media').createDefault({
+				id: 'sponsor-logo',
+				label: 'Sponsor logo',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
+			asset: pinned,
+		} as never);
+		const group = config.layout.composition.items.find(item => item.type === 'group');
+		if (group?.type !== 'group')
+			throw new Error('Expected a Graphic Group fixture');
+		group.children.push({
+			...getGraphicItemDefinition('media').createDefault({
+				id: 'group-sponsor-logo',
+				label: 'Grouped sponsor logo',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
+			asset: pinned,
+		} as never);
+		return { layout: config.layout, groupId: group.id };
+	}
+
+	async function savePinnedLayout() {
+		const { layout, groupId } = pinnedLayout(reference);
+		const updated = await $fetch<ScreenResponse>(
+			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+			{
+				method: 'PATCH',
+				body: { layout },
+			},
+		);
+		return { updated, groupId };
+	}
+
+	/** A Screen and a Graphic Asset of a test's own, pinned the same way. */
+	async function pinnedOverlay(key: string) {
+		const pinned = await ingest(`reference-${key}-logo`, `Reference ${key} logo`);
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: `Pinned ${key}`, slug: `pinned-${key}`, currentMode: 'feature-match-overlay' },
+		});
+		const { layout } = pinnedLayout(pinned);
+		await $fetch<ScreenResponse>(
+			`/api/events/${eventId}/screens/${screen.id}/config/feature-match-overlay`,
+			{
+				method: 'PATCH',
+				body: { layout },
+			},
+		);
+		return { screenId: screen.id, pinned, layout };
+	}
 
 	beforeAll(async () => {
 		graphicsAuthorCookie = await operatorSessionCookie();
@@ -49,31 +148,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 			},
 		});
 		screenId = screen.id;
-		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
-			method: 'POST',
-			headers: { cookie: graphicsAuthorCookie },
-			body: graphicsIngestionRequest({
-				idempotencyKey: 'reference-event-logo',
-				name: 'Reference Event logo',
-				defaultEventId: eventId,
-				browserDecodeEvidence: {
-					outcome: 'decoded',
-					sourceDigest: createHash('sha256').update(referencePixelPng).digest('hex'),
-					width: 1,
-					height: 1,
-				},
-				declaredByteLength: referencePixelPng.byteLength,
-			}),
-		});
-		const response = await fetch(
-			`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
-			{
-				method: 'PUT',
-				headers: { cookie: graphicsAuthorCookie },
-				body: referencePixelPng,
-			},
-		);
-		operation = await expectOperationResult(response);
+		reference = await ingest('reference-event-logo', 'Reference Event logo');
 	});
 
 	afterAll(async () => {
@@ -84,52 +159,13 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 	});
 
 	it('atomically saves Screen configuration and every persisted exact-revision usage', async () => {
-		const reference = {
-			assetId: operation.result!.assetId,
-			revisionId: operation.result!.revisionId,
-		};
-		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = { kind: 'asset', ...reference };
-		config.layout.composition.items.push({
-			...getGraphicItemDefinition('media').createDefault({
-				id: 'sponsor-logo',
-				label: 'Sponsor logo',
-				canvasWidth: 1920,
-				canvasHeight: 1080,
-			}),
-			asset: reference,
-		} as never);
-		const group = config.layout.composition.items.find(item => item.type === 'group');
-		if (group?.type !== 'group')
-			throw new Error('Expected a Graphic Group fixture');
-		group.children.push({
-			...getGraphicItemDefinition('media').createDefault({
-				id: 'group-sponsor-logo',
-				label: 'Grouped sponsor logo',
-				canvasWidth: 1920,
-				canvasHeight: 1080,
-			}),
-			asset: reference,
-		} as never);
+		const { updated, groupId } = await savePinnedLayout();
 
-		const updated = await $fetch(
-			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-			{
-				method: 'PATCH',
-				body: { layout: config.layout },
-			},
-		);
-		expect(updated!.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual({ kind: 'asset', ...reference });
+		expect(updated.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual({ kind: 'asset', ...reference });
 
-		const usage = await $fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${reference.assetId}/usage`,
-			{
-				headers: { cookie: graphicsAuthorCookie },
-			},
-		);
 		// Usage is reported in owner-slot order, so the composed tree precedes the
 		// Frame it is drawn over.
-		expect(usage).toEqual([
+		await expect(usageOf(reference)).resolves.toEqual([
 			expect.objectContaining({
 				reference,
 				owner: {
@@ -146,7 +182,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 					kind: 'screen',
 					id: String(screenId),
 					name: 'Pinned Overlay',
-					slot: `layout.composition.items.${group.id}.children.group-sponsor-logo.asset`,
+					slot: `layout.composition.items.${groupId}.children.group-sponsor-logo.asset`,
 					eventId,
 				},
 			}),
@@ -164,6 +200,7 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 	});
 
 	it('rejects a newly introduced missing reference without changing configuration or usage', async () => {
+		await savePinnedLayout();
 		const current = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		const config = structuredClone(current!.modeConfigs!['feature-match-overlay']);
 		config!.layout!.frame.backgroundImage = {
@@ -183,43 +220,32 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 		const unchanged = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
 		expect(unchanged!.modeConfigs!['feature-match-overlay']!.layout!.frame.backgroundImage).toEqual({
 			kind: 'asset',
-			assetId: operation.result!.assetId,
-			revisionId: operation.result!.revisionId,
+			...reference,
 		});
-		await expect($fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-			{
-				headers: { cookie: graphicsAuthorCookie },
-			},
-		)).resolves.toHaveLength(3);
+		await expect(usageOf(reference)).resolves.toHaveLength(3);
 	});
 
 	it('keeps unchanged retired revisions indexed and exactly resolvable', async () => {
+		// A Screen and an asset of its own: the retirement must not reach another test's pin.
+		const { screenId: retiredScreenId, pinned, layout } = await pinnedOverlay('retired');
 		await executeIntegrationD1(`
 			UPDATE graphic_assets
 			SET lifecycle_state = 'retired'
-			WHERE id = '${operation.result!.assetId}'
+			WHERE id = '${pinned.assetId}'
 		`);
-		const current = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
-		const config = structuredClone(current!.modeConfigs!['feature-match-overlay']);
-		config!.layout!.frame.backgroundImageFit = 'contain';
+		layout.frame.backgroundImageFit = 'contain';
 
 		await $fetch(
-			`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
+			`/api/events/${eventId}/screens/${retiredScreenId}/config/feature-match-overlay`,
 			{
 				method: 'PATCH',
-				body: { layout: config!.layout },
+				body: { layout },
 			},
 		);
 
-		await expect($fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-			{
-				headers: { cookie: graphicsAuthorCookie },
-			},
-		)).resolves.toHaveLength(3);
+		await expect(usageOf(pinned)).resolves.toHaveLength(3);
 		const resolution = await fetch(
-			`/api/graphics-assets/${operation.result!.assetId}/revisions/${operation.result!.revisionId}/content`,
+			`/api/graphics-assets/${pinned.assetId}/revisions/${pinned.revisionId}/content`,
 			{
 				headers: { cookie: graphicsAuthorCookie },
 			},
@@ -251,13 +277,12 @@ describe('feature Match Overlay exact Graphic Asset References', () => {
 	});
 
 	it('removes every authoritative usage row when the owning Screen is deleted', async () => {
-		await $fetch(`/api/events/${eventId}/screens/${screenId}`, { method: 'DELETE' });
-		await expect($fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-			{
-				headers: { cookie: graphicsAuthorCookie },
-			},
-		)).resolves.toEqual([]);
+		const { screenId: deletedScreenId, pinned } = await pinnedOverlay('deleted');
+		await expect(usageOf(pinned)).resolves.toHaveLength(3);
+
+		await $fetch(`/api/events/${eventId}/screens/${deletedScreenId}`, { method: 'DELETE' });
+
+		await expect(usageOf(pinned)).resolves.toEqual([]);
 	});
 });
 
@@ -380,45 +405,6 @@ describe('background Screen exact Graphic Asset References', () => {
 			}),
 		]);
 	});
-
-	it('refuses a second animation layer at the write path', async () => {
-		const current = await $fetch(`/api/events/${eventId}/screens/${screenId}`);
-		const layers = structuredClone(current!.modeConfigs!.background!.layers) as Array<Record<string, unknown>>;
-		layers.push(
-			{
-				id: 'anim-1',
-				type: 'animation',
-				enabled: true,
-				opacity: 1,
-				animation: { effect: 'fog' },
-			},
-			{
-				id: 'anim-2',
-				type: 'animation',
-				enabled: false,
-				opacity: 1,
-				animation: { effect: 'caustics' },
-			},
-		);
-
-		await expect($fetch(
-			`/api/events/${eventId}/screens/${screenId}/config/background`,
-			{
-				method: 'PATCH',
-				body: { layers },
-			},
-		)).rejects.toMatchObject({ statusCode: 400 });
-	});
-
-	it('removes the layer\'s usage row when the owning Screen is deleted', async () => {
-		await $fetch(`/api/events/${eventId}/screens/${screenId}`, { method: 'DELETE' });
-		await expect($fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${operation.result!.assetId}/usage`,
-			{
-				headers: { cookie: graphicsAuthorCookie },
-			},
-		)).resolves.toEqual([]);
-	});
 });
 
 /**
@@ -505,7 +491,7 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 		catch {}
 	});
 
-	it('keeps the Deck’s row when the same Screen’s Card stack is written', async () => {
+	it('keeps each mode’s row apart: a Card write leaves the Deck’s, and dropping the Deck’s layer leaves the Card’s', async () => {
 		for (const mode of ['deck', 'card']) {
 			await $fetch(
 				`/api/events/${eventId}/screens/${screenId}/config/${mode}`,
@@ -524,9 +510,7 @@ describe('a plain overlay mode’s own Background Layer references (#580)', () =
 			'card.backgroundLayers.plate.source',
 			'deck.backgroundLayers.plate.source',
 		]);
-	});
 
-	it('stops indexing a layer once the stack drops it', async () => {
 		await $fetch(
 			`/api/events/${eventId}/screens/${screenId}/config/deck`,
 			{

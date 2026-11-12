@@ -38,35 +38,19 @@ async function anonymous(path: string, init: RequestInit = {}) {
 
 describe('the API boundary', () => {
 	/**
-	 * One route per shape of private path, rather than one per route: what is
-	 * being established is that the middleware runs at all and refuses by
-	 * default. The set is exhaustive against the routes on disk in the unit
-	 * suite, where it can be, and a census by HTTP would be a hundred and sixty
-	 * requests establishing the same thing.
+	 * One read and one write, rather than one per route: what is being
+	 * established is that the middleware runs at all and refuses by default.
+	 * Which paths are private is exhaustive against the routes on disk in the
+	 * unit suite, where it can be, and a census by HTTP would be a hundred and
+	 * sixty requests establishing the same thing. The two orderings only a real
+	 * server has, ahead of `event-exists.ts` and ahead of the router, are the
+	 * cases below.
 	 */
 	it.each([
 		// A collection read, and the plainest possible case.
 		['GET', '/api/graphics-assets'],
 		// A write. The boundary must refuse before the body is read, not after.
 		['POST', '/api/events'],
-		// The on-air Screen command route: the one ADR-0010 names as the reason
-		// guard-by-guard protection was not good enough.
-		['POST', '/api/events/1/screens/1/command'],
-		// The Melee credential write, the other named one.
-		['PUT', '/api/events/1/melee-config'],
-		// Under `/api/events/:id/**`, so `event-exists.ts` would answer 404 for a
-		// missing Event if it ran first. It must not: the difference between 404
-		// and 401 is an Event-existence oracle for anybody who asks.
-		['GET', '/api/events/999999999/players'],
-		// The Screen lookup by slug's **old** path. #397 moved the route to
-		// `/api/screen-output/**`, and nothing was left behind at this one — so this
-		// row is now about the boundary's default rather than about that route: a path
-		// with no handler is private, which is what stops a moved route from being
-		// reachable at the address it moved away from.
-		['GET', '/api/events/1/screens/slug/anything'],
-		// A path no handler answers. Private by default reaches further than the
-		// routes that exist, which is the posture rather than a side effect.
-		['GET', '/api/not-a-route-at-all'],
 	])('refuses an anonymous %s %s with one uniform 401', async (method, path) => {
 		const { status, message } = await anonymous(path, { method });
 

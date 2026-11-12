@@ -90,7 +90,7 @@ jobs:
         run: node scripts/ci-scope.mjs
 
   # Every gate `pnpm test` runs (verify.mjs --tests) appears below as its own step
-  # (test/unit/scripts/workerSmoke.test.ts holds that), split across parallel
+  # (test/unit/scripts/repoWiring.test.ts holds that), split across parallel
   # jobs so the longest one, not the sum, sets the wall time. Lint, typecheck
   # and the two suites were one job of 11 to 18 minutes, three times the next
   # longest; each is its own job now, and the Nuxt suite sets the wall time.

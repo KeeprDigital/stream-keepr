@@ -12,8 +12,11 @@ const mockCardStore = reactive({
 	readActiveCardAsScreenOutput: vi.fn((_read: () => Promise<unknown>) => vi.fn()),
 	cardDataDegraded: false,
 });
-/** The Card the server holds for the Screen; `loadActiveCard` reads it, as the store does. */
+const SCREEN_ID = 1;
+/** The Card the server holds for the Screen; `loadActiveCard` reads it while that Screen is selected, as the store does. */
 let serverCard: { name: string } | null = null;
+/** The Screen the store was last told to show: it reads that Screen's Card, and none while no Screen is selected. */
+let selectedScreenId: number | null = null;
 // New for each test, so none hears a channel an earlier one watched.
 let continuity = createContinuitySignal();
 let attachment = createAttachSignal();
@@ -61,11 +64,17 @@ enableAutoUnmount(afterEach);
 
 describe('useCardModeData', () => {
 	beforeEach(() => {
-		mockScreen.value = { id: 1 };
+		mockScreen.value = { id: SCREEN_ID };
 		serverCard = null;
+		selectedScreenId = null;
 		mockCardStore.activeCard = null;
+		mockCardStore.setActiveScreen.mockImplementation((screenId: number | null) => {
+			selectedScreenId = screenId;
+		});
 		mockCardStore.loadActiveCard.mockImplementation(async () => {
-			mockCardStore.activeCard = serverCard;
+			mockCardStore.activeCard = selectedScreenId === SCREEN_ID
+				? serverCard
+				: null;
 			return 'landed';
 		});
 		mockRealtime.connectionState = 'connected';
@@ -77,12 +86,13 @@ describe('useCardModeData', () => {
 		mockApiFetch.mockResolvedValue({ id: 'card-1', name: 'Lightning Bolt' });
 	});
 
-	it('calls setActiveScreen and loadActiveCard on mount', async () => {
-		mountCardModeData();
+	it('shows its Screen\'s Card once mounted', async () => {
+		serverCard = { name: 'Lightning Bolt' };
+
+		const { card } = mountCardModeData();
 		await flushPromises();
 
-		expect(mockCardStore.setActiveScreen).toHaveBeenCalledWith(1);
-		expect(mockCardStore.loadActiveCard).toHaveBeenCalled();
+		expect(card.value).toEqual({ name: 'Lightning Bolt' });
 	});
 
 	it('reads the Screen\'s Card through the Screen, not the operator\'s Card path (#604)', async () => {

@@ -408,6 +408,94 @@ describe('outputChangeOf', () => {
 				{ kind: 'screen', screenId: SCREEN },
 			],
 		],
+		// What is new names its id as what changes it does, so an output following every one shows it.
+		[
+			'talent:created',
+			[
+				{
+					kind: 'talent',
+					talentIds: [TALENT],
+				},
+			],
+		],
+		[
+			'phase:created',
+			[
+				{
+					kind: 'phase',
+					phaseIds: [PHASE],
+				},
+			],
+		],
+		[
+			'round:created',
+			[
+				{
+					kind: 'round',
+					roundIds: [ROUND],
+				},
+			],
+		],
+		[
+			'featureMatch:created',
+			[
+				{
+					kind: 'featureMatchSlot',
+					slotIds: [SLOT],
+				},
+			],
+		],
+		[
+			'playerList:created',
+			[
+				{
+					kind: 'playerList',
+					playerListIds: [LIST],
+				},
+			],
+		],
+		[
+			'broadcastDeckList:created',
+			[
+				{
+					kind: 'broadcastDeckList',
+					broadcastDeckListIds: [DECK_LIST],
+				},
+			],
+		],
+		[
+			'broadcastDeckList:deleted',
+			[
+				{
+					kind: 'broadcastDeckList',
+					broadcastDeckListIds: [DECK_LIST],
+				},
+			],
+		],
+		[
+			'archetype:created',
+			[
+				{
+					kind: 'archetype',
+					archetypeIds: [91],
+				},
+			],
+		],
+		[
+			'archetype:deleted',
+			[
+				{
+					kind: 'archetype',
+					archetypeIds: [91],
+				},
+			],
+		],
+		[
+			'screen:created',
+			[
+				{ kind: 'screen', screenId: SCREEN },
+			],
+		],
 	])('%s names what it changed', (type, changes) => {
 		expect(outputChangeOf(type, SAMPLES[type])).toEqual(changes);
 	});

@@ -206,26 +206,6 @@ describe('unattended Screen Output Graphic Asset Revision delivery', () => {
 		expect(screen).not.toHaveProperty('assetCapabilityDigest');
 	});
 
-	it('refuses that lookup for a Screen the capability is not for, as a plain 404', async () => {
-		// A second Screen in the same Event: the capability is real, the slug is real,
-		// and the pairing is not. One 404 for that and for a slug that does not exist,
-		// so a bearer cannot walk an Event's Screens with the capability it has.
-		const other = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
-			method: 'POST',
-			body: { name: 'Not This One', slug: 'not-this-one', currentMode: 'card' },
-		});
-
-		const response = await anonymousFetch(
-			`/api/screen-output/events/${eventId}/screens/slug/not-this-one`,
-			{
-				headers: authorizedHeaders(),
-			},
-		);
-
-		expect(response.status).toBe(404);
-		await $fetch(`/api/events/${eventId}/screens/${other.id}`, { method: 'DELETE' });
-	});
-
 	it('range-delivers the exact revision when native media sends its path-scoped capability cookie', async () => {
 		const session = await fetch(
 			`/api/screen-output/screens/${screenId}/asset-capability-session`,

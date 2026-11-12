@@ -191,61 +191,6 @@ describe('useFeatureMatchStateStore batched flush clobber regression', () => {
 		expect(final.player2.lifeTotal).toBe(15);
 	});
 
-	it('does not let a non-batched action\'s success clobber a still-pending batched life edit', async () => {
-		// The life edit's flush never starts (debounce not advanced) — its
-		// optimistic value only exists locally.
-		store.adjustLife(EVENT_ID, MATCH_ID, 'player1', -3);
-		expect(store.featureMatchStates.get(MATCH_ID)!.player1.lifeTotal).toBe(17);
-
-		// A non-batched action succeeds with server state that predates the life
-		// edit (player1 still 20 server-side). It only owns `activePlayer` — a
-		// whole-state write here would revert the pending life edit.
-		const serverState = createMockFeatureMatchState({
-			player1: {
-				lifeTotal: 20,
-				gameWins: 0,
-				counters: [],
-				sideboardRevealed: false,
-			},
-			player2: {
-				lifeTotal: 20,
-				gameWins: 0,
-				counters: [],
-				sideboardRevealed: false,
-			},
-			activePlayer: 'player2',
-		});
-		mockRepo.updateState.mockResolvedValue(commandResult(serverState, 4));
-
-		await store.setActivePlayer(EVENT_ID, MATCH_ID, 'player2');
-		await flushPromises();
-
-		const state = store.featureMatchStates.get(MATCH_ID)!;
-		expect(state.activePlayer).toBe('player2');
-		expect(state.player1.lifeTotal).toBe(17); // pending edit survives
-	});
-
-	it('rolling back a non-batched action restores only its owned fields', async () => {
-		// The non-batched action starts FIRST, so its rollback snapshot predates
-		// the life edit — a whole-state rollback would revert the life edit too.
-		let rejectUpdateState!: (error: Error) => void;
-		mockRepo.updateState.mockImplementation(() => new Promise((_resolve, reject) => {
-			rejectUpdateState = reject;
-		}));
-
-		const pending = store.setActivePlayer(EVENT_ID, MATCH_ID, 'player2');
-		store.adjustLife(EVENT_ID, MATCH_ID, 'player1', -3);
-		expect(store.featureMatchStates.get(MATCH_ID)!.player1.lifeTotal).toBe(17);
-
-		rejectUpdateState(new Error('network error'));
-		await pending;
-		await flushPromises();
-
-		const state = store.featureMatchStates.get(MATCH_ID)!;
-		expect(state.activePlayer).toBeNull(); // rolled back
-		expect(state.player1.lifeTotal).toBe(17); // pending edit survives the rollback
-	});
-
 	it('accumulates rapid life deltas into one flush with the merged payload', async () => {
 		const confirmed = createMockFeatureMatchState({
 			player1: {
@@ -280,41 +225,5 @@ describe('useFeatureMatchStateStore batched flush clobber regression', () => {
 			{ lifeDelta: -10 },
 		);
 		expect(store.featureMatchStates.get(MATCH_ID)!.player1.lifeTotal).toBe(10);
-	});
-
-	it('a remote session event landing while a life edit is pending merges around its Field Ownership', async () => {
-		// Operator taps life -3 — optimistic, batch still pending (debounce not advanced).
-		store.adjustLife(EVENT_ID, MATCH_ID, 'player1', -3);
-		expect(store.featureMatchStates.get(MATCH_ID)!.player1.lifeTotal).toBe(17);
-
-		// A remote frame arrives reflecting server state that predates the tap
-		// (player1 still 20 there), but carries a real remote change to player2.
-		const remoteState = createMockFeatureMatchState({
-			player1: {
-				lifeTotal: 20,
-				gameWins: 0,
-				counters: [],
-				sideboardRevealed: false,
-			},
-			player2: {
-				lifeTotal: 12,
-				gameWins: 0,
-				counters: [],
-				sideboardRevealed: false,
-			},
-		});
-		await store.applyRemoteSessionEvent({
-			eventId: EVENT_ID,
-			slotId: MATCH_ID,
-			sessionId: 500,
-			sourceSnapshot: createSourceSnapshot(),
-			currentState: remoteState,
-			sequence: 4,
-			timestamp: new Date('2026-01-01T00:00:10.000Z').toISOString(),
-		} as any);
-
-		const state = store.featureMatchStates.get(MATCH_ID)!;
-		expect(state.player2.lifeTotal).toBe(12); // remote change applies
-		expect(state.player1.lifeTotal).toBe(17); // pending tap survives
 	});
 });

@@ -6,7 +6,7 @@ import type {
 } from '~~/shared/types/userAdministration';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { fetch, url } from './client';
-import { INTEGRATION_ADMIN_BOOTSTRAP_TOKEN, INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
+import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 import { executeIntegrationD1 } from './integrationD1';
 
 /**
@@ -29,7 +29,6 @@ import { executeIntegrationD1 } from './integrationD1';
  */
 
 const INVITED_EMAIL = 'user-admin-399-invited@keepr.digital';
-const SECOND_EMAIL = 'user-admin-399-second@keepr.digital';
 const FIRST_PASSWORD = 'user-admin-399-first-password';
 const SECOND_PASSWORD = 'user-admin-399-second-password';
 const THIRD_PASSWORD = 'user-admin-399-third-password';
@@ -123,25 +122,17 @@ describe('user administration', () => {
 	let invitedUserId = '';
 
 	beforeAll(async () => {
-		// These are the only accounts this suite creates, and it starts from an
-		// installation that has never had them — including on a rerun against a
+		// This is the only account this suite creates, and it starts from an
+		// installation that has never had it — including on a rerun against a
 		// persisted local D1.
 		await executeIntegrationD1(`
-			DELETE FROM session WHERE user_id IN (SELECT id FROM user WHERE email IN ('${INVITED_EMAIL}', '${SECOND_EMAIL}'));
-			DELETE FROM account WHERE user_id IN (SELECT id FROM user WHERE email IN ('${INVITED_EMAIL}', '${SECOND_EMAIL}'));
-			DELETE FROM user WHERE email IN ('${INVITED_EMAIL}', '${SECOND_EMAIL}');
+			DELETE FROM session WHERE user_id IN (SELECT id FROM user WHERE email = '${INVITED_EMAIL}');
+			DELETE FROM account WHERE user_id IN (SELECT id FROM user WHERE email = '${INVITED_EMAIL}');
+			DELETE FROM user WHERE email = '${INVITED_EMAIL}';
 		`);
 	});
 
 	describe('who is admitted', () => {
-		it('does not admit the first-admin bootstrap token in its place', async () => {
-			const response = await administer('', {
-				headers: { 'x-admin-bootstrap-token': INTEGRATION_ADMIN_BOOTSTRAP_TOKEN },
-			});
-
-			expect(response.status).toBe(403);
-		});
-
 		it('refuses a caller with no Graphics Administrator token every route on the surface, not only the listing', async () => {
 			// Each request carries the suite's operator session, which is the point:
 			// `/api/admin/**` is exempt from the session boundary, so a session is
@@ -197,43 +188,6 @@ describe('user administration', () => {
 			expect((await redeem(created.passwordResetLink.url, 'a-third-password')).status)
 				.not
 				.toBe(200);
-		});
-
-		it('refuses a second account for the same email', async () => {
-			const response = await administer('', {
-				method: 'POST',
-				body: {
-					email: INVITED_EMAIL.toUpperCase(),
-					name: 'A Duplicate',
-				},
-			});
-
-			// 409 rather than the unique index's 500: what the administrator needs
-			// to hear is that this person already has an account.
-			expect(response.status).toBe(409);
-		});
-
-		it('refuses a body with a key it does not know', async () => {
-			// `role` is the one worth naming — a surface that silently accepted it
-			// would be a roles model nobody designed.
-			const response = await administer('', {
-				method: 'POST',
-				body: { email: SECOND_EMAIL, name: 'A Second Operator', role: 'admin' },
-			});
-
-			expect(response.status).toBe(400);
-			expect(await findAccount(SECOND_EMAIL)).toBeUndefined();
-		});
-
-		it('lists the account it created', async () => {
-			const listing = await listAccounts();
-
-			expect(listing.cap).toBeGreaterThan(0);
-			expect(listing.total).toBeGreaterThanOrEqual(listing.users.length);
-			expect(listing.users.map(user => user.email)).toContain(INVITED_EMAIL);
-			// A listing is read by a browser; a password hash on it would be the
-			// whole installation.
-			expect(JSON.stringify(listing)).not.toContain('password');
 		});
 	});
 

@@ -1,64 +1,40 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { lastCallTo } from '~~/test/helpers/lastCallTo';
-import { providerRefusal } from '~~/test/helpers/providerRefusal';
 
-/** #264's publish-failure line, told apart from anything else a sync run logs. */
-function isPublishFailureLine(call: unknown[]): boolean {
-	const [line] = call;
-	return typeof line === 'string' && line.includes('"message":"melee_sync_realtime_publish_failed"');
-}
+/*
+ * What a setup or an update reports as done when a later stage throws. Only a
+ * stand-in can make Deck List persistence or a Round refresh throw on demand;
+ * what the stages store is `meleeSyncWorkflows.sqlite.test.ts`'s.
+ */
 
 const mockMelee = {
-	fetchMergedPlayers: vi.fn(),
 	fetchPlayers: vi.fn(),
 	fetchCurrentStandings: vi.fn(),
 	fetchEvent: vi.fn(),
 };
-const mockRequireMeleeService = vi.fn(() => mockMelee);
 const mockSyncMatchesFromMelee = vi.fn();
 const mockRoundService = {
 	findByEventId: vi.fn(),
 	findById: vi.fn(),
 	upsertByExternalId: vi.fn(),
-	remove: vi.fn(),
 };
 const mockPhaseService = {
 	findById: vi.fn(),
 	findByEventId: vi.fn(),
 	upsertByExternalId: vi.fn(),
-	remove: vi.fn(),
 };
 const mockPlayerService = {
 	batchUpsertByExternalId: vi.fn(),
 	reconcileMeleeSnapshot: vi.fn(),
-	findAll: vi.fn(async () => []),
-};
-const mockPlayerDeckService = {
-	reconcilePrimaryArchetype: vi.fn(),
-};
-const mockPlayerFeatureMatchSyncService = {
-	syncMatchesFromPlayers: vi.fn(),
-	syncMatchesFromPlayersAfterCommit: vi.fn(),
-};
-const mockFeatureMatchService = {
-	findById: vi.fn(),
-};
-const mockImportedResolver = {
-	resolveBatch: vi.fn(),
-};
-const mockMtgCardService = {
-	batchUpsert: vi.fn(),
+	findAll: vi.fn(),
 };
 const mockPersistPlayerDeckLists = vi.fn();
 
-const mockRefreshBindings = vi.fn();
-
 vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
-	refreshBroadcastGraphicsBindings: mockRefreshBindings,
+	refreshBroadcastGraphicsBindings: vi.fn(),
 }));
 
 vi.mock('~~/server/services/meleeIntegration', () => ({
-	requireMeleeService: mockRequireMeleeService,
+	requireMeleeService: () => mockMelee,
 }));
 
 vi.mock('~~/server/modules/melee-sync/roundMatches', () => ({
@@ -79,33 +55,28 @@ vi.mock('~~/server/services/player', () => ({
 	playerService: () => mockPlayerService,
 }));
 
-vi.mock('~~/server/services/playerDeck', () => ({
-	playerDeckService: () => mockPlayerDeckService,
-}));
-
 vi.mock('~~/server/services/playerFeatureMatchSync', () => ({
-	playerFeatureMatchSyncService: () => mockPlayerFeatureMatchSyncService,
+	playerFeatureMatchSyncService: () => ({
+		syncMatchesFromPlayersAfterCommit: async () => [],
+	}),
 }));
 
 vi.mock('~~/server/services/featureMatch', () => ({
-	featureMatchService: () => mockFeatureMatchService,
-}));
-
-vi.mock('~~/server/services/event', () => ({
-	eventService: () => ({}),
+	featureMatchService: () => ({}),
 }));
 
 vi.mock('~~/server/services/importedMtgCardResolver', () => ({
-	importedMtgCardResolverService: () => mockImportedResolver,
+	importedMtgCardResolverService: () => ({
+		resolveBatch: async () => ({
+			resolutions: new Map(),
+		}),
+	}),
 }));
 
 vi.mock('~~/server/services/mtgCard', () => ({
-	mtgCardService: () => mockMtgCardService,
-}));
-
-vi.mock('~~/server/utils/meleeSyncState', () => ({
-	recordMeleeSyncFailure: vi.fn(),
-	recordMeleeSyncSuccess: vi.fn(),
+	mtgCardService: () => ({
+		batchUpsert: async () => new Map(),
+	}),
 }));
 
 vi.mock('~~/server/utils/ably', () => ({
@@ -113,18 +84,11 @@ vi.mock('~~/server/utils/ably', () => ({
 	publishMessageStrict: vi.fn(),
 }));
 
-vi.mock('~~/server/mappers/featureMatch', () => ({
-	mapFeatureMatchToResponse: vi.fn(match => match),
-}));
-
 vi.mock('~~/server/modules/melee-sync/deckLists', () => ({
-	buildPlayersWithDeckLists: vi.fn((eventId, players) => players.map((player: any) => ({
-		playerData: { eventId, ...player },
-		deckLists: [],
-	}))),
-	buildResolvedCardUpserts: vi.fn(() => new Map()),
-	collectImportedDeckCards: vi.fn(() => ({ cards: [], totalDeckLists: 0 })),
-	createImportedCardResolver: vi.fn(() => vi.fn()),
+	buildPlayersWithDeckLists: () => [],
+	buildResolvedCardUpserts: () => new Map(),
+	collectImportedDeckCards: () => ({ cards: [], totalDeckLists: 0 }),
+	createImportedCardResolver: () => () => null,
 	persistPlayerDeckLists: mockPersistPlayerDeckLists,
 }));
 
@@ -141,272 +105,59 @@ const eventData = {
 	lastDecklistsSyncedAt: new Date('2026-01-01T00:00:00.000Z'),
 };
 
-const round1 = {
-	id: 1,
+const phase = { id: 10, eventId: 1, name: 'Swiss' };
+/** The tournament's one Round, not yet paired. */
+const round = {
+	id: 2,
 	eventId: 1,
-	phaseId: 10,
+	phaseId: phase.id,
 	name: 'Round 1',
 	roundNumber: 1,
 	externalId: '101',
 	externalSource: 'melee',
-	lastSyncedAt: new Date('2026-01-01T01:00:00.000Z'),
-};
-const round2 = {
-	id: 2,
-	eventId: 1,
-	phaseId: 10,
-	name: 'Round 2',
-	roundNumber: 2,
-	externalId: '102',
-	externalSource: 'melee',
 	lastSyncedAt: null,
 };
-const syncedRound2 = {
-	...round2,
-	lastSyncedAt: new Date('2026-01-01T02:00:00.000Z'),
-};
 
-function matchResult(round: typeof round1, matchCount = 4) {
-	return {
-		success: true,
-		message: `Synced ${round.name}`,
-		round: {
-			id: round.id,
-			name: round.name,
-			roundNumber: round.roundNumber,
-			phaseId: round.phaseId,
-		},
-		matchCount,
-		created: matchCount,
+beforeEach(() => {
+	mockMelee.fetchPlayers.mockReset().mockResolvedValue([]);
+	mockMelee.fetchCurrentStandings.mockReset().mockResolvedValue([]);
+	mockMelee.fetchEvent.mockReset().mockResolvedValue({
+		ID: 1,
+		Name: 'Event',
+		Game: 'Magic: The Gathering',
+		Phases: [
+			{
+				ID: 10,
+				Name: 'Swiss',
+				FormatId: 'modern',
+				SortOrder: 0,
+				Rounds: [
+					{ ID: 101, Name: 'Round 1', SortOrder: 0 },
+				],
+			},
+		],
+	});
+	mockPhaseService.findByEventId.mockReset().mockResolvedValue([]);
+	mockPhaseService.findById.mockReset().mockResolvedValue(phase);
+	mockPhaseService.upsertByExternalId.mockReset().mockResolvedValue({ phase, created: false });
+	mockRoundService.findByEventId.mockReset().mockResolvedValue([]);
+	mockRoundService.findById.mockReset().mockResolvedValue(round);
+	mockRoundService.upsertByExternalId.mockReset().mockResolvedValue({ round, created: false });
+	mockPlayerService.findAll.mockReset().mockResolvedValue([]);
+	mockPlayerService.batchUpsertByExternalId.mockReset().mockResolvedValue({ players: [], created: 0, updated: 0 });
+	mockPlayerService.reconcileMeleeSnapshot.mockReset().mockResolvedValue({
+		players: [],
+		created: 0,
 		updated: 0,
-		staleDeleted: 0,
-		unlinkedSlotIds: [],
-		droppedAssignmentIds: [],
-		warnings: [],
-		complete: false,
-		resultChangedMatchIds: [],
-		pairingsChanged: true,
-		standingsChanged: false,
-	};
-}
-
-describe('melee Sync updateFromMelee workflow', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		mockMelee.fetchMergedPlayers.mockResolvedValue([]);
-		mockMelee.fetchPlayers.mockResolvedValue([]);
-		mockMelee.fetchCurrentStandings.mockResolvedValue([]);
-		mockMelee.fetchEvent.mockResolvedValue({
-			ID: 1,
-			Name: 'Event',
-			Game: 'Magic: The Gathering',
-			Phases: [
-				{
-					ID: 10,
-					Name: 'Swiss',
-					FormatId: 'modern',
-					SortOrder: 0,
-					Rounds: [
-						{ ID: 101, Name: 'Round 1', SortOrder: 0 },
-						{ ID: 102, Name: 'Round 2', SortOrder: 1 },
-					],
-				},
-			],
-		});
-		mockPhaseService.findByEventId.mockResolvedValue([]);
-		mockPhaseService.upsertByExternalId.mockResolvedValue({
-			phase: { id: 10, eventId: 1, name: 'Swiss' },
-			created: false,
-		});
-		mockPhaseService.remove.mockResolvedValue(true);
-		mockRoundService.upsertByExternalId.mockImplementation(async input => ({
-			round: input.externalId === '101'
-				? round1
-				: round2,
-			created: false,
-		}));
-		mockRoundService.remove.mockResolvedValue(true);
-		mockPlayerService.batchUpsertByExternalId.mockResolvedValue({ players: [], created: 0, updated: 0 });
-		mockPlayerService.reconcileMeleeSnapshot.mockResolvedValue({
-			players: [],
-			created: 0,
-			updated: 0,
-			deactivated: 0,
-		});
-		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers.mockResolvedValue([]);
-		mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit.mockResolvedValue([]);
-		mockImportedResolver.resolveBatch.mockResolvedValue({
-			resolutions: new Map(),
-		});
-		mockMtgCardService.batchUpsert.mockResolvedValue(new Map());
-		mockPersistPlayerDeckLists.mockResolvedValue({ skippedPlayers: 0, unresolvedCards: 0 });
-		mockRoundService.findById.mockImplementation(async (id: number) => [round1, round2, syncedRound2].find(round => round.id === id));
-		mockPhaseService.findById.mockResolvedValue({ id: 10, eventId: 1, name: 'Swiss' });
-		mockSyncMatchesFromMelee.mockImplementation(async (_eventId, _eventData, round) => matchResult(round));
+		deactivated: 0,
 	});
+	mockPersistPlayerDeckLists.mockReset().mockResolvedValue({ skippedPlayers: 0, unresolvedCards: 0 });
+	mockSyncMatchesFromMelee.mockReset();
+});
 
-	it('runs initial setup from one upstream snapshot without importing Round Matches', async () => {
-		mockRoundService.findByEventId.mockResolvedValue([]);
-		const checkpoint = vi.fn().mockResolvedValue(undefined);
-
-		const result = await createMeleeSyncWorkflows().runInitialSetup(syncContext, 1, eventData, checkpoint);
-
-		expect(mockMelee.fetchEvent).toHaveBeenCalledOnce();
-		expect(mockMelee.fetchPlayers).toHaveBeenCalledOnce();
-		expect(mockMelee.fetchCurrentStandings).toHaveBeenCalledOnce();
-		expect(mockMelee.fetchMergedPlayers).not.toHaveBeenCalled();
-		expect(mockPlayerService.reconcileMeleeSnapshot).toHaveBeenCalledOnce();
-		expect(mockPlayerService.batchUpsertByExternalId).toHaveBeenCalledOnce();
-		expect(mockSyncMatchesFromMelee).not.toHaveBeenCalled();
-		expect(checkpoint).toHaveBeenCalledTimes(3);
-		expect(result).toEqual(expect.objectContaining({
-			success: true,
-			steps: ['structure', 'players', 'decklists'],
-			phases: 1,
-			rounds: 2,
-		}));
-	});
-
-	it('names the provider refusal behind a notification it could not deliver', async () => {
-		// The provider's refusal is logged, not discarded (#264).
-		mockRoundService.findByEventId.mockResolvedValue([]);
-		const ably = await import('~~/server/utils/ably');
-		vi.mocked(ably.publishMessageStrict).mockRejectedValueOnce(providerRefusal());
-		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-		const result = await createMeleeSyncWorkflows().runInitialSetup(syncContext, 1, eventData, vi.fn().mockResolvedValue(undefined));
-
-		const [line] = lastCallTo(warnSpy, isPublishFailureLine);
-		expect(JSON.parse(line as string)).toEqual({
-			message: 'melee_sync_realtime_publish_failed',
-			messageType: 'melee:structureSynced',
-			statusCode: 404,
-			errorCode: 40400,
-			errorName: 'Error',
-			reason: 'No application found',
-		});
-		expect(result.success).toBe(true);
-		expect(result.warnings).toContain('Data was saved, but realtime notification "melee:structureSynced" could not be delivered');
-		warnSpy.mockRestore();
-	});
-
-	it('stops an aggregate update before the next durable stage when its ownership checkpoint fails', async () => {
-		const ownershipLost = new Error('lease ownership lost');
-		const checkpoint = vi.fn()
-			.mockResolvedValueOnce(undefined)
-			.mockRejectedValueOnce(ownershipLost);
-
-		await expect(
-			createMeleeSyncWorkflows().updateFromMelee(syncContext, 1, eventData, {}, checkpoint),
-		).rejects.toBe(ownershipLost);
-
-		expect(checkpoint).toHaveBeenCalledTimes(2);
-		expect(mockPhaseService.upsertByExternalId).toHaveBeenCalled();
-		expect(mockPlayerService.reconcileMeleeSnapshot).not.toHaveBeenCalled();
-		expect(mockSyncMatchesFromMelee).not.toHaveBeenCalled();
-	});
-
-	it('rejects duplicate phase identities before writing any structure', async () => {
-		mockMelee.fetchEvent.mockResolvedValue({
-			ID: 1,
-			Name: 'Event',
-			Game: 'Magic: The Gathering',
-			Phases: [
-				{
-					ID: 10,
-					Name: 'Swiss A',
-					FormatId: 'modern',
-					SortOrder: 0,
-					Rounds: [],
-				},
-				{
-					ID: 10,
-					Name: 'Swiss B',
-					FormatId: 'modern',
-					SortOrder: 1,
-					Rounds: [],
-				},
-			],
-		});
-
-		await expect(
-			createMeleeSyncWorkflows().syncEventStructure(syncContext, 1, eventData),
-		)
-			.rejects
-			.toThrow('Duplicate Melee phase external identity: 10');
-
-		expect(mockPhaseService.findByEventId).not.toHaveBeenCalled();
-		expect(mockPhaseService.upsertByExternalId).not.toHaveBeenCalled();
-		expect(mockRoundService.upsertByExternalId).not.toHaveBeenCalled();
-	});
-
-	it('rejects duplicate round identities across phases before writing any structure', async () => {
-		mockMelee.fetchEvent.mockResolvedValue({
-			ID: 1,
-			Name: 'Event',
-			Game: 'Magic: The Gathering',
-			Phases: [
-				{
-					ID: 10,
-					Name: 'Swiss',
-					FormatId: 'modern',
-					SortOrder: 0,
-					Rounds: [
-						{ ID: 101, Name: 'Round 1', SortOrder: 0 },
-					],
-				},
-				{
-					ID: 11,
-					Name: 'Top Cut',
-					FormatId: 'modern',
-					SortOrder: 1,
-					Rounds: [
-						{ ID: 101, Name: 'Quarterfinals', SortOrder: 0 },
-					],
-				},
-			],
-		});
-
-		await expect(
-			createMeleeSyncWorkflows().syncEventStructure(syncContext, 1, eventData),
-		)
-			.rejects
-			.toThrow('Duplicate Melee round external identity: 101');
-
-		expect(mockPhaseService.findByEventId).not.toHaveBeenCalled();
-		expect(mockPhaseService.upsertByExternalId).not.toHaveBeenCalled();
-		expect(mockRoundService.upsertByExternalId).not.toHaveBeenCalled();
-	});
-
-	it('defensively rejects a missing Round before fetching or replacing Matches', async () => {
-		mockRoundService.findById.mockResolvedValue(null);
-
-		await expect(
-			createMeleeSyncWorkflows().syncRoundMatches(syncContext, 1, eventData, 999),
-		).rejects.toMatchObject({ statusCode: 404 });
-
-		expect(mockPhaseService.findById).not.toHaveBeenCalled();
-		expect(mockSyncMatchesFromMelee).not.toHaveBeenCalled();
-	});
-
-	it('defensively rejects a non-Melee Round before fetching or replacing Matches', async () => {
-		mockRoundService.findById.mockResolvedValue({
-			...round1,
-			externalId: null,
-			externalSource: null,
-		});
-
-		await expect(
-			createMeleeSyncWorkflows().syncRoundMatches(syncContext, 1, eventData, round1.id),
-		).rejects.toMatchObject({ statusCode: 400 });
-
-		expect(mockPhaseService.findById).not.toHaveBeenCalled();
-		expect(mockSyncMatchesFromMelee).not.toHaveBeenCalled();
-	});
-
-	it('reports only completed setup steps when Deck List persistence throws', async () => {
-		mockRoundService.findByEventId.mockResolvedValue([]);
-		mockPersistPlayerDeckLists.mockRejectedValueOnce(new Error('Deck persistence failed'));
+describe('the stages a Melee Sync command reports as done when a later one throws', () => {
+	it('reports structure and Players, and no Deck Lists, when Deck List persistence throws during setup', async () => {
+		mockPersistPlayerDeckLists.mockRejectedValue(new Error('Deck persistence failed'));
 		const progress: Array<Record<string, Date>> = [];
 
 		await expect(
@@ -429,115 +180,9 @@ describe('melee Sync updateFromMelee workflow', () => {
 		]);
 	});
 
-	it('skips Deck Lists during aggregate setup for a supported source game without an import adapter', async () => {
-		mockMelee.fetchEvent.mockResolvedValue({
-			ID: 1,
-			Name: 'OP Event',
-			Game: 'One Piece Card Game',
-			Phases: [],
-		});
-		mockRoundService.findByEventId.mockResolvedValue([]);
-		const progress: Array<Record<string, Date>> = [];
-
-		const result = await createMeleeSyncWorkflows().runInitialSetup(
-			syncContext,
-			1,
-			{ ...eventData, game: 'op' },
-			undefined,
-			metadata => progress.push(metadata as Record<string, Date>),
-		);
-
-		expect(result).toMatchObject({
-			success: true,
-			deckListsSkipped: true,
-			deckLists: { players: 0, deckLists: 0 },
-			warnings: ['Melee.gg Deck List import is not yet supported for this Event game'],
-		});
-		expect(progress).toEqual([
-			{
-				lastEventSyncedAt: expect.any(Date),
-			},
-			{
-				lastPlayersSyncedAt: expect.any(Date),
-			},
-		]);
-		expect(mockImportedResolver.resolveBatch).not.toHaveBeenCalled();
-		expect(mockMtgCardService.batchUpsert).not.toHaveBeenCalled();
-		expect(mockPersistPlayerDeckLists).not.toHaveBeenCalled();
-	});
-
-	it('rejects a known upstream game mismatch before aggregate writes', async () => {
-		mockMelee.fetchEvent.mockResolvedValue({
-			ID: 1,
-			Name: 'Wrong Event',
-			Game: 'One Piece Card Game',
-			Phases: [],
-		});
-
-		await expect(
-			createMeleeSyncWorkflows().runInitialSetup(syncContext, 1, eventData),
-		).rejects.toMatchObject({
-			statusCode: 422,
-			data: { code: 'MELEE_GAME_MISMATCH' },
-		});
-
-		expect(mockPhaseService.findByEventId).not.toHaveBeenCalled();
-		expect(mockPlayerService.reconcileMeleeSnapshot).not.toHaveBeenCalled();
-		expect(mockImportedResolver.resolveBatch).not.toHaveBeenCalled();
-	});
-
-	it('refreshes players, skips deck lists by default when already synced, and advances the next round after refreshing the previous round', async () => {
-		mockRoundService.findByEventId.mockResolvedValue([round1, round2]);
-
-		const result = await createMeleeSyncWorkflows().updateFromMelee(syncContext, 1, eventData);
-
-		expect(mockPlayerService.reconcileMeleeSnapshot).toHaveBeenCalledOnce();
-		expect(mockMelee.fetchEvent).toHaveBeenCalledOnce();
-		expect(mockSyncMatchesFromMelee).toHaveBeenCalledTimes(2);
-		expect(mockSyncMatchesFromMelee.mock.calls.map(call => call[2].id)).toEqual([1, 2]);
-		expect(result.steps).toEqual([
-			'structure',
-			'players',
-			'previous-round',
-			'next-round',
-		]);
-		expect(result.refreshedRound?.id).toBe(1);
-		expect(result.advancedRound?.id).toBe(2);
-	});
-
-	it('includes deck lists when requested', async () => {
-		mockRoundService.findByEventId.mockResolvedValue([round2]);
-
-		const result = await createMeleeSyncWorkflows().updateFromMelee(syncContext, 1, eventData, { includeDeckLists: true });
-
-		expect(mockMelee.fetchEvent).toHaveBeenCalledOnce();
-		expect(result.deckLists).toEqual(expect.objectContaining({ deckLists: 0, players: 0 }));
-		expect(result.steps).toContain('decklists');
-	});
-
-	it('includes deck lists automatically when they have never been synced', async () => {
-		mockRoundService.findByEventId.mockResolvedValue([round2]);
-
-		await createMeleeSyncWorkflows().updateFromMelee(syncContext, 1, { ...eventData, lastDecklistsSyncedAt: null });
-
-		expect(mockMelee.fetchEvent).toHaveBeenCalledOnce();
-	});
-
-	it('refreshes the latest synced round when there is no next unsynced round', async () => {
-		mockRoundService.findByEventId.mockResolvedValue([round1, syncedRound2]);
-
-		const result = await createMeleeSyncWorkflows().updateFromMelee(syncContext, 1, eventData);
-
-		expect(mockSyncMatchesFromMelee).toHaveBeenCalledTimes(1);
-		expect(mockSyncMatchesFromMelee!.mock!.calls![0]![2].id).toBe(2);
-		expect(result.refreshedRound?.id).toBe(2);
-		expect(result.advancedRound).toBeNull();
-		expect(result.steps).toEqual(['structure', 'players', 'latest-round']);
-	});
-
-	it('reports completed update steps when a later Round refresh throws', async () => {
-		mockRoundService.findByEventId.mockResolvedValue([round2]);
-		mockSyncMatchesFromMelee.mockRejectedValueOnce(new Error('Round refresh failed'));
+	it('reports structure, Players and Deck Lists when the Round refresh after them throws during an update', async () => {
+		mockRoundService.findByEventId.mockResolvedValue([round]);
+		mockSyncMatchesFromMelee.mockRejectedValue(new Error('Round refresh failed'));
 		const progress: Array<Record<string, Date>> = [];
 
 		await expect(
@@ -562,44 +207,5 @@ describe('melee Sync updateFromMelee workflow', () => {
 				lastDecklistsSyncedAt: expect.any(Date),
 			},
 		]);
-	});
-
-	// The post-commit form swallows a lost Session race (playerFeatureMatchSync proves
-	// that); these pin that both bulk writes, which have already committed, use it.
-	it.each([
-		[
-			'a Player sync',
-			async () => {
-				mockPlayerService.reconcileMeleeSnapshot.mockResolvedValue({
-					players: [
-						{ id: 10, externalId: 'player-1' },
-					],
-					created: 0,
-					updated: 1,
-					deactivated: 0,
-				});
-				await createMeleeSyncWorkflows().syncPlayers(syncContext, 1, eventData);
-				return 10;
-			},
-		],
-		[
-			'a Deck List sync',
-			async () => {
-				mockPlayerService.batchUpsertByExternalId.mockResolvedValue({
-					players: [
-						{ id: 11, externalId: 'player-2' },
-					],
-					created: 0,
-					updated: 1,
-				});
-				await createMeleeSyncWorkflows().syncDeckLists(syncContext, 1, eventData);
-				return 11;
-			},
-		],
-	])('reverse-syncs %s through the post-commit form', async (_label, run) => {
-		const playerId = await run();
-
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayersAfterCommit).toHaveBeenCalledWith(1, [playerId]);
-		expect(mockPlayerFeatureMatchSyncService.syncMatchesFromPlayers).not.toHaveBeenCalled();
 	});
 });

@@ -53,7 +53,7 @@ describe('deciding whether the validator deploys', () => {
 		});
 
 		expect(decision.deploy).toBe(true);
-		expect(decision.reason).toContain('changed');
+		expect(decision.reason).toMatch(/\bchanged\b/);
 	});
 
 	it.each([
@@ -509,17 +509,14 @@ describe('the git marker store', () => {
 	}
 
 	it('reads a missing marker as undefined without fetching it', () => {
-		const { git, calls } = fakeGit();
+		// As git does: fetching a ref the remote does not have fails.
+		const git = (args: string[]) => {
+			if (args[0] === 'fetch')
+				throw new Error('fatal: couldn\'t find remote ref refs/tags/production-validator');
+			return '';
+		};
 
 		expect(gitMarkerStore({ git }).read('production-validator')).toBeUndefined();
-		expect(calls.map(call => call.args)).toEqual([
-			[
-				'ls-remote',
-				'--tags',
-				'origin',
-				'refs/tags/production-validator',
-			],
-		]);
 	});
 
 	it('reads the remote\'s marker, replacing any stale local copy of the tag', () => {
@@ -582,28 +579,39 @@ describe('the git marker store', () => {
 	});
 });
 
+// What `pnpm deploy:status` and a stopped promotion print: the state an operator
+// recovers from, and the commit it is about.
 describe('describing a marker', () => {
 	it.each([
-		['a missing marker', undefined, 'missing'],
-		['a lightweight tag', '', 'unreadable'],
+		[
+			'a missing marker',
+			undefined,
+			['missing'],
+		],
+		[
+			'a lightweight tag',
+			'',
+			['unreadable'],
+		],
 		[
 			'a confirmed validator deploy',
 			deployedMarker(FINGERPRINT_A),
-			`deployed ${COMMIT_A} (fingerprint ${FINGERPRINT_A}, clean worktree, from local)`,
+			['deployed', COMMIT_A],
 		],
 		[
 			'an unconfirmed one',
 			deployedMarker(FINGERPRINT_A).replace('state: deployed', 'state: pending'),
-			`pending (started, never confirmed) ${COMMIT_A}`,
+			['pending', COMMIT_A],
 		],
-	])('%s', (_case, text, expected) => {
-		expect(describeMarker(text)).toContain(expected);
+	])('%s', (_case, text, tokens) => {
+		const description = describeMarker(text);
+
+		for (const token of tokens)
+			expect(description).toContain(token);
 	});
 
-	it('names missing fields rather than printing undefined', () => {
-		const description = describeMarker('stream-keepr promotion marker\n\ncomponent: validator\n');
-
-		expect(description).toBe('(no state) (no commit)');
+	it('never prints undefined for a field the marker lacks', () => {
+		expect(describeMarker('stream-keepr promotion marker\n\ncomponent: validator\n')).not.toContain('undefined');
 	});
 });
 

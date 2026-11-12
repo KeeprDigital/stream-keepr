@@ -9,7 +9,6 @@ import type {
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MODES_WITH_A_BACKGROUND_LAYER_STACK } from '../helpers/backgroundLayerModes';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { expectOperationResult } from './responseStatus';
@@ -48,8 +47,8 @@ function decodeEvidence(bytes: Uint8Array) {
  * resolves media as the author. What a Screen Output resolves is decided by the
  * Screen's Graphic Asset Reference index, and what may be trashed or purged is
  * decided by the same index, so an asset layer the index never saw was blank on
- * air and unprotected at once. Each mode gets its own Graphic Asset, so one mode's
- * reference cannot stand in for another's protection.
+ * air and unprotected at once. One mode walks the path here; that every mode's
+ * PATCH keeps its stack and names its own slot is the unit suite's.
  */
 describe('a plain overlay mode’s asset Background Layer', () => {
 	let eventId: number;
@@ -128,7 +127,8 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 		await expectOperationResult(upload);
 	}
 
-	describe.each(MODES_WITH_A_BACKGROUND_LAYER_STACK)('on a %s Screen', (mode) => {
+	describe('on a Card Screen', () => {
+		const mode = 'card';
 		let screenId: number;
 		let capability: string;
 		let reference: GraphicAssetReference;
@@ -187,11 +187,6 @@ describe('a plain overlay mode’s asset Background Layer', () => {
 			expect(delivered.status).toBe(200);
 			expect(new Uint8Array(await delivered.arrayBuffer())).toEqual(pixelPng);
 		});
-
-		// Trash and Revision Pruning read one index whatever the mode, so one mode proves
-		// both here; the slot each mode's layer is indexed under is the unit suite's.
-		if (mode !== MODES_WITH_A_BACKGROUND_LAYER_STACK[0])
-			return;
 
 		it('counts the revision as in use, under the layer that pins it, and refuses to trash it', async () => {
 			const usage = await $fetch<GraphicAssetUsage[]>(

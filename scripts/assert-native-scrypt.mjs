@@ -46,7 +46,7 @@ const FALLBACK_PASSWORD_MODULE = /@better-auth\/utils\/dist\/password\.[mc]js$/;
  * Classify one source map's `sources` against the two password modules. Both
  * patterns anchor on the full basename, so neither can match the other's file.
  */
-export function classifySources(sources) {
+function classifySources(sources) {
 	return {
 		native: sources.filter(source => NATIVE_PASSWORD_MODULE.test(source)),
 		fallback: sources.filter(source => FALLBACK_PASSWORD_MODULE.test(source)),
@@ -67,7 +67,7 @@ function* sourceMapFiles(directory) {
  * Prove the classification bites, in both directions, before trusting it to
  * stay quiet. Returns the ways it is broken, empty when it is sound.
  */
-export function selfTest() {
+function selfTest() {
 	const native = '../node_modules/@better-auth/utils/dist/password.node.mjs';
 	const fallback = '../node_modules/@better-auth/utils/dist/password.mjs';
 	const bystander = '../node_modules/@better-auth/utils/dist/hash.mjs';

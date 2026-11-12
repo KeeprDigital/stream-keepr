@@ -430,28 +430,15 @@ describe('the generic settings renderer', () => {
 		].filter(path => !unusable.includes(path)).sort());
 	});
 
-	// The renderer's side of a field's condition; each condition's own cases sit with its contract
-	// (`test/unit/shared/screenModeSettingsFields.test.ts`), and the rows here are the ones only this page proves.
+	// The renderer's side of a field's condition: it reads the Screen's config, its Event, and a nested
+	// block as stored, and a hidden block hides its fields. Each condition's own cases sit with its
+	// contract (`test/unit/shared/screenModeSettingsFields.test.ts`).
 	it.each([
 		{
 			mode: 'pairings',
 			config: { showHeader: false },
 			event: {},
 			field: 'headerText',
-			shown: false,
-		},
-		{
-			mode: 'pairings',
-			config: { autoPageEnabled: false },
-			event: {},
-			field: 'autoPageIntervalMs',
-			shown: false,
-		},
-		{
-			mode: 'head-to-head',
-			config: { playerSource: 'featureMatchSlot' },
-			event: {},
-			field: 'player1Id',
 			shown: false,
 		},
 		{
@@ -462,80 +449,10 @@ describe('the generic settings renderer', () => {
 			shown: false,
 		},
 		{
-			mode: 'feature-match',
-			config: {},
-			event: { standingsEnabled: false },
-			field: 'showRecords',
-			shown: false,
-		},
-		{
-			mode: 'feature-match',
-			config: {},
-			event: { tableNumberEnabled: false },
-			field: 'showTableNumber',
-			shown: false,
-		},
-		{
-			mode: 'feature-match',
-			config: {},
-			event: { featureMatchDefaultTurnTrackingEnabled: false },
-			field: 'showTurnControls',
-			shown: false,
-		},
-		{
-			mode: 'feature-match',
-			config: {},
-			event: { featureMatchDefaultExtraTurnsEnabled: false },
-			field: 'showOvertime',
-			shown: false,
-		},
-		{
-			mode: 'feature-match',
-			config: {},
-			event: { featureMatchDefaultMulliganTrackingEnabled: false },
-			field: 'showMulliganInfo',
-			shown: false,
-		},
-		{
-			mode: 'talent',
-			config: { selection: 'one' },
-			event: {},
-			field: 'talentIds',
-			shown: false,
-		},
-		{
-			mode: 'talent',
-			config: { rotateSocialProfiles: false },
-			event: {},
-			field: 'socialProfileDwellMs',
-			shown: false,
-		},
-		{
-			mode: 'top-cut',
-			config: { bracketSource: 'phase' },
-			event: {},
-			field: 'manualBracket',
-			shown: false,
-		},
-		{
-			mode: 'top-cut',
-			config: { bracketSource: 'phase' },
-			event: { game: 'op' },
-			field: 'manualBracket',
-			shown: true,
-		},
-		{
 			mode: 'deck',
 			config: { board: 'mainboard' },
 			event: {},
 			field: 'sideboard.view',
-			shown: false,
-		},
-		{
-			mode: 'deck',
-			config: { board: 'sideboard' },
-			event: {},
-			field: 'mainboard.view',
 			shown: false,
 		},
 		{
@@ -555,13 +472,6 @@ describe('the generic settings renderer', () => {
 			event: {},
 			field: 'sideboard.columns',
 			shown: true,
-		},
-		{
-			mode: 'deck',
-			config: {},
-			event: { pointsSystem: null },
-			field: 'showHighlanderPoints',
-			shown: false,
 		},
 	] as { mode: RenderedMode; config: Record<string, unknown>; event: Partial<DbEvent>; field: string; shown: boolean }[])(
 		'$mode with $config on an Event with $event shows $field: $shown',

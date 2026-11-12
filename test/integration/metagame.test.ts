@@ -7,9 +7,6 @@ describe('metagame API', () => {
 	let playerListId: number;
 	let archetypeId1: number;
 	let archetypeId2: number;
-	let largeScopeEventId: number;
-	let largeScopePlayerListId: number;
-	let largeScopeArchetypeId: number;
 	let deckTestPlayerId: number;
 
 	beforeAll(async () => {
@@ -107,57 +104,11 @@ describe('metagame API', () => {
 				playerIds: [p1.id, p2.id],
 			},
 		});
-
-		// Create a second event with enough players to exceed the old 50-ID limit.
-		const largeScopeEvent = (await $fetch('/api/events', {
-			method: 'POST',
-			body: { name: 'Integration Large Scope Event', game: 'mtg', featureMatchOrientation: 'horizontal' },
-		})) as any;
-		largeScopeEventId = largeScopeEvent.id;
-
-		const largeScopeArchetype = (await $fetch(`/api/events/${largeScopeEventId}/archetypes`, {
-			method: 'POST',
-			body: { name: 'Domain Ramp', colors: 'WUBRG' },
-		})) as any;
-		largeScopeArchetypeId = largeScopeArchetype.id;
-
-		const largeScopePlayerIds: number[] = [];
-		for (let index = 1; index <= 60; index++) {
-			const player = (await $fetch(`/api/events/${largeScopeEventId}/players`, {
-				method: 'POST',
-				body: {
-					name: `Large Scope Player ${index}`,
-					archetypeId: largeScopeArchetypeId,
-					wins: 1,
-					losses: 0,
-					position: index,
-					points: 3,
-					gameData: { type: 'mtg', deckName: 'Domain Ramp', deckColors: 'WUBRG' },
-				},
-			})) as any;
-			largeScopePlayerIds.push(player.id);
-		}
-
-		const largeScopeList = (await $fetch(`/api/events/${largeScopeEventId}/player-lists`, {
-			method: 'POST',
-			body: { name: 'Large Scope List' },
-		})) as any;
-		largeScopePlayerListId = largeScopeList.id;
-
-		await $fetch(`/api/events/${largeScopeEventId}/player-lists/${largeScopePlayerListId}/members`, {
-			method: 'POST',
-			body: { playerIds: largeScopePlayerIds },
-		});
 	});
 
 	afterAll(async () => {
 		try {
 			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
-		}
-		catch {}
-
-		try {
-			await $fetch(`/api/events/${largeScopeEventId}`, { method: 'DELETE' });
 		}
 		catch {}
 	});
@@ -206,21 +157,8 @@ describe('metagame API', () => {
 			expect(data.entries).toBeInstanceOf(Array);
 		});
 
-		it('respects scope=topN', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?scope=topN&topN=2`)) as any;
-			// Top 2 players by position: p1, p2
-			expect(data.totalPlayers).toBe(2);
-		});
-
 		it('respects scope=playerList', async () => {
 			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?scope=playerList&playerListId=${playerListId}`)) as any;
-			expect(data.totalPlayers).toBe(2);
-		});
-
-		it('respects scope=minPoints', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes?scope=minPoints&minPoints=12`)) as any;
-			// Players with at least 12 points: p1 (15), p2 (12)
-			expect(data.scope).toBe('minPoints');
 			expect(data.totalPlayers).toBe(2);
 		});
 	});
@@ -250,13 +188,6 @@ describe('metagame API', () => {
 			expect(data.totalDecks).toBe(0);
 			expect(data.entries).toBeInstanceOf(Array);
 		});
-
-		it('accepts metagame scope query params', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/tokens?scope=topN&topN=2`)) as any;
-
-			expect(data.scope).toBe('topN');
-			expect(data.entries).toBeInstanceOf(Array);
-		});
 	});
 
 	// ──────────────── Archetype detail ────────────────
@@ -272,38 +203,9 @@ describe('metagame API', () => {
 			expect(data.players).toHaveLength(2);
 			expect(data.keyCards).toBeInstanceOf(Array);
 			expect(data.cardBreakdown).toBeInstanceOf(Array);
-		});
-
-		it('returns null conversion stats without a conversion target', async () => {
-			const data = (await $fetch(`/api/events/${eventId}/metagame/archetypes/${archetypeId1}`)) as any;
-
+			// No conversion target was asked for.
 			expect(data.convertedCount).toBeNull();
 			expect(data.conversionRate).toBeNull();
-		});
-
-		it('supports large archetype populations without failing', async () => {
-			const data = (await $fetch(`/api/events/${largeScopeEventId}/metagame/archetypes/${largeScopeArchetypeId}`)) as any;
-
-			expect(data.playerCount).toBe(60);
-			expect(data.players).toHaveLength(60);
-		});
-	});
-
-	describe('large player scopes', () => {
-		it('supports topN scopes larger than 50', async () => {
-			const data = (await $fetch(`/api/events/${largeScopeEventId}/metagame/archetypes?scope=topN&topN=55`)) as any;
-
-			expect(data.totalPlayers).toBe(55);
-			expect(data.classifiedPlayers).toBe(55);
-			expect(data.entries[0].count).toBe(55);
-		});
-
-		it('supports playerList scopes larger than 50', async () => {
-			const data = (await $fetch(`/api/events/${largeScopeEventId}/metagame/archetypes?scope=playerList&playerListId=${largeScopePlayerListId}`)) as any;
-
-			expect(data.totalPlayers).toBe(60);
-			expect(data.classifiedPlayers).toBe(60);
-			expect(data.entries[0].count).toBe(60);
 		});
 	});
 

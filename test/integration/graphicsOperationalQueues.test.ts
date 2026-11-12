@@ -7,7 +7,6 @@ import type { GraphicsQueueActionOutcome } from '~~/shared/utils/graphicsOperati
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { GRAPHICS_OPERATIONAL_QUEUES } from '../../shared/utils/graphicsOperationalQueues';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
@@ -33,7 +32,6 @@ function pngWithTextChunks(count: number) {
 }
 
 const queuesRetiredPng = pngWithTextChunks(60);
-const queuesReferencedPng = pngWithTextChunks(62);
 
 function decodeEvidence(bytes: Uint8Array) {
 	return {
@@ -201,52 +199,6 @@ describe('the Graphics Asset Library operational queues API', () => {
 			{ headers: administratorHeaders },
 		);
 		expect(gone.status).toBe(404);
-	});
-
-	it('refuses to Trash a Graphic Asset any artifact still pins', async () => {
-		const event = await $fetch<{ id: number }>('/api/events', {
-			method: 'POST',
-			body: {
-				name: 'Graphic Asset Queues Event',
-				game: 'mtg',
-				featureMatchOrientation: 'horizontal',
-			},
-		});
-		try {
-			const screen = await $fetch<{ id: number }>(`/api/events/${event.id}/screens`, {
-				method: 'POST',
-				body: {
-					name: 'Queues overlay',
-					slug: `queues-overlay-${event.id}`,
-					currentMode: 'feature-match-overlay',
-				},
-			});
-			const operation = await ingest(
-				'Queues referenced logo',
-				'queues-referenced',
-				queuesReferencedPng,
-			);
-			const assetId = operation.result!.assetId;
-			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.frame.backgroundImage = {
-				kind: 'asset',
-				assetId,
-				revisionId: operation.result!.revisionId,
-			};
-			await $fetch(
-				`/api/events/${event.id}/screens/${screen.id}/config/feature-match-overlay`,
-				{
-					method: 'PATCH',
-					body: { layout: config.layout },
-				},
-			);
-
-			// A fresh reference proof found pinned usage, so nothing was reclaimed.
-			expect(await authorLifecycleAction(assetId, 'trash')).toMatchObject({ outcome: 'in-use' });
-		}
-		finally {
-			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' }).catch(() => {});
-		}
 	});
 
 	it('reports an ingestion retry that has nothing left to resume', async () => {

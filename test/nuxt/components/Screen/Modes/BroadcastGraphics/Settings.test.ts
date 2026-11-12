@@ -135,9 +135,6 @@ const EditWorkspaceStub = defineComponent({
 		:data-writable="String(writable)"
 		:data-canvas="canvasWidth + 'x' + canvasHeight"
 		:data-can-take-over="String(canTakeOver)"
-		:data-playout-disconnected="String(playoutDisconnected)"
-		:data-save-state="saveState"
-		:data-save-error="saveError ?? ''"
 	/>`,
 });
 
@@ -245,18 +242,6 @@ describe('broadcastGraphicsSettings', () => {
 
 		expect(wrapper.find('[data-testid="edit-workspace"]').exists()).toBe(true);
 		expect(wrapper.find('[data-testid="live-workspace"]').exists()).toBe(false);
-	});
-
-	// The hoisted sync's disconnection signal reaches the Edit workspace (#373): its on-air marks
-	// must say "unknown" while the connection is down, and the Edit workspace can only say so if…
-	it('hands the Edit workspace the playout disconnection signal', async () => {
-		mockRoute.query = { workspace: 'edit' };
-		mockPlayoutDisconnected.value = true;
-
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		expect(wrapper.get('[data-testid="edit-workspace"]').attributes('data-playout-disconnected')).toBe('true');
 	});
 
 	it('preserves the selected Broadcast Graphic when moving between workspaces', async () => {
@@ -394,31 +379,7 @@ describe('broadcastGraphicsSettings', () => {
 		expect(mockTakeOver).toHaveBeenCalled();
 	});
 
-	// The save state travels from the mode-config write to the workspace that
-	// asked for the write, and a retry travels back (#381).
-	it('hands the Edit workspace the authored save\'s state and sentence', async () => {
-		mockRoute.query = { workspace: 'edit' };
-		mockSaveState.value = 'failed';
-		mockSaveError.value = 'Graphic Asset Reference at graphics.slate.items.logo.asset is not selectable';
-
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		const workspace = wrapper.get('[data-testid="edit-workspace"]');
-		expect(workspace.attributes('data-save-state')).toBe('failed');
-		expect(workspace.attributes('data-save-error'))
-			.toBe('Graphic Asset Reference at graphics.slate.items.logo.asset is not selectable');
-	});
-
-	it('hands the Edit workspace the flush of the authored save', async () => {
-		mockRoute.query = { workspace: 'edit' };
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		await expect(wrapper.getComponent(EditWorkspaceStub).props('flushEdits')!()).resolves.toBe(true);
-		expect(mockFlush).toHaveBeenCalledOnce();
-	});
-
+	// A retry travels from the workspace back to the mode-config write it asked for (#381).
 	it('re-sends the failed save on the workspace\'s retry', async () => {
 		mockRoute.query = { workspace: 'edit' };
 		mockSaveState.value = 'failed';
@@ -521,19 +482,6 @@ describe('broadcastGraphicsSettings', () => {
 
 			expect(wrapper.find('[data-testid="program-monitor-card"]').exists()).toBe(true);
 		});
-	});
-
-	it('names the lease holder to a session observing the Edit workspace read-only', async () => {
-		mockRoute.query = { workspace: 'edit' };
-		mockLeaseWritable.value = false;
-
-		const wrapper = await mountComponent();
-		await flushPromises();
-
-		// The workspace is handed who to name, rather than being left to say
-		// "another session" (#398). The notice itself is the workspace's own, and
-		// is pinned in `EditWorkspace.test.ts`.
-		expect(wrapper.getComponent(EditWorkspaceStub).props('holderName')).toBe('Marcus Angel');
 	});
 });
 

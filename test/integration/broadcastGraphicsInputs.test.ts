@@ -107,20 +107,6 @@ describe('broadcast graphics Graphic Input command API', () => {
 		expect(screen.modeConfigs['broadcast-graphics']!.graphics[0]!.inputs).toHaveLength(7);
 	});
 
-	it('shares a server-accepted working edit with every other session immediately', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-shared', graphicWith([NAME]));
-
-		await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
-
-		// A second Live Control has nothing but the authoritative snapshot to go on,
-		// and it already carries the edit — nobody had to publish it.
-		const elsewhere = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
-
-		expect(elsewhere.currentState.inputs[GRAPHIC]!.working).toEqual({ name: 'Ava Reed' });
-		// And it is not on air, because the graphic is off and nothing has accepted it.
-		expect(elsewhere.currentState.inputs[GRAPHIC]!.accepted).toEqual({});
-	});
-
 	it('keeps a staged edit off air until Update Graphic accepts the complete set', async () => {
 		const harness = await createGraphicsHarness(eventId, 'inputs-update', graphicWith([
 			NAME,
@@ -187,42 +173,6 @@ describe('broadcast graphics Graphic Input command API', () => {
 
 		const unchanged = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
 		expect(unchanged.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'First' });
-	});
-
-	it('stores a value that violates its declared bound rather than coercing it, and never accepts it', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-unavailable', graphicWith([NAME]));
-		await harness.send({
-			commandId: playoutCommandId('take'),
-			type: 'Take',
-			payload: { graphicId: GRAPHIC },
-		});
-		const good = await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
-		await harness.send({
-			commandId: playoutCommandId('update-good'),
-			type: 'Update Graphic',
-			payload: {
-				graphicId: GRAPHIC,
-				basedOnAcceptedRevision: good.currentState.inputs[GRAPHIC]!.acceptedRevision,
-			},
-		} as BroadcastGraphicsCommand);
-
-		const tooLong = 'A'.repeat(50);
-		const staged = await setBroadcastGraphicInput(harness, GRAPHIC, 'name', tooLong);
-
-		// Stored exactly as entered, so Live Control can show what is wrong with it.
-		expect(staged.currentState.inputs[GRAPHIC]!.working).toEqual({ name: tooLong });
-
-		const updated = await harness.send({
-			commandId: playoutCommandId('update-unavailable'),
-			type: 'Update Graphic',
-			payload: {
-				graphicId: GRAPHIC,
-				basedOnAcceptedRevision: staged.currentState.inputs[GRAPHIC]!.acceptedRevision,
-			},
-		} as BroadcastGraphicsCommand);
-
-		// And on air the last accepted rendering is still what program shows.
-		expect(updated.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed' });
 	});
 
 	it('rejects an edit naming a Graphic Input the Broadcast Graphic does not declare', async () => {

@@ -516,3 +516,167 @@ describe('feature Match Slot Promotion around its batch', () => {
 		expect((await slotRow(stage.slot1))?.matchId).toBe(stage.matchN);
 	});
 });
+
+async function noteAssignment(assignmentId: number, note: string, updatedAt?: Date) {
+	const [noted] = await db.update(schema.featureMatchAssignments)
+		.set({
+			note,
+			...(updatedAt
+				? { updatedAt }
+				: {}),
+		})
+		.where(eq(schema.featureMatchAssignments.id, assignmentId))
+		.returning();
+	return noted!;
+}
+
+/** Promotes having confirmed the discard of `reviewed`'s Note, as it stood when read. */
+function promoteConfirming(stage: Stage, slotId: number, matchId: number, reviewed: { id: number; updatedAt: Date }) {
+	return featureMatchPromotionModule().promoteMatchToSlot({
+		eventId: stage.eventId,
+		slotId,
+		matchId,
+		confirmedNoteDiscards: [
+			{ assignmentId: reviewed.id, updatedAt: reviewed.updatedAt },
+		],
+	});
+}
+
+// A promotion ends the Assignment of a different Match its Slot holds in that
+// Round. A Note on it is lost only to an operator who confirmed that very version.
+describe('feature Match Slot Promotion over an Assignment carrying a Note', () => {
+	it('is refused, naming the Note and its Match, before any Slot, Assignment or Session changes', async () => {
+		const stage = await stageEvent();
+		const noted = await noteAssignment((await promote(stage, stage.slot1, stage.matchN)).assignment.id, 'Do not lose this');
+		const before = await promotionState(stage);
+		publishMessage.mockClear();
+
+		await expect(promote(stage, stage.slot1, stage.matchM)).rejects.toMatchObject({
+			statusCode: 409,
+			data: {
+				code: 'feature-match-note-discard-required',
+				assignments: [
+					{
+						assignment: { id: noted.id, matchId: stage.matchN, note: 'Do not lose this' },
+						match: { id: stage.matchN, tableNumber: 2 },
+					},
+				],
+			},
+		});
+
+		expect(await promotionState(stage)).toEqual(before);
+		expect(publishMessage).not.toHaveBeenCalled();
+	});
+
+	it('replaces it with a new Assignment holding no Note, once exactly the version reviewed is confirmed', async () => {
+		const stage = await stageEvent();
+		const noted = await noteAssignment((await promote(stage, stage.slot1, stage.matchN)).assignment.id, 'The reviewed note');
+
+		const replaced = await promoteConfirming(stage, stage.slot1, stage.matchM, noted);
+
+		expect(replaced.promotedSlot).toMatchObject({ id: stage.slot1, matchId: stage.matchM });
+		expect(replaced.assignment).toMatchObject({ slotId: stage.slot1, matchId: stage.matchM, note: null });
+		expect(replaced.assignment.id).not.toBe(noted.id);
+		expect(await assignmentsOf(stage)).toEqual([
+			expect.objectContaining({ id: replaced.assignment.id, matchId: stage.matchM, note: null }),
+		]);
+	});
+
+	it('answers a confirmation of an earlier version with the Note as it now stands, changing nothing', async () => {
+		const stage = await stageEvent();
+		const reviewed = await noteAssignment((await promote(stage, stage.slot1, stage.matchN)).assignment.id, 'Version one');
+		const current = await noteAssignment(reviewed.id, 'Version two', new Date(reviewed.updatedAt.getTime() + 1000));
+		const before = await promotionState(stage);
+		publishMessage.mockClear();
+
+		await expect(promoteConfirming(stage, stage.slot1, stage.matchM, reviewed)).rejects.toMatchObject({
+			statusCode: 409,
+			data: {
+				code: 'feature-match-note-discard-required',
+				assignments: [
+					{
+						assignment: { id: current.id, note: 'Version two' },
+					},
+				],
+			},
+		});
+
+		expect(await promotionState(stage)).toEqual(before);
+		expect(publishMessage).not.toHaveBeenCalled();
+	});
+
+	it('moves a continuing Assignment with its own Note, asking only about the Note it displaces', async () => {
+		const stage = await stageEvent();
+		const continuing = await noteAssignment((await promote(stage, stage.slot1, stage.matchM)).assignment.id, 'Carry this Note');
+		const displaced = await noteAssignment((await promote(stage, stage.slot2, stage.matchN)).assignment.id, 'Confirm losing this Note');
+
+		await expect(promote(stage, stage.slot2, stage.matchM)).rejects.toMatchObject({
+			statusCode: 409,
+			data: {
+				assignments: [
+					{
+						assignment: { id: displaced.id, note: 'Confirm losing this Note' },
+					},
+				],
+			},
+		});
+
+		const moved = await promoteConfirming(stage, stage.slot2, stage.matchM, displaced);
+
+		expect(moved.assignment).toMatchObject({
+			id: continuing.id,
+			slotId: stage.slot2,
+			matchId: stage.matchM,
+			note: 'Carry this Note',
+		});
+		expect(await assignmentsOf(stage)).toEqual([
+			expect.objectContaining({ id: continuing.id, slotId: stage.slot2, note: 'Carry this Note' }),
+		]);
+	});
+
+	it('leaves the Slot\'s Assignment in another Round, and its Note, as they were', async () => {
+		const stage = await stageEvent();
+		const round = await db.query.rounds.findFirst({
+			where: (rounds, { eq }) => eq(rounds.id, stage.roundId),
+		});
+		const [otherRound] = await db.insert(schema.rounds)
+			.values({
+				eventId: stage.eventId,
+				phaseId: round!.phaseId,
+				name: 'Round 2',
+				roundNumber: 2,
+			})
+			.returning();
+		const [otherMatch] = await db.insert(schema.matches)
+			.values({
+				eventId: stage.eventId,
+				roundId: otherRound!.id,
+				tableNumber: 9,
+				sortOrder: 0,
+			})
+			.returning();
+		const retained = await noteAssignment((await promote(stage, stage.slot1, otherMatch!.id)).assignment.id, 'Historical context');
+
+		await promote(stage, stage.slot1, stage.matchM);
+
+		expect(await db.query.featureMatchAssignments.findMany({
+			where: (assignments, { eq }) => eq(assignments.roundId, otherRound!.id),
+		})).toEqual([
+			expect.objectContaining({ id: retained.id, matchId: otherMatch!.id, note: 'Historical context' }),
+		]);
+	});
+
+	it('keeps the Assignment and its Note when the Match its Slot holds is promoted there again', async () => {
+		const stage = await stageEvent();
+		const noted = await noteAssignment((await promote(stage, stage.slot1, stage.matchM)).assignment.id, 'Keep this note');
+
+		const again = await promote(stage, stage.slot1, stage.matchM);
+
+		expect(again.assignment).toMatchObject({
+			id: noted.id,
+			slotId: stage.slot1,
+			matchId: stage.matchM,
+			note: 'Keep this note',
+		});
+	});
+});

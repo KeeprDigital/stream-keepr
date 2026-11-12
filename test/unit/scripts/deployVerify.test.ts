@@ -3,17 +3,23 @@ import type { AddressInfo } from 'node:net';
 import { execFile } from 'node:child_process';
 import { createServer } from 'node:http';
 import process from 'node:process';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DeployVerifyFailure, verifyDeployment } from '../../../scripts/deploy-verify.mjs';
+import { LOAD_TOLERANT_WAIT_MS } from '../../helpers/loadTolerantBounds';
 
 const SCRIPT = 'scripts/deploy-verify.mjs';
 
 type Handler = (request: IncomingMessage, response: ServerResponse) => void;
 
+const HTML = 'text/html; charset=utf-8';
+const SPA_FALLBACK = '<!DOCTYPE html><html><body><div id="__nuxt"></div></body></html>';
+const READING = '{"serverTime":1760000000000}';
+
 /**
  * A stand-in for a deployed origin on localhost: real HTTP, no deployment, no
- * credentials, no network beyond loopback. Each case spawns the real script,
- * except the retry cases, which call its exported probe to skip the pauses.
+ * credentials, no network beyond loopback. The probe's rules are driven through
+ * the script's exported probe; only what the command adds to it (the target
+ * from the environment, the exit code, the liveness claim) spawns the script.
  */
 describe('deploy:verify against a local stand-in origin', () => {
 	const servers: Server[] = [];
@@ -36,132 +42,70 @@ describe('deploy:verify against a local stand-in origin', () => {
 		};
 	}
 
-	function runScript(healthUrl: string) {
-		return new Promise<{ code: number | null; output: string }>((resolve) => {
-			execFile(process.execPath, [SCRIPT], {
-				env: { ...process.env, STREAM_KEEPR_DEPLOY_HEALTH_URL: healthUrl },
-				timeout: 20_000,
-			}, (error, stdout, stderr) => {
-				resolve({
-					code: error
-						? (error.code as number) ?? 1
-						: 0,
-					output: `${stdout}${stderr}`,
-				});
-			});
-		});
+	// The script's own retry policy, without its real five-second pauses.
+	const fast = { attempts: 3, retryDelayMs: 0 };
+
+	interface WrongAnswer {
+		answer: string;
+		status?: number;
+		contentType?: string;
+		location?: string;
+		body?: string;
+		named: RegExp;
 	}
 
-	it('passes a live origin answering the clock reading, and claims liveness only', async () => {
+	it.each<WrongAnswer>([
+		{
+			answer: 'a redirect to a sign-in page',
+			status: 302,
+			location: '/login',
+			named: /302.*\/login/,
+		},
+		{
+			answer: 'a 200 HTML page such as an SPA fallback',
+			contentType: HTML,
+			body: SPA_FALLBACK,
+			named: /text\/html/,
+		},
+		{ answer: 'a JSON content type whose body does not parse', body: '{"serverTime": 17', named: /not valid JSON/ },
+		{ answer: 'a JSON null', body: 'null', named: /serverTime/ },
+		{ answer: 'a JSON array', body: `[${READING}]`, named: /serverTime/ },
+		{ answer: 'a string serverTime', body: '{"serverTime":"1760000000000"}', named: /serverTime/ },
+		{ answer: 'a fractional serverTime', body: '{"serverTime":1760000000000.5}', named: /serverTime/ },
+		{ answer: 'a non-positive serverTime', body: '{"serverTime":0}', named: /serverTime/ },
+		{ answer: 'a JSON error envelope', body: '{"statusCode":503,"message":"Service Unavailable"}', named: /serverTime/ },
+		{
+			answer: 'status 201 with a clock-reading body',
+			status: 201,
+			body: READING,
+			named: /answered 201/,
+		},
+		{
+			answer: 'status 401 with a clock-reading body',
+			status: 401,
+			body: READING,
+			named: /answered 401/,
+		},
+	])('fails $answer on its first answer, following and retrying nothing', async ({ status = 200, contentType = 'application/json', location, body, named }) => {
 		const requested: string[] = [];
+		// Every other path answers the clock reading, so a redirect that was followed would pass.
 		const url = await origin((request, response) => {
 			requested.push(request.url ?? '');
-			json({
-				serverTime: Date.now(),
-			})(request, response);
+			if (request.url !== '/api/time')
+				return response.writeHead(200, { 'content-type': 'application/json' }).end(READING);
+			response.writeHead(status, {
+				'content-type': contentType,
+				...(location
+					? { location }
+					: {}),
+			}).end(body);
 		});
 
-		const { code, output } = await runScript(`${url}/`);
+		const outcome: unknown = await verifyDeployment({ baseUrl: url, ...fast }).catch((error: unknown) => error);
 
-		expect(code).toBe(0);
+		expect(outcome).toBeInstanceOf(DeployVerifyFailure);
+		expect((outcome as DeployVerifyFailure).message).toMatch(named);
 		expect(requested).toEqual(['/api/time']);
-		expect(output).toContain('liveness only');
-		expect(output).not.toMatch(/new release is serving/i);
-	});
-
-	it('fails a redirect to a sign-in page without following it', async () => {
-		const requested: string[] = [];
-		const url = await origin((request, response) => {
-			requested.push(request.url ?? '');
-			if (request.url === '/login') {
-				return json({
-					serverTime: Date.now(),
-				})(request, response);
-			}
-			response.writeHead(302, { location: '/login' });
-			response.end();
-		});
-
-		const { code, output } = await runScript(url);
-
-		expect(code).not.toBe(0);
-		expect(requested).toEqual(['/api/time']);
-		expect(output).toContain('302');
-		expect(output).toContain('/login');
-		expect(output).not.toContain('liveness only');
-	});
-
-	it('fails a 200 HTML page such as an SPA fallback', async () => {
-		const url = await origin((_request, response) => {
-			response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-			response.end('<!DOCTYPE html><html><body><div id="__nuxt"></div></body></html>');
-		});
-
-		const { code, output } = await runScript(url);
-
-		expect(code).not.toBe(0);
-		expect(output).toContain('text/html');
-		expect(output).not.toContain('liveness only');
-	});
-
-	it('fails a JSON content type whose body does not parse', async () => {
-		const url = await origin((_request, response) => {
-			response.writeHead(200, { 'content-type': 'application/json' });
-			response.end('{"serverTime": 17');
-		});
-
-		const { code, output } = await runScript(url);
-
-		expect(code).not.toBe(0);
-		expect(output).toMatch(/not valid JSON/);
-		expect(output).not.toContain('liveness only');
-	});
-
-	it.each([
-		['an empty object', {}],
-		['a JSON null', null],
-		[
-			'an array',
-			[
-				{ serverTime: 1_760_000_000_000 },
-			],
-		],
-		[
-			'a string serverTime',
-			{ serverTime: '1760000000000' },
-		],
-		[
-			'a fractional serverTime',
-			{ serverTime: 1_760_000_000_000.5 },
-		],
-		[
-			'a non-positive serverTime',
-			{ serverTime: 0 },
-		],
-		[
-			'a JSON error envelope',
-			{ statusCode: 503, message: 'Service Unavailable' },
-		],
-	])('fails a JSON body of the wrong shape: %s', async (_name, body) => {
-		const url = await origin(json(body));
-
-		const { code, output } = await runScript(url);
-
-		expect(code).not.toBe(0);
-		expect(output).toContain('serverTime');
-		expect(output).not.toContain('liveness only');
-	});
-
-	it.each([201, 203, 401, 404])('fails status %i even with a clock-reading body', async (status) => {
-		const url = await origin(json({
-			serverTime: Date.now(),
-		}, status));
-
-		const { code, output } = await runScript(url);
-
-		expect(code).not.toBe(0);
-		expect(output).toContain(`answered ${status}`);
-		expect(output).not.toContain('liveness only');
 	});
 
 	it.each([
@@ -171,18 +115,20 @@ describe('deploy:verify against a local stand-in origin', () => {
 		'http://127.0.0.1:9/?preview=1',
 		'http://127.0.0.1:9/#top',
 	])('refuses the target %j without probing anything', async (target) => {
-		const { code, output } = await runScript(target);
+		const fetchRequest = vi.fn();
 
-		expect(code).not.toBe(0);
-		expect(output).toContain('STREAM_KEEPR_DEPLOY_HEALTH_URL');
-		expect(output).not.toContain('Retrying');
+		const outcome: unknown = await verifyDeployment({
+			baseUrl: target,
+			fetchRequest: fetchRequest as unknown as typeof fetch,
+			...fast,
+		}).catch((error: unknown) => error);
+
+		expect(outcome).toBeInstanceOf(DeployVerifyFailure);
+		expect((outcome as DeployVerifyFailure).message).toContain('STREAM_KEEPR_DEPLOY_HEALTH_URL');
+		expect(fetchRequest).not.toHaveBeenCalled();
 	});
 
 	describe('retrying what a fresh promotion can still be settling', () => {
-		// The script's own retry policy, called in-process so the test need not
-		// sit through the real five-second pauses. Still real HTTP to loopback.
-		const fast = { attempts: 3, retryDelayMs: 0 };
-
 		it('fails an origin that keeps answering 503, after every attempt', async () => {
 			let requests = 0;
 			const url = await origin((_request, response) => {
@@ -215,35 +161,86 @@ describe('deploy:verify against a local stand-in origin', () => {
 			expect(requests).toBe(2);
 		});
 
-		it('fails an origin nothing is listening on', async () => {
-			const url = await origin(json({
-				serverTime: Date.now(),
-			}));
-			await new Promise(resolve => servers.pop()!.close(resolve));
-
-			await expect(verifyDeployment({ baseUrl: url, ...fast })).rejects.toThrow(DeployVerifyFailure);
-		});
-
-		it('fails an origin that accepts the connection and never answers', async () => {
-			let requests = 0;
-			const url = await origin(() => {
-				requests += 1;
+		it('fails an origin nothing is listening on, after every attempt', async () => {
+			// What Node's fetch rejects with on a closed port. A port bound and
+			// released here could be taken again before the probe connected.
+			const fetchRequest = vi.fn(async () => {
+				throw new TypeError('fetch failed', {
+					cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:443'), { code: 'ECONNREFUSED' }),
+				});
 			});
 
-			await expect(verifyDeployment({ baseUrl: url, ...fast, timeoutMs: 100 })).rejects.toThrow(/could not be reached/);
-			expect(requests).toBe(3);
+			const failure = verifyDeployment({
+				baseUrl: 'https://127.0.0.1',
+				fetchRequest: fetchRequest as unknown as typeof fetch,
+				...fast,
+			});
+
+			await expect(failure).rejects.toBeInstanceOf(DeployVerifyFailure);
+			await expect(failure).rejects.toThrow(/could not be reached \(ECONNREFUSED\)/);
+			expect(fetchRequest).toHaveBeenCalledTimes(3);
 		});
 
-		it('does not retry a definitive wrong answer', async () => {
-			let requests = 0;
+		it('fails an origin that accepts the connection and never answers, after every attempt', async () => {
+			const url = await origin(() => {});
+			// Counted where the probe asks: a request its timeout cuts off may never reach the origin.
+			const fetchRequest = vi.fn((...request: Parameters<typeof fetch>) => fetch(...request));
+
+			await expect(verifyDeployment({
+				baseUrl: url,
+				fetchRequest: fetchRequest as unknown as typeof fetch,
+				...fast,
+				timeoutMs: 25,
+			})).rejects.toThrow(/could not be reached/);
+			expect(fetchRequest).toHaveBeenCalledTimes(3);
+		});
+	});
+
+	describe('run as the command, its target in STREAM_KEEPR_DEPLOY_HEALTH_URL', () => {
+		function runScript(healthUrl: string) {
+			return new Promise<{ code: number | null; output: string }>((resolve) => {
+				execFile(process.execPath, [SCRIPT], {
+					env: { ...process.env, STREAM_KEEPR_DEPLOY_HEALTH_URL: healthUrl },
+					timeout: LOAD_TOLERANT_WAIT_MS,
+				}, (error, stdout, stderr) => {
+					resolve({
+						code: error
+							? (error.code as number) ?? 1
+							: 0,
+						output: `${stdout}${stderr}`,
+					});
+				});
+			});
+		}
+
+		it('exits 0 on the clock reading, and claims liveness only', async () => {
+			const requested: string[] = [];
+			const url = await origin((request, response) => {
+				requested.push(request.url ?? '');
+				json({
+					serverTime: Date.now(),
+				})(request, response);
+			});
+
+			const { code, output } = await runScript(`${url}/`);
+
+			expect(code).toBe(0);
+			expect(requested).toEqual(['/api/time']);
+			expect(output).toContain('liveness only');
+			expect(output).not.toMatch(/new release is serving/i);
+		});
+
+		it('exits non-zero on a wrong answer, naming it and claiming nothing', async () => {
 			const url = await origin((_request, response) => {
-				requests += 1;
-				response.writeHead(200, { 'content-type': 'text/html' });
-				response.end('<html></html>');
+				response.writeHead(200, { 'content-type': HTML });
+				response.end(SPA_FALLBACK);
 			});
 
-			await expect(verifyDeployment({ baseUrl: url, ...fast })).rejects.toThrow(/text\/html/);
-			expect(requests).toBe(1);
+			const { code, output } = await runScript(url);
+
+			expect(code).not.toBe(0);
+			expect(output).toContain('text/html');
+			expect(output).not.toContain('liveness only');
 		});
 	});
 });

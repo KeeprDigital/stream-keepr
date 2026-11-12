@@ -10,7 +10,8 @@ import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSe
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
 // Clearing an optional setting in a mode's settings editor writes the `null` that deletes it
-// (#703).
+// (#703): one case per control kind and write path. Each control's own clearing is its home's
+// (`ConfigField.test.ts`, `eventReferencePickers.test.ts`); each field's write is `ModeSettings.test.ts`'s.
 
 const config = ref<Record<string, unknown>>({});
 const writes: Record<string, unknown>[] = [];
@@ -60,13 +61,6 @@ mockNuxtImport('useRoundStore', () => () => ({
 		{ id: 31, name: 'Round 4' },
 	],
 	loadRoundsByEventId: vi.fn(),
-}));
-mockNuxtImport('useArchetypeStore', () => () => ({
-	...loaded,
-	archetypes: [
-		{ id: 4, name: 'Mono Red' },
-	],
-	loadByEventId: vi.fn(),
 }));
 mockNuxtImport('usePhaseStore', () => () => ({
 	...loaded,
@@ -126,14 +120,10 @@ afterEach(() => {
 	mounted = null;
 });
 
-/** The modes whose page the generic settings renderer draws. */
+/** The modes below whose page the generic settings renderer draws itself; the others wrap it. */
 const RENDERED: ReadonlySet<ScreenMode> = new Set([
 	'round-clock',
-	'pairings',
-	'card',
-	'player-history',
 	'head-to-head',
-	'feature-match',
 ]);
 
 async function mountEditor(editor: string, mode: ScreenMode) {
@@ -177,89 +167,31 @@ async function mountEditor(editor: string, mode: ScreenMode) {
 type ClearableField = [label: string, field: string, storedValue: unknown];
 
 describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
+	// A paginated mode writes through its Page Rotation: a number, and a picker in its Source.
 	[
 		'Metagame',
 		'metagame',
 		{ viewMode: 'cards', scope: 'playerList' },
 		[
-			['Archetype filter', 'archetypeFilter', 'Rakdos Midrange'],
-			['Max width', 'maxWidth', 1200],
-			['Header text', 'headerText', 'Day 2 Metagame'],
-			['Player List', 'playerListId', 7],
-		],
-	],
-	[
-		'TopCards',
-		'top-cards',
-		{ scope: 'playerList' },
-		[
-			['Archetype filter', 'archetypeFilter', 'Azorius Control'],
-			['Header text', 'headerText', 'Top Cards'],
-			['Player List', 'playerListId', 7],
-		],
-	],
-	[
-		'Standings',
-		'standings',
-		{ viewMode: 'watchlist' },
-		[
-			['Header text', 'headerText', 'Final Standings'],
 			['Max width', 'maxWidth', 1200],
 			['Player List', 'playerListId', 7],
 		],
 	],
-	[
-		'PlayerHistory',
-		'player-history',
-		{},
-		[
-			['Header text', 'headerText', 'Match History'],
-			['Player', 'playerId', 5],
-		],
-	],
-	[
-		'Pairings',
-		'pairings',
-		{},
-		[
-			['Header text', 'headerText', 'Top Tables'],
-			['Round', 'roundId', 31],
-		],
-	],
+	// Text, on a mode that writes its config directly.
 	[
 		'HeadToHead',
 		'head-to-head',
 		{},
 		[
 			['Header text', 'headerText', 'Feature Match Preview'],
-			['Feature Match Slot', 'featureMatchId', 4],
 		],
 	],
-	[
-		'HeadToHead',
-		'head-to-head',
-		{ playerSource: 'players' },
-		[
-			['First Player', 'player1Id', 7],
-			['Second Player', 'player2Id', 8],
-		],
-	],
-	[
-		'Talent',
-		'talent',
-		{},
-		[
-			['Header text', 'headerText', 'Your Casters'],
-			['Talent', 'talentId', 7],
-		],
-	],
+	// A slot's own widget.
 	[
 		'TopCut',
 		'top-cut',
 		{},
 		[
-			['Header text', 'headerText', 'Championship Bracket'],
-			['Phase', 'phaseId', 3],
 			['Bracket size', 'bracketSizeOverride', 8],
 		],
 	],
@@ -270,16 +202,6 @@ describe.each<[string, ScreenMode, Record<string, unknown>, ClearableField[]]>([
 		{},
 		[
 			['Round', 'roundId', 31],
-		],
-	],
-	[
-		'ArchetypeSpotlight',
-		'archetype-spotlight',
-		{ scope: 'playerList' },
-		[
-			['Header text', 'headerText', 'Deck to Beat'],
-			['Archetype', 'archetypeId', 4],
-			['Player List', 'playerListId', 7],
 		],
 	],
 ])('the %s settings editor', (editor, mode, variant, fields) => {

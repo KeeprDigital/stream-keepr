@@ -291,16 +291,15 @@ describe('screens extended API', () => {
 		},
 	};
 
-	it('sets a card on the screen, answering the Card revision it committed', async () => {
-		const result = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`, {
+	// The Card's rules are held in `test/unit/server/api/cardExpiry.sqlite.test.ts`;
+	// this is one pass through its three routes on a real server.
+	it('sets, reads and clears the Card on the screen, answering each Card revision', async () => {
+		const saved = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`, {
 			method: 'PUT',
 			body: sampleCard,
 		});
+		expect(saved).toEqual({ success: true, revision: 1 });
 
-		expect(result).toEqual({ success: true, revision: 1 });
-	});
-
-	it('gets the card that was set on the screen, with its revision', async () => {
 		const { card, revision } = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
 
 		expect(revision).toBe(1);
@@ -318,14 +317,11 @@ describe('screens extended API', () => {
 			},
 		});
 		expect(card!.savedAt).toBeTypeOf('number');
-	});
 
-	it('clears the card from the screen', async () => {
-		const result = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`, {
+		const cleared = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`, {
 			method: 'DELETE',
 		});
-
-		expect(result).toEqual({ success: true, revision: 2 });
+		expect(cleared).toEqual({ success: true, revision: 2 });
 
 		const read = await $fetch(`/api/events/${eventId}/screens/${screenId}/card`);
 		expect(read).toEqual({ card: null, revision: 2 });

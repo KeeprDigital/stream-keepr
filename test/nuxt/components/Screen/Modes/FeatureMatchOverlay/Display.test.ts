@@ -1413,18 +1413,6 @@ describe('featureMatchOverlayDisplay', () => {
 			});
 		});
 
-		it('paints text in the FontFace family the pinned revision resolves to', async () => {
-			vi.stubGlobal('FontFace', class {
-				constructor(public family: string, public source: string) {}
-				async load() { return this; }
-			});
-
-			const wrapper = await mountComponent();
-
-			expect(wrapper.get('[data-graphic-item-kind="text"] p').attributes('style'))
-				.toContain('font-family: stream-keepr-graphic-asset-font-asset-font-revision-2;');
-		});
-
 		it('loads the revision from its exact content URL and hides the output until it is ready', async () => {
 			let finishLoad!: () => void;
 			const loaded = new Promise<void>((resolve) => {

@@ -246,33 +246,42 @@ describe('solveDeckLayout', () => {
 		});
 	}
 
+	/** The case a failure names, as its row title did. */
+	const named = ({ main, side, width, height, placement, columns, maxCardWidth, gap }: typeof CONSTRAINED[number]) =>
+		`${main} and ${side} cards ${placement} in ${width}×${height}, columns ${columns}, max ${maxCardWidth}, gap ${gap}`;
+
 	// The deck never leaves its space, a max card size holds, and a set column count is kept.
 	// A set gap is kept until it would be wider than the cards it separates.
-	it.each(CONSTRAINED)('lays $main and $side cards $placement in $width×$height within columns $columns, max $maxCardWidth, gap $gap', (row) => {
-		const input = constrained(row);
-		const layout = solveDeckLayout(input)!;
-		const { width, height } = extent(input);
+	it('lays every deck within its space, max card size, set columns and set gap', () => {
+		for (const row of CONSTRAINED) {
+			const input = constrained(row);
+			const layout = solveDeckLayout(input)!;
+			const { width, height } = extent(input);
+			const which = named(row);
 
-		expect(layout.cardWidth).toBeGreaterThan(0);
-		expect(width).toBeLessThanOrEqual(input.width + 0.001);
-		expect(height).toBeLessThanOrEqual(input.height + 0.001);
-		expect(layout.mainboard!.width).toBeCloseTo(layout.mainboard!.columns * layout.cardWidth + (layout.mainboard!.columns - 1) * layout.mainboard!.gap);
-		if (row.maxCardWidth !== null)
-			expect(layout.cardWidth).toBeLessThanOrEqual(row.maxCardWidth);
-		if (row.columns !== null)
-			expect(layout.mainboard!.columns).toBe(row.columns);
-		if (row.gap !== null)
-			expect(layout.mainboard!.gap).toBeCloseTo(Math.min(row.gap, layout.cardWidth));
+			expect(layout.cardWidth, which).toBeGreaterThan(0);
+			expect(width, which).toBeLessThanOrEqual(input.width + 0.001);
+			expect(height, which).toBeLessThanOrEqual(input.height + 0.001);
+			expect(layout.mainboard!.width, which).toBeCloseTo(layout.mainboard!.columns * layout.cardWidth + (layout.mainboard!.columns - 1) * layout.mainboard!.gap);
+			if (row.maxCardWidth !== null)
+				expect(layout.cardWidth, which).toBeLessThanOrEqual(row.maxCardWidth);
+			if (row.columns !== null)
+				expect(layout.mainboard!.columns, which).toBe(row.columns);
+			if (row.gap !== null)
+				expect(layout.mainboard!.gap, which).toBeCloseTo(Math.min(row.gap, layout.cardWidth));
+		}
 	});
 
 	// The largest card that fits: the deck reaches one side of its space unless the max card size stops it.
-	it.each(CONSTRAINED)('fills $width×$height with $main and $side cards $placement, columns $columns, max $maxCardWidth, gap $gap', (row) => {
-		const input = constrained(row);
-		const layout = solveDeckLayout(input)!;
-		const { width, height } = extent(input);
-		const atMax = row.maxCardWidth !== null && layout.cardWidth === row.maxCardWidth;
+	it('fills every space with the largest card that fits, short of a side only at the max card size', () => {
+		for (const row of CONSTRAINED) {
+			const input = constrained(row);
+			const layout = solveDeckLayout(input)!;
+			const { width, height } = extent(input);
+			const atMax = row.maxCardWidth !== null && layout.cardWidth === row.maxCardWidth;
 
-		expect(atMax || Math.min(input.width - width, input.height - height) < 0.001).toBe(true);
+			expect(atMax || Math.min(input.width - width, input.height - height) < 0.001, named(row)).toBe(true);
+		}
 	});
 
 	// Auto gap follows the card: today's 8 px beside a 144 px card, and in proportion at any other size.
@@ -366,30 +375,39 @@ describe('solveDeckGroups', () => {
 			+ (groups.rows.length - 1) * input.groupGap;
 	}
 
-	// The groups never leave their space, a max card size holds, and a set column count is kept.
-	it.each(cases)('lays groups of $counts in $width×$height within columns $columns, max $maxCardWidth, gap $gap', (input) => {
-		const groups = solveDeckGroups(input);
+	/** The case a failure names, as its row title did. */
+	const named = ({ counts, width, height, columns, maxCardWidth, gap }: typeof cases[number]) =>
+		`groups of ${counts.join(',')} in ${width}×${height}, columns ${columns}, max ${maxCardWidth}, gap ${gap}`;
 
-		expect(groups.cardWidth).toBeGreaterThan(0);
-		expect(groups.rows).toHaveLength(input.counts.length);
-		input.counts.forEach((count, index) => expect(groups.columns * groups.rows[index]!).toBeGreaterThanOrEqual(count));
-		expect(groups.columns * groups.cardWidth + (groups.columns - 1) * groups.gap).toBeLessThanOrEqual(input.width + 1e-6);
-		expect(heightOf(input)).toBeLessThanOrEqual(input.height + 1e-6);
-		if (input.maxCardWidth !== null)
-			expect(groups.cardWidth).toBeLessThanOrEqual(input.maxCardWidth);
-		if (input.columns !== null)
-			expect(groups.columns).toBe(input.columns);
-		if (input.gap !== null)
-			expect(groups.gap).toBeCloseTo(Math.min(input.gap, groups.cardWidth));
+	// The groups never leave their space, a max card size holds, and a set column count is kept.
+	it('lays every set of groups within its space, max card size, set columns and set gap', () => {
+		for (const input of cases) {
+			const groups = solveDeckGroups(input);
+			const which = named(input);
+
+			expect(groups.cardWidth, which).toBeGreaterThan(0);
+			expect(groups.rows, which).toHaveLength(input.counts.length);
+			input.counts.forEach((count, index) => expect(groups.columns * groups.rows[index]!, which).toBeGreaterThanOrEqual(count));
+			expect(groups.columns * groups.cardWidth + (groups.columns - 1) * groups.gap, which).toBeLessThanOrEqual(input.width + 1e-6);
+			expect(heightOf(input), which).toBeLessThanOrEqual(input.height + 1e-6);
+			if (input.maxCardWidth !== null)
+				expect(groups.cardWidth, which).toBeLessThanOrEqual(input.maxCardWidth);
+			if (input.columns !== null)
+				expect(groups.columns, which).toBe(input.columns);
+			if (input.gap !== null)
+				expect(groups.gap, which).toBeCloseTo(Math.min(input.gap, groups.cardWidth));
+		}
 	});
 
 	// The largest card that fits: one side reaches its space unless the max card size stops it.
-	it.each(cases)('fills $width×$height with groups of $counts, columns $columns, max $maxCardWidth, gap $gap', (input) => {
-		const groups = solveDeckGroups(input);
-		const widthLeft = input.width - (groups.columns * groups.cardWidth + (groups.columns - 1) * groups.gap);
-		const atMax = input.maxCardWidth !== null && groups.cardWidth === input.maxCardWidth;
+	it('fills every space with the largest card that fits, short of a side only at the max card size', () => {
+		for (const input of cases) {
+			const groups = solveDeckGroups(input);
+			const widthLeft = input.width - (groups.columns * groups.cardWidth + (groups.columns - 1) * groups.gap);
+			const atMax = input.maxCardWidth !== null && groups.cardWidth === input.maxCardWidth;
 
-		expect(atMax || Math.min(widthLeft, input.height - heightOf(input)) < 1e-6).toBe(true);
+			expect(atMax || Math.min(widthLeft, input.height - heightOf(input)) < 1e-6, named(input)).toBe(true);
+		}
 	});
 
 	it('gives every group the one column count and card size a worked space holds', () => {

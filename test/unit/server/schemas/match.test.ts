@@ -22,6 +22,18 @@ describe.each([
 			...provenance,
 		}).success).toBe(false);
 	});
+
+	// ADR-0047: a Match Result is Melee Sync's alone to record.
+	it.each([
+		['hasResult', true],
+		['player1GameWins', 2],
+		['player2GameWins', 1],
+		['gameDraws', 1],
+		['isBye', true],
+		['resultString', '2-1'],
+	])('refuses a manual write carrying %s, which only Melee Sync records', (field, value) => {
+		expect(schema.safeParse({ ...manual, [field]: value }).success).toBe(false);
+	});
 });
 
 describe('manual player snapshots on createMatchSchema', () => {

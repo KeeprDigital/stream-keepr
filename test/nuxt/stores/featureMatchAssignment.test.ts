@@ -182,16 +182,9 @@ describe('useFeatureMatchAssignmentStore', () => {
 	 * same Event loaded afresh since is the lifetime that answer belongs to, so it may
 	 * not replace a Round's Assignments there (#606).
 	 */
-	describe.each([
-		[
-			'Event B',
-			[2],
-		],
-		[
-			'Event A, loaded again since',
-			[2, 1],
-		],
-	])('a save answered after the operator moved on to %s', (_, switches) => {
+	describe('a save answered after the operator moved on to Event A, loaded again since', () => {
+		const switches = [2, 1];
+
 		/** Ends on Round 10 loaded, as Event A's own is when loaded again. */
 		async function switchAway() {
 			let shown!: FeatureMatchAssignment[];
