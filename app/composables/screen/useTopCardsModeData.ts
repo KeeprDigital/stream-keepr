@@ -1,8 +1,8 @@
 import type { CardBreakdownEntry, CardBreakdownResponse } from '~~/shared/types/metagame';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import { metagameCardImageUrl, offeredMetagameScope } from '~~/shared/utils/metagame';
-import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 import { useStagedScreenContent } from '~/modules/screen-mode/readiness';
 
@@ -13,7 +13,6 @@ export interface RankedTopCard {
 }
 
 export function useTopCardsModeData(context: ScreenContext) {
-	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'top-cards');
 	const outputReads = useScreenOutputReads(context);
 	const game = useScreenCardGame(context);
@@ -21,7 +20,7 @@ export function useTopCardsModeData(context: ScreenContext) {
 	// The server derives the breakdown from the saved configuration (#604), so
 	// the read changes with the configuration fields it depends on.
 	const freshness = useScreenModeFreshness<CardBreakdownResponse | null>({
-		eventId,
+		hearing: useScreenModeHearing(context, 'top-cards', () => config.value),
 		source: () => outputReads.scopeKey.value && JSON.stringify([
 			outputReads.scopeKey.value,
 			config.value.scope,
@@ -38,7 +37,6 @@ export function useTopCardsModeData(context: ScreenContext) {
 		read: () => outputReads.topCards(),
 		initialData: null,
 		errorMessage: 'Failed to load top cards data',
-		dependsOn: metagameBreakdownDependencies(() => config.value),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;

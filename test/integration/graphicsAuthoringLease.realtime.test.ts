@@ -4,9 +4,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { createCommandHarness } from './featureMatchSessionHelpers';
-import { integrationRealtimeConfigured } from './helpers';
 import { anotherBrowser } from './identities';
 import { diagnoseRealtimePublishFailure, SCREEN_COMMAND_ROUTE_REFUSALS } from './realtimeDiagnosis';
+import { integrationRealtimeConfigured } from './realtimeKey';
 
 interface LeaseState {
 	artifact: { kind: string; id: string };

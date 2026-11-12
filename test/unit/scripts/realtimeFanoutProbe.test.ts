@@ -2,12 +2,48 @@ import { spawnSync } from 'node:child_process';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { probeOrigin, RealtimeFanoutProbeRefusal } from '../../../scripts/measure-realtime-fanout.mjs';
+import { deliveredByChannel, probeOrigin, RealtimeFanoutProbeRefusal } from '../../../scripts/measure-realtime-fanout.mjs';
 
 // The probe writes an Event and a live session, so the only reachable part is its
 // refusal to default an origin: the old default, :8787, is the port every worktree
 // shares (#289).
 const PROBE_PATH = fileURLToPath(new URL('../../../scripts/measure-realtime-fanout.mjs', import.meta.url));
+
+// A Screen is told on its own channel what the Event channel announced, so a
+// total alone cannot say which channel a change in the count came from.
+describe('the fan-out probe counts each channel apart', () => {
+	it.each([
+		{
+			name: 'nothing delivered',
+			received: [],
+			byChannel: {
+				event: { delivered: 0, byType: {} },
+				screen: { delivered: 0, byType: {} },
+			},
+		},
+		{
+			name: 'one type on both channels',
+			received: [
+				{ channel: 'event', name: 'match:updated', bytes: 10 },
+				{ channel: 'event', name: 'match:updated', bytes: 10 },
+				{ channel: 'screen', name: 'output:modeDataChanged', bytes: 4 },
+				{ channel: 'screen', name: 'match:updated', bytes: 10 },
+			],
+			byChannel: {
+				event: {
+					delivered: 2,
+					byType: { 'match:updated': 2 },
+				},
+				screen: {
+					delivered: 2,
+					byType: { 'output:modeDataChanged': 1, 'match:updated': 1 },
+				},
+			},
+		},
+	])('$name', ({ received, byChannel }) => {
+		expect(deliveredByChannel(received)).toEqual(byChannel);
+	});
+});
 
 describe('the fan-out probe refuses to default its origin', () => {
 	it.each([

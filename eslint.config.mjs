@@ -49,6 +49,31 @@ const sharedFieldTemplateSyntax = [
 	'WithStatement',
 	{ selector: 'VElement[rawName=/^(?:UInputNumber|u-input-number)$/]', message: 'Use GraphicsNumberField (or GraphicsOpacityField), the one number field the inspector and the Theme editor share.' },
 ];
+const sampleDatasetImport = { regex: 'screen-mode/sample(Screen|Dataset)$', message: 'The Screen Mode Sample Dataset is a Theme preview\'s alone (components/Theme).' };
+// Rendering code: what a Screen Output, a Program monitor or a preview runs.
+const renderingFiles = [
+	'app/composables/screen/**/*.ts',
+	'app/modules/screen/**/*.ts',
+	'app/modules/screen-mode/**/*.ts',
+	'app/components/Screen/**/*.vue',
+	'app/pages/event/*/screen/**/*.vue',
+];
+// The rendering code the Screen Mode Sample Dataset rule above leaves alone.
+const sampleDatasetFiles = ['app/modules/screen-mode/sample*.ts', 'app/composables/screen/useScreenOutputReads.ts'];
+const eventChannelSeam = 'app/modules/screen/renderingChannel.ts';
+const eventChannelMessage = 'A rendering of a Screen follows its Screen\'s own channel (`renderingChannel`); a preview or editor names the Event channel through `authoringEventChannel`.';
+const eventChannelImport = {
+	group: ['**/realtimeChannels'],
+	importNames: ['eventRealtimeChannel'],
+	message: eventChannelMessage,
+};
+// The same function as Nuxt auto-imports it from `shared/utils`.
+const eventChannelGlobal = { name: 'eventRealtimeChannel', message: eventChannelMessage };
+// antfu's defaults, which a block setting `no-restricted-globals` would otherwise replace.
+const defaultRestrictedGlobals = [
+	{ name: 'global', message: 'Use `globalThis` instead.' },
+	{ name: 'self', message: 'Use `globalThis` instead.' },
+];
 const compositorPanelSyntax = [
 	{ selector: 'CallExpression[callee.name=\'emit\'][arguments.0.value=\'update:graphics\']:not(CallExpression[callee.name=\'useCompositorEditing\'] CallExpression)', message: 'Commit the stack only through useCompositorEditing.' },
 	{ selector: 'Identifier[name=\'replaceBroadcastGraphic\']', message: 'Stack replacement belongs to the compositor editing module.' },
@@ -207,9 +232,7 @@ export default withNuxt(
 			'no-restricted-imports': [
 				'error',
 				{
-					patterns: [
-						{ regex: 'screen-mode/sample(Screen|Dataset)$', message: 'The Screen Mode Sample Dataset is a Theme preview\'s alone (components/Theme).' },
-					],
+					patterns: [sampleDatasetImport],
 				},
 			],
 		},
@@ -253,6 +276,34 @@ export default withNuxt(
 		files: ['app/components/Graphics/**/*.vue', 'app/components/Theme/**/*.vue'],
 		rules: {
 			'vue/no-restricted-syntax': ['error', ...sharedFieldTemplateSyntax],
+		},
+	},
+	{
+		// A live rendering of a Screen follows only its Screen's own channel. Rendering code names
+		// the Event channel through one seam, so nothing a Screen Output runs comes to depend on it.
+		files: renderingFiles,
+		ignores: [eventChannelSeam, ...sampleDatasetFiles],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [eventChannelImport, sampleDatasetImport],
+				},
+			],
+			'no-restricted-globals': ['error', ...defaultRestrictedGlobals, eventChannelGlobal],
+		},
+	},
+	{
+		// The same, for the rendering code that may read the Screen Mode Sample Dataset.
+		files: sampleDatasetFiles,
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [eventChannelImport],
+				},
+			],
+			'no-restricted-globals': ['error', ...defaultRestrictedGlobals, eventChannelGlobal],
 		},
 	},
 	{

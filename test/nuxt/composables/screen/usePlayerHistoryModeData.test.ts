@@ -428,27 +428,8 @@ describe('usePlayerHistoryModeData', () => {
 			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
 
-		it('ignores Matches that are neither held nor the Player\'s', async () => {
+		it('re-reads when a held Round changes', async () => {
 			await showingPendingHistory();
-
-			deliver('match:updated', {
-				match: match({ id: 9, player1Id: 3, player2Id: 4 }),
-			});
-			deliver('match:deleted', { matchId: 9 });
-			await flushPromises();
-
-			expect(mockFetch).not.toHaveBeenCalled();
-		});
-
-		it('re-reads when a held Round changes, and not for another Round', async () => {
-			await showingPendingHistory();
-
-			deliver('round:updated', {
-				round: { id: 40 },
-			});
-			deliver('round:deleted', { roundId: 40 });
-			await flushPromises();
-			expect(mockFetch).not.toHaveBeenCalled();
 
 			deliver('round:updated', {
 				round: { id: 31 },
@@ -502,18 +483,12 @@ describe('usePlayerHistoryModeData', () => {
 			expect(formatOutcome(pageData.value[0]!)).toBe(rereads ? 'WIN 2–0' : 'Pending');
 		});
 
-		it('follows an edit to the selected Player\'s record or an opponent\'s, and no one else\'s', async () => {
+		it('follows an edit to the selected Player\'s record or an opponent\'s', async () => {
 			const { player } = await showingPendingHistory();
 			mockFetch.mockResolvedValue({
 				player: { ...mockPlayer, wins: 13 },
 				history: [pending],
 			});
-
-			deliver('player:updated', {
-				player: { id: 5 },
-			});
-			await flushPromises();
-			expect(mockFetch).not.toHaveBeenCalled();
 
 			deliver('player:updated', {
 				player: { id: 7 },

@@ -1,9 +1,8 @@
-import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { HeadToHeadModeConfig } from '~~/shared/types/screenConfig';
 import type { ScreenOutputHeadToHeadPlayer, ScreenOutputHeadToHeadResponse } from '~~/shared/types/screenOutputReads';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 
 type HeldHeadToHead = ScreenOutputHeadToHeadResponse | null;
 
@@ -20,67 +19,17 @@ function selection(config: HeadToHeadModeConfig): string | null {
 }
 
 /**
- * The Event Data a Head-to-Head is read from: its Feature Match Slot, which
- * Players the Slot seats and on which sides its Session shows them, those
- * Players (whose own records it shows) and their Archetypes, the Matches
- * between them, and the Round Standings shown for a Player holding no record
- * of their own. Melee's wholesale syncs re-read.
- */
-export function headToHeadDependencies(boundSlotId: () => number | null): ScreenModeDependencies<HeldHeadToHead> {
-	const isBoundSlot = (slotId: number) => slotId === boundSlotId();
-	const heldPlayerIds = (held: HeldHeadToHead) => [held?.player1?.id, held?.player2?.id].filter((id): id is number => id != null);
-	const holdsPlayer = (held: HeldHeadToHead, playerId: number) => heldPlayerIds(held).includes(playerId);
-	const seatsBoth = (held: HeldHeadToHead, match: { player1Id: number | null; player2Id: number | null }) => {
-		const ids = heldPlayerIds(held);
-		return ids.length === 2 && match.player1Id != null && match.player2Id != null
-			&& ids.includes(match.player1Id) && ids.includes(match.player2Id);
-	};
-	const holdsEarlierMatch = (held: HeldHeadToHead, matchId: number) => held?.earlierMatches.some(earlierMatch => earlierMatch.matchId === matchId) ?? false;
-	/** The Slot's Session seats a held Player on the other side, as `SwapPlayers` does (ADR-0058). */
-	const seatsHeldOpposite = (held: HeldHeadToHead, snapshot: FeatureMatchSourceSnapshot) =>
-		(held?.player1 != null && held.player1.id === snapshot.player2?.playerId)
-		|| (held?.player2 != null && held.player2.id === snapshot.player1?.playerId);
-
-	return {
-		'featureMatch:updated': ({ featureMatch }) => isBoundSlot(featureMatch.id),
-		'featureMatchSession:eventApplied': ({ slotId, sourceSnapshot }, held) => isBoundSlot(slotId) && seatsHeldOpposite(held, sourceSnapshot),
-		'featureMatch:deleted': ({ featureMatchId }) => isBoundSlot(featureMatchId),
-		'melee:featureMatchesSynced': ({ slotIds }) => slotIds.some(isBoundSlot),
-		'player:updated': ({ player }, held) => holdsPlayer(held, player.id),
-		'player:deleted': ({ playerId }, held) => holdsPlayer(held, playerId),
-		'match:created': ({ match }, held) => seatsBoth(held, match),
-		'match:updated': ({ match }, held) => seatsBoth(held, match) || holdsEarlierMatch(held, match.id),
-		'match:deleted': ({ matchId }, held) => holdsEarlierMatch(held, matchId),
-		'round:updated': ({ round }, held) => held?.earlierMatches.some(earlierMatch => earlierMatch.roundId === round.id) ?? false,
-		'round:deleted': true,
-		'round:matchesRefreshed': true,
-		'phase:updated': true,
-		'phase:deleted': true,
-		'archetype:updated': true,
-		'archetype:deleted': true,
-		'melee:dataReset': true,
-		'melee:structureSynced': true,
-		'melee:matchResultsSynced': true,
-		'melee:pairingsSynced': true,
-		'melee:roundStandingsSynced': true,
-		'melee:playersSynced': true,
-		'melee:decklistsSynced': true,
-	};
-}
-
-/**
  * A Head-to-Head's two Players and their earlier Matches, kept current on a
  * Screen Output (#760). Bound to a Feature Match Slot, it follows the Slot's
  * current Feature Match Assignment as the Slot is reassigned.
  */
 export function useHeadToHeadModeData(context: ScreenContext) {
-	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'head-to-head');
 	const outputReads = useScreenOutputReads(context);
 	const eventStore = useEventStore();
 
 	const freshness = useScreenModeFreshness<HeldHeadToHead>({
-		eventId,
+		hearing: useScreenModeHearing(context, 'head-to-head', () => config.value),
 		source: () => {
 			const selected = selection(config.value);
 			return outputReads.scopeKey.value && selected
@@ -90,9 +39,6 @@ export function useHeadToHeadModeData(context: ScreenContext) {
 		read: () => outputReads.headToHead(),
 		initialData: null,
 		errorMessage: 'Failed to load head-to-head',
-		dependsOn: headToHeadDependencies(() => config.value.playerSource === 'featureMatchSlot'
-			? config.value.featureMatchId ?? null
-			: null),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;

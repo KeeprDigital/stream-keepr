@@ -32,14 +32,18 @@ function harness(dependsOn: ScreenModeDependencies<Held> = {}, { attached = [] a
 	const scope = effectScope();
 	scopes.push(scope);
 	const freshness = scope.run(() => useScreenModeFreshness<Held>({
-		eventId,
+		hearing: () => ({
+			channel: eventId.value
+				? `event:${eventId.value}`
+				: null,
+			dependsOn,
+		}),
 		source: () => selection.value === null
 			? null
 			: String(selection.value),
 		read,
 		initialData: { ids: [], label: 'none' },
 		errorMessage: 'Failed to read',
-		dependsOn,
 		realtime: realtime.transport as unknown as ScreenModeFreshnessTransport,
 	}))!;
 	return {

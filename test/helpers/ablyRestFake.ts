@@ -44,6 +44,8 @@ export function createAblyRestFake() {
 	const batches: string[][] = [];
 	const refusing = new Map<string, number>();
 	let refusedBatches = 0;
+	let heldBatch: Promise<unknown> | null = null;
+	let batchAsked: (() => void) | null = null;
 
 	function refuses(channel: string): boolean {
 		const left = refusing.get(channel) ?? 0;
@@ -66,6 +68,11 @@ export function createAblyRestFake() {
 
 		async batchPublish(specs: BatchSpec[]) {
 			batches.push(specs.flatMap(spec => spec.channels));
+			const held = heldBatch;
+			heldBatch = null;
+			batchAsked?.();
+			batchAsked = null;
+			await held;
 			if (refusedBatches > 0) {
 				refusedBatches -= 1;
 				throw refusal('batch');
@@ -108,11 +115,23 @@ export function createAblyRestFake() {
 		refuseBatches(times: number) {
 			refusedBatches = times;
 		},
+		/** Keep the next batch request pending until `until` settles; later requests are answered at once. */
+		holdNextBatch(until: Promise<unknown>) {
+			heldBatch = until;
+		},
+		/** Resolves once the next batch request has been made, answered or not. */
+		nextBatchAsked() {
+			return new Promise<void>((resolve) => {
+				batchAsked = resolve;
+			});
+		},
 		reset() {
 			published.length = 0;
 			batches.length = 0;
 			refusing.clear();
 			refusedBatches = 0;
+			heldBatch = null;
+			batchAsked = null;
 		},
 	};
 }

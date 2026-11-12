@@ -1,55 +1,24 @@
 import type { ScreenOutputPairingsResponse, ScreenOutputRoundMatch } from '~~/shared/types/screenOutputReads';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import { formatGameScore, readMatchFromPlayer1Side } from '~~/shared/utils/matchFromPlayerSide';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 type HeldPairings = ScreenOutputPairingsResponse | null;
 
-/**
- * The Event Data a Round's pairings are read from: the Round, its Matches, and
- * the Players they seat. Melee's wholesale syncs of structure and Players
- * re-read; a Round's synced Match Results or pairings re-read only for this
- * Round.
- */
-export function pairingsDependencies(roundId: () => number | undefined): ScreenModeDependencies<HeldPairings> {
-	const isRound = (id: number) => id === roundId();
-	const holdsMatch = (held: HeldPairings, matchId: number) => held?.matches.some(row => row.matchId === matchId) ?? false;
-	const holdsPlayer = (held: HeldPairings, playerId: number) =>
-		held?.matches.some(row => row.player1?.id === playerId || row.player2?.id === playerId) ?? false;
-
-	return {
-		'player:updated': ({ player }, held) => holdsPlayer(held, player.id),
-		'player:deleted': ({ playerId }, held) => holdsPlayer(held, playerId),
-		'match:created': ({ match }) => isRound(match.roundId),
-		'match:updated': ({ match }, held) => isRound(match.roundId) || holdsMatch(held, match.id),
-		'match:deleted': ({ matchId }, held) => holdsMatch(held, matchId),
-		'round:updated': ({ round }) => isRound(round.id),
-		'round:deleted': ({ roundId: id }) => isRound(id),
-		'round:matchesRefreshed': ({ roundId: id }) => isRound(id),
-		'melee:matchResultsSynced': ({ roundId: id }) => isRound(id),
-		'melee:pairingsSynced': ({ roundId: id }) => isRound(id),
-		'melee:dataReset': true,
-		'melee:structureSynced': true,
-		'melee:playersSynced': true,
-	};
-}
-
 export function usePairingsModeData(context: ScreenContext) {
-	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'pairings');
 	const outputReads = useScreenOutputReads(context);
 
 	const freshness = useScreenModeFreshness<HeldPairings>({
-		eventId,
+		hearing: useScreenModeHearing(context, 'pairings', () => config.value),
 		source: () => outputReads.scopeKey.value && config.value.roundId
 			? `${outputReads.scopeKey.value}:${config.value.roundId}`
 			: null,
 		read: () => outputReads.pairings(),
 		initialData: null,
 		errorMessage: 'Failed to load pairings',
-		dependsOn: pairingsDependencies(() => config.value.roundId),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;

@@ -218,15 +218,33 @@ const headToHeadSlot = (config: HeadToHeadModeConfig) => config.playerSource ===
 /** Whether a Round Clock follows the Current Round, which any Round, Phase or Match may move. */
 const followsCurrentRound = (config: RoundClockModeConfig) => config.roundId == null;
 
-/** Whether a Feature Match Overlay names its Slot; until then it reads nothing. */
-const selectsOverlaySlot = (config: FeatureMatchOverlayModeConfig) => config.featureMatchId != null;
+/**
+ * The one Match the Overlay's Slot follows, or that Match's Round or Phase:
+ * all it shows of each kind. Until it names a Slot it reads nothing.
+ */
+function overlayFollowed(field: 'matchIds' | 'roundIds' | 'phaseIds') {
+	return (config: FeatureMatchOverlayModeConfig): OutputFollowNarrowing | false =>
+		config.featureMatchId != null && {
+			[field]: { followedBy: config.featureMatchId },
+		};
+}
 
-/** The Players the Overlay's Slot seats, whose sideboards a Deck List Graphic Item shows. */
-function overlaySeatedPlayers(config: FeatureMatchOverlayModeConfig): OutputFollowNarrowing | false {
-	return config.featureMatchId != null && {
-		playerIds: { seatedIn: config.featureMatchId },
+/** The Players a named Feature Match Slot seats, or nothing while none is named. */
+function seatedPlayers(slotId: number | null | undefined): OutputFollowNarrowing | false {
+	return slotId != null && {
+		playerIds: { seatedIn: slotId },
 	};
 }
+
+/** The Players the Overlay's Slot seats, whose sideboards a Deck List Graphic Item shows. */
+const overlaySeatedPlayers = (config: FeatureMatchOverlayModeConfig) => seatedPlayers(config.featureMatchId);
+
+/**
+ * The Players a control Screen's Slot seats, whose decks say which deck
+ * counters it offers. Reverse Sync announces the Slot only when its snapshot
+ * changes, and the snapshot holds no deck cards.
+ */
+const controlsSeatedPlayers = (config: FeatureMatchModeConfig) => seatedPlayers(config.featureMatchId);
 
 /**
  * Single source of truth for all screen modes and their display characteristics.
@@ -358,6 +376,8 @@ const SCREEN_MODE_DEFINITIONS = {
 		outputFollows: {
 			featureMatchSlot: (config: FeatureMatchModeConfig) => namedSlot(config.featureMatchId),
 			featureMatchSession: (config: FeatureMatchModeConfig) => namedSlot(config.featureMatchId),
+			player: controlsSeatedPlayers,
+			playerDeck: controlsSeatedPlayers,
 		},
 	},
 	'feature-match-overlay': {
@@ -372,11 +392,12 @@ const SCREEN_MODE_DEFINITIONS = {
 		outputFollows: {
 			featureMatchSlot: (config: FeatureMatchOverlayModeConfig) => namedSlot(config.featureMatchId),
 			featureMatchSession: (config: FeatureMatchOverlayModeConfig) => namedSlot(config.featureMatchId),
-			// Over-approximation: it shows the one Match its Slot follows, and
-			// that Match's Round and Phase, which the Slot names and the config does not.
-			match: selectsOverlaySlot,
-			round: selectsOverlaySlot,
-			phase: selectsOverlaySlot,
+			// The one Match its Slot follows, and that Match's Round and Phase.
+			// A Slot's Match changes only in a write announcing the Slot, so the
+			// Slot as it stands after any write names the Match its output shows.
+			match: overlayFollowed('matchIds'),
+			round: overlayFollowed('roundIds'),
+			phase: overlayFollowed('phaseIds'),
 			// Over-approximation: followed whether or not the layout holds a Deck List Graphic Item.
 			player: overlaySeatedPlayers,
 			playerDeck: overlaySeatedPlayers,
@@ -497,9 +518,7 @@ const SCREEN_MODE_DEFINITIONS = {
 			featureMatchSession: headToHeadSlot,
 			// The two Players it picks, or the two its Slot seats.
 			player: (config: HeadToHeadModeConfig) => config.playerSource === 'featureMatchSlot'
-				? config.featureMatchId != null && {
-					playerIds: { seatedIn: config.featureMatchId },
-				}
+				? seatedPlayers(config.featureMatchId)
 				: {
 						playerIds: [config.player1Id, config.player2Id].filter(id => id != null),
 					},

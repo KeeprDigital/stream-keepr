@@ -53,6 +53,9 @@ const connectedCount = computed(() => screen.value
 // already re-fetching on their own; this row is where the operator learns that
 // program is showing placeholder cards, since the output itself never says so.
 const degradedCardDataCount = useScreenOutputCardDataHealth(() => screenId.value);
+// Outputs loaded before outputs followed their Screen's own channel: they still
+// depend on the Event channel until reloaded, and say so by reporting no protocol.
+const outdatedOutputCount = useOutdatedScreenOutputs(() => screenId.value);
 
 const modeSettingsComponent = computed(() => {
 	const mode = screen.value?.currentMode;
@@ -419,6 +422,14 @@ async function sendCommand(command: ScreenCommand) {
 							>
 								<UIcon name="i-lucide-triangle-alert" class="size-3.5" />
 								Card data incomplete on {{ degradedCardDataCount }} {{ degradedCardDataCount === 1 ? 'output' : 'outputs' }} — re-fetching until Scryfall answers
+							</span>
+							<span
+								v-if="outdatedOutputCount > 0"
+								class="flex items-center gap-1.5 text-xs text-warning"
+								data-testid="outputs-outdated"
+							>
+								<UIcon name="i-lucide-triangle-alert" class="size-3.5" />
+								{{ outdatedOutputCount }} outdated {{ outdatedOutputCount === 1 ? 'output' : 'outputs' }} — refresh to load the current version
 							</span>
 						</div>
 					</div>

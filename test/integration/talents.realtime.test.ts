@@ -3,7 +3,8 @@ import Ably from 'ably';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
 import { $fetch } from './client';
-import { $fetchRaw, INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
+import { $fetchRaw } from './helpers';
+import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './realtimeKey';
 
 describe('talents API', () => {
 	let eventId: number;

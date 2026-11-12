@@ -15,6 +15,7 @@ import {
 	previewSelectMessage,
 	readGraphicsPreviewState,
 } from '~/modules/graphics/previewMessages';
+import { renderingChannel } from '~/modules/screen/renderingChannel';
 import { useGraphicAnimationPreviewClock } from './useGraphicAnimationPreviewClock';
 
 /**
@@ -348,6 +349,10 @@ export function useBroadcastGraphicsModeData(context: ScreenContext) {
 			? undefined
 			: eventId.value ?? undefined),
 		() => (isPreview?.value ? undefined : screen.value?.id),
+		// Its Live Session's messages arrive on the channel the rendering follows.
+		() => (isPreview?.value
+			? null
+			: renderingChannel(context)),
 	);
 	// A Theme preview's sample has a Live Session but no Event to follow: it is
 	// read once, through the same Screen read, and never changes. The store keys

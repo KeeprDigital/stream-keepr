@@ -5,8 +5,8 @@ import Ably from 'ably';
 import { describe, expect, it } from 'vitest';
 import { eventRealtimeChannel } from '../../shared/utils/realtimeChannels';
 import { $fetch, anonymousFetch, fetch } from './client';
-import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './helpers';
 import { queryIntegrationD1 } from './integrationD1';
+import { INTEGRATION_ABLY_API_KEY, integrationRealtimeConfigured } from './realtimeKey';
 
 const initialSource = '1 Integration Bolt (it1) 1';
 const authoredSource = [

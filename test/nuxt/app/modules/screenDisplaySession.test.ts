@@ -8,6 +8,13 @@ import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/real
 import { ScreenLookupUnavailable } from '~/composables/repositories/useScreenRepository';
 import { SCREEN_OUTPUT_LOAD_RETRY_MS, useScreenDisplaySession } from '~/modules/screen/displaySession';
 
+/** The channel a live rendering of the `main` Screen follows: its Screen's own. */
+const MAIN_SCREEN_CHANNEL = 'screen:42:7';
+/** The same for the `second` Screen. */
+const SECOND_SCREEN_CHANNEL = 'screen:42:8';
+/** The channel a preview follows: its Event's. */
+const EVENT_CHANNEL = 'event:42';
+
 function flushPromises() {
 	return new Promise(resolve => setTimeout(resolve, 0));
 }
@@ -77,9 +84,20 @@ function createHarness(options: {
 	const eventStore = reactive({
 		eventId: options.eventId ?? null,
 		outputEvent: null as unknown,
+		/** Whether the context was last held as an editor preview's, which alone joins its Event's room. */
+		heldAsPreview: null as boolean | null,
 		setOutputEvent: vi.fn((outputEvent: unknown) => {
 			eventStore.outputEvent = outputEvent;
 		}),
+	});
+	// The store's method as the session calls it, so a test asserts the context alone.
+	const sessionEventStore = new Proxy(eventStore, {
+		get: (target, key, receiver) => key === 'setOutputEvent'
+			? (outputEvent: unknown, role: { preview?: boolean } = {}) => {
+					target.heldAsPreview = role.preview ?? false;
+					target.setOutputEvent(outputEvent);
+				}
+			: Reflect.get(target, key, receiver),
 	});
 	// The Event context an output reads through its Screen (#604), never the
 	// operator's private Event read.
@@ -92,13 +110,34 @@ function createHarness(options: {
 	};
 	const { onContinuityLost, reattach } = createContinuitySignal();
 	const { onceAttached, attach, detach } = createAttachSignal();
+	const channelHandlers = new Map<string, Set<(message: Record<string, unknown>) => void>>();
 	const realtime = reactive({
 		connectionId: 'conn-1',
 		connectionState: 'connected',
 		tokenError: null as Error | null,
 		onContinuityLost,
 		onceAttached,
+		onChannel: vi.fn((channel: string, type: string, handler: (message: Record<string, unknown>) => void) => {
+			const key = `${channel}|${type}`;
+			if (!channelHandlers.has(key))
+				channelHandlers.set(key, new Set());
+			channelHandlers.get(key)!.add(handler);
+			return () => channelHandlers.get(key)!.delete(handler);
+		}),
 	});
+	/** A peer's message of `type` as `channel` delivers it. */
+	function deliver(channel: string, type: string, payload: Record<string, unknown> = {}) {
+		for (const handler of [
+			...channelHandlers.get(`${channel}|${type}`) ?? [],
+		])
+			handler({ eventId: 42, ...payload });
+	}
+	/** The channels a message handler listens on now. */
+	function messageChannels() {
+		return [
+			...new Set([...channelHandlers].filter(([, handlers]) => handlers.size > 0).map(([key]) => key.split('|')[0]!)),
+		].sort();
+	}
 	const realtimeCallbacks: any[] = [];
 	const realtimeSession = {
 		start: vi.fn(async (_eventId: number, screenId: number) => {
@@ -117,7 +156,7 @@ function createHarness(options: {
 		setup() {
 			session = useScreenDisplaySession({
 				route,
-				eventStore: eventStore as any,
+				eventStore: sessionEventStore as any,
 				screenStore: screenStore as any,
 				realtime: realtime as any,
 				outputReads: outputReads as any,
@@ -149,6 +188,8 @@ function createHarness(options: {
 		reattach,
 		attach,
 		detach,
+		deliver,
+		messageChannels,
 		realtimeSession,
 		realtimeCallbacks,
 		exportElementPng,
@@ -697,7 +738,7 @@ describe('useScreenDisplaySession', () => {
 			// would miss what is published in between (#641).
 			expect(harness.order).toEqual([]);
 
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.order).toEqual(['refresh:7']);
@@ -744,7 +785,7 @@ describe('useScreenDisplaySession', () => {
 			const missedChange = createMockScreen({ id: 7, slug: 'renamed', currentMode: 'standings' });
 			harness.screens.renamed = missedChange;
 
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.screenStore.refreshActiveScreen).toHaveBeenCalledWith(42, 7, null);
@@ -768,7 +809,7 @@ describe('useScreenDisplaySession', () => {
 			};
 			harness.outputReads.event.mockResolvedValueOnce(missed as any);
 
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
@@ -788,7 +829,7 @@ describe('useScreenDisplaySession', () => {
 			const inFlight = deferred<any>();
 			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
 
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 			harness.eventStore.outputEvent = { id: 42, name: 'Heard meanwhile' };
 			inFlight.resolve({ id: 42, name: 'Answered before or after it' });
@@ -843,7 +884,7 @@ describe('useScreenDisplaySession', () => {
 			harness.screenStore.refreshActiveScreen.mockResolvedValueOnce(null);
 			harness.outputReads.event.mockRejectedValueOnce(new Error('503 Service Unavailable'));
 
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.screenStore.activeScreen).toBe(onProgram);
@@ -854,7 +895,7 @@ describe('useScreenDisplaySession', () => {
 			// Transient: the next loss of continuity tries again.
 			const missedChange = createMockScreen({ id: 7, slug: 'main', currentMode: 'standings' });
 			harness.screens.main = missedChange;
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.screenStore.activeScreen).toEqual(missedChange);
@@ -867,7 +908,7 @@ describe('useScreenDisplaySession', () => {
 			const lateContext = deferred<any>();
 			harness.outputReads.event.mockReturnValueOnce(lateContext.promise);
 
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 			harness.route.params.screenSlug = 'second';
 			await nextTick();
@@ -936,14 +977,14 @@ describe('useScreenDisplaySession', () => {
 				const harness = await failedLoad();
 
 				// No Event channel names it yet, so a reattach there finds nothing to do.
-				harness.reattach('event:42');
+				harness.reattach(MAIN_SCREEN_CHANNEL);
 				await flushPromises();
 				expect(harness.order).toEqual([]);
 
 				await suspendAndResume(harness);
 				harness.order.splice(0);
 
-				harness.reattach('event:42');
+				harness.reattach(MAIN_SCREEN_CHANNEL);
 				await flushPromises();
 				expect(harness.order).toEqual(['refresh:7']);
 			});
@@ -998,7 +1039,7 @@ describe('useScreenDisplaySession', () => {
 	 * reports no continuity loss (ADR-0023), so the output re-reads off the attach
 	 * itself (#727).
 	 */
-	describe('its first load, before its Event channel first attached', () => {
+	describe('its first load, before the channel it follows first attached', () => {
 		it('re-reads its Screen and Event context once the channel attaches, reflecting what it missed', async () => {
 			const harness = createHarness({
 				route: createRoute({}, '#asset-capability=a-screen-output-capability-token'),
@@ -1012,7 +1053,7 @@ describe('useScreenDisplaySession', () => {
 			const missedEvent = { id: 42, name: 'Output Event', orientation: 'portrait' };
 			harness.outputReads.event.mockResolvedValueOnce(missedEvent as any);
 
-			harness.attach('event:42');
+			harness.attach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.order).toEqual(['refresh:7']);
@@ -1035,7 +1076,7 @@ describe('useScreenDisplaySession', () => {
 			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
 			await flushPromises();
 
-			harness.attach('event:42');
+			harness.attach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 			expect(harness.outputReads.event).toHaveBeenCalledOnce();
 
@@ -1052,35 +1093,57 @@ describe('useScreenDisplaySession', () => {
 		it('re-reads only once, not on every later attach', async () => {
 			const harness = createHarness();
 			await flushPromises();
-			harness.attach('event:42');
+			harness.attach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 			harness.order.splice(0);
 
-			harness.detach('event:42');
-			harness.attach('event:42');
+			harness.detach(MAIN_SCREEN_CHANNEL);
+			harness.attach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			// A later loss of continuity is Reconnect Resync's (ADR-0023).
 			expect(harness.order).toEqual([]);
 		});
 
-		it('does not re-read for a load whose Event channel was already attached', async () => {
+		it('does not re-read a preview\'s load whose Event channel was already attached', async () => {
 			// A Screen change within one Event: the channel listened throughout, so
 			// nothing published during the reads went unheard.
-			const harness = createHarness();
+			const harness = createHarness({
+				query: { embed: 'preview' },
+			});
 			await flushPromises();
-			harness.attach('event:42');
+			harness.attach(EVENT_CHANNEL);
 			await flushPromises();
 
 			harness.route.params.screenSlug = 'second';
 			await nextTick();
 			await flushPromises();
 			harness.order.splice(0);
-			harness.attach('event:42');
+			harness.attach(EVENT_CHANNEL);
 			await flushPromises();
 
 			expect(harness.order).toEqual([]);
 			expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+		});
+
+		// A live rendering's channel is its Screen's own, so another Screen is another first attach.
+		it('re-reads a Screen change once the new Screen\'s channel first attaches, and not for the Screen it left', async () => {
+			const harness = createHarness();
+			await flushPromises();
+			harness.attach(MAIN_SCREEN_CHANNEL);
+			await flushPromises();
+
+			harness.route.params.screenSlug = 'second';
+			await nextTick();
+			await flushPromises();
+			harness.order.splice(0);
+			harness.attach(MAIN_SCREEN_CHANNEL);
+			await flushPromises();
+			expect(harness.order).toEqual([]);
+
+			harness.attach(SECOND_SCREEN_CHANNEL);
+			await flushPromises();
+			expect(harness.order).toEqual(['refresh:8']);
 		});
 
 		it('re-reads for a Program monitor too, without entering presence', async () => {
@@ -1090,7 +1153,7 @@ describe('useScreenDisplaySession', () => {
 			await flushPromises();
 			harness.order.splice(0);
 
-			harness.attach('event:42');
+			harness.attach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.order).toEqual(['refresh:7']);
@@ -1110,7 +1173,7 @@ describe('useScreenDisplaySession', () => {
 			await flushPromises();
 			harness.order.splice(0);
 
-			harness.attach('event:42');
+			harness.attach(SECOND_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.order).toEqual(['refresh:8']);
@@ -1121,7 +1184,7 @@ describe('useScreenDisplaySession', () => {
 			await flushPromises();
 			harness.order.splice(0);
 
-			harness.attach('event:42');
+			harness.attach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.order).toEqual([]);
@@ -1129,17 +1192,172 @@ describe('useScreenDisplaySession', () => {
 	});
 
 	/**
+	 * A live rendering follows only its Screen's own channel; a preview renders
+	 * configuration the server has not been given, and stays on its Event's.
+	 */
+	describe('the channel it follows', () => {
+		it.each([
+			{
+				rendering: 'a Screen Output',
+				query: {},
+				messages: [MAIN_SCREEN_CHANNEL],
+				resyncs: MAIN_SCREEN_CHANNEL,
+				deaf: EVENT_CHANNEL,
+				preview: false,
+			},
+			{
+				rendering: 'a Program monitor',
+				query: { embed: 'monitor' },
+				messages: [MAIN_SCREEN_CHANNEL],
+				resyncs: MAIN_SCREEN_CHANNEL,
+				deaf: EVENT_CHANNEL,
+				preview: false,
+			},
+			// A preview's messages are the Realtime Event Session's, in the room its held context opens.
+			{
+				rendering: 'a preview',
+				query: { embed: 'preview' },
+				messages: [],
+				resyncs: EVENT_CHANNEL,
+				deaf: MAIN_SCREEN_CHANNEL,
+				preview: true,
+			},
+		])('$rendering hears messages on $messages and resyncs off $resyncs alone', async ({ query, messages, resyncs, deaf, preview }) => {
+			const harness = createHarness({ query });
+			await flushPromises();
+			harness.order.splice(0);
+
+			expect(harness.messageChannels()).toEqual(messages);
+			expect(harness.eventStore.heldAsPreview).toBe(preview);
+
+			harness.reattach(deaf);
+			harness.attach(deaf);
+			await flushPromises();
+			expect(harness.order).toEqual([]);
+
+			harness.reattach(resyncs);
+			await flushPromises();
+			expect(harness.order).toEqual(['refresh:7']);
+		});
+
+		it('stops hearing the Screen it leaves', async () => {
+			const harness = createHarness();
+			await flushPromises();
+
+			harness.route.params.screenSlug = 'second';
+			await nextTick();
+			await flushPromises();
+
+			expect(harness.messageChannels()).toEqual([SECOND_SCREEN_CHANNEL]);
+		});
+	});
+
+	/**
+	 * A Screen's channel says its Event context changed and carries nothing: the
+	 * Event, or the Theme whose tokens the context holds. The rendering re-reads
+	 * it through its Screen, holding the context it renders with meanwhile.
+	 */
+	describe('a notice that its Event context changed', () => {
+		const changed = { id: 42, name: 'Output Event', orientation: 'portrait' };
+
+		it('re-reads its Event context, and holds the one it renders with until the read answers', async () => {
+			const harness = createHarness();
+			await flushPromises();
+			const read = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(read.promise);
+
+			harness.deliver(MAIN_SCREEN_CHANNEL, 'output:eventContextChanged');
+			await flushPromises();
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+			expect(harness.eventStore.outputEvent).toEqual({ id: 42, name: 'Output Event' });
+			expect(harness.session.loading.value).toBe(false);
+
+			read.resolve(changed);
+			await flushPromises();
+			expect(harness.eventStore.outputEvent).toEqual(changed);
+			expect(harness.screenStore.refreshActiveScreen).not.toHaveBeenCalled();
+		});
+
+		it('pays one follow-up read for a burst of notices heard while a read is in flight', async () => {
+			const harness = createHarness();
+			await flushPromises();
+			const read = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(read.promise);
+
+			for (let notice = 0; notice < 4; notice++)
+				harness.deliver(MAIN_SCREEN_CHANNEL, 'output:eventContextChanged');
+			await flushPromises();
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(2);
+
+			harness.outputReads.event.mockResolvedValueOnce(changed as any);
+			read.resolve({ id: 42, name: 'Answered before the last notice' });
+			await flushPromises();
+
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+			expect(harness.eventStore.outputEvent).toEqual(changed);
+		});
+
+		it('retries a read that failed, since the change will not be announced again', async () => {
+			vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const harness = createHarness();
+			await flushPromises();
+			vi.useFakeTimers();
+			harness.outputReads.event.mockRejectedValueOnce(new Error('unavailable'));
+
+			harness.deliver(MAIN_SCREEN_CHANNEL, 'output:eventContextChanged');
+			await vi.advanceTimersByTimeAsync(0);
+			expect(harness.eventStore.outputEvent).toEqual({ id: 42, name: 'Output Event' });
+			expect(harness.session.error.value).toBeNull();
+
+			harness.outputReads.event.mockResolvedValueOnce(changed as any);
+			await vi.advanceTimersByTimeAsync(SCREEN_OUTPUT_LOAD_RETRY_MS);
+
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(3);
+			expect(harness.eventStore.outputEvent).toEqual(changed);
+		});
+
+		it('asks the load in flight for one recovery when heard before it finishes', async () => {
+			const harness = createHarness();
+			const inFlight = deferred<any>();
+			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
+			await flushPromises();
+
+			harness.deliver(MAIN_SCREEN_CHANNEL, 'output:eventContextChanged');
+			await flushPromises();
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(1);
+
+			harness.outputReads.event.mockResolvedValueOnce(changed as any);
+			inFlight.resolve({ id: 42, name: 'Read before the notice' });
+			await flushPromises();
+
+			expect(harness.eventStore.outputEvent).toEqual(changed);
+		});
+
+		it('is not heard by a preview, which its Event\'s room keeps current', async () => {
+			const harness = createHarness({
+				query: { embed: 'preview' },
+			});
+			await flushPromises();
+
+			harness.deliver(MAIN_SCREEN_CHANNEL, 'output:eventContextChanged');
+			await flushPromises();
+
+			expect(harness.outputReads.event).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	/**
 	 * A load in flight is not yet listened for by Reconnect Resync, which follows
-	 * only a finished load's Event. A continuity loss on its Event channel while it
+	 * only a finished load. A continuity loss on the channel it follows while it
 	 * reads still means something published meanwhile went unheard, so the load
 	 * recovers once it finishes, as it does for a first attach (#733).
 	 */
 	describe('a continuity loss during its load', () => {
-		/** A loaded rendering whose Event channel is attached, changing to the second Screen with its Event context read held. */
+		/** A loaded rendering changing to the second Screen, whose own channel it now follows, with its Event context read held. */
 		async function screenChangeInFlight() {
 			const harness = createHarness();
 			await flushPromises();
-			harness.attach('event:42');
+			harness.attach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 			const inFlight = deferred<any>();
 			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
@@ -1151,11 +1369,11 @@ describe('useScreenDisplaySession', () => {
 			return { harness, inFlight };
 		}
 
-		it('recovers once loaded when its attached Event channel lost continuity mid-load', async () => {
+		it('recovers once loaded when the channel it follows lost continuity mid-load', async () => {
 			const { harness, inFlight } = await screenChangeInFlight();
 			const contextReads = harness.outputReads.event.mock.calls.length;
 
-			harness.reattach('event:42');
+			harness.reattach(SECOND_SCREEN_CHANNEL);
 			await flushPromises();
 			// The load is not superseded: its reads stand, and nothing re-reads yet.
 			expect(harness.order).toEqual([]);
@@ -1177,9 +1395,9 @@ describe('useScreenDisplaySession', () => {
 			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
 			await flushPromises();
 
-			harness.reattach('event:42');
-			harness.attach('event:42');
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
+			harness.attach(MAIN_SCREEN_CHANNEL);
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 			harness.order.splice(0);
 			inFlight.resolve({ id: 42, name: 'Read before the attach' });
@@ -1192,11 +1410,11 @@ describe('useScreenDisplaySession', () => {
 		it('recovers once for a loss on a loaded rendering', async () => {
 			const harness = createHarness();
 			await flushPromises();
-			harness.attach('event:42');
+			harness.attach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 			harness.order.splice(0);
 
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.order).toEqual(['refresh:7']);
@@ -1207,8 +1425,8 @@ describe('useScreenDisplaySession', () => {
 			await flushPromises();
 			harness.order.splice(0);
 
-			harness.reattach('event:42');
-			harness.attach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
+			harness.attach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 
 			expect(harness.order).toEqual(['refresh:7']);
@@ -1218,7 +1436,7 @@ describe('useScreenDisplaySession', () => {
 		it('leaves a loss heard during a load a Screen change superseded to the load that superseded it', async () => {
 			const { harness, inFlight } = await screenChangeInFlight();
 
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			harness.route.params.screenSlug = 'main';
 			await nextTick();
 			await flushPromises();
@@ -1236,7 +1454,7 @@ describe('useScreenDisplaySession', () => {
 			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
 			await vi.advanceTimersByTimeAsync(0);
 
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			inFlight.reject(new Error('503 Service Unavailable'));
 			await vi.advanceTimersByTimeAsync(0);
 			expect(harness.session.error.value).toBe('Event details unavailable');
@@ -1258,7 +1476,7 @@ describe('useScreenDisplaySession', () => {
 			harness.outputReads.event.mockReturnValueOnce(inFlight.promise);
 			await flushPromises();
 
-			harness.reattach('event:42');
+			harness.reattach(MAIN_SCREEN_CHANNEL);
 			await flushPromises();
 			harness.order.splice(0);
 			inFlight.resolve({ id: 42, name: 'Read before the loss' });

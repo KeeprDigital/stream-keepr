@@ -32,6 +32,13 @@ export interface ScreenPresenceData {
 	 */
 	assetAccess?: 'granted' | 'absent';
 	/**
+	 * Which realtime protocol this Screen Output follows, reported by the output
+	 * about itself: `2` follows its Screen's own channel and nothing from its
+	 * Event's (`SCREEN_CHANNEL_PROTOCOL`). Absent on an output loaded before that,
+	 * which still depends on the Event channel until it is reloaded.
+	 */
+	protocol?: number;
+	/**
 	 * Whether this Screen Output's rendering resolved all the card data it asked
 	 * for, reported by the output about itself like `assetAccess` — a degraded
 	 * deck keeps rendering placeholders on program and re-fetches on its own, so

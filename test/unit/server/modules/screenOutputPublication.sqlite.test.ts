@@ -9,6 +9,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import * as schema from '~~/server/db/schema';
 import { eventRealtimeChannel, screenRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { createAblyRestFake } from '~~/test/helpers/ablyRestFake';
+import { deferred } from '~~/test/helpers/deferred';
 import { eventMessageSamples } from '~~/test/helpers/eventMessageSamples';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
@@ -89,6 +90,7 @@ const SCREENS = {
 	standings: await stageScreen(eventId, 'standings', { roundId: round!.id }),
 	overlay: await stageScreen(eventId, 'feature-match-overlay', { featureMatchId: slot!.id }),
 	otherOverlay: await stageScreen(eventId, 'feature-match-overlay', { featureMatchId: otherSlot!.id }),
+	controls: await stageScreen(eventId, 'feature-match', { featureMatchId: slot!.id }),
 	headToHead: await stageScreen(eventId, 'head-to-head', { playerSource: 'featureMatchSlot', featureMatchId: slot!.id }),
 	card: await stageScreen(eventId, 'card'),
 	graphics: await stageScreen(eventId, 'broadcast-graphics'),
@@ -186,6 +188,9 @@ describe('what a Screen\'s channel is sent', () => {
 			messages: [sessionEvent],
 			screens: {
 				overlay: [
+					forwarded(sessionEvent),
+				],
+				controls: [
 					forwarded(sessionEvent),
 				],
 				headToHead: [
@@ -340,6 +345,9 @@ describe('what a Screen\'s channel is sent', () => {
 				overlay: [
 					changed('overlay', 'player'),
 				],
+				controls: [
+					changed('controls', 'player'),
+				],
 				headToHead: [
 					changed('headToHead', 'player'),
 				],
@@ -362,6 +370,40 @@ describe('what a Screen\'s channel is sent', () => {
 			},
 		},
 		{
+			name: 'a seated Player\'s deck change reaches the control Screen of their Slot, which no Slot message announces',
+			messages: [
+				message('playerDeck:cardsResolved'),
+			],
+			screens: {
+				overlay: [
+					changed('overlay', 'playerDeck'),
+				],
+				controls: [
+					changed('controls', 'playerDeck'),
+				],
+				headToHead: [
+					changed('headToHead', 'playerDeck'),
+				],
+			},
+		},
+		{
+			name: 'an unseated Player\'s deck change does not reach a control Screen',
+			messages: [
+				message('playerDeck:cardsResolved', {
+					deckIds: [],
+					playerIds: [unseated!.id],
+				}),
+			],
+			screens: {
+				otherOverlay: [
+					changed('otherOverlay', 'playerDeck'),
+				],
+				headToHead: [
+					changed('headToHead', 'playerDeck'),
+				],
+			},
+		},
+		{
 			name: 'a Slot change is a cause, never a payload',
 			messages: [
 				message('featureMatch:updated'),
@@ -369,6 +411,9 @@ describe('what a Screen\'s channel is sent', () => {
 			screens: {
 				overlay: [
 					changed('overlay', 'featureMatchSlot'),
+				],
+				controls: [
+					changed('controls', 'featureMatchSlot'),
 				],
 				headToHead: [
 					changed('headToHead', 'featureMatchSlot'),
@@ -405,6 +450,9 @@ describe('what a Screen\'s channel is sent', () => {
 				otherOverlay: [
 					changed('otherOverlay', 'player', 'round'),
 				],
+				controls: [
+					changed('controls', 'player'),
+				],
 				headToHead: [
 					changed('headToHead', 'player', 'round'),
 				],
@@ -425,6 +473,11 @@ describe('what a Screen\'s channel is sent', () => {
 					forwarded(sessionEvent),
 					contextChanged,
 					changed('overlay', 'featureMatchSlot'),
+				],
+				controls: [
+					forwarded(sessionEvent),
+					contextChanged,
+					changed('controls', 'featureMatchSlot'),
 				],
 				headToHead: [
 					contextChanged,
@@ -524,6 +577,392 @@ describe('what a Screen\'s channel is sent', () => {
 		expect(heardByScreens(other.id)).toEqual({});
 		expect(ably.batches).toEqual([]);
 		expect(heardByEvent(other.id)).toHaveLength(3);
+	});
+});
+
+describe('what a Feature Match Overlay is told of Matches, Rounds and Phases', async () => {
+	// Its own Event: an Overlay whose Slot follows a Match, one whose Slot
+	// follows none, and a Head-to-Head of the first Slot, which narrows by neither.
+	const other = await stageEvent();
+	const [swiss, topCut] = await db.insert(schema.phases).values([
+		{ eventId: other.id, name: 'Swiss' },
+		{ eventId: other.id, name: 'Top 8' },
+	]).returning();
+	const [itsRound, anotherRound] = await db.insert(schema.rounds).values([
+		{
+			eventId: other.id,
+			phaseId: swiss!.id,
+			name: 'Round 1',
+			roundNumber: 1,
+		},
+		{
+			eventId: other.id,
+			phaseId: topCut!.id,
+			name: 'Quarterfinals',
+			roundNumber: 2,
+		},
+	]).returning();
+	const [followed, anotherMatch] = await db.insert(schema.matches).values([
+		{ eventId: other.id, roundId: itsRound!.id },
+		{ eventId: other.id, roundId: anotherRound!.id },
+	]).returning();
+	const [following, idle] = await db.insert(schema.featureMatches).values([
+		{ eventId: other.id, tableNumber: 1, matchId: followed!.id },
+		{ eventId: other.id, tableNumber: 2 },
+	]).returning();
+	const overlays = {
+		following: await stageScreen(other.id, 'feature-match-overlay', { featureMatchId: following!.id }),
+		idle: await stageScreen(other.id, 'feature-match-overlay', { featureMatchId: idle!.id }),
+		headToHead: await stageScreen(other.id, 'head-to-head', { playerSource: 'featureMatchSlot', featureMatchId: following!.id }),
+	};
+	type Told = keyof typeof overlays;
+	const TOLD = Object.keys(overlays) as Told[];
+
+	/** What each of these Screens' channels received, by name; a silent Screen is left out. */
+	function heardByOverlays() {
+		const heard = heardByScreens(other.id);
+		return Object.fromEntries(TOLD.flatMap((screen) => {
+			const messages = heard[screenRealtimeChannel(other.id, overlays[screen])];
+			return messages
+				? [
+						[screen, messages],
+					]
+				: [];
+		}));
+	}
+	function toldOf(kind: OutputChangeKind, screens: Told[]) {
+		return Object.fromEntries(screens.map(screen => [
+			screen,
+			[
+				[
+					'output:modeDataChanged',
+					{
+						screenId: overlays[screen],
+						causes: [kind],
+					},
+				],
+			],
+		]));
+	}
+
+	// An Overlay hears the one Match its Slot follows, and that Match's Round
+	// and Phase. A change naming no Match may have taken its Match away.
+	it.each<{ name: string; type: MessageType; payload: object; kind: OutputChangeKind; told: Told[] }>([
+		{
+			name: 'the Match its Slot follows',
+			type: 'match:updated',
+			payload: {
+				match: { id: followed!.id, roundId: itsRound!.id },
+			},
+			kind: 'match',
+			told: ['following', 'headToHead'],
+		},
+		{
+			name: 'another Match',
+			type: 'match:updated',
+			payload: {
+				match: { id: anotherMatch!.id, roundId: anotherRound!.id },
+			},
+			kind: 'match',
+			told: ['headToHead'],
+		},
+		{
+			name: 'a new Match',
+			type: 'match:created',
+			payload: {
+				match: { id: 999_999, roundId: itsRound!.id },
+			},
+			kind: 'match',
+			told: ['headToHead'],
+		},
+		{
+			name: 'a results sync naming its Match',
+			type: 'melee:matchResultsSynced',
+			payload: {
+				roundId: itsRound!.id,
+				matchIds: [anotherMatch!.id, followed!.id],
+			},
+			kind: 'match',
+			told: ['following', 'headToHead'],
+		},
+		{
+			name: 'a results sync naming other Matches',
+			type: 'melee:matchResultsSynced',
+			payload: {
+				roundId: itsRound!.id,
+				matchIds: [anotherMatch!.id],
+			},
+			kind: 'match',
+			told: ['headToHead'],
+		},
+		{
+			name: 'a deleted Match, which names none',
+			type: 'match:deleted',
+			payload: { matchId: anotherMatch!.id },
+			kind: 'match',
+			told: ['following', 'idle', 'headToHead'],
+		},
+		{
+			name: 'a pairings sync, which names none',
+			type: 'melee:pairingsSynced',
+			payload: { roundId: anotherRound!.id },
+			kind: 'match',
+			told: ['following', 'idle', 'headToHead'],
+		},
+		{
+			name: 'its Match\'s Round',
+			type: 'round:updated',
+			payload: {
+				round: { id: itsRound!.id },
+			},
+			kind: 'round',
+			told: ['following', 'idle', 'headToHead'],
+		},
+		{
+			name: 'another Round, which only a Slot following no Match may have lost',
+			type: 'round:updated',
+			payload: {
+				round: { id: anotherRound!.id },
+			},
+			kind: 'round',
+			told: ['idle', 'headToHead'],
+		},
+		{
+			name: 'its Match\'s Phase',
+			type: 'phase:updated',
+			payload: {
+				phase: { id: swiss!.id },
+			},
+			kind: 'phase',
+			told: ['following', 'idle', 'headToHead'],
+		},
+		{
+			name: 'another Phase, which only a Slot following no Match may have lost',
+			type: 'phase:updated',
+			payload: {
+				phase: { id: topCut!.id },
+			},
+			kind: 'phase',
+			told: ['idle', 'headToHead'],
+		},
+	])('$name', async ({ type, payload, kind, told }) => {
+		await announce([
+			message(type, payload),
+		], other.id);
+
+		expect(heardByOverlays()).toEqual(toldOf(kind, told));
+	});
+
+	// Interest is read after the write committed: the Slot as it now stands
+	// names the Match, and a write moving the Slot announces the Slot.
+	it('judges a Slot re-pointed in the write on the Match it follows now', async () => {
+		const moved = await stageEvent();
+		const [movedPhase] = await db.insert(schema.phases).values({ eventId: moved.id, name: 'Swiss' }).returning();
+		const [movedRound] = await db.insert(schema.rounds).values({
+			eventId: moved.id,
+			phaseId: movedPhase!.id,
+			name: 'Round 1',
+			roundNumber: 1,
+		}).returning();
+		const [before, after] = await db.insert(schema.matches).values([
+			{ eventId: moved.id, roundId: movedRound!.id },
+			{ eventId: moved.id, roundId: movedRound!.id },
+		]).returning();
+		const [movedSlot] = await db.insert(schema.featureMatches).values({ eventId: moved.id, tableNumber: 1, matchId: before!.id }).returning();
+		const screenId = await stageScreen(moved.id, 'feature-match-overlay', { featureMatchId: movedSlot!.id });
+		const told = (...causes: OutputChangeKind[]) => ({
+			[screenRealtimeChannel(moved.id, screenId)]: [
+				[
+					'output:modeDataChanged',
+					{ screenId, causes },
+				],
+			],
+		});
+		const updated = (matchId: number) => message('match:updated', {
+			match: { id: matchId, roundId: movedRound!.id },
+		});
+
+		await db.update(schema.featureMatches).set({ matchId: after!.id }).where(eq(schema.featureMatches.id, movedSlot!.id));
+		await announce([
+			updated(before!.id),
+		], moved.id);
+		expect(heardByScreens(moved.id)).toEqual({});
+
+		await asOneOutputChange(async () => await announce([
+			updated(before!.id),
+			message('featureMatch:updated', {
+				featureMatch: { id: movedSlot!.id },
+			}),
+		], moved.id));
+		expect(heardByScreens(moved.id)).toEqual(told('featureMatchSlot'));
+
+		ably.reset();
+		await announce([
+			updated(after!.id),
+		], moved.id);
+		expect(heardByScreens(moved.id)).toEqual(told('match'));
+	});
+});
+
+describe('a write made in a request', () => {
+	const roundUpdated = message('round:updated');
+	const playerUpdated = message('player:updated');
+
+	/** A request as the Worker gives one: what `useEvent` answers, and the work it was asked to finish after answering. */
+	function inRequest(waitUntil?: (work: Promise<unknown>) => void) {
+		const finishing: Promise<unknown>[] = [];
+		const request = {
+			context: {
+				cloudflare: {
+					context: {
+						waitUntil: waitUntil ?? ((work: Promise<unknown>) => finishing.push(work)),
+					},
+				},
+			},
+		};
+		vi.stubGlobal('useEvent', () => request);
+		return finishing;
+	}
+	afterEach(() => vi.unstubAllGlobals());
+	/** Lets everything already able to run, run: a held publish stays held. */
+	const turn = async () => await new Promise<void>(resolve => setImmediate(resolve));
+
+	// Only a notice waits for nothing it carries: a payload forwarded whole is
+	// a Take, a Card or a score, which its Screen must have when the write answers.
+	it.each<{ name: string; request: boolean; write: () => Promise<unknown>; answersFirst: boolean }>([
+		{
+			name: 'answers before a slow Screen publish settles, for a notice',
+			request: true,
+			write: async () => await publishMessage(eventId, roundUpdated.type, roundUpdated.payload as never),
+			answersFirst: true,
+		},
+		{
+			name: 'answers before a slow Screen publish settles, for a strict publish',
+			request: true,
+			write: async () => await publishMessageStrict(eventId, 'round:updated', roundUpdated.payload as never),
+			answersFirst: true,
+		},
+		{
+			name: 'answers before a slow Screen publish settles, for a run of notices',
+			request: true,
+			write: async () => await asOneOutputChange(async () => await announce([roundUpdated, playerUpdated])),
+			answersFirst: true,
+		},
+		{
+			name: 'waits for the Screen publish with no request, as a scheduled tick has none',
+			request: false,
+			write: async () => await publishMessage(eventId, roundUpdated.type, roundUpdated.payload as never),
+			answersFirst: false,
+		},
+		{
+			name: 'waits for the Screen publish of a Live Session message',
+			request: true,
+			write: async () => await announce([commandApplied]),
+			answersFirst: false,
+		},
+		{
+			name: 'waits for the Screen publish of a Card',
+			request: true,
+			write: async () => await announce([cardUpdated]),
+			answersFirst: false,
+		},
+		{
+			name: 'waits for the Screen publish of a Feature Match Session event',
+			request: true,
+			write: async () => await announce([sessionEvent]),
+			answersFirst: false,
+		},
+		{
+			name: 'waits for the Screen publish of a run forwarding a payload',
+			request: true,
+			write: async () => await asOneOutputChange(async () => await announce([roundUpdated, sessionEvent])),
+			answersFirst: false,
+		},
+	])('$name', async ({ request, write, answersFirst }) => {
+		const finishing = request
+			? inRequest()
+			: [];
+		const release = deferred();
+		ably.holdNextBatch(release.promise);
+		const asked = ably.nextBatchAsked();
+		const answered = vi.fn();
+
+		const writing = write().then(answered);
+		await asked;
+		await turn();
+		const answeredFirst = answered.mock.calls.length === 1;
+		const heardWhileHeld = heardByScreens();
+		release.resolve();
+		await writing;
+		await Promise.all(finishing);
+
+		expect(answeredFirst).toBe(answersFirst);
+		expect(finishing).toHaveLength(answersFirst ? 1 : 0);
+		expect(heardWhileHeld).toEqual({});
+		expect(Object.keys(heardByScreens())).not.toEqual([]);
+	});
+
+	// Two writes of one request reach a Screen in the order they were made,
+	// however slow the first one's publish.
+	it('keeps one request\'s notices in order', async () => {
+		const finishing = inRequest();
+		const release = deferred();
+		ably.holdNextBatch(release.promise);
+		const asked = ably.nextBatchAsked();
+
+		const writing = announce([roundUpdated, playerUpdated]);
+		await asked;
+		await turn();
+		release.resolve();
+		await writing;
+		await Promise.all(finishing);
+
+		expect(finishing).toHaveLength(2);
+		expect(heardByScreens().standings).toEqual([
+			changed('standings', 'round'),
+			changed('standings', 'player'),
+		]);
+	});
+
+	// Finished after the answer, a refused publish is logged as before, and the
+	// work handed to the request never rejects.
+	it('logs a publish refused after the answer, and rejects nothing', async () => {
+		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const finishing = inRequest();
+		ably.refuseBatches(2);
+
+		await publishMessage(eventId, roundUpdated.type, roundUpdated.payload as never);
+
+		await expect(Promise.all(finishing)).resolves.toHaveLength(1);
+		expect(heardByScreens()).toEqual({});
+		expect(errors.mock.calls.map(([line]) => JSON.parse(line as string))).toEqual(
+			([
+				'standings',
+				'overlay',
+				'otherOverlay',
+				'headToHead',
+			] as const).map(screen => expect.objectContaining({
+				message: 'realtime_publish_failed',
+				eventId,
+				screenId: SCREENS[screen],
+				messageTypes: ['output:modeDataChanged'],
+				statusCode: 500,
+			})),
+		);
+	});
+
+	// A request that cannot take the work leaves the write waiting for it, as with none.
+	it('waits for the Screen publish when the request refuses the work', async () => {
+		const finishing = inRequest(() => {
+			throw new Error('Illegal invocation');
+		});
+
+		await publishMessage(eventId, roundUpdated.type, roundUpdated.payload as never);
+
+		expect(finishing).toEqual([]);
+		expect(heardByScreens().standings).toEqual([
+			changed('standings', 'round'),
+		]);
 	});
 });
 

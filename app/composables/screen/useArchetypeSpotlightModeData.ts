@@ -5,14 +5,13 @@ import { conversionTargetLabel, eventConversionTarget } from '~~/shared/conversi
 import { metagameCardImageUrl, offeredMetagameScope } from '~~/shared/utils/metagame';
 import { archetypeSpotlightScreenQuery } from '~~/shared/utils/metagameQuery';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
-import { metagameBreakdownDependencies } from '~/modules/metagame/screenDependencies';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 import { useStagedScreenContent } from '~/modules/screen-mode/readiness';
 
 /** The Archetype Spotlight Screen's data (#761): one Archetype's pilots, numbers and top cards in a Metagame scope. */
 export function useArchetypeSpotlightModeData(context: ScreenContext) {
-	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'archetype-spotlight');
 	const outputReads = useScreenOutputReads(context);
 	const eventStore = useEventStore();
@@ -28,7 +27,7 @@ export function useArchetypeSpotlightModeData(context: ScreenContext) {
 	// Event's target, so the read changes with what it asks: the archetype detail
 	// query, and the projection's card fields.
 	const freshness = useScreenModeFreshness<ScreenOutputArchetypeSpotlightResponse | null>({
-		eventId,
+		hearing: useScreenModeHearing(context, 'archetype-spotlight', () => config.value),
 		source: () => {
 			const request = archetypeSpotlightScreenQuery(config.value, conversionTarget.value);
 			return outputReads.scopeKey.value && request
@@ -44,7 +43,6 @@ export function useArchetypeSpotlightModeData(context: ScreenContext) {
 		initialData: null,
 		errorMessage: 'Failed to load archetype spotlight',
 		// The archetype detail is a Metagame read over the same Event Data.
-		dependsOn: metagameBreakdownDependencies(() => config.value),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;

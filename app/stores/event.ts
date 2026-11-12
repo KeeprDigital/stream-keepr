@@ -28,9 +28,15 @@ export const useEventStore = defineStore('event', () => {
 	 * A rendering of a Screen — output, Program monitor or preview — never loads
 	 * the operator's Event; it holds the narrow context its Screen's read answers,
 	 * so nothing operator-only can be read off it, and `eventId` still names the
-	 * Event its realtime room and reads are scoped to.
+	 * Event its reads are scoped to.
 	 */
 	const outputEvent = ref<ScreenOutputEvent | null>(null);
+	/**
+	 * Whether the held Event context is an editor preview's. A preview renders
+	 * configuration not yet saved, which the server cannot tell its Screen's
+	 * channel about, so it alone among renderings joins its Event's realtime room.
+	 */
+	const outputEventIsPreview = ref(false);
 	/**
 	 * The operator Event's Theme as an operator surface last read it, kept
 	 * current by `theme:updated` as a rendering's is, so a Screen's token
@@ -89,6 +95,16 @@ export const useEventStore = defineStore('event', () => {
 	const eventId = computed(() => event.value?.id ?? outputEvent.value?.id ?? null);
 
 	/**
+	 * The Event whose realtime room this client joins: the operator's, or an
+	 * editor preview's. A Screen Output or Program monitor joins none, because it
+	 * follows only its own Screen's channel.
+	 */
+	const roomEventId = computed(() => event.value?.id
+		?? (outputEventIsPreview.value
+			? outputEvent.value?.id ?? null
+			: null));
+
+	/**
 	 * The Event fields a surface renders with, whichever kind of surface it is:
 	 * the operator's Event on a control page, the output context on a rendering
 	 * of a Screen. Components shared by both read this rather than `event`.
@@ -126,7 +142,9 @@ export const useEventStore = defineStore('event', () => {
 		event.value = data;
 	}
 
-	function setOutputEvent(data: ScreenOutputEvent) {
+	/** Hold the Event context a rendering read through its Screen; `preview` says it is an editor preview's. */
+	function setOutputEvent(data: ScreenOutputEvent, { preview = false }: { preview?: boolean } = {}) {
+		outputEventIsPreview.value = preview;
 		outputEvent.value = toScreenOutputEvent(data);
 	}
 
@@ -499,6 +517,7 @@ export const useEventStore = defineStore('event', () => {
 		activeLoads.clear();
 		event.value = null;
 		outputEvent.value = null;
+		outputEventIsPreview.value = false;
 		eventTheme.value = null;
 		error.value = null;
 		loading.value = false;
@@ -516,6 +535,7 @@ export const useEventStore = defineStore('event', () => {
 		// Computed
 		isLoaded,
 		eventId,
+		roomEventId,
 		displayEvent,
 
 		// Actions

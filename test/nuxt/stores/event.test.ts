@@ -298,6 +298,57 @@ describe('useEventStore', () => {
 		});
 	});
 
+	// The Event room is the operator's, or a preview's: a live rendering follows only its Screen's channel.
+	describe('the Event whose realtime room this client joins', () => {
+		it.each([
+			{
+				client: 'an operator',
+				event: 5,
+				context: null,
+				preview: false,
+				room: 5,
+			},
+			{
+				client: 'a Screen Output or Program monitor',
+				event: null,
+				context: 7,
+				preview: false,
+				room: null,
+			},
+			{
+				client: 'an editor preview',
+				event: null,
+				context: 7,
+				preview: true,
+				room: 7,
+			},
+			{
+				client: 'nothing loaded',
+				event: null,
+				context: null,
+				preview: false,
+				room: null,
+			},
+		])('is $room for $client', ({ event, context, preview, room }) => {
+			const store = useEventStore();
+			if (event)
+				store.setEvent(createMockEvent({ id: event }) as never);
+			if (context)
+				store.setOutputEvent(createMockEvent({ id: context }) as never, { preview });
+
+			expect(store.roomEventId).toBe(room);
+		});
+
+		it('is forgotten with the context when the stores reset', () => {
+			const store = useEventStore();
+			store.setOutputEvent(createMockEvent({ id: 7 }) as never, { preview: true });
+
+			store.$reset();
+
+			expect(store.roomEventId).toBeNull();
+		});
+	});
+
 	// A rendering holds only a newer write to the Theme its Event uses (ADR-0049).
 	describe('a Theme token write announced to a rendering', () => {
 		const held = {

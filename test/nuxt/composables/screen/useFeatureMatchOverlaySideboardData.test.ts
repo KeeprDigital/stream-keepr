@@ -35,6 +35,8 @@ const mockBuildDeckListArrays = vi.fn();
 
 const mockEventId = ref<number | null>(1);
 const mockCardDataHealth = ref<'complete' | 'degraded'>('complete');
+/** Whether the rendering is a live one, hearing its Screen's own channel. */
+const mockLive = ref(false);
 
 mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
 mockNuxtImport('useScreenOutputReads', () => () => ({ playerDecks: mockPlayerDecks }));
@@ -53,7 +55,8 @@ mockNuxtImport('useReconnectResync', () => (resync: () => void, _eventId: unknow
 	};
 });
 const screenContext = screenContextOf({
-	screen: ref(null),
+	screen: ref({ id: 3 }),
+	followsScreenChannel: mockLive,
 	eventId: computed(() => mockEventId.value),
 	cardDataHealth: mockCardDataHealth,
 });
@@ -63,6 +66,12 @@ function announcePlayerUpdated(player: Record<string, unknown>) {
 	serverPlayers.set(player.id as number, player);
 	const call = mockOnChannel.mock.calls.find(([, type]) => type === 'player:updated');
 	call?.[2]({ eventId: 1, player });
+}
+
+/** A live rendering's Screen channel names the kinds of change its Screen shows. */
+function announceCauses(causes: string[]) {
+	const call = mockOnChannel.mock.calls.findLast(([channel, type]) => channel === 'screen:1:3' && type === 'output:modeDataChanged');
+	call?.[2]({ eventId: 1, screenId: 3, causes } as never);
 }
 
 /** Another browser resolved an unresolved deck card; no Player revision moves (#648). */
@@ -85,6 +94,8 @@ function groupItem(children: Array<Record<string, unknown>>) {
 
 function overlayConfig(items: Array<Record<string, unknown>>): FeatureMatchOverlayModeConfig {
 	return {
+		// The Slot `slotMatch` is.
+		featureMatchId: 7,
 		layout: {
 			composition: { id: 'composition', name: 'Feature Match Layout', items },
 		},
@@ -165,10 +176,13 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		reconnectResyncCallbacks.length = 0;
 		firstAttachCallbacks.length = 0;
 		mockEventId.value = 1;
+		mockLive.value = false;
 		mockCardDataHealth.value = 'complete';
 		serverPlayers.clear();
 		config.value = overlayConfig([]);
 		match.value = null;
+		// A read a test held open and never used must not answer the next test's.
+		mockReadDeck.mockReset();
 		mockReadDeck.mockResolvedValue(deckResponse([
 			sideboardCard('Duress'),
 		]));
@@ -345,9 +359,9 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		]);
 	});
 
-	it('re-fetches when a player:updated announces a revision other than the one on screen', async () => {
-		// Live-follow: the announcement rolls `updatedAt` past the displayed
-		// stamp, and the refreshed deck flows through the ordinary load.
+	it('re-fetches when a seated Player is edited, and not for a Player on neither side', async () => {
+		// Live-follow: a change to a seated Player re-reads, and the refreshed
+		// deck flows through the ordinary load.
 		serverPlayers.set(5, rosterPlayer(5, '2026-08-21T00:00:00.000Z'));
 		config.value = overlayConfig([
 			deckListItem('player1'),
@@ -358,8 +372,6 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		await flushPromises();
 		expect(mockPlayerDecks).toHaveBeenCalledTimes(1);
 
-		// The revision on screen, and a Player on neither side, are not news.
-		announcePlayerUpdated(rosterPlayer(5, '2026-08-21T00:00:00.000Z'));
 		announcePlayerUpdated(rosterPlayer(9, '2026-08-21T01:00:00.000Z'));
 		await flushPromises();
 		expect(mockPlayerDecks).toHaveBeenCalledTimes(1);
@@ -390,11 +402,6 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 		await flushPromises();
 		expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
 		expect(sideboards.value).toBe(onProgram);
-
-		// The revision just read is not news.
-		announcePlayerUpdated(rosterPlayer(5, '2026-08-21T01:00:00.000Z'));
-		await flushPromises();
-		expect(mockPlayerDecks).toHaveBeenCalledTimes(2);
 	});
 
 	it('shows an edit announced while the first read is in flight, which that read missed', async () => {
@@ -437,6 +444,53 @@ describe('useFeatureMatchOverlaySideboardData', () => {
 				mainboard: [],
 				sideboard: cards.map(card => enrichedCard(card.name, `https://img.test/${card.name}.jpg`)),
 			}));
+		});
+
+		// A live rendering hears its Screen's channel name the cause, with no Player or revision to judge.
+		it.each([
+			{
+				causes: ['player'],
+				reads: 2,
+				shown: 'Negate',
+			},
+			{
+				causes: ['playerDeck'],
+				reads: 2,
+				shown: 'Negate',
+			},
+			{
+				causes: ['match', 'round'],
+				reads: 1,
+				shown: 'Duress',
+			},
+		])('a live rendering told of $causes has read $reads times and shows $shown', async ({ causes, reads, shown }) => {
+			mockLive.value = true;
+			config.value = overlayConfig([
+				deckListItem('player1'),
+			]);
+			match.value = slotMatch();
+			const { sideboards } = mountSideboardData();
+			await flushPromises();
+			let answer!: (deck: unknown) => void;
+			mockReadDeck.mockImplementationOnce(() => new Promise((resolve) => {
+				answer = resolve;
+			}));
+
+			announceCauses(causes);
+			await flushPromises();
+			// Program keeps the sideboard it shows while the re-read is in flight.
+			expect(sideboards.value.player1).toEqual([
+				{ name: 'Duress', quantity: 2, imageUrl: 'https://img.test/Duress.jpg' },
+			]);
+			answer?.(deckResponse([
+				sideboardCard('Negate'),
+			]));
+			await flushPromises();
+
+			expect(mockPlayerDecks).toHaveBeenCalledTimes(reads);
+			expect(sideboards.value.player1).toEqual([
+				{ name: shown, quantity: 2, imageUrl: `https://img.test/${shown}.jpg` },
+			]);
 		});
 
 		it('re-reads a side whose Player\'s Deck Lists were rewritten, and not for another Player', async () => {

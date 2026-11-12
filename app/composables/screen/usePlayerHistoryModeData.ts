@@ -1,10 +1,9 @@
-import type { MatchResponse } from '~~/shared/api';
 import type { MatchSide } from '~~/shared/utils/matchFromPlayerSide';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import { formatGameScore } from '~~/shared/utils/matchFromPlayerSide';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 /** One of a Player's Matches, its result read from that Player's side. */
@@ -26,51 +25,12 @@ export interface PlayerHistory {
 	rows: PlayerMatchHistoryEntry[];
 }
 
-/**
- * The Event Data a Player's match history is read from: the Player and their
- * opponents, their Matches, those Matches' Rounds and Phases, and the
- * opponents' Archetypes. Phases and Melee syncs are rare and not identified in
- * a history row, so any of them re-reads, except a sync of Round Standings,
- * which the history does not show.
- */
-export function playerHistoryDependencies(playerId: () => number | null): ScreenModeDependencies<PlayerHistory> {
-	const involvesPlayer = (match: MatchResponse) =>
-		match.player1Id === playerId() || match.player2Id === playerId();
-	const holdsMatch = (held: PlayerHistory, matchId: number) => held.rows.some(row => row.id === matchId);
-	const holdsRound = (held: PlayerHistory, roundId: number) => held.rows.some(row => row.roundId === roundId);
-	const holdsOpponent = (held: PlayerHistory, id: number) => held.rows.some(row => row.opponentId === id);
-	// An opponent's deck name may come from their Archetype.
-	const showsOpponentDeck = (_message: unknown, held: PlayerHistory) => held.rows.some(row => row.opponentDeckName != null);
-
-	return {
-		'player:updated': ({ player }, held) => player.id === playerId() || holdsOpponent(held, player.id),
-		'player:deleted': ({ playerId: id }, held) => id === playerId() || holdsOpponent(held, id),
-		'match:created': ({ match }) => involvesPlayer(match),
-		'match:updated': ({ match }, held) => involvesPlayer(match) || holdsMatch(held, match.id),
-		'match:deleted': ({ matchId }, held) => holdsMatch(held, matchId),
-		'round:updated': ({ round }, held) => holdsRound(held, round.id),
-		'round:deleted': ({ roundId }, held) => holdsRound(held, roundId),
-		'round:matchesRefreshed': true,
-		'phase:updated': true,
-		'phase:deleted': true,
-		'archetype:updated': showsOpponentDeck,
-		'archetype:deleted': showsOpponentDeck,
-		'melee:dataReset': true,
-		'melee:structureSynced': true,
-		'melee:matchResultsSynced': true,
-		'melee:pairingsSynced': true,
-		'melee:playersSynced': true,
-		'melee:decklistsSynced': true,
-	};
-}
-
 export function usePlayerHistoryModeData(context: ScreenContext) {
-	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'player-history');
 	const outputReads = useScreenOutputReads(context);
 
 	const freshness = useScreenModeFreshness<PlayerHistory>({
-		eventId,
+		hearing: useScreenModeHearing(context, 'player-history', () => config.value),
 		source: () => outputReads.scopeKey.value && config.value.playerId
 			? `${outputReads.scopeKey.value}:${config.value.playerId}`
 			: null,
@@ -80,7 +40,6 @@ export function usePlayerHistoryModeData(context: ScreenContext) {
 		},
 		initialData: { player: null, rows: [] },
 		errorMessage: 'Failed to load player match history',
-		dependsOn: playerHistoryDependencies(() => config.value.playerId),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;

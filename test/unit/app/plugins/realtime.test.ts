@@ -1103,7 +1103,7 @@ describe('realtime plugin', () => {
 		const scope = effectScope();
 		scope.run(() => useReconnectResync(() => {
 			shown = server;
-		}, 7, realtime));
+		}, 'event:7', realtime));
 		await settle();
 		connectionHandlers.get('connected')?.();
 		const channel = channels.get('event:7')!;

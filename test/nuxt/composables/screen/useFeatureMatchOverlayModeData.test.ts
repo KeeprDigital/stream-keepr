@@ -519,19 +519,10 @@ describe('useFeatureMatchOverlayModeData', () => {
 			wrapper.unmount();
 		});
 
-		it('re-reads when the Round it shows changes, and not for another', async () => {
+		it('re-reads when the Round it shows changes', async () => {
 			const { wrapper } = mountBoundOutput();
 			await flushPromises();
 			mockApiFetch.mockClear();
-
-			deliver('round:updated', {
-				round: { id: 99, name: 'Round 9' },
-			});
-			deliver('featureMatch:updated', {
-				featureMatch: { id: 11, matchId: 300 },
-			});
-			await flushPromises();
-			expect(mockApiFetch).not.toHaveBeenCalled();
 
 			deliver('round:updated', {
 				round: { id: 20, name: 'Top 8' },

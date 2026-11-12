@@ -8,7 +8,7 @@ import type { Flight } from '~/utils/guardedSequence';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue';
 import { eventCanvasOf } from '~~/shared/eventCanvas';
-import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
+import { screenRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import {
 	parseScreenEmbed,
 	parseScreenOutput,
@@ -24,6 +24,8 @@ import { ScreenLookupUnavailable } from '~/composables/repositories/useScreenRep
 import { useScreenRealtimeSession } from '~/composables/screen/useScreenRealtimeSession';
 import { getScreenModeDisplayType, isControlScreenMode } from '~/modules/screen-mode';
 import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
+import { authoringEventChannel, SCREEN_CHANNEL_PROTOCOL } from '~/modules/screen/renderingChannel';
+import { useScreenChannelSession } from '~/modules/screen/screenChannelSession';
 import { useEventStore } from '~/stores/event';
 import { useScreenStore } from '~/stores/screen';
 import { buildFeatureMatchOverlayExportFilename, exportElementPng } from '~/utils/exportElementPng';
@@ -148,6 +150,14 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	 */
 	const embed = computed(() => parseScreenEmbed(route.query.embed));
 	const isPreview = computed(() => embed.value === 'preview');
+	/**
+	 * Whether this is a live rendering of the Screen as saved: a Screen Output, a
+	 * Program monitor, or the same page opened with a Session. It hears only its
+	 * Screen's own channel, which the server tells of exactly what the Screen
+	 * shows. A preview renders configuration its editor has not saved, which the
+	 * server can derive nothing from, so it alone stays in its Event's room.
+	 */
+	const followsScreenChannel = computed(() => !isPreview.value);
 	/*
 	 * Editor-only guides require the preview role as well as their own flag, so an
 	 * ordinary Screen Output URL draws none.
@@ -214,9 +224,9 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	 * operator learns about the degradation beside the controls instead.
 	 */
 	const cardDataHealth = ref<ScreenCardDataHealth>('complete');
-	/** The Event's Theme, as its Event context carries it and `theme:updated` keeps it. */
+	/** The Event's Theme, as its Event context carries it: re-read on a live rendering, kept by `theme:updated` in a preview. */
 	const themeTokens = computed(() => eventStore.outputEvent?.theme?.tokens);
-	/** The Event Canvas, as the Event context carries it and `event:updated` keeps it. */
+	/** The Event Canvas, as the Event context carries it. */
 	const eventCanvas = computed(() => eventCanvasOf(eventStore.outputEvent));
 	const screenContext: ScreenContext = {
 		screen: activeScreen,
@@ -226,6 +236,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		outputMode,
 		outputWarning,
 		isPreview,
+		followsScreenChannel,
 		previewGuides,
 		previewSafeAreas,
 		previewStressDataset,
@@ -311,6 +322,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			outputMode: outputMode.value,
 			assetAccess: assetCapability.value ? 'granted' : 'absent',
 			cardData: cardDataHealth.value,
+			protocol: SCREEN_CHANNEL_PROTOCOL,
 		}),
 	});
 
@@ -379,21 +391,24 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		loadedOn.value = null;
 		recoveries.supersede();
 		cancelLoadRetry();
+		cancelContextRetry();
 	}
 
 	/**
-	 * The current load attempt's own listening on its Event channel, for what
-	 * Reconnect Resync cannot hear yet: it follows only a finished load's Event.
+	 * The current load attempt's own listening on the channel it will follow, for
+	 * what Reconnect Resync cannot hear yet: it follows only a finished load.
 	 *
-	 * - **The first attach.** A load reads before it listens: the Event channel
-	 *   attaches only once the Event context names it, after the reads have
-	 *   answered. Whatever was published in between reached neither the reads nor
-	 *   any listener, and a first attach on an unbroken connection reports no
-	 *   continuity loss (ADR-0023). So a load re-reads once off that attach, rather
-	 *   than attaching before it reads, which would hold program blank for as long
+	 * That channel is the Screen's own for a live rendering, named once the
+	 * Screen lookup answers its id, and the Event's for a preview.
+	 *
+	 * - **The first attach.** A load reads before it listens: a live rendering's
+	 *   channel is named by the Screen its first read answers. Whatever was
+	 *   published in between reached neither the reads nor any listener, and a
+	 *   first attach on an unbroken connection reports no continuity loss
+	 *   (ADR-0023). So a load re-reads once off that attach, rather than
+	 *   attaching before it reads, which would hold program blank for as long
 	 *   as a token outage lasts (#727). Inert when the channel is attached already
-	 *   — a Screen change within one Event — because then it was listening before
-	 *   the reads went out.
+	 *   because then it was listening before the reads went out.
 	 * - **A continuity loss.** On a channel already attached, a loss while the
 	 *   load reads means something published meanwhile went unheard too (#733).
 	 *
@@ -405,10 +420,26 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	let loadListeners: Array<() => void> = [];
 	/** The load that heard a reason to re-read while it was still reading, if any. */
 	let loadAskedRecovery: Flight | null = null;
+	/** The load attempt listening now, if any. */
+	let currentLoad: Flight | null = null;
 
-	function listenDuringLoad(evtId: number, flight: Flight) {
+	/**
+	 * The channel a load of this Screen follows: the Screen's own, or its Event's
+	 * for a preview. `null` for a live rendering whose Screen is not yet known.
+	 */
+	function followedChannel(evtId: number, screenId: number | null): string | null {
+		if (isPreview.value)
+			return authoringEventChannel(evtId);
+		return screenId === null
+			? null
+			: screenRealtimeChannel(evtId, screenId);
+	}
+
+	function listenDuringLoad(channel: string | null, flight: Flight) {
 		stopListeningDuringLoad();
-		const channel = eventRealtimeChannel(evtId);
+		if (!channel)
+			return;
+		currentLoad = flight;
 		function askForRecovery() {
 			if (flight.stale)
 				return;
@@ -427,6 +458,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		for (const stop of loadListeners.splice(0))
 			stop();
 		loadAskedRecovery = null;
+		currentLoad = null;
 	}
 
 	/** The slow retry of a load whose Screen lookup or Event context read failed. */
@@ -438,10 +470,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		loadRetry = null;
 	}
 
-	/** Begin one attempt at a load: no retry stands for it, and it listens on its Event channel. */
-	function beginLoadAttempt(evtId: number, flight: Flight) {
+	/** Begin one attempt at a load: no retry stands for it, and it listens on the channel it follows, once that is known. */
+	function beginLoadAttempt(evtId: number, screenId: number | null, flight: Flight) {
 		cancelLoadRetry();
-		listenDuringLoad(evtId, flight);
+		listenDuringLoad(followedChannel(evtId, screenId), flight);
 	}
 
 	function readScope(evtId: number, screenId: number): ScreenOutputReadScope {
@@ -465,7 +497,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			return;
 		}
 
-		beginLoadAttempt(evtId, flight);
+		beginLoadAttempt(evtId, null, flight);
 		try {
 			// The capability is this output's credential for the lookup itself since
 			// #397, not only for the media it later resolves. An `embed=preview`
@@ -475,6 +507,9 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 				return;
 			if (!loadedScreen || screenStore.activeScreen?.id !== loadedScreen.id)
 				throw new Error('Screen not found');
+			// A live rendering's channel is named by the Screen this just answered.
+			if (!isPreview.value)
+				listenDuringLoad(followedChannel(evtId, loadedScreen.id), flight);
 
 			await finishLoad(readScope(evtId, loadedScreen.id), flight);
 		}
@@ -501,7 +536,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		}
 		if (flight.stale)
 			return;
-		eventStore.setOutputEvent(outputEvent);
+		eventStore.setOutputEvent(outputEvent, { preview: isPreview.value });
 
 		// Only a Screen Output joins its Screen's presence and answers its Screen's
 		// commands. An embedded rendering of either kind is a control surface's own
@@ -562,7 +597,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	 */
 	async function resumeLoad(scope: ScreenOutputReadScope) {
 		const flight = loads.begin();
-		beginLoadAttempt(scope.eventId, flight);
+		beginLoadAttempt(scope.eventId, scope.screenId, flight);
 		try {
 			const screen = await screenStore.refreshActiveScreen(scope.eventId, scope.screenId, scope.assetCapability);
 			if (flight.stale)
@@ -577,13 +612,14 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	}
 
 	/**
-	 * Re-read the Event context a loaded rendering holds. An `event:updated` that
-	 * lands while the read is in flight may be newer or older than its answer, and
-	 * the context carries no revision to tell them apart, so the answer is not
-	 * applied over it and one more read settles which is current — as Screen Mode
-	 * Data Freshness does for a mode's data.
+	 * Re-read the Event context a loaded rendering holds, and answer whether the
+	 * read answered. In a preview, an `event:updated` that lands while the read is
+	 * in flight may be newer or older than its answer, and the context carries no
+	 * revision to tell them apart, so the answer is not applied over it and one
+	 * more read settles which is current — as Screen Mode Data Freshness does for
+	 * a mode's data.
 	 */
-	async function rereadOutputEvent(scope: ScreenOutputReadScope, flight: Flight) {
+	async function rereadOutputEvent(scope: ScreenOutputReadScope, flight: Flight): Promise<boolean> {
 		for (;;) {
 			const heldBefore = eventStore.outputEvent;
 			let outputEvent: ScreenOutputEvent;
@@ -593,14 +629,66 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			catch (err) {
 				if (flight.current)
 					console.warn('Failed to re-read the Event context; keeping the last one:', err);
-				return;
+				return false;
 			}
 			if (flight.stale)
-				return;
+				return true;
 			if (eventStore.outputEvent === heldBefore) {
-				eventStore.setOutputEvent(outputEvent);
-				return;
+				eventStore.setOutputEvent(outputEvent, { preview: isPreview.value });
+				return true;
 			}
+		}
+	}
+
+	/**
+	 * A live rendering's Screen channel said its Event context changed: its
+	 * Event, or the Event's Theme, whose tokens the context carries (ADR-0022).
+	 * The notice carries nothing, so the context is re-read through the Screen.
+	 *
+	 * One read in flight at a time: a notice heard meanwhile asks for one more
+	 * once it answers, so a burst costs one follow-up. A read that fails is
+	 * retried on the slow cadence, because the change that asked for it will not
+	 * be announced again. Heard before the load finishes, it asks that load for a
+	 * recovery instead. Program keeps the context it renders with throughout.
+	 */
+	let contextReading = false;
+	let contextAsked = false;
+	let contextRetry: ReturnType<typeof setTimeout> | null = null;
+
+	function cancelContextRetry() {
+		if (contextRetry)
+			clearTimeout(contextRetry);
+		contextRetry = null;
+	}
+
+	async function followEventContext() {
+		cancelContextRetry();
+		if (contextReading) {
+			contextAsked = true;
+			return;
+		}
+		const loaded = loadedOn.value;
+		if (!loaded) {
+			if (currentLoad?.current)
+				loadAskedRecovery = currentLoad;
+			return;
+		}
+		contextReading = true;
+		let answered = true;
+		try {
+			do {
+				contextAsked = false;
+				answered = await rereadOutputEvent(loaded, recoveries.begin());
+			} while (contextAsked && loadedOn.value === loaded);
+		}
+		finally {
+			contextReading = false;
+		}
+		if (!answered && loadedOn.value === loaded && !contextRetry) {
+			contextRetry = setTimeout(() => {
+				contextRetry = null;
+				void followEventContext();
+			}, SCREEN_OUTPUT_LOAD_RETRY_MS);
 		}
 	}
 
@@ -678,8 +766,10 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 	}
 
 	/*
-	 * A Theme switch arrives as `event:updated`, which names the new Theme and
-	 * carries none of its tokens; an Event context naming a Theme it does not
+	 * In a preview a Theme switch arrives as `event:updated`, which names the new
+	 * Theme and carries none of its tokens; a live rendering re-reads its whole
+	 * Event context on its Screen channel's notice, which answers both. Either
+	 * way, an Event context naming a Theme it does not
 	 * hold re-reads, and renders the held one until the answer lands. A re-read
 	 * that fails is retried on the slow cadence, since nothing else retries it
 	 * while the connection stays up.
@@ -711,10 +801,27 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 			cancelSelectedThemeRetry();
 	});
 
-	// A loaded rendering hears its Screen's announcements on the Event channel.
-	// One not loaded listens on none — its Event context, which names the channel,
-	// may be what failed — so the connection coming back retries it.
-	useReconnectResync(resyncActiveScreen, () => loadedOn.value?.eventId ?? null, realtime);
+	// A live rendering hears everything on its Screen's own channel, from the
+	// moment it holds its Screen; a preview is in its Event's room instead.
+	useScreenChannelSession({
+		realtime,
+		screenStore,
+		channel: () => {
+			const held = screenStore.activeScreen;
+			const evtId = resolveEventId();
+			return held && evtId && !isPreview.value
+				? followedChannel(evtId, held.id)
+				: null;
+		},
+		onEventContextChanged: () => void followEventContext(),
+	});
+
+	// A loaded rendering resyncs off the channel it follows. One not loaded
+	// listens on none — the read that names it may be what failed — so the
+	// connection coming back retries it.
+	useReconnectResync(resyncActiveScreen, () => loadedOn.value
+		? followedChannel(loadedOn.value.eventId, loadedOn.value.screenId)
+		: null, realtime);
 	// Subscriptions that waited on a token missed what was published meanwhile,
 	// and a first attach over an unbroken connection reports no continuity loss
 	// (ADR-0023), exactly as the Realtime Event Session resyncs on it.
@@ -744,6 +851,7 @@ export function useScreenDisplaySession(options: ScreenDisplaySessionOptions = {
 		loads.supersede();
 		forgetLoad();
 		cancelSelectedThemeRetry();
+		cancelContextRetry();
 		stopListeningDuringLoad();
 		await screenRealtimeSession.stop();
 	});

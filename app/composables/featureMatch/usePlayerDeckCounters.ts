@@ -44,6 +44,13 @@ export function usePlayerDeckCounters(
 		return { id: seated.playerId, name: seated.data?.name ?? null };
 	});
 
+	const seatedDeckName = computed(() => {
+		const m = match.value;
+		return m
+			? getMtgGameData(featureMatchSidePlayer(withFollowedFeatureMatchSession(m, featureMatchStateStore), toValue(playerSide)).data?.gameData).deckName
+			: undefined;
+	});
+
 	const matchedPlayer = computed(() => {
 		const playerId = playerLocator.value.id;
 		if (playerId) {
@@ -65,6 +72,9 @@ export function usePlayerDeckCounters(
 			matchedPlayer.value?.id,
 			matchedPlayer.value?.updatedAt,
 			getMtgGameData(matchedPlayer.value?.gameData).deckName,
+			// The Slot's own copy of the seated Player's deck name, which Reverse Sync
+			// writes: a rendering holds no roster a Player's own message would update.
+			seatedDeckName.value,
 		] as const,
 		async () => {
 			const currentRequestId = ++requestId;

@@ -2,13 +2,13 @@ import type { StandingsColumnKey } from '~~/shared/types/enums';
 import type { ScreenOutputStandingsResponse } from '~~/shared/types/screenOutputReads';
 import type { PositionChange } from '~~/shared/utils/standingsPositionChange';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import type { ScreenModeDependencies } from '~/modules/screen-mode/freshness';
 import type { Player } from '~/types';
 import { isColumnVisible } from '~~/shared/screenModeConfigs/subShapes';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
 import { formatPositionChange, positionChange } from '~~/shared/utils/standingsPositionChange';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
+import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
 import { usePaginatedScreenMode } from '~/modules/screen-mode/pagination';
 
 /**
@@ -29,52 +29,12 @@ function byStandingsPosition(a: Player, b: Player): number {
  */
 type StandingsRead = ScreenOutputStandingsResponse & { readPositionChange: boolean };
 
-/**
- * The Event Data Standings are read from: the roster, the Round they are fixed
- * at and its snapshot, the watchlist they filter to, and, while the Position
- * Change column shows, the previous Round in the Event's Round order. Every
- * Player is a row, and Melee syncs rewrite records and snapshots wholesale, so
- * any sync of Players or Round Standings re-reads; a synced Match Result or
- * pairing does not, since Standings show only stored Round Standings. Any
- * Round or Phase edit may reorder the Event's Rounds, so while that column
- * shows, each one re-reads. A new Round holds no Round Standings until a Melee
- * sync stores them, which re-reads already.
- */
-export function standingsDependencies(
-	watchlistId: () => number | null,
-	showsPositionChange: () => boolean,
-): ScreenModeDependencies<StandingsRead> {
-	const holdsRound = (held: StandingsRead, roundId: number) => held.round?.id === roundId;
-	const isWatchlist = (listId: number) => listId === watchlistId();
-
-	return {
-		'player:created': true,
-		'player:updated': true,
-		'player:deleted': true,
-		'round:updated': ({ round }, held) => holdsRound(held, round.id) || showsPositionChange(),
-		'round:deleted': ({ roundId }, held) => holdsRound(held, roundId) || showsPositionChange(),
-		'phase:updated': () => showsPositionChange(),
-		'phase:deleted': () => showsPositionChange(),
-		'playerList:updated': ({ playerList }) => isWatchlist(playerList.id),
-		'playerList:deleted': ({ listId }) => isWatchlist(listId),
-		'playerList:membersChanged': ({ listId }) => isWatchlist(listId),
-		'melee:dataReset': true,
-		'melee:structureSynced': true,
-		'melee:roundStandingsSynced': true,
-		'melee:playersSynced': true,
-	};
-}
-
 export function useStandingsModeData(context: ScreenContext) {
-	const { eventId } = context;
 	const config = useScreenModeConfig(context, 'standings');
 
 	const outputReads = useScreenOutputReads(context);
 	const eventStore = useEventStore();
 
-	const selectedWatchlistId = () => config.value.viewMode === 'watchlist'
-		? config.value.playerListId ?? null
-		: null;
 	const showsPositionChange = () => isColumnVisible(config.value.columns, 'positionChange');
 
 	// ── Data Loading ──
@@ -84,7 +44,7 @@ export function useStandingsModeData(context: ScreenContext) {
 	 * in the Player store, so an operator's roster cannot stand in for it (#603).
 	 */
 	const freshness = useScreenModeFreshness<StandingsRead>({
-		eventId,
+		hearing: useScreenModeHearing(context, 'standings', () => config.value),
 		source: () => outputReads.scopeKey.value
 			? `${outputReads.scopeKey.value}:${config.value.viewMode}:${config.value.playerListId}:${config.value.roundId}:${showsPositionChange()}`
 			: null,
@@ -104,7 +64,6 @@ export function useStandingsModeData(context: ScreenContext) {
 			readPositionChange: false,
 		},
 		errorMessage: 'Failed to load standings data',
-		dependsOn: standingsDependencies(selectedWatchlistId, showsPositionChange),
 	});
 	const loading = freshness.loading;
 	const error = freshness.error;
