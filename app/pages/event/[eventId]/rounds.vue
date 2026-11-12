@@ -24,12 +24,14 @@ const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
 	{
 		consumes: 'phases',
 		isLoaded: () => phaseStore.isLoaded,
-		load: id => phaseStore.loadPhasesByEventId(id),
+		isLoading: () => phaseStore.loading,
+		load: id => phaseStore.loadPhasesByEventId(id, { failure: 'raise' }),
 	},
 	{
 		consumes: 'rounds',
 		isLoaded: () => roundStore.isLoaded,
-		load: id => roundStore.loadRoundsByEventId(id),
+		isLoading: () => roundStore.loading,
+		load: id => roundStore.loadRoundsByEventId(id, { failure: 'raise' }),
 	},
 ]);
 

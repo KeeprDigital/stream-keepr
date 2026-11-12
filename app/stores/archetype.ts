@@ -1,3 +1,4 @@
+import type { EventDataLoadOptions } from '~/modules/event-data/lifecycle';
 import type {
 	Archetype,
 	CreateArchetypeInput,
@@ -33,8 +34,8 @@ export const useArchetypeStore = defineStore('archetype', () => {
 		useMetagameStore().applyRemoteInvalidated();
 	}
 
-	async function loadByEventId(eventId: number) {
-		return lifecycle.loadByEventId(eventId);
+	async function loadByEventId(eventId: number, load?: EventDataLoadOptions) {
+		return lifecycle.loadByEventId(eventId, load);
 	}
 
 	async function createArchetype(eventId: number, input: CreateArchetypeInput) {

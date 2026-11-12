@@ -62,7 +62,8 @@ const { initialLoading, initialError, retry } = useEventPageLoading([
 	{
 		consumes: 'players',
 		isLoaded: () => playerStore.isLoaded,
-		load: id => playerStore.loadPlayersByEventId(id),
+		isLoading: () => playerStore.loading,
+		load: id => playerStore.loadPlayersByEventId(id, { failure: 'raise' }),
 	},
 ], fetchPageData);
 

@@ -63,12 +63,14 @@ const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
 	{
 		consumes: 'players',
 		isLoaded: () => playerStore.isLoaded,
-		load: id => playerStore.loadPlayersByEventId(id),
+		isLoading: () => playerStore.loading,
+		load: id => playerStore.loadPlayersByEventId(id, { failure: 'raise' }),
 	},
 	{
 		consumes: 'archetypes',
 		isLoaded: () => archetypeStore.isLoaded,
-		load: id => archetypeStore.loadByEventId(id),
+		isLoading: () => archetypeStore.loading,
+		load: id => archetypeStore.loadByEventId(id, { failure: 'raise' }),
 	},
 ], fetchPageData);
 </script>

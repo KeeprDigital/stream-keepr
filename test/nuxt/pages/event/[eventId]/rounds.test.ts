@@ -2,7 +2,8 @@ import type { PropType } from 'vue';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defineComponent, ref } from 'vue';
+import { defineComponent } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockEvent, createMockRound } from '~~/test/helpers/fixtures';
 
 /*
@@ -31,12 +32,6 @@ mockNuxtImport('useOverlay', () => () => ({
 		}),
 	}),
 }));
-mockNuxtImport('useEventPageLoading', () => () => ({
-	eventId: ref(1),
-	initialLoading: ref(false),
-	initialError: ref(null),
-	retry: vi.fn(),
-}));
 
 const round = createMockRound({
 	id: 10,
@@ -58,16 +53,17 @@ function serve({ rounds }: { rounds: 'online' | 'offline' }) {
 	});
 }
 
-/** Each Round as the two actions this page starts for it. */
+/** Each Round as the two actions this page starts for it, and whether the page is still loading. */
 const PhaseListStub = defineComponent({
 	props: {
 		rounds: {
 			type: Array as PropType<Array<{ id: number }>>,
 			default: () => [],
 		},
+		loading: Boolean,
 	},
 	emits: ['syncMatches', 'enableManualOverride'],
-	template: `<div>
+	template: `<div :data-loading="loading">
 		<template v-for="round in rounds" :key="round.id">
 			<button type="button" :data-sync="round.id" @click="$emit('syncMatches', round)" />
 			<button type="button" :data-override="round.id" @click="$emit('enableManualOverride', round)" />
@@ -83,35 +79,81 @@ async function mountPage() {
 			stubs: {
 				UICollectionPage: defineComponent({ template: '<div><slot /></div>' }),
 				RoundPhaseList: PhaseListStub,
-				UIInitialLoadError: true,
+				UIInitialLoadError: defineComponent({ template: '<div role="alert" />' }),
 			},
 		},
 	});
 }
 
-describe('event structure page, when the reload after a committed write fails', () => {
-	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
+let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
 
+beforeEach(() => {
+	for (const store of [
+		useMeleeStore(),
+		useEventStore(),
+		usePhaseStore(),
+		useRoundStore(),
+		useMatchStore(),
+		usePlayerStore(),
+		useFeatureMatchStore(),
+		useFeatureMatchStateStore(),
+		useMetagameStore(),
+	])
+		store.$reset();
+	const event = {
+		...createMockEvent(),
+		talents: [],
+		meleeConfigured: false,
+	};
+	useEventStore().setEvent(event as never);
+	mockEventRepo.getById.mockResolvedValue(event);
+});
+
+afterEach(() => {
+	wrapper?.unmount();
+	wrapper = null;
+});
+
+describe('event structure page, when a newer Rounds load supersedes its own', () => {
+	// Its own read answers after a reload a realtime message started, so it holds nothing.
+	it('keeps loading, with no error, until the newer load lands, then shows that load\'s Rounds', async () => {
+		const reads = [
+			deferred<unknown>(),
+			deferred<unknown>(),
+		];
+		const [pageRead, newerRead] = reads;
+		mockFetch.mockImplementation(async (path: string) => path.endsWith('/rounds')
+			? reads.shift()!.promise
+			: []);
+		wrapper = await mountPage();
+		await flushPromises();
+		const newerLoad = useRoundStore().loadRoundsByEventId(1);
+
+		pageRead!.resolve([round]);
+		await flushPromises();
+
+		expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+		expect(wrapper.get('[data-loading]').attributes('data-loading')).toBe('true');
+
+		newerRead!.resolve([
+			createMockRound({
+				id: 11,
+				eventId: 1,
+				phaseId: 1,
+				name: 'Round 2',
+			}),
+		]);
+		await newerLoad;
+		await flushPromises();
+
+		expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+		expect(wrapper.get('[data-loading]').attributes('data-loading')).toBe('false');
+		expect(wrapper.findAll('[data-sync]').map(button => button.attributes('data-sync'))).toEqual(['11']);
+	});
+});
+
+describe('event structure page, when the reload after a committed write fails', () => {
 	beforeEach(async () => {
-		for (const store of [
-			useMeleeStore(),
-			useEventStore(),
-			usePhaseStore(),
-			useRoundStore(),
-			useMatchStore(),
-			usePlayerStore(),
-			useFeatureMatchStore(),
-			useFeatureMatchStateStore(),
-			useMetagameStore(),
-		])
-			store.$reset();
-		const event = {
-			...createMockEvent(),
-			talents: [],
-			meleeConfigured: false,
-		};
-		useEventStore().setEvent(event as never);
-		mockEventRepo.getById.mockResolvedValue(event);
 		mockEventRepo.syncSpecificRound.mockResolvedValue({
 			success: true,
 			round,
@@ -123,11 +165,6 @@ describe('event structure page, when the reload after a committed write fails', 
 		serve({ rounds: 'online' });
 		await useRoundStore().loadRoundsByEventId(1);
 		mockToast.add.mockClear();
-	});
-
-	afterEach(() => {
-		wrapper?.unmount();
-		wrapper = null;
 	});
 
 	// The write landed either way; only what the operator is told to do next differs.

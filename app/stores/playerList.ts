@@ -1,3 +1,4 @@
+import type { EventDataLoadOptions } from '~/modules/event-data/lifecycle';
 import type {
 	CreatePlayerListInput,
 	PlayerListSummary,
@@ -51,7 +52,7 @@ export const usePlayerListStore = defineStore('playerList', () => {
 	const loadListMembers = memberRuntime.loadListMembers;
 	const getCachedMemberIds = memberRuntime.getCachedMemberIds;
 
-	async function loadByEventId(eventId: number) {
+	async function loadByEventId(eventId: number, load?: EventDataLoadOptions) {
 		return lifecycle.loadFrom(eventId, async () => {
 			const listsData = await repo.list(eventId);
 
@@ -63,7 +64,7 @@ export const usePlayerListStore = defineStore('playerList', () => {
 			}
 
 			return listsData;
-		});
+		}, load);
 	}
 
 	async function createList(eventId: number, input: CreatePlayerListInput) {

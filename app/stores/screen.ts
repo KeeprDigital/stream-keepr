@@ -1,3 +1,4 @@
+import type { EventDataLoadOptions } from '~/modules/event-data/lifecycle';
 import type { ActiveScreenLookup, ScreenPresenceInfo } from '~/modules/screen/runtime';
 import type { Screen } from '~/types';
 import { toRaw } from 'vue';
@@ -112,14 +113,18 @@ export const useScreenStore = defineStore('screen', () => {
 	 * A load superseded by a newer one for the same Event answers with that newer
 	 * load's Screens, so a caller racing another (a page and its layout) is not told
 	 * it failed. One superseded by a reset or another Event answers `null`.
+	 *
+	 * A failed load answers `null` too, unless asked to raise its failure as an Event
+	 * Data load is (`EventDataLoadOptions`). Only the latest load raises, and only to
+	 * its own caller: a superseded load answers `null` when it or the newer one failed.
 	 */
-	function loadScreensByEventId(eventId: number) {
-		const load = fetchScreens(eventId);
+	function loadScreensByEventId(eventId: number, options?: EventDataLoadOptions) {
+		const load = fetchScreens(eventId, options);
 		latestScreensLoad = load;
 		return load;
 	}
 
-	async function fetchScreens(eventId: number): Promise<Screen[] | null> {
+	async function fetchScreens(eventId: number, { failure }: EventDataLoadOptions = {}): Promise<Screen[] | null> {
 		const flight = screensLoads.begin();
 		const token = beginLoad();
 		currentEventId.value = eventId;
@@ -127,7 +132,7 @@ export const useScreenStore = defineStore('screen', () => {
 			const data = await screenRepo.list(eventId);
 			if (flight.stale || currentEventId.value !== eventId) {
 				return currentEventId.value === eventId
-					? latestScreensLoad
+					? latestScreensLoad?.catch(() => null) ?? null
 					: null;
 			}
 			// Per Screen, not wholesale. The list is the authority on *membership* —
@@ -141,8 +146,11 @@ export const useScreenStore = defineStore('screen', () => {
 			return kept;
 		}
 		catch (caughtError) {
-			if (flight.current)
-				error.value = loadErrorMessage(caughtError);
+			if (flight.stale)
+				return null;
+			error.value = loadErrorMessage(caughtError);
+			if (failure === 'raise')
+				throw caughtError;
 			return null;
 		}
 		finally {
