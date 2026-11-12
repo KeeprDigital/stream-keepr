@@ -1,13 +1,8 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { execFile } from 'node:child_process';
 import { createServer } from 'node:http';
-import process from 'node:process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DeployVerifyFailure, verifyDeployment } from '../../../scripts/deploy-verify.mjs';
-import { LOAD_TOLERANT_WAIT_MS } from '../../helpers/loadTolerantBounds';
-
-const SCRIPT = 'scripts/deploy-verify.mjs';
+import { DeployVerifyFailure, main, verifyDeployment } from '../../../scripts/deploy-verify.mjs';
 
 type Handler = (request: IncomingMessage, response: ServerResponse) => void;
 
@@ -18,13 +13,14 @@ const READING = '{"serverTime":1760000000000}';
 /**
  * A stand-in for a deployed origin on localhost: real HTTP, no deployment, no
  * credentials, no network beyond loopback. The probe's rules are driven through
- * the script's exported probe; only what the command adds to it (the target
- * from the environment, the exit code, the liveness claim) spawns the script.
+ * the script's exported probe; what the command adds to it (the target from
+ * the environment, the exit code, the liveness claim) through its entry point.
  */
 describe('deploy:verify against a local stand-in origin', () => {
 	const servers: Server[] = [];
 
 	afterEach(async () => {
+		vi.unstubAllGlobals();
 		await Promise.all(servers.splice(0).map(server => new Promise(resolve => server.close(resolve))));
 	});
 
@@ -197,20 +193,35 @@ describe('deploy:verify against a local stand-in origin', () => {
 	});
 
 	describe('run as the command, its target in STREAM_KEEPR_DEPLOY_HEALTH_URL', () => {
-		function runScript(healthUrl: string) {
-			return new Promise<{ code: number | null; output: string }>((resolve) => {
-				execFile(process.execPath, [SCRIPT], {
-					env: { ...process.env, STREAM_KEEPR_DEPLOY_HEALTH_URL: healthUrl },
-					timeout: LOAD_TOLERANT_WAIT_MS,
-				}, (error, stdout, stderr) => {
-					resolve({
-						code: error
-							? (error.code as number) ?? 1
-							: 0,
-						output: `${stdout}${stderr}`,
-					});
-				});
+		const loopbackFetch = fetch;
+
+		// The command's default target is production. Every fetch it could make is this
+		// stand-in, which sends on only what is for the local origin and refuses the rest
+		// with an answer the probe fails on at once: a target read wrongly is never asked.
+		async function runCommand(healthUrl: string, standIn: string) {
+			const asked: string[] = [];
+			const printed: string[] = [];
+			const fetchRequest = (async (...request: Parameters<typeof fetch>) => {
+				const url = String(request[0]);
+				asked.push(url);
+				return url.startsWith(`${standIn}/`)
+					? loopbackFetch(...request)
+					: new Response('not the stand-in origin', { status: 421 });
+			}) as typeof fetch;
+			vi.stubGlobal('fetch', fetchRequest);
+			vi.spyOn(console, 'log').mockImplementation(line => void printed.push(String(line)));
+			vi.spyOn(console, 'error').mockImplementation(line => void printed.push(String(line)));
+
+			const code = await main({
+				env: { STREAM_KEEPR_DEPLOY_HEALTH_URL: healthUrl },
+				fetchRequest,
 			});
+
+			return {
+				code,
+				asked,
+				output: printed.join('\n'),
+			};
 		}
 
 		it('exits 0 on the clock reading, and claims liveness only', async () => {
@@ -222,9 +233,10 @@ describe('deploy:verify against a local stand-in origin', () => {
 				})(request, response);
 			});
 
-			const { code, output } = await runScript(`${url}/`);
+			const { code, asked, output } = await runCommand(`${url}/`, url);
 
 			expect(code).toBe(0);
+			expect(asked).toEqual([`${url}/api/time`]);
 			expect(requested).toEqual(['/api/time']);
 			expect(output).toContain('liveness only');
 			expect(output).not.toMatch(/new release is serving/i);
@@ -236,9 +248,10 @@ describe('deploy:verify against a local stand-in origin', () => {
 				response.end(SPA_FALLBACK);
 			});
 
-			const { code, output } = await runScript(url);
+			const { code, asked, output } = await runCommand(url, url);
 
-			expect(code).not.toBe(0);
+			expect(code).toBe(1);
+			expect(asked).toEqual([`${url}/api/time`]);
 			expect(output).toContain('text/html');
 			expect(output).not.toContain('liveness only');
 		});

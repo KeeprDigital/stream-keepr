@@ -1,0 +1,10 @@
+# zizmor audits the workflows and the composite action in the `checks` job of
+# ci.yml. An audit is switched off here only with its reason.
+
+rules:
+  # `uses: $/.github/actions/setup` in place of `./…` (GitHub, July 2026).
+  # actionlint's newest release (1.7.12, March 2026) rejects the `$/` form as
+  # an action with no ref, and both linters have to pass. Switch the seven
+  # `uses:` in ci.yml and remove this once an actionlint release accepts it.
+  self-repository:
+    disable: true

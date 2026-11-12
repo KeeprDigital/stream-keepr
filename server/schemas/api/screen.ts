@@ -1507,7 +1507,6 @@ export const featureMatchOverlayModeConfigSchema = modeConfigCompleteSchemaMap['
 export const broadcastGraphicsModeConfigSchema = modeConfigCompleteSchemaMap['broadcast-graphics'];
 export const metagameModeConfigSchema = modeConfigCompleteSchemaMap.metagame;
 export const topCardsModeConfigSchema = modeConfigCompleteSchemaMap['top-cards'];
-export const playerHistoryModeConfigSchema = modeConfigCompleteSchemaMap['player-history'];
 export const pairingsModeConfigSchema = modeConfigCompleteSchemaMap.pairings;
 export const archetypeSpotlightModeConfigSchema = modeConfigCompleteSchemaMap['archetype-spotlight'];
 export const headToHeadModeConfigSchema = modeConfigCompleteSchemaMap['head-to-head'];

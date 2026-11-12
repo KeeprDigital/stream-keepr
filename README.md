@@ -408,6 +408,15 @@ PR run verified: one PR, with `main` unchanged since its PR run. That PR run's
 then name the run that verified the tree. Any doubt runs everything. A newer
 push cancels the older PR run. It is the full gate: before it,
 `pnpm verify:quick`.
+The lint job also lints the workflows, which `pnpm verify` does not:
+[actionlint](https://github.com/rhysd/actionlint) checks that each is one
+GitHub will accept, its `run:` scripts through shellcheck, and
+[zizmor](https://docs.zizmor.sh) checks what each is trusted with, such as a
+checkout that leaves its credential on disk without saying it needs to. Both
+are pinned in `ci.yml`, and `.github/zizmor.yml` holds each audit switched off
+and why. To run them before a push that edits a workflow:
+`brew install actionlint shellcheck zizmor`, then
+`actionlint && zizmor --no-online-audits --collect=workflows,actions .`.
 Realtime integration tests self-skip in CI: no Ably key is configured there, by
 decision (#189). The suites in the table above that need a running preview,
 Docker, or a real store stay local. Other vitest modes work directly,

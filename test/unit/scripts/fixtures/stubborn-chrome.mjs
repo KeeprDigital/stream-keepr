@@ -9,13 +9,24 @@
  *
  * `--say=<text>` writes `<text>` to stderr first, the way Chrome logs what it is
  * stuck on (#790). `--exit=<code>` leaves with that code instead of running on.
+ *
+ * Each signal it ignores it also records, one name a line, in
+ * `signals-received` in its profile: the only word a test gets that the
+ * launcher has begun stopping it.
  */
+import { appendFileSync } from 'node:fs';
+import { join } from 'node:path';
 import process from 'node:process';
 
 const option = name => process.argv.find(arg => arg.startsWith(`--${name}=`))?.slice(name.length + 3);
 
-process.on('SIGINT', () => {});
-process.on('SIGTERM', () => {});
+const profile = option('user-data-dir');
+for (const name of ['SIGINT', 'SIGTERM']) {
+	process.on(name, () => {
+		if (profile !== undefined)
+			appendFileSync(join(profile, 'signals-received'), `${name}\n`);
+	});
+}
 const said = option('say');
 if (said !== undefined)
 	process.stderr.write(`${said}\n`);

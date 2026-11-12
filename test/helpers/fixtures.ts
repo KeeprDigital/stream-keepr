@@ -1,6 +1,6 @@
 /**
  * Test data factories.
- * Every entity type has a factory that returns a complete, valid object.
+ * Each factory returns a complete, valid object.
  * Use `overrides` to customise individual fields per test.
  *
  * Convention: factory names are `createMock<Entity>`. Return types match
@@ -19,7 +19,7 @@
  * See "Wire shape" at the foot of this file.
  */
 
-import type { DbArchetype, DbEvent, DbEventTalent, DbFeatureMatch, DbMatch, DbPhase, DbPlayer, DbPlayerList, DbPlayerListMember, DbPlayerRoundStandings, DbRound, DbScreen } from '~~/server/db/schema';
+import type { DbArchetype, DbEvent, DbEventTalent, DbFeatureMatch, DbMatch, DbPhase, DbPlayer, DbPlayerList, DbRound, DbScreen } from '~~/server/db/schema';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { ArchetypeDetailResponse, CardResponse } from '~~/shared/types/metagame';
 
@@ -242,17 +242,6 @@ export function createMockPlayerList(overrides?: Partial<DbPlayerList>): DbPlaye
 	};
 }
 
-export function createMockPlayerListMember(overrides?: Partial<DbPlayerListMember>): DbPlayerListMember {
-	return {
-		id: 1,
-		listId: 1,
-		playerId: 1,
-		sortOrder: 0,
-		...defaultTimestamps(overrides),
-		...overrides,
-	};
-}
-
 // ──────────────── Feature Match ────────────────
 
 export function createMockFeatureMatch(overrides?: Partial<DbFeatureMatch>): DbFeatureMatch {
@@ -307,24 +296,6 @@ export function createMockScreen(overrides?: Partial<DbScreen>): DbScreen {
 		...defaultTimestamps(overrides),
 		...overrides,
 		graphicAssetReferenceVersion: overrides?.graphicAssetReferenceVersion ?? null,
-	};
-}
-
-// ──────────────── Round ────────────────
-
-export function createMockPlayerRoundStandings(overrides?: Partial<DbPlayerRoundStandings>): DbPlayerRoundStandings {
-	return {
-		id: 1,
-		eventId: 1,
-		playerId: 1,
-		roundId: 1,
-		wins: null,
-		losses: null,
-		draws: null,
-		position: null,
-		points: null,
-		...defaultTimestamps(overrides),
-		...overrides,
 	};
 }
 
@@ -424,27 +395,20 @@ function wireFactory<O, T>(factory: (overrides?: O) => T): (overrides?: O) => Wi
 }
 
 /**
- * The wire siblings, one per factory that carries a timestamp.
+ * The wire siblings of the factories a client-side suite reads.
  *
  * Overrides are still given in the server's vocabulary — `createWireMockRound({
  * lastSyncedAt: new Date(...) })` — because an override describes the row, and the
- * round trip is what the factory is for. The two factories with no `Date` anywhere
- * (`createMockFeatureMatchState`, `createMockArchetypeDetailResponse`) get no sibling:
- * their output already survives the trip unchanged.
+ * round trip is what the factory is for. A factory no suite reads over the wire has
+ * no sibling until one does (`wireFactory` makes it), and the two with no `Date`
+ * anywhere (`createMockFeatureMatchState`, `createMockArchetypeDetailResponse`) need
+ * none: their output already survives the trip unchanged.
  *
  * Additive on purpose. Nothing that reads `createMock*` today changes shape, and a
  * suite adopts the production shape one call at a time (#296, #284).
  */
 export const createWireMockEvent = wireFactory(createMockEvent);
-export const createWireMockTalent = wireFactory(createMockTalent);
 export const createWireMockPlayer = wireFactory(createMockPlayer);
-export const createWireMockArchetype = wireFactory(createMockArchetype);
-export const createWireMockUiArchetype = wireFactory(createMockUiArchetype);
-export const createWireMockPlayerList = wireFactory(createMockPlayerList);
-export const createWireMockPlayerListMember = wireFactory(createMockPlayerListMember);
 export const createWireMockFeatureMatch = wireFactory(createMockFeatureMatch);
 export const createWireMockScreen = wireFactory(createMockScreen);
-export const createWireMockPlayerRoundStandings = wireFactory(createMockPlayerRoundStandings);
-export const createWireMockPhase = wireFactory(createMockPhase);
 export const createWireMockRound = wireFactory(createMockRound);
-export const createWireMockMatch = wireFactory(createMockMatch);

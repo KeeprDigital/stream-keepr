@@ -32,7 +32,7 @@ import {
 } from './deckLists';
 import {
 	inspectMeleeGameCompatibility,
-	unsupportedDeckListAdapterMessage,
+	UNRECOGNIZED_GAME_DECK_LISTS_MESSAGE,
 } from './gameCompatibility';
 import { requireMeleeManagedRound } from './roundValidation';
 
@@ -689,8 +689,8 @@ export function createMeleeSyncWorkflows() {
 		const melee = requireMeleeService(eventData);
 		const rawMeleeEvent = meleeEventSnapshot ?? await melee.fetchEvent();
 		const gameCompatibility = inspectSourceGame(eventData, rawMeleeEvent);
-		const unsupportedMessage = gameCompatibility.status === 'unknown' || eventData.game !== 'mtg'
-			? unsupportedDeckListAdapterMessage(eventData.game)
+		const unsupportedMessage = gameCompatibility.status === 'unknown'
+			? UNRECOGNIZED_GAME_DECK_LISTS_MESSAGE
 			: null;
 		if (unsupportedMessage) {
 			if (options.unsupportedGame === 'reject') {

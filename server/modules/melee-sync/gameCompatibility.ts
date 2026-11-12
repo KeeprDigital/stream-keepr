@@ -53,8 +53,9 @@ export function inspectMeleeGameCompatibility(
 		: { status: 'mismatch', meleeGame };
 }
 
-export function unsupportedDeckListAdapterMessage(eventGame: Game): string {
-	return eventGame === 'mtg'
-		? 'Melee.gg reported an unrecognized game, so MTG Deck Lists were not imported'
-		: 'Melee.gg Deck List import is not yet supported for this Event game';
-}
+/**
+ * Why a Deck List sync imported nothing. Only an unrecognized source game gets
+ * that far: the Event's own game is MTG, since Melee Sync refuses any other
+ * before a workflow runs (`requireMeleeSyncOffered`, ADR-0057).
+ */
+export const UNRECOGNIZED_GAME_DECK_LISTS_MESSAGE = 'Melee.gg reported an unrecognized game, so MTG Deck Lists were not imported';
