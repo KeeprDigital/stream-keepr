@@ -27,7 +27,7 @@ export function useTopCardsModeData(context: ScreenContext) {
 			config.value.topN,
 			config.value.minPoints,
 			config.value.playerListId,
-			config.value.archetypeFilter,
+			config.value.archetypeId,
 			config.value.board,
 			config.value.sortBy,
 			config.value.limit,
@@ -92,8 +92,10 @@ export function useTopCardsModeData(context: ScreenContext) {
 			? 'Most Played Pointed Cards'
 			: 'Most Played Cards';
 
-		return config.value.archetypeFilter
-			? `${prefix}${title}: ${config.value.archetypeFilter}`
+		// The Archetype as its read names it: the Screen holds its id alone (ADR-0038).
+		const archetype = cardData.value?.archetype?.name;
+		return archetype
+			? `${prefix}${title}: ${archetype}`
 			: `${prefix}${title}`;
 	});
 

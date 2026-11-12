@@ -18,6 +18,7 @@ import {
 	DEFAULT_HEADER_CONFIG,
 	DEFAULT_METAGAME_SCOPE,
 	DEFAULT_PAGE_ROTATION,
+	FORMER_METAGAME_ARCHETYPE_FILTER_FIELD,
 	hasSideboard,
 	headerConfigShape,
 	METAGAME_CARD_SORT_BY_LABELS,
@@ -67,7 +68,8 @@ const pagesRanking = ({ config }: ScreenSettingsContext) => typeof config.cardsP
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Scoping
 	...metagameScopeShape,
-	archetypeFilter: metagameArchetypeFilterField,
+	/** The Archetype whose cards the ranking counts alone; an Event Reference (ADR-0038). */
+	archetypeId: metagameArchetypeFilterField,
 
 	// Data selection & filtering
 	board: editorField(z.enum(BOARD_SELECTION_VALUES), {
@@ -180,7 +182,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	pointsBadgeTextSize: cardBadgeSizeField('points-badge', ({ config }) => config.showPointsBadges === true),
 }, {
 	...DEFAULT_METAGAME_SCOPE,
-	archetypeFilter: undefined,
+	archetypeId: undefined,
 	board: 'mainboard',
 	sortBy: 'inclusionRate',
 	limit: 10,
@@ -217,6 +219,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 			showWhen: ({ config, event }) => hasPointsSystem(event) || config.showPointsBadges === true,
 		},
 	},
+	formerFields: [FORMER_METAGAME_ARCHETYPE_FILTER_FIELD],
 });
 
 export type TopCardsModeConfig = ScreenModeConfigOf<typeof topCardsModeConfigContract>;

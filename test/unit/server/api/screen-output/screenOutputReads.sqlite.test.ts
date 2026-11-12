@@ -82,6 +82,7 @@ const operatorLiveSession = await handler(import('~~/server/api/events/[id]/scre
 const { createScreenOutputAssetCapabilityManager } = await import('~~/server/modules/screen-output-assets/manager');
 const { screenService } = await import('~~/server/services/screen');
 const { featureMatchDeckListService } = await import('~~/server/services/featureMatchDeckList');
+const { archetypeWriteModule } = await import('~~/server/modules/archetype-write');
 
 const manager = createScreenOutputAssetCapabilityManager({
 	signingKey,
@@ -842,6 +843,76 @@ describe('metagame, Most Played Cards and Archetype Spotlight', () => {
 		const answer = await asOutput(read.topCards, await showing('top-cards', { scope: 'all', limit: 5 }));
 
 		expect(answer).toMatchObject({ scope: 'all', entries: [] });
+	});
+
+	// The filter names its Archetype by id (ADR-0038), so a rename neither empties nor misnames it.
+	it.each([
+		[
+			'Most Played Cards',
+			'top-cards',
+			read.topCards,
+			{},
+			(answer: any) => answer,
+		],
+		[
+			'Metagame cards view',
+			'metagame',
+			read.metagame,
+			{ viewMode: 'cards' },
+			(answer: any) => answer.breakdown,
+		],
+	] as const)('reads a %s Screen filtered to an Archetype as that Archetype\'s cards, before and after it is renamed', async (_name, mode, route, config, breakdownOf) => {
+		const [event] = await db.insert(schema.events)
+			.values({ name: `Filtered ${mode}`, game: 'mtg', featureMatchOrientation: 'horizontal' })
+			.returning({ id: schema.events.id });
+		const eventId = event!.id;
+		const [monoRed] = await db.insert(schema.archetypes).values({ eventId, name: 'Mono Red' }).returning({ id: schema.archetypes.id });
+		const pilots = await db.insert(schema.players).values([
+			{ eventId, name: 'Red Pilot', archetypeId: monoRed!.id },
+			{ eventId, name: 'Blue Pilot' },
+		]).returning({ id: schema.players.id });
+		const cards = await db.insert(schema.cards).values([
+			{ game: 'mtg', name: `Lightning Bolt (${mode})`, cardType: 'Instant' },
+			{ game: 'mtg', name: `Negate (${mode})`, cardType: 'Instant' },
+		]).returning({ id: schema.cards.id });
+		for (const [index, pilot] of pilots.entries()) {
+			const [deck] = await db.insert(schema.playerDecks).values({
+				eventId,
+				playerId: pilot.id,
+				externalId: `filtered-${mode}-${index}`,
+				externalSource: 'melee',
+				formatExternalId: 'format',
+				name: 'Deck',
+				isPrimary: true,
+			}).returning({ id: schema.playerDecks.id });
+			await db.insert(schema.playerDeckCards).values({
+				deckId: deck!.id,
+				cardId: cards[index]!.id,
+				quantity: 4,
+				compartment: 'mainboard',
+				sortOrder: 0,
+			});
+		}
+		const screen = await stageScreen(mode, {
+			[mode]: { ...config, archetypeId: monoRed!.id },
+		}, {}, eventId);
+		const filtered = (name: string) => ({
+			totalDecks: 1,
+			archetype: { id: monoRed!.id, name },
+			entries: [
+				{ name: `Lightning Bolt (${mode})` },
+			],
+		});
+
+		expect(breakdownOf(await asOutput(route, screen))).toMatchObject(filtered('Mono Red'));
+
+		await archetypeWriteModule().updateArchetype({
+			eventId,
+			archetypeId: monoRed!.id,
+			input: { name: 'Red Deck Wins' },
+		});
+
+		expect(breakdownOf(await asOutput(route, screen))).toMatchObject(filtered('Red Deck Wins'));
 	});
 
 	it('reads the Archetype the saved Archetype Spotlight configuration names', async () => {

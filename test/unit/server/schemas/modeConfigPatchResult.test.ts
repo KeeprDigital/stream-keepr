@@ -283,14 +283,14 @@ describe('parseModeConfigPatchResult', () => {
 		// configuration different from the one that gets stored.
 		const merged = parseModeConfigPatchResult(
 			{
-				metagame: { topN: 5, archetypeFilter: 'aggro' } as never,
+				metagame: { topN: 5, archetypeId: 4 } as never,
 			},
 			'metagame',
-			{ archetypeFilter: null },
+			{ archetypeId: null },
 		);
 
 		expect(merged.metagame).toMatchObject({ topN: 5 });
-		expect(Object.keys(merged.metagame!)).not.toContain('archetypeFilter');
+		expect(Object.keys(merged.metagame!)).not.toContain('archetypeId');
 	});
 });
 

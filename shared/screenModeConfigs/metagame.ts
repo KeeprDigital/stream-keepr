@@ -13,7 +13,7 @@ import { isMetagameColumnOffered, isMetagameSortOffered } from '../utils/metagam
 import { METAGAME_CHART_MAX_ARCHETYPES } from '../utils/metagameChart';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField, withEditorMeta } from './fields';
-import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, headerConfigShape, METAGAME_CARD_SORT_BY_LABELS, metagameArchetypeFilterField, metagameScopeShape, pageRotationPageSize, pageRotationShape, returnsToFirstPage, tableMaxWidthField } from './subShapes';
+import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, FORMER_METAGAME_ARCHETYPE_FILTER_FIELD, headerConfigShape, METAGAME_CARD_SORT_BY_LABELS, metagameArchetypeFilterField, metagameScopeShape, pageRotationPageSize, pageRotationShape, returnsToFirstPage, tableMaxWidthField } from './subShapes';
 
 const METAGAME_SORT_BY_LABELS = {
 	metaShare: 'Meta share',
@@ -74,7 +74,8 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 
 	// Scoping
 	...metagameScopeShape,
-	archetypeFilter: withEditorMeta(metagameArchetypeFilterField, { showWhen: showsCards }),
+	/** The Archetype the cards view counts alone; an Event Reference (ADR-0038). */
+	archetypeId: withEditorMeta(metagameArchetypeFilterField, { showWhen: showsCards }),
 
 	// Sorting
 	sortBy: editorField(z.enum(METAGAME_SORT_BY_VALUES), {
@@ -147,7 +148,7 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 }, {
 	viewMode: 'archetype',
 	...DEFAULT_METAGAME_SCOPE,
-	archetypeFilter: undefined,
+	archetypeId: undefined,
 	sortBy: 'metaShare',
 	cardSortBy: 'inclusionRate',
 	archetypeColumns: [
@@ -187,6 +188,7 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 		table: { title: 'Table', card: 'content', showWhen: pagesTable },
 		size: { title: 'Size', card: 'content' },
 	},
+	formerFields: [FORMER_METAGAME_ARCHETYPE_FILTER_FIELD],
 });
 
 export type MetagameModeConfig = ScreenModeConfigOf<typeof metagameModeConfigContract>;

@@ -151,13 +151,25 @@ export function hasSideboard({ event }: ScreenSettingsContext): boolean {
 	return !event?.game || getFeatureMatchStateTracking(event.game).sideboard;
 }
 
-/** A card read's archetype filter: an Archetype's name, narrowing the cards to its decks. */
-export const metagameArchetypeFilterField = editorField(z.string().max(200).optional(), {
+/**
+ * A card read's archetype filter: the Archetype whose decks the cards are
+ * narrowed to, an Event Reference by id (ADR-0038), so a rename keeps it and a
+ * delete unsets it (ADR-0060). A mode carries it as `archetypeId`.
+ */
+export const metagameArchetypeFilterField = editorField(z.number().int().positive().optional(), {
 	label: 'Archetype filter',
 	card: 'source',
+	reference: 'archetype',
 	description: 'Count one archetype\'s cards only.',
 	placeholder: 'All archetypes',
 });
+
+/**
+ * The filter as an earlier contract stored it, by the Archetype's name (#1153).
+ * Storage was migrated to `archetypeId`; a stale client may still send the
+ * name, which is a former field (ADR-0037).
+ */
+export const FORMER_METAGAME_ARCHETYPE_FILTER_FIELD = 'archetypeFilter';
 
 /**
  * A paginated mode's Page Rotation: `currentPage` is the manually selected page

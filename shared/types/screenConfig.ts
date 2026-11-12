@@ -470,9 +470,9 @@ const MODE_RESET_PRESERVED_KEYS = {
 	'metagame': [
 		'viewMode',
 		...METAGAME_SCOPE_FIELDS,
-		'archetypeFilter',
+		'archetypeId',
 	],
-	'top-cards': [...METAGAME_SCOPE_FIELDS, 'archetypeFilter'],
+	'top-cards': [...METAGAME_SCOPE_FIELDS, 'archetypeId'],
 	'player-history': ['playerId'],
 	'pairings': ['roundId'],
 	'archetype-spotlight': ['archetypeId', ...METAGAME_SCOPE_FIELDS],

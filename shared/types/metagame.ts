@@ -121,6 +121,8 @@ export interface CardBreakdownResponse {
 	entries: CardBreakdownEntry[];
 	totalDecks: number;
 	scope: MetagameScope;
+	/** The Archetype whose decks alone were counted, as named now; absent when every Archetype's were. */
+	archetype?: { id: number; name: string };
 }
 
 // ─── Token requirements (list view) ─────────────────────────────
