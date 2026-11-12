@@ -374,8 +374,12 @@ export type GraphicAssetLifecycleTransition
  * Everything the library reads and writes in its catalogue. Delivery's reads are
  * their own smaller interface (ADR-0073); Template Package installation and
  * export read revision content through it too.
+ *
+ * Retention is required of it (#1140): a lifecycle transition never lacks the
+ * catalogue its Evidence is written to, and the type is what holds that.
  */
-export interface GraphicsAssetCatalogue extends GraphicsAssetCatalogueHealth, GraphicsAssetDeliveryCatalogue {
+export interface GraphicsAssetCatalogue
+	extends GraphicsAssetCatalogueHealth, GraphicsAssetDeliveryCatalogue, GraphicsAssetRetentionCatalogue {
 	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
 	initiateGraphicsIngestion: (operation: GraphicsIngestionOperation) => Promise<GraphicsIngestionOperation>;
 	recordStagedBytes: (input: {
@@ -1474,15 +1478,13 @@ export function createGraphicsAssetLibrary(
 	};
 
 	/**
-	 * The scheduled retention path needs transactional catalogue proofs that a
-	 * catalogue answering only the `GraphicsAssetCatalogue` port cannot provide.
+	 * Retention over the full catalogue, whose port requires the transactional
+	 * proofs the scheduled path needs. Only a health-only catalogue or byte
+	 * store refuses it, as it refuses every other family.
 	 */
-	function findRetention() {
-		const catalogue = requireCatalogue();
-		if (!('listStagedInputExpiryCandidates' in catalogue))
-			return undefined;
+	function requireRetention() {
 		return createGraphicsRetention({
-			catalogue: catalogue as GraphicsAssetCatalogue & GraphicsAssetRetentionCatalogue,
+			catalogue: requireCatalogue(),
 			staging: requireStaging(),
 			canonical: requireCanonical(),
 			now,
@@ -1490,21 +1492,10 @@ export function createGraphicsAssetLibrary(
 		});
 	}
 
-	function requireRetention() {
-		const retention = findRetention();
-		if (!retention) {
-			throw new GraphicsAssetLibraryError(
-				'Graphics Asset retention is unavailable for this catalogue',
-				'graphics-asset-library-unavailable',
-			);
-		}
-		return retention;
-	}
-
 	/**
-	 * Reconciliation needs the same transactional catalogue proofs the retention
-	 * path does, so it is likewise unavailable against a catalogue answering only
-	 * the `GraphicsAssetCatalogue` port.
+	 * Reconciliation needs transactional catalogue proofs the
+	 * `GraphicsAssetCatalogue` port does not declare, so it is unavailable
+	 * against a catalogue answering only that port.
 	 */
 	function findReconciliation() {
 		const catalogue = requireCatalogue();
@@ -1653,7 +1644,7 @@ export function createGraphicsAssetLibrary(
 		transition: 'frozen' | 'resumed',
 	) {
 		try {
-			await findRetention()?.recordPruningTransition({
+			await requireRetention().recordPruningTransition({
 				assetId,
 				transition,
 				actor: GRAPHICS_RETENTION_ACTOR,
@@ -1681,7 +1672,7 @@ export function createGraphicsAssetLibrary(
 		deadline?: string;
 	}) {
 		try {
-			await findRetention()?.recordLifecycleTransition({
+			await requireRetention().recordLifecycleTransition({
 				...input,
 				recordedAt: timestamp(),
 			});
@@ -1701,7 +1692,7 @@ export function createGraphicsAssetLibrary(
 		actor: string;
 	}) {
 		try {
-			await findRetention()?.recordSupersession(input);
+			await requireRetention().recordSupersession(input);
 		}
 		catch {
 			// Evidence is best-effort against a publication that already committed.
@@ -5300,7 +5291,7 @@ export function createGraphicsAssetLibrary(
 			// The lifecycle read back is what carries the state the asset came
 			// from and the recovery deadline Trash just established, neither of
 			// which the transition itself reports.
-			const trashed = (await findRetention()?.inspect(input.assetId))?.lifecycle;
+			const trashed = (await requireRetention().inspect(input.assetId))?.lifecycle;
 			await recordLifecycleTransition({
 				assetId: input.assetId,
 				transition: 'trashed',
@@ -5318,7 +5309,7 @@ export function createGraphicsAssetLibrary(
 		async restoreGraphicAsset(input) {
 			// Restoration discards the state it is leaving, so the lifecycle is
 			// read before the transition rather than after it.
-			const restoring = (await findRetention()?.inspect(input.assetId))?.lifecycle;
+			const restoring = (await requireRetention().inspect(input.assetId))?.lifecycle;
 			const transition = await catalogueRequest(
 				() => requireCatalogue().restoreGraphicAsset({
 					assetId: input.assetId,
