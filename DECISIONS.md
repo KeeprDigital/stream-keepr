@@ -1267,7 +1267,7 @@ Melee Sync promises to preserve manual structure, and the cascade broke that pro
 - The reset now also deletes an imported Round an operator moved under a manual Phase, unless it holds a manual Match. Before, such a Round survived the reset still carrying Provenance.
 - A kept Round loses its Melee-synced Round Standings along with its imported Matches, as removing the Round would have done.
 - Each step's predicate is evaluated when the batch runs, so a manual Round or Match added after the caller read the structure is still kept.
-- `test/unit/server/modules/meleeStructurePreservation.sqlite.test.ts` proves all of this on SQLite with the real migrations and foreign keys enabled: a stale Phase holding a manual Round, a stale Round holding a manual Match and its Assignment, imported-only stale structure still removed, a repeated sync changing nothing and warning nothing, and the reset. `test/integration/integrityAndReset.test.ts` covers the reset's answer over HTTP.
+- `test/unit/server/modules/meleeStructurePreservation.sqlite.test.ts` proves all of this on SQLite with the real migrations and foreign keys enabled: a stale Phase holding a manual Round, a stale Round holding a manual Match and its Assignment, imported-only stale structure still removed, a repeated sync changing nothing and warning nothing, and the reset. `test/unit/server/api/events/[id]/melee-config.put.sqlite.test.ts` holds the reset's answer: the sentences the configuration route returns for what it kept.
 
 ### Rejected alternatives
 

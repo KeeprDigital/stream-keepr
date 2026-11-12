@@ -16,7 +16,7 @@ export const SCREEN_OUTPUT_VALUES: ScreenOutput[] = ['overlay', 'fill', 'key'];
  */
 export type ScreenEmbed = 'preview' | 'monitor';
 
-export const SCREEN_EMBED_VALUES: ScreenEmbed[] = ['preview', 'monitor'];
+const SCREEN_EMBED_VALUES: ScreenEmbed[] = ['preview', 'monitor'];
 
 /**
  * Resolve the embed role carried on a Screen's one stable URL, or null for the

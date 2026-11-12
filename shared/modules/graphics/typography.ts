@@ -46,7 +46,7 @@ export interface GraphicFontDefinition {
 	category: 'display' | 'body' | 'mono' | 'serif' | 'system';
 }
 
-export const GRAPHIC_FONTS: readonly GraphicFontDefinition[] = [
+const GRAPHIC_FONTS: readonly GraphicFontDefinition[] = [
 	{
 		id: 'saira-condensed',
 		label: 'Saira Condensed',
