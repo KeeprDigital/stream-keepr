@@ -8,9 +8,9 @@ import { createMockScreen } from '~~/test/helpers/fixtures';
 const contract = screenModeConfigContract('deck');
 
 /**
- * A Deck List board's layout as an earlier contract stored it, under Card
- * Sizing, reads as the Card Layout that replaced it. Deck's former default was
- * Fixed, so a stored width naming no Card Sizing was a Fixed width.
+ * A Deck List board's layout as an earlier contract stored it reads as the Card
+ * Layout that replaced it. Deck's former default was Fixed 144 px, so a board
+ * an earlier contract wrote naming no Card Sizing was Fixed.
  */
 describe('a Deck List board storing a Card Sizing', () => {
 	it.each([
@@ -35,19 +35,19 @@ describe('a Deck List board storing a Card Sizing', () => {
 			reads: { alignment: 'top' },
 		},
 		{
-			name: 'a board storing neither is Auto',
+			name: 'an earlier board naming no Card Sizing or width was Fixed at the former default width',
+			stored: { cardSize: 'large', stackOverlap: 0.2, columns: 4 },
+			reads: { maxCardSize: 144, columns: 4 },
+		},
+		{
+			name: 'an earlier board naming no Card Sizing keeps a max card size it names',
+			stored: { dynamicCardSize: false, maxCardSize: 300 },
+			reads: { maxCardSize: 300 },
+		},
+		{
+			name: 'a board naming no former field is a Card Layout, its max card size Auto',
 			stored: { columns: 6 },
 			reads: { columns: 6 },
-		},
-		{
-			name: 'a column count with auto columns on is Auto',
-			stored: { cardSizing: 'fit', autoColumns: true, columns: 5 },
-			reads: {},
-		},
-		{
-			name: 'a column count with auto columns off is kept',
-			stored: { cardSizing: 'fit', autoColumns: false, columns: 5 },
-			reads: { columns: 5 },
 		},
 	])('$name', ({ stored, reads }) => {
 		for (const board of ['mainboard', 'sideboard'] as const) {
@@ -138,6 +138,8 @@ describe('a Deck List board\'s Card Layout', () => {
 		{ field: 'cardGap', value: 0, accepted: true },
 		{ field: 'cardGap', value: 100, accepted: true },
 		{ field: 'cardGap', value: 101, accepted: false },
+		// Auto columns is an absent `columns`, so a stale client's flag is refused rather than dropped.
+		{ field: 'autoColumns', value: true, accepted: false },
 	])('a write of a board\'s $field $value is accepted: $accepted', ({ field, value, accepted }) => {
 		for (const board of ['mainboard', 'sideboard'] as const) {
 			expect(modeConfigPatchSchemaMap.deck.safeParse({

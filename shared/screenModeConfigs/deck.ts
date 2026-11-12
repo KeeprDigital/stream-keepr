@@ -79,8 +79,8 @@ const sideboardLayoutShape = {
 /**
  * A layout block's former fields: its size preset and stack share, which
  * `stackReveal` and a card width replaced; `dynamicCardSize`, which Card
- * Sizing replaced; and Card Sizing itself (`cardSizing`, `cardWidth`,
- * `autoColumns`), which the Card Layout replaced (ADR-0054).
+ * Sizing replaced; and Card Sizing itself (`cardSizing`, `cardWidth`), which
+ * the Card Layout replaced (ADR-0054).
  */
 const FORMER_BOARD_LAYOUT_FIELDS = [
 	'cardSize',
@@ -88,7 +88,6 @@ const FORMER_BOARD_LAYOUT_FIELDS = [
 	'dynamicCardSize',
 	'cardSizing',
 	'cardWidth',
-	'autoColumns',
 ] as const;
 
 /** A Fixed card's width before the board set one, under the former Card Sizing. */
@@ -96,25 +95,22 @@ const FORMER_DEFAULT_CARD_WIDTH = 144;
 
 /**
  * The Card Layout a board's Card Sizing meant (ADR-0054): a Fixed width is the
- * max card size, and a column count with auto columns on is Auto. A board's
- * former default was Fixed, so a width stored with no Card Sizing was a Fixed
- * one; a block storing neither has no max card size.
+ * max card size. A board's former default was Fixed 144 px, so a block an
+ * earlier contract wrote, naming a former field, with no Card Sizing was Fixed.
+ * A block naming no former field is a Card Layout, whose absent max is Auto.
  */
 function upgradeBoardCardSizing(block: unknown): unknown {
 	if (typeof block !== 'object' || block === null || Array.isArray(block))
 		return block;
 	const stored = block as Readonly<Record<string, unknown>>;
-	const fixed = stored.cardSizing === 'fixed'
-		|| (stored.cardSizing === undefined && stored.cardWidth !== undefined);
-	const autoColumns = stored.autoColumns === true;
-	if (!fixed && !autoColumns)
+	const earlier = FORMER_BOARD_LAYOUT_FIELDS.some(field => field in stored);
+	const fixed = stored.cardSizing === 'fixed' || (stored.cardSizing === undefined && earlier);
+	if (!fixed || 'maxCardSize' in stored)
 		return block;
-	const upgraded: Record<string, unknown> = { ...stored };
-	if (autoColumns)
-		delete upgraded.columns;
-	if (fixed && !('maxCardSize' in stored))
-		upgraded.maxCardSize = stored.cardWidth ?? FORMER_DEFAULT_CARD_WIDTH;
-	return upgraded;
+	return {
+		...stored,
+		maxCardSize: stored.cardWidth ?? FORMER_DEFAULT_CARD_WIDTH,
+	};
 }
 
 /** Each stored board block, upgraded on its own; a board not stored stays absent. */

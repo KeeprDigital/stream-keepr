@@ -33,26 +33,6 @@ describe('a Most Played Cards Screen storing a Card Sizing', () => {
 			stored: { cardWidth: 200, limit: 12 },
 			reads: { limit: 12 },
 		},
-		{
-			name: 'a column count with auto columns on is Auto',
-			stored: { autoColumns: true, columns: 5 },
-			reads: {},
-		},
-		{
-			name: 'a column count with auto columns off is kept',
-			stored: { autoColumns: false, columns: 5, cardGap: 20 },
-			reads: { columns: 5, cardGap: 20 },
-		},
-		{
-			name: 'Fixed auto columns keep the max card size and choose the columns',
-			stored: {
-				cardSizing: 'fixed',
-				cardWidth: 96,
-				autoColumns: true,
-				columns: 7,
-			},
-			reads: { maxCardSize: 96 },
-		},
 	])('$name', ({ stored, reads }) => {
 		expect(contract.readStored(stored)).toEqual(reads);
 		expect(mapScreenToResponse(createMockScreen({
@@ -120,6 +100,8 @@ describe('a Most Played Cards Screen\'s Card Layout', () => {
 		{ field: 'columns', value: null, accepted: true },
 		{ field: 'maxCardSize', value: null, accepted: true },
 		{ field: 'cardGap', value: null, accepted: true },
+		// Auto columns is an absent `columns`, so a stale client's flag is refused rather than dropped.
+		{ field: 'autoColumns', value: true, accepted: false },
 	])('a write of $field $value is accepted: $accepted', ({ field, value, accepted }) => {
 		expect(modeConfigPatchSchemaMap['top-cards'].safeParse({ [field]: value }).success).toBe(accepted);
 	});

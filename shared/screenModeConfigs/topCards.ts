@@ -48,20 +48,16 @@ const pagesRanking = ({ config }: ScreenSettingsContext) => typeof config.cardsP
 
 /**
  * The Card Layout a Card Sizing meant (ADR-0054): a Fixed width is the max card
- * size, and a column count with auto columns on is Auto. A fragment naming no
- * Card Sizing was Fit, the former default, which has no max card size.
+ * size. A fragment naming no Card Sizing was Fit, the former default, which has
+ * no max card size.
  */
 function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<string, unknown> {
-	const fixed = fragment.cardSizing === 'fixed';
-	const autoColumns = fragment.autoColumns === true;
-	if (!fixed && !autoColumns)
+	if (fragment.cardSizing !== 'fixed' || 'maxCardSize' in fragment)
 		return fragment;
-	const upgraded: Record<string, unknown> = { ...fragment };
-	if (autoColumns)
-		delete upgraded.columns;
-	if (fixed && !('maxCardSize' in fragment))
-		upgraded.maxCardSize = fragment.cardWidth ?? FORMER_DEFAULT_CARD_WIDTH;
-	return upgraded;
+	return {
+		...fragment,
+		maxCardSize: fragment.cardWidth ?? FORMER_DEFAULT_CARD_WIDTH,
+	};
 }
 
 /**
@@ -82,7 +78,7 @@ function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<
  * are former fields, which a stored config may still carry. Its Card Layout
  * and badge text sizes are config, read only here (ADR-0054); the size presets
  * they replaced are former fields too. Its cards always fit: Card Sizing
- * (`cardSizing`, `cardWidth`, `autoColumns`) is former, and a stored one reads
+ * (`cardSizing`, `cardWidth`) is former, and a stored one reads
  * as the Card Layout it meant (`upgradeCardSizing`). Each badge is placed and
  * sized on its own, Auto (following its card) or px, as a Deck Screen's are;
  * one `badgeSize` once sized both. A card's image prints its name, so
@@ -242,7 +238,6 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		// Card Sizing: cards always fit, under a max card size (ADR-0054).
 		'cardSizing',
 		'cardWidth',
-		'autoColumns',
 	],
 	upgradeFormerFields: upgradeCardSizing,
 	groups: {

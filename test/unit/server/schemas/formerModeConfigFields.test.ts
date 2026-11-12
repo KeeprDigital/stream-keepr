@@ -33,7 +33,6 @@ describe.each([
 			'showCardNames',
 			'cardSizing',
 			'cardWidth',
-			'autoColumns',
 		],
 		former: {
 			rankBadgeTextColor: '#ffffff',
@@ -48,7 +47,6 @@ describe.each([
 			showCardNames: true,
 			cardSizing: 'fit',
 			cardWidth: 200,
-			autoColumns: false,
 		},
 		kept: { limit: 12 },
 		patch: { limit: 15 },
@@ -178,18 +176,19 @@ describe.each([
 			},
 			sideboard: { stackOverlap: 20 },
 		},
+		// A board an earlier contract wrote naming no Card Sizing was Fixed at 144 px (ADR-0054).
 		reads: {
-			mainboard: { view: 'grid', columns: 6 },
-			sideboard: {},
+			mainboard: { view: 'grid', columns: 6, maxCardSize: 144 },
+			sideboard: { maxCardSize: 144 },
 		},
 		patch: { showDeckName: false },
 		patched: {
-			mainboard: { view: 'grid', columns: 6 },
-			sideboard: {},
+			mainboard: { view: 'grid', columns: 6, maxCardSize: 144 },
+			sideboard: { maxCardSize: 144 },
 			showDeckName: false,
 		},
 	},
-	// Card Sizing replaced it, and the Card Layout Card Sizing (ADR-0054); a straggler alone reads as the default.
+	// Card Sizing replaced it, and the Card Layout Card Sizing (ADR-0054); a straggler alone reads as the former default, Fixed 144 px.
 	{
 		mode: 'deck',
 		stored: {
@@ -197,13 +196,13 @@ describe.each([
 			sideboard: { view: 'stack', dynamicCardSize: false },
 		},
 		reads: {
-			mainboard: { view: 'grid' },
-			sideboard: { view: 'stack' },
+			mainboard: { view: 'grid', maxCardSize: 144 },
+			sideboard: { view: 'stack', maxCardSize: 144 },
 		},
 		patch: { showDeckName: false },
 		patched: {
-			mainboard: { view: 'grid' },
-			sideboard: { view: 'stack' },
+			mainboard: { view: 'grid', maxCardSize: 144 },
+			sideboard: { view: 'stack', maxCardSize: 144 },
 			showDeckName: false,
 		},
 	},
