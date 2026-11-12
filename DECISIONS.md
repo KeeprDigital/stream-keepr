@@ -2408,7 +2408,7 @@ All of a Screen's Mode Tokens sat in one flat Theme card above the mode's settin
 
 ## ADR-0073: The Graphics Asset Library keeps one facade, and an operation family moves behind its own smaller interface only where its invariants get a home
 
-Accepted · 2026-11-04 · [#623](https://github.com/KeeprDigital/stream-keepr/issues/623) · Follow-ups [#989](https://github.com/KeeprDigital/stream-keepr/issues/989), [#990](https://github.com/KeeprDigital/stream-keepr/issues/990), [#992](https://github.com/KeeprDigital/stream-keepr/issues/992); [#991](https://github.com/KeeprDigital/stream-keepr/issues/991) was closed as not planned, and what remained of it is [#1140](https://github.com/KeeprDigital/stream-keepr/issues/1140) · Amended 2026-11-12 by [#1122](https://github.com/KeeprDigital/stream-keepr/issues/1122), which deletes the in-memory catalogue adapter, and by #1140, which requires retention of the catalogue port.
+Accepted · 2026-11-04 · [#623](https://github.com/KeeprDigital/stream-keepr/issues/623) · Follow-ups [#989](https://github.com/KeeprDigital/stream-keepr/issues/989), [#992](https://github.com/KeeprDigital/stream-keepr/issues/992); [#990](https://github.com/KeeprDigital/stream-keepr/issues/990) was closed as not planned, pending the #989 trial; [#991](https://github.com/KeeprDigital/stream-keepr/issues/991) was closed as not planned, and what remained of it is [#1140](https://github.com/KeeprDigital/stream-keepr/issues/1140) · Amended 2026-11-12 by [#1122](https://github.com/KeeprDigital/stream-keepr/issues/1122), which deletes the in-memory catalogue adapter, by #1140, which requires retention of the catalogue port, and by #989, which moves ingestion on its invariants alone.
 
 ### Evaluation
 
@@ -2418,18 +2418,20 @@ The evidence is from `main` at `82c22f49`, after #949 (Talent photo) and #950 (I
 
 **The real operation families,** found by tracing which facade methods call which catalogue methods and which invariants change together:
 
-| Family                  | Facade                                       | Catalogue                                                                      | Where it lives                                                                         | Verdict                                                   |
-| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Delivery                | 5 reads (`index.ts:5446–5553`)               | `findRevisionContent(s)`, `findThumbnailContent` (`index.ts:607–657`)          | Closures in the factory (`index.ts:1693–1710`, `1802–1882`)                            | **Moved here**                                            |
-| Ingestion               | 15 (`index.ts:4210–4249`, `4473–5275`)       | 19, among them publish, reuse, claim, multipart and staged bytes               | `continueGraphicsIngestion` (`index.ts:3707`), helpers (`1891–2631`)                   | Worth doing: #989                                         |
-| Template Packages       | 8 (`index.ts:4250–4472`, export `5554–5717`) | 12, plus `findRevisionContent` (`index.ts:3339`, `5580`)                       | `index.ts:2692–3706`                                                                   | Worth doing after the ingestion operation interface: #990 |
-| Discovery and lifecycle | 6 (`index.ts:5276–5445`)                     | 6; Retire-blocking SQL (`catalogue.ts:265`)                                    | Facade plus Evidence hooks (`index.ts:1717–1775`)                                      | #991 closed as not planned; what remained of it: #1140    |
-| Retention               | 6 (`index.ts:5718–5779`, `5801–5818`)        | `GraphicsAssetRetentionCatalogue`, 32 (`retention.ts:160`)                     | `createGraphicsRetention` (`retention.ts:426`)                                         | Already split; no ticket                                  |
-| Reconciliation          | 7 (`index.ts:5819–5876`)                     | `GraphicsAssetReconciliationCatalogue`, 30 (`reconciliation.ts:151`)           | `createGraphicsReconciliation` (`reconciliation.ts:356`), media port (`index.ts:1433`) | Already split; no ticket                                  |
-| Operational reads       | 4 (`index.ts:4174`, `5780–5800`)             | Cockpit 9 (`operations-cockpit.ts:91`), queues 14 (`operational-queues.ts:64`) | Their own modules                                                                      | Already split; no ticket                                  |
-| Health and capacity     | 3                                            | `checkHealth`, `getCapacity`, `updateCapacityLimits`                           | Facade                                                                                 | A split would only pass through; no ticket                |
+| Family                  | Facade                                       | Catalogue                                                                      | Where it lives                                                                         | Verdict                                                 |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Delivery                | 5 reads (`index.ts:5446–5553`)               | `findRevisionContent(s)`, `findThumbnailContent` (`index.ts:607–657`)          | Closures in the factory (`index.ts:1693–1710`, `1802–1882`)                            | **Moved here**                                          |
+| Ingestion               | 15 (`index.ts:4210–4249`, `4473–5275`)       | 19, among them publish, reuse, claim, multipart and staged bytes               | `continueGraphicsIngestion` (`index.ts:3707`), helpers (`1891–2631`)                   | Going ahead on its invariants alone, as the trial: #989 |
+| Template Packages       | 8 (`index.ts:4250–4472`, export `5554–5717`) | 12, plus `findRevisionContent` (`index.ts:3339`, `5580`)                       | `index.ts:2692–3706`                                                                   | #990 closed as not planned, pending the #989 trial      |
+| Discovery and lifecycle | 6 (`index.ts:5276–5445`)                     | 6; Retire-blocking SQL (`catalogue.ts:265`)                                    | Facade plus Evidence hooks (`index.ts:1717–1775`)                                      | #991 closed as not planned; what remained of it: #1140  |
+| Retention               | 6 (`index.ts:5718–5779`, `5801–5818`)        | `GraphicsAssetRetentionCatalogue`, 32 (`retention.ts:160`)                     | `createGraphicsRetention` (`retention.ts:426`)                                         | Already split; no ticket                                |
+| Reconciliation          | 7 (`index.ts:5819–5876`)                     | `GraphicsAssetReconciliationCatalogue`, 30 (`reconciliation.ts:151`)           | `createGraphicsReconciliation` (`reconciliation.ts:356`), media port (`index.ts:1433`) | Already split; no ticket                                |
+| Operational reads       | 4 (`index.ts:4174`, `5780–5800`)             | Cockpit 9 (`operations-cockpit.ts:91`), queues 14 (`operational-queues.ts:64`) | Their own modules                                                                      | Already split; no ticket                                |
+| Health and capacity     | 3                                            | `checkHealth`, `getCapacity`, `updateCapacityLimits`                           | Facade                                                                                 | A split would only pass through; no ticket              |
 
-Ingestion and Template Packages share the Graphics Ingestion Operation lifecycle: `get/updateIngestionOperation`, `claimGraphicsIngestion`, `recordCanonicalWrites` and `getCapacity`. That shared lifecycle is one sub-interface, and #989 proposes landing it first.
+Ingestion and Template Packages share the Graphics Ingestion Operation lifecycle: `get/updateIngestionOperation`, `claimGraphicsIngestion`, `recordCanonicalWrites` and `getCapacity`. That shared lifecycle is one sub-interface, `GraphicsIngestionOperationCatalogue` (`operation.ts`), and #989 landed it first.
+
+The two families share more than that interface (read at `57351fea`). A Template Package starts through `initiateGraphicsIngestion`, and is uploaded, cancelled and retried by the ingestion facade methods. `continueGraphicsIngestion` hands a Template Package operation to `continueTemplatePackagePreflight`. Both pipelines fail an operation, release its staged input and write canonical bytes through the same closures in the factory. So the ingestion module cannot be cut out by moving ingestion's code alone.
 
 **Behaviour contracts across both catalogue adapters:**
 
@@ -2447,6 +2449,15 @@ Ingestion and Template Packages share the Graphics Ingestion Operation lifecycle
 **The catalogue port has one adapter, D1 (#1122).** The in-memory adapter the evaluation counts was built only by tests, and is deleted: every library test runs on the SQLite harness. So a second adapter no longer earns a family its seam; a caller needing only that family still does. The cross-adapter contracts the evaluation lists, and the one #991 proposed, have nothing left to compare.
 
 **Retention is required of the catalogue port (#1140).** `GraphicsAssetCatalogue` extends `GraphicsAssetRetentionCatalogue`, so the facade no longer asks at run time whether its catalogue has retention: a Retire, Trash, Restore or supersession always has a catalogue to write its Evidence to, and the type holds that. Evidence stays best-effort against a transition that already committed. The reconciliation, cockpit and queue catalogues are still probed for; the same argument may apply to them, and it has not been decided.
+
+**Ingestion moves on its invariants alone, as a trial (#989).** Contradicts this ADR's rule that "something must vary across that seam": with one adapter and no caller needing only ingestion, nothing varies across ingestion's. Worth reopening because ingestion's four invariants can be named, and today a test reaches them only through the whole library:
+
+- One active attempt per Graphics Ingestion Operation (claim and lease).
+- Staged bytes count against the Graphics Staging Allowance until their deletes are proven.
+- Publication is complete or nothing, and idempotent.
+- Exact content is reused, and replacing a file with its own content is a no-op.
+
+The maintainer decided on 2026-11-12 that ingestion goes ahead as the trial of whether nameable invariants are reason enough. The rule above stands for every other family until the trial is judged: Template Packages (#990) is closed as not planned and is reopened if the trial proves the pattern worthwhile, and #991 is closed. Ingestion lands in two steps. First the Graphics Ingestion Operation lifecycle, as the catalogue sub-interface `GraphicsAssetCatalogue` extends. Then the ingestion module and its own catalogue sub-interface, with each invariant's home test at that seam on the D1 catalogue.
 
 **Delivery is the first.** `server/modules/graphics-asset-library/delivery.ts` holds it:
 
@@ -2466,7 +2477,7 @@ How the existing types fit around it:
 - Every reader wires `reportDisagreement` to `createGraphicsDisagreementReporter` (`reconciliation.ts`). It is built from the catalogue's observation reads and writes and the canonical store alone, never staging or media. The scheduled reconciliation pass compares an expectation through the same code, so a reader and the pass open the same Graphics Discrepancy and announce it once (#992).
 - `catalogueRequest` moved to `catalogue-request.ts`, unchanged, so every family shares one way of failing as unavailable.
 
-**Template Package export keeps the shared agreement rule.** It reads through delivery's `readCanonicalContent` and `observeCanonicalContent` until #990 moves it.
+**Template Package export keeps the shared agreement rule.** It reads through delivery's `readCanonicalContent` and `observeCanonicalContent`. #990 would have moved it, and is closed pending the #989 trial.
 
 ### Why
 
@@ -2483,8 +2494,8 @@ How the existing types fit around it:
 - **A catalogue double needs only the three reads** to back delivery.
 - **The estimated cost** of each split:
   - Delivery: small, done (5 facade methods, 3 catalogue reads, 1 caller rewired).
-  - Ingestion: large (#989).
-  - Template Packages: medium to large (#990).
+  - Ingestion: large (#989). The lifecycle sub-interface is small and done.
+  - Template Packages: medium to large (#990, closed as not planned pending the #989 trial).
   - Discovery and lifecycle: not split (#991 closed as not planned). What remained of it, requiring retention of the catalogue port, was small (#1140).
 
 ### Rejected alternatives

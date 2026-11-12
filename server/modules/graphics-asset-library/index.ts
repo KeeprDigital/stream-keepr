@@ -69,6 +69,7 @@ import type {
 	GraphicsStagingObjectStore,
 	ReadGraphicsObjectOutcome,
 } from './object-store';
+import type { GraphicsIngestionOperationCatalogue } from './operation';
 import type { GraphicsOperationalQueuesCatalogue } from './operational-queues';
 import type { GraphicsOperationsCockpitCatalogue } from './operations-cockpit';
 import type {
@@ -373,14 +374,18 @@ export type GraphicAssetLifecycleTransition
 /**
  * Everything the library reads and writes in its catalogue. Delivery's reads are
  * their own smaller interface (ADR-0073); Template Package installation and
- * export read revision content through it too.
+ * export read revision content through it too. The Graphics Ingestion Operation
+ * lifecycle is another, shared by ingestion and Template Packages.
  *
  * Retention is required of it (#1140): a lifecycle transition never lacks the
  * catalogue its Evidence is written to, and the type is what holds that.
  */
 export interface GraphicsAssetCatalogue
-	extends GraphicsAssetCatalogueHealth, GraphicsAssetDeliveryCatalogue, GraphicsAssetRetentionCatalogue {
-	getCapacity: () => Promise<GraphicsAssetLibraryCapacity>;
+	extends
+	GraphicsAssetCatalogueHealth,
+	GraphicsAssetDeliveryCatalogue,
+	GraphicsAssetRetentionCatalogue,
+	GraphicsIngestionOperationCatalogue {
 	initiateGraphicsIngestion: (operation: GraphicsIngestionOperation) => Promise<GraphicsIngestionOperation>;
 	recordStagedBytes: (input: {
 		operation: GraphicsIngestionOperation;
@@ -396,11 +401,6 @@ export interface GraphicsAssetCatalogue
 	recordRemoteCopyStagedSource: (input: {
 		operation: GraphicsIngestionOperation;
 		observedByteLength: number;
-		recordedAt: string;
-	}) => Promise<void>;
-	recordCanonicalWrites: (input: {
-		operation: GraphicsIngestionOperation;
-		contents: readonly { digest: string; byteLength: number }[];
 		recordedAt: string;
 	}) => Promise<void>;
 	reserveGraphicAssetPublication: (input: {
@@ -419,10 +419,6 @@ export interface GraphicsAssetCatalogue
 	updateCapacityLimits: (
 		input: GraphicsAssetCapacityLimits & { updatedAt: string },
 	) => Promise<GraphicsAssetLibraryCapacity>;
-	getIngestionOperation: (
-		operationId: GraphicsIngestionOperationId,
-		initiatedBy: string,
-	) => Promise<GraphicsIngestionOperation | undefined>;
 	getGraphicAssetMultipartState: (
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
@@ -580,15 +576,6 @@ export interface GraphicsAssetCatalogue
 	 * candidate or quarantined content, is not reachable.
 	 */
 	isGraphicAssetContentReachable: (digest: string) => Promise<boolean>;
-	updateIngestionOperation: (
-		operation: GraphicsIngestionOperation,
-		expectedUpdatedAt: string,
-	) => Promise<GraphicsIngestionOperation>;
-	claimGraphicsIngestion: (input: {
-		operation: GraphicsIngestionOperation;
-		claimedAt: string;
-		staleBefore: string;
-	}) => Promise<GraphicsIngestionOperation | undefined>;
 	findReusableGraphicAsset: (sourceDigest: string) => Promise<ReusableGraphicAsset | undefined>;
 	findCurrentGraphicAsset: (assetId: GraphicAssetId) => Promise<
 		| (ReusableGraphicAsset & { sourceDigest: string })
@@ -2058,7 +2045,7 @@ export function createGraphicsAssetLibrary(
 	}
 
 	async function failOperation(
-		catalogue: GraphicsAssetCatalogue,
+		catalogue: GraphicsIngestionOperationCatalogue,
 		operation: GraphicsIngestionOperation,
 		failure: NonNullable<GraphicsIngestionOperation['failure']>,
 		report?: GraphicAssetValidationReport,
