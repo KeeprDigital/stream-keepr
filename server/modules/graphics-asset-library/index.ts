@@ -58,6 +58,7 @@ import type { GraphicsOperationalQueueId } from '~~/shared/utils/graphicsOperati
 import type { GraphicsAssetDelivery, GraphicsAssetDeliveryCatalogue } from './delivery';
 import type { GraphicsCapacityExhaustedDetails } from './errors';
 import type { processStaticFont } from './font';
+import type { GraphicsAssetIngestionCatalogue, ReusableGraphicAsset } from './ingestion';
 import type { GraphicsAssetMultipartState } from './multipart';
 import type {
 	BoundedByteStream,
@@ -82,7 +83,6 @@ import type {
 import type { GraphicsRemoteSourceFetcher } from './remote-source';
 import type {
 	GraphicsAssetRetentionCatalogue,
-	ReleaseStagedInputBytes,
 	StrandedStagedInputReleaseOutcome,
 } from './retention';
 import type {
@@ -206,6 +206,11 @@ export {
 	graphicsIngestionOperationId,
 	installedGraphicsTemplateId,
 } from './identities';
+export type {
+	GraphicsAssetIngestionCatalogue,
+	PublishGraphicAssetCatalogueInput,
+	ReusableGraphicAsset,
+} from './ingestion';
 export { graphicsMultipartPartByteLength } from './multipart';
 
 /**
@@ -220,23 +225,6 @@ const PACKAGE_ENTRY_READ_CHUNK_BYTES = 1024 * 1024;
 
 export interface GraphicsAssetCatalogueHealth {
 	checkHealth: () => Promise<{ outcome: 'healthy' }>;
-}
-
-export interface PublishGraphicAssetCatalogueInput {
-	operation: GraphicsIngestionOperation;
-	report: Extract<GraphicAssetValidationReport, { outcome: 'accepted' }>;
-	assetId: GraphicAssetId;
-	revisionId: GraphicAssetRevisionId;
-	derivativeId: GraphicsDerivativeId;
-	sourceDigest: string;
-	thumbnailDigest: string;
-	thumbnailByteLength: number;
-	publishedAt: string;
-}
-
-export interface ReusableGraphicAsset {
-	assetId: GraphicAssetId;
-	revisionId: GraphicAssetRevisionId;
 }
 
 /**
@@ -340,7 +328,8 @@ export type GraphicAssetLifecycleTransition
  * Everything the library reads and writes in its catalogue. Delivery's reads are
  * their own smaller interface (ADR-0073); Template Package installation and
  * export read revision content through it too. The Graphics Ingestion Operation
- * lifecycle is another, shared by ingestion and Template Packages.
+ * lifecycle is another, shared by ingestion and Template Packages, and
+ * ingestion's own reads and writes are a third.
  *
  * Retention is required of it (#1140): a lifecycle transition never lacks the
  * catalogue its Evidence is written to, and the type is what holds that.
@@ -350,72 +339,11 @@ export interface GraphicsAssetCatalogue
 	GraphicsAssetCatalogueHealth,
 	GraphicsAssetDeliveryCatalogue,
 	GraphicsAssetRetentionCatalogue,
-	GraphicsIngestionOperationCatalogue {
-	recordStagedBytes: (input: {
-		operation: GraphicsIngestionOperation;
-		usedBytes: number;
-		recordedAt: string;
-	}) => Promise<void>;
-	/**
-	 * An approved remote copy reserves the worst-case staging envelope before
-	 * any byte moves, because the exact length is only knowable from the remote
-	 * response. This records the observed length as the operation's declared
-	 * length and releases the unused part of that reservation.
-	 */
-	recordRemoteCopyStagedSource: (input: {
-		operation: GraphicsIngestionOperation;
-		observedByteLength: number;
-		recordedAt: string;
-	}) => Promise<void>;
-	reserveGraphicAssetPublication: (input: {
-		operation: GraphicsIngestionOperation;
-		sourceDigest: string;
-		sourceByteLength: number;
-		thumbnailDigest: string;
-		thumbnailByteLength: number;
-		reservedAt: string;
-	}) => Promise<
-		| { outcome: 'reserved'; operation: GraphicsIngestionOperation }
-		| { outcome: 'blocked'; capacity: GraphicsCapacityExhaustedDetails }
-		/** Another attempt took the operation; this one has nothing left to reserve for. */
-		| { outcome: 'lost-claim' }
-	>;
+	GraphicsIngestionOperationCatalogue,
+	GraphicsAssetIngestionCatalogue {
 	updateCapacityLimits: (
 		input: GraphicsAssetCapacityLimits & { updatedAt: string },
 	) => Promise<GraphicsAssetLibraryCapacity>;
-	getGraphicAssetMultipartState: (
-		operationId: GraphicsIngestionOperationId,
-		initiatedBy: string,
-	) => Promise<GraphicsAssetMultipartState | undefined>;
-	updateGraphicAssetMultipartState: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-		expectedVersion: number;
-		state: GraphicsAssetMultipartState;
-		updatedAt: string;
-	}) => Promise<boolean>;
-	/**
-	 * Records the multipart upload an approved remote copy is holding, or clears
-	 * it with `null` once that upload is provably released. A remote copy moves
-	 * its bytes server-side, so the checkpoint carries the uploadId alone: it
-	 * exists only so expiry and cancellation can abort an upload whose own
-	 * request died before it could.
-	 */
-	checkpointRemoteCopyMultipartUpload: (input: {
-		operationId: GraphicsIngestionOperationId;
-		initiatedBy: string;
-		uploadId: GraphicsMultipartUploadIdentity | null;
-	}) => Promise<void>;
-	recordGraphicAssetMultipartCleanupComplete: (
-		operationId: GraphicsIngestionOperationId,
-		initiatedBy: string,
-	) => Promise<void>;
-	/**
-	 * Zeroes a terminal operation's staging accounting once its staged objects
-	 * are proven deleted. Ingestion reaches it only through
-	 * `releaseTerminalStagedInput`, which proves the deletes first.
-	 */
-	releaseStagedInputBytes: ReleaseStagedInputBytes;
 	getTemplatePackagePreflight: (
 		operationId: GraphicsIngestionOperationId,
 		initiatedBy: string,
@@ -540,25 +468,6 @@ export interface GraphicsAssetCatalogue
 	 * candidate or quarantined content, is not reachable.
 	 */
 	isGraphicAssetContentReachable: (digest: string) => Promise<boolean>;
-	findReusableGraphicAsset: (sourceDigest: string) => Promise<ReusableGraphicAsset | undefined>;
-	findCurrentGraphicAsset: (assetId: GraphicAssetId) => Promise<
-		| (ReusableGraphicAsset & { sourceDigest: string })
-		| undefined
-	>;
-	reuseGraphicAsset: (input: {
-		operation: GraphicsIngestionOperation;
-		reusable: ReusableGraphicAsset;
-		publishedAt: string;
-	}) => Promise<GraphicsIngestionOperation>;
-	completeGraphicAssetReplacementNoop: (input: {
-		operation: GraphicsIngestionOperation;
-		current: ReusableGraphicAsset & { sourceDigest: string };
-		completedAt: string;
-	}) => Promise<GraphicsIngestionOperation>;
-	publishGraphicAssetReplacement: (input: PublishGraphicAssetCatalogueInput & {
-		targetAssetId: GraphicAssetId;
-	}) => Promise<GraphicsIngestionOperation>;
-	publishGraphicAsset: (input: PublishGraphicAssetCatalogueInput) => Promise<GraphicsIngestionOperation>;
 	updateGraphicAsset: (input: {
 		assetId: GraphicAssetId;
 		name: string;
