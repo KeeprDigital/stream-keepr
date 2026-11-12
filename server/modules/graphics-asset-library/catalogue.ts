@@ -2641,7 +2641,7 @@ export function createD1GraphicsAssetCatalogue(
 				return { outcome: 'updated', asset };
 			}
 			// Only an active asset can be held back; one already retired or trashed
-			// answers not-allowed, as the in-memory catalogue does.
+			// answers not-allowed.
 			const templateUsage = (usage.results as unknown as UsageRow[]).map(usageFromRow);
 			if (templateUsage.length > 0) {
 				const current = await database.prepare(

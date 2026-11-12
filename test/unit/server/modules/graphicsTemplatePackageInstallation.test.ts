@@ -2,18 +2,16 @@ import type { GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-li
 import type {
 	GraphicAsset,
 } from '~~/shared/types/graphicsAsset';
-import { afterAll, describe, expect, it } from 'vitest';
-import {
-	createInMemoryGraphicsAssetCatalogue,
-} from '~~/server/modules/graphics-asset-library';
-import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
+import type { PackageLibrary } from '~~/test/helpers/templatePackageLibrary';
+import { describe, expect, it } from 'vitest';
 import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import { DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES } from '~~/shared/types/graphicsAsset';
 import { testGraphicAssetRevisionId } from '~~/test/helpers/graphicsAssetIdentities';
 import { digestOf, sixteenPixelPng, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
 import { webpPixel } from '~~/test/helpers/graphicsImageFixtures';
-import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+import { addEvent, createSqliteGraphicsAssetCatalogue } from '~~/test/helpers/graphicsLibrary';
 import {
 	createPackageLibrary,
 	exportPackage,
@@ -35,20 +33,10 @@ import {
 /** Overrides catalogue methods so a failure the catalogue can genuinely produce is observable at the seam. */
 type CatalogueFault = Partial<GraphicsAssetCatalogue>;
 
-const harness = await createSqliteD1Harness();
-afterAll(async () => await harness.close());
-
-function createLibrary(
-	label: string,
-	options: {
-		canonicalLimitBytes?: number;
-		fault?: () => CatalogueFault;
-		catalogue?: GraphicsAssetCatalogue;
-	} = {},
-) {
-	const catalogue = options.catalogue ?? createInMemoryGraphicsAssetCatalogue(options);
+async function createLibrary(label: string, options: { fault?: () => CatalogueFault } = {}) {
+	const { catalogue, harness } = await createSqliteGraphicsAssetCatalogue();
 	return {
-		...createPackageLibrary(label, {
+		...await createPackageLibrary(label, {
 			catalogue: new Proxy(catalogue, {
 				get(target, property, receiver) {
 					const override = options.fault?.()[property as keyof GraphicsAssetCatalogue];
@@ -58,10 +46,11 @@ function createLibrary(
 			now: () => new Date('2026-07-31T09:00:00.000Z'),
 		}),
 		catalogue,
+		harness,
 	};
 }
 
-type Library = ReturnType<typeof createLibrary>['library'];
+type Library = PackageLibrary;
 
 async function activeAssets(library: Library): Promise<GraphicAsset[]> {
 	return await library.listGraphicAssets({});
@@ -71,7 +60,7 @@ describe('the Template Package installation contract', () => {
 	// The validator proves the staged source of the operation it is given; a
 	// packaged video is one entry of the staged archive, never that archive.
 	it('installs a packaged silent video the validator proved from its own staged bytes', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const motion = await ingestSilentVideo(sender, 'Motion');
 		const archive = await exportPackage(sender, {
 			assets: [
@@ -79,7 +68,7 @@ describe('the Template Package installation contract', () => {
 			],
 		});
 
-		const { library: receiver, staging } = createLibrary('receiver');
+		const { library: receiver, staging } = await createLibrary('receiver');
 		const completed = await install(receiver, archive);
 
 		expect(completed.failure).toBeUndefined();
@@ -101,7 +90,7 @@ describe('the Template Package installation contract', () => {
 	// The validator answers "still running" long before a long video is proven, and
 	// reads the copy after that: taking it away then strands the validation.
 	it('keeps the staged copy of a packaged silent video whose validation has not answered yet', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const motion = await ingestSilentVideo(sender, 'Motion');
 		const archive = await exportPackage(sender, {
 			assets: [
@@ -109,7 +98,7 @@ describe('the Template Package installation contract', () => {
 			],
 		});
 
-		const { library: receiver, staging } = createPackageLibrary('receiver', {
+		const { library: receiver, staging } = await createPackageLibrary('receiver', {
 			silentVideoPlaybackValidator: {
 				validate: async () => ({ outcome: 'unavailable', retryable: true }),
 			},
@@ -125,7 +114,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('installs a Template and its assets into a library that holds neither', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const archive = await exportPackage(sender, {
 			assets: [
@@ -133,7 +122,7 @@ describe('the Template Package installation contract', () => {
 			],
 		});
 
-		const { library: receiver, canonical } = createLibrary('receiver');
+		const { library: receiver, canonical } = await createLibrary('receiver');
 		const completed = await install(receiver, archive);
 
 		expect(completed.stage).toBe('completed');
@@ -198,7 +187,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('reuses the exact local revision an origin identity, revision, and digest name', async () => {
-		const { library } = createLibrary('sender');
+		const { library } = await createLibrary('sender');
 		const backdrop = await ingestImage(library, 'Backdrop');
 		const archive = await exportPackage(library, {
 			assets: [
@@ -241,7 +230,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('recognises an exact origin it recorded on a previous installation', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const archive = await exportPackage(sender, {
 			assets: [
@@ -249,7 +238,7 @@ describe('the Template Package installation contract', () => {
 			],
 		});
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver } = await createLibrary('receiver');
 		const first = installationOf(await install(receiver, archive));
 		expect(first.assets[0]!.outcome).toBe('created');
 
@@ -271,7 +260,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('creates a separate Graphic Asset for a related source revision', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const firstArchive = await exportPackage(sender, {
 			assets: [
@@ -285,7 +274,7 @@ describe('the Template Package installation contract', () => {
 			],
 		});
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver } = await createLibrary('receiver');
 		const first = installationOf(await install(receiver, firstArchive));
 		const second = installationOf(await install(receiver, secondArchive));
 
@@ -302,7 +291,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('creates a separate Graphic Asset for a digest-only match and reuses its bytes', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const archive = await exportPackage(sender, {
 			assets: [
@@ -310,7 +299,7 @@ describe('the Template Package installation contract', () => {
 			],
 		});
 
-		const { library: receiver, canonical } = createLibrary('receiver');
+		const { library: receiver, canonical } = await createLibrary('receiver');
 		// The receiver already holds these exact bytes under its own provenance.
 		const local = await ingestImage(receiver, 'Local backdrop');
 		const before = await receiver.getCapacity();
@@ -334,7 +323,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('keeps distinct packaged identities distinct even when their bytes match', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const first = await ingestImage(sender, 'Backdrop A');
 		const second = await ingestImage(sender, 'Backdrop B');
 		expect(first.assetId).not.toBe(second.assetId);
@@ -345,7 +334,7 @@ describe('the Template Package installation contract', () => {
 			],
 		});
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver } = await createLibrary('receiver');
 		const installation = installationOf(await install(receiver, archive));
 
 		expect(installation.assets).toHaveLength(2);
@@ -365,7 +354,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('rewrites every reference the Template document carries, however deeply nested', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const badge = await ingestImage(sender, 'Badge', webpPixel, 'image/webp');
 		const archive = await exportPackage(sender, {
@@ -386,7 +375,7 @@ describe('the Template Package installation contract', () => {
 			},
 		});
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver } = await createLibrary('receiver');
 		const installation = installationOf(await install(receiver, archive));
 		const template = await receiver.inspectInstalledGraphicsTemplate({
 			templateId: installation.templateId,
@@ -424,7 +413,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('installs a packaged font under the profile it actually satisfied here', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const face = await ingestStaticFont(sender, 'Face');
 		const archive = await exportPackage(sender, {
 			assets: [
@@ -432,7 +421,7 @@ describe('the Template Package installation contract', () => {
 			],
 		});
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver } = await createLibrary('receiver');
 		const installation = installationOf(await install(receiver, archive));
 
 		// No browser loaded this face here, so the installed revision records the
@@ -445,7 +434,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('keeps a reused revision\'s own attested profile rather than the packaged one', async () => {
-		const { library } = createLibrary('sender');
+		const { library } = await createLibrary('sender');
 		const face = await ingestStaticFont(library, 'Face');
 		const archive = await exportPackage(library, {
 			assets: [
@@ -464,7 +453,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('associates everything an Event-scoped installation touched with that Event', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const archive = await exportPackage(sender, {
 			assets: [
@@ -472,7 +461,8 @@ describe('the Template Package installation contract', () => {
 			],
 		});
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver, harness } = await createLibrary('receiver');
+		await addEvent(harness, 7);
 		const installation = installationOf(await install(receiver, archive, { defaultEventId: 7 }));
 
 		const assets = await activeAssets(receiver);
@@ -484,7 +474,7 @@ describe('the Template Package installation contract', () => {
 	});
 
 	it('records the installed references as authoritative usage', async () => {
-		const { library: sender } = createLibrary('sender');
+		const { library: sender } = await createLibrary('sender');
 		const backdrop = await ingestImage(sender, 'Backdrop');
 		const archive = await exportPackage(sender, {
 			assets: [
@@ -492,7 +482,7 @@ describe('the Template Package installation contract', () => {
 			],
 		});
 
-		const { library: receiver } = createLibrary('receiver');
+		const { library: receiver } = await createLibrary('receiver');
 		const installation = installationOf(await install(receiver, archive));
 		const installed = installation.assets[0]!;
 
@@ -520,7 +510,7 @@ describe('the Template Package installation contract', () => {
 			{ proposal: 'a clean proposal', ingest: ingestImage },
 			{ proposal: 'a proposal its author confirmed', ingest: ingestStaticFont },
 		])('resumes an interrupted installation of $proposal without publishing twice', async ({ ingest }) => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingest(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -528,7 +518,7 @@ describe('the Template Package installation contract', () => {
 				],
 			});
 
-			const { library: receiver, canonical } = createLibrary('receiver');
+			const { library: receiver, canonical } = await createLibrary('receiver');
 			let resting = await preflight(receiver, archive);
 			if (resting.stage === 'awaiting-confirmation') {
 				resting = await receiver.confirmTemplatePackagePreflight({
@@ -567,7 +557,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('publishes nothing when a revision it would reuse stops accepting references', async () => {
-			const { library } = createLibrary('sender');
+			const { library } = await createLibrary('sender');
 			const backdrop = await ingestImage(library, 'Backdrop');
 			const archive = await exportPackage(library, {
 				assets: [
@@ -618,7 +608,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('exposes nothing when a package is cancelled before publication', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -626,7 +616,7 @@ describe('the Template Package installation contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const resting = await preflight(receiver, archive);
 			expect(resting.stage).toBe('awaiting-installation');
 
@@ -649,7 +639,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('answers a repeated installation with the one that already committed', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -657,7 +647,7 @@ describe('the Template Package installation contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			let operation = await preflight(receiver, archive);
 			const first = await receiver.installTemplatePackage({
 				operationId: operation.id,
@@ -683,7 +673,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('lets only one of two concurrent installations publish', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -691,7 +681,7 @@ describe('the Template Package installation contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const resting = await preflight(receiver, archive);
 			const outcomes = await Promise.allSettled([
 				receiver.installTemplatePackage({
@@ -716,17 +706,8 @@ describe('the Template Package installation contract', () => {
 
 		// One source revision has one Graphic Asset Origin. An installation that
 		// loses that race publishes nothing, and its retry reuses the winner's asset.
-		it.each([
-			{
-				adapter: 'the D1 catalogue',
-				catalogue: () => createD1GraphicsAssetCatalogue(harness.database),
-			},
-			{
-				adapter: 'the in-memory catalogue',
-				catalogue: () => createInMemoryGraphicsAssetCatalogue(),
-			},
-		])('lets only one of two operations publishing one package create its asset, over $adapter', async ({ catalogue }) => {
-			const { library: sender } = createLibrary('sender');
+		it('lets only one of two operations publishing one package create its asset', async () => {
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -737,8 +718,7 @@ describe('the Template Package installation contract', () => {
 			// The first operation publishes after the second has derived its own
 			// proposal and just before the second's publication commits.
 			let publishFirst: (() => Promise<unknown>) | undefined;
-			const { library: receiver, catalogue: base } = createLibrary('receiver', {
-				catalogue: catalogue(),
+			const { library: receiver, catalogue: base } = await createLibrary('receiver', {
 				fault: () => publishFirst
 					? {
 							installTemplatePackage: async (input) => {
@@ -788,7 +768,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('refuses a proposal the author confirmed but that no longer describes the package', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -796,7 +776,7 @@ describe('the Template Package installation contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const resting = await preflight(receiver, archive);
 			expect(resting.stage).toBe('awaiting-installation');
 			const confirmedFingerprint = resting.templatePackagePreflight!.fingerprint;
@@ -833,7 +813,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('refuses to install a package whose preflight nobody confirmed', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -841,7 +821,7 @@ describe('the Template Package installation contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			// A local asset with the same bytes makes the proposal carry a warning.
 			await ingestImage(receiver, 'Local backdrop');
 			const paused = await preflight(receiver, archive);
@@ -912,7 +892,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('publishes nothing when capacity runs out between confirmation and publication', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -924,7 +904,7 @@ describe('the Template Package installation contract', () => {
 			// installation takes for itself is the last check before bytes become
 			// permanent, and it is the one that has to hold.
 			let exhausted = false;
-			const { library: receiver } = createLibrary('receiver', {
+			const { library: receiver } = await createLibrary('receiver', {
 				fault: () => exhausted
 					? {
 							reserveTemplatePackagePublication: async () => ({
@@ -971,7 +951,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('publishes nothing when the publication transaction itself fails', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -980,7 +960,7 @@ describe('the Template Package installation contract', () => {
 			});
 
 			let catalogueFails = false;
-			const { library: receiver } = createLibrary('receiver', {
+			const { library: receiver } = await createLibrary('receiver', {
 				fault: () => catalogueFails
 					? {
 							installTemplatePackage: async () => {
@@ -1018,7 +998,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('publishes nothing when installing would exceed canonical capacity', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -1027,7 +1007,11 @@ describe('the Template Package installation contract', () => {
 			});
 
 			// Room to stage and preflight the package, but not to keep its bytes.
-			const { library: receiver } = createLibrary('receiver', { canonicalLimitBytes: 1 });
+			const { library: receiver } = await createLibrary('receiver');
+			await receiver.updateCapacityLimits({
+				canonicalLimitBytes: 1,
+				stagingLimitBytes: DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
+			});
 			const resting = await preflight(receiver, archive);
 			expect(resting.stage).toBe('failed');
 			expect(resting.failure).toMatchObject({
@@ -1040,7 +1024,7 @@ describe('the Template Package installation contract', () => {
 
 	describe('immutable provenance', () => {
 		it('rejects the complete package when an origin claims different content', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const badge = await ingestImage(sender, 'Badge', webpPixel, 'image/webp');
 			const archive = await exportPackage(sender, {
@@ -1050,7 +1034,7 @@ describe('the Template Package installation contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			await install(receiver, archive);
 			expect(await activeAssets(receiver)).toHaveLength(2);
 
@@ -1099,7 +1083,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('refuses to reuse an exact origin whose asset can no longer take references', async () => {
-			const { library } = createLibrary('sender');
+			const { library } = await createLibrary('sender');
 			const backdrop = await ingestImage(library, 'Backdrop');
 			const archive = await exportPackage(library, {
 				assets: [
@@ -1141,7 +1125,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('rejects a package whose packaged identities claim one source revision', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const badge = await ingestImage(sender, 'Badge', webpPixel, 'image/webp');
 			const parts = readTemplatePackageParts(await exportPackage(sender, {
@@ -1166,7 +1150,7 @@ describe('the Template Package installation contract', () => {
 				},
 			];
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const operation = await preflight(receiver, writeTemplatePackage(parts));
 
 			expect(operation.stage).toBe('failed');
@@ -1176,7 +1160,7 @@ describe('the Template Package installation contract', () => {
 		});
 
 		it('never lets a later local revision inherit the origin of a revision it installed', async () => {
-			const { library: sender } = createLibrary('sender');
+			const { library: sender } = await createLibrary('sender');
 			const backdrop = await ingestImage(sender, 'Backdrop');
 			const archive = await exportPackage(sender, {
 				assets: [
@@ -1184,7 +1168,7 @@ describe('the Template Package installation contract', () => {
 				],
 			});
 
-			const { library: receiver } = createLibrary('receiver');
+			const { library: receiver } = await createLibrary('receiver');
 			const installed = installationOf(await install(receiver, archive)).assets[0]!;
 			// The receiver replaces the imported asset's content locally.
 			const replaced = await replaceImage(

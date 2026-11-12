@@ -2,10 +2,7 @@ import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphi
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { TemplatePackagePreflightReport } from '~~/shared/types/templatePackage';
 import { describe, expect, it } from 'vitest';
-import {
-	createGraphicsAssetLibrary,
-	createInMemoryGraphicsAssetCatalogue,
-} from '~~/server/modules/graphics-asset-library';
+import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -21,6 +18,7 @@ import {
 import { maximalBroadcastGraphicDocument } from '../../../helpers/broadcastGraphicDocument';
 import { maximalFeatureMatchLayoutDocument } from '../../../helpers/featureMatchLayoutDocument';
 import { digestOf, pixelPng } from '../../../helpers/graphicsFixtures';
+import { createSqliteGraphicsAssetCatalogue } from '../../../helpers/graphicsLibrary';
 import { collectStream } from '../../../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
@@ -32,10 +30,11 @@ import {
 
 let sequence = 0;
 
-function createLibrary(label: string) {
+async function createLibrary(label: string) {
 	let nextIdentity = 0;
+	const { catalogue } = await createSqliteGraphicsAssetCatalogue();
 	return createGraphicsAssetLibrary({
-		catalogue: createInMemoryGraphicsAssetCatalogue(),
+		catalogue,
 		staging: createInMemoryStagingGraphicsObjectStore(),
 		canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		now: () => new Date('2026-07-31T09:00:00.000Z'),
@@ -44,7 +43,7 @@ function createLibrary(label: string) {
 	});
 }
 
-type Library = ReturnType<typeof createLibrary>;
+type Library = Awaited<ReturnType<typeof createLibrary>>;
 
 async function ingestImage(library: Library, name: string): Promise<GraphicAssetReference> {
 	const operation = await library.initiateGraphicsIngestion({
@@ -124,7 +123,7 @@ function reportOf(operation: { templatePackagePreflight?: TemplatePackagePreflig
 
 /** A sender's layout and the package it produced, ready to be rewritten. */
 async function exportedPackage() {
-	const sender = createLibrary(`sender-${++sequence}`);
+	const sender = await createLibrary(`sender-${++sequence}`);
 	const frameAsset = await ingestImage(sender, 'Frame backdrop');
 	const itemAsset = await ingestImage(sender, 'Sponsor logo');
 	const document = maximalFeatureMatchLayoutDocument({ frameAsset, itemAsset });
@@ -141,7 +140,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 	it('accepts a package whose Template really is a Feature Match Layout', async () => {
 		const { archive } = await exportedPackage();
 
-		const report = reportOf(await preflight(createLibrary('receiver'), archive));
+		const report = reportOf(await preflight(await createLibrary('receiver'), archive));
 
 		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
 		expect(report.outcome).not.toBe('rejected');
@@ -162,7 +161,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		const parts = readTemplatePackageParts(archive);
 		parts.template = { ...(parts.template as Record<string, unknown>), featureMatchId: 12 };
 
-		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+		const report = reportOf(await preflight(await createLibrary('receiver'), writeTemplatePackage(parts)));
 
 		expect(report.outcome).toBe('rejected');
 		expect(report.issues.some(issue => issue.code === 'invalid-template-document')).toBe(true);
@@ -173,7 +172,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		const parts = readTemplatePackageParts(archive);
 		parts.template = { ...(parts.template as Record<string, unknown>), sources: 'not a list of sources' };
 
-		const receiver = createLibrary('receiver');
+		const receiver = await createLibrary('receiver');
 		const before = await receiver.listGraphicAssets({});
 		const operation = await preflight(receiver, writeTemplatePackage(parts));
 		const report = reportOf(operation);
@@ -193,7 +192,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		const parts = readTemplatePackageParts(archive);
 		parts.template = maximalBroadcastGraphicDocument({ asset: itemAsset });
 
-		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+		const report = reportOf(await preflight(await createLibrary('receiver'), writeTemplatePackage(parts)));
 
 		expect(report.outcome).toBe('rejected');
 		expect(report.issues.some(issue => issue.code === 'invalid-template-document')).toBe(true);
@@ -225,7 +224,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 		// …and nothing was declared for it.
 		expect(declared).not.toContain(featureMatchLayoutVocabularyIdentity('token', 'player1name'));
 		// …and a receiver installs the layout rather than refusing it.
-		const report = reportOf(await preflight(createLibrary('receiver'), archive));
+		const report = reportOf(await preflight(await createLibrary('receiver'), archive));
 		expect(report.outcome).not.toBe('rejected');
 	});
 
@@ -243,7 +242,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 			},
 		];
 
-		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+		const report = reportOf(await preflight(await createLibrary('receiver'), writeTemplatePackage(parts)));
 
 		expect(report.outcome).toBe('rejected');
 		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
@@ -258,7 +257,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 				: declaration,
 		);
 
-		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+		const report = reportOf(await preflight(await createLibrary('receiver'), writeTemplatePackage(parts)));
 
 		expect(report.outcome).toBe('rejected');
 		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
@@ -272,7 +271,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 			declaration => declaration.identity !== featureMatchLayoutVocabularyIdentity('token', 'player1Name'),
 		);
 
-		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+		const report = reportOf(await preflight(await createLibrary('receiver'), writeTemplatePackage(parts)));
 
 		expect(report.outcome).toBe('rejected');
 		expect(report.issues.some(issue =>
@@ -324,7 +323,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 			),
 		};
 
-		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+		const report = reportOf(await preflight(await createLibrary('receiver'), writeTemplatePackage(parts)));
 
 		expect(report.outcome).toBe('rejected');
 		expect(report.issues.some(issue => issue.code === 'invalid-template-document')).toBe(true);
@@ -332,7 +331,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 
 	// A `.skgraphic` naming a layout host term is a package no exporter could write.
 	it('refuses a host vocabulary term declared by a `.skgraphic` package', async () => {
-		const sender = createLibrary(`skgraphic-sender-${++sequence}`);
+		const sender = await createLibrary(`skgraphic-sender-${++sequence}`);
 		const asset = await ingestImage(sender, 'Backdrop');
 		const document = maximalBroadcastGraphicDocument({ asset });
 		const requirements = broadcastGraphicTemplatePackageRequirements(document);
@@ -359,7 +358,7 @@ describe('a `.sklayout` Template Package crossing an installation boundary', () 
 
 	// Both kinds share one application font registry (#138).
 	it('validates both package kinds against the one shared application font registry', async () => {
-		const sender = createLibrary(`font-sender-${++sequence}`);
+		const sender = await createLibrary(`font-sender-${++sequence}`);
 		const asset = await ingestImage(sender, 'Backdrop');
 		const graphic = maximalBroadcastGraphicDocument({ asset });
 		const layout = maximalFeatureMatchLayoutDocument({ frameAsset: asset, itemAsset: asset });
@@ -417,7 +416,7 @@ describe('a `.sklayout` Template Package and the Theme', () => {
 
 		expect(travelled.composition.items.map(item => item.themeBindings)).toEqual(document.composition.items.map(item => item.themeBindings));
 		expect(travelled.composition.items.some(item => item.themeBindings)).toBe(true);
-		const report = reportOf(await preflight(createLibrary('theme-receiver'), archive));
+		const report = reportOf(await preflight(await createLibrary('theme-receiver'), archive));
 		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
 	});
 });

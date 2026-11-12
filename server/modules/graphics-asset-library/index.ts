@@ -199,7 +199,6 @@ import { createStoredZipArchive, storedZipArchiveByteLength } from './zip-archiv
 export { createGraphicsAssetDelivery } from './delivery';
 export type { GraphicsAssetDelivery, GraphicsAssetDeliveryCatalogue } from './delivery';
 export { GraphicsAssetLibraryError } from './errors';
-export { createInMemoryGraphicsAssetCatalogue } from './in-memory-catalogue';
 
 /**
  * A manifest or Template document is parsed in full, so both are bounded well
@@ -1475,8 +1474,8 @@ export function createGraphicsAssetLibrary(
 	};
 
 	/**
-	 * The scheduled retention path needs transactional catalogue proofs that an
-	 * ordinary in-memory catalogue double cannot provide.
+	 * The scheduled retention path needs transactional catalogue proofs that a
+	 * catalogue answering only the `GraphicsAssetCatalogue` port cannot provide.
 	 */
 	function findRetention() {
 		const catalogue = requireCatalogue();
@@ -1504,8 +1503,8 @@ export function createGraphicsAssetLibrary(
 
 	/**
 	 * Reconciliation needs the same transactional catalogue proofs the retention
-	 * path does, so it is likewise unavailable against an ordinary in-memory
-	 * catalogue double.
+	 * path does, so it is likewise unavailable against a catalogue answering only
+	 * the `GraphicsAssetCatalogue` port.
 	 */
 	function findReconciliation() {
 		const catalogue = requireCatalogue();
@@ -1522,9 +1521,9 @@ export function createGraphicsAssetLibrary(
 	}
 
 	/**
-	 * The Operations Cockpit reads aggregates the ordinary in-memory catalogue
-	 * double does not implement, so it is available only against a catalogue that
-	 * can answer them.
+	 * The Operations Cockpit reads aggregates the `GraphicsAssetCatalogue` port
+	 * does not declare, so it is available only against a catalogue that can
+	 * answer them.
 	 *
 	 * Every cockpit-specific method is checked rather than one standing in for
 	 * the rest, because a partially implemented double would otherwise fail

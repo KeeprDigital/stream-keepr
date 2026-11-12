@@ -23,16 +23,17 @@ afterAll(async () => await harness.close());
 let libraries = 0;
 const catalogue = () => createD1GraphicsAssetCatalogue(harness.database);
 
-function newLibrary() {
-	return createPackageLibrary(`removal-${++libraries}`, {
+async function newLibrary() {
+	const { library } = await createPackageLibrary(`removal-${++libraries}`, {
 		catalogue: catalogue(),
-	}).library;
+	});
+	return library;
 }
 
 /** One library that exports a package pinning a fresh image, and receives it. */
 async function installedTemplate() {
-	const library = newLibrary();
-	const sender = createPackageLibrary(`sender-${libraries}`).library;
+	const library = await newLibrary();
+	const { library: sender } = await createPackageLibrary(`sender-${libraries}`);
 	const archive = await exportPackage(sender, {
 		assets: [
 			{ slot: 'backdrop', reference: await ingestPackageImage(sender, 'Backdrop') },
@@ -159,7 +160,7 @@ describe('removing an Installed Graphics Template', () => {
 
 describe('a superseded revision only a removed template pinned', () => {
 	it('becomes a Revision Pruning candidate', async () => {
-		const library = newLibrary();
+		const library = await newLibrary();
 		const first = await ingestPackageImage(library, 'Backdrop');
 		const archive = await exportPackage(library, {
 			assets: [

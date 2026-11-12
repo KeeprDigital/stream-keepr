@@ -1,4 +1,3 @@
-import type { GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
 import type {
 	GraphicsAssetDelivery,
 	GraphicsCanonicalDisagreement,
@@ -7,7 +6,6 @@ import type { InMemoryGraphicsCanonicalObjectStore } from '~~/server/modules/gra
 import type { GraphicAssetId, GraphicAssetRevisionId } from '~~/shared/types/graphicsAsset';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createInMemoryGraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import { createGraphicsAssetDelivery } from '~~/server/modules/graphics-asset-library/delivery';
 import { createBoundedByteStream } from '~~/server/modules/graphics-asset-library/object-store';
@@ -29,20 +27,6 @@ beforeEach(async () => {
 afterEach(async () => {
 	await harness.close();
 });
-
-// The fake-parity contract for the in-memory catalogue the library's other unit
-// tests run on: it answers delivery's reads as the D1 catalogue does, so one
-// table runs against each. No other file runs over both.
-const CATALOGUES: [string, () => GraphicsAssetCatalogue][] = [
-	[
-		'the in-memory catalogue',
-		() => createInMemoryGraphicsAssetCatalogue(),
-	],
-	[
-		'the D1 catalogue on SQLite',
-		() => createD1GraphicsAssetCatalogue(harness.database),
-	],
-];
 
 const missingRevision = 'missing-revision' as GraphicAssetRevisionId;
 
@@ -71,8 +55,8 @@ const CONTRADICTIONS: [string, (canonical: InMemoryGraphicsCanonicalObjectStore,
 ];
 
 /** One published PNG, and a delivery built over only its catalogue and canonical store. */
-async function publishedForDelivery(catalogueFactory: (typeof CATALOGUES)[number][1]) {
-	const catalogue = catalogueFactory();
+async function publishedForDelivery() {
+	const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 	const context = createTestGraphicsLibrary({ catalogue });
 	const reference = publishedRevision(await ingestImage(context, { idempotencyKey: 'delivered' }));
 	const thumbnail = await catalogue.findThumbnailContent(reference.assetId);
@@ -135,9 +119,9 @@ const READS: [string, (published: Published) => Promise<unknown>, (published: Pu
 	],
 ];
 
-describe.each(CATALOGUES)('delivery over %s', (_name, catalogueFactory) => {
+describe('delivery', () => {
 	it('serves a pinned revision\'s exact bytes and its preview', async () => {
-		const { delivery, reference } = await publishedForDelivery(catalogueFactory);
+		const { delivery, reference } = await publishedForDelivery();
 
 		const resolved = await delivery.resolveGraphicAssetRevision(reference);
 		expect(resolved).toMatchObject({ outcome: 'available', byteLength: pixelPng.byteLength, contentType: 'image/png' });
@@ -154,7 +138,7 @@ describe.each(CATALOGUES)('delivery over %s', (_name, catalogueFactory) => {
 	});
 
 	it('serves exactly the byte range asked for', async () => {
-		const { delivery, reference } = await publishedForDelivery(catalogueFactory);
+		const { delivery, reference } = await publishedForDelivery();
 
 		const resolved = await delivery.resolveGraphicAssetRevision({
 			...reference,
@@ -184,14 +168,14 @@ describe.each(CATALOGUES)('delivery over %s', (_name, catalogueFactory) => {
 			(delivery: GraphicsAssetDelivery) => delivery.resolveGraphicAssetThumbnail({ assetId: 'no-such-asset' as GraphicAssetId }),
 		],
 	])('answers missing, never another revision, when %s that does not exist', async (_read, read) => {
-		const { delivery, reference, reported } = await publishedForDelivery(catalogueFactory);
+		const { delivery, reference, reported } = await publishedForDelivery();
 
 		expect(await read(delivery, reference.assetId)).toEqual({ outcome: 'missing' });
 		expect(reported).toEqual([]);
 	});
 
 	it('answers a set-wise inspection by input position', async () => {
-		const { delivery, reference } = await publishedForDelivery(catalogueFactory);
+		const { delivery, reference } = await publishedForDelivery();
 		const missing = { assetId: reference.assetId, revisionId: missingRevision };
 
 		expect(await delivery.inspectGraphicAssetRevisions({
@@ -214,7 +198,7 @@ describe.each(CATALOGUES)('delivery over %s', (_name, catalogueFactory) => {
 			...rest,
 		] as const),
 	))('answers unavailable on %s, and reports it, when the byte store %s', async (_read, _contradiction, contradict, read, disagreement, digest) => {
-		const published = await publishedForDelivery(catalogueFactory);
+		const published = await publishedForDelivery();
 		await contradict(published.canonical, digest(published));
 
 		expect(await read(published)).toEqual({ outcome: 'unavailable', retryable: true });
@@ -225,7 +209,7 @@ describe.each(CATALOGUES)('delivery over %s', (_name, catalogueFactory) => {
 
 	// #374: revisions sharing content share one canonical object.
 	it('observes each distinct content once in a set-wise inspection', async () => {
-		const catalogue = catalogueFactory();
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 		const context = createTestGraphicsLibrary({ catalogue });
 		const first = publishedRevision(await ingestImage(context, { idempotencyKey: 'first' }));
 		const twin = publishedRevision(await ingestImage(context, { idempotencyKey: 'twin' }));
@@ -244,7 +228,7 @@ describe.each(CATALOGUES)('delivery over %s', (_name, catalogueFactory) => {
 
 	// A store that could not answer proves nothing about the object.
 	it.each(READS)('answers unavailable without reporting when the byte store cannot answer %s', async (_read, read, _disagreement, digest) => {
-		const published = await publishedForDelivery(catalogueFactory);
+		const published = await publishedForDelivery();
 		published.canonical.markUnavailable(canonicalIdentity(digest(published)));
 
 		expect(await read(published)).toEqual({ outcome: 'unavailable', retryable: true });
@@ -254,7 +238,7 @@ describe.each(CATALOGUES)('delivery over %s', (_name, catalogueFactory) => {
 
 describe('delivery and its collaborators', () => {
 	it('keeps its answer when reporting a disagreement fails', async () => {
-		const catalogue = createInMemoryGraphicsAssetCatalogue();
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 		const context = createTestGraphicsLibrary({ catalogue });
 		const reference = publishedRevision(await ingestImage(context, { idempotencyKey: 'delivered' }));
 		await context.canonical.delete(canonicalIdentity(digestOf(pixelPng)));
@@ -283,7 +267,7 @@ describe('delivery and its collaborators', () => {
 			{ canonical: healthOnly },
 		],
 	])('is built without a usable %s, and refuses a read as the library being unavailable', async (_missing, unusable) => {
-		const catalogue = createInMemoryGraphicsAssetCatalogue();
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 		const context = createTestGraphicsLibrary({ catalogue });
 		const reference = publishedRevision(await ingestImage(context, { idempotencyKey: 'delivered' }));
 		const delivery = createGraphicsAssetDelivery({ catalogue, canonical: context.canonical, ...unusable });

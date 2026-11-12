@@ -61,10 +61,6 @@ export function templatePackageVideoWorkingCopyOperationId(
 /**
  * What one complete Template Package installation published, in the order an
  * author reads it.
- *
- * Both the D1 catalogue and its in-memory double record this, and a difference
- * between the two would be a difference in what callers are told rather than in
- * how it is stored — so they derive it from the same place.
  */
 export function templatePackageInstallationResult(
 	input: Pick<InstallTemplatePackageCatalogueInput, 'template' | 'created' | 'reused'>,

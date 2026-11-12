@@ -1,12 +1,24 @@
-import { describe, expect, it } from 'vitest';
-import { createInMemoryGraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
+import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import { createTestGraphicsLibrary, DAY, ingestImage, publishedRevision } from '~~/test/helpers/graphicsLibrary';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+
+let harness: SqliteD1Harness;
+
+beforeEach(async () => {
+	harness = await createSqliteD1Harness();
+});
+
+afterEach(async () => {
+	await harness.close();
+});
 
 const RECOVERY_WINDOW = 30 * DAY;
 
 async function trashedAsset() {
 	const context = createTestGraphicsLibrary({
-		catalogue: createInMemoryGraphicsAssetCatalogue(),
+		catalogue: createD1GraphicsAssetCatalogue(harness.database),
 		identityPrefix: 'lifecycle',
 	});
 	const { assetId } = publishedRevision(await ingestImage(context, { idempotencyKey: 'lifecycle-recovery-window' }));

@@ -31,9 +31,8 @@ const oversizedRemoteSource = (() => {
 let harness: SqliteD1Harness;
 
 /**
- * A remote copy against the real catalogue, so the checkpoint's SQL — taking it,
- * and clearing it by binding null — is exercised as deployed rather than through
- * the in-memory double.
+ * A remote copy that outgrows one part, so the checkpoint's SQL — taking it, and
+ * clearing it by binding null — is exercised.
  */
 function createRemoteCopyLibrary() {
 	const delegate = createInMemoryStagingGraphicsObjectStore();

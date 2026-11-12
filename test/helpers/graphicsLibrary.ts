@@ -16,7 +16,9 @@ import type {
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+import { onTestFinished } from 'vitest';
 import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
+import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -26,11 +28,33 @@ import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
 import { digestOf, pixelPng } from '~~/test/helpers/graphicsFixtures';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 export const HOUR = 60 * 60 * 1000;
 export const DAY = 24 * HOUR;
 
 type LibraryDependencies = Parameters<typeof createGraphicsAssetLibrary>[0];
+
+/**
+ * The D1 catalogue on a SQLite database of its own, closed when the test that
+ * asked for it ends: for a test whose libraries must share nothing.
+ */
+export async function createSqliteGraphicsAssetCatalogue() {
+	const harness = await createSqliteD1Harness();
+	onTestFinished(async () => await harness.close());
+	return {
+		catalogue: createD1GraphicsAssetCatalogue(harness.database),
+		harness,
+	};
+}
+
+/** The Event row an Event-scoped ingestion or installation points at. */
+export async function addEvent(harness: SqliteD1Harness, eventId: number) {
+	await harness.client.execute({
+		sql: 'INSERT INTO events (id, name, game, feature_match_orientation) VALUES (?, ?, \'mtg\', \'landscape\')',
+		args: [eventId, `Event ${eventId}`],
+	});
+}
 
 export type TestGraphicsLibraryOptions = Partial<Omit<LibraryDependencies, 'staging' | 'canonical'>> & {
 	/** The clock's starting instant. */

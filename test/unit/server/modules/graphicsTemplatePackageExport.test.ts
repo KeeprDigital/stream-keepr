@@ -31,7 +31,7 @@ describe('the Template Package export contract', () => {
 	it.each(TEMPLATE_PACKAGE_KINDS)(
 		'embeds the exact required Graphic Asset Revision in a %s package',
 		async (packageKind) => {
-			const { library } = createExportLibrary();
+			const { library } = await createExportLibrary();
 			const backdrop = await ingestImage(library, 'Backdrop', transparentPixelPng);
 
 			const result = await library.exportTemplatePackage({
@@ -74,7 +74,7 @@ describe('the Template Package export contract', () => {
 	);
 
 	it('keeps distinct packaged identities apart while storing identical bytes once', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const first = await ingestImage(library, 'Watermark A', webpPixel, 'image/webp');
 		const second = await ingestImage(library, 'Watermark B', webpPixel, 'image/webp');
 		expect(first.assetId).not.toBe(second.assetId);
@@ -108,7 +108,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('collapses repeated slots requiring one revision into a single packaged asset', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const logo = await ingestImage(library, 'Logo', transparentPixelPng);
 
 		const result = await library.exportTemplatePackage({
@@ -133,7 +133,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('rejects a missing reference and unavailable content together in one report', async () => {
-		const { library, canonical } = createExportLibrary();
+		const { library, canonical } = await createExportLibrary();
 		const present = await ingestImage(library, 'Present', transparentPixelPng);
 		const vanished = await ingestImage(library, 'Vanished', webpPixel, 'image/webp');
 		canonical.markUnavailable(graphicsObjectIdentity(`sha256/${digestOf(webpPixel)}`));
@@ -177,7 +177,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('declares application-owned capabilities without duplicating them into the archive', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const logo = await ingestImage(library, 'Logo', transparentPixelPng);
 
 		const result = await library.exportTemplatePackage({
@@ -244,7 +244,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('blocks an application capability this installation does not provide', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 
 		const result = await library.exportTemplatePackage({
 			packageKind: 'skgraphic',
@@ -321,7 +321,7 @@ describe('the Template Package export contract', () => {
 			'items[0].label',
 		],
 	] as const)('rejects a Template document carrying %s', async (_description, document, code, slot) => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 
 		const result = await library.exportTemplatePackage({
 			packageKind: 'sklayout',
@@ -338,7 +338,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('blocks a Graphic Asset Reference the Template document carries but the export never declared', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const declared = await ingestImage(library, 'Declared', transparentPixelPng);
 		const smuggled = await ingestImage(library, 'Smuggled', webpPixel, 'image/webp');
 
@@ -373,7 +373,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('packages a layout whose Frame image and video are library-sourced Screen Media Sources', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const plate = await ingestImage(library, 'Frame plate', transparentPixelPng);
 		const loop = await ingestSilentVideo(library, 'Frame loop');
 		const layout = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout);
@@ -401,7 +401,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('embeds every required image, silent video, and font revision', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const image = await ingestImage(library, 'Backdrop', transparentPixelPng);
 		const video = await ingestSilentVideo(library, 'Sting');
 		const font = await ingestStaticFont(library, 'MPlantin');
@@ -439,7 +439,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('blocks a slot whose revision is a different media kind', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const image = await ingestImage(library, 'Backdrop', transparentPixelPng);
 
 		const result = await library.exportTemplatePackage({
@@ -463,7 +463,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('blocks a package needing more than 100 packaged Graphic Asset Revisions', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const assets: { slot: string; reference: GraphicAssetReference }[] = [];
 		for (let index = 0; index < 101; index += 1) {
 			const reference = await ingestImage(library, `Logo ${index}`, transparentPixelPng);
@@ -489,7 +489,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('declares the Definitions of Graphic Items nested inside a Graphic Group', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const graphic = {
 			id: 'stacked-lower-third',
 			name: 'Stacked lower third',
@@ -571,7 +571,7 @@ describe('the Template Package export contract', () => {
 		// vocabulary. A Broadcast Graphic Template that places one must package the
 		// exact revision it pins, or the package installs a Template with a
 		// dangling field — and a group's children pin them just as its top level does.
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const backdrop = await ingestImage(library, 'Backdrop', transparentPixelPng);
 		const insert = await ingestImage(library, 'Insert', webpPixel, 'image/webp');
 
@@ -660,7 +660,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('keeps authored display copy that mentions a URL exportable', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 
 		const result = await library.exportTemplatePackage({
 			packageKind: 'skgraphic',
@@ -686,7 +686,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('still blocks a remote resource in a position a renderer would fetch', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const cases = [
 			[
 				'frame.mediaBackground.url',
@@ -777,7 +777,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('blocks an inline payload wherever it was authored', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const cases = [
 			[
 				'frame.backgroundImage',
@@ -821,7 +821,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('reports a missing reference and an envelope limit in the same report', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const assets: { slot: string; reference: GraphicAssetReference }[] = [];
 		for (let index = 0; index < 101; index += 1) {
 			const reference = await ingestImage(library, `Bulk ${index}`, transparentPixelPng);
@@ -850,7 +850,7 @@ describe('the Template Package export contract', () => {
 	});
 
 	it('exposes no storage-provider detail to either package consumer', async () => {
-		const { library } = createExportLibrary();
+		const { library } = await createExportLibrary();
 		const logo = await ingestImage(library, 'Logo', transparentPixelPng);
 
 		for (const packageKind of TEMPLATE_PACKAGE_KINDS) {

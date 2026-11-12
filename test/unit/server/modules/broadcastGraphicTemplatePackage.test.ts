@@ -2,10 +2,7 @@ import type { BroadcastGraphicConfig, GraphicItemKind } from '~~/shared/types/gr
 import type { GraphicAsset } from '~~/shared/types/graphicsAsset';
 import type { PackageLibrary } from '~~/test/helpers/templatePackageLibrary';
 import { describe, expect, it } from 'vitest';
-import {
-	createGraphicsAssetLibrary,
-	createInMemoryGraphicsAssetCatalogue,
-} from '~~/server/modules/graphics-asset-library';
+import { createGraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -13,6 +10,7 @@ import {
 import { templatePackagePayloads } from '~~/server/modules/template-package-payload';
 import { getGraphicItemDefinition } from '~~/shared/modules/graphics/itemDefinitions';
 import { broadcastGraphicTemplatePackageRequirements } from '~~/shared/utils/templatePackageRequirements';
+import { createSqliteGraphicsAssetCatalogue } from '~~/test/helpers/graphicsLibrary';
 import {
 	createPackageLibrary,
 	ingestPackageImage as ingestImage,
@@ -33,12 +31,13 @@ import {
 
 let sequence = 0;
 
-function createLibrary(label: string) {
-	return createPackageLibrary(label, {
+async function createLibrary(label: string) {
+	const { library } = await createPackageLibrary(label, {
 		templatePayloads: templatePackagePayloads,
 		silentVideoPlaybackValidator: undefined,
 		now: () => new Date('2026-07-31T09:00:00.000Z'),
-	}).library;
+	});
+	return library;
 }
 
 async function exportGraphic(
@@ -85,7 +84,7 @@ async function withGraphicItemDefinitionAt<T>(
 
 /** A sender's design and the package it produced, ready to be rewritten. */
 async function exportedPackage() {
-	const sender = createLibrary(`sender-${++sequence}`);
+	const sender = await createLibrary(`sender-${++sequence}`);
 	const asset = await ingestImage(sender, 'Backdrop');
 	const document = maximalBroadcastGraphicDocument({ asset });
 	return {
@@ -97,7 +96,7 @@ async function exportedPackage() {
 }
 
 async function exportedProjectedPackage() {
-	const sender = createLibrary(`projection-sender-${++sequence}`);
+	const sender = await createLibrary(`projection-sender-${++sequence}`);
 	const asset = await ingestImage(sender, 'Projection backdrop');
 	const document = maximalBroadcastGraphicDocument({ asset });
 	return { document, archive: await exportGraphic(sender, document) };
@@ -110,14 +109,15 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 
 		expect(parts.manifest.template.revision).toBe(4);
 
-		const receiver = createLibrary('receiver');
+		const receiver = await createLibrary('receiver');
 		expect(reportOf(await preflight(receiver, archive)).templateRevision).toBe(4);
 	});
 
 	// Without a registry the artifact check would silently cease to exist.
 	it('refuses to receive a package at all when no Template Package payload registry is wired', async () => {
+		const { catalogue } = await createSqliteGraphicsAssetCatalogue();
 		const unwired = createGraphicsAssetLibrary({
-			catalogue: createInMemoryGraphicsAssetCatalogue(),
+			catalogue,
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		});
@@ -133,7 +133,7 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 	it('accepts a package whose Template really is a Broadcast Graphic', async () => {
 		const { archive } = await exportedPackage();
 
-		const report = reportOf(await preflight(createLibrary('receiver'), archive));
+		const report = reportOf(await preflight(await createLibrary('receiver'), archive));
 
 		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
 		expect(report.outcome).not.toBe('rejected');
@@ -158,7 +158,7 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 				configurationVersion: 2,
 			}),
 		]));
-		const report = reportOf(await preflight(createLibrary('projection-receiver'), archive));
+		const report = reportOf(await preflight(await createLibrary('projection-receiver'), archive));
 		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
 	});
 
@@ -167,7 +167,7 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 		const parts = readTemplatePackageParts(archive);
 		parts.template = { ...(parts.template as Record<string, unknown>), items: 'not a list of items' };
 
-		const receiver = createLibrary('receiver');
+		const receiver = await createLibrary('receiver');
 		const before = await receiver.listGraphicAssets({});
 		const operation = await preflight(receiver, writeTemplatePackage(parts));
 		const report = reportOf(operation);
@@ -209,7 +209,7 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 				: declaration,
 		);
 
-		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+		const report = reportOf(await preflight(await createLibrary('receiver'), writeTemplatePackage(parts)));
 
 		expect(report.outcome).toBe('rejected');
 		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
@@ -229,7 +229,7 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 
 		// And a receiver back at the version it implements refuses the package, which
 		// is the protection the declaration exists to give.
-		const report = reportOf(await preflight(createLibrary('receiver'), archive));
+		const report = reportOf(await preflight(await createLibrary('receiver'), archive));
 
 		expect(report.outcome).toBe('rejected');
 		expect(report.issues.some(issue => issue.code === 'unsupported-application-capability')).toBe(true);
@@ -246,7 +246,7 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 			declaration => declaration.identity !== identity,
 		);
 
-		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+		const report = reportOf(await preflight(await createLibrary('receiver'), writeTemplatePackage(parts)));
 
 		expect(report.outcome).toBe('rejected');
 		expect(report.issues.some(issue =>
@@ -269,7 +269,7 @@ describe('a `.skgraphic` Template Package crossing an installation boundary', ()
 			},
 		];
 
-		const report = reportOf(await preflight(createLibrary('receiver'), writeTemplatePackage(parts)));
+		const report = reportOf(await preflight(await createLibrary('receiver'), writeTemplatePackage(parts)));
 
 		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
 	});
@@ -283,7 +283,7 @@ describe('a `.skgraphic` Template Package and the Theme', () => {
 
 		expect(travelled.items.map(item => item.themeBindings)).toEqual(document.items.map(item => item.themeBindings));
 		expect(travelled.items.some(item => item.themeBindings)).toBe(true);
-		const report = reportOf(await preflight(createLibrary('theme-receiver'), archive));
+		const report = reportOf(await preflight(await createLibrary('theme-receiver'), archive));
 		expect(report.issues.filter(issue => issue.severity === 'error')).toEqual([]);
 	});
 });

@@ -1,10 +1,11 @@
+import type { SqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import { createHash } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
 	createGraphicsAssetLibrary,
-	createInMemoryGraphicsAssetCatalogue,
 	GraphicsAssetLibraryError,
 } from '~~/server/modules/graphics-asset-library';
+import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import {
 	createInMemoryCanonicalGraphicsObjectStore,
 	createInMemoryStagingGraphicsObjectStore,
@@ -18,6 +19,17 @@ import {
 } from '~~/shared/types/graphicsAsset';
 import { pngWithTextChunks, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
 import { boundedBytes } from '~~/test/helpers/graphicsLibrary';
+import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
+
+let harness: SqliteD1Harness;
+
+beforeEach(async () => {
+	harness = await createSqliteD1Harness();
+});
+
+afterEach(async () => {
+	await harness.close();
+});
 
 describe('the Graphics Asset Library Capacity', () => {
 	const browserDecodeEvidence = (bytes: Uint8Array) => ({
@@ -29,7 +41,7 @@ describe('the Graphics Asset Library Capacity', () => {
 
 	it('reports the installation defaults and separate canonical usage categories', async () => {
 		const library = createGraphicsAssetLibrary({
-			catalogue: createInMemoryGraphicsAssetCatalogue(),
+			catalogue: createD1GraphicsAssetCatalogue(harness.database),
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		});
@@ -61,9 +73,13 @@ describe('the Graphics Asset Library Capacity', () => {
 
 	it('admits concurrent staging work only while worst-case reservations fit', async () => {
 		const library = createGraphicsAssetLibrary({
-			catalogue: createInMemoryGraphicsAssetCatalogue({ stagingLimitBytes: 68 }),
+			catalogue: createD1GraphicsAssetCatalogue(harness.database),
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
+		});
+		await library.updateCapacityLimits({
+			canonicalLimitBytes: DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
+			stagingLimitBytes: 68,
 		});
 		const admission = (idempotencyKey: string) => library.initiateGraphicsIngestion({
 			idempotencyKey,
@@ -133,11 +149,13 @@ describe('the Graphics Asset Library Capacity', () => {
 			},
 		};
 		const library = createGraphicsAssetLibrary({
-			catalogue: createInMemoryGraphicsAssetCatalogue({
-				stagingLimitBytes: transparentPixelPng.byteLength,
-			}),
+			catalogue: createD1GraphicsAssetCatalogue(harness.database),
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical,
+		});
+		await library.updateCapacityLimits({
+			canonicalLimitBytes: DEFAULT_GRAPHICS_CANONICAL_QUOTA_BYTES,
+			stagingLimitBytes: transparentPixelPng.byteLength,
 		});
 		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'verified-staging-progress',
@@ -173,7 +191,7 @@ describe('the Graphics Asset Library Capacity', () => {
 	});
 
 	it('accounts for catalogue metadata and unreachable canonical writes separately', async () => {
-		const catalogue = createInMemoryGraphicsAssetCatalogue();
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 		const library = createGraphicsAssetLibrary({
 			catalogue,
 			staging: createInMemoryStagingGraphicsObjectStore(),
@@ -213,9 +231,13 @@ describe('the Graphics Asset Library Capacity', () => {
 	it('blocks canonical growth before writing bytes when the hard limit is exhausted', async () => {
 		const canonical = createInMemoryCanonicalGraphicsObjectStore();
 		const library = createGraphicsAssetLibrary({
-			catalogue: createInMemoryGraphicsAssetCatalogue({ canonicalLimitBytes: 1 }),
+			catalogue: createD1GraphicsAssetCatalogue(harness.database),
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical,
+		});
+		await library.updateCapacityLimits({
+			canonicalLimitBytes: 1,
+			stagingLimitBytes: DEFAULT_GRAPHICS_STAGING_ALLOWANCE_BYTES,
 		});
 		const operation = await library.initiateGraphicsIngestion({
 			idempotencyKey: 'blocked-canonical-growth',
@@ -258,7 +280,7 @@ describe('the Graphics Asset Library Capacity', () => {
 	});
 
 	it('never answers a lost publication claim with exhausted capacity', async () => {
-		const catalogue = createInMemoryGraphicsAssetCatalogue();
+		const catalogue = createD1GraphicsAssetCatalogue(harness.database);
 		let claimLost = false;
 		const library = createGraphicsAssetLibrary({
 			// A lost claim is a race between two attempts at one operation, so it
@@ -302,7 +324,7 @@ describe('the Graphics Asset Library Capacity', () => {
 
 	it('publishes proven no-growth content at the full Canonical Graphics Quota', async () => {
 		const library = createGraphicsAssetLibrary({
-			catalogue: createInMemoryGraphicsAssetCatalogue(),
+			catalogue: createD1GraphicsAssetCatalogue(harness.database),
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		});
@@ -369,7 +391,7 @@ describe('the Graphics Asset Library Capacity', () => {
 
 	it('reports warning pressure at 80% and critical pressure at 95%', async () => {
 		const library = createGraphicsAssetLibrary({
-			catalogue: createInMemoryGraphicsAssetCatalogue(),
+			catalogue: createD1GraphicsAssetCatalogue(harness.database),
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		});
@@ -402,7 +424,7 @@ describe('the Graphics Asset Library Capacity', () => {
 
 	it('keeps concurrent canonical publication reservations within the hard limit', async () => {
 		const library = createGraphicsAssetLibrary({
-			catalogue: createInMemoryGraphicsAssetCatalogue(),
+			catalogue: createD1GraphicsAssetCatalogue(harness.database),
 			staging: createInMemoryStagingGraphicsObjectStore(),
 			canonical: createInMemoryCanonicalGraphicsObjectStore(),
 		});

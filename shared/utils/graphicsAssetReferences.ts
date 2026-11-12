@@ -38,12 +38,6 @@ export const THEME_REFERENCE_OWNER_KIND = 'theme';
 export const TALENT_REFERENCE_OWNER_KIND = 'talent';
 export const TALENT_PHOTO_SLOT = 'photo';
 
-export function isGraphicsTemplateReferenceOwnerKind(
-	kind: string,
-): kind is typeof GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS[number] {
-	return (GRAPHICS_TEMPLATE_REFERENCE_OWNER_KINDS as readonly string[]).includes(kind);
-}
-
 export interface ScreenGraphicAssetReference {
 	reference: GraphicAssetReference;
 	ownerSlot: string;
