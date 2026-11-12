@@ -85,6 +85,9 @@ export default withNuxt(
 			'**/migrations',
 			'.claude/worktrees/**',
 			'.worktrees/**',
+			// The Impeccable plugin's per-checkout hook state, kept out of Git by `.git/info/exclude`, which ESLint does not read.
+			'.impeccable/hook.*.json',
+			'.impeccable/config.local.json',
 			'AGENTS.md',
 			'CLAUDE.md',
 			'**/worker-configuration.d.ts',
