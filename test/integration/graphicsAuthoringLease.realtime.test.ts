@@ -1,7 +1,7 @@
 import type { ScreenResponse } from '~~/shared/api';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
+import { FEATURE_MATCH_OVERLAY_PRESETS } from '../../shared/featureMatchOverlayPresets';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { createCommandHarness } from './featureMatchSessionHelpers';
 import { anotherBrowser } from './identities';

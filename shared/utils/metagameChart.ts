@@ -1,5 +1,5 @@
-import type { ArchetypeBreakdownEntry, ArchetypeBreakdownResponse } from '~~/shared/types/metagame';
-import { OTHER_ARCHETYPE_ID } from '~~/shared/types/metagame';
+import type { ArchetypeBreakdownEntry, ArchetypeBreakdownResponse } from '../types/metagame';
+import { OTHER_ARCHETYPE_ID } from '../types/metagame';
 
 /**
  * The most Archetypes the Metagame chart draws, one per categorical colour
