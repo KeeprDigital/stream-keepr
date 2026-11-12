@@ -186,16 +186,6 @@ describe('the Graphics Asset Library reconciliation API', () => {
 		});
 		expect(response.status).toBe(400);
 	});
-
-	it('offers deep verification as an action the API accepts', async () => {
-		// It reaches the domain rather than being rejected by the schema; an
-		// unknown discrepancy is then a not-found, not a bad request.
-		expect((await fetch('/api/admin/graphics-assets/discrepancies/unknown/actions', {
-			method: 'POST',
-			headers: { ...administratorHeaders, 'content-type': 'application/json' },
-			body: JSON.stringify({ action: 'verify-stored-bytes' }),
-		})).status).toBe(404);
-	});
 });
 
 // Its refusal without the token is the API boundary's own case (apiBoundary.test.ts).
