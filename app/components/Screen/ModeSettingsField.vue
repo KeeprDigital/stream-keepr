@@ -1,6 +1,15 @@
 <script setup lang="ts">
+import type { Component } from 'vue';
 import type { DeckSource } from '~~/shared/screenModeConfigs/deck';
+import type { EventReferenceKind } from '~~/shared/screenModeConfigs/eventReferences';
 import type { SettingsPageField } from '~/modules/screen-mode/settingsPage';
+import ScreenArchetypeField from '~/components/Screen/ArchetypeField.vue';
+import ScreenFeatureMatchSlotField from '~/components/Screen/FeatureMatchSlotField.vue';
+import ScreenPhaseField from '~/components/Screen/PhaseField.vue';
+import ScreenPlayerField from '~/components/Screen/PlayerField.vue';
+import ScreenPlayerListField from '~/components/Screen/PlayerListField.vue';
+import ScreenRoundField from '~/components/Screen/RoundField.vue';
+import ScreenTalentField from '~/components/Screen/TalentField.vue';
 import { fieldDescription, fieldLabel, fieldOptions, fieldValue } from '~/modules/screen-mode/settingsPage';
 
 /**
@@ -11,6 +20,22 @@ import { fieldDescription, fieldLabel, fieldOptions, fieldValue } from '~/module
  * value, a set's in the order its values run; the page writes the patch
  * naming the field.
  */
+/**
+ * The picker of each Event Reference kind naming one id, and what it takes
+ * beyond its label, description, value and none label. A Deck Source is a
+ * union, so it has a picker of its own.
+ */
+const ID_PICKERS: Partial<Record<EventReferenceKind, { picker: Component; withEvent: boolean; props?: Record<string, unknown> }>> = {
+	round: { picker: ScreenRoundField, withEvent: true },
+	player: { picker: ScreenPlayerField, withEvent: true },
+	playerList: { picker: ScreenPlayerListField, withEvent: true },
+	featureMatchSlot: { picker: ScreenFeatureMatchSlotField, withEvent: true, props: { detailed: true } },
+	archetype: { picker: ScreenArchetypeField, withEvent: true },
+	phase: { picker: ScreenPhaseField, withEvent: true },
+	// The Event's Talents ride on the Event itself.
+	talent: { picker: ScreenTalentField, withEvent: false },
+};
+
 const props = defineProps<{
 	entry: SettingsPageField;
 	eventId: number;
@@ -40,6 +65,17 @@ const setValue = computed(() => Array.isArray(value.value)
 	: []);
 const setItems = computed(() => items.value
 	?? (props.entry.field.values ?? []).map(option => ({ label: option, value: option })));
+const idPicker = computed(() => props.entry.field.reference === undefined
+	? undefined
+	: ID_PICKERS[props.entry.field.reference]);
+const idPickerProps = computed(() => ({
+	label: field.value.label,
+	description: description.value,
+	modelValue: referenceId.value,
+	...(nullLabel.value ? { nullLabel: nullLabel.value } : {}),
+	...(idPicker.value?.withEvent ? { eventId: props.eventId } : {}),
+	...idPicker.value?.props,
+}));
 /** A bound following the Screen's content, in displayed units. */
 const contentMax = computed(() => {
 	const max = props.entry.field.maxFor?.(props.entry.context);
@@ -61,67 +97,10 @@ function toggledSet(value: string, checked: boolean): string[] {
 
 <template>
 	<template v-if="field.control === 'reference'">
-		<ScreenRoundField
-			v-if="field.reference === 'round'"
-			:label="field.label"
-			:description="description"
-			:model-value="referenceId"
-			:event-id="eventId"
-			v-bind="nullLabel ? { nullLabel } : {}"
-			@update:model-value="emit('update', $event)"
-		/>
-		<ScreenPlayerField
-			v-else-if="field.reference === 'player'"
-			:label="field.label"
-			:description="description"
-			:model-value="referenceId"
-			:event-id="eventId"
-			v-bind="nullLabel ? { nullLabel } : {}"
-			@update:model-value="emit('update', $event)"
-		/>
-		<ScreenPlayerListField
-			v-else-if="field.reference === 'playerList'"
-			:label="field.label"
-			:description="description"
-			:model-value="referenceId"
-			:event-id="eventId"
-			v-bind="nullLabel ? { nullLabel } : {}"
-			@update:model-value="emit('update', $event)"
-		/>
-		<ScreenFeatureMatchSlotField
-			v-else-if="field.reference === 'featureMatchSlot'"
-			:label="field.label"
-			:description="description"
-			:model-value="referenceId"
-			:event-id="eventId"
-			detailed
-			v-bind="nullLabel ? { nullLabel } : {}"
-			@update:model-value="emit('update', $event)"
-		/>
-		<ScreenArchetypeField
-			v-else-if="field.reference === 'archetype'"
-			:label="field.label"
-			:description="description"
-			:model-value="referenceId"
-			:event-id="eventId"
-			v-bind="nullLabel ? { nullLabel } : {}"
-			@update:model-value="emit('update', $event)"
-		/>
-		<ScreenPhaseField
-			v-else-if="field.reference === 'phase'"
-			:label="field.label"
-			:description="description"
-			:model-value="referenceId"
-			:event-id="eventId"
-			v-bind="nullLabel ? { nullLabel } : {}"
-			@update:model-value="emit('update', $event)"
-		/>
-		<ScreenTalentField
-			v-else-if="field.reference === 'talent'"
-			:label="field.label"
-			:description="description"
-			:model-value="referenceId"
-			v-bind="nullLabel ? { nullLabel } : {}"
+		<component
+			:is="idPicker.picker"
+			v-if="idPicker"
+			v-bind="idPickerProps"
 			@update:model-value="emit('update', $event)"
 		/>
 		<ScreenDeckSourceField
