@@ -221,7 +221,7 @@ describe('screenDeckDisplay', () => {
 		expect(wrapper.find('[data-testid="sideboard-list"]').exists()).toBe(false);
 	});
 
-	// A sideboard naming no layout value of its own takes the mainboard's (#1091).
+	// A sideboard naming no layout value of its own takes the mainboard's.
 	it.each([
 		{
 			name: 'its own',

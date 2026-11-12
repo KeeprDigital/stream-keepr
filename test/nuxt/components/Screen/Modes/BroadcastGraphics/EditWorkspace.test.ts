@@ -18,7 +18,7 @@ mockNuxtImport('useEventStore', () => () => ({
 	event: { id: 7, name: 'Regional', game: 'mtg' },
 }));
 
-// The playout facts the on-air marks and refusals read (#373, #1100): the Live Session store over a Live State per test.
+// The playout facts the on-air marks and refusals read: the Live Session store over a Live State per test.
 const mockLiveState = {
 	value: createInitialBroadcastGraphicsLiveState() as BroadcastGraphicsLiveState,
 };
@@ -445,7 +445,7 @@ describe('broadcastGraphicsEditWorkspace', () => {
 			? { ...graphic, name: 'Talent' }
 			: graphic);
 
-		// An edit to a graphic on a program output would reach program at once (#1100).
+		// An edit to a graphic on a program output would reach program at once.
 		it.each([
 			{
 				playout: 'off air',
@@ -513,7 +513,7 @@ describe('broadcastGraphicsEditWorkspace', () => {
 		});
 	});
 
-	// Canvas handles (#1101): the preview moves what the editor has selected, as the editor may.
+	// Canvas handles: the preview moves what the editor has selected, as the editor may.
 	describe('the preview\'s canvas handles', () => {
 		const bed = shape('bed');
 		const graphics: BroadcastGraphicConfig[] = [

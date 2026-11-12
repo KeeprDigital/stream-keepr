@@ -418,7 +418,7 @@ describe('broadcastGraphicsProgramMonitor', () => {
 		});
 	});
 
-	// Wiring only: the shared hand-out owns its controls and their words (#237, #1104).
+	// Wiring only: the shared hand-out owns its controls and their words.
 	it('hands out this Screen\'s Overlay Output where the operator watches it', async () => {
 		const outputWindow = {
 			opener: {} as unknown,

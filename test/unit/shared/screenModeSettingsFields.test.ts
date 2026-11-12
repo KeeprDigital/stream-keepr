@@ -6,7 +6,7 @@ import { SCREEN_SETTINGS_CARDS, unwrapOptionalField } from '~~/shared/screenMode
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 
-// A Screen's settings page renders from its mode's contract (#1093), so every
+// A Screen's settings page renders from its mode's contract, so every
 // field says where it sits and how it is edited, and a page shows one label per
 // concept.
 
@@ -79,7 +79,7 @@ function shows(mode: ScreenMode, path: string, settings: ScreenSettingsContext):
 	return (group?.showWhen?.(settings) ?? true) && (field!.showWhen?.(settings) ?? true);
 }
 
-// A control that cannot have an effect is hidden (#1060), on the field that cannot.
+// A control that cannot have an effect is hidden, on the field that cannot.
 describe('when a settings field shows', () => {
 	it.each([
 		[

@@ -137,7 +137,7 @@ describe('a Screen Output hand-out', () => {
 	});
 
 	// A refusal and a blocked tab are opposite instructions — retry, or allow pop-ups —
-	// so each is said in its own words, and neither is blamed on the clipboard (#231, #257, #258).
+	// so each is said in its own words, and neither is blamed on the clipboard.
 	it.each([
 		[
 			'opens nothing when asset access is refused',

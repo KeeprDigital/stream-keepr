@@ -89,7 +89,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s config contract', (mode) => {
 	});
 });
 
-// A table mode's max width is Auto, stored as absent, or a width within the Event Canvas bounds (#1081).
+// A table mode's max width is Auto, stored as absent, or a width within the Event Canvas bounds.
 describe.each(['standings', 'metagame'] as const)('the %s max width', (mode) => {
 	it.each([
 		[99, false],

@@ -126,7 +126,7 @@ afterEach(() => {
 	mounted = null;
 });
 
-/** The modes whose page the generic settings renderer draws (#1094). */
+/** The modes whose page the generic settings renderer draws. */
 const RENDERED: ReadonlySet<ScreenMode> = new Set([
 	'round-clock',
 	'pairings',

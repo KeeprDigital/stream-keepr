@@ -6,7 +6,7 @@ import SourceFramingStyleFields from '~/components/Screen/Modes/FeatureMatchOver
 
 // A Source Item edits its shape: corner radii, through the shared corner editor,
 // which border sides show and where its glow falls. Its fill, border and glow
-// are the Theme's `source-surface` (#831).
+// are the Theme's `source-surface`.
 
 enableAutoUnmount(afterEach);
 

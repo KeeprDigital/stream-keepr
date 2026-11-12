@@ -35,7 +35,7 @@ const BESPOKE_CONTROLS: Record<string, string> = {
 const OPTIONS_NOT_OFFERED: Record<string, readonly string[]> = {
 };
 
-/** A mode whose page the generic settings renderer draws from its contract (#1094). */
+/** A mode whose page the generic settings renderer draws from its contract. */
 const RENDERER = 'ModeSettings';
 
 /** Each mode's editor, and the config variants that between them render every scalar control. */
@@ -56,7 +56,7 @@ const EDITOR_VARIANTS: Partial<Record<ScreenMode, EditorVariants>> = {
 		variants: [{}],
 	},
 	// Each board in each view: the defaults show a grid Mainboard and a stacked Sideboard
-	// following its layout; a customised Sideboard shows its own layout fields (#1091).
+	// following its layout; a customised Sideboard shows its own layout fields.
 	'deck': {
 		editor: RENDERER,
 		variants: [
@@ -481,7 +481,7 @@ describe.each(SCREEN_MODE_VALUES)('the %s settings editor', (mode) => {
 
 				const path = writtenPath(initial, patch, bespoke);
 				if (path.length === 1 && bespoke.has(path[0]!))
-					continue; // an Event Reference's picker or a named slot's widget (ADR-0038, #1093)
+					continue; // an Event Reference's picker or a named slot's widget (ADR-0038)
 
 				const key = path.join('.');
 				if (BESPOKE_CONTROLS[`${mode}.${key}`]) {

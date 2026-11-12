@@ -815,7 +815,7 @@ describe('broadcastGraphicsDisplay', () => {
 		return posted;
 	}
 
-	// #1101: the editor adds a ⌘-clicked item to its selection, or takes it out.
+	// The editor adds a ⌘-clicked item to its selection, or takes it out.
 	it.each([
 		[
 			'a click',
@@ -907,7 +907,7 @@ describe('broadcastGraphicsDisplay', () => {
 		expect(await postedToEditor(() => wrapper.get('[data-in-selected-graphic="true"][data-item-guide="bar"]').trigger('click'))).toEqual([]);
 	});
 
-	// The live output path is unchanged (#1101): locks and selections reach no live Screen Output.
+	// The live output path is unchanged: locks and selections reach no live Screen Output.
 	it('renders a live Screen Output the same whatever its stack locks or its editor selects, with no guide or selection chrome', async () => {
 		mockOnAirGraphicIds.value = ['lower-third'];
 		mockScreen.value = screenWithStack([lowerThird]);
@@ -1099,7 +1099,7 @@ describe('broadcastGraphicsDisplay', () => {
 			expect(capabilitySessionRequests).toEqual(['/api/screen-output/screens/1/asset-capability-session']);
 		});
 
-		// A bound item's picture is the Theme's logo (#831), which no Screen overrides: one stored before is read by nothing.
+		// A bound item's picture is the Theme's logo, which no Screen overrides: one stored before is read by nothing.
 		it('resolves a media item bound to the logo from its Theme, never a stored override, through its capability', async () => {
 			mockAssetCapability.value = 'capability-token';
 			mockThemeTokens.value = {

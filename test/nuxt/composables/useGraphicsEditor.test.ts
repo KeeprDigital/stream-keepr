@@ -255,7 +255,7 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 		});
 	});
 
-	/** Several layers selected act together, each verb one undo step (#740). */
+	/** Several layers selected act together, each verb one undo step. */
 	describe('with several layers selected', () => {
 		it.each<[string, (editor: Editor) => void, { x: number; y: number }]>([
 			[
@@ -377,7 +377,7 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 		});
 	});
 
-	/** A locked layer is left alone by the canvas and arrow nudges, and edited by its panel (#747). */
+	/** A locked layer is left alone by the canvas and arrow nudges, and edited by its panel. */
 	describe('with Layer Locks', () => {
 		function storeLocked(harness: Editing, ids: string[]) {
 			harness.storeItems(harness.composition().items.map(item => ids.includes(item.id)
@@ -447,7 +447,7 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 		});
 	});
 
-	/** ⌘G and ⌘⇧G, each one undo step (#920). */
+	/** ⌘G and ⌘⇧G, each one undo step. */
 	describe('grouping and ungrouping', () => {
 		it('groups the selected Graphic Items as one undo step, and selects the new group', () => {
 			const harness = editing();
@@ -502,7 +502,7 @@ describe.each<GraphicsEditorHostFixture>(GRAPHICS_EDITOR_HOSTS)('the shared grap
 		});
 	});
 
-	/** Align and distribute move the selected layers, each command one undo step (#919). */
+	/** Align and distribute move the selected layers, each command one undo step. */
 	describe('aligning and distributing', () => {
 		it.each<[string, (editor: Editor) => void, (harness: Editing) => unknown]>([
 			[

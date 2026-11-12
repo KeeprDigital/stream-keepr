@@ -180,7 +180,7 @@ describe('the Standings reveal', () => {
 });
 
 describe('the Standings Position Change warning', () => {
-	// Warns from the Screen's own read (#905), only while the column shows.
+	// Warns from the Screen's own read, only while the column shows.
 	it.each([
 		{ shown: true, noPreviousRound: true, warns: true },
 		{ shown: true, noPreviousRound: false, warns: false },

@@ -6,7 +6,7 @@ import { getDisplayDefaultsForMode, resolveScreenModeConfig } from '~~/shared/ty
 import { createMockScreen } from '~~/test/helpers/fixtures';
 
 /**
- * Standings shows one range of positions (#1080). What an earlier contract
+ * Standings shows one range of positions. What an earlier contract
  * stored as a Top N count or a slice pair reads as that range, and a write
  * still naming either stores the range.
  */

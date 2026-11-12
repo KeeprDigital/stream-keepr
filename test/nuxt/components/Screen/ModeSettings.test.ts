@@ -327,7 +327,7 @@ const VARIANTS = {
 	],
 	'background': [{}],
 	// Each board in each view: a grid mainboard and a stacked sideboard following it;
-	// a list mainboard and a customised grid sideboard; a customised list sideboard (#1091).
+	// a list mainboard and a customised grid sideboard; a customised list sideboard.
 	'deck': [
 		{ showDeckStats: true },
 		{

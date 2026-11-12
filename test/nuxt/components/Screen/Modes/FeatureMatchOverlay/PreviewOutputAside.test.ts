@@ -94,7 +94,7 @@ async function downloadPng(wrapper: Wrapper, output: string) {
 }
 
 // The URL hand-out is the shared component's test; here it is wired once, beside the
-// PNG capture this editor keeps, with this surface's own words for a refused capture (#231, #1104).
+// PNG capture this editor keeps, with this surface's own words for a refused capture.
 describe('feature Match Overlay preview aside — output hand-outs', () => {
 	it('hands out this Screen\'s fill and key outputs through the shared hand-out', async () => {
 		const wrapper = mountAside();

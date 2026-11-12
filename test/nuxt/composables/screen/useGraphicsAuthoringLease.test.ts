@@ -314,7 +314,7 @@ describe('useGraphicsAuthoringLease', () => {
 		});
 	});
 
-	// What an editor drops its unsaved edits on (#1100): the lease taken by another
+	// What an editor drops its unsaved edits on: the lease taken by another
 	// Session, or lapsed; never a close of its own, whose pending save still lands.
 	describe('losing the lease', () => {
 		it.each([

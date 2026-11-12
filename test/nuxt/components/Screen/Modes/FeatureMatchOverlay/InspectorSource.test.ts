@@ -253,7 +253,7 @@ describe('feature Match Overlay Source Item sections', () => {
 });
 
 describe('feature Match Overlay Source Item: actions', () => {
-	// Each action is offered once (#1069): the layer row duplicates, removes and hides.
+	// Each action is offered once: the layer row duplicates, removes and hides.
 	it.each([
 		'Duplicate Source Item',
 		'Remove Source Item',

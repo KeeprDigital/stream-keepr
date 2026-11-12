@@ -216,7 +216,7 @@ describe('usePaginatedScreenMode', () => {
 		expect(pageData.value).toEqual([0, 1, 2]);
 	});
 
-	// A page size is Auto while absent: one page of every row, in the editor as on the Screen Output (#780).
+	// A page size is Auto while absent: one page of every row, in the editor as on the Screen Output.
 	it.each([
 		{
 			cardsPerPage: undefined,

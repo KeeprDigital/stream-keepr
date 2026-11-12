@@ -6,7 +6,7 @@ import { screenModeConfigContract } from '~~/shared/screenModes';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import BracketSizeField from '~/components/Screen/Modes/TopCut/BracketSizeField.vue';
 
-// A Top Cut Bracket's size: sized from its first Round until one is picked, a set size only enlarging it (#906).
+// A Top Cut Bracket's size: sized from its first Round until one is picked, a set size only enlarging it.
 
 enableAutoUnmount(afterEach);
 

@@ -177,7 +177,7 @@ describe('featureMatchOverlayFrameStyleCard', () => {
 		expect(wrapper.get(`[data-section="${section}"]`).findAll('[data-token]').map(row => row.attributes('data-token'))).toEqual([token]);
 	});
 
-	// A Frame setting stored partly in the layout and partly as a Mode Token is edited in one section (#1103).
+	// A Frame setting stored partly in the layout and partly as a Mode Token is edited in one section.
 	it.each([
 		[
 			'Video',

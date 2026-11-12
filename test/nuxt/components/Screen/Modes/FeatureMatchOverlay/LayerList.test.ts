@@ -275,7 +275,7 @@ describe('featureMatchOverlayLayerList', () => {
 		expect(config.value.layout.composition.items.map(item => item.id)).toEqual(['back', 'child']);
 	});
 
-	// Each action once (#1069): a row reorders from its menu, its drag and ⌘] / ⌘[, and carries no arrows.
+	// Each action once: a row reorders from its menu, its drag and ⌘] / ⌘[, and carries no arrows.
 	it.each<[string, string, string, string[]]>([
 		[
 			'Bring forward',
@@ -300,7 +300,7 @@ describe('featureMatchOverlayLayerList', () => {
 		expect(config.value.layout.composition.items.map(item => item.id)).toEqual(order);
 	});
 
-	// Each action once (#1069): arrows are gone from the row, and alignment lives in the geometry section.
+	// Each action once: arrows are gone from the row, and alignment lives in the geometry section.
 	it('offers a row no arrow buttons, and its menu no alignment', async () => {
 		const { wrapper } = await mountList();
 		for (const key of ['source:player1-source', 'source:main-source', 'source:player2-source'])

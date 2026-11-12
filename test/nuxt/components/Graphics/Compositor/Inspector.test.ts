@@ -607,7 +607,7 @@ describe('graphicsCompositorInspector', () => {
 		expect(wrapper.find('[data-testid="shape-geometry-preset"]').exists()).toBe(false);
 	});
 
-	// Each action once (#1069, #1100): both hosts hide a layer from its layer row, not here.
+	// Each action once: both hosts hide a layer from its layer row, not here.
 	it.each([
 		['Broadcast Graphics', BROADCAST_GRAPHICS_HOST_CONTRACT],
 		['the Feature Match Overlay', FEATURE_MATCH_OVERLAY_HOST_CONTRACT],

@@ -156,7 +156,7 @@ describe('graphicsMultiLayerInspector', () => {
 		expect(wrapper.emitted('group')).toEqual(emitted);
 	});
 
-	// Each action once (#1069): the geometry section is the one place that aligns and distributes.
+	// Each action once: the geometry section is the one place that aligns and distributes.
 	it.each([
 		['Align top', 'align', 'top'],
 		['Align centre', 'align', 'center'],

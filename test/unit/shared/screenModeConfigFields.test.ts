@@ -80,7 +80,7 @@ describe('a config contract\'s editor fields', () => {
 	});
 });
 
-// A contract field carries its whole editor description (#1093): where it sits on
+// A contract field carries its whole editor description: where it sits on
 // the settings page, what it offers, and what it references, so a page renders
 // from the contract alone.
 describe('a config contract field\'s editor description', () => {

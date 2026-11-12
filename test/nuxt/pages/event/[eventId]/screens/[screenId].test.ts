@@ -379,7 +379,7 @@ describe('screen config page — degraded card data on connected outputs', () =>
 
 /**
  * Wiring only: the shared hand-out owns its controls and their words, and
- * `useScreenOutputAccessUrl` fresh-per-hand-out capabilities (#231, #1104).
+ * `useScreenOutputAccessUrl` fresh-per-hand-out capabilities.
  */
 describe('screen config page — handing out this Screen’s output', () => {
 	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
@@ -462,7 +462,7 @@ describe('screen config page — handing out this Screen’s output', () => {
 
 /**
  * The header keeps what an operator reaches for at the top level and puts the rare
- * and destructive actions in one menu, where Rotate and Reset still confirm (#1063).
+ * and destructive actions in one menu, where Rotate and Reset still confirm.
  */
 describe('screen config page — the Screen header', () => {
 	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
@@ -717,7 +717,7 @@ describe('screen config page — Editor Focus Mode', () => {
 
 /**
  * A plain overlay mode's page ends with Background & Placement, closed unless
- * it holds a layer or an override (#970). No card lists the Foundation Tokens a
+ * it holds a layer or an override. No card lists the Foundation Tokens a
  * Screen takes from its Theme alone.
  */
 describe('screen config page — live actions first, Background & Placement last', () => {

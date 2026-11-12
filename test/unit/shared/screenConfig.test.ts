@@ -116,7 +116,7 @@ describe('resolveDeckBoards', () => {
 	});
 
 	// The sideboard takes the mainboard's layout values unless its block names one of its own;
-	// its view and stack reveal are always its own (#1091).
+	// its view and stack reveal are always its own.
 	it.each([
 		{
 			name: 'a sideboard naming no layout value takes the mainboard\'s, and keeps its own view and reveal',

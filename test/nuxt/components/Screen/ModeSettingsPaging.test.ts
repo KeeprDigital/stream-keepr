@@ -14,7 +14,7 @@ enableAutoUnmount(afterEach);
 
 // A paginated mode's page selection counts the pages its Screen Output renders: the rows as the
 // Screen reads them, followed as the Screen follows them (Screen Mode Data Freshness), not a count
-// from config (#780). Shown on Pairings, whose rows are a Round's Matches.
+// from config. Shown on Pairings, whose rows are a Round's Matches.
 
 const savedConfig = {
 	roundId: 31,

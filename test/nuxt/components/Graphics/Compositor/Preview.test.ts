@@ -247,7 +247,7 @@ describe('graphicsCompositorPreview', () => {
 		expect((posted[0] as { state: { graphics: unknown[] } }).state.graphics).toHaveLength(1);
 	});
 
-	// The shell checks who sent a selection; this host hands it on, a ⌘-click as a toggle (#1101).
+	// The shell checks who sent a selection; this host hands it on, a ⌘-click as a toggle.
 	it.each([
 		['a click', {}, false],
 		[

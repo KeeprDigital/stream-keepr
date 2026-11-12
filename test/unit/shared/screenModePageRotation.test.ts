@@ -60,7 +60,7 @@ describe('screen Mode Page Rotation', () => {
 		const durationEdit = { autoPageIntervalMs: 5_000 };
 
 		it('carries the shared rotation fields, validation and defaults', () => {
-			// The shared schema itself; a mode may describe a field in its own words (#1093).
+			// The shared schema itself; a mode may describe a field in its own words.
 			for (const [field, schema] of Object.entries(pageRotationShape))
 				expect(contract.shape[field]?._zod.def, field).toBe(schema._zod.def);
 			// Most Played Cards pages by cards, not rows (ADR-0054), so its page size is its own field.

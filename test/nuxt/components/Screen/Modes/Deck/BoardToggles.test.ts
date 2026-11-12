@@ -6,7 +6,7 @@ import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import BoardToggles from '~/components/Screen/Modes/Deck/BoardToggles.vue';
 
 // A Deck List Screen's board toggles write the one `board` selection, keeping the last board
-// shown on, and say when a shown board's Deck Source holds no cards for it (#477, #478).
+// shown on, and say when a shown board's Deck Source holds no cards for it.
 
 enableAutoUnmount(afterEach);
 

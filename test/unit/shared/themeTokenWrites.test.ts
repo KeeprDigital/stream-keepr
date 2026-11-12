@@ -371,12 +371,12 @@ describe('a Theme Token write', () => {
 		expect(parseThemeTokenWrite(name, value)).toEqual({ ok: true, dropped: true });
 	});
 
-	// A table's max width is its mode's config (#1081).
+	// A table's max width is its mode's config.
 	it.each(['standings.max-width', 'metagame.max-width'])('accepts %s, once a Mode Token, and drops it', (name) => {
 		expect(parseThemeTokenWrite(name, 1200)).toEqual({ ok: true, dropped: true });
 	});
 
-	// The table modes' type and shared chrome read Foundation Tokens (#1077).
+	// The table modes' type and shared chrome read Foundation Tokens.
 	const SHARED_CHROME = [
 		'surface',
 		'title-typography',
@@ -420,7 +420,7 @@ describe('a Theme Token write', () => {
 				'clock-typography',
 			],
 		],
-		// The card modes' too, with their placeholder surface and badge shadow (#1078).
+		// The card modes' too, with their placeholder surface and badge shadow.
 		[
 			'deck',
 			[
@@ -455,7 +455,7 @@ describe('a Theme Token write', () => {
 				'badge-shadow',
 			],
 		],
-		// Top Cut Bracket's, with a settled Bracket Position's border and the rule between its entrants (#1079).
+		// Top Cut Bracket's, with a settled Bracket Position's border and the rule between its entrants.
 		[
 			'top-cut',
 			[

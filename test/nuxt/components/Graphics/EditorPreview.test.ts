@@ -89,7 +89,7 @@ describe('graphics editor preview — what it tells its frame', () => {
 		]);
 	});
 
-	// The frame may mount its listeners after `load` fires, so it announces readiness (#235).
+	// The frame may mount its listeners after `load` fires, so it announces readiness.
 	it.each([
 		[
 			'its own frame',
@@ -196,7 +196,7 @@ describe('graphics editor preview — what its frame tells it', () => {
 		]);
 	});
 
-	// A gone frame has a null `contentWindow`, which a bare `source === contentWindow` matches (#252).
+	// A gone frame has a null `contentWindow`, which a bare `source === contentWindow` matches.
 	it('accepts no selection once there is no frame that could have sent one', async () => {
 		const wrapper = mountPreview({
 			receive: () => true,

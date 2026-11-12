@@ -21,10 +21,9 @@ import { stubCapabilitySession, stubFontFaces } from '~~/test/nuxt/helpers/fontF
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import Renderer from '~/components/Screen/Renderer.vue';
 
-// Each Screen Mode's display, mounted by its Screen host under a resolved
-// token set, paints every Mode Token it declares and its shared chrome from the
-// Foundation Tokens, and a plain mode's host insets and aligns it by the Theme
-// (ADR-0049, ADR-0051).
+// Each Screen Mode's display, under its Screen host, paints every Mode Token it declares
+// and its chrome from the Foundation Tokens; a plain mode's host insets and aligns it by
+// the Theme (ADR-0049, ADR-0051).
 
 type ColorProperty = 'color' | 'backgroundColor' | 'borderBottomColor' | 'borderTopColor' | 'borderLeftColor' | 'borderColor' | 'boxShadow' | 'width' | 'height' | 'gap' | 'fontSize';
 
