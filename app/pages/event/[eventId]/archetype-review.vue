@@ -7,8 +7,6 @@ definePageMeta({
 	layout: false,
 });
 
-const route = useRoute();
-const router = useRouter();
 const eventStore = useEventStore();
 const playerStore = usePlayerStore();
 const archetypeStore = useArchetypeStore();
@@ -59,34 +57,10 @@ const {
 	prepareAdvance,
 } = useArchetypeReviewQueue();
 
-function handleJumpToDeck(deckId: number) {
-	if (!jumpToDeck(deckId) || !loadedEventId.value)
-		return;
-	void router.replace({
-		path: `/event/${loadedEventId.value}/archetype-review`,
-		query: {
-			deckId: String(deckId),
-		},
-	});
-}
-
-watch([
-	initialLoading,
-	allEntries,
-	() => route.query.deckId,
-], ([loading]) => {
-	if (loading)
-		return;
-	const rawDeckId = Array.isArray(route.query.deckId)
-		? route.query.deckId[0]
-		: route.query.deckId;
-	const deckId = rawDeckId
-		? Number(rawDeckId)
-		: null;
-	if (deckId && Number.isFinite(deckId)) {
-		jumpToDeck(deckId);
-	}
-}, { immediate: true });
+useArchetypeReviewDeckUrl({
+	loading: initialLoading,
+	queue: { currentEntry, jumpToDeck },
+});
 
 // ── Assignment ──
 
@@ -128,7 +102,7 @@ const {
 				:entries="allEntries"
 				:selected-deck-id="currentEntry?.deck.id ?? null"
 				@update:queue-filter="queueFilter = $event"
-				@jump-to-deck="handleJumpToDeck"
+				@jump-to-deck="jumpToDeck"
 				@back="goBack()"
 				@advance="advance()"
 			/>

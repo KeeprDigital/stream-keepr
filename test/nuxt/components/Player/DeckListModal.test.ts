@@ -33,6 +33,11 @@ const { getMeleeLiveResultsStatus } = vi.hoisted(() => ({
 }));
 mockNuxtImport('useEventRepository', () => () => ({ getMeleeLiveResultsStatus }));
 
+const { navigateTo } = vi.hoisted(() => ({
+	navigateTo: vi.fn(),
+}));
+mockNuxtImport('navigateTo', () => navigateTo);
+
 mockNuxtImport('useScryfallBatch', () => () => ({
 	fetchScryfallCards: vi.fn(async () => ({
 		cards: new Map(),
@@ -323,6 +328,35 @@ describe('player deck list modal', () => {
 		await flushPromises();
 
 		expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Swiss');
+	});
+
+	// Archetype Review reads `deckId`: a Player can hold several Deck Lists, and the one shown is the one reviewed.
+	it.each([
+		['the deck it opened on', 0, 7],
+		['the deck the operator picked', 1, 8],
+	])('opens Archetype Review on %s', async (_, tab, deckId) => {
+		const wrapper = mount(DeckListModal, {
+			props: {
+				playerName: 'Marcus',
+				playerId: 7,
+				deckLists: [
+					makeDeckList(),
+					constructedDeck,
+				],
+			},
+			global: {
+				stubs: {
+					...stubs,
+					UButton: { template: '<button type="button"><slot /></button>' },
+				},
+			},
+		});
+		await flushPromises();
+
+		await wrapper.findAll('[role="tab"]')[tab]!.trigger('click');
+		await wrapper.findAll('button').find(button => button.text() === 'Review deck')!.trigger('click');
+
+		expect(navigateTo).toHaveBeenLastCalledWith(`/event/1/archetype-review?deckId=${deckId}`);
 	});
 
 	it('lists the deck\'s counter types with the cards, not in the header', async () => {

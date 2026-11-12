@@ -113,10 +113,11 @@ export function useArchetypeReviewQueue() {
 		deckLoading.value = false;
 	}, { immediate: true });
 
-	// Reset index when filter changes
+	// A filter change starts its list over, at once: a jump that changes the
+	// filter picks its deck afterwards, and a later reset would undo the pick.
 	watch(queueFilter, () => {
 		currentIndex.value = 0;
-	});
+	}, { flush: 'sync' });
 
 	watch(filteredQueue, (queue) => {
 		if (queue.length === 0) {
@@ -165,15 +166,14 @@ export function useArchetypeReviewQueue() {
 		}
 	}
 
+	/** Shows a deck of the Event, widening the filter to every deck when its list lacks it. */
 	function jumpToDeck(deckId: number): boolean {
-		let index = filteredQueue.value.findIndex(entry => entry.deck.id === deckId);
-		if (index < 0) {
-			queueFilter.value = 'all';
-			index = filteredQueue.value.findIndex(entry => entry.deck.id === deckId);
-		}
-		if (index < 0)
+		const holdsDeck = (entry: ReviewEntry) => entry.deck.id === deckId;
+		if (!allEntries.value.some(holdsDeck))
 			return false;
-		currentIndex.value = index;
+		if (!filteredQueue.value.some(holdsDeck))
+			queueFilter.value = 'all';
+		currentIndex.value = filteredQueue.value.findIndex(holdsDeck);
 		return true;
 	}
 
