@@ -382,6 +382,28 @@ describe('a committed write', () => {
 			],
 		]);
 	});
+
+	// ADR-0045: the saving client applied only the Slot, so it must hear of the Player too.
+	it('announces the Player a Slot setup edit writes first and with no origin, then the Slot under the writer\'s', async () => {
+		const { eventId, slot, players } = await stage();
+
+		await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId: slot,
+			input: {
+				player1Id: players[0]!,
+				player1Data: { name: 'Ada', pronouns: 'she/her' },
+			},
+			originConnectionId: ORIGIN,
+		});
+
+		// Seating the Player also opens a Session, which `featureMatchSessionOpeners.sqlite.test.ts` holds.
+		const eventData = announced(eventId).filter(([type]) => !type.startsWith('featureMatchSession:'));
+		expect(eventData.map(([type, payload]) => [type, payload.originConnectionId ?? null])).toEqual([
+			['player:updated', null],
+			['featureMatch:updated', ORIGIN],
+		]);
+	});
 });
 
 // An update to another Event's Round is `roundTiming.sqlite.test.ts`'s.
