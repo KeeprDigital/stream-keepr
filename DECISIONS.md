@@ -2433,7 +2433,7 @@ The evidence is from `main` at `82c22f49`, after #949 (Talent photo) and #950 (I
 | Operational reads       | 4 (`index.ts:4174`, `5780–5800`)             | Cockpit 9 (`operations-cockpit.ts:91`), queues 14 (`operational-queues.ts:64`) | Their own modules                                                                      | Already split; no ticket                                |
 | Health and capacity     | 3                                            | `checkHealth`, `getCapacity`, `updateCapacityLimits`                           | Facade                                                                                 | A split would only pass through; no ticket              |
 
-Ingestion and Template Packages share the Graphics Ingestion Operation lifecycle: `get/updateIngestionOperation`, `claimGraphicsIngestion`, `recordCanonicalWrites` and `getCapacity`. That shared lifecycle is one sub-interface, `GraphicsIngestionOperationCatalogue` (`operation.ts`), and #989 landed it first.
+Ingestion and Template Packages share the Graphics Ingestion Operation lifecycle: `get/updateIngestionOperation`, `claimGraphicsIngestion`, `recordCanonicalWrites` and `getCapacity`. That shared lifecycle is one sub-interface, `GraphicsIngestionOperationCatalogue` (`operation.ts`), and #989 landed it first. `initiateGraphicsIngestion` joined it as its sixth method, because both families start an operation through it.
 
 The two families share more than that interface (read at `57351fea`). A Template Package starts through `initiateGraphicsIngestion`, and is uploaded, cancelled and retried by the ingestion facade methods. `continueGraphicsIngestion` hands a Template Package operation to `continueTemplatePackagePreflight`. Both pipelines fail an operation, release its staged input and write canonical bytes through the same closures in the factory. So the ingestion module cannot be cut out by moving ingestion's code alone.
 
@@ -2466,7 +2466,7 @@ The maintainer decided on 2026-11-12 that ingestion goes ahead as the trial of w
 1. The Graphics Ingestion Operation lifecycle, as the catalogue sub-interface `GraphicsAssetCatalogue` extends.
 2. The steps both pipelines take (starting, changing and failing an operation, releasing its staged input, writing canonical bytes, and the pinned silent-video validation), moved unchanged into `operation-lifecycle.ts`, which the facade builds once.
 3. The ingestion module and its own catalogue sub-interface, handing a Template Package operation back to the facade.
-4. Each invariant's home test at that seam, on the D1 catalogue.
+4. Each invariant's home test at that seam, on the D1 catalogue. This step is not decided yet: the existing suites stay on the facade, as the proof the move preserved behaviour, until the module is on `main`.
 
 **Delivery is the first.** `server/modules/graphics-asset-library/delivery.ts` holds it:
 
@@ -2485,6 +2485,14 @@ How the existing types fit around it:
 - `GraphicsAssetCatalogue` extends the delivery catalogue, and `GraphicsAssetLibrary` extends `GraphicsAssetDelivery`.
 - Every reader wires `reportDisagreement` to `createGraphicsDisagreementReporter` (`reconciliation.ts`). It is built from the catalogue's observation reads and writes and the canonical store alone, never staging or media. The scheduled reconciliation pass compares an expectation through the same code, so a reader and the pass open the same Graphics Discrepancy and announce it once (#992).
 - `catalogueRequest` moved to `catalogue-request.ts`, unchanged, so every family shares one way of failing as unavailable.
+
+**Ingestion is the second (#989).** `server/modules/graphics-asset-library/ingestion.ts` holds it:
+
+- **Interface:** `GraphicsAssetIngestion` has the 14 methods that start a Graphics Ingestion Operation, feed it bytes, confirm, cancel and retry it, unchanged. `GraphicsAssetLibrary` extends it and the facade spreads its methods in.
+- **Catalogue:** `GraphicsAssetIngestionCatalogue` has 14 methods of its own (staged-byte accounting, the multipart checkpoint, reuse and publication) and extends the six-method lifecycle. `GraphicsAssetCatalogue` extends both.
+- **Built from:** `createGraphicsAssetIngestion({ catalogue, staging, canonical, lifecycle, remoteSource?, now, generateIdentity, recordSupersession, continueTemplatePackage })`. `lifecycle` is the one instance the facade built from `operation-lifecycle.ts`.
+
+**One callback hands a Template Package operation back to the facade.** `continueTemplatePackage(operation)` is called at one place, the first statement of `continueGraphicsIngestion`, and ingestion returns its answer untouched. By then the archive is staged and counted and, on a retry, the operation is claimed. The callback must not call back into ingestion for that operation, and it records a pipeline failure on the operation rather than throwing. Template Packages reach nothing else in the module: they start, fail and release an operation through the lifecycle, and their archive is uploaded by ingestion's `uploadGraphicAsset` before the callback fires.
 
 **Template Package export keeps the shared agreement rule.** It reads through delivery's `readCanonicalContent` and `observeCanonicalContent`. #990 would have moved it, and is closed pending the #989 trial.
 
@@ -2516,6 +2524,9 @@ How the existing types fit around it:
 - **Give delivery reconciliation itself rather than a reporter.** Building reconciliation needs the staging store, which would put staging back into every delivery. A reporter keeps delivery buildable from the catalogue and the canonical store alone.
 - **Let the reconciliation factory take staging lazily, so a Screen Output could build all of it (#992).** The output would still need the media port, built from the facade's validators, and every repair action would type-check against a staging store that might not be there. The reporter needs neither.
 - **Move export onto delivery now.** Export belongs to the Template Package family (#990).
+- **Ingestion importing the Template Package pipeline (#989).** That pipeline is closures in the facade. Importing it means moving it, which is #990.
+- **An event for a staged Template Package (#989).** Upload and retry return the continued operation to the route, so an event would need a reply channel: a callback with more parts.
+- **The facade dispatching Template Package operations itself (#989).** It would wrap the five methods that continue an operation, and would no longer expose ingestion's methods unchanged.
 
 ## ADR-0074: A One Piece Card Game Event's Players and their Deck Lists come from a TCG+ Import, and its cards from one catalogue keyed by card number
 

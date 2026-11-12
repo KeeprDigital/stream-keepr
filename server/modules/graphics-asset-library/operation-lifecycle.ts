@@ -21,7 +21,10 @@ import type {
 import type { SilentVideoPlaybackValidator } from './silent-video-playback-validator';
 import { TEMPLATE_PACKAGE_LIMITS } from '~~/shared/types/templatePackage';
 import { graphicAssetSourceKind } from '~~/shared/utils/graphicAssetSource';
-import { MAX_SILENT_VIDEO_POSTER_BYTES } from '~~/shared/utils/graphicsAssetCompatibility';
+import {
+	GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS,
+	MAX_SILENT_VIDEO_POSTER_BYTES,
+} from '~~/shared/utils/graphicsAssetCompatibility';
 import { canonicalContentIdentity } from './canonical-integrity';
 import { catalogueRequest } from './catalogue-request';
 import { GraphicsAssetLibraryError } from './errors';
@@ -38,8 +41,7 @@ import { validationError } from './validation';
 
 export interface GraphicsIngestionOperationLifecycleDependencies {
 	/** Refuses with `graphics-asset-library-unavailable` over a health-only catalogue. */
-	requireCatalogue: () => Pick<GraphicsAssetCatalogue, 'initiateGraphicsIngestion'>
-		& GraphicsStagedInputReleaseCatalogue;
+	requireCatalogue: () => GraphicsIngestionOperationCatalogue & GraphicsStagedInputReleaseCatalogue;
 	/** Refuses with `graphics-asset-library-unavailable` over a health-only byte store. */
 	requireStaging: () => GraphicsStagingObjectStore;
 	silentVideoPlaybackValidator: SilentVideoPlaybackValidator;
@@ -65,6 +67,8 @@ export function createGraphicsIngestionOperationLifecycle(
 		now,
 		generateIdentity,
 	} = dependencies;
+	const activeIngestionLeaseMilliseconds
+		= GRAPHICS_MULTIPART_PART_TRANSFER_TIMEOUT_MILLISECONDS + 30_000;
 
 	function timestamp() {
 		return now().toISOString();
@@ -370,7 +374,8 @@ export function createGraphicsIngestionOperationLifecycle(
 	 * nothing twice.
 	 */
 	async function releaseCancelledStagedInput(
-		catalogue: GraphicsAssetCatalogue,
+		catalogue: GraphicsIngestionOperationCatalogue
+			& Pick<GraphicsAssetCatalogue, 'getGraphicAssetMultipartState' | 'recordGraphicAssetMultipartCleanupComplete'>,
 		operation: GraphicsIngestionOperation,
 	): Promise<GraphicsIngestionOperation> {
 		const multipart = await catalogueRequest(
@@ -470,6 +475,7 @@ export function createGraphicsIngestionOperationLifecycle(
 	}
 
 	return {
+		activeIngestionLeaseMilliseconds,
 		initiateGraphicsOperation,
 		changedOperation,
 		SilentVideoValidationRuntimeError,
@@ -481,3 +487,5 @@ export function createGraphicsIngestionOperationLifecycle(
 		storeCanonicalBytes,
 	};
 }
+
+export type GraphicsIngestionOperationLifecycle = ReturnType<typeof createGraphicsIngestionOperationLifecycle>;
