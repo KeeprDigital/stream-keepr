@@ -23,6 +23,9 @@ export function playerHistoryDependencies(playerId: () => number | null): Screen
 
 	return {
 		'player:updated': ({ player }, held) => player.id === playerId() || holdsOpponent(held, player.id),
+		// Naming no Player, it may have re-projected any of them (ADR-0084).
+		'player:deckProjectionsChanged': ({ playerIds }, held) =>
+			playerIds === null || playerIds.some(id => id === playerId() || holdsOpponent(held, id)),
 		'player:deleted': ({ playerId: id }, held) => id === playerId() || holdsOpponent(held, id),
 		'match:created': ({ match }) => involvesPlayer(match),
 		'match:updated': ({ match }, held) => involvesPlayer(match) || holdsMatch(held, match.id),

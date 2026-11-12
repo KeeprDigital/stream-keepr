@@ -5,6 +5,7 @@ import type { PlayerNameFacts } from '~~/shared/utils/playerName';
 import { eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { events } from '~~/server/db/schema';
+import { mapPlayerToResponse } from '~~/server/mappers/player';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
 import { releaseEmptiedLeaderArchetypes } from '~~/server/modules/op-deck-list-write/archetypes';
 import { archetypeService } from '~~/server/services/archetype';
@@ -121,24 +122,25 @@ export function playerUpdateModule() {
 		playerIds,
 		originConnectionId,
 	}: ReconcileDeckProjectionsParams) {
-		// One bulk write for every affected Player, all or none, then one run of
-		// `player:updated` messages in the order of the requested Player IDs, after
-		// which Graphic Input Bindings re-resolve once.
+		// One bulk write for every affected Player, all or none, then one message
+		// naming them in the order of the requested Player IDs (ADR-0084). It answers
+		// the Players it wrote; none written, nothing is announced.
 		const updatedPlayers = await playerDeckService().reconcilePrimaryArchetypesForPlayers(eventId, playerIds);
-		const responses = await publication.playersUpdated({
+		if (updatedPlayers.length === 0)
+			return [];
+
+		const updatedIds = updatedPlayers.map(player => player.id);
+		await publication.playerDeckProjectionsChanged({
 			eventId,
-			entities: updatedPlayers,
+			playerIds: updatedIds,
 			originConnectionId,
 		});
-
-		if (updatedPlayers.length > 0) {
-			await publishPlayerSnapshotUpdates({
-				eventId,
-				playerIds: updatedPlayers.map(player => player.id),
-				originConnectionId,
-			});
-		}
-		return responses;
+		await publishPlayerSnapshotUpdates({
+			eventId,
+			playerIds: updatedIds,
+			originConnectionId,
+		});
+		return updatedPlayers.map(mapPlayerToResponse);
 	}
 
 	async function updatePlayer({

@@ -541,7 +541,7 @@ A root-relative path was first accepted wherever it pointed, so an author could 
 
 ## ADR-0022: A Screen Output reads what its Screen publishes, through its Screen
 
-Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/issues/604) · Amended 2026-10-21 ([#707](https://github.com/KeeprDigital/stream-keepr/issues/707)): a Card's expiry is a clock projection that no read, client or timer writes · Amended 2026-10-27 ([#820](https://github.com/KeeprDigital/stream-keepr/issues/820)): the Event context carries the Event's Theme · Amended 2026-11-03 ([#908](https://github.com/KeeprDigital/stream-keepr/issues/908)): a Metagame read counts Conversion Rate against the Event's Conversion Target (ADR-0061)
+Accepted · 2026-10-17 · [#604](https://github.com/KeeprDigital/stream-keepr/issues/604) · Amended 2026-10-21 ([#707](https://github.com/KeeprDigital/stream-keepr/issues/707)): a Card's expiry is a clock projection that no read, client or timer writes · Amended 2026-10-27 ([#820](https://github.com/KeeprDigital/stream-keepr/issues/820)): the Event context carries the Event's Theme · Amended 2026-11-03 ([#908](https://github.com/KeeprDigital/stream-keepr/issues/908)): a Metagame read counts Conversion Rate against the Event's Conversion Target (ADR-0061) · Amended 2026-11-12 ([#1141](https://github.com/KeeprDigital/stream-keepr/issues/1141)): an Archetype rename or delete patches no held Player (ADR-0084)
 
 ### Decision
 
@@ -583,7 +583,7 @@ This section first named a server-side timeout as expiry's owner. None exists: `
 - Reconnect Resync re-reads the same way: the held Screen by id and the Event context, both through the Screen with the credential the rendering loaded with (#705). A rendering's load is the Screen lookup, the Event context and — for a Screen Output — its realtime session; one that holds its Screen without the rest has not finished loading, so its next recovery resumes the load from that Screen rather than only re-reading it. A load whose Event context read failed says so ("Event details unavailable"), never "Screen not found", and retries itself every 15 s, because nothing else retries it while the connection stays up (#727). The Event context is the display session's own re-read, not Event Data Resync's Event dataset (ADR-0028): that dataset is the operator's private Event, which a rendering never holds. A Screen Output or Program monitor also re-reads it whenever its Screen's channel says the Event context changed (`output:eventContextChanged`), which covers an Event edit, a Theme switch and a Theme token write alike, since the context carries the Theme: it applies no `event:updated` or `theme:updated` payload. One read is in flight at a time, a burst costs one follow-up, and a failed one is retried every 15 s. Both recoveries run off the Screen's channel for such a rendering, and off the Event's for a preview.
 - Store-wide reader hooks a rendering installs (`readActiveCardAsScreenOutput`, `readSessionsAsScreenOutput`, `readSessionAsScreenOutput`) are uninstalled when the rendering is disposed, so a control page never inherits them.
 - A Screen Output or Program monitor follows only its Screen's own channel, and joins no Event room. That channel carries whole only what the Screen's own read answers the same: the Screen's announcements, its Card while in Card Spotlight, its Broadcast Graphics Live Session's messages, and the Feature Match Session messages of the Slot it shows, at the Event's sequence numbers. Every other change arrives as a cause, a kind of Output Change with no payload (`output:modeDataChanged`), and the rendering re-reads through its Screen. So the Feature Match Overlay sideboard re-reads on a `player` or `playerDeck` cause (ADR-0031), and every mode's read in Screen Mode Data Freshness re-reads on the causes its Screen Mode Definition declares it follows (`outputFollows`).
-- A rendering holds the records it read in the ordinary stores (`playerStore.holdPlayer`, `featureMatchStore.holdFeatureMatch`), but on a Screen Output or Program monitor no Event message updates them: a `featureMatchSlot` or `player` cause re-reads the Slot through the Screen, which holds it again, and only a preview, in its Event's room, still has `player:updated` and `featureMatch:updated` applied to them. Standings holds nothing in them: an operator's populated roster would stand in for its read.
+- A rendering holds the records it read in the ordinary stores (`playerStore.holdPlayer`, `featureMatchStore.holdFeatureMatch`), but on a Screen Output or Program monitor no Event message updates them: a `featureMatchSlot` or `player` cause re-reads the Slot through the Screen, which holds it again, and only a preview, in its Event's room, still has `player:updated` and `featureMatch:updated` applied to them. An Archetype rename or delete sends no `player:updated`: the preview's operator re-reads the Players, and the mode re-reads on the `player` change (ADR-0084). Standings holds nothing in them: an operator's populated roster would stand in for its read.
 - A preview and a settings editor decide what to re-read by the same rule the server applies (`outputChangeOf`, `screenHears`), run here over the Event's messages against the mode and configuration they render. No mode keeps a message map of its own. Who a Slot seats is unknown to that rule on the client unless its caller says, so a mode narrowed by it hears every Player there.
 - A rendering never leaves its page on its own. A Screen Output or Program monitor goes blank where it stands when its Screen is deleted. A deleted Event's Screens go with it and nothing reaches the output, which holds what it shows; `event:deleted`, which sends an operator home, is not heard.
 - Melee sync refreshes, which reload whole collections privately, are skipped on a rendering. What a rendering re-reads after Event Data changes is the Screen Mode data freshness work's (#601–#603, #610).
@@ -2913,3 +2913,44 @@ Wrangler decides whether to run a migration by its name alone. v1.5.0's `_hub_mi
 - **Keep the name `0000_baseline.sql`.** Fewer words to change, but a production database nobody emptied would skip it in silence. One emptied of tables but not of `_hub_migrations` would too, and the Worker would deploy onto no schema at all.
 - **Delete the tests and keep `0001`–`0007`.** It leaves backfill SQL that runs on every fresh database, rewrites nothing, and has no test.
 - **Concatenate the SQL by hand, as ADR-0071 did.** ADR-0071 concatenated to keep the backfills. With none to keep, generating gives the file and the snapshot `pnpm db:generate` diffs against, and nothing to transcribe wrongly.
+
+## ADR-0084: An Archetype rename or delete announces the Players it re-projected in one message that names them
+
+Accepted · 2026-11-12 · [#1141](https://github.com/KeeprDigital/stream-keepr/issues/1141)
+
+### Decision
+
+**Renaming or deleting an Archetype publishes one `player:deckProjectionsChanged`** for the Players whose Archetype projection it re-ran: those whose primary Deck List holds the Archetype. The message names them (`playerIds`) and carries none of them. It goes out once the bulk write commits, under the writer's origin, before `archetype:updated` or `archetype:deleted`, and not at all when no Player was written. No `player:updated` is published on this path. `player:updated` itself is unchanged: a single Player edit and a deck review still publish it, carrying the Player.
+
+**It is one Event Data change.** One publish on the Event's channel, one telling of the Screens, one re-resolution of Graphic Input Bindings. The Reverse Sync that follows is as it was.
+
+**Every consumer of the per-Player messages follows it:**
+
+- **An operator browser re-reads the Event's Players** and invalidates its Metagame pages, as it does on `melee:playersSynced`. It still applies the projection itself on the Archetype's own message, for the Players whose decks it has loaded. The browser that made the change skips its own message, as it skipped its own `player:updated`.
+- **A Player history re-reads** when the message names its Player or an opponent it holds.
+- **A Screen Output is told a `player` change naming those Players**, so exactly the Screens a `player:updated` for one of them reached are told, once. A preview applies the same rule to the message itself.
+
+**A message too large to name its Players names none.** Where the ids would take the message past `MAX_REALTIME_MESSAGE_BYTES`, it is published with `playerIds: null`: any Player may have changed. An operator re-reads the Players either way; a Player history re-reads; every Screen following Players is told, as on a sync. So the message is bounded by construction and `realtime_publish_oversized` cannot fire for it, the same fallback ADR-0004 gives a Live Session notification.
+
+### Why
+
+The write was already one batch (#1039). Its announcement was one `player:updated` per Player, each a publish to Ably made in sequence inside one Worker invocation: 400 for an Archetype 400 Players hold. Nothing had measured that against the Worker's subrequest limit, and a refused publish is logged and skipped, so some peers could be left untold of some Players.
+
+The ids fit where the Players do not. A `PlayerResponse` is several hundred bytes, so a few hundred pass 64 KiB. An id costs its digits and a comma: 400 Players weigh about 3 KB, and the limit holds some 8,000 seven-digit ids. An Archetype held by more Players than that is not an Event this app has seen, but the publisher cannot rule it out, and an oversized publish is refused silently. So the fallback is by size, measured over the whole message as `realtimeMessageBytes` measures it, not by a count.
+
+A re-read is what a peer already does for a bulk Player change (`melee:playersSynced`, `tcgplus:imported`). ADR-0031 took the same shape for a resolved Unresolved Deck Card, and rejected one `player:updated` per Player for the same cost.
+
+### Consequences
+
+- A peer operator's Player list is re-read once per rename or delete, where its rows were replaced one by one. The maintainer accepted that on #1141.
+- An operator browser on a page that never loaded the Players loads them on this message, as on `melee:playersSynced`.
+- A preview's held Players (`playerStore.holdPlayer`, ADR-0022) are no longer patched by a message on this path. Its operator's re-read replaces them, and its mode re-reads on the `player` change.
+- The message does not say what changed on a Player. A consumer needing the new Archetype, deck name or colours reads the Player.
+- The same per-Player loop remains in the One Piece Card Game bulk Deck List write (`writeMany` with `announcePlayers`, ADR-0074), which still publishes one `player:updated` per Player. This message's handling would serve it: the operator re-read and the `player` change are what its consumers need. Its name would not, since that write replaces a Player's Deck List and not only their Archetype projection.
+- `test/unit/server/modules/archetypeChangeAnnouncement.sqlite.test.ts` pins what reaches the Event's channel for 1, 3 and 400 Players, the order against the Archetype's message, and both sides of the size bound.
+
+### Rejected alternatives
+
+- **Carry the Players.** A peer would patch its rows without a read, but a few hundred do not fit one message, so the common case for a popular Archetype would be the fallback.
+- **Split the ids across several messages.** Past the bound a peer re-reads the Players whatever the ids say, so a second message buys only narrower Screen tellings, for a case not yet seen, and gives up "one message, whatever the number".
+- **Leave it to the Archetype's own message.** An operator browser already projects from it, but only onto Players whose decks it has loaded, and a Screen following Players and not Archetypes would hear nothing.

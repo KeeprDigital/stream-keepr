@@ -19,6 +19,7 @@ import { asOneOutputChange } from '~~/server/modules/screen-output-publication';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { publishMessage, publishMessageStrict } from '~~/server/utils/ably';
 import { publishFailureFields } from '~~/server/utils/realtimePublishFailure';
+import { MAX_REALTIME_MESSAGE_BYTES, realtimeMessageBytes } from '~~/shared/types/messages';
 import { featureMatchMessages } from './messages';
 
 export type { EventDataMessage } from './messages';
@@ -64,6 +65,10 @@ interface PlayerDeckPublicationInput extends EntityPublicationInput<DbPlayerDeck
 }
 
 interface PlayerDeckCardsResolvedInput extends PublicationInput, MessagePayload<'playerDeck:cardsResolved'> {}
+
+interface PlayerDeckProjectionsChangedInput extends PublicationInput {
+	playerIds: readonly number[];
+}
 
 interface ArchetypeKeyCardsUpdatedInput extends PublicationInput {
 	archetypeId: number;
@@ -341,6 +346,27 @@ export function eventDataPublicationModule() {
 		return updated;
 	}
 
+	/**
+	 * Announces the Players an Archetype rename or delete re-projected, in one
+	 * message naming them, whatever their number (ADR-0084): one publish, one
+	 * telling of the Screens, one re-resolution of Graphic Input Bindings.
+	 *
+	 * Where even their ids would not fit one message it names none, and every
+	 * consumer re-reads as it does after a sync. So the message is bounded by
+	 * construction, and `realtime_publish_oversized` cannot fire for it.
+	 */
+	async function playerDeckProjectionsChanged({ eventId, playerIds, originConnectionId }: PlayerDeckProjectionsChangedInput) {
+		if (playerIds.length === 0)
+			return;
+		const named = {
+			playerIds: [...playerIds],
+		};
+		const fits = realtimeMessageBytes(eventId, 'player:deckProjectionsChanged', named, originConnectionId) <= MAX_REALTIME_MESSAGE_BYTES;
+		await publishEventDataChange(eventId, 'player:deckProjectionsChanged', fits
+			? named
+			: { playerIds: null }, originConnectionId);
+	}
+
 	async function playerDeleted({ eventId, id, originConnectionId }: DeletedPublicationInput) {
 		await publishEventDataChange(eventId, 'player:deleted', { playerId: id }, originConnectionId);
 	}
@@ -592,6 +618,7 @@ export function eventDataPublicationModule() {
 		playerCreated,
 		playerUpdated,
 		playersUpdated,
+		playerDeckProjectionsChanged,
 		playerDeleted,
 		playerListCreated,
 		playerListUpdated,

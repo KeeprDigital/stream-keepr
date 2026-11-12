@@ -145,6 +145,16 @@ export interface MessageDefinitions {
 		playerId: number;
 	};
 
+	/**
+	 * An Archetype rename or delete re-projected these Players from their primary
+	 * Deck Lists: each one's Archetype, deck name and colours (ADR-0084). It names
+	 * the Players and carries none, since a few hundred do not fit one message.
+	 * `null` names none, where even their ids do not fit: any Player may have changed.
+	 */
+	'player:deckProjectionsChanged': {
+		playerIds: number[] | null;
+	};
+
 	'playerDeck:reviewed': {
 		deck: PlayerDeckSummaryResponse;
 	};

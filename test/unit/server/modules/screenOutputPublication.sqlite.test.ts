@@ -356,6 +356,70 @@ describe('what a Screen\'s channel is sent', () => {
 			},
 		},
 		{
+			name: 'a deck projection change reaches the Screens whose Slot seats one of the Players it names',
+			messages: [
+				message('player:deckProjectionsChanged', {
+					playerIds: [unseated!.id, seated!.id],
+				}),
+			],
+			screens: {
+				standings: [
+					changed('standings', 'player'),
+				],
+				overlay: [
+					changed('overlay', 'player'),
+				],
+				otherOverlay: [
+					changed('otherOverlay', 'player'),
+				],
+				controls: [
+					changed('controls', 'player'),
+				],
+				headToHead: [
+					changed('headToHead', 'player'),
+				],
+			},
+		},
+		{
+			name: 'a deck projection change does not reach a Screen whose Slot seats none of its Players',
+			messages: [
+				message('player:deckProjectionsChanged', {
+					playerIds: [unseated!.id],
+				}),
+			],
+			screens: {
+				standings: [
+					changed('standings', 'player'),
+				],
+				otherOverlay: [
+					changed('otherOverlay', 'player'),
+				],
+			},
+		},
+		{
+			name: 'a deck projection change naming no Player reaches every Screen showing Players',
+			messages: [
+				message('player:deckProjectionsChanged', { playerIds: null }),
+			],
+			screens: {
+				standings: [
+					changed('standings', 'player'),
+				],
+				overlay: [
+					changed('overlay', 'player'),
+				],
+				otherOverlay: [
+					changed('otherOverlay', 'player'),
+				],
+				controls: [
+					changed('controls', 'player'),
+				],
+				headToHead: [
+					changed('headToHead', 'player'),
+				],
+			},
+		},
+		{
 			name: 'a seated Player\'s deck change reaches the control Screen of their Slot, which no Slot message announces',
 			messages: [
 				message('playerDeck:cardsResolved'),
@@ -1011,6 +1075,15 @@ describe('every publish site reaches the Screen channels', () => {
 			act: async () => (await import('~~/server/modules/event-data-publication')).eventDataPublicationModule().playersUpdated({
 				eventId,
 				entities: [seated!, opponent!, unseated!],
+			}),
+			screen: 'standings',
+			heard: ['output:modeDataChanged'],
+		},
+		{
+			family: 'Event Data publication, many Players in one message',
+			act: async () => (await import('~~/server/modules/event-data-publication')).eventDataPublicationModule().playerDeckProjectionsChanged({
+				eventId,
+				playerIds: [seated!.id, opponent!.id, unseated!.id],
 			}),
 			screen: 'standings',
 			heard: ['output:modeDataChanged'],

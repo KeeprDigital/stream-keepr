@@ -175,6 +175,12 @@ const OUTPUT_CHANGES: { [K in MessageType]: (payload: MessagePayload<K>) => read
 			playerIds: [playerId],
 		},
 	],
+	// Naming no Player, it may have re-projected any of them (ADR-0084).
+	'player:deckProjectionsChanged': ({ playerIds }) => [
+		playerIds
+			? { kind: 'player', playerIds }
+			: { kind: 'player' },
+	],
 	'playerDeck:reviewed': ({ deck }) => [
 		{
 			kind: 'playerDeck',

@@ -249,6 +249,69 @@ describe('a peer\'s message', () => {
 		}).toEqual(left);
 	});
 
+	// An Archetype rename or delete names the Players it re-projected and carries none
+	// (ADR-0084), so an operator re-reads them; a Screen Output has no Session to.
+	it.each([
+		{
+			client: 'an operator',
+			named: 'its Players',
+			playerIds: [PLAYER_ID, 3],
+			reads: ['players'],
+			deckName: 'Azorius Tempo',
+		},
+		{
+			client: 'an operator',
+			named: 'no Player',
+			playerIds: null,
+			reads: ['players'],
+			deckName: 'Azorius Tempo',
+		},
+		{
+			client: 'a Screen Output',
+			named: 'its Players',
+			playerIds: [PLAYER_ID, 3],
+			reads: [],
+			deckName: undefined,
+		},
+	] as const)('player:deckProjectionsChanged naming $named makes $client re-read $reads', async ({ client, playerIds, reads, deckName }) => {
+		const { metagameVersion } = await stage(client);
+		onTestFinished(() => {
+			answers.players = [
+				createWireMockPlayer({ id: PLAYER_ID, eventId: EVENT_ID }),
+			];
+		});
+		answers.players = [
+			createWireMockPlayer({
+				id: PLAYER_ID,
+				eventId: EVENT_ID,
+				gameData: { type: 'mtg', deckName: 'Azorius Tempo', deckColors: 'WU' },
+			}),
+		];
+
+		deliver('player:deckProjectionsChanged', {
+			playerIds: playerIds && [...playerIds],
+		});
+
+		expect({
+			reads: (await settled()).reads,
+			deckName: (usePlayerStore().players[0]?.gameData as { deckName?: string } | null)?.deckName,
+			metagameInvalidations: useMetagameStore().invalidationVersion - metagameVersion,
+		}).toEqual({ reads, deckName, metagameInvalidations: 1 });
+	});
+
+	it('skips its own player:deckProjectionsChanged, whose write it already holds', async () => {
+		const { metagameVersion } = await stage('an operator');
+
+		deliver('player:deckProjectionsChanged', {
+			playerIds: [PLAYER_ID],
+		}, { fromSelf: true });
+
+		expect({
+			reads: (await settled()).reads,
+			metagameInvalidations: useMetagameStore().invalidationVersion - metagameVersion,
+		}).toEqual({ reads: [], metagameInvalidations: 0 });
+	});
+
 	it('playerDeck:cardsResolved invalidates the metagame', () => {
 		const version = useMetagameStore().invalidationVersion;
 
