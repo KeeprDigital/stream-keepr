@@ -3,7 +3,10 @@ import type { QueueFilter, ReviewEntry } from '~/composables/workflows/useArchet
 import { isReviewedPlayerDeck } from '~~/shared/utils/playerDeck';
 
 const props = defineProps<{
+	/** The shown deck's place in the filter's list, or -1 for a deck outside it. */
 	currentIndex: number;
+	canGoBack: boolean;
+	canAdvance: boolean;
 	filteredCount: number;
 	queueFilter: QueueFilter;
 	reviewedCount: number;
@@ -41,7 +44,9 @@ const selectedJumpDeckId = computed(() => props.selectedDeckId ?? undefined);
 						variant="ghost"
 						icon="i-lucide-chevron-left"
 						size="sm"
-						:disabled="currentIndex === 0 || initialLoading"
+						aria-label="Previous deck"
+						title="Back to the deck shown before this one"
+						:disabled="!canGoBack || initialLoading"
 						@click="emit('back')"
 					/>
 					<UButton
@@ -49,7 +54,8 @@ const selectedJumpDeckId = computed(() => props.selectedDeckId ?? undefined);
 						variant="ghost"
 						icon="i-lucide-chevron-right"
 						size="sm"
-						:disabled="currentIndex >= filteredCount - 1 || initialLoading"
+						aria-label="Next deck"
+						:disabled="!canAdvance || initialLoading"
 						@click="emit('advance')"
 					/>
 				</div>
@@ -117,7 +123,7 @@ const selectedJumpDeckId = computed(() => props.selectedDeckId ?? undefined);
 				<USeparator orientation="vertical" class="h-4" />
 
 				<span class="text-sm text-muted">Deck</span>
-				<span class="text-sm tabular-nums">{{ filteredCount > 0 ? currentIndex + 1 : 0 }} of {{ filteredCount }}</span>
+				<span class="text-sm tabular-nums" data-deck-position>{{ currentIndex >= 0 ? currentIndex + 1 : '–' }} of {{ filteredCount }}</span>
 			</div>
 		</template>
 	</UDashboardToolbar>

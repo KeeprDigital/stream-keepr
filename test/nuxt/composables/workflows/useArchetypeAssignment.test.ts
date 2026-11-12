@@ -193,6 +193,22 @@ describe('useArchetypeAssignment', () => {
 			expect(advance).toHaveBeenCalledOnce();
 		});
 
+		it('stays on a deck that was already reviewed', async () => {
+			const advance = vi.fn();
+			const existing = makeArchetype({ id: 5, name: 'Control' });
+			mockFindByName.mockReturnValue(existing);
+			mockFindByNameAndColors.mockReturnValue(existing);
+
+			const opts = makeOptions(makeEntry({ playerId: 10, archetypeId: 4, deckReviewed: true }), advance);
+			const { nameInput, acceptName } = useArchetypeAssignment(opts);
+			nameInput.value = 'Control';
+
+			await acceptName();
+
+			expect(mockReviewDeck).toHaveBeenCalledWith(1, 10, 1, 5);
+			expect(advance).not.toHaveBeenCalled();
+		});
+
 		it('calls PATCH key cards and assigns when key cards changed', async () => {
 			const advance = vi.fn();
 			const existing = makeArchetype({
