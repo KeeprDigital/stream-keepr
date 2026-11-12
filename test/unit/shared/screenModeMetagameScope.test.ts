@@ -36,7 +36,7 @@ describe('the Metagame Scope', () => {
 			for (const field of [
 				...SCOPE_FIELDS,
 				...(archetypeFilter
-					? ['archetypeFilter']
+					? ['archetypeId']
 					: []),
 			])
 				expect(reset, field).not.toHaveProperty(field);
@@ -46,12 +46,17 @@ describe('the Metagame Scope', () => {
 			expect(SCREEN_MODES[mode].eventReferences).toHaveProperty('playerListId', 'playerList');
 		});
 
-		it(archetypeFilter ? 'carries the shared archetype filter' : 'carries no archetype filter', () => {
+		it(archetypeFilter ? 'carries the shared archetype filter, an Event Reference to an Archetype' : 'carries no archetype filter', () => {
+			// The shared schema itself; a mode may describe when it shows.
+			const filters = Object.entries(shape)
+				.filter(([, field]) => (field as typeof metagameArchetypeFilterField)._zod.def === metagameArchetypeFilterField._zod.def)
+				.map(([key]) => key);
+
+			expect(filters).toEqual(archetypeFilter
+				? ['archetypeId']
+				: []);
 			if (archetypeFilter)
-				// The shared schema itself; a mode may describe when it shows.
-				expect((shape.archetypeFilter as typeof metagameArchetypeFilterField)._zod.def).toBe(metagameArchetypeFilterField._zod.def);
-			else
-				expect(shape).not.toHaveProperty('archetypeFilter');
+				expect(SCREEN_MODES[mode].eventReferences).toHaveProperty('archetypeId', 'archetype');
 		});
 	});
 });

@@ -23,7 +23,7 @@ const defaultConfig = {
 	topN: 8,
 	minPoints: 9,
 	playerListId: undefined as number | undefined,
-	archetypeFilter: undefined as string | undefined,
+	archetypeId: undefined as number | undefined,
 	board: 'mainboard' as const,
 	sortBy: 'inclusionRate' as const,
 	limit: 10,
@@ -105,11 +105,6 @@ describe('useTopCardsModeData', () => {
 			'12+ Points Most Played Cards',
 		],
 		[
-			'the archetype filter',
-			{ archetypeFilter: 'Mono Red' },
-			'Most Played Cards: Mono Red',
-		],
-		[
 			'the pointed filter',
 			{ scope: 'topN', topN: 8, pointedOnly: true },
 			'Top 8 Most Played Pointed Cards',
@@ -123,6 +118,26 @@ describe('useTopCardsModeData', () => {
 		Object.assign(mutableConfig, config);
 
 		expect(makeTopCardsModeData().headerText.value).toBe(expected);
+	});
+
+	// The Screen holds the Archetype's id alone (ADR-0038); its read names it, so a rename shows.
+	it('heads the grid with the Archetype its read narrowed the cards to, and re-reads when the filter changes', async () => {
+		mockFetch.mockImplementation(async () => mutableConfig.archetypeId === 4
+			? {
+					entries: [],
+					totalDecks: 2,
+					scope: 'all',
+					archetype: { id: 4, name: 'Mono Red' },
+				}
+			: { entries: [], totalDecks: 5, scope: 'all' });
+		const { headerText } = makeTopCardsModeData();
+		await flushPromises();
+		expect(headerText.value).toBe('Most Played Cards');
+
+		mutableConfig.archetypeId = 4;
+		await flushPromises();
+
+		expect(headerText.value).toBe('Most Played Cards: Mono Red');
 	});
 
 	it('reads the card breakdown through the Screen', async () => {

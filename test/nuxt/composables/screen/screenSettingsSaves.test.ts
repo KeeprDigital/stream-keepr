@@ -237,8 +237,8 @@ describe('screen settings saves', () => {
 	describe.each<[ScreenMode, string, unknown, Record<string, unknown>]>([
 		[
 			'metagame',
-			'archetypeFilter',
-			'Rakdos Midrange',
+			'archetypeId',
+			4,
 			{ topN: 16 },
 		],
 	])('clearing %s %s', (mode, field, storedValue, unrelated) => {
@@ -282,7 +282,7 @@ describe('screen settings saves', () => {
 			eventId: 1,
 			stateVersion: 1,
 			modeConfigs: {
-				metagame: { headerText: 'Day 2 Metagame', archetypeFilter: 'Rakdos Midrange' },
+				metagame: { headerText: 'Day 2 Metagame', archetypeId: 4 },
 			},
 		}));
 		const scope = effectScope();
@@ -293,7 +293,7 @@ describe('screen settings saves', () => {
 
 		// The header is a display setting; the Archetype filter is what the Screen points at.
 		expect(server.held.modeConfigs?.metagame).not.toHaveProperty('headerText');
-		expect(server.held.modeConfigs?.metagame).toMatchObject({ archetypeFilter: 'Rakdos Midrange' });
+		expect(server.held.modeConfigs?.metagame).toMatchObject({ archetypeId: 4 });
 		expect(config.value.headerText).toBeUndefined();
 		scope.stop();
 	});

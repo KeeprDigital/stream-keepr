@@ -798,7 +798,7 @@ describe('metagameModeConfigSchema', () => {
 		scope: 'all' as const,
 		topN: 8,
 		playerListId: 1,
-		archetypeFilter: 'Mono Red',
+		archetypeId: 4,
 		sortBy: 'metaShare' as const,
 		cardSortBy: 'inclusionRate' as const,
 		archetypeColumns: [

@@ -827,6 +827,7 @@ _Avoid_: worst-case data, overflow data
 - A selected **Broadcast Deck List** prevents deleting that list or disabling Broadcast Deck Lists; deleting the whole **Event** is the cascade exception
 - Deleting a selected **Player**, alone or in a Melee data reset, clears every **Deck Source** naming them to no Player in the same write (ADR-0032)
 - Deleting a **Feature Match Slot**, alone or by lowering the Event's Slot count, clears every **Deck Source** showing a side of it to no Slot in the same write (ADR-0057), and sets every other **Event Reference** naming it to none (ADR-0060); each such **Screen** is announced, so its **Screen Output** shows its mode's no-Slot state
+- A Metagame **Screen**'s cards view and a Most Played Cards **Screen** may each count one **Archetype**'s cards alone, naming it by an **Event Reference**: renaming the Archetype keeps the filter, and deleting it unsets the filter, so the Screen counts every Archetype's cards (ADR-0038, ADR-0060)
 - **Broadcast Graphics Screen** and **Feature Match Overlay** each expose **Overlay Output**, **Fill Output**, and **Key Output** variants with identical canvas dimensions, all derived from one final composed frame
 - A graphics **Screen Output** uses one stable Screen URL with an output selection; an omitted or invalid selection renders the **Overlay Output**
 - At the same authoritative time, every graphics **Screen Output** resolves the same composition and animation phase; a late-loading or reconnected one catches up rather than replaying

@@ -20,6 +20,17 @@ const quantityPositionSchema = z.enum(QUANTITY_POSITION_VALUES);
 /** The most cards a board lays out, so the most columns its grid can have: a hundred-card singleton deck. */
 const DECK_BOARD_MAX_CARDS = 100;
 
+/**
+ * The most columns a board's grid can use on this Screen: one per card its Deck
+ * List gives the board, where the page knows them (ADR-0054). A board with no
+ * cards keeps the field's minimum; with no Deck List resolved, the contract's
+ * bound stands.
+ */
+function mostBoardColumns(group: 'mainboard' | 'sideboard') {
+	return ({ deckBoardCards }: ScreenSettingsContext): number | undefined => deckBoardCards
+		&& Math.min(DECK_BOARD_MAX_CARDS, Math.max(1, deckBoardCards[group]));
+}
+
 /** What each board view is called. */
 const BOARD_VIEW_LABELS = { grid: 'Grid', stack: 'Stack', list: 'List' } as const;
 
@@ -46,7 +57,7 @@ function deckBoardLayoutShape<const Views extends readonly [string, ...string[]]
 			description: `How the ${group}'s cards are shown.`,
 			options: Object.fromEntries(views.map(view => [view, BOARD_VIEW_LABELS[view as keyof typeof BOARD_VIEW_LABELS]])) as Record<Views[number], string>,
 		}),
-		...cardLayoutShape(DECK_BOARD_MAX_CARDS, group, ownLayout),
+		...cardLayoutShape(DECK_BOARD_MAX_CARDS, group, ownLayout, mostBoardColumns(group)),
 		listColumns: editorField(z.number().int().min(1).max(4).optional(), {
 			...place,
 			label: 'List columns',

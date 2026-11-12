@@ -202,6 +202,7 @@ mockNuxtImport('usePhaseStore', () => () => ({
 }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({
 	...loaded,
+	featureMatches: [],
 	loadFeatureMatchesByEventId: vi.fn(),
 }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => ({
@@ -210,6 +211,7 @@ mockNuxtImport('useFeatureMatchStateStore', () => () => ({
 }));
 mockNuxtImport('useBroadcastDeckListStore', () => () => ({
 	summaries: [],
+	details: new Map(),
 	loadCollection: vi.fn(),
 }));
 // A points system, so the Deck editor offers its card point settings, and every

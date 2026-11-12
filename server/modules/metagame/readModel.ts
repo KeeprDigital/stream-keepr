@@ -21,9 +21,9 @@ export interface MetagameArchetypeBreakdownQuery extends MetagameScopeQuery {
 export interface MetagameCardBreakdownQuery extends MetagameScopeQuery {
 	sortBy?: MetagameCardSortBy;
 	limit?: number;
+	/** The Archetype whose decks alone are counted. */
 	archetypeId?: number;
 	board?: BoardSelection;
-	archetype?: string;
 	excludeTypes?: MetagameCardTypeBucket[];
 	pointedOnly?: boolean;
 }
@@ -69,7 +69,6 @@ export function metagameReadModel() {
 				query.playerListId,
 				query.archetypeId,
 				query.board,
-				query.archetype,
 				query.excludeTypes,
 				query.minPoints,
 				query.pointedOnly,

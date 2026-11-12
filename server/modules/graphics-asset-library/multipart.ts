@@ -11,6 +11,7 @@ import {
 	GRAPHICS_MULTIPART_MAXIMUM_PART_ATTEMPTS,
 	GRAPHICS_MULTIPART_PART_BYTES,
 } from '~~/shared/utils/graphicsAssetCompatibility';
+import { GraphicsAssetLibraryError } from './errors';
 
 export interface GraphicsAssetMultipartState {
 	version: number;
@@ -62,4 +63,16 @@ export function graphicsMultipartTransfer(
 			}))
 			.sort((left, right) => left.partNumber - right.partNumber),
 	};
+}
+
+export function graphicsMultipartPartByteLength(
+	declaredByteLength: number,
+	partNumber: number,
+): number {
+	const partCount = Math.ceil(declaredByteLength / GRAPHICS_MULTIPART_PART_BYTES);
+	if (!Number.isSafeInteger(partNumber) || partNumber <= 0 || partNumber > partCount)
+		throw new GraphicsAssetLibraryError('Multipart part number is outside this operation', 'invalid-ingestion-input');
+	return partNumber === partCount
+		? declaredByteLength - GRAPHICS_MULTIPART_PART_BYTES * (partCount - 1)
+		: GRAPHICS_MULTIPART_PART_BYTES;
 }

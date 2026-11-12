@@ -67,7 +67,8 @@ const pagesRanking = ({ config }: ScreenSettingsContext) => typeof config.cardsP
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Scoping
 	...metagameScopeShape,
-	archetypeFilter: metagameArchetypeFilterField,
+	/** The Archetype whose cards the ranking counts alone; an Event Reference (ADR-0038). */
+	archetypeId: metagameArchetypeFilterField,
 
 	// Data selection & filtering
 	board: editorField(z.enum(BOARD_SELECTION_VALUES), {
@@ -180,7 +181,7 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	pointsBadgeTextSize: cardBadgeSizeField('points-badge', ({ config }) => config.showPointsBadges === true),
 }, {
 	...DEFAULT_METAGAME_SCOPE,
-	archetypeFilter: undefined,
+	archetypeId: undefined,
 	board: 'mainboard',
 	sortBy: 'inclusionRate',
 	limit: 10,

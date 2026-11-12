@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { DeckModeConfig } from '~~/shared/screenModeConfigs/deck';
 import type { ScreenSettingsCard, ScreenSettingsContext } from '~~/shared/screenModeConfigs/fields';
 import type { ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import type { ScreenModeSettingsSlotProps, SettingsPageCard, SettingsPageField, SettingsPageSection } from '~/modules/screen-mode/settingsPage';
@@ -108,10 +109,16 @@ function usePaging() {
 }
 const paged = usePaging();
 
+// A Deck List Screen's boards run their columns no further than the cards its Deck Source gives them (ADR-0054).
+const deckBoardCards = mode === 'deck'
+	? useDeckBoardCards(() => configRecord.value as Partial<DeckModeConfig>, () => props.eventId)
+	: undefined;
+
 const context = computed<ScreenSettingsContext>(() => ({
 	config: configRecord.value,
 	event: eventStore.event,
 	hasPlayerLists: playerListStore.lists.length > 0,
+	deckBoardCards: deckBoardCards?.value,
 }));
 
 const cards = computed(() => settingsPageCards(mode, context.value));
