@@ -1424,7 +1424,7 @@ Reverse Sync rebuilds a Slot's player snapshot from the Player after every Playe
 
 - The write-through is an ordinary manual Player write, so a name or pronouns it changes becomes a Manually Edited Field and holds through Melee Sync (ADR-0046). LGS is never imported and holds anyway.
 - A setup save that fails on the Slot write (a `409`, or the Slot deleted) has already written the Player. The Player's edit stands and the operator retries the Slot.
-- `test/unit/server/services/featureMatchSlotSetupSurvivesReverseSync.sqlite.test.ts` holds the round-sync and One Piece Nickname cases against SQLite; `test/unit/server/modules/eventDataWrites.test.ts` holds the order and the missing origin.
+- `test/unit/server/services/featureMatchSlotSetupSurvivesReverseSync.sqlite.test.ts` holds the round-sync and One Piece Nickname cases against SQLite, and the order by its outcome: a record edited in the same save stays on the Slot. `test/unit/server/modules/eventDataWrites.sqlite.test.ts` holds the missing origin.
 
 ### Rejected alternatives
 

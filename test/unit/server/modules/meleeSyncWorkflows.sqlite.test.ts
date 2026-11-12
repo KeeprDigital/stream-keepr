@@ -33,9 +33,15 @@ const publishMessage = vi.fn();
 /** Thrown by the next Session correction instead of applying it. */
 let failNextCorrection: unknown;
 
+/** The Melee tournament each read was configured for, in order. */
+const tournamentsRead: (string | null)[] = [];
+
 vi.doMock('~~/server/db', () => ({ db }));
 vi.doMock('~~/server/services/meleeIntegration', () => ({
-	requireMeleeService: () => melee,
+	requireMeleeService: (eventData: { meleeEventId: string | null }) => {
+		tournamentsRead.push(eventData.meleeEventId);
+		return melee;
+	},
 }));
 vi.doMock('~~/server/services/importedMtgCardResolver', () => ({
 	importedMtgCardResolverService: () => ({
@@ -218,6 +224,7 @@ function announcedByMelee() {
 
 beforeEach(() => {
 	failNextCorrection = undefined;
+	tournamentsRead.length = 0;
 	publishMessage.mockReset();
 	melee.fetchEvent.mockReset().mockResolvedValue(tournament);
 	melee.fetchPlayers.mockReset().mockResolvedValue(tournamentPlayers);
@@ -553,5 +560,77 @@ describe('a sync whose Reverse Sync loses a Session race', () => {
 			where: eq(schema.featureMatches.id, slot!.id),
 		}))?.player1Data).toEqual({ name: 'Old Name' });
 		expect((await readEvent(eventId)).lastSyncError).toBeNull();
+	});
+});
+
+describe('a command that completes', () => {
+	const SYNC_TIMES = [
+		'initialSetupCompletedAt',
+		'lastEventSyncedAt',
+		'lastPlayersSyncedAt',
+		'lastDecklistsSyncedAt',
+	] as const;
+	const unrecognisedGame = { ...tournament, Game: 'Some Future Game' };
+
+	// Setup of an unrecognised game is `initial Setup`'s, above.
+	it.each<{ command: string; upstream?: object; run: (eventId: number) => Promise<unknown>; records: readonly (typeof SYNC_TIMES)[number][] }>([
+		{
+			command: 'initial Setup',
+			run: eventId => meleeSyncModule().runInitialSetup(requestEvent, eventId),
+			records: SYNC_TIMES,
+		},
+		{
+			command: 'an update that imports Deck Lists',
+			run: eventId => meleeSyncModule().updateFromMelee(requestEvent, eventId),
+			records: ['lastEventSyncedAt', 'lastPlayersSyncedAt', 'lastDecklistsSyncedAt'],
+		},
+		{
+			command: 'an update of an unrecognised game, which imports no Deck Lists',
+			upstream: unrecognisedGame,
+			run: eventId => meleeSyncModule().updateFromMelee(requestEvent, eventId, { advanceRound: false }),
+			records: ['lastEventSyncedAt', 'lastPlayersSyncedAt'],
+		},
+		{
+			command: 'a Deck List sync on its own, which never completes setup',
+			run: eventId => meleeSyncModule().syncDeckLists(requestEvent, eventId),
+			records: ['lastDecklistsSyncedAt'],
+		},
+	])('$command records its own sync times, clears the last failure and gives the Event back', async ({ upstream, run, records }) => {
+		const eventId = await createEvent({ lastSyncError: 'An earlier sync failed' });
+		if (upstream)
+			melee.fetchEvent.mockResolvedValue(upstream);
+
+		await run(eventId);
+
+		const event = await readEvent(eventId);
+		expect(SYNC_TIMES.filter(time => event[time] !== null)).toEqual(records);
+		expect(event).toMatchObject({ lastSyncError: null, meleeSyncLeaseToken: null, meleeSyncLeaseCommand: null });
+	});
+
+	// A configuration save holds the same lease, so what a command reads under it cannot change beneath it.
+	it('reads the tournament to sync only once it holds the Event, so a configuration saved just before is the one it syncs', async () => {
+		const eventId = await createEvent();
+		const execute = harness.client.execute.bind(harness.client);
+		let leaseTaken = false;
+		vi.spyOn(harness.client, 'execute').mockImplementation((async (statement: unknown) => {
+			const sql = typeof statement === 'string'
+				? statement
+				: (statement as { sql: string }).sql;
+			if (!leaseTaken && /update "events" set "melee_sync_lease_token"/i.test(sql)) {
+				leaseTaken = true;
+				await execute({
+					sql: 'UPDATE events SET melee_event_id = ? WHERE id = ?',
+					args: ['melee-2', eventId],
+				});
+			}
+			return await execute(statement as never);
+		}) as never);
+
+		await meleeSyncModule().syncPlayers(requestEvent, eventId);
+
+		expect(leaseTaken).toBe(true);
+		expect([
+			...new Set(tournamentsRead),
+		]).toEqual(['melee-2']);
 	});
 });

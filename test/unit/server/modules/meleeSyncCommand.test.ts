@@ -2,6 +2,12 @@ import type { H3Event } from 'h3';
 import type { MeleeSyncContext } from '~~/server/modules/melee-sync/context';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+/*
+ * What a command records when its run goes wrong: a stage that throws or half-completes, a
+ * lease lost at a heartbeat or the final write. Only stand-ins for the workflows and the lease
+ * force those; what a completed command records is `meleeSyncWorkflows.sqlite.test.ts`'s.
+ */
+
 const mockLoadEventData = vi.fn();
 const mockAcquireLease = vi.fn();
 const mockReleaseLease = vi.fn();
@@ -92,82 +98,6 @@ describe('melee sync command boundary', () => {
 		},
 	};
 
-	describe('the sync times a successful command records', () => {
-		it.each([
-			[
-				'an update',
-				'updateFromMelee',
-				'update',
-				[],
-				{
-					success: true,
-					steps: ['structure', 'players', 'decklists'],
-				},
-				{ lastEventSyncedAt: at, lastPlayersSyncedAt: at, lastDecklistsSyncedAt: at },
-			],
-			[
-				'an update whose game has no Deck List adapter',
-				'updateFromMelee',
-				'update',
-				[
-					{ includeDeckLists: true },
-				],
-				{
-					success: true,
-					steps: ['structure', 'players', 'decklists'],
-					deckListsSkipped: true,
-				},
-				{ lastEventSyncedAt: at, lastPlayersSyncedAt: at },
-			],
-			[
-				'initial setup',
-				'runInitialSetup',
-				'initial-setup',
-				[],
-				{ success: true },
-				{
-					initialSetupCompletedAt: at,
-					lastEventSyncedAt: at,
-					lastPlayersSyncedAt: at,
-					lastDecklistsSyncedAt: at,
-				},
-			],
-			[
-				'initial setup whose game has no Deck List adapter',
-				'runInitialSetup',
-				'initial-setup',
-				[],
-				{ success: true, deckListsSkipped: true },
-				{ initialSetupCompletedAt: at, lastEventSyncedAt: at, lastPlayersSyncedAt: at },
-			],
-			[
-				'a standalone Deck List sync, which never completes setup',
-				'syncDeckLists',
-				'decklists',
-				[],
-				{ success: true, warnings: [] },
-				{ lastDecklistsSyncedAt: at },
-			],
-			[
-				'a Deck List sync the adapter skipped',
-				'syncDeckLists',
-				'decklists',
-				[],
-				{ success: true, skipped: true, warnings: [] },
-				{},
-			],
-		] as const)('%s', async (_label, command, lease, args, workflowResult, recorded) => {
-			mockWorkflows[command].mockResolvedValue(workflowResult);
-
-			await (meleeSyncModule() as any)[command](requestEvent, 1, ...args);
-
-			expect(mockAcquireLease).toHaveBeenCalledWith(1, lease);
-			expect(mockRecordSuccess).toHaveBeenCalledWith(syncContext, 1, recorded, 'lease-token');
-			expect(mockRecordFailure).not.toHaveBeenCalled();
-			expect(mockReleaseLease).toHaveBeenCalledWith(1, 'lease-token');
-		});
-	});
-
 	it.each([
 		[
 			'initial setup',
@@ -196,15 +126,6 @@ describe('melee sync command boundary', () => {
 		expect(mockRecordSuccess).not.toHaveBeenCalled();
 		expect(mockRecordFailure).toHaveBeenCalledOnce();
 		expect(mockRecordFailure).toHaveBeenCalledWith(syncContext, 1, expect.objectContaining({ message }), { lastEventSyncedAt: at, lastPlayersSyncedAt: at }, 'lease-token');
-	});
-
-	it('loads credentials only after acquiring the command lease', async () => {
-		mockWorkflows.syncPlayers.mockResolvedValue(playersResult);
-
-		await meleeSyncModule().syncPlayers(requestEvent, 1);
-
-		expect(mockAcquireLease.mock.invocationCallOrder[0]).toBeLessThan(mockLoadEventData.mock.invocationCallOrder[0]!);
-		expect(mockLoadEventData.mock.invocationCallOrder[0]).toBeLessThan(mockWorkflows.syncPlayers.mock.invocationCallOrder[0]!);
 	});
 
 	it('refreshes Players then one Round under a single round lease, keeping both warnings', async () => {

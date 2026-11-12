@@ -7,10 +7,6 @@ const MAX_MODE_CONFIGS_BYTES = 512 * 1024;
 
 const mockPublishMessage = vi.fn();
 const mockPublishMessageStrict = vi.fn();
-const mockFeatureMatchService = {
-	findById: vi.fn(),
-	findByEventId: vi.fn(),
-};
 const mockRefreshBindings = vi.fn();
 
 vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
@@ -19,9 +15,6 @@ vi.mock('~~/server/modules/broadcast-graphics-live-session', () => ({
 vi.mock('~~/server/utils/ably', () => ({
 	publishMessage: mockPublishMessage,
 	publishMessageStrict: mockPublishMessageStrict,
-}));
-vi.mock('~~/server/services/featureMatch', () => ({
-	featureMatchService: () => mockFeatureMatchService,
 }));
 
 const { eventDataPublicationModule } = await import('~~/server/modules/event-data-publication');
@@ -538,34 +531,6 @@ it('publishes a reviewed Deck List under its Archetype\'s name, keeping what was
 	expect(mockPublishMessage).toHaveBeenCalledWith(1, 'playerDeck:reviewed', { deck }, origin);
 });
 
-describe('a batch of Feature Match Slot updates', () => {
-	it('reads the Event\'s Slots once and announces each one that still exists', async () => {
-		mockFeatureMatchService.findByEventId.mockResolvedValueOnce([
-			slot,
-			{ ...slot, id: 6, matchId: null },
-		]);
-
-		const published = await eventDataPublicationModule().featureMatchSlotsUpdated({
-			eventId: 1,
-			slotIds: [4, 5, 6],
-			originConnectionId: origin,
-		});
-
-		expect(mockFeatureMatchService.findByEventId).toHaveBeenCalledOnce();
-		expect(mockFeatureMatchService.findById).not.toHaveBeenCalled();
-		expect(published.map(entry => entry.id)).toEqual([4, 6]);
-		expect(mockPublishMessage.mock.calls.map(call => [call[1], call[2].featureMatch.id])).toEqual([
-			['featureMatch:updated', 4],
-			['featureMatch:updated', 6],
-		]);
-	});
-
-	it('reads nothing when no Slot was affected', async () => {
-		await expect(eventDataPublicationModule().featureMatchSlotsUpdated({ eventId: 1, slotIds: [] })).resolves.toEqual([]);
-		expect(mockFeatureMatchService.findByEventId).not.toHaveBeenCalled();
-	});
-});
-
 describe('a Screen change is announced rather than shipped', () => {
 	// modeConfigs may reach 512 KiB; a realtime message is far smaller (#95).
 	const atStorageCeiling = row({
@@ -661,23 +626,6 @@ describe('re-resolving Broadcast Graphic bindings', () => {
 		await eventDataPublicationModule().meleePlayersSynced({ eventId: 1, playerCount: 120 });
 
 		expect(mockRefreshBindings).toHaveBeenCalledWith(1);
-	});
-
-	it('catches them up once for a whole batch of Feature Match Slots', async () => {
-		mockFeatureMatchService.findByEventId.mockResolvedValue([
-			slot,
-			{ ...slot, id: 5 },
-			{ ...slot, id: 6 },
-		]);
-
-		await eventDataPublicationModule().featureMatchSlotsUpdated({
-			eventId: 1,
-			slotIds: [4, 5, 6],
-		});
-
-		expect(mockRefreshBindings.mock.calls).toEqual([
-			[1],
-		]);
 	});
 
 	// A bulk write's Players are one change: each is announced, and bindings re-resolve once.

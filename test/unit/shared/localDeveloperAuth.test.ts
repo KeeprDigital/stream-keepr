@@ -33,6 +33,7 @@ describe('the Local Developer Session opt-in', () => {
 		// on the command line and assigned in no file, and it
 		// is deliberately not a `NUXT_` name — nothing in `.env`, and no
 		// runtimeConfig key, answers to it.
+		// eslint-disable-next-line no-restricted-syntax -- the literal is the contract: launchers, docs and the forbidden-file scan spell it out.
 		expect(LOCAL_AUTH_BYPASS_NAME).toBe('STREAM_KEEPR_LOCAL_AUTH_BYPASS');
 		expect(LOCAL_AUTH_BYPASS_NAME.startsWith('NUXT_')).toBe(false);
 	});
