@@ -112,6 +112,7 @@ mockNuxtImport('useArchetypeStore', () => () => ({
 }));
 mockNuxtImport('useFeatureMatchStore', () => () => ({
 	...loaded,
+	featureMatches: [],
 	loadFeatureMatchesByEventId: vi.fn(),
 }));
 mockNuxtImport('useFeatureMatchMenuItems', () => () => ref([
@@ -124,11 +125,14 @@ mockNuxtImport('useFeatureMatchStateStore', () => () => ({
 }));
 mockNuxtImport('useBroadcastDeckListStore', () => () => ({
 	summaries: [],
+	details: new Map(),
 	loadCollection: vi.fn(),
 }));
-mockNuxtImport('usePlayerDeckCache', () => () => ({
-	fetchDeck: vi.fn(async () => null),
+// The selected Player's Deck List, as the deck cache answers it: none until a test holds one.
+const { fetchDeck } = vi.hoisted(() => ({
+	fetchDeck: vi.fn(async (): Promise<{ cards: { name: string; compartment: string }[] } | null> => null),
 }));
+mockNuxtImport('usePlayerDeckCache', () => () => ({ fetchDeck }));
 
 /** A Mode Token row, named by its token. */
 const ThemeTokenFieldStub = defineComponent({
@@ -743,6 +747,28 @@ describe('the generic settings renderer', () => {
 		const wrapper = await mountPage(mode, options);
 
 		expect(wrapper.get(`[data-settings-field="${field}"] input[type="number"]`).attributes('max')).toBe(max);
+	});
+
+	// Each board's own columns run to the cards its Deck Source's Deck List gives that board (#1109).
+	it('bounds each Deck List board\'s columns by the cards its Deck Source\'s Deck List holds for it', async () => {
+		fetchDeck.mockResolvedValue({
+			cards: [
+				{ name: 'Lightning Bolt', compartment: 'mainboard' },
+				{ name: 'Goblin Guide', compartment: 'mainboard' },
+				{ name: 'Mountain', compartment: 'mainboard' },
+				{ name: 'Roiling Vortex', compartment: 'sideboard' },
+			],
+		});
+
+		const wrapper = await mountPage('deck', {
+			config: {
+				deckSource: { type: 'player', playerId: 5 },
+				sideboard: { view: 'grid', alignment: 'center' },
+			},
+		});
+
+		expect(wrapper.get('[data-settings-field="mainboard.columns"] input[type="number"]').attributes('max')).toBe('3');
+		expect(wrapper.get('[data-settings-field="sideboard.columns"] input[type="number"]').attributes('max')).toBe('1');
 	});
 
 	it('offers a badge position every point but the centre, which a badge cannot take', async () => {
