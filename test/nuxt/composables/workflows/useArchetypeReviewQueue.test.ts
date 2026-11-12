@@ -245,64 +245,252 @@ describe('useArchetypeReviewQueue', () => {
 	});
 
 	describe('navigation', () => {
+		// Unreviewed decks 1 to 3 in list order, then deck 4 reviewed before deck 5.
 		beforeEach(() => {
 			mockPlayerStore.players = [
 				mtgPlayer(1, 'Deck A'),
 				mtgPlayer(2, 'Deck B'),
 				mtgPlayer(3, 'Deck C'),
+				mtgPlayer(4, 'Deck D', { deckReviewed: true }),
+				mtgPlayer(5, 'Deck E', { deckReviewed: true }),
 			];
 		});
 
-		it('steps through the queue, telling the caller each time', () => {
-			const onNavigate = vi.fn();
-			const { currentEntry, advance, goBack, queueFilter } = makeQueue();
-			queueFilter.value = 'all';
-			expect(currentEntry.value?.displayName).toBe('Deck A');
+		function makeReviewQueue() {
+			const queue = makeQueue();
+			mockPlayerDeckStore.decks[3]!.reviewedAt = new Date('2026-01-01');
+			mockPlayerDeckStore.decks[4]!.reviewedAt = new Date('2026-01-02');
+			return queue;
+		}
 
-			advance(onNavigate);
-			expect(currentEntry.value?.displayName).toBe('Deck B');
-			goBack(onNavigate);
-			expect(currentEntry.value?.displayName).toBe('Deck A');
-			expect(onNavigate).toHaveBeenCalledTimes(2);
+		function review(deckId: number) {
+			const deck = mockPlayerDeckStore.decks.find(entry => entry.id === deckId)!;
+			deck.archetypeId = 9;
+			deck.reviewedAt = new Date();
+		}
+
+		function removeDeck(deckId: number) {
+			mockPlayerDeckStore.decks = mockPlayerDeckStore.decks.filter(entry => entry.id !== deckId);
+		}
+
+		const shown = (queue: ReturnType<typeof makeQueue>) => queue.currentEntry.value?.deck.id ?? null;
+
+		it('lists reviewed decks most recently reviewed first, after the unreviewed', () => {
+			const queue = makeReviewQueue();
+
+			queue.queueFilter.value = 'all';
+
+			expect(queue.filteredQueue.value.map(entry => entry.deck.id)).toEqual([1, 2, 3, 5, 4]);
 		});
 
-		it('starts over when the filter changes', async () => {
-			const { currentIndex, advance, queueFilter } = makeQueue();
-			advance();
+		it('steps forward through its list to the last deck', () => {
+			const queue = makeReviewQueue();
+			const seen = [
+				shown(queue),
+			];
 
-			queueFilter.value = 'all';
+			for (let step = 0; step < 3; step++) {
+				queue.advance();
+				seen.push(shown(queue));
+			}
+
+			expect(seen).toEqual([1, 2, 3, 3]);
+			expect(queue.canAdvance.value).toBe(false);
+		});
+
+		it('has nothing to go back to before a second deck is shown', () => {
+			const queue = makeReviewQueue();
+
+			queue.goBack();
+
+			expect(queue.canGoBack.value).toBe(false);
+			expect(shown(queue)).toBe(1);
+		});
+
+		it('goes back to the deck just reviewed, though its list no longer holds it', async () => {
+			const queue = makeReviewQueue();
+			const transition = queue.prepareAdvance();
+			review(1);
+			transition.commit();
+			await nextTick();
+			expect(shown(queue)).toBe(2);
+
+			queue.goBack();
+
+			expect(shown(queue)).toBe(1);
+			expect(queue.queueFilter.value).toBe('unreviewed');
+			expect(queue.currentIndex.value).toBe(-1);
+		});
+
+		it('retraces its steps forward, then carries on through the list', () => {
+			const queue = makeReviewQueue();
+			queue.advance();
+			queue.goBack();
+			const seen = [
+				shown(queue),
+			];
+
+			queue.advance();
+			seen.push(shown(queue));
+			queue.advance();
+			seen.push(shown(queue));
+
+			expect(seen).toEqual([1, 2, 3]);
+		});
+
+		it('forgets the way forward once another deck is picked', () => {
+			const queue = makeReviewQueue();
+			queue.advance();
+			queue.goBack();
+			queue.jumpToDeck(5);
+
+			queue.goBack();
+			queue.advance();
+
+			expect(shown(queue)).toBe(5);
+		});
+
+		it('passes over a deck the Event no longer holds', async () => {
+			const queue = makeReviewQueue();
+			queue.advance();
+			queue.advance();
+			removeDeck(2);
 			await nextTick();
 
-			expect(currentIndex.value).toBe(0);
+			queue.goBack();
+
+			expect(shown(queue)).toBe(1);
 		});
 
-		it('stays on the last entry when the filtered queue shrinks under it', async () => {
+		it('resumes its list where it left it, from a deck outside the list', () => {
+			const queue = makeReviewQueue();
+			queue.advance();
+			queue.jumpToDeck(5);
+
+			queue.advance();
+
+			expect(shown(queue)).toBe(2);
+		});
+
+		it.each([
+			['keeps the deck shown when the new list holds it', 'all', 2],
+			['shows the new list\'s first deck when it does not', 'reviewed', 5],
+		] as const)('%s, on a change of filter', async (_, filter, deckId) => {
+			const queue = makeReviewQueue();
+			queue.advance();
+
+			queue.queueFilter.value = filter;
+			await nextTick();
+
+			expect(shown(queue)).toBe(deckId);
+		});
+
+		it('shows no deck for an empty list, and goes back to the deck it left', async () => {
+			mockPlayerStore.players = [
+				mtgPlayer(1, 'Deck A'),
+			];
+			const queue = makeQueue();
+
+			queue.queueFilter.value = 'reviewed';
+			await nextTick();
+			expect(shown(queue)).toBeNull();
+
+			queue.goBack();
+
+			expect(shown(queue)).toBe(1);
+		});
+
+		it('stays on the deck shown when its list loses it', async () => {
+			const queue = makeReviewQueue();
+			queue.advance();
+
+			review(2);
+			await nextTick();
+
+			expect(shown(queue)).toBe(2);
+		});
+
+		it('shows the deck now at that place when the Event loses the deck shown', async () => {
+			const queue = makeReviewQueue();
+			queue.advance();
+
+			removeDeck(2);
+			await nextTick();
+
+			expect(shown(queue)).toBe(3);
+		});
+
+		it.each([
+			['the next deck of its list', 1, 2],
+			['the deck now last in its list, after its last deck', 3, 2],
+		])('advances from a reviewed deck to %s', async (_, deckId, nextDeckId) => {
+			const queue = makeReviewQueue();
+			queue.jumpToDeck(deckId);
+
+			const transition = queue.prepareAdvance();
+			review(deckId);
+			await nextTick();
+			expect(shown(queue)).toBe(deckId);
+			transition.commit();
+			await nextTick();
+
+			expect(shown(queue)).toBe(nextDeckId);
+		});
+
+		it('shows no deck once its list\'s only deck is reviewed, and goes back to it', async () => {
+			mockPlayerStore.players = [
+				mtgPlayer(1, 'Deck A'),
+			];
+			const queue = makeQueue();
+
+			const transition = queue.prepareAdvance();
+			review(1);
+			transition.commit();
+			await nextTick();
+			expect(shown(queue)).toBeNull();
+
+			queue.goBack();
+
+			expect(shown(queue)).toBe(1);
+		});
+	});
+
+	describe('jumping to a deck', () => {
+		it.each([
+			['a deck in its list', 2, true, 2],
+			['a deck outside its list', 3, true, 3],
+			[
+				'no deck the Event does not hold',
+				999,
+				false,
+				1,
+			],
+		])('shows %s, keeping the filter', (_, deckId, found, shownDeckId) => {
+			mockPlayerStore.players = [
+				mtgPlayer(1, 'Deck A'),
+				mtgPlayer(2, 'Deck B'),
+				mtgPlayer(3, 'Deck C', { deckReviewed: true }),
+			];
+			const { currentEntry, queueFilter, canGoBack, jumpToDeck } = makeQueue();
+
+			expect(jumpToDeck(deckId)).toBe(found);
+
+			expect(currentEntry.value?.deck.id).toBe(shownDeckId);
+			expect(queueFilter.value).toBe('unreviewed');
+			expect(canGoBack.value).toBe(found);
+		});
+
+		it('leaves nothing to go back to when the page opens on the deck', () => {
 			mockPlayerStore.players = [
 				mtgPlayer(1, 'Deck A'),
 				mtgPlayer(2, 'Deck B'),
 			];
-			const { currentEntry, advance } = makeQueue();
-			advance();
+			const { currentEntry, canGoBack, jumpToDeck } = makeQueue();
 
-			mockPlayerDeckStore.decks[1]!.reviewedAt = new Date();
-			mockPlayerDeckStore.decks[1]!.archetypeId = 5;
-			await nextTick();
+			jumpToDeck(2, { history: false });
 
-			expect(currentEntry.value?.player.id).toBe(1);
-		});
-
-		it('keeps a just-reviewed deck on screen until the advance commits', async () => {
-			const { currentEntry, prepareAdvance } = makeQueue();
-			await nextTick();
-
-			const transition = prepareAdvance();
-			mockPlayerStore.players[0]!.archetypeId = 55;
-			await nextTick();
-			expect(currentEntry.value?.player.id).toBe(1);
-
-			transition.commit();
-			await nextTick();
-			expect(currentEntry.value?.player.id).toBe(2);
+			expect(currentEntry.value?.deck.id).toBe(2);
+			expect(canGoBack.value).toBe(false);
 		});
 	});
 

@@ -7,8 +7,6 @@ definePageMeta({
 	layout: false,
 });
 
-const route = useRoute();
-const router = useRouter();
 const eventStore = useEventStore();
 const playerStore = usePlayerStore();
 const archetypeStore = useArchetypeStore();
@@ -53,40 +51,18 @@ const {
 	reviewedCount,
 	progressPercent,
 	archetypePlayerCounts,
+	canGoBack,
+	canAdvance,
 	advance,
 	goBack,
 	jumpToDeck,
 	prepareAdvance,
 } = useArchetypeReviewQueue();
 
-function handleJumpToDeck(deckId: number) {
-	if (!jumpToDeck(deckId) || !loadedEventId.value)
-		return;
-	void router.replace({
-		path: `/event/${loadedEventId.value}/archetype-review`,
-		query: {
-			deckId: String(deckId),
-		},
-	});
-}
-
-watch([
-	initialLoading,
-	allEntries,
-	() => route.query.deckId,
-], ([loading]) => {
-	if (loading)
-		return;
-	const rawDeckId = Array.isArray(route.query.deckId)
-		? route.query.deckId[0]
-		: route.query.deckId;
-	const deckId = rawDeckId
-		? Number(rawDeckId)
-		: null;
-	if (deckId && Number.isFinite(deckId)) {
-		jumpToDeck(deckId);
-	}
-}, { immediate: true });
+useArchetypeReviewDeckUrl({
+	loading: initialLoading,
+	queue: { currentEntry, jumpToDeck },
+});
 
 // ── Assignment ──
 
@@ -119,6 +95,8 @@ const {
 		<template #toolbar>
 			<ArchetypeReviewToolbar
 				:current-index="currentIndex"
+				:can-go-back="canGoBack"
+				:can-advance="canAdvance"
 				:filtered-count="filteredCount"
 				:queue-filter="queueFilter"
 				:reviewed-count="reviewedCount"
@@ -128,7 +106,7 @@ const {
 				:entries="allEntries"
 				:selected-deck-id="currentEntry?.deck.id ?? null"
 				@update:queue-filter="queueFilter = $event"
-				@jump-to-deck="handleJumpToDeck"
+				@jump-to-deck="jumpToDeck"
 				@back="goBack()"
 				@advance="advance()"
 			/>
@@ -157,36 +135,7 @@ const {
 			</template>
 		</UIEmptyState>
 
-		<!-- Empty filtered queue -->
-		<UIEmptyState
-			v-else-if="filteredCount === 0"
-			icon="i-lucide-check-circle"
-			:title="queueFilter === 'unreviewed' ? 'All decks reviewed!' : 'No decks match this filter.'"
-			:description="`${reviewedCount} / ${totalDecks} decks assigned to archetypes.`"
-		>
-			<template #actions>
-				<div class="flex items-center gap-2">
-					<UButton
-						v-if="queueFilter === 'unreviewed'"
-						color="primary"
-						variant="outline"
-						:to="`/event/${loadedEventId}/metagame`"
-					>
-						View Metagame
-					</UButton>
-					<UButton
-						v-if="queueFilter !== 'all'"
-						color="neutral"
-						variant="outline"
-						@click="() => { queueFilter = 'all' }"
-					>
-						Show All Decks
-					</UButton>
-				</div>
-			</template>
-		</UIEmptyState>
-
-		<!-- Main review UI -->
+		<!-- Main review UI: the deck shown, in the filter's list or gone back to outside it -->
 		<div v-else-if="currentEntry" class="flex h-full flex-col xl:flex-row">
 			<ArchetypeReviewDeckPanel
 				:entry="currentEntry"
@@ -215,5 +164,34 @@ const {
 				@chip-click="handleChipClick"
 			/>
 		</div>
+
+		<!-- No deck shown: the filter's list is empty -->
+		<UIEmptyState
+			v-else
+			icon="i-lucide-check-circle"
+			:title="queueFilter === 'unreviewed' ? 'All decks reviewed!' : 'No decks match this filter.'"
+			:description="`${reviewedCount} / ${totalDecks} decks assigned to archetypes.`"
+		>
+			<template #actions>
+				<div class="flex items-center gap-2">
+					<UButton
+						v-if="queueFilter === 'unreviewed'"
+						color="primary"
+						variant="outline"
+						:to="`/event/${loadedEventId}/metagame`"
+					>
+						View Metagame
+					</UButton>
+					<UButton
+						v-if="queueFilter !== 'all'"
+						color="neutral"
+						variant="outline"
+						@click="() => { queueFilter = 'all' }"
+					>
+						Show All Decks
+					</UButton>
+				</div>
+			</template>
+		</UIEmptyState>
 	</NuxtLayout>
 </template>

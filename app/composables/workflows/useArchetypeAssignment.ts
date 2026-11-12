@@ -243,7 +243,10 @@ export function useArchetypeAssignment({
 		if (!currentEventId || !currentEntry.value || saving.value || !isNameValid.value)
 			return;
 
-		const transition = prepareAdvance();
+		// A deck being reviewed moves on to the next; one already reviewed was come back to, and stays.
+		const transition = isEditMode.value
+			? null
+			: prepareAdvance();
 
 		await runRequest(async () => {
 			const name = nameInput.value.trim();
@@ -289,10 +292,10 @@ export function useArchetypeAssignment({
 				color: 'error',
 			}),
 			onSuccess: () => {
-				transition.commit();
+				transition?.commit();
 			},
 			onFailure: () => {
-				transition.cancel();
+				transition?.cancel();
 			},
 		});
 	}
