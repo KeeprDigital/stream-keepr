@@ -3,15 +3,16 @@ holds only what an agent must follow.
 
 ## Before pushing
 
-Push once `pnpm verify:quick` (lint, typecheck, unit and Nuxt suites) passes;
-CI is the full gate. Open the PR as a draft, which CI skips, and mark it ready
-when the branch is done: that runs every gate `pnpm verify` runs, Worker build
-and workerd smoke included. Realtime integration tests are the exception: CI
-has no Ably key, so they run only against your local `.env`. A change touching
-realtime needs `pnpm test:integration --run` green before you mark it ready.
-Reach for `pnpm verify` to reproduce a CI failure locally. Commit
-`pnpm-lock.yaml` with any `package.json` change that affects dependency
-resolution.
+Push once `pnpm verify:quick` passes. It checks what your checkout changes
+since `main`: lint of the changed files, typecheck, and the unit and Nuxt tests
+whose imports reach them. CI is the full gate, and runs everything. Open the PR
+as a draft, which CI skips, and mark it ready when the branch is done: that
+runs every gate `pnpm verify` runs, Worker build and workerd smoke included.
+Realtime integration tests are the exception: CI has no Ably key, so they run
+only against your local `.env`. A change touching realtime needs
+`pnpm test:integration --run` green before you mark it ready. Reach for
+`pnpm verify` to reproduce a CI failure locally. Commit `pnpm-lock.yaml` with
+any `package.json` change that affects dependency resolution.
 
 ## Landing on main
 
@@ -37,7 +38,12 @@ runs only on PRs and in the merge queue. Open the PR from your branch and leave
 - Stop dev servers with SIGINT/SIGTERM. `pnpm reap` safely removes orphaned
   `workerd`; scope any manual kill to your worktree's path
   (`pkill -f "<worktree path>/.*workerd"`), never bare `pkill -f workerd`.
-- Run one integration suite at a time per machine.
+- Every heavy gate takes run slots from one budget for the whole machine,
+  shared with every other worktree, and waits its turn when there are none. A
+  `[run-slots] … has waited` line is the queue, not a hang: leave it, or read
+  the line with `pnpm slots`. Start a suite or `pnpm verify` in the background
+  rather than under a short timeout, and never start a second copy of a run
+  that is waiting.
 
 ## Domain docs
 

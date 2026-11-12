@@ -1,6 +1,7 @@
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { warmChromium } from '../../scripts/graphics-acceptance/chromium.mjs';
+import { acquireRunSlots, RUN_SLOT_COSTS } from '../../scripts/slots.mjs';
 import { prepareIntegrationD1 } from '../integration/integrationD1';
 import { freePorts, startIntegrationServer, testContextFor } from '../integration/servers';
 import { integrationEventIdBlocks, resetIntegrationWranglerState } from '../integration/state';
@@ -11,6 +12,17 @@ const disableFsWatchImport = fileURLToPath(new URL('../integration/disable-fs-wa
 const nodeOptions = [process.env.NODE_OPTIONS, '--import', disableFsWatchImport].filter(Boolean).join(' ');
 
 export async function setup() {
+	const slots = await acquireRunSlots({ want: RUN_SLOT_COSTS['local-auth'], label: 'local-auth suite' });
+	try {
+		return await startLocalAuthServer(slots.release);
+	}
+	catch (error) {
+		slots.release();
+		throw error;
+	}
+}
+
+async function startLocalAuthServer(releaseSlots: () => void) {
 	// Before the dev server, so the cold launch has the machine to itself (#790).
 	const warmingStarted = Date.now();
 	const warmed = await warmChromium();
@@ -40,5 +52,6 @@ export async function setup() {
 	return async () => {
 		await server.stop();
 		await resetIntegrationWranglerState(PERSIST_DIR);
+		releaseSlots();
 	};
 }

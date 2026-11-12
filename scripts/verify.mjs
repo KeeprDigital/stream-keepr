@@ -1,10 +1,9 @@
 /**
  * `pnpm verify` — CI's gates on the working tree, run as a dependency graph.
  *
- * Every gate from the old sequential chain still runs; they run side by side
- * where nothing forbids it, and the first failure stops the rest. Each gate's
- * output goes to `node_modules/.cache/verify/<gate>.log`; a failing gate's tail
- * is printed.
+ * Every gate runs side by side with the others where nothing forbids it, and
+ * the first failure stops the rest. Each gate's output goes to
+ * `node_modules/.cache/verify/<gate>.log`; a failing gate's tail is printed.
  *
  * What orders the graph:
  * - The root tsconfig extends `.nuxt/tsconfig.json`, so every Vite and TypeScript
@@ -15,13 +14,19 @@
  *   its tsconfig stands alone, so they need no `prepare`.
  * - The server-backed stage (integration, local-auth, browser gates) starts only
  *   once the cheap stage has passed, so a lint or type error never waits behind
- *   it. Those suites are timing-sensitive on a loaded machine (README § Testing):
- *   they run one after another, never two sets of servers at once, and the
- *   build runs beside the cheap stage instead, so that little else competes
- *   with the servers and only its short Worker tail overlaps them.
+ *   it.
  *
- * Usage: node scripts/verify.mjs [--quick | --tests]
- *   --quick  the first stage only: lint, typecheck, unit and Nuxt suites.
+ * What the graph does not decide is how much runs at once. Every heavy gate
+ * takes run slots from the one budget this machine has
+ * (`scripts/slots.mjs`), shared with every other worktree's runs, and waits
+ * its turn when there are none: the integration suite takes them all.
+ *
+ * Usage: node scripts/verify.mjs [--quick [--all] | --tests]
+ *   --quick  what this checkout's change can break: lint of the files it
+ *            changes, typecheck, and the unit and Nuxt tests whose imports
+ *            reach those files. Before a push; CI is the full gate.
+ *   --quick --all
+ *            the whole cheap stage: lint, typecheck, unit and Nuxt suites.
  *   --tests  every test suite and local acceptance gate, without lint,
  *            typecheck, the build, or the bundle checks; this is `pnpm test`.
  */
@@ -31,6 +36,7 @@ import { createWriteStream } from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { changeBase } from './changed-files.mjs';
 import { main as reapStrandedWorkerd } from './reap-workerd.mjs';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -59,8 +65,7 @@ export const GATES = {
 		command: ['run', 'typecheck:app'],
 		after: ['prepare'],
 	},
-	// Chained rather than side by side: each vitest suite already uses every core,
-	// and two at once starve CPU-bound tests into their timeouts.
+	// After the app's program, not beside it: each holds 3.7 GB on a cold cache.
 	'typecheck:test': {
 		command: ['run', 'typecheck:test'],
 		after: ['typecheck:app'],
@@ -89,8 +94,7 @@ export const GATES = {
 		command: ['run', 'test:integration', '--run'],
 		after: FIRST_STAGE,
 	},
-	// Chained rather than side by side: each starts its own servers, and the
-	// integration suite beside another gives results CI never reproduces.
+	// One after another: each starts its own servers, and is timed against them.
 	'test:local-auth': {
 		command: ['run', 'test:local-auth'],
 		after: ['test:integration'],
@@ -149,11 +153,62 @@ const NOT_TESTS = new Set([
 ]);
 
 /**
+ * `--quick`: the first stage, with lint and both suites narrowed to what this
+ * checkout changes. Vitest reads the change itself (`--changed`), following
+ * each test file's imports, and runs every test when the change reaches a
+ * file every test depends on and none imports (`unitRerunTriggers`,
+ * `vitest.shared.ts`).
+ *
+ * @param {string} baseRef the ref the branch is measured from
+ */
+function changedGates(baseRef) {
+	const changed = ['--changed', baseRef, '--passWithNoTests'];
+	return {
+		'prepare': GATES.prepare,
+		'lint:changed': {
+			command: ['run', 'lint:changed'],
+			after: ['prepare'],
+		},
+		'typecheck:app': GATES['typecheck:app'],
+		'typecheck:test': GATES['typecheck:test'],
+		'typecheck:validator': GATES['typecheck:validator'],
+		'test:unit:changed': {
+			command: ['exec', 'vitest', 'run', ...changed],
+			after: ['prepare'],
+		},
+		'test:nuxt:changed': {
+			command: [
+				'exec',
+				'vitest',
+				'run',
+				'--config',
+				'vitest.nuxt.config.ts',
+				...changed,
+			],
+			after: ['test:unit:changed'],
+		},
+	};
+}
+
+/**
  * The gates a mode runs. A dependency outside the selection counts as met, so
  * `--tests` starts the server-backed stage once the unit and Nuxt suites pass.
+ *
+ * `--quick` narrows to the change when there is a `main` to measure it from
+ * (`baseRef` answers which), and is the whole first stage otherwise or with
+ * `--all`.
+ *
+ * @param {string[]} argv the command line
+ * @param {() => string | undefined} [baseRef] the ref the branch is measured from, if any
+ * @returns {Record<string, { command: string[], after: string[], env?: Record<string, string> }>} the gates, by name
  */
-export function selectGates(argv) {
+export function selectGates(argv, baseRef = () => changeBase()?.ref) {
 	if (argv.includes('--quick')) {
+		const base = argv.includes('--all')
+			? undefined
+			: baseRef();
+		if (base)
+			return changedGates(base);
 		const wanted = new Set(['prepare', ...FIRST_STAGE]);
 		return Object.fromEntries(Object.entries(GATES).filter(([name]) => wanted.has(name)));
 	}
@@ -175,6 +230,8 @@ function signalGroup(child, signal) {
 export async function main(argv = process.argv) {
 	const gates = selectGates(argv);
 	await mkdir(logDirectory, { recursive: true });
+	if ('lint:changed' in gates)
+		process.stdout.write(`verify --quick: checking what this checkout changes since ${changeBase()?.ref}; CI runs everything\n`);
 
 	const started = Date.now();
 	const passed = new Map();

@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { RUN_SLOT_COSTS } from '../../../scripts/slots.mjs';
 import { GATES, selectGates } from '../../../scripts/verify.mjs';
 
 /**
@@ -78,6 +79,65 @@ describe('verify and CI run the same gates', () => {
 		expect(scripts.test).toBe('node scripts/verify.mjs --tests');
 		expect(commands).toEqual(expect.arrayContaining(['pnpm test:unit:coverage', 'pnpm test:integration --run']));
 		expect(commands.filter(command => !ciCommands.some(step => step === command || step.startsWith(`${command} `)))).toEqual([]);
+	});
+});
+
+// Before a push, a change is checked in proportion to it; CI is the full gate (README § Testing).
+describe('verify --quick checks what a checkout changes', () => {
+	const firstStage = [
+		'prepare',
+		'lint',
+		'typecheck:app',
+		'typecheck:test',
+		'typecheck:validator',
+		'test:unit:coverage',
+		'test:nuxt:coverage',
+	];
+
+	it('lints the changed files, typechecks, and runs the unit and Nuxt tests the change reaches', () => {
+		const gates = selectGates(['--quick'], () => 'origin/main');
+
+		expect(Object.keys(gates)).toEqual([
+			'prepare',
+			'lint:changed',
+			'typecheck:app',
+			'typecheck:test',
+			'typecheck:validator',
+			'test:unit:changed',
+			'test:nuxt:changed',
+		]);
+		expect(scripts['lint:changed']).toBe('node scripts/lint-changed.mjs');
+		expect(gates['test:unit:changed']!.command.join(' ')).toBe('exec vitest run --changed origin/main --passWithNoTests');
+		expect(gates['test:nuxt:changed']!.command.join(' ')).toBe('exec vitest run --config vitest.nuxt.config.ts --changed origin/main --passWithNoTests');
+	});
+
+	it.each([
+		{
+			run: 'asked for all of it',
+			argv: ['--quick', '--all'],
+			baseRef: 'origin/main',
+		},
+		{
+			run: 'there is no main to measure the change from',
+			argv: ['--quick'],
+			baseRef: undefined,
+		},
+	])('runs the whole first stage when $run', ({ argv, baseRef }) => {
+		expect(Object.keys(selectGates(argv, () => baseRef))).toEqual(firstStage);
+	});
+});
+
+// A gate outside the pool is one every other worktree's runs cannot see (scripts/slots.mjs).
+describe('every heavy gate takes run slots', () => {
+	it.each([
+		{ script: 'lint', cost: 'lint' },
+		{ script: 'typecheck:app', cost: 'typecheck' },
+		{ script: 'typecheck:test', cost: 'typecheck' },
+		{ script: 'build', cost: 'build' },
+		{ script: 'worker:smoke', cost: 'worker-smoke' },
+	] as const)('pnpm $script runs inside the slots a $cost costs', ({ script, cost }) => {
+		expect(RUN_SLOT_COSTS).toHaveProperty(cost);
+		expect(scripts[script]).toContain(`node scripts/slots.mjs ${cost} -- `);
 	});
 });
 

@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<{
 	 */
 	clearable?: boolean;
 }>(), {
+	// eslint-disable-next-line vue/require-valid-default-prop -- without type information the rule reads `GraphicAsset['kind'] | GraphicAsset['kind'][]` as an array alone
 	assetKind: 'image',
 	disabled: false,
 	clearable: true,

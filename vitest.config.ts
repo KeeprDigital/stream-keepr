@@ -1,10 +1,11 @@
 import { defineConfig } from 'vitest/config';
 import { wasmModulePlugin } from './build/wasmModulePlugin.ts';
-import { hideLoadTolerantWaitFrame, LOAD_TOLERANT_BAIL_AFTER_FAILURES, LOAD_TOLERANT_HOOK_TIMEOUT_MS, LOAD_TOLERANT_TEST_TIMEOUT_MS, rootAliases, unitCoverageConfig } from './vitest.shared.ts';
+import { heldToRunSlots, hideLoadTolerantWaitFrame, LOAD_TOLERANT_BAIL_AFTER_FAILURES, LOAD_TOLERANT_HOOK_TIMEOUT_MS, LOAD_TOLERANT_TEST_TIMEOUT_MS, rootAliases, unitCoverageConfig, unitRerunTriggers } from './vitest.shared.ts';
 
 export default defineConfig({
 	plugins: [
 		wasmModulePlugin('test-webassembly-modules'),
+		heldToRunSlots('unit tests'),
 	],
 	resolve: {
 		alias: rootAliases,
@@ -18,6 +19,7 @@ export default defineConfig({
 		testTimeout: LOAD_TOLERANT_TEST_TIMEOUT_MS,
 		hookTimeout: LOAD_TOLERANT_HOOK_TIMEOUT_MS,
 		bail: LOAD_TOLERANT_BAIL_AFTER_FAILURES,
+		forceRerunTriggers: unitRerunTriggers,
 		onStackTrace: hideLoadTolerantWaitFrame,
 		server: {
 			deps: {

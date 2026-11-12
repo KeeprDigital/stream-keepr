@@ -1,7 +1,10 @@
-import type { CoverageOptions } from 'vitest/node';
+import type { Plugin } from 'vite';
+import type { CoverageOptions, Reporter } from 'vitest/node';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { acquireRunSlots, RUN_SLOTS_HELD_ENV, runSlotCount, suiteSlotCeiling } from './scripts/slots.mjs';
 
 export const rootDir = fileURLToPath(new URL('.', import.meta.url));
 
@@ -25,6 +28,91 @@ export { LOAD_TOLERANT_BAIL_AFTER_FAILURES, LOAD_TOLERANT_HOOK_TIMEOUT_MS, LOAD_
 export function hideLoadTolerantWaitFrame(_error: unknown, frame: { file: string }) {
 	return !frame.file.endsWith('test/helpers/loadTolerantWaits.ts');
 }
+
+const RUN_SLOT_REPORTER = Symbol.for('stream-keepr.runSlotReporter');
+
+/**
+ * Holds a test run to this machine's run slots (`scripts/slots.mjs`): one
+ * per worker, taken when the run knows its files and given back when it ends.
+ *
+ * A run of three files takes three; a whole suite takes the ceiling, which is
+ * fewer workers than Vitest would start and measurably faster for it. With
+ * none free the run waits its turn and says so. However Vitest is started
+ * (`pnpm test:unit`, `vitest related`, `pnpm verify`), runs in every worktree
+ * draw on the one budget, so they queue rather than starve each other into
+ * their timeouts.
+ *
+ * A plugin rather than a reporter in the config: `--reporter` on the command
+ * line replaces the config's list, and would take this with it.
+ */
+export function heldToRunSlots(label: string, ledger: { path?: string; total?: number } = {}): Plugin {
+	return {
+		name: 'stream-keepr:run-slots',
+		configureVitest({ vitest }) {
+			const total = ledger.total ?? runSlotCount();
+			if (total === 0 || vitest.config.reporters.some(reporter => RUN_SLOT_REPORTER in reporter))
+				return;
+			const ceiling = Math.min(vitest.config.maxWorkers, suiteSlotCeiling(total));
+			let lease: Awaited<ReturnType<typeof acquireRunSlots>> | undefined;
+			const giveBack = () => {
+				lease?.release();
+				lease = undefined;
+				delete process.env[RUN_SLOTS_HELD_ENV];
+			};
+			vitest.config.reporters.push({
+				[RUN_SLOT_REPORTER]: true,
+				async onTestRunStart(specifications) {
+					giveBack();
+					if (specifications.length === 0)
+						return;
+					const want = Math.min(specifications.length, ceiling);
+					lease = await acquireRunSlots({
+						...ledger,
+						total,
+						want,
+						// Half of what it could use: a suite that started on the one free
+						// slot would keep that one worker long after the rest came free.
+						min: Math.ceil(want / 2),
+						label: specifications.length === 1
+							? `${label}, 1 file`
+							: `${label}, ${specifications.length} files`,
+					});
+					// The workers start after this and inherit it: a test that runs a gate
+					// of its own (a script under test) then takes nothing more, where it
+					// would otherwise wait in line behind the very run it belongs to.
+					process.env[RUN_SLOTS_HELD_ENV] = String(lease.slots);
+					// Read when the run groups its files, which is after this hook returns.
+					for (const config of new Set([
+						vitest.config,
+						...vitest.projects.map(project => project.config),
+					]))
+						config.maxWorkers = lease.slots;
+				},
+				onTestRunEnd: giveBack,
+			} as Reporter);
+		},
+	};
+}
+
+/**
+ * What no test imports and every test depends on. Under `--changed`
+ * (`pnpm verify:quick`) Vitest selects tests by following their imports, so a
+ * change to one of these would select none; it runs the whole suite instead.
+ */
+export const unitRerunTriggers = [
+	'**/package.json',
+	'**/pnpm-lock.yaml',
+	'**/{vitest,vite}.config.*',
+	'**/vitest.shared.ts',
+	'**/test/helpers/{blockCloudflareCredentials,loadTolerantBounds,loadTolerantWaits}.ts',
+	// The sqlite harness reads these from disk.
+	'**/server/db/migrations/**',
+];
+export const nuxtRerunTriggers = [
+	...unitRerunTriggers,
+	'**/nuxt.config.ts',
+	'**/test/nuxt/{setup,quietSuspenseNotice,failOnUnbundledIcon}.ts',
+];
 
 export const rootAliases = {
 	'~~': rootDir,

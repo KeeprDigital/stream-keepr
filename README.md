@@ -310,9 +310,10 @@ Binding any other bypassed launcher off loopback carries the same exposure
 | While developing                            | `pnpm test:unit`, `pnpm test:nuxt`, `pnpm test:integration`, `pnpm test:local-auth` | Watch mode; pass `--run` for a single pass. Local-auth is one spawned-dev-server pass.                                                                                                                                                                                                                                      |
 | Before commit                               | `pnpm test`                                                                         | Every test gate of `pnpm verify` (`verify.mjs --tests`): unit + Nuxt (coverage thresholds in `vitest.shared.ts`), integration, local-auth, then the five local browser gates, each in turn: `still-images`, `silent-video`, `fonts`, `animation-effects`, `key-matte`. No lint, typecheck, or build. Needs Chrome/Chromium. |
 | Tests your branch touches                   | `pnpm test:changed`                                                                 | Only the unit and Nuxt test files whose imports reach a file changed since `origin/main`; seconds to half a minute, no coverage thresholds.                                                                                                                                                                                 |
-| Quick check while developing                | `pnpm verify:quick`                                                                 | The cheap half of `pnpm verify`: lint, typecheck, unit and Nuxt suites, about 1½ minutes warm.                                                                                                                                                                                                                              |
+| Before a push                               | `pnpm verify:quick`                                                                 | What this checkout changes since `main`: lint of the changed files, typecheck, and the unit and Nuxt tests whose imports reach them. Seconds to about a minute. `--all` runs the whole cheap half instead: lint, typecheck, unit and Nuxt suites with their coverage floors.                                                |
 | Reproducing a CI failure                    | `pnpm verify`                                                                       | CI's gates on the working tree, run side by side as a graph (`scripts/verify.mjs`) and stopped at the first failure: typecheck (the validator Worker included), lint, every `pnpm test` suite, `validator:dry-run`, build, `worker:dry-run`, `worker:smoke`.                                                                |
 | Checking an existing build                  | `pnpm worker:smoke`                                                                 | Runs `.output/server` under local workerd and probes routing, Better Auth, deny-by-default, the bypass session, D1, generated config, object storage, codec Wasm, and ranged delivery. Refuses a missing build.                                                                                                             |
+| Seeing what holds the machine               | `pnpm slots`                                                                        | Who holds run slots and who waits, across every worktree (below).                                                                                                                                                                                                                                                           |
 | Listing acceptance harnesses                | `pnpm accept`                                                                       | Every harness, what it proves, what it needs, and its flags. Run one with `pnpm accept <name> [flags]`.                                                                                                                                                                                                                     |
 | Touching still-image codecs or Wasm         | `pnpm accept still-image-ingestion`                                                 | Proves JPEG/WebP ingestion decodes on workerd. Needs `pnpm preview` running at `127.0.0.1:8787`.                                                                                                                                                                                                                            |
 | Touching an Animation Effect shader         | `pnpm accept animation-effects`                                                     | Mounts every effect at defaults and range extremes in Chromium (SwiftShader); requires compile, lit-but-not-washed-out frames, motion, and halo's trails fading out. Local only.                                                                                                                                            |
@@ -322,8 +323,14 @@ Binding any other bypassed launcher off loopback carries the same exposure
 | Touching font delivery against a real store | `pnpm accept fonts --library`                                                       | Library face against local `pnpm preview`; plain `pnpm accept fonts` covers synthetic faces.                                                                                                                                                                                                                                |
 | Deploy day                                  | `pnpm accept deployed`                                                              | The six deployed gates in order, stopping at the first failure. See [Deploy day](#deploy-day).                                                                                                                                                                                                                              |
 
-Before push, `pnpm verify:quick` is enough: CI is the full gate (below), and
-running `pnpm verify` first would only repeat it. Open the PR as a draft and
+Before push, `pnpm verify:quick` is enough. It checks the change in proportion
+to it, and CI is the full gate (below): running the suites or `pnpm verify`
+first would only repeat it. Vitest finds the tests by following each test
+file's imports to the files changed since `origin/main`, committed or not, and
+runs every test when the change reaches a file every test depends on and
+none imports (`package.json`, a Vitest config or setup file, a migration:
+`unitRerunTriggers` in `vitest.shared.ts`); a
+test that reads a file without importing it is CI's to catch. Open the PR as a draft and
 mark it ready when the branch is done. Realtime integration tests are the one
 gate CI cannot run, so a change touching realtime runs
 `pnpm test:integration --run` locally first.
@@ -340,9 +347,22 @@ How `pnpm verify` runs:
 - **Cheap gates first.** `nuxt prepare`, then lint, typecheck, and the unit and
   Nuxt suites; the build runs beside them, and the silent-video validator's
   typecheck and bundle check start at once beside `nuxt prepare`. The
-  server-backed suites and browser
-  gates start only once those pass, so a lint or type error arrives in seconds,
-  and run one after another: integration, local-auth, then the browser gates.
+  server-backed suites and browser gates start only once those pass, so a lint
+  or type error arrives in seconds, and run one after another: integration,
+  local-auth, then the browser gates.
+- **Every heavy gate takes run slots** (`scripts/slots.mjs`). The machine has
+  one budget of them, shared by every worktree of this checkout: a slot is
+  about one busy core and 1.5 GB, and a 10-core, 16 GB machine has eight. Lint,
+  each typecheck program and the build take three; a test run takes one per
+  worker, up to six; the integration suite takes them all. A gate with too few
+  free waits its turn, first come first served, and prints
+  `[run-slots] … has waited` with who holds them. This is what lets several
+  agents verify at once: before it, each gate was sized as if it had the
+  machine, a first `verify:quick` in a fresh worktree held about 10 GB (cold
+  lint 3.8, cold typecheck 3.7, the unit suite 2.4), and two of them starved
+  each other into timeouts. `STREAM_KEEPR_RUN_SLOTS` sizes the pool by hand
+  (`off` runs unqueued). A holder whose process is gone gives its slots back,
+  and so does one that has held them 30 minutes, which no gate takes.
 - **Each gate logs to `node_modules/.cache/verify/<gate>.log`.** The terminal
   shows one line per gate and the tail of the first failure.
 - **Lint and typecheck are cached** (`node_modules/.cache/eslint/`,
@@ -362,12 +382,19 @@ How `pnpm verify` runs:
   unit suite, breaks the Nuxt suite on a warm cache; on by default since
   Vitest 5, so `vitest.nuxt.config.ts` turns it off); `pool: 'threads'`
   (no gain); ESLint `--concurrency` and `projectService` (slower, and
-  `projectService` exhausts the heap).
+  `projectService` exhausts the heap). Measured again in November 2026:
+  Vitest's own worker count, one fewer than the cores (the unit suite 56 s at
+  nine workers, 44 s at six; the Nuxt suite 113 s and 75 s, so a run takes at
+  most six slots); `--no-isolate` for the unit suite (Miniflare stubs
+  outlive the file that made them); and `ts/no-floating-promises` on app and
+  test code as well as server and shared (a cold lint cost 176 s of CPU and
+  4.4 GB, against 60 s and 3.5 GB with the rule where a floating promise loses
+  a write, and 46 s and 2.0 GB without it).
 
 CI (`.github/workflows/ci.yml`) runs the same gates as `pnpm verify` on PRs
-and in the merge queue, split across parallel jobs (checks, two integration
-shards, local-auth and browser gates, Worker build) so the longest job sets the
-wall time. The queue's run tests the exact tree that lands
+and in the merge queue, split across parallel jobs (lint, typecheck, the unit
+suite, the Nuxt suite, two integration shards, local-auth and browser gates,
+Worker build) so the longest job sets the wall time. The queue's run tests the exact tree that lands
 ([Releases](#releases)). It skips draft PRs (marking one ready runs it) and
 the Worker build when only tests, docs or the other workflows changed. A change
 that touches only docs skips the code gates and runs `pnpm verify:docs`
@@ -388,10 +415,12 @@ e.g. `pnpm exec vitest --ui`.
 
 Gotchas:
 
-- **Run integration suites one at a time.** Concurrent runs, or a loaded
-  machine, make every result meaningless. A cascade of `ECONNREFUSED` or
-  "session cookie was not issued" with zero assertion failures means a
-  `workerd` backend died, not that the code broke.
+- **The integration suite has the machine to itself.** It takes every run
+  slot, so it waits for other runs to end and nothing starts beside it, from
+  this worktree or another. Its tests time real requests: on a loaded machine
+  every result is meaningless. A cascade of `ECONNREFUSED` or "session cookie
+  was not issued" with zero assertion failures means a `workerd` backend died,
+  not that the code broke.
 - **The integration suite runs several servers.** One `nuxt dev` per vitest
   worker, each over its own database under `.wrangler/state/integration-<n>`, so
   test files run in parallel but never two against one database. The default is
@@ -447,8 +476,9 @@ Gotchas:
   stops after five failed tests, so a real hang names itself well inside CI's
   job limit rather than spending the timeout on every test after it. A test
   that passes alone and fails under load is a defect in the test: it is racing
-  a real timer or sharing state. Reproduce it by oversubscribing
-  (`--maxWorkers=30` beside another suite), not by re-running until green.
+  a real timer or sharing state. Reproduce it by oversubscribing with the run
+  slots off (`STREAM_KEEPR_RUN_SLOTS=off pnpm exec vitest run --maxWorkers=30`
+  beside another such run), not by re-running until green.
 - **The Nuxt suite is selected by config**, not project:
   `vitest --config vitest.nuxt.config.ts`.
 - **Local acceptance harnesses target `http://127.0.0.1:8787`**, whichever
