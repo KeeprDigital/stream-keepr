@@ -1,15 +1,10 @@
 import type { GraphicAssetBrowserDecodeEvidence } from '~~/shared/types/graphicsAsset';
+import { sha256Hex } from '~~/shared/utils/sha256';
 
 export async function verifyStillImageBrowserDecode(
 	source: Blob,
 ): Promise<GraphicAssetBrowserDecodeEvidence> {
-	const sourceDigest = Array.from(
-		new Uint8Array(await crypto.subtle.digest(
-			'SHA-256',
-			await source.arrayBuffer(),
-		)),
-		byte => byte.toString(16).padStart(2, '0'),
-	).join('');
+	const sourceDigest = await sha256Hex(await source.arrayBuffer());
 	try {
 		if (typeof createImageBitmap === 'function') {
 			const bitmap = await createImageBitmap(source);

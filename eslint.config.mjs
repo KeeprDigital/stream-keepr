@@ -141,6 +141,20 @@ export default withNuxt(
 		},
 	},
 	{
+		// A page opened over plain HTTP on a LAN address has no secure context, so no
+		// `crypto.subtle` and no `crypto.randomUUID` (README § Local auth bypass). Code
+		// a browser runs takes a digest from `sha256Hex` and an id from `randomUuid`.
+		files: ['app/**/*.{ts,vue}', 'shared/**/*.ts'],
+		ignores: ['shared/utils/sha256.ts'],
+		rules: {
+			'no-restricted-properties': [
+				'error',
+				{ property: 'subtle', message: 'Web Crypto is missing on a plain-HTTP LAN page: use sha256Hex (shared/utils/sha256.ts).' },
+				{ property: 'randomUUID', message: 'crypto.randomUUID is missing on a plain-HTTP LAN page: use randomUuid (shared/utils/uuid.ts).' },
+			],
+		},
+	},
+	{
 		files: ['server/**/*.ts'],
 		plugins: { drizzle },
 		rules: {
