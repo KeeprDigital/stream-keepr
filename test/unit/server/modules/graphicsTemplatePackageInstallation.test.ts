@@ -837,9 +837,7 @@ describe('the Template Package installation contract', () => {
 		// The D1 catalogue's own lookups: a Graphic Asset held here at a revision that is not,
 		// a pause it stores, and the confirmation it records before anything installs.
 		it('holds a related source revision over the D1 catalogue until its warning is accepted', async () => {
-			const { library } = createLibrary('related-revision', {
-				catalogue: createD1GraphicsAssetCatalogue(harness.database),
-			});
+			const { library } = await createLibrary('related-revision');
 			const backdrop = await ingestImage(library, 'Backdrop');
 			const parts = readTemplatePackageParts(await exportPackage(library, {
 				assets: [
