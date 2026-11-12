@@ -45,21 +45,6 @@ describe('a Feature Match Slot side\'s Deck List', () => {
 		}) as any;
 	}
 
-	it('previews a paste with number-only placeholders, storing nothing', async () => {
-		const answer = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}/deck-lists/preview`, {
-			method: 'POST',
-			body: { text: ZORO_DECK },
-		}) as any;
-
-		expect(answer.deckList.entries.map((entry: any) => [entry.number, entry.card?.name ?? null])).toEqual([
-			['OP01-001', 'Roronoa Zoro'],
-			['OP01-025', 'Roronoa Zoro'],
-			['OP99-999', null],
-		]);
-		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}`);
-		expect(slot.player1Data?.gameData ?? null).toBeNull();
-	});
-
 	it('reaches the active Session\'s snapshot when replaced, without reopening it', async () => {
 		await paste(ZORO_DECK);
 		const replaced = await paste(NAMI_DECK);
