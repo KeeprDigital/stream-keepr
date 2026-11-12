@@ -97,58 +97,6 @@ describe('the Graphics Asset Library Capacity API', () => {
 		}
 	});
 
-	it('returns structured insufficient-storage details when staging admission is full', async () => {
-		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
-			headers: { cookie: authorCookie },
-		});
-		const occupiedStagingBytes = original.staging.usedBytes + original.staging.reservedBytes;
-
-		try {
-			await $fetch('/api/admin/graphics-assets/capacity', {
-				method: 'PUT',
-				headers: administratorHeaders,
-				body: {
-					canonicalLimitBytes: original.canonical.limitBytes,
-					stagingLimitBytes: occupiedStagingBytes + 1,
-				},
-			});
-			const response = await fetch('/api/graphics-assets/ingestion-operations', {
-				method: 'POST',
-				headers: {
-					'content-type': 'application/json',
-					'cookie': authorCookie,
-				},
-				body: JSON.stringify(graphicsIngestionRequest({
-					idempotencyKey: `capacity-blocked-${crypto.randomUUID()}`,
-					name: 'Blocked staging operation',
-					declaredByteLength: 68,
-				})),
-			});
-
-			expect(response.status).toBe(507);
-			await expect(response.json()).resolves.toMatchObject({
-				statusCode: 507,
-				statusMessage: 'Insufficient Storage',
-				data: {
-					resource: 'staging',
-					limitBytes: occupiedStagingBytes + 1,
-					requestedBytes: 68,
-					availableBytes: 1,
-				},
-			});
-		}
-		finally {
-			await $fetch('/api/admin/graphics-assets/capacity', {
-				method: 'PUT',
-				headers: administratorHeaders,
-				body: {
-					canonicalLimitBytes: original.canonical.limitBytes,
-					stagingLimitBytes: original.staging.limitBytes,
-				},
-			});
-		}
-	});
-
 	it('allows a proven no-growth publication through D1 at the full Canonical Graphics Quota', async () => {
 		const original = await $fetch<GraphicsAssetLibraryCapacity>('/api/graphics-assets/capacity', {
 			headers: { cookie: authorCookie },

@@ -454,41 +454,6 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 		});
 	});
 
-	it('records a stable report for a conflicting MIME outside the accepted allowlist', async () => {
-		const operation = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
-			method: 'POST',
-			headers: authorHeaders,
-			body: graphicsIngestionRequest({
-				idempotencyKey: 'integration-conflicting-unsupported-mime',
-				name: 'Unsupported MIME declaration',
-				sourceFileName: 'declared.png',
-				declaredMime: 'image/gif',
-				browserDecodeEvidence: browserDecodeEvidence(transparentPixelPng),
-				declaredByteLength: transparentPixelPng.byteLength,
-			}),
-		});
-		const response = await fetch(
-			`/api/graphics-assets/ingestion-operations/${operation.id}/content`,
-			{
-				method: 'PUT',
-				headers: { ...authorHeaders, 'content-type': 'image/gif' },
-				body: transparentPixelPng,
-			},
-		);
-
-		expect(response.status).toBe(200);
-		await expect(response.json()).resolves.toMatchObject({
-			stage: 'failed',
-			report: {
-				outcome: 'rejected',
-				issues: [
-					{ code: 'conflicting-image-mime' },
-				],
-			},
-			failure: { code: 'validation-failed', retryable: false },
-		});
-	});
-
 	// One profile refusal proves the validator sits behind the seam; each rule is its own unit test.
 	it('rejects a truncated JPEG through the durable public ingestion seam', async () => {
 		const bytes = jpegPixel.subarray(0, -1);

@@ -263,6 +263,31 @@ describe('the Graphics Asset Library operational queues', () => {
 			expect(item.actions.join(' ')).not.toContain('adopt');
 	});
 
+	// A reading names its subjects by domain identity; where their bytes live stays the byte store's.
+	it('names no object key or content digest for unavailable content or a quarantined object', async () => {
+		const context = createQueuesLibrary();
+		await ingestAsset(context, { idempotencyKey: 'lost-content', name: 'Lost backdrop' });
+		await context.canonical.delete(canonicalIdentity(digestOf(pixelPng)));
+		const strayDigest = digestOf(paddedPng(1));
+		await context.canonical.createImmutable({
+			identity: canonicalIdentity(strayDigest),
+			bytes: boundedBytes(paddedPng(1)),
+			metadata: canonicalMetadata(strayDigest),
+		});
+		await context.library.runGraphicsReconciliation();
+
+		const overview = await context.library.getOperationalQueues();
+
+		expect(queueOf(overview, 'unavailable-content').items).toHaveLength(1);
+		expect(queueOf(overview, 'quarantined-object').items).toHaveLength(1);
+		const reading = JSON.stringify(overview);
+		expect(reading).not.toContain('sha256/');
+		expect(reading).not.toContain(digestOf(pixelPng));
+		expect(reading).not.toContain(strayDigest);
+		// Quarantined bytes are rechecked and deleted; adopting them is never on offer.
+		expect(reading).not.toContain('adopt');
+	});
+
 	it('states one complete count per queue and lists work deadline-first', async () => {
 		const context = createQueuesLibrary();
 		const first = await ingestAsset(context, {

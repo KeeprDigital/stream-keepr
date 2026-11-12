@@ -12,6 +12,7 @@ import {
 	MAX_GRAPHIC_PLACEHOLDER_STYLES_PER_TEXT_ITEM,
 	modeConfigPatchSchemaMap,
 	modeConfigsMapSchema,
+	parseModeConfigPatchResult,
 } from '~~/server/schemas/api/screen';
 import { addGraphicItem, getGraphicItemDefinition } from '~~/shared/modules/graphics';
 import {
@@ -381,6 +382,60 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		}).success).toBe(false);
 	});
 
+	// A PATCH stores what it parsed: a key the patch form dropped would be lost, and one it filled in invented.
+	it('carries Graphic Inputs, their Graphic Input Binding and Graphic Placeholder Styles through the patch path unchanged', () => {
+		const graphics = [
+			{
+				...graphic('lower-third'),
+				inputs: [
+					{
+						type: 'text',
+						key: 'name',
+						label: 'Name',
+						required: true,
+						updatePolicy: 'staged',
+						default: 'Unnamed',
+						maxLength: 40,
+					},
+					{
+						type: 'choice',
+						key: 'side',
+						label: 'Side',
+						required: false,
+						updatePolicy: 'live',
+						default: 'left',
+						options: [
+							{ value: 'left', label: 'Left' },
+							{ value: 'right', label: 'Right' },
+						],
+					},
+				],
+				sources: [
+					{ key: 'player', label: 'Player', kind: 'player' },
+				],
+				bindings: [
+					{ inputKey: 'name', sourceKey: 'player', fieldId: 'player.name' },
+				],
+				items: [
+					{
+						...textItem('name-line'),
+						text: '{name} — {side}',
+						placeholderStyles: {
+							side: { fontWeight: 300, color: '#00d9ff' },
+						},
+					},
+				],
+			},
+		];
+
+		const patch = modeConfigPatchSchemaMap['broadcast-graphics'].parse({ graphics }) as Record<string, unknown>;
+
+		expect(patch).toEqual({ graphics });
+		expect(parseModeConfigPatchResult({}, 'broadcast-graphics', patch)).toEqual({
+			'broadcast-graphics': { graphics },
+		});
+	});
+
 	it('names the whole-Screen Graphic Input cap rather than reporting a byte count', () => {
 		const perGraphic = MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC;
 		const graphics = Array.from(
@@ -505,6 +560,80 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		});
 
 		expect(messages(result)).toEqual(refusal);
+	});
+
+	// Each declared type is its own branch of the declaration, with fields no other takes.
+	it.each<[string, Record<string, unknown>]>([
+		[
+			'text',
+			{ default: 'Unnamed', maxLength: 20 },
+		],
+		[
+			'number',
+			{ default: 0, integer: true, min: 0 },
+		],
+		[
+			'toggle',
+			{ default: false },
+		],
+		[
+			'choice',
+			{
+				default: 'left',
+				options: [
+					{ value: 'left', label: 'Left' },
+					{ value: 'right', label: 'Right' },
+				],
+			},
+		],
+		[
+			'color',
+			{ default: '#00d9ff' },
+		],
+		[
+			'media',
+			{ default: null, mediaKind: 'image' },
+		],
+	])('accepts a %s Graphic Input, keeping its declaration as written', (type, fields) => {
+		const declaration = {
+			type,
+			key: 'input',
+			label: 'Input',
+			required: false,
+			updatePolicy: 'staged',
+			...fields,
+		};
+
+		const result = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [
+				{
+					...graphic('lower-third'),
+					inputs: [declaration],
+				},
+			],
+		});
+
+		expect(messages(result)).toEqual([]);
+		expect(result.data?.graphics[0]?.inputs).toEqual([declaration]);
+	});
+
+	it('refuses a Graphic Input carrying a field its declared type does not take', () => {
+		const result = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [
+				{
+					...graphic('lower-third'),
+					inputs: [
+						{
+							...textInput('flag'),
+							type: 'toggle',
+							default: false,
+						},
+					],
+				},
+			],
+		});
+
+		expect(result.success).toBe(false);
 	});
 
 	it('rejects a Graphic Input key a Graphic Text Template could not name', () => {

@@ -1,7 +1,9 @@
+import type { H3Event } from 'h3';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
+import { stubH3Event } from '~~/test/helpers/h3Event';
 import { fakeOpCardBulkLookup, knownOpCard, mockOpWriteBoundaries } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
@@ -57,7 +59,12 @@ const LATE = knownOpCard({
 let upstream = fakeOpCardBulkLookup([ZORO, NAMI, RED, BLUE]);
 mockOpWriteBoundaries(db, () => upstream);
 
+vi.stubGlobal('defineEventHandler', (handler: unknown) => handler);
+vi.stubGlobal('getValidatedRouterParams', async (event: { params: unknown }, parse: (value: unknown) => unknown) => parse(event.params));
+vi.stubGlobal('readValidatedBody', async (event: { body: unknown }, parse: (value: unknown) => unknown) => parse(event.body));
+
 const { featureMatchDeckListModule } = await import('~~/server/modules/feature-match-deck-list');
+const previewRoute = (await import('~~/server/api/events/[id]/feature-match-slots/[slotId]/deck-lists/preview.post')).default as unknown as (event: H3Event) => Promise<unknown>;
 const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-match-slot-write');
 const { featureMatchStateService } = await import('~~/server/services/featureMatchState');
 const { featureMatchDeckListService } = await import('~~/server/services/featureMatchDeckList');
@@ -166,6 +173,28 @@ describe('previewing a pasted Deck List', () => {
 		expect(upstream.batches()).toEqual([
 			['OP01-001', 'OP01-025', 'OP99-999'],
 		]);
+	});
+
+	// The route names a Slot only to address it: a preview stores nothing there.
+	it('is what its route answers for the request\'s Event and text, storing nothing on the Slot', async () => {
+		const { eventId, slotId } = await stageSlot();
+		const before = await slotRow(slotId);
+
+		const answer = await previewRoute(stubH3Event({
+			params: {
+				id: String(eventId),
+				slotId: String(slotId),
+			},
+			body: { text: ZORO_DECK },
+		}));
+
+		expect(answer).toEqual(await featureMatchDeckListModule().preview({ eventId, text: ZORO_DECK }));
+		expect(answer).toMatchObject({
+			available: true,
+			deckList: { leaderNumber: 'OP01-001' },
+		});
+		expect(await slotRow(slotId)).toEqual(before);
+		expect(await db.select().from(schema.featureMatchDeckLists).where(eq(schema.featureMatchDeckLists.slotId, slotId))).toEqual([]);
 	});
 
 	it('answers unavailable when no bandai-keepr is configured', async () => {

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
+import { updateScreenSchema } from '~~/server/schemas/api/screen';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { createAblyRestFake } from '~~/test/helpers/ablyRestFake';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
@@ -155,6 +156,46 @@ describe('updating a Screen', () => {
 				{ screenId: screen.id, originConnectionId: 'origin-1' },
 			],
 		]);
+	});
+
+	// The Edit Screen dialog sends every stored mode configuration back with a rename, and storage
+	// holds PATCH fragments: most lack a field the mode's complete configuration requires.
+	it('renames a Screen whose stored mode configurations are PATCH fragments, storing them as they were', async () => {
+		const fragments = {
+			'background': {},
+			'card': {},
+			'deck': { showDeckName: false },
+			'standings': { viewMode: 'all' },
+			'top-cut': { showHeader: false },
+			'feature-match': { showClock: false },
+			'feature-match-overlay': {},
+			'broadcast-graphics': {
+				channels: [
+					{ id: 'lower-thirds', name: 'Lower Thirds' },
+				],
+			},
+			'metagame': { topN: 16 },
+			'top-cards': { limit: 12 },
+			'player-history': { rowsPerPage: 5 },
+		};
+		const screen = await stageScreen({ modeConfigs: fragments as never });
+
+		const answered = await screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
+			eventId,
+			screenId: screen.id,
+			input: updateScreenSchema.parse({
+				name: 'Renamed',
+				slug: screen.slug,
+				currentMode: screen.currentMode,
+				modeConfigs: fragments,
+				stateVersion: screen.stateVersion,
+			}),
+		});
+
+		expect(answered.modeConfigs).toEqual(fragments);
+		expect(await stored(screen.id)).toMatchObject({ name: 'Renamed', stateVersion: screen.stateVersion + 1 });
+		expect((await stored(screen.id))?.modeConfigs).toEqual(fragments);
 	});
 
 	it('refuses a slug another Screen of the Event uses, storing and announcing nothing', async () => {

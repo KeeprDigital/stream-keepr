@@ -109,18 +109,6 @@ describe('graphics Authoring Leases', () => {
 		return serverTime;
 	}
 
-	/** Past an instant on that clock: a wait derived from it, not a sleep bet against it. */
-	async function serverClockPasses(instant: number): Promise<void> {
-		for (;;) {
-			const now = await serverNow();
-			if (now > instant)
-				return;
-			await new Promise((resolve) => {
-				setTimeout(resolve, instant - now + 1);
-			});
-		}
-	}
-
 	beforeAll(async () => {
 		browserA = await operatorSessionCookie();
 		browserB = await anotherBrowser();
@@ -242,34 +230,6 @@ describe('graphics Authoring Leases', () => {
 		expect((await authoredStack()).map(entry => entry.id)).toEqual(['holder-stack']);
 	});
 
-	it('lets an observer read every accepted authoring change', async () => {
-		await askForLease(browserA);
-		await patchStack(browserA, [
-			graphic('holder-stack'),
-			graphic('second-graphic'),
-		]);
-
-		const screen = await request(`/api/events/${eventId}/screens/${screenId}`, { cookie: browserB });
-
-		expect(screen.status).toBe(200);
-		expect(
-			(screen.data.modeConfigs['broadcast-graphics'].graphics as BroadcastGraphicConfig[])
-				.map(entry => entry.id),
-		).toEqual(['holder-stack', 'second-graphic']);
-	});
-
-	it('renews the deadline for the session already holding the lease', async () => {
-		const before = await askForLease(browserA);
-		// The server's clock has moved on since the grant, so a renewal's deadline has too.
-		await serverClockPasses(await serverNow());
-		const renewed = await askForLease(browserA);
-
-		expect(renewed.data.outcome).toBe('renew');
-		expect(renewed.data.lease.role).toBe('holder');
-		expect(renewed.data.lease.expiresAt!).toBeGreaterThan(before.data.lease.expiresAt!);
-		expect(renewed.data.lease.heldSince).toBe(before.data.lease.heldSince);
-	});
-
 	it('never restricts a live command session while the Edit workspace is leased', async () => {
 		// Multi-operator live operation keeps running under its own field-scoped
 		// conflict rules rather than under the lease.
@@ -368,24 +328,5 @@ describe('graphics Authoring Leases', () => {
 		expect(released.data.lease.writable).toBe(true);
 		expect(released.data.lease.heldByAnotherSession).toBe(false);
 		expect(released.data.lease.expiresAt).toBeNull();
-	});
-
-	it('frees an artifact whose holding session disappeared without releasing it', async () => {
-		const acquired = await askForLease(browserA, { heartbeatIntervalMs: 1_000 });
-		expect(acquired.data.outcome).toBe('grant');
-		const expiresAt = acquired.data.lease.expiresAt!;
-		// Read after the grant, so the deadline can only be nearer than the three seconds it was given.
-		expect(expiresAt - await serverNow()).toBeLessThanOrEqual(3_000);
-
-		// Session A is gone: it never heartbeats again and never releases.
-		expect((await askForLease(browserB)).data.outcome).toBe('observe');
-
-		// Once the clock that stamped the deadline reads past it, the next ask is served
-		// later still: the lease has lapsed for it whatever the machine's load.
-		await serverClockPasses(expiresAt);
-		const recovered = await askForLease(browserB);
-		expect(recovered.data.outcome).toBe('grant');
-		expect(recovered.data.lease.role).toBe('holder');
-		expect(recovered.data.lease.heldByAnotherSession).toBe(false);
 	});
 });

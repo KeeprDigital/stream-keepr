@@ -1,4 +1,7 @@
-import type { BroadcastGraphicsCommand } from '~~/shared/types/broadcastGraphicsLiveSession';
+import type {
+	BroadcastGraphicsCommand,
+	BroadcastGraphicsLiveSessionResponse,
+} from '~~/shared/types/broadcastGraphicsLiveSession';
 import type {
 	BroadcastGraphicConfig,
 	GraphicInputDeclaration,
@@ -87,6 +90,12 @@ function clip(revisionId: string): MediaGraphicInputValue {
 	};
 }
 
+/** A transparent (VP9-alpha) video, which ADR-0020 publishes and delivers like any other revision. */
+const TRANSPARENT_VIDEO: MediaGraphicInputValue = {
+	assetId: testGraphicAssetId('asset-sting'),
+	revisionId: testGraphicAssetRevisionId('revision-sting'),
+};
+
 /** A revision that exists but whose bytes the library cannot currently reach. */
 const UNREACHABLE_REVISION = 'revision-unreachable';
 
@@ -98,6 +107,8 @@ const graphicsAssetLibrary = {
 	async inspectGraphicAssetRevision(input: { assetId: string; revisionId: string }): Promise<GraphicAssetReferenceStatus> {
 		if (input.revisionId === UNREACHABLE_REVISION || graphicsAssetLibraryOutage.has(input.revisionId))
 			return { outcome: 'unavailable', retryable: true };
+		if (input.assetId === TRANSPARENT_VIDEO.assetId && input.revisionId === TRANSPARENT_VIDEO.revisionId)
+			return { outcome: 'available', lifecycleState: 'active', kind: 'silent-video' };
 		return input.assetId === ASSET_ID && (REVISIONS as readonly string[]).includes(input.revisionId)
 			? { outcome: 'available', lifecycleState: 'active', kind: 'image' }
 			: { outcome: 'missing' };
@@ -108,9 +119,10 @@ const graphicsAssetLibrary = {
 
 const CLIP_A = 'clipA';
 const CLIP_B = 'clipB';
+const STING = 'sting';
 
 /** A media Graphic Input on a live On-air Update Policy, so one `Set Input` moves the accepted set. */
-function mediaInput(key: string): GraphicInputDeclaration {
+function mediaInput(key: string, mediaKind: 'image' | 'silent-video' = 'image'): GraphicInputDeclaration {
 	return {
 		key,
 		label: key,
@@ -118,7 +130,7 @@ function mediaInput(key: string): GraphicInputDeclaration {
 		required: false,
 		updatePolicy: 'live',
 		default: null,
-		mediaKind: 'image',
+		mediaKind,
 	};
 }
 
@@ -129,6 +141,7 @@ const SLATE: BroadcastGraphicConfig = {
 	inputs: [
 		mediaInput(CLIP_A),
 		mediaInput(CLIP_B),
+		mediaInput(STING, 'silent-video'),
 	],
 };
 
@@ -156,7 +169,9 @@ interface LiveSession {
 	/** An epoch ended by failure, its published references left behind (#305): the state orphan repair is for. */
 	strandReferencesOfEndedEpoch: () => Promise<void>;
 	/** Whether this Screen's output may fetch this exact revision now. */
-	canResolve: (revisionId: string) => Promise<boolean>;
+	canResolve: (revisionId: string, assetId?: string) => Promise<boolean>;
+	/** The authoritative snapshot a reconnecting Live Control or Screen Output loads. */
+	snapshot: () => Promise<Pick<BroadcastGraphicsLiveSessionResponse, 'sequence' | 'currentState'>>;
 }
 
 /** One Event, one Broadcast Graphics Screen, and its open playout epoch, per test. */
@@ -193,14 +208,18 @@ async function liveSession(): Promise<LiveSession> {
 					eq(schema.broadcastGraphicsLiveSessions.status, 'active'),
 				));
 		},
-		canResolve: async (revisionId) => {
+		canResolve: async (revisionId, assetId = ASSET_ID) => {
 			const outcome = await authorizer.authorize({
 				screenId,
 				capabilityDigest: assetCapabilityDigest,
-				assetId: ASSET_ID,
+				assetId,
 				revisionId,
 			});
 			return outcome.outcome === 'authorized';
+		},
+		snapshot: async () => {
+			const { sequence, currentState } = await module.loadSession(eventId, screenId);
+			return { sequence, currentState };
 		},
 	};
 }
@@ -236,6 +255,19 @@ beforeAll(async () => {
 			technicalFacts: {},
 		} as never);
 	}
+	await db.insert(graphicAssets).values({
+		id: TRANSPARENT_VIDEO.assetId,
+		name: 'Sting',
+		kind: 'silent-video',
+	} as never);
+	await db.insert(graphicAssetRevisions).values({
+		id: TRANSPARENT_VIDEO.revisionId,
+		assetId: TRANSPARENT_VIDEO.assetId,
+		revisionNumber: 1,
+		contentDigest: CONTENT_DIGEST,
+		compatibilityProfile: 'silent-video-v1',
+		technicalFacts: { kind: 'silent-video', targetCompatibility: 'chromium-transparency' },
+	} as never);
 });
 
 beforeEach(() => {
@@ -290,6 +322,7 @@ describe('a media selection the Graphics Asset Library refuses', () => {
 	it('names a revision that does not exist as a Missing Graphic Asset Reference', async () => {
 		const live = await liveSession();
 		await live.take();
+		const before = await live.snapshot();
 
 		await expect(live.setInput(CLIP_A, clip('no-such-revision'))).rejects.toMatchObject({
 			statusCode: 409,
@@ -299,8 +332,9 @@ describe('a media selection the Graphics Asset Library refuses', () => {
 			},
 		});
 
-		// Refused outright: the value is not accepted, so the index publishes nothing
-		// for it and no Screen Output can fetch it.
+		// Refused outright, before anything is stored: the Live Session is where it was,
+		// so no Live Control is shown the value and no Screen Output can fetch it.
+		expect(await live.snapshot()).toEqual(before);
 		expect(await resolvable(live)).toEqual([]);
 	});
 
@@ -332,6 +366,19 @@ describe('a media selection the Graphics Asset Library refuses', () => {
 			statusCode: 409,
 			data: { code: 'unavailable-asset-content' },
 		});
+	});
+});
+
+/** Chromium is the only supported engine for transparent video, so nothing about engines is recorded or asked (ADR-0020). */
+describe('a transparent video chosen at runtime', () => {
+	it('goes on air as its exact identity and revision, and its Screen Output may fetch it', async () => {
+		const live = await liveSession();
+		await live.take();
+
+		await live.setInput(STING, TRANSPARENT_VIDEO);
+
+		expect((await live.snapshot()).currentState.inputs[SLATE.id]!.accepted[STING]).toEqual(TRANSPARENT_VIDEO);
+		expect(await live.canResolve(TRANSPARENT_VIDEO.revisionId, TRANSPARENT_VIDEO.assetId)).toBe(true);
 	});
 });
 

@@ -2,6 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
+import { updateFeatureMatchSchema } from '~~/server/schemas/api/featureMatch';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { createAblyRestFake } from '~~/test/helpers/ablyRestFake';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
@@ -339,6 +340,26 @@ describe('a committed write', () => {
 				carried: [carried],
 			},
 		]);
+	});
+
+	// A setup edit writes only what it names: a side it leaves out keeps its player.
+	it('leaves each side\'s player data as stored on a Feature Match Slot edit naming only the table', async () => {
+		const { eventId } = await stage();
+		const sides = {
+			player1Data: { name: 'Alice' },
+			player2Data: { name: 'Bob' },
+		};
+		const [slot] = await db.insert(schema.featureMatches).values({ eventId, tableNumber: 2, ...sides }).returning({ id: schema.featureMatches.id });
+
+		const answered = await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId: slot!.id,
+			// As the setup form sends it: the table number is text.
+			input: updateFeatureMatchSchema.parse({ tableNumber: '12' }),
+		});
+
+		expect(answered).toMatchObject({ id: slot!.id, tableNumber: 12, ...sides });
+		expect(await read.slot(slot!.id)).toMatchObject({ tableNumber: 12, ...sides });
 	});
 
 	// Which Slots a reorder stores and names is `featureMatch.sqlite.test.ts`'s; a deleted Match

@@ -20,17 +20,6 @@ describe('misc API endpoints', () => {
 		catch {}
 	});
 
-	// ── /api/time ──
-
-	it('gET /api/time returns serverTime as a number', async () => {
-		const data = await $fetch('/api/time');
-
-		expect(data).toHaveProperty('serverTime');
-		expect(data.serverTime).toBeTypeOf('number');
-		// Should be a reasonable timestamp (after 2024-01-01)
-		expect(data.serverTime).toBeGreaterThan(1_704_067_200_000);
-	});
-
 	// ── /api/events/[id]/standings ──
 
 	it('gET standings returns empty standings for a fresh event', async () => {

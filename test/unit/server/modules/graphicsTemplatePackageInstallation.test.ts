@@ -10,6 +10,7 @@ import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset
 import {
 	graphicsObjectIdentity,
 } from '~~/server/modules/graphics-asset-library/object-store';
+import { testGraphicAssetRevisionId } from '~~/test/helpers/graphicsAssetIdentities';
 import { digestOf, sixteenPixelPng, pixelPng as transparentPixelPng } from '~~/test/helpers/graphicsFixtures';
 import { webpPixel } from '~~/test/helpers/graphicsImageFixtures';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
@@ -851,6 +852,63 @@ describe('the Template Package installation contract', () => {
 				initiatedBy: paused.initiatedBy,
 			})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
 			expect(await activeAssets(receiver)).toHaveLength(1);
+		});
+
+		// The D1 catalogue's own lookups: a Graphic Asset held here at a revision that is not,
+		// a pause it stores, and the confirmation it records before anything installs.
+		it('holds a related source revision over the D1 catalogue until its warning is accepted', async () => {
+			const { library } = createLibrary('related-revision', {
+				catalogue: createD1GraphicsAssetCatalogue(harness.database),
+			});
+			const backdrop = await ingestImage(library, 'Backdrop');
+			const parts = readTemplatePackageParts(await exportPackage(library, {
+				assets: [
+					{ slot: 'backdrop', reference: backdrop },
+				],
+			}));
+			const packaged = parts.manifest.packagedAssets[0]!;
+			parts.manifest.packagedAssets = [
+				{
+					...packaged,
+					origin: {
+						...packaged.origin,
+						sourceRevisionId: testGraphicAssetRevisionId('a-revision-never-held-here'),
+					},
+				},
+			];
+			parts.template = {
+				backdrop: {
+					assetId: packaged.origin.sourceAssetId,
+					revisionId: 'a-revision-never-held-here',
+				},
+			};
+			const held = (await activeAssets(library)).length;
+
+			const paused = await preflight(library, writeTemplatePackage(parts));
+			expect(paused.stage).toBe('awaiting-confirmation');
+			await expect(library.installTemplatePackage({
+				operationId: paused.id,
+				initiatedBy: paused.initiatedBy,
+			})).rejects.toMatchObject({ code: 'ingestion-operation-not-uploadable' });
+			expect(await activeAssets(library)).toHaveLength(held);
+
+			const confirmed = await library.confirmTemplatePackagePreflight({
+				operationId: paused.id,
+				initiatedBy: paused.initiatedBy,
+				fingerprint: paused.templatePackagePreflight!.fingerprint,
+			});
+			expect(confirmed.stage).toBe('awaiting-installation');
+			const completed = await library.installTemplatePackage({
+				operationId: confirmed.id,
+				initiatedBy: confirmed.initiatedBy,
+			});
+
+			expect(completed.stage).toBe('completed');
+			expect(installationOf(completed).assets[0]).toMatchObject({
+				outcome: 'created',
+				basis: 'related-origin-revision',
+			});
+			expect(await activeAssets(library)).toHaveLength(held + 1);
 		});
 
 		it('publishes nothing when capacity runs out between confirmation and publication', async () => {

@@ -1,4 +1,3 @@
-import type { ScreenResponse } from '~~/shared/api';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch } from './client';
 import { $fetchRaw } from './helpers';
@@ -82,59 +81,6 @@ describe('screens API', () => {
 		expect(updated.name).toBe('Updated Overlay');
 		expect(updated.currentMode).toBe('card');
 		screenStateVersion = updated.stateVersion;
-	});
-
-	it('renames a Screen whose stored mode configs are PATCH fragments, sending them back as the Edit Screen dialog does', async () => {
-		// Every fragment but Card Spotlight's and Top Cut Bracket's lacks a field the mode's complete
-		// config requires, which the old form's full write refused (#588, #589); Card Spotlight
-		// and Top Cut Bracket never required one. A full write of a mode on its config
-		// contract accepts what storage holds. An empty PATCH leaves the Background
-		// fragment empty, which is also what a display reset leaves.
-		const fragments = {
-			'background': {},
-			'card': {},
-			'deck': { showDeckName: false },
-			'standings': { viewMode: 'all' },
-			'top-cut': { showHeader: false },
-			'feature-match': { showClock: false },
-			'feature-match-overlay': {},
-			'broadcast-graphics': {
-				channels: [
-					{ id: 'lower-thirds', name: 'Lower Thirds' },
-				],
-			},
-			'metagame': { topN: 16 },
-			'top-cards': { limit: 12 },
-			'player-history': { rowsPerPage: 5 },
-		};
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
-			method: 'POST',
-			body: { name: 'Fragment Screen', slug: 'integration-fragment-screen', currentMode: 'standings' },
-		});
-
-		let stored = screen;
-		for (const [mode, fragment] of Object.entries(fragments)) {
-			stored = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screen.id}/config/${mode}`, {
-				method: 'PATCH',
-				body: fragment,
-			});
-		}
-		expect(stored.modeConfigs).toEqual(fragments);
-
-		const res = await $fetchRaw(`/api/events/${eventId}/screens/${screen.id}`, {
-			method: 'PATCH',
-			body: {
-				name: 'Renamed Fragment Screen',
-				slug: stored.slug,
-				currentMode: stored.currentMode,
-				modeConfigs: stored.modeConfigs,
-				stateVersion: stored.stateVersion,
-			},
-		});
-
-		expect(res.status).toBe(200);
-		expect(res._data.name).toBe('Renamed Fragment Screen');
-		expect(res._data.modeConfigs).toEqual(fragments);
 	});
 
 	it('deletes a screen', async () => {

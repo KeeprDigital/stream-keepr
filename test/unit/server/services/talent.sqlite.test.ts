@@ -68,6 +68,27 @@ describe('talentService Social Profiles', () => {
 		});
 		expect(await stored(talent.id)).toEqual({ ...none, name: 'Renamed', youtubeHandle: 'Caster' });
 	});
+
+	// An empty set is a supplied one: it clears, where an omitted set keeps.
+	it('clears every Social Profile when the supplied set is empty', async () => {
+		const [event] = await db.insert(schema.events).values({ name: 'Event', game: 'mtg', featureMatchOrientation: 'horizontal' }).returning();
+		const talent = await talentService().create(event!.id, {
+			name: 'Caster',
+			socialProfiles: { twitch: 'Caster', x: 'caster' },
+		});
+
+		await talentService().update(talent.id, event!.id, { socialProfiles: {} });
+
+		expect(await stored(talent.id)).toEqual({
+			name: 'Caster',
+			twitchHandle: null,
+			youtubeHandle: null,
+			xHandle: null,
+			instagramHandle: null,
+			tiktokHandle: null,
+			blueskyHandle: null,
+		});
+	});
 });
 
 describe('talentService role', () => {

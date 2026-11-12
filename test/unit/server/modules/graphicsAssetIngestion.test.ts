@@ -288,6 +288,34 @@ describe('still-image ingestion through the Graphics Asset Library public module
 		});
 	});
 
+	// A MIME no profile accepts is still a declaration: it is held against the bytes, not dropped.
+	it('rejects a declared MIME outside the accepted formats, declared the same way twice', async () => {
+		const { library } = createLibrary();
+		const operation = await library.initiateGraphicsIngestion({
+			idempotencyKey: 'unaccepted-declared-mime',
+			initiatedBy: 'graphics-author-1',
+			name: 'Unaccepted declaration',
+			sourceFileName: 'declared.png',
+			declaredMime: 'image/gif',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+
+		const failed = await uploadBytes(library, operation, 'image/gif', transparentPixelPng, 25 * 1024 * 1024);
+
+		expect(failed).toMatchObject({
+			stage: 'failed',
+			report: {
+				outcome: 'rejected',
+				compatibilityProfile: 'still-image-v1',
+				issues: [
+					{ code: 'conflicting-image-mime' },
+				],
+			},
+			failure: { code: 'validation-failed', retryable: false },
+		});
+		await expect(library.listGraphicAssets({})).resolves.toEqual([]);
+	});
+
 	it.each([
 		{
 			label: 'profiled JPEG',
