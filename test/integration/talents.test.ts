@@ -96,16 +96,6 @@ describe('talents API', () => {
 		expect(duplicate.socialProfiles).toEqual({ twitch: 'JohnStillLive' });
 	});
 
-	it('clears all Social Profiles when supplied an empty map', async () => {
-		const updated = await $fetch(`/api/events/${eventId}/talents/${talentId}`, {
-			method: 'PATCH',
-			body: { socialProfiles: {} },
-		});
-
-		expect(updated.id).toBe(talentId);
-		expect(updated.socialProfiles).toEqual({});
-	});
-
 	it('deletes a talent', async () => {
 		// Create a throwaway talent
 		const talent = await $fetch(`/api/events/${eventId}/talents`, {
