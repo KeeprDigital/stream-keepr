@@ -2,30 +2,16 @@ import type { GraphicAsset, GraphicsIngestionOperation } from '~~/shared/types/g
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { GRAPHICS_MULTIPART_PART_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
 import { $fetch, anonymousFetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { anotherBrowser, anotherUser } from './identities';
 import { expectResponseStatus } from './responseStatus';
 
-/**
- * Who a Graphics Ingestion Operation belongs to, proved through the real routes.
- *
- * Since #398 the answer is a **person** (ADR-0010's credential model), and that is
- * what this suite is now about. The rule it used to open with — that every
- * author-facing route refuses a caller carrying no session — is the API boundary's
- * since the cutover and is proved once, against a genuinely anonymous client, in
- * `apiBoundary.test.ts`. What is left is the guarantee no middleware can state:
- *
- * - one person cannot reach another's operation, however they label themselves;
- * - the same person can, from any browser — an operation outlives the session it
- *   was started in, which is the whole of what the cutover bought.
- *
- * Scoping is asserted while the caller supplies the identity header the library
- * used to trust. A suite that only proved scoping between two headers would prove
- * the mechanism and not the guarantee, which is exactly the gap this replaces.
- */
+// A Graphics Ingestion Operation belongs to a person: nobody else reaches it, whatever
+// identity they claim, and its owner reaches it from any browser. That a caller with no
+// Session is refused at all is `apiBoundary.test.ts`'s.
 
 const basePixelPng = Uint8Array.from(Buffer.from(
 	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -33,28 +19,16 @@ const basePixelPng = Uint8Array.from(Buffer.from(
 ));
 const emptyTextChunk = Uint8Array.of(0, 0, 0, 0, 0x74, 0x45, 0x58, 0x74, 0x96, 0x42, 0xC5, 0x85);
 
-/**
- * This suite's own still-image content, padded with a chunk count no other suite
- * uses.
- *
- * Integration suites share one database and identical bytes deduplicate into one
- * Graphic Asset by design, so the bare single-pixel PNG would publish under
- * whichever suite reached the library first — and this suite's lifecycle subject
- * would carry somebody else's name and somebody else's lifecycle. `70` because
- * every count up to 64 is already spoken for; a count another suite retires,
- * Trashes, or purges takes this suite's canonical bytes with it.
- */
+// This suite's own still image. Identical bytes deduplicate into one Graphic Asset across
+// suites, so it is padded with a chunk count (70) no other suite uses.
 const transparentPixelPng = Uint8Array.from(Buffer.concat([
 	basePixelPng.slice(0, -12),
 	...Array.from({ length: 70 }).fill(emptyTextChunk) as Uint8Array[],
 	basePixelPng.slice(-12),
 ]));
 
-/**
- * An author identity the server does not honour. The library used to read this
- * header, so every request an intruder makes here still sends it, set to the
- * identity that initiated the operation under attack. It must buy nothing.
- */
+// The author identity header the library once trusted, sent on every request here and
+// set to the owner's. It must buy nothing.
 const UNHONOURED_AUTHOR_ID_HEADER = { 'x-graphics-author-id': 'authorisation-victim-author' };
 
 const digest = createHash('sha256').update(transparentPixelPng).digest('hex');
@@ -68,14 +42,8 @@ interface AuthorisedRoute {
 	contentType?: string;
 }
 
-/**
- * Every route that acts on one existing Graphics Ingestion Operation.
- *
- * Bodies are deliberately well-formed. A route that validates its body before it
- * reaches the library would otherwise answer a foreign caller with a validation
- * failure, and the suite would be reading 400 where it means to read "no such
- * operation for you".
- */
+// Every route that acts on one existing Graphics Ingestion Operation. Bodies are
+// well-formed, so a refusal is about who asked and never a validation failure.
 const operationRoutes: AuthorisedRoute[] = [
 	{
 		label: 'reading operation state',
@@ -134,8 +102,7 @@ const operationRoutes: AuthorisedRoute[] = [
 		path: id => `/api/graphics-assets/ingestion-operations/${id}/multipart/complete`,
 	},
 	{
-		// A loopback URL, so a run in which scoping has failed still reaches no
-		// network: the fetcher rejects the destination before opening anything.
+		// A loopback URL, so a run in which scoping has failed still reaches no network.
 		label: 'copying an approved remote source',
 		method: 'POST',
 		path: id => `/api/graphics-assets/ingestion-operations/${id}/remote-copy`,
@@ -184,34 +151,12 @@ function requestInit(route: AuthorisedRoute, headers: Record<string, string>) {
 
 describe('graphics author authorisation across the ingestion and lifecycle routes', () => {
 	let authorCookie: string;
-	let intruderCookie: string;
 	let fontBytes: Uint8Array<ArrayBuffer>;
-	let assetId: string;
-	let eventId: number;
 
-	/** The Events the lifecycle subject is currently associated with. */
-	async function assetEventIds() {
-		const assets = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
-			headers: { cookie: authorCookie },
-			query: { search: 'Authorisation lifecycle subject' },
-		});
-		return assets.find(asset => asset.id === assetId)?.eventIds;
-	}
-	/**
-	 * One operation per scoping case.
-	 *
-	 * A shared subject would let the first case in the sweep decide the answer
-	 * every later case reads — cancel it and the rest stop existing for anybody,
-	 * which is a 404 that proves nothing about who asked.
-	 */
-	const scopingProbes = new Map<string, string>();
+	/** The probes the running test parked. */
+	const parked: string[] = [];
 
-	async function initiateStillImageAs(
-		cookie: string,
-		idempotencyKey: string,
-		name: string,
-		defaultEventId?: number,
-	) {
+	async function initiateFontAs(cookie: string, idempotencyKey: string) {
 		return await $fetch<GraphicsIngestionOperation>(
 			'/api/graphics-assets/ingestion-operations',
 			{
@@ -219,31 +164,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 				headers: { cookie, ...UNHONOURED_AUTHOR_ID_HEADER },
 				body: graphicsIngestionRequest({
 					idempotencyKey,
-					name,
-					declaredByteLength: transparentPixelPng.byteLength,
-					...defaultEventId === undefined
-						? {}
-						: { defaultEventId },
-					browserDecodeEvidence: {
-						outcome: 'decoded',
-						sourceDigest: digest,
-						width: 1,
-						height: 1,
-					},
-				}),
-			},
-		);
-	}
-
-	async function initiateFontAs(cookie: string, idempotencyKey: string, name: string) {
-		return await $fetch<GraphicsIngestionOperation>(
-			'/api/graphics-assets/ingestion-operations',
-			{
-				method: 'POST',
-				headers: { cookie, ...UNHONOURED_AUTHOR_ID_HEADER },
-				body: graphicsIngestionRequest({
-					idempotencyKey,
-					name,
+					name: idempotencyKey,
 					sourceFileName: 'mplantin.woff',
 					declaredMime: 'font/woff',
 					declaredByteLength: fontBytes.byteLength,
@@ -268,104 +189,93 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 		);
 	}
 
+	async function operationAs(cookie: string, operationId: string) {
+		return await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/ingestion-operations/${operationId}`,
+			{
+				headers: { cookie, ...UNHONOURED_AUTHOR_ID_HEADER },
+			},
+		);
+	}
+
+	// The author's own operation, parked at `awaiting-confirmation`: a staged font awaiting
+	// the browser's answer, the one stage at which every route has real work to refuse.
+	async function parkedProbe(idempotencyKey: string) {
+		const initiated = await initiateFontAs(authorCookie, idempotencyKey);
+		const staged = await uploadAs(authorCookie, initiated.id, fontBytes, 'font/woff');
+		expect(staged.stage).toBe('awaiting-confirmation');
+		parked.push(initiated.id);
+		return initiated.id;
+	}
+
 	beforeAll(async () => {
 		fontBytes = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
 		authorCookie = await operatorSessionCookie();
-		// A different person, not a second browser: what the scoping cases below
-		// probe is ownership, and one person in two browsers is one owner (#398).
-		intruderCookie = await anotherUser('ingestion-outsider');
-		expect(intruderCookie).not.toBe(authorCookie);
-
-		/**
-		 * Every scoping probe is parked at `awaiting-confirmation`: a font whose
-		 * bytes are staged and which is waiting on the browser's answer to a
-		 * server-selected challenge. That is the one stage at which all thirteen
-		 * routes have real work to refuse — in particular the staged-source route,
-		 * which answers `missing` at any other stage and would otherwise report a
-		 * 404 that says nothing at all about who asked.
-		 *
-		 * Parked is also load-bearing for suite isolation: these bytes are
-		 * byte-identical to the `mplantin.woff` that graphicsAssetIngestion
-		 * publishes as a real font revision. Staged-but-unconfirmed content touches
-		 * nothing digest-keyed (see the padding-count registry docblock in
-		 * helpers.ts, proved on #371), so the two suites cannot collide — but
-		 * confirming any probe would publish these bytes and recreate exactly the
-		 * #368 cross-suite dedup collision. The last test in this file trips if
-		 * that ever happens.
-		 */
-		for (const [index, route] of operationRoutes.entries()) {
-			const initiated = await initiateFontAs(
-				authorCookie,
-				`authorisation-scoping-probe-${index}`,
-				`Authorisation scoping probe ${index}`,
-			);
-			const staged = await uploadAs(authorCookie, initiated.id, fontBytes, 'font/woff');
-			expect(staged.stage).toBe('awaiting-confirmation');
-			scopingProbes.set(route.label, initiated.id);
-		}
-
-		// One published asset, so the lifecycle and metadata routes have a real
-		// subject to refuse to act on rather than a missing one. It carries an Event
-		// association because the metadata route's sharpest edge is detaching one.
-		const event = await $fetch<{ id: number }>('/api/events', {
-			method: 'POST',
-			body: {
-				name: 'Graphics Authorisation Event',
-				game: 'mtg',
-				featureMatchOrientation: 'horizontal',
-			},
-		});
-		eventId = event.id;
-		const publishable = await initiateStillImageAs(
-			authorCookie,
-			'authorisation-lifecycle-subject',
-			'Authorisation lifecycle subject',
-			eventId,
-		);
-		const published = await uploadAs(
-			authorCookie,
-			publishable.id,
-			transparentPixelPng,
-			'image/png',
-		);
-		expect(published.stage).toBe('completed');
-		assetId = published.result!.assetId;
-		await expect(assetEventIds()).resolves.toEqual([eventId]);
 	});
 
-	afterAll(async () => {
-		try {
-			await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
-		}
-		catch {}
+	// A probe's bytes are the font graphicsAssetIngestion publishes. Staged, they collide
+	// with nothing; confirmed, they would become that suite's canonical content.
+	afterEach(async () => {
+		for (const operationId of parked.splice(0))
+			expect((await operationAs(authorCookie, operationId)).stage).toBe('awaiting-confirmation');
 	});
 
-	/*
-	 * A `describe` of thirteen route-by-route refusals for a caller with no session
-	 * stood here until #398. Every one of them now meets ADR-0010's boundary before
-	 * its handler runs, so they asserted a middleware from thirteen angles; the
-	 * boundary is proved once in `apiBoundary.test.ts`, and exhaustively against
-	 * every route file on disk in `test/unit/server/utils/apiBoundary.test.ts`.
-	 *
-	 * What those cases also proved is kept below, because the boundary suite does
-	 * not: a refusal leaves the library exactly as it was.
-	 */
-
-	/**
-	 * The half of the deleted cases that is about the library rather than the
-	 * middleware: a refused write must change nothing.
-	 *
-	 * A 401 with a side effect is the shape worth a test — a route that reads a
-	 * body, acts, and refuses afterwards passes any status-code assertion — and the
-	 * two writes chosen are the sharpest the surface has. The metadata route
-	 * replaces the Event association set outright, so an empty array is a valid
-	 * request that detaches the asset from every Event it belongs to; the lifecycle
-	 * actions are the ones #116 was filed over.
-	 *
-	 * Asked through `anonymousFetch`, because this suite's client signs anything
-	 * that presents no session of its own.
-	 */
+	// A 401 with a side effect passes any status assertion, so each refusal is followed by
+	// a read of what it must not have changed.
 	describe('a refused write', () => {
+		let assetId: string;
+		let eventId: number;
+
+		async function lifecycleSubject() {
+			const assets = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+				headers: { cookie: authorCookie },
+				query: { search: 'Authorisation lifecycle subject' },
+			});
+			return assets.find(asset => asset.id === assetId);
+		}
+
+		beforeAll(async () => {
+			const event = await $fetch<{ id: number }>('/api/events', {
+				method: 'POST',
+				body: {
+					name: 'Graphics Authorisation Event',
+					game: 'mtg',
+					featureMatchOrientation: 'horizontal',
+				},
+			});
+			eventId = event.id;
+			const publishable = await $fetch<GraphicsIngestionOperation>(
+				'/api/graphics-assets/ingestion-operations',
+				{
+					method: 'POST',
+					headers: { cookie: authorCookie },
+					body: graphicsIngestionRequest({
+						idempotencyKey: 'authorisation-lifecycle-subject',
+						name: 'Authorisation lifecycle subject',
+						declaredByteLength: transparentPixelPng.byteLength,
+						defaultEventId: eventId,
+						browserDecodeEvidence: {
+							outcome: 'decoded',
+							sourceDigest: digest,
+							width: 1,
+							height: 1,
+						},
+					}),
+				},
+			);
+			const published = await uploadAs(authorCookie, publishable.id, transparentPixelPng, 'image/png');
+			expect(published.stage).toBe('completed');
+			assetId = published.result!.assetId;
+		});
+
+		afterAll(async () => {
+			try {
+				await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+			}
+			catch {}
+		});
+
+		// The metadata write replaces the Event association set, so `[]` would detach them all.
 		it('detaches no Event association, having been refused before it acted', async () => {
 			const response = await anonymousFetch(`/api/graphics-assets/${assetId}`, {
 				method: 'PATCH',
@@ -374,7 +284,9 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			});
 
 			expect(response.status).toBe(401);
-			await expect(assetEventIds()).resolves.toEqual([eventId]);
+			expect(await lifecycleSubject()).toMatchObject({
+				eventIds: [eventId],
+			});
 		});
 
 		it('leaves the Graphic Asset in active discovery', async () => {
@@ -385,198 +297,137 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			});
 
 			expect(response.status).toBe(401);
-			await expect($fetch<GraphicAsset[]>('/api/graphics-assets', {
-				headers: { cookie: authorCookie },
-				query: { search: 'Authorisation lifecycle subject' },
-			})).resolves.toMatchObject([
-				{
-					id: assetId,
-					lifecycle: { state: 'active' },
-				},
-			]);
+			expect(await lifecycleSubject()).toMatchObject({
+				lifecycle: { state: 'active' },
+			});
 		});
 	});
 
 	describe('a second person claiming the initiating identity', () => {
-		it.each(operationRoutes)('cannot reach the operation for $label', async (route) => {
+		let intruderCookie: string;
+
+		beforeAll(async () => {
+			// A different person, not a second browser: one person in two browsers is one owner.
+			intruderCookie = await anotherUser('ingestion-outsider');
+			expect(intruderCookie).not.toBe(authorCookie);
+		});
+
+		it.each(operationRoutes)('cannot reach the operation for $label, which its author finds as they left it', async (route) => {
+			const operationId = await parkedProbe(`authorisation-scoping-probe-${operationRoutes.indexOf(route)}`);
+
 			const response = await fetch(
-				route.path(scopingProbes.get(route.label)!),
+				route.path(operationId),
 				requestInit(route, { cookie: intruderCookie, ...UNHONOURED_AUTHOR_ID_HEADER }),
 			);
+
 			expect(response.status).toBe(404);
-		});
-
-		it('cannot reconnect to an operation by reusing its idempotency key', async () => {
-			const reconnectAttempt = await initiateFontAs(
-				intruderCookie,
-				'authorisation-scoping-probe-0',
-				'Authorisation scoping probe 0',
-			);
-			expect(reconnectAttempt.id).not.toBe(scopingProbes.get(operationRoutes[0]!.label));
-		});
-	});
-
-	/**
-	 * The other half of that key, and the half the cutover widened (#398).
-	 *
-	 * `(initiatedBy, idempotencyKey)` is unique, and `initiatedBy` is now a person
-	 * — so the same key sent from a second browser reconnects to the first
-	 * operation instead of starting a second one. ADR-0010 calls this intentional
-	 * dedupe rather than a side effect, which is worth a case of its own precisely
-	 * because it reads like one: under the Graphics Author Session the identical
-	 * request from a second browser produced a second operation, and the sentence
-	 * describing that ("the same person in a second browser is still a second
-	 * author") was retired with it.
-	 */
-	describe('the same person in a second browser', () => {
-		it('reconnects to their own operation rather than starting another', async () => {
-			const secondBrowser = await anotherBrowser();
-
-			const reconnected = await initiateFontAs(
-				secondBrowser,
-				'authorisation-scoping-probe-0',
-				'Authorisation scoping probe 0',
-			);
-
-			expect(reconnected.id).toBe(scopingProbes.get(operationRoutes[0]!.label));
-		});
-
-		it('leaves every probed operation exactly as its own author left it', async () => {
-			for (const route of operationRoutes) {
-				const operationId = scopingProbes.get(route.label)!;
-				await expect($fetch<GraphicsIngestionOperation>(
-					`/api/graphics-assets/ingestion-operations/${operationId}`,
-					{
-						headers: { cookie: authorCookie, ...UNHONOURED_AUTHOR_ID_HEADER },
-					},
-				)).resolves.toMatchObject({ id: operationId, stage: 'awaiting-confirmation' });
-			}
-		});
-
-		it('leaves the initiator still reading their own provisional staged bytes', async () => {
-			const operationId = scopingProbes.get('reading provisional staged bytes')!;
-			const response = await fetch(
+			expect(await operationAs(authorCookie, operationId)).toMatchObject({
+				id: operationId,
+				stage: 'awaiting-confirmation',
+			});
+			const staged = await fetch(
 				`/api/graphics-assets/ingestion-operations/${operationId}/staged-source`,
 				{
 					headers: { cookie: authorCookie, ...UNHONOURED_AUTHOR_ID_HEADER },
 				},
 			);
-			expect(response.status).toBe(200);
-			expect(new Uint8Array(await response.arrayBuffer())).toEqual(fontBytes);
+			expect(staged.status).toBe(200);
+			expect(new Uint8Array(await staged.arrayBuffer())).toEqual(fontBytes);
+		});
+
+		it('cannot reconnect to an operation by reusing its idempotency key', async () => {
+			const operationId = await parkedProbe('authorisation-reused-key-probe');
+
+			const reconnectAttempt = await initiateFontAs(intruderCookie, 'authorisation-reused-key-probe');
+
+			expect(reconnectAttempt.id).not.toBe(operationId);
 		});
 	});
 
-	/**
-	 * A session ending mid-transfer, which is where ownership used to cost the most
-	 * and now costs almost nothing (#176's scenario, #398's answer).
-	 *
-	 * The same story as before the cutover for its first two beats — the transfer
-	 * stops with `401`, and the durable checkpoint is untouched — and the opposite
-	 * for its third. Ownership is the person's now, so signing in again reaches the
-	 * operation instead of finding somebody else's: the case below that used to
-	 * assert `404` for a reload asserts that the transfer resumes.
-	 *
-	 * That is the difference ADR-0010 bought, stated where it can be seen: an upload
-	 * interrupted overnight is finished in the morning, from any machine, rather
-	 * than being reclaimed by the retention sweep with its bytes still good.
-	 */
+	// `(initiatedBy, idempotencyKey)` is unique and `initiatedBy` is the person, so the same
+	// key from a second browser reconnects: deliberate dedupe, not a second operation.
+	describe('the same person in a second browser', () => {
+		it('reconnects to their own operation rather than starting another', async () => {
+			const operationId = await parkedProbe('authorisation-second-browser-probe');
+
+			const reconnected = await initiateFontAs(await anotherBrowser(), 'authorisation-second-browser-probe');
+
+			expect(reconnected.id).toBe(operationId);
+		});
+	});
+
+	// Ownership is the person's, so a transfer whose session ended is refused from nobody,
+	// keeps its checkpoint, and is reached and finished by its owner from any session.
 	describe('a session that ends mid-transfer', () => {
-		/**
-		 * A cookie of the shape a browser keeps and the server has forgotten.
-		 *
-		 * A token that was never issued, not one that has expired — the two are not
-		 * the same event, and the honest claim is narrower than "this is what expiry
-		 * looks like". What makes it a faithful proxy is that both reach the boundary
-		 * the same way: Better Auth looks the token up, gets nothing back, and the
-		 * request is refused before a handler sees it. It has to be a *session*
-		 * cookie by name, because the suite's client signs any request that presents
-		 * none — a request with no identity has to be sent deliberately since the
-		 * cutover.
-		 */
+		// A session cookie by name, carrying a token the server never issued: Better Auth finds
+		// nothing for it, as for an expired one. The suite's client signs a request with none.
 		const endedCookie
 			= 'better-auth.session_token=a7f1c0d2-ended-session-token-no-longer-stored';
 
 		const bytes = new Uint8Array(GRAPHICS_MULTIPART_PART_BYTES + 1);
-		let interruptedId: string;
 
-		beforeAll(async () => {
+		/** The transfers the running test started. */
+		const transfers: string[] = [];
+
+		async function sendPart(operationId: string, partNumber: 1 | 2, cookie: string) {
+			return await fetch(
+				`/api/graphics-assets/ingestion-operations/${operationId}/multipart/parts/${partNumber}`,
+				{
+					method: 'PUT',
+					headers: { cookie, 'content-type': 'application/octet-stream' },
+					body: partNumber === 1
+						? bytes.subarray(0, GRAPHICS_MULTIPART_PART_BYTES)
+						: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES),
+				},
+			);
+		}
+
+		/** A two-part transfer the author began: its first part verified, its second not sent. */
+		async function interruptedTransfer(idempotencyKey: string) {
 			const initiated = await $fetch<GraphicsIngestionOperation>(
 				'/api/graphics-assets/ingestion-operations',
 				{
 					method: 'POST',
 					headers: { cookie: authorCookie },
 					body: graphicsIngestionRequest({
-						idempotencyKey: 'authorisation-lapsed-session-transfer',
-						name: 'Authorisation lapsed session transfer',
+						idempotencyKey,
+						name: idempotencyKey,
 						declaredMime: 'image/png',
 						declaredByteLength: bytes.byteLength,
 					}),
 				},
 			);
-			interruptedId = initiated.id;
+			transfers.push(initiated.id);
 			const started = await $fetch<GraphicsIngestionOperation>(
-				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart`,
+				`/api/graphics-assets/ingestion-operations/${initiated.id}/multipart`,
 				{
 					method: 'POST',
 					headers: { cookie: authorCookie },
 				},
 			);
 			expect(started.transfer?.partCount).toBe(2);
-			const firstPart = await fetch(
-				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/parts/1`,
-				{
-					method: 'PUT',
-					headers: { 'cookie': authorCookie, 'content-type': 'application/octet-stream' },
-					body: bytes.subarray(0, GRAPHICS_MULTIPART_PART_BYTES),
-				},
-			);
-			await expectResponseStatus(firstPart, 200);
-		});
+			await expectResponseStatus(await sendPart(initiated.id, 1, authorCookie), 200);
+			return initiated.id;
+		}
 
-		it('refuses the next part rather than accepting it from nobody', async () => {
-			const response = await fetch(
-				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/parts/2`,
-				{
-					method: 'PUT',
-					headers: { 'cookie': endedCookie, 'content-type': 'application/octet-stream' },
-					body: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES),
-				},
-			);
-			expect(response.status).toBe(401);
-		});
-
-		/**
-		 * The cutover's headline, and the one case in this file that asserts the
-		 * opposite* of what it asserted before #398.
-		 *
-		 * Signing in again is a new Better Auth session — a new browser, as far as
-		 * the installation is concerned — and it reaches the operation, because
-		 * `initiatedBy` is the person rather than the session. Under the Graphics
-		 * Author Session this was a `404` to the very person who started the upload.
-		 */
-		it('is reached again after signing in from another browser', async () => {
-			const secondBrowser = await anotherBrowser();
-			expect(secondBrowser).not.toBe(authorCookie);
-
-			await expect($fetch<GraphicsIngestionOperation>(
-				`/api/graphics-assets/ingestion-operations/${interruptedId}`,
-				{
-					headers: { cookie: secondBrowser },
-				},
-			)).resolves.toMatchObject({
-				id: interruptedId,
-				stage: 'transferring',
-				transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
-			});
-		});
-
-		it('loses nothing at all, checkpoint included', async () => {
-			await expect($fetch<GraphicsIngestionOperation>(
-				`/api/graphics-assets/ingestion-operations/${interruptedId}`,
-				{
+		// Cancelling releases the staged reservation, so no test leaves 16 MiB parked in the
+		// Graphics Staging Allowance for this suite's neighbours.
+		afterEach(async () => {
+			for (const operationId of transfers.splice(0)) {
+				await $fetch(`/api/graphics-assets/ingestion-operations/${operationId}`, {
+					method: 'DELETE',
 					headers: { cookie: authorCookie },
-				},
-			)).resolves.toMatchObject({
+				});
+			}
+		});
+
+		it('refuses the next part rather than accepting it from nobody, losing nothing, checkpoint included', async () => {
+			const interruptedId = await interruptedTransfer('authorisation-lapsed-session-refused');
+
+			const refused = await sendPart(interruptedId, 2, endedCookie);
+
+			expect(refused.status).toBe(401);
+			expect(await operationAs(authorCookie, interruptedId)).toMatchObject({
 				stage: 'transferring',
 				transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
 				transfer: {
@@ -591,25 +442,27 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 			});
 		});
 
-		/**
-		 * The session that started it can still finish it, from the verified part
-		 * rather than from the beginning. The bytes are zero-filled, so the library
-		 * rejects them on their merits — which is the point: the transfer completed
-		 * and the operation reached a terminal stage of its own, releasing its
-		 * staged reservation instead of leaving 16 MiB parked in the Graphics
-		 * Staging Allowance for this suite's neighbours.
-		 */
-		it('is resumed to a terminal outcome by the session that started it', async () => {
-			const finalPart = await fetch(
-				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/parts/2`,
-				{
-					method: 'PUT',
-					headers: { 'cookie': authorCookie, 'content-type': 'application/octet-stream' },
-					body: bytes.subarray(GRAPHICS_MULTIPART_PART_BYTES),
-				},
-			);
-			await expectResponseStatus(finalPart, 200);
+		// Signing in again is a new Session, and it reaches the operation because
+		// `initiatedBy` is the person.
+		it('is reached again after signing in from another browser', async () => {
+			const interruptedId = await interruptedTransfer('authorisation-lapsed-session-reached');
+			const secondBrowser = await anotherBrowser();
+			expect(secondBrowser).not.toBe(authorCookie);
 
+			expect(await operationAs(secondBrowser, interruptedId)).toMatchObject({
+				id: interruptedId,
+				stage: 'transferring',
+				transferredByteLength: GRAPHICS_MULTIPART_PART_BYTES,
+			});
+		});
+
+		// Finished from the verified part, not from the beginning. The bytes are zero-filled,
+		// so the library rejects them on their merits: a terminal stage of the operation's own.
+		it('is resumed to a terminal outcome by the session that started it', async () => {
+			const interruptedId = await interruptedTransfer('authorisation-lapsed-session-resumed');
+			expect((await sendPart(interruptedId, 2, endedCookie)).status).toBe(401);
+
+			await expectResponseStatus(await sendPart(interruptedId, 2, authorCookie), 200);
 			const completion = await fetch(
 				`/api/graphics-assets/ingestion-operations/${interruptedId}/multipart/complete`,
 				{
@@ -617,6 +470,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 					headers: { cookie: authorCookie },
 				},
 			);
+
 			expect(completion.status).toBe(200);
 			expect(await completion.json()).toMatchObject({
 				stage: 'failed',
@@ -624,26 +478,5 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 				report: { outcome: 'rejected' },
 			});
 		});
-	});
-
-	/**
-	 * The tripwire the probe setup docblock promises: after every case above has
-	 * run (vitest executes a file's tests in declaration order, so this one runs
-	 * last), each scoping probe is still parked at `awaiting-confirmation`, so no
-	 * copy of this suite's staged `mplantin.woff` ever became canonical content.
-	 * That is what keeps this suite off graphicsAssetIngestion's published font
-	 * revision (#371); a future case that confirms a probe fails here.
-	 */
-	it('leaves every scoping probe parked at awaiting-confirmation', async () => {
-		expect(scopingProbes.size).toBe(operationRoutes.length);
-		for (const [label, operationId] of scopingProbes) {
-			const operation = await $fetch<GraphicsIngestionOperation>(
-				`/api/graphics-assets/ingestion-operations/${operationId}`,
-				{
-					headers: { cookie: authorCookie },
-				},
-			);
-			expect(operation.stage, `scoping probe for ${label}`).toBe('awaiting-confirmation');
-		}
 	});
 });
