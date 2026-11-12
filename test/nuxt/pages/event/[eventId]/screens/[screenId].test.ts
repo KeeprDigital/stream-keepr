@@ -4,7 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, nextTick, reactive } from 'vue';
 import { UButtonStub, UDropdownMenuStub, UModalStub, UTooltipStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import { ScreenSettingsCardStub } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 import EditorFocusModeToggle from '~/components/Graphics/EditorFocusModeToggle.vue';
 import ScreenModeSettings from '~/components/Screen/ModeSettings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
@@ -160,7 +160,7 @@ async function mountPage(stubOverrides: Record<string, unknown> = {}) {
 				USeparator: true,
 				UModal: UModalStub,
 				UAlert: true,
-				ScreenSettingsSection: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				...stubOverrides,
 			},
 		},
@@ -724,7 +724,7 @@ describe('screen config page — live actions first, Background & Placement last
 	let wrapper: Awaited<ReturnType<typeof mountPage>> | null = null;
 
 	const ModeSettingsStub = defineComponent({
-		template: '<section data-settings-card="Mode settings" />',
+		template: '<section data-section="Mode settings" />',
 	});
 
 	beforeEach(() => {
@@ -766,8 +766,8 @@ describe('screen config page — live actions first, Background & Placement last
 		resolveLoad(1, screen);
 		await flushPromises();
 
-		const cards = wrapper.findAll('[data-settings-card]');
-		expect(cards.map(card => card.attributes('data-settings-card'))).toEqual([
+		const cards = wrapper.findAll('[data-section]');
+		expect(cards.map(card => card.attributes('data-section'))).toEqual([
 			'Mode settings',
 			'Background & Placement',
 		]);
@@ -803,7 +803,7 @@ describe('screen config page — live actions first, Background & Placement last
 		resolveLoad(1, screen);
 		await flushPromises();
 
-		const titles = wrapper.findAll('section[data-settings-card]').map(card => card.attributes('data-settings-card'));
+		const titles = wrapper.findAll('section[data-section]').map(card => card.attributes('data-section'));
 		expect(titles[0]).toBe('Live');
 		expect(titles.at(-1)).toBe('Background & Placement');
 		expect(titles.filter(title => title === 'Background & Placement')).toHaveLength(1);

@@ -7,6 +7,7 @@ import { computed, defineComponent, h, ref } from 'vue';
 import { screenSettingsPage } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import Settings from '~/components/Screen/Modes/Background/Settings.vue';
 import { createMockScreen } from '../../../../../helpers/fixtures';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 // Every mount reads the one shared config; a mount left behind re-renders on each later test's edit.
 enableAutoUnmount(afterEach);
@@ -124,7 +125,7 @@ async function mountComponent() {
 	return mount(screenSettingsPage(() => screen, () => h(Settings, { screen, eventId: 7 })), {
 		global: {
 			stubs: {
-				ScreenSettingsSection: defineComponent({ template: '<section><slot /></section>' }),
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
 				ScreenAnimationEffectFields: AnimationEffectFieldsStub,
 				GraphicsAssetFocusPicker: defineComponent({ template: '<div data-testid="asset-picker" />' }),

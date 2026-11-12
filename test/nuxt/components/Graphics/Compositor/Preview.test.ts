@@ -5,6 +5,7 @@ import { defineComponent, nextTick } from 'vue';
 import { squareShapeGeometry } from '~~/shared/modules/graphics';
 import Preview from '~/components/Graphics/Compositor/Preview.vue';
 import { GRAPHICS_PREVIEW_SELECT_MESSAGE, GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 enableAutoUnmount(afterEach);
 
@@ -32,10 +33,6 @@ const graphics = [
 		],
 	},
 ];
-
-const ScreenSettingsCardStub = defineComponent({
-	template: '<section><slot name="actions" :open="true" /><slot /></section>',
-});
 
 const SlotOnlyStub = defineComponent({ template: '<div><slot /></div>' });
 
@@ -108,7 +105,7 @@ async function mountComponent(props: Record<string, unknown> = {}) {
 		},
 		global: {
 			stubs: {
-				ScreenSettingsSection: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				UFormField: SlotOnlyStub,
 				USwitch: USwitchStub,
 				UFieldGroup: SlotOnlyStub,

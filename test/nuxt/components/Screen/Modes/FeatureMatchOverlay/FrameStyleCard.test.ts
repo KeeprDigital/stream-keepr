@@ -9,6 +9,7 @@ import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedS
 import FrameStyleCard from '~/components/Screen/Modes/FeatureMatchOverlay/FrameStyleCard.vue';
 import SurfaceStyleTokenInput from '~/components/Theme/SurfaceStyleTokenInput.vue';
 import { THEME_TOKEN_DRAFT_COMMIT_MS } from '~/modules/theme-editor/draft';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 const { mockApiFetch } = vi.hoisted(() => ({
 	mockApiFetch: vi.fn(),
@@ -90,15 +91,6 @@ const ScreenSettingsToggleStub = defineComponent({
 	template: '<button type="button" data-testid="settings-toggle" :data-description="description" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
 });
 
-const ControlSectionStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-		summary: { type: String, required: false },
-		defaultOpen: { type: Boolean, default: false },
-	},
-	template: '<section data-testid="control-section" :data-section="title" :data-summary="summary" :data-default-open="String(defaultOpen)"><h3>{{ title }}</h3><slot /></section>',
-});
-
 const USwitchStub = defineComponent({
 	name: 'USwitch',
 	props: {
@@ -131,7 +123,7 @@ async function mountComponent(options: Partial<{
 				USelect: USelectStub,
 				ScreenMediaBackgroundFields: defineComponent({ template: '<div data-testid="media-background-fields" />' }),
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
-				ScreenSettingsSection: ControlSectionStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				USwitch: USwitchStub,
 				UButton: defineComponent({ template: '<button type="button"><slot /></button>' }),
 				UBadge: defineComponent({

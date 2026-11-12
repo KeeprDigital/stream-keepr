@@ -8,6 +8,7 @@ import { computed, defineComponent, h, inject, nextTick, provide, ref } from 'vu
 import { screenModeConfigContract } from '~~/shared/screenModes';
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { DEFAULT_DECK_BOARD_LAYOUT, getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
@@ -318,9 +319,7 @@ function differentItem(props: Record<string, any>) {
 }
 
 const stubs = {
-	ScreenSettingsSection: defineComponent({
-		setup: (_, { slots }) => () => h('section', slots.default?.()),
-	}),
+	ScreenSettingsSection: ScreenSettingsSectionStub,
 	ScreenSettingsToggle: controlStub('toggle', props => !props.modelValue),
 	// A bare switch, as a card badge's row shows it, named by its field.
 	USwitch: controlStub('toggle', props => !props.modelValue),

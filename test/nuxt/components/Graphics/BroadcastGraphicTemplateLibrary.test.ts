@@ -7,6 +7,7 @@ import { defineComponent, ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { transportFailure } from '~~/test/helpers/transportFailure';
 import TemplateLibrary from '~/components/Graphics/BroadcastGraphicTemplateLibrary.vue';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 enableAutoUnmount(afterEach);
 
@@ -45,12 +46,6 @@ mockNuxtImport('useScreenStore', () => () => ({
 	},
 }));
 
-const ScreenSettingsCardStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-	},
-	template: '<section><h2>{{ title }}</h2><slot /></section>',
-});
 const UIEmptyStateStub = defineComponent({
 	props: {
 		title: { type: String, required: false },
@@ -147,7 +142,7 @@ async function mountLibrary(props: Record<string, unknown> = {}, stubs: Record<s
 		},
 		global: {
 			stubs: {
-				ScreenSettingsSection: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				UIEmptyState: UIEmptyStateStub,
 				UAlert: UAlertStub,
 				UBadge: UBadgeStub,

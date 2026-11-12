@@ -5,6 +5,7 @@ import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import EditorPreview from '~/components/Graphics/EditorPreview.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE, GRAPHICS_PREVIEW_SELECT_MESSAGE } from '~/modules/graphics/previewMessages';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 // The preview drawn at half the canvas, so a drag's pixels are canvas pixels doubled.
 vi.mock('@vueuse/core', async importOriginal => ({
@@ -43,7 +44,7 @@ function mountPreview(props: Record<string, unknown> = {}) {
 		global: {
 			stubs: {
 				...nuxtUiStubs,
-				ScreenSettingsSection: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 			},
 		},
 	});

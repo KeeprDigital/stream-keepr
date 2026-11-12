@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, ref } from 'vue';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
-import { ScreenSettingsCardStub, screenSettingsPage } from '~~/test/nuxt/helpers/screenThemeOverrides';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
+import { screenSettingsPage } from '~~/test/nuxt/helpers/screenThemeOverrides';
 import Settings from '~/components/Screen/ModeBackgroundLayersSettings.vue';
 
 // Background & Placement: a plain overlay mode's own Background Layer stack,
@@ -41,7 +42,7 @@ function mountComponent(themeOverrides: StoredThemeTokens = {}) {
 		global: {
 			stubs: {
 				...nuxtUiStubs,
-				ScreenSettingsSection: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				ScreenBackgroundLayersEditor: EditorStub,
 			},
 		},
@@ -69,7 +70,7 @@ describe('background & Placement', () => {
 	it('holds the Screen inset and alignment, under Placement', () => {
 		const wrapper = mountComponent();
 
-		expect(wrapper.get('[data-settings-card]').attributes('data-settings-card')).toBe('Background & Placement');
+		expect(wrapper.get('[data-section]').attributes('data-section')).toBe('Background & Placement');
 		expect(wrapper.text()).toContain('Placement');
 		expect(wrapper.findAll('[data-token]').map(row => row.attributes('data-token'))).toEqual(['inset', 'alignment']);
 	});
@@ -114,6 +115,6 @@ describe('background & Placement', () => {
 
 		const wrapper = mountComponent(overrides);
 
-		expect(wrapper.get('[data-settings-card]').attributes('data-default-open')).toBe(open);
+		expect(wrapper.get('[data-section]').attributes('data-default-open')).toBe(open);
 	});
 });

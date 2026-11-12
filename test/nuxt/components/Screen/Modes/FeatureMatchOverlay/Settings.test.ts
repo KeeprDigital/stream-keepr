@@ -11,6 +11,7 @@ import OpacityField from '~/components/Graphics/OpacityField.vue';
 import PreviewOutputAside from '~/components/Screen/Modes/FeatureMatchOverlay/PreviewOutputAside.vue';
 import Settings from '~/components/Screen/Modes/FeatureMatchOverlay/Settings.vue';
 import { useEditorFocusMode } from '~/modules/graphics/editorFocusMode';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 enableAutoUnmount(afterEach);
 
@@ -108,13 +109,6 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 }));
 mockNuxtImport('useToast', () => () => ({ add: mockToastAdd }));
 mockNuxtImport('$fetch', () => mockApiFetch);
-
-const ScreenSettingsCardStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-	},
-	template: '<section data-testid="settings-card"><h2>{{ title }}</h2><slot /></section>',
-});
 
 const LayerInspectorStub = defineComponent({
 	props: {
@@ -225,7 +219,7 @@ const UButtonStub = defineComponent({
 });
 
 const SETTINGS_STUBS = {
-	ScreenSettingsSection: ScreenSettingsCardStub,
+	ScreenSettingsSection: ScreenSettingsSectionStub,
 	FeatureMatchOverlayLayerInspector: LayerInspectorStub,
 	FeatureMatchOverlayLayerList: LayerListStub,
 	FeatureMatchOverlayCompositorInspector: CompositorInspectorStub,
@@ -1020,7 +1014,7 @@ describe('featureMatchOverlaySettings — Graphics Authoring Lease', () => {
 			FeatureMatchOverlayPreviewOutputAside: false,
 			GraphicsCanvasManipulationOverlay: true,
 			// The real preview panel, whose toolbar is its card's actions.
-			ScreenSettingsSection: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
+			ScreenSettingsSection: ScreenSettingsSectionStub,
 		});
 		await flushPromises();
 		const toggle = wrapper.get('[data-testid="preview-stress-dataset"]');

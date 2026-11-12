@@ -18,6 +18,7 @@ import {
 import { createEmptyGraphicBindingDataSet } from '~~/shared/modules/graphics';
 import { UInputMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import LiveControl from '~/components/Screen/Modes/BroadcastGraphics/LiveControl.vue';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 enableAutoUnmount(afterEach);
 
@@ -84,12 +85,6 @@ mockNuxtImport('useGraphicBindingData', () => () => ({
 		: []),
 }));
 
-const ScreenSettingsCardStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-	},
-	template: '<section><h2>{{ title }}</h2><slot /></section>',
-});
 const UIEmptyStateStub = defineComponent({
 	props: {
 		title: { type: String, required: false },
@@ -248,7 +243,7 @@ async function mountComponent(
 		},
 		global: {
 			stubs: {
-				ScreenSettingsSection: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				UIEmptyState: UIEmptyStateStub,
 				UAlert: UAlertStub,
 				UBadge: UBadgeStub,

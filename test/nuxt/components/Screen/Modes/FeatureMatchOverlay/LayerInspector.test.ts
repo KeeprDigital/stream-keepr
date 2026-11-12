@@ -8,6 +8,7 @@ import { defineComponent } from 'vue';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { stubPointerCapture } from '~~/test/nuxt/helpers/pointerCapture';
 import LayerInspector from '~/components/Screen/Modes/FeatureMatchOverlay/LayerInspector.vue';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 // The host-owned half of the Feature Match Overlay property panel: the Frame and the Source Items.
 
@@ -18,15 +19,6 @@ const ScreenSettingsToggleStub = defineComponent({
 	},
 	emits: ['update:modelValue'],
 	template: '<button type="button" data-testid="settings-toggle" @click="$emit(\'update:modelValue\', !modelValue)">{{ label }}</button>',
-});
-
-const ControlSectionStub = defineComponent({
-	props: {
-		title: { type: String, required: false },
-		summary: { type: String, required: false },
-		badge: { type: String, required: false },
-	},
-	template: '<section data-testid="control-section"><h3>{{ title }}</h3><p v-if="summary">{{ summary }}</p><span v-if="badge">{{ badge }}</span><slot /></section>',
 });
 
 const UFormFieldStub = defineComponent({
@@ -84,7 +76,7 @@ async function mountComponent(overrides: Partial<{
 		global: {
 			stubs: {
 				ScreenSettingsToggle: ScreenSettingsToggleStub,
-				ScreenSettingsSection: ControlSectionStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				FeatureMatchOverlayFrameStyleCard: defineComponent({ template: '<div data-testid="frame-style-card" />' }),
 				GraphicsGeometryFields: GeometryFieldsStub,
 				FeatureMatchOverlaySourceFramingStyleFields: defineComponent({

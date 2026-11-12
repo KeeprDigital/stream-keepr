@@ -10,6 +10,7 @@ import {
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { liveSessionSelectors } from '~~/test/nuxt/helpers/broadcastGraphicsLiveSessionReads';
 import ProgramMonitor from '~/components/Screen/Modes/BroadcastGraphics/ProgramMonitor.vue';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 enableAutoUnmount(afterEach);
 
@@ -61,15 +62,6 @@ const UAlertStub = defineComponent({
 	template: '<div><strong>{{ title }}</strong><span>{{ description }}</span></div>',
 });
 
-const ScreenSettingsCardStub = defineComponent({
-	name: 'ScreenSettingsSection',
-	props: {
-		title: { type: String, required: false },
-		collapsible: { type: Boolean, default: true },
-	},
-	template: '<section><h2>{{ title }}</h2><slot name="actions" :open="true" /><slot /></section>',
-});
-
 const UFieldGroupStub = defineComponent({ template: '<div><slot /></div>' });
 const USelectStub = defineComponent({
 	name: 'USelect',
@@ -111,7 +103,7 @@ async function mountComponent(
 		},
 		global: {
 			stubs: {
-				ScreenSettingsSection: ScreenSettingsCardStub,
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				UFieldGroup: UFieldGroupStub,
 				USelect: USelectStub,
 				UButton: UButtonStub,
@@ -231,7 +223,7 @@ describe('broadcastGraphicsProgramMonitor', () => {
 	it('offers no collapse: a Program monitor that can be hidden is not persistent', async () => {
 		const wrapper = await mountComponent();
 
-		expect(wrapper.getComponent(ScreenSettingsCardStub).props('collapsible')).toBe(false);
+		expect(wrapper.getComponent(ScreenSettingsSectionStub).props('collapsible')).toBe(false);
 	});
 
 	// In the Edit workspace the monitor shares the viewport with the authoring tree, preview, and

@@ -2,6 +2,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { defineComponent, h, nextTick, ref } from 'vue';
 import PreviewPanel from '~/components/Graphics/PreviewPanel.vue';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 // The one preview panel shared by the Broadcast Graphics and Feature Match Overlay editors: output
 // selection, zoom and pan, the canvas-aspect viewport, and the item and safe-area guide switches.
@@ -19,16 +20,9 @@ enableAutoUnmount(afterEach);
 
 const SlotOnlyStub = defineComponent({ template: '<div><slot /></div>' });
 
-const ScreenSettingsCardStub = defineComponent({
-	props: {
-		collapsible: { type: Boolean, required: false },
-	},
-	template: '<section><slot name="actions" :open="true" /><slot /></section>',
-});
-
 const global = {
 	stubs: {
-		ScreenSettingsSection: ScreenSettingsCardStub,
+		ScreenSettingsSection: ScreenSettingsSectionStub,
 		UFormField: SlotOnlyStub,
 		UFieldGroup: SlotOnlyStub,
 		USwitch: defineComponent({
@@ -402,7 +396,7 @@ describe('graphicsPreviewPanel', () => {
 	});
 
 	it('collapses by default, and stays open when the host says it cannot', () => {
-		expect(mountPanel().findComponent(ScreenSettingsCardStub).props('collapsible')).toBe(true);
-		expect(mountPanel({ collapsible: false }).findComponent(ScreenSettingsCardStub).props('collapsible')).toBe(false);
+		expect(mountPanel().findComponent(ScreenSettingsSectionStub).props('collapsible')).toBe(true);
+		expect(mountPanel({ collapsible: false }).findComponent(ScreenSettingsSectionStub).props('collapsible')).toBe(false);
 	});
 });

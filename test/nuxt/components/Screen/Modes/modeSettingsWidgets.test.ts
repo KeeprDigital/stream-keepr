@@ -5,6 +5,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, h, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { editedScreenModeData } from '~~/test/helpers/editedScreenModeData';
 import { createMockEvent } from '~~/test/helpers/fixtures';
 import { NuxtLinkStub, nuxtUiStubs, UFormFieldBesideStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import { fakeScreenThemeNetwork, screenSettingsPage, seedThemedScreen } from '~~/test/nuxt/helpers/screenThemeOverrides';
@@ -16,24 +17,12 @@ import { useEventStore } from '~/stores/event';
 
 enableAutoUnmount(afterEach);
 
-const { mockFetch, modeData } = vi.hoisted(() => ({
+const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
-	modeData: { noPreviousRoundStandings: false },
 }));
 mockNuxtImport('$fetch', () => mockFetch);
 
-// The rows the Screen pages, and whether its Standings read found a previous Round to compare with.
-vi.mock('~/modules/screen-mode/editorModeData', async () => {
-	const { ref } = await import('vue');
-	return {
-		useEditedScreenModeData: () => ({
-			rowCount: ref(0),
-			loading: ref(false),
-			answered: ref(true),
-			noPreviousRoundStandings: ref(modeData.noPreviousRoundStandings),
-		}),
-	};
-});
+vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
 const config = ref<Record<string, any>>({});
 const writes: Record<string, unknown>[] = [];
@@ -88,7 +77,7 @@ mockNuxtImport('useArchetypeStore', () => () => ({
 
 beforeEach(() => {
 	writes.length = 0;
-	modeData.noPreviousRoundStandings = false;
+	editedScreenModeData.noPreviousRoundStandings = false;
 	playerLists.isLoaded = false;
 	playerLists.lists = [];
 	playerLists.loadByEventId.mockClear();
@@ -197,7 +186,7 @@ describe('the Standings Position Change warning', () => {
 		{ shown: true, noPreviousRound: false, warns: false },
 		{ shown: false, noPreviousRound: true, warns: false },
 	])('with the column shown $shown and no previous Round $noPreviousRound, warns: $warns', async ({ shown, noPreviousRound, warns }) => {
-		modeData.noPreviousRoundStandings = noPreviousRound;
+		editedScreenModeData.noPreviousRoundStandings = noPreviousRound;
 		const wrapper = await mountPage('standings', {
 			columns: [
 				{ key: 'name', visible: true },

@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, inject, provide, ref } from 'vue';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
 
@@ -146,9 +147,7 @@ async function mountEditor(editor: string, mode: ScreenMode) {
 		},
 		global: {
 			stubs: {
-				ScreenSettingsSection: defineComponent({
-					setup: (_, { slots }) => () => h('section', slots.default?.()),
-				}),
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				ScreenSettingsToggle: true,
 				ScreenColumnConfigEditor: true,
 				ScreenColumnVisibilityList: true,

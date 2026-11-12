@@ -8,6 +8,7 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConf
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import PreviewOutputAside from '~/components/Screen/Modes/FeatureMatchOverlay/PreviewOutputAside.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
+import { ScreenSettingsSectionStub } from '~~/test/nuxt/helpers/screenSettingsSection';
 
 const copyToClipboard = vi.fn();
 const toastAdd = vi.fn();
@@ -43,7 +44,7 @@ function mountAside(props: {
 		global: {
 			stubs: {
 				...nuxtUiStubs,
-				ScreenSettingsSection: { template: '<section><slot name="actions" :open="true" /><slot /></section>' },
+				ScreenSettingsSection: ScreenSettingsSectionStub,
 				GraphicsCanvasManipulationOverlay: true,
 			},
 		},

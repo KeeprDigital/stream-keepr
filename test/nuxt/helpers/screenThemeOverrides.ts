@@ -104,12 +104,3 @@ export function overrideWrites(fetch: Mock): Array<Record<string, unknown>> {
 		.filter(([url]) => url === OVERRIDES_PATH)
 		.map(([, init]) => init.body.tokens);
 }
-
-/** A Screen settings card, named by its title, showing whether it starts open; its body always renders. */
-export const ScreenSettingsCardStub = defineComponent({
-	props: {
-		title: { type: String, default: '' },
-		defaultOpen: { type: Boolean, default: true },
-	},
-	template: '<section :data-settings-card="title" :data-default-open="String(defaultOpen)"><slot /></section>',
-});

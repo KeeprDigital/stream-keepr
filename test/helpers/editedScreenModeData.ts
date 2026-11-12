@@ -6,12 +6,20 @@ import { ref } from 'vue';
  * Most Played Cards editors' tests cover (#780):
  *
  *   vi.mock('~/modules/screen-mode/editorModeData', () => import('~~/test/helpers/editedScreenModeData'));
+ *
+ * A test of what the editor shows from its read sets `editedScreenModeData`
+ * before it mounts, and resets it after.
  */
+export const editedScreenModeData = {
+	/** Standings: the read found no previous Round to compare positions with. */
+	noPreviousRoundStandings: false,
+};
+
 export function useEditedScreenModeData() {
 	return {
 		rowCount: ref(0),
 		loading: ref(false),
 		answered: ref(true),
-		noPreviousRoundStandings: ref(false),
+		noPreviousRoundStandings: ref(editedScreenModeData.noPreviousRoundStandings),
 	};
 }
