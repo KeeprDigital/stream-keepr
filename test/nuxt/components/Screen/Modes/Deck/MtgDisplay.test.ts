@@ -319,7 +319,7 @@ describe('screenDeckDisplay', () => {
 	// badges on the former default 144 px card. A list row has no card, so it keeps that 14 px.
 	it.each([
 		{ maxCardSize: 144, quantity: '16px', points: '14px' },
-		{ maxCardSize: 72, quantity: '8px', points: '7px' },
+		{ maxCardSize: 108, quantity: '12px', points: '10.5px' },
 	])('sizes Auto badges on a $maxCardSize px card', async ({ maxCardSize, quantity, points }) => {
 		[measured.width, measured.height] = [1920, 960];
 		mutableConfig = {
