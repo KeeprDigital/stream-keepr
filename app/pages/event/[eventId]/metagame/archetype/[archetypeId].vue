@@ -14,11 +14,12 @@ const router = useRouter();
 const eventStore = useEventStore();
 const playerStore = usePlayerStore();
 const metagameStore = useMetagameStore();
+const archetypeStore = useArchetypeStore();
 const metagameClient = useMetagameClient();
 const { openPlayerDeckList } = usePlayerDeckListModal();
 const { runRequest } = useRequestFeedback();
 const playerDeckStore = usePlayerDeckStore();
-const { mergeInto } = useArchetypeManagement(() => eventStore.eventId!, () => Number(route.params.archetypeId));
+const { archetype: heldArchetype, mergeInto } = useArchetypeManagement(() => eventStore.eventId!, () => Number(route.params.archetypeId));
 
 const game = computed(() => eventStore.event?.game);
 const isMtg = computed(() => game.value === 'mtg');
@@ -147,6 +148,12 @@ const stats = computed(() => {
 async function fetchDetail() {
 	if (!eventStore.eventId || !archetypeId.value)
 		return;
+	// An Archetype the Event no longer holds, deleted or merged away, has no details to read.
+	if (archetypeStore.isLoaded && !heldArchetype.value) {
+		detail.value = null;
+		syncActiveSection([]);
+		return;
+	}
 	await runRequest(
 		() => metagameClient.loadArchetypeDetail(
 			eventStore.eventId!,

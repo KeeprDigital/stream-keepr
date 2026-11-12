@@ -40,11 +40,21 @@ const mockEventStore = reactive({
 	event: { id: 99, game: 'mtg' as 'mtg' | 'op' },
 });
 mockNuxtImport('useEventStore', () => () => mockEventStore);
-mockNuxtImport('useMetagameStore', () => () => reactive({
+const mockMetagameStore = reactive({
 	scopeQuery: { scope: 'all' },
 	conversionTarget: { conversionMetric: 'topN', conversionThreshold: 8 },
 	invalidationVersion: 0,
-}));
+});
+mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
+const mockArchetypeStore = reactive({
+	archetypes: [
+		{ id: 7 },
+		{ id: 8 },
+	],
+	isLoaded: true,
+	loadByEventId: vi.fn(),
+});
+mockNuxtImport('useArchetypeStore', () => () => mockArchetypeStore);
 mockNuxtImport('usePlayerStore', () => () => reactive({
 	players: [],
 	isLoaded: true,
@@ -103,6 +113,25 @@ describe('archetype metagame detail page', () => {
 			},
 		});
 		wrapper.unmount();
+	});
+
+	// An Archetype the Event no longer holds, deleted or merged away, has no details to read.
+	it('reads no details of an Archetype the Event no longer holds, and shows none', async () => {
+		const wrapper = await mountPage();
+		await flushPromises();
+		mockFetch.mockClear();
+
+		mockArchetypeStore.archetypes = [];
+		mockMetagameStore.invalidationVersion++;
+		await flushPromises();
+
+		expect(mockFetch).not.toHaveBeenCalledWith('/api/events/99/metagame/archetypes/7', expect.anything());
+		expect(wrapper.find('[data-testid="stats"]').exists()).toBe(false);
+		wrapper.unmount();
+		mockArchetypeStore.archetypes = [
+			{ id: 7 },
+			{ id: 8 },
+		];
 	});
 
 	it('edits the Pinned Chart Series of the Archetype it shows', async () => {
