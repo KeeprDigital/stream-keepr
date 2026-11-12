@@ -2746,12 +2746,12 @@ Every select, number field and toggle lines up the same way only if one componen
 
 - A component under `app/components/Screen/` that is part of a settings surface writes no raw `UFormField`, no bare `UInputNumber` and no hand-written subheading or hint classes.
 - A new density or layout is a prop on the primitive, never a second component.
-- The primitives have no tests of their own beyond the open-and-remember rule of the section (`test/nuxt/components/Screen/SettingsSection.test.ts`); the seams that mount them cover them.
+- The `ScreenSettings*` layout primitives have no tests of their own beyond the open-and-remember rule of the section (`test/nuxt/components/Screen/SettingsSection.test.ts`); the seams that mount them, such as the generic renderer's and `ScreenConfigField`'s tests, cover them.
 - Event configuration pages and modals are outside this decision.
 - A bare `UInputNumber` under `app/components/Graphics/` or `app/components/Theme/` fails lint (`eslint.config.mjs`), so a new inspector or Theme field takes the shared number field.
 - A Theme dimension now steps and drags like every other number, so the Theme editor writes it once its edits pause, as it does a composite token, and an entry beyond its bounds is held at the bound rather than undone. A typography token's weight is a number stepping by 100 rather than a list.
 - A Source Item's corners are no longer set through the shared `borderRadius`: "All corners" writes each corner's own radius. A stored `borderRadius` still reads as the radius of every corner that names none.
-- The shared controls have no tests of their own; the Theme editor's page test and the inspector's, Source Item's and settings' tests cover them where they are mounted.
+- A shared field control under `app/components/Graphics/` is tested at its home for the rules it owns, such as a typography's bounds and cleared field, a number field's drag, or a fill's stops (`test/nuxt/components/Graphics/*Fields.test.ts`, `NumberField.test.ts`). The Theme editor's page test and the inspector's, Source Item's and settings' tests each wire it once, through the adapter that maps their values to its fields, and do not retest its rules.
 
 ### Rejected alternatives
 
