@@ -109,6 +109,47 @@ describe('event data lifecycle module', () => {
 		expect(harness.lifecycle.listLoading.value).toBe(false);
 	});
 
+	// A caller that reports a failed load itself asks for it raised. Only the failure
+	// the collection shows is: a superseded load answers `null`, failed or not.
+	describe('a failed load asked to raise its failure', () => {
+		it('raises it, and the collection still shows it', async () => {
+			const harness = createHarness();
+			harness.repository.list.mockRejectedValue(new Error('Network unavailable'));
+
+			await expect(harness.lifecycle.loadByEventId(10, { failure: 'raise' })).rejects.toThrow('Network unavailable');
+
+			expect(harness.lifecycle.error.value).toBe('Network unavailable');
+			expect(harness.lifecycle.listLoading.value).toBe(false);
+		});
+
+		it.each([
+			{
+				superseded: 'a newer load',
+				supersede: (harness: ReturnType<typeof createHarness>) => void harness.lifecycle.loadByEventId(10),
+				loading: true,
+			},
+			{
+				superseded: 'a reset',
+				supersede: (harness: ReturnType<typeof createHarness>) => harness.lifecycle.reset(),
+				loading: false,
+			},
+		])('answers null once $superseded superseded it, and shows no error', async ({ supersede, loading }) => {
+			const harness = createHarness();
+			const failing = deferred<Item[]>();
+			harness.repository.list
+				.mockReturnValueOnce(failing.promise)
+				.mockReturnValueOnce(deferred<Item[]>().promise);
+
+			const load = harness.lifecycle.loadByEventId(10, { failure: 'raise' });
+			supersede(harness);
+			failing.reject(new Error('Network unavailable'));
+
+			await expect(load).resolves.toBeNull();
+			expect(harness.lifecycle.error.value).toBeNull();
+			expect(harness.lifecycle.listLoading.value).toBe(loading);
+		});
+	});
+
 	it('creates, updates, and deletes through the lifecycle interface', async () => {
 		const harness = createHarness();
 		const item = { id: 1, eventId: 10, name: 'One' };

@@ -118,7 +118,7 @@ async function submit() {
 			let localRefreshFailed = false;
 			if (meleeDataWillReset) {
 				try {
-					await refreshAfterMeleeReset(props.eventId);
+					await refreshAfterMeleeReset(props.eventId, { failure: 'raise' });
 				}
 				catch {
 					// Persistence has committed. Do not report the configuration request as

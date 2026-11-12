@@ -87,6 +87,20 @@ function held() {
 	};
 }
 
+/** Reads of one Event-scoped resource that reached the network. */
+function readsOf(resource: string) {
+	return mockFetch.mock.calls.filter(([path]) => path === `/api/events/1/${resource}`).length;
+}
+
+/** The server stops answering reads of one resource; every other read still answers. */
+function failReadsOf(resource: string) {
+	mockFetch.mockImplementation(async (path: string, options?: { query?: { roundId?: number } }) => {
+		if (path.endsWith(`/${resource}`))
+			throw new Error(`${resource} offline`);
+		return serve(path, options);
+	});
+}
+
 const testRounds = [
 	{
 		id: 10,
@@ -383,7 +397,7 @@ describe('useMeleeStore', () => {
 				slots: [5],
 				metagame: 'invalidated',
 			});
-			expect(store.lastOperation).toMatchObject({ kind: 'players', status: 'success' });
+			expect(store.lastOperation).toMatchObject({ kind: 'players', status: 'success', title: 'Players Synced' });
 			expect(store.lastOperation?.details).toContain('1 deactivated');
 			expect(store.lastOperation?.details).toContain('Player notification could not be delivered');
 		});
@@ -510,11 +524,7 @@ describe('useMeleeStore', () => {
 				advancedRound: null,
 				refreshedRound: null,
 			});
-			mockFetch.mockImplementation(async (path: string, options?: { query?: { roundId?: number } }) => {
-				if (path.endsWith('/decks'))
-					throw new Error('Deck Lists offline');
-				return serve(path, options);
-			});
+			failReadsOf('decks');
 
 			const result = await store.updateFromMelee();
 
@@ -522,7 +532,7 @@ describe('useMeleeStore', () => {
 			expect(store.lastOperation?.status).toBe('warning');
 			expect(store.lastOperation?.title).toBe('Melee Updated — Reload Needed');
 			expect(store.lastOperation?.description).toContain('source changes were committed');
-			expect(store.lastOperation?.details).toContain('Local deck lists refresh failed: Deck Lists offline');
+			expect(store.lastOperation?.details).toContain('Local deck lists refresh failed: decks offline');
 			expect(store.error).toBeNull();
 		});
 	});
@@ -644,11 +654,6 @@ describe('useMeleeStore', () => {
 	});
 
 	describe('runInitialSetup', () => {
-		/** Reads of one Event-scoped resource that reached the network. */
-		function readsOf(resource: string) {
-			return mockFetch.mock.calls.filter(([path]) => path === `/api/events/1/${resource}`).length;
-		}
-
 		it('uses one server command and holds all it imported, each read once', async () => {
 			setEvent();
 			importOnServer();
@@ -759,6 +764,190 @@ describe('useMeleeStore', () => {
 
 			vi.advanceTimersByTime(1500);
 			expect(store.setupStep).toBeNull();
+		});
+	});
+
+	// The command landed, so a reload that fails is this browser's to report: the
+	// operator is told to reload, and which data is behind.
+	describe('a reload that fails after its command committed', () => {
+		const round = {
+			id: 20,
+			name: 'Round 2',
+			roundNumber: 2,
+			phaseId: 1,
+		};
+		const players = {
+			created: 1,
+			updated: 0,
+			deactivated: 0,
+			matchesUpdated: 0,
+			errors: [],
+		};
+		/** Each Melee command as the server commits it, with the title its banner then carries. */
+		const commands = {
+			syncEvent: {
+				title: 'Event Synced',
+				run: () => {
+					mockEventRepo.syncMelee.mockResolvedValue({
+						success: true,
+						event: { name: 'Test Event' },
+						phases: 2,
+						rounds: 7,
+					});
+					return store.syncEvent();
+				},
+			},
+			syncPlayers: {
+				title: 'Players Synced',
+				run: () => {
+					mockEventRepo.syncPlayers.mockResolvedValue({ success: true, results: players });
+					return store.syncPlayers();
+				},
+			},
+			syncDecklists: {
+				title: 'Deck Lists Synced',
+				run: () => {
+					mockEventRepo.syncDecklists.mockResolvedValue({
+						success: true,
+						results: initialSetupResponse.deckLists,
+						warnings: [],
+					});
+					return store.syncDecklists();
+				},
+			},
+			syncSpecificRound: {
+				title: 'Round Synced',
+				run: () => {
+					mockEventRepo.syncSpecificRound.mockResolvedValue({
+						success: true,
+						round,
+						matchCount: 1,
+						created: 1,
+						updated: 0,
+						warnings: [],
+					});
+					return store.syncSpecificRound(round.id);
+				},
+			},
+			updateFromMelee: {
+				title: 'Melee Updated',
+				run: () => {
+					mockEventRepo.updateFromMelee.mockResolvedValue({
+						success: true,
+						warnings: [],
+						steps: ['players'],
+						players,
+						deckLists: null,
+						rounds: [],
+						advancedRound: null,
+						refreshedRound: null,
+					});
+					return store.updateFromMelee();
+				},
+			},
+			runInitialSetup: {
+				title: 'Initial Setup Complete',
+				run: () => {
+					mockEventRepo.runInitialSetup.mockResolvedValue(initialSetupResponse);
+					return store.runInitialSetup();
+				},
+			},
+		};
+
+		/** The next Players read held open, so a test decides what happens before it answers. */
+		function holdPlayersReload() {
+			const reload = deferred<unknown[]>();
+			mockFetch.mockImplementation(async (path: string, options?: { query?: { roundId?: number } }) => {
+				if (!path.endsWith('/players'))
+					return serve(path, options);
+				mockFetch.mockImplementation(serve);
+				return reload.promise;
+			});
+			return reload;
+		}
+
+		it.each([
+			['syncEvent', 'phases', 'event structure'],
+			['syncEvent', 'rounds', 'event structure'],
+			['syncEvent', 'feature-match-slots', 'event structure'],
+			['syncEvent', 'matches', 'event structure'],
+			['syncPlayers', 'players', 'players'],
+			['syncPlayers', 'feature-match-slots', 'feature matches'],
+			['syncDecklists', 'players', 'players'],
+			['syncDecklists', 'feature-match-slots', 'feature matches'],
+			['syncSpecificRound', 'players', 'players'],
+			['syncSpecificRound', 'rounds', 'rounds'],
+			['syncSpecificRound', 'feature-match-slots', 'feature matches'],
+			['syncSpecificRound', 'matches', 'matches'],
+			['updateFromMelee', 'players', 'players'],
+			['updateFromMelee', 'phases', 'event structure'],
+			['updateFromMelee', 'matches', 'event structure'],
+			['runInitialSetup', 'phases', 'phases'],
+			['runInitialSetup', 'rounds', 'rounds'],
+			['runInitialSetup', 'players', 'players'],
+			['runInitialSetup', 'feature-match-slots', 'feature matches'],
+		] as const)('%s, when the %s reload fails, says Reload Needed and lists the %s refresh', async (command, resource, label) => {
+			setEvent();
+			await useMatchStore().loadMatchesByRoundId(1, round.id);
+			importOnServer();
+			failReadsOf(resource);
+
+			await commands[command].run();
+
+			expect(store.lastOperation).toMatchObject({
+				status: 'warning',
+				title: `${commands[command].title} — Reload Needed`,
+			});
+			expect(store.lastOperation?.details).toContain(`Local ${label} refresh failed: ${resource} offline`);
+			expect(store.error).toBeNull();
+		});
+
+		it('still reloads the rest of the Event structure when one of its reloads fails', async () => {
+			setEvent();
+			await useMatchStore().loadMatchesByEventId(1);
+			importOnServer();
+			failReadsOf('phases');
+
+			await commands.syncEvent.run();
+
+			expect(held()).toMatchObject({
+				phases: [],
+				rounds: [10, 20],
+				slots: [5],
+				matches: [100, 200],
+			});
+		});
+
+		// A superseded reload is no failure: what superseded it is newer, or another Event's.
+		it('says nothing when the operator moved to another Event before the reload failed', async () => {
+			setEvent();
+			importOnServer();
+			const reload = holdPlayersReload();
+
+			const syncing = commands.syncPlayers.run();
+			await vi.waitFor(() => expect(readsOf('players')).toBe(1));
+			resetAllEventStores();
+			setEvent({ id: 2 });
+			reload.reject(new Error('players offline'));
+			await syncing;
+
+			expect(store.lastOperation).toBeNull();
+			expect(usePlayerStore().error).toBeNull();
+		});
+
+		it('reports a plain success when a newer Players load superseded the reload that failed', async () => {
+			setEvent();
+			importOnServer();
+			const reload = holdPlayersReload();
+
+			const syncing = commands.syncPlayers.run();
+			await vi.waitFor(() => expect(readsOf('players')).toBe(1));
+			await usePlayerStore().loadPlayersByEventId(1);
+			reload.reject(new Error('players offline'));
+			await syncing;
+
+			expect(store.lastOperation).toMatchObject({ status: 'success', title: 'Players Synced' });
+			expect(held().players).toEqual([7]);
 		});
 	});
 

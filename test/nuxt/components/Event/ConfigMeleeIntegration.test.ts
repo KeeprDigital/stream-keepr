@@ -167,7 +167,8 @@ describe('configMeleeIntegration', () => {
 		expect(mockEventRepo.updateMeleeConfig).toHaveBeenCalledWith(1, expect.objectContaining({
 			meleeEnabled: false,
 		}));
-		expect(mockRefreshAfterMeleeReset).toHaveBeenCalledWith(1);
+		// Asked to raise a failed reload, which is how the card hears of one.
+		expect(mockRefreshAfterMeleeReset).toHaveBeenCalledWith(1, { failure: 'raise' });
 		expect(mockEventStore.setEvent).toHaveBeenCalledWith({ meleeConfigured: true });
 		expect(mockEventStore.loadEvent).not.toHaveBeenCalled();
 	});
