@@ -165,13 +165,6 @@ export const metagameArchetypeFilterField = editorField(z.number().int().positiv
 });
 
 /**
- * The filter as an earlier contract stored it, by the Archetype's name (#1153).
- * Storage was migrated to `archetypeId`; a stale client may still send the
- * name, which is a former field (ADR-0037).
- */
-export const FORMER_METAGAME_ARCHETYPE_FILTER_FIELD = 'archetypeFilter';
-
-/**
  * A paginated mode's Page Rotation: `currentPage` is the manually selected page
  * (auto-page off); `rotationAnchor` is the rotation's epoch (auto-page on),
  * written only by operator surfaces and projected against server time by every
