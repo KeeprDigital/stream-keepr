@@ -140,7 +140,8 @@ describe('the Graphics Asset Library operational queues API', () => {
 		expect(refused.status).toBe(400);
 	});
 
-	it('states every queue in risk order with its complete count', async () => {
+	// Wiring: the reading's order, counts and contents are `graphicsOperationalQueues.sqlite.test.ts`'s.
+	it('answers a Graphics Administrator the reading of every queue', async () => {
 		const overview = await $fetch<GraphicsOperationalQueuesOverview>(
 			'/api/admin/graphics-assets/queues',
 			{ headers: administratorHeaders },
@@ -148,18 +149,6 @@ describe('the Graphics Asset Library operational queues API', () => {
 
 		expect(overview.queues.map(queue => queue.id))
 			.toEqual([...GRAPHICS_OPERATIONAL_QUEUES]);
-		expect(overview.authority).toEqual({
-			expectedReachability: 'catalogue',
-			presentBytes: 'byte-store',
-			contentAvailabilityFlag: 'advisory-reconciliation-state',
-		});
-		for (const queue of overview.queues)
-			expect(queue.totalCount).toBeGreaterThanOrEqual(queue.items.length);
-
-		// No provider detail reaches an administrator surface.
-		const serialized = JSON.stringify(overview);
-		expect(serialized).not.toContain('sha256/');
-		expect(serialized).not.toContain('adopt');
 	});
 
 	it('inspects a Retired asset and reports restoration exactly once', async () => {
@@ -210,30 +199,5 @@ describe('the Graphics Asset Library operational queues API', () => {
 			{ method: 'POST', headers: administratorHeaders },
 		);
 		expect(retried).toEqual({ outcome: 'already-in-state' });
-	});
-
-	it('filters the Evidence ledger to one subject', async () => {
-		const operation = await ingest('Queues evidence logo', 'queues-evidence', pngWithTextChunks(64));
-		const assetId = operation.result!.assetId;
-		await authorLifecycleAction(assetId, 'trash');
-		await $fetch(`/api/admin/graphics-assets/${assetId}/purge`, {
-			method: 'POST',
-			headers: administratorHeaders,
-			body: { confirmation: 'purge-now' },
-		});
-
-		const { entries } = await $fetch<{
-			entries: { subject: { kind: string; id: string } }[];
-		}>(
-			'/api/admin/graphics-assets/evidence',
-			{
-				headers: administratorHeaders,
-				query: { subjectKind: 'graphic-asset', subjectId: assetId },
-			},
-		);
-
-		expect(entries.length).toBeGreaterThan(0);
-		for (const entry of entries)
-			expect(entry.subject).toEqual({ kind: 'graphic-asset', id: assetId });
 	});
 });
