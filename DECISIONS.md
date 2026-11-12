@@ -2457,7 +2457,12 @@ The two families share more than that interface (read at `57351fea`). A Template
 - Publication is complete or nothing, and idempotent.
 - Exact content is reused, and replacing a file with its own content is a no-op.
 
-The maintainer decided on 2026-11-12 that ingestion goes ahead as the trial of whether nameable invariants are reason enough. The rule above stands for every other family until the trial is judged: Template Packages (#990) is closed as not planned and is reopened if the trial proves the pattern worthwhile, and #991 is closed. Ingestion lands in two steps. First the Graphics Ingestion Operation lifecycle, as the catalogue sub-interface `GraphicsAssetCatalogue` extends. Then the ingestion module and its own catalogue sub-interface, with each invariant's home test at that seam on the D1 catalogue.
+The maintainer decided on 2026-11-12 that ingestion goes ahead as the trial of whether nameable invariants are reason enough. The rule above stands for every other family until the trial is judged: Template Packages (#990) is closed as not planned and is reopened if the trial proves the pattern worthwhile, and #991 is closed. Ingestion lands in four steps, because Template Packages run through it:
+
+1. The Graphics Ingestion Operation lifecycle, as the catalogue sub-interface `GraphicsAssetCatalogue` extends.
+2. The steps both pipelines take (starting, changing and failing an operation, releasing its staged input, writing canonical bytes, and the pinned silent-video validation), moved unchanged into `operation-lifecycle.ts`, which the facade builds once.
+3. The ingestion module and its own catalogue sub-interface, handing a Template Package operation back to the facade.
+4. Each invariant's home test at that seam, on the D1 catalogue.
 
 **Delivery is the first.** `server/modules/graphics-asset-library/delivery.ts` holds it:
 
