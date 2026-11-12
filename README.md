@@ -513,13 +513,10 @@ code queries through `db` from `~~/server/db`. Wrangler records applied
 migrations in `_hub_migrations`; production's history is in that table, so the
 name must not change.
 
-The history starts at one migration, `0000_baseline_2.sql`: the whole schema,
-squashed a second time before the release after v1.5.0, because production's
-database is wiped before that release ships (ADR-0083, after ADR-0019's first
-squash). Later migrations follow it as they come; the first,
-`0001_archetype_filter_event_reference.sql`, is hand-written and changes no
-schema: it rewrites each stored Archetype filter name as the Archetype's id
-(ADR-0038). The baseline has two parts:
+The history is one migration, `0000_baseline_2.sql`: the whole schema, squashed
+a second time before the release after v1.5.0, because production's database is
+wiped before that release ships (ADR-0083, after ADR-0019's first squash). It
+has two parts:
 
 - **Generated**: every table, index (the partial unique ones too) and foreign
   key, written by `pnpm db:generate` from the schema.

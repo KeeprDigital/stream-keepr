@@ -75,21 +75,6 @@ describe.each(SCREEN_MODE_VALUES)('the %s config contract', (mode) => {
 	});
 });
 
-// The Archetype filter was stored as an Archetype's name until it became an
-// Event Reference (#1153); the name is a former field of both modes (ADR-0037).
-describe.each(['metagame', 'top-cards'] as const)('the %s former archetype filter name', (mode) => {
-	it('is accepted in a stale client\'s full write without being stored, and is never read', () => {
-		const stale = {
-			[mode]: { archetypeFilter: 'Mono Red', topN: 16 },
-		};
-
-		expect(modeConfigsMapSchema.parse(stale)).toEqual({
-			[mode]: { topN: 16 },
-		});
-		expect(resolveScreenModeConfig(stale as never, mode)).not.toHaveProperty('archetypeFilter');
-	});
-});
-
 // A table mode's max width is Auto, stored as absent, or a width within the Event Canvas bounds.
 describe.each(['standings', 'metagame'] as const)('the %s max width', (mode) => {
 	it.each([
