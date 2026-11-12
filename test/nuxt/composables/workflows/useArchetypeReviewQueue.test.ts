@@ -306,6 +306,46 @@ describe('useArchetypeReviewQueue', () => {
 		});
 	});
 
+	describe('jumping to a deck', () => {
+		it.each([
+			[
+				'a deck in the filter, keeping the filter',
+				2,
+				true,
+				2,
+				'unreviewed',
+			],
+			[
+				'a deck outside the filter, showing every deck',
+				3,
+				true,
+				3,
+				'all',
+			],
+			[
+				'no deck the Event does not hold, keeping the filter',
+				999,
+				false,
+				1,
+				'unreviewed',
+			],
+		])('shows %s', async (_, deckId, found, shownDeckId, filter) => {
+			mockPlayerStore.players = [
+				mtgPlayer(1, 'Deck A'),
+				mtgPlayer(2, 'Deck B'),
+				mtgPlayer(3, 'Deck C', { deckReviewed: true }),
+			];
+			const { currentEntry, queueFilter, jumpToDeck } = makeQueue();
+			await nextTick();
+
+			expect(jumpToDeck(deckId)).toBe(found);
+			await nextTick();
+
+			expect(currentEntry.value?.deck.id).toBe(shownDeckId);
+			expect(queueFilter.value).toBe(filter);
+		});
+	});
+
 	it('loads the current entry\'s deck', async () => {
 		const deck = {
 			id: 1,
