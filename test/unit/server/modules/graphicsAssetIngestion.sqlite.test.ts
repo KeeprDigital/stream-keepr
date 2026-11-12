@@ -1256,6 +1256,68 @@ describe('still-image ingestion at the Graphic Asset ingestion seam', () => {
 		await expect(storedAssets()).resolves.toEqual([]);
 	});
 
+	// One active attempt per operation: a retry takes a working operation only
+	// once its last write is a whole lease old, and the attempt it displaced
+	// publishes nothing.
+	it('refuses a retry while another attempt holds the operation, and takes it once that lease lapses', async () => {
+		const delegate = createD1GraphicsAssetCatalogue(harness.database);
+		let publications = 0;
+		let publicationStarted!: () => void;
+		let releasePublication!: () => void;
+		const started = new Promise<void>((resolve) => {
+			publicationStarted = resolve;
+		});
+		const released = new Promise<void>((resolve) => {
+			releasePublication = resolve;
+		});
+		const catalogue = {
+			...delegate,
+			async publishGraphicAsset(input: Parameters<typeof delegate.publishGraphicAsset>[0]) {
+				if (publications++ === 0) {
+					publicationStarted();
+					await released;
+				}
+				return await delegate.publishGraphicAsset(input);
+			},
+		};
+		const { ingestion, lifecycle, advanceTo } = createIngestion(
+			createInMemoryStagingGraphicsObjectStore(),
+			createInMemoryCanonicalGraphicsObjectStore(),
+			catalogue,
+		);
+		const operation = await ingestion.initiateGraphicsIngestion({
+			idempotencyKey: 'leased-attempt',
+			initiatedBy: 'graphics-author-1',
+			name: 'Leased attempt',
+			declaredByteLength: transparentPixelPng.byteLength,
+		});
+		const working = uploadBytes(ingestion, operation, undefined, transparentPixelPng, 16 * 1024 * 1024);
+		await started;
+		const held = await ingestion.getIngestionOperation({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+		});
+		const lastWrite = new Date(held.updatedAt).getTime();
+		const retry = () => ingestion.retryGraphicsIngestion({
+			operationId: operation.id,
+			initiatedBy: operation.initiatedBy,
+		});
+
+		advanceTo(new Date(lastWrite + lifecycle.activeIngestionLeaseMilliseconds - 1).toISOString());
+		await expect(retry()).rejects.toMatchObject({ code: 'ingestion-operation-lease-held' });
+
+		advanceTo(new Date(lastWrite + lifecycle.activeIngestionLeaseMilliseconds).toISOString());
+		const retried = await retry();
+		expect(retried).toMatchObject({
+			stage: 'completed',
+			result: { outcome: 'published' },
+		});
+
+		releasePublication();
+		await expect(working).resolves.toEqual(retried);
+		await expect(storedAssets()).resolves.toHaveLength(1);
+	});
+
 	it('fences a displaced processor after a stale operation is claimed', async () => {
 		const { ingestion, catalogue } = createIngestion();
 		const created = await ingestion.initiateGraphicsIngestion({
