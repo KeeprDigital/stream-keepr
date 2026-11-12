@@ -1,4 +1,4 @@
-import type { BoardSelection, MetagameScope } from '../types/enums';
+import type { BoardSelection, MetagameCardSortBy, MetagameScope } from '../types/enums';
 import type { ScreenSettingsContext } from './fields';
 import { z } from 'zod';
 import { getFeatureMatchStateTracking, getMetagameRules } from '../config/games';
@@ -187,6 +187,22 @@ export const DEFAULT_PAGE_ROTATION = {
 	autoPageEnabled: false,
 	autoPageIntervalMs: 10000,
 } as const;
+
+/**
+ * Editor meta for a field outside the Source card that reorders or recounts the
+ * rows a Page Rotation pages, such as a sort or a limit: its edit returns to
+ * page 1, as every Source edit does.
+ */
+export const returnsToFirstPage = {
+	writesWith: () => ({ currentPage: 1 }),
+} as const;
+
+/** What each sort of a card ranking is called. */
+export const METAGAME_CARD_SORT_BY_LABELS = {
+	inclusionRate: 'Inclusion rate',
+	avgCopies: 'Average copies',
+	totalCopies: 'Total copies',
+} as const satisfies Record<MetagameCardSortBy, string>;
 
 /** How many rows a page of a Page Rotation holds, under whichever name its mode gives the field. */
 export const pageRotationPageSize = editorField(z.number().int().min(1).max(100), { label: 'Rows per page', card: 'paging' });

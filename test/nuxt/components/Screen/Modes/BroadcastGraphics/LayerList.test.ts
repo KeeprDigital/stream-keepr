@@ -179,6 +179,25 @@ describe('broadcastGraphicsLayerList', () => {
 		expect(wrapper.findAll('[data-testid="broadcast-graphic-more"]')).toHaveLength(graphicMenus);
 	});
 
+	// Graphics on air composite in stack order: a move between two of them reaches program.
+	it.each([
+		{
+			onAir: [EDITED_GRAPHIC_ID, OTHER_GRAPHIC_ID],
+			offered: false,
+		},
+		{
+			onAir: [EDITED_GRAPHIC_ID],
+			offered: true,
+		},
+	])('offers a move past the other Broadcast Graphic with $onAir on air: $offered', async ({ onAir, offered }) => {
+		const { wrapper } = mountList({ onAir });
+
+		await wrapper.get(`[data-graphic-id="${EDITED_GRAPHIC_ID}"] [data-testid="broadcast-graphic-more"]`).trigger('click');
+		const back = wrapper.findAll('[role="menuitem"]').find(entry => entry.text().startsWith('Send to back'))!;
+
+		expect(back.attributes('disabled') === undefined).toBe(offered);
+	});
+
 	it('offers no Delete of a Broadcast Graphic on air', async () => {
 		const { wrapper } = mountList({
 			onAir: [EDITED_GRAPHIC_ID],

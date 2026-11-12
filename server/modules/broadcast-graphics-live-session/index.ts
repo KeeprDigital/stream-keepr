@@ -30,10 +30,12 @@ import { graphicBindingDataService } from '~~/server/services/graphicBindingData
 import { screenService } from '~~/server/services/screen';
 import {
 	broadcastGraphicChannelContexts,
+	broadcastGraphicPhaseTiming,
 	BroadcastGraphicsCommandRejection,
 	broadcastGraphicsLiveSessionGraphicAssetReferences,
 	broadcastGraphicSourceSelections,
 	broadcastGraphicsResolveBindingsDue,
+	onAirBroadcastGraphicIds,
 	recoveredBroadcastGraphicsLiveState,
 	resolveSocialProfileProjectionAcceptances,
 } from '~~/shared/modules/broadcast-graphics-live-session';
@@ -769,8 +771,34 @@ export function broadcastGraphicsLiveSessionModule() {
 		}
 	};
 
+	/**
+	 * The ids of the Screen's Broadcast Graphics on a program output now, an exiting
+	 * one included; none for a Screen outside Broadcast Graphics mode or with no
+	 * open epoch. Read on this server's clock, each against its own phase durations.
+	 */
+	const onAirGraphicIds = async (screen: DbScreen): Promise<string[]> => {
+		if (screen.currentMode !== 'broadcast-graphics')
+			return [];
+		const session = await state.findActiveSessionByScreen(screen.id, screen.eventId);
+		if (!session)
+			return [];
+		const stack = authoredStack(screen);
+		const contexts = broadcastGraphicChannelContexts(stack);
+		const now = Date.now();
+		return onAirBroadcastGraphicIds(
+			recoveredBroadcastGraphicsLiveState(session.currentState),
+			stack.graphics,
+			graphic => broadcastGraphicPhaseTiming(
+				stack.graphics.find(entry => entry.id === graphic.id)!,
+				now,
+				contexts[graphic.id],
+			),
+		);
+	};
+
 	return {
 		loadSession,
+		onAirGraphicIds,
 		applyCommand,
 		refreshLiveBindings,
 		republishLiveSessionReferences,

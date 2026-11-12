@@ -1,8 +1,10 @@
+import type { DbScreen } from '~~/server/db/schema';
 import type { GraphicsAssetLibrary } from '~~/server/modules/graphics-asset-library';
 import type { ScreenOutputAssetCapabilityManager } from '~~/server/modules/screen-output-assets/manager';
 import type { CreateScreenInput, UpdateScreenInput } from '~~/server/schemas/api/screen';
 import type { ScreenResponse } from '~~/shared/api';
 import type { ScreenMode } from '~~/shared/types/enums';
+import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 import { eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
@@ -27,7 +29,7 @@ import {
 } from '~~/server/utils/routeGuards';
 import { parseScreenThemeOverrideWrite, SCREEN_THEME_OVERRIDE_REFUSALS } from '~~/shared/screenThemeOverrides';
 import { storedThemeTokenGraphicAssetReferences } from '~~/shared/themeAssetReferences';
-import { mergeScreenModeConfig } from '~~/shared/types/screenConfig';
+import { mergeScreenModeConfig, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import {
 	GRAPHIC_ASSET_REFERENCING_SCREEN_MODES,
 	isGraphicAssetReferencingScreenMode,
@@ -216,6 +218,28 @@ function modeConfigWriteEditsWorkspace(mode: ScreenMode, config: Record<string, 
 	return fields?.some(field => Object.hasOwn(config, field)) ?? false;
 }
 
+/** A Broadcast Graphic as the on-air rule compares it: its Graphic Channel is set beside the stack, on air or off. */
+function withoutChannel({ channelId: _channelId, ...graphic }: BroadcastGraphicConfig) {
+	return graphic;
+}
+
+/**
+ * The Broadcast Graphic on air that a rewritten stack would change, remove, or
+ * move among the others on air, which composite in stack order; none when it
+ * leaves them all as they are.
+ */
+export function editedOnAirBroadcastGraphic(
+	current: readonly BroadcastGraphicConfig[],
+	next: readonly BroadcastGraphicConfig[],
+	onAirIds: readonly string[],
+): BroadcastGraphicConfig | undefined {
+	const onAir = current.filter(graphic => onAirIds.includes(graphic.id));
+	const after = next.filter(graphic => onAirIds.includes(graphic.id));
+	return onAir.find((graphic, index) => !after[index]
+		|| after[index].id !== graphic.id
+		|| !sameJson(withoutChannel(after[index]), withoutChannel(graphic)));
+}
+
 /**
  * The `modeConfigs` a Screen entering Deck List mode on a One Piece Card Game
  * Event is written with, its Deck Source on a Feature Match Slot side; or
@@ -256,6 +280,27 @@ async function withOpDeckSourceDefault(
 export function screenWriteModule() {
 	const publication = eventDataPublicationModule();
 	const screens = screenService();
+
+	/**
+	 * Refuse a write of the Broadcast Graphics stack that edits a graphic on air
+	 * (ADR-0081): it would reach program at once. The editor refuses it first; this
+	 * holds for a stale client, a second tab, and a save that a Take overtook.
+	 */
+	async function refuseOnAirGraphicEdit(existing: DbScreen, nextConfigs: ModeConfigsMap | null | undefined): Promise<void> {
+		const current = resolveScreenModeConfig(existing.modeConfigs, 'broadcast-graphics').graphics;
+		const next = resolveScreenModeConfig(nextConfigs, 'broadcast-graphics').graphics;
+		if (sameJson(current, next))
+			return;
+		const onAirIds = await broadcastGraphicsLiveSessionModule().onAirGraphicIds(existing);
+		const edited = editedOnAirBroadcastGraphic(current, next, onAirIds);
+		if (edited) {
+			throw createError({
+				statusCode: 409,
+				statusMessage: 'Conflict',
+				message: `Broadcast Graphic "${edited.name}" is on air and cannot be edited. Take it off air first.`,
+			});
+		}
+	}
 
 	async function createScreen({ eventId, input, originConnectionId, screenOutputAssetCapabilities }: CreateScreenParams): Promise<ScreenResponse> {
 		await validateScreenModeConfigsReferences(eventId, input.modeConfigs);
@@ -303,6 +348,9 @@ export function screenWriteModule() {
 		const leaseFence = genericWriteEditsWorkspace(existingScreen, data)
 			? await admitScreenGraphicsEditWrite(eventId, screenId, authoringSessionId)
 			: undefined;
+
+		if (data.modeConfigs !== undefined)
+			await refuseOnAirGraphicEdit(existingScreen, data.modeConfigs);
 
 		await validateScreenModeConfigsReferences(eventId, data.modeConfigs);
 		rejectChangedGraphicAssetReferencesOnGenericUpdate(
@@ -453,6 +501,9 @@ export function screenWriteModule() {
 		 * write path without anyone having to remember to wire it up. See #85.
 		 */
 		parseModeConfigPatchResult(existing.modeConfigs, mode, config);
+
+		if (mode === 'broadcast-graphics')
+			await refuseOnAirGraphicEdit(existing, mergeScreenModeConfig(existing.modeConfigs ?? {}, mode, config));
 
 		if (isGraphicAssetReferencingScreenMode(mode)) {
 			const nextConfigs = mergeScreenModeConfig(existing.modeConfigs ?? {}, mode, config);

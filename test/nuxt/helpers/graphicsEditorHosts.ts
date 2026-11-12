@@ -94,10 +94,9 @@ export const EDITED_GRAPHIC_ID = 'lower-third';
 export const OTHER_GRAPHIC_ID = 'slate';
 
 /**
- * A Broadcast Graphics editor over a stack of two: `slate` at the back, holding one
- * text item `s`, and `lower-third` in front with `items` as its Graphic Items.
- * `onAir` names the graphics on a program output, and `channels` the Screen's
- * Graphic Channels.
+ * A Broadcast Graphics editor over a stack of two: `slate` at the back with one
+ * text item `s`, and `lower-third` in front holding `items`. `onAir` names the
+ * graphics on a program output, `channels` the Screen's Graphic Channels.
  */
 export function broadcastGraphicsEditing(options: { writable: boolean; items?: GraphicItemConfig[] }) {
 	const graphics = ref<BroadcastGraphicConfig[]>([
@@ -119,6 +118,7 @@ export function broadcastGraphicsEditing(options: { writable: boolean; items?: G
 	const leased = ref(options.writable);
 	const held = ref(false);
 	const onAir = ref(new Set<string>());
+	const withheld: ('undo' | 'redo')[] = [];
 	const selectedGraphicId = ref<string | null>(EDITED_GRAPHIC_ID);
 	const host = broadcastGraphicsEditorHost({
 		graphics: () => graphics.value,
@@ -133,6 +133,7 @@ export function broadcastGraphicsEditing(options: { writable: boolean; items?: G
 		writable: leased,
 		held,
 		onAir: graphicId => onAir.value.has(graphicId),
+		onStepWithheld: step => withheld.push(step),
 	});
 	const editor = useGraphicsEditor(host);
 	const graphic = (id: string) => graphics.value.find(entry => entry.id === id)!;
@@ -156,6 +157,7 @@ export function broadcastGraphicsEditing(options: { writable: boolean; items?: G
 		graphics,
 		channels,
 		onAir,
+		withheld,
 		selectedGraphicId,
 		graphic,
 	};

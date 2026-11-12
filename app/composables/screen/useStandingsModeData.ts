@@ -127,11 +127,12 @@ export function useStandingsModeData(context: ScreenContext) {
 		let rows = [...standingsRows.value];
 
 		if (mode === 'range') {
-			rows = rows.filter(p =>
-				p.position != null
-				&& p.position >= config.value.rangeStart
-				&& p.position <= config.value.rangeEnd,
-			);
+			// A Player without a position counts from its place in the order, after
+			// every placed Player, so a range still shows rows before standings exist.
+			rows = rows.filter((p, index) => {
+				const position = p.position ?? index + 1;
+				return position >= config.value.rangeStart && position <= config.value.rangeEnd;
+			});
 		}
 		else if (mode === 'watchlist') {
 			rows = rows.filter(p => watchlistPlayerIds.value.has(p.id));

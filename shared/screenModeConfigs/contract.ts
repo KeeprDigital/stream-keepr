@@ -1,5 +1,6 @@
 import type { ConfigFieldMeta, EditorField, ScreenModeConfigField, ScreenModeConfigFields, ScreenSettingsGroupDeclaration, ShapeEventReferences } from './fields';
 import { z } from 'zod';
+import { isPlainRecord } from '../utils/plainObject';
 import { assertFieldGroupsDeclared, clampToShapeBounds, EDITOR_META_KEY, screenModeConfigFields, unwrapOptionalField } from './fields';
 
 /** Refuses a field carrying a zod default: a default lives only in `defaults` (ADR-0037). */
@@ -217,10 +218,6 @@ function shapeHoldsPath(shape: z.ZodRawShape, [key, ...rest]: readonly string[])
 		return true;
 	const inner = unwrapOptionalField(field);
 	return inner instanceof z.ZodObject && shapeHoldsPath(inner.shape, rest);
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-	return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 /** A copy of `fragment` without the field at `path`, or undefined when it holds none. */

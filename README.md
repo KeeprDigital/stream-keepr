@@ -1259,7 +1259,7 @@ only through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding (no
 
 - **Feature Match Overlay runs on the Shared Graphics Foundation.** The legacy
   widget / widget-group / z-index model was deleted without a migration.
-  `test/unit/shared/featureMatchOverlayPresets.test.ts` pins the invariants of
+  `test/unit/shared/builtInFeatureMatchLayoutTemplates.test.ts` pins the invariants of
   the built-in Feature Match Layout Templates (`full-table`,
   `left-stacked-player-cams`, `neon-feature-match`). Dropped by design: per-side
   borders on a Surface Style (compose with rule-preset Shape items), the

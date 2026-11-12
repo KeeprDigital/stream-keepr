@@ -87,15 +87,21 @@ export interface GraphicsEditOptions {
  * records, so the host's write undoes as one step.
  *
  * A composition the host forbids, such as a Broadcast Graphic on air, is left
- * alone: no write that changes or removes it is made, by a verb or a host's own
- * `edit`, and undo and redo restore everything but it. Its layers are still
- * selected and copied.
+ * alone: no write that changes or removes it, or reorders it among the others
+ * forbidden, is made, by a verb or a host's own `edit`. Undo and redo restore
+ * everything but it, and keep a step that would restore nothing else. Its layers
+ * are still selected and copied.
  *
  * A locked layer (#747) is left alone by every canvas verb — a move, a resize, a
  * rotation and an arrow nudge — and still edited by the property panel. The
  * lock is stored on the layer (#943), so locking is an edit like any other: one
  * undo step, and only while leased.
  */
+/** Whether two documents, or two of their parts, hold the same content. */
+function sameContent(a: unknown, b: unknown): boolean {
+	return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: GraphicsEditorHostContract<D, L>) {
 	const { tree, forbidden } = contract;
 	const read = () => contract.document.read();
@@ -214,23 +220,45 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 	/**
 	 * What an undo or redo writes: the document it restores, with each composition
 	 * the host forbids now left as it is, and what the host keeps outside undo.
+	 * `withheld` says the step changes a forbidden composition, or their order.
 	 */
-	function restoring(restored: D): D {
+	function restoring(restored: D): { document: D; withheld: boolean } {
 		const current = read();
-		const kept = tree.compositions(current)
-			.filter(composition => !mayEditComposition(composition))
-			.reduce((next, composition) => tree.withComposition(next, composition), restored);
-		return contract.document.restore?.(kept, current) ?? kept;
+		const forbiddenNow = tree.compositions(current).filter(composition => !mayEditComposition(composition));
+		const before = new Map(tree.compositions(restored).map(composition => [composition.id, composition]));
+		const withheld = forbiddenNow.some(composition => !sameContent(before.get(composition.id), composition))
+			|| !sameContent(orderAmong(restored, forbiddenNow), forbiddenNow.map(composition => composition.id));
+		const kept = forbiddenNow.reduce((next, composition) => tree.withComposition(next, composition), restored);
+		return {
+			document: contract.document.restore?.(kept, current) ?? kept,
+			withheld,
+		};
+	}
+
+	/**
+	 * Take one undo or redo step. A step that would only change what the host
+	 * forbids now writes nothing and is kept, so it still undoes once the
+	 * composition may be written again; the host is told (`stepWithheld`).
+	 */
+	function step(name: 'undo' | 'redo') {
+		const current = snapshot();
+		const taken = (name === 'undo'
+			? undoEdit
+			: redoEdit)(history.value, current);
+		if (!taken)
+			return;
+		const { document, withheld } = restoring(taken.restore);
+		if (withheld && sameContent(document, current)) {
+			forbidden.stepWithheld?.(name);
+			return;
+		}
+		history.value = taken.history;
+		contract.document.write(document);
 	}
 
 	function undo() {
-		if (!canUndo.value)
-			return;
-		const step = undoEdit(history.value, snapshot());
-		if (!step)
-			return;
-		history.value = step.history;
-		contract.document.write(restoring(step.restore));
+		if (canUndo.value)
+			step('undo');
 	}
 
 	/**
@@ -245,13 +273,8 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 	}
 
 	function redo() {
-		if (!canRedo.value)
-			return;
-		const step = redoEdit(history.value, snapshot());
-		if (!step)
-			return;
-		history.value = step.history;
-		contract.document.write(restoring(step.restore));
+		if (canRedo.value)
+			step('redo');
 	}
 
 	/* ── Forbidden edits ───────────────────────────── */
@@ -260,13 +283,24 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 		return !forbidden.composition?.(composition);
 	}
 
-	/** Whether a document would change, or remove, a composition the host forbids now. */
+	/** The ids of `among` in the order `document` holds them. */
+	function orderAmong(document: D, among: readonly GraphicComposition[]): string[] {
+		const ids = new Set(among.map(composition => composition.id));
+		return tree.compositions(document).map(composition => composition.id).filter(id => ids.has(id));
+	}
+
+	/**
+	 * Whether a document would change or remove a composition the host forbids
+	 * now, or reorder those compositions among themselves: Broadcast Graphics on
+	 * air composite in stack order.
+	 */
 	function changesForbidden(next: D): boolean {
 		if (!forbidden.composition)
 			return false;
+		const forbiddenNow = tree.compositions(read()).filter(composition => !mayEditComposition(composition));
 		const after = new Map(tree.compositions(next).map(composition => [composition.id, composition]));
-		return tree.compositions(read()).some(composition => !mayEditComposition(composition)
-			&& after.get(composition.id) !== composition);
+		return forbiddenNow.some(composition => after.get(composition.id) !== composition)
+			|| orderAmong(next, forbiddenNow).some((id, index) => id !== forbiddenNow[index]!.id);
 	}
 
 	/** Whether the host lets this layer be written now. A layer it owns always is. */
@@ -709,7 +743,7 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 	function paste(copied: CopiedLayers): ClipboardPasteRefusal | null {
 		const into = tree.destination(read(), layers.value);
 		if (into && !mayEditComposition(into))
-			return null;
+			return { reason: 'no-destination' };
 		const outcome = tree.paste(copied, read(), {
 			selected: layers.value,
 			groupId: selectedGroup.value?.id,
@@ -797,6 +831,7 @@ export function useGraphicsEditor<D, L extends GraphicsEditorLayer>(contract: Gr
 		removalRefusal,
 		mayEdit,
 		mayEditComposition,
+		changesForbidden,
 		duplicate,
 		move,
 		moveToEdge,

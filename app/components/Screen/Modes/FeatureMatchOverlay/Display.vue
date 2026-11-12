@@ -15,7 +15,6 @@ import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureM
 import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFeatureMatchOverlaySideboardData';
 import { useFeatureMatchOverlaySideboardRevealAnimation } from '~/composables/screen/useFeatureMatchOverlaySideboardRevealAnimation';
 import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
-import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~/modules/feature-match-overlay/editorHost';
 import {
 	FEATURE_MATCH_OVERLAY_PREVIEW_SELECT_MESSAGE,
 	isFeatureMatchOverlayPreviewSelectedTargetMessage,
@@ -24,7 +23,7 @@ import { frameBorderLine, resolveFeatureMatchOverlayRenderModel } from '~/module
 import { featureMatchOverlaySelectionKey } from '~/modules/feature-match-overlay/selection';
 import { resolveFeatureMatchOverlayThemeValues } from '~/modules/feature-match-overlay/themeTokens';
 import { featureMatchGraphicsContext, featureMatchTokenValues } from '~/modules/feature-match-overlay/tokenValues';
-import { lockedGraphicItems, lockedLayers } from '~/modules/graphics/editor/layerLocks';
+import { lockedGraphicItems } from '~/modules/graphics/editor/layerLocks';
 import {
 	GRAPHICS_PREVIEW_READY_MESSAGE,
 	GRAPHICS_PREVIEW_SELECT_MESSAGE,
@@ -351,11 +350,10 @@ function isPreviewTargetSelected(target: FeatureMatchOverlaySelectionTarget) {
  * (#943). Their guides are drawn but not offered, so a click on one falls through
  * to the layer beneath it, or to the canvas.
  */
-const locked = computed(() => lockedLayers(FEATURE_MATCH_LAYOUT_EDITOR_TREE, config.value.layout));
-const lockedItems = computed(() => lockedGraphicItems(FEATURE_MATCH_LAYOUT_EDITOR_TREE, config.value.layout));
+const lockedItems = computed(() => lockedGraphicItems([config.value.layout.composition]));
 
 function isSourceLocked(itemId: string) {
-	return locked.value.some(layer => layer.type === 'source' && layer.itemId === itemId);
+	return config.value.layout.sources.some(source => source.id === itemId && source.locked === true);
 }
 
 function selectSourceGuide(itemId: string, event?: MouseEvent | KeyboardEvent) {

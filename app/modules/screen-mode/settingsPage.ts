@@ -8,6 +8,7 @@ import { computed } from 'vue';
 import { SCREEN_SETTINGS_CARD_TITLES, SCREEN_SETTINGS_CARDS } from '~~/shared/screenModeConfigs/fields';
 import { SCREEN_MODES, screenModeConfigContract } from '~~/shared/screenModes';
 import { placeScreenThemeTokens } from '~~/shared/screenThemeOverrides';
+import { isPlainRecord } from '~~/shared/utils/plainObject';
 
 /**
  * A Screen Mode's settings page as its contract and Mode Tokens describe it
@@ -87,10 +88,6 @@ export function isPageRotationMode(mode: ScreenMode): mode is PageRotationMode {
 	return SCREEN_MODES[mode].pageRotation !== undefined;
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /** Every field a contract declares, a nested block's own fields in place of the block, in declaration order. */
 function shownFields(
 	fields: Readonly<Record<string, ScreenModeConfigField>>,
@@ -104,9 +101,9 @@ function shownFields(
 		const fieldPath = [...path, field.key];
 		if (field.control === 'block' && field.fields) {
 			const stored = context.config[field.key];
-			const block = isRecord(stored)
+			const block = isPlainRecord(stored)
 				? stored
-				: isRecord(defaults[field.key])
+				: isPlainRecord(defaults[field.key])
 					? defaults[field.key] as Record<string, any>
 					: {};
 			return shownFields(field.fields, { ...context, block }, {}, fieldPath);

@@ -25,6 +25,7 @@ import {
 	TEMPLATE_PACKAGE_TEMPLATE_ENTRY,
 	templatePackageContentEntry,
 } from '~~/shared/types/templatePackage';
+import { isPlainObject } from '~~/shared/utils/plainObject';
 import { inspectTemplatePackageCapabilities } from './template-package';
 import { packagedOriginKey } from './template-package-installation';
 import { templatePackagePreflightIssue } from './template-package-preflight-issues';
@@ -55,13 +56,6 @@ const CANONICAL_MIMES = new Set<string>([
 ]);
 
 const ASSET_KINDS = new Set<string>(['image', 'silent-video', 'font']);
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		return false;
-	const prototype = Object.getPrototypeOf(value);
-	return prototype === Object.prototype || prototype === null;
-}
 
 function isNonEmptyString(value: unknown, maximumLength = 200): value is string {
 	return typeof value === 'string' && value.length > 0 && value.length <= maximumLength;

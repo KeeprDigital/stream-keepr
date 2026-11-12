@@ -4,7 +4,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import * as authSchema from '~~/server/db/schema/auth';
-import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
+import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '~~/shared/builtInFeatureMatchLayoutTemplates';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
@@ -70,10 +70,10 @@ function call(handler: Handler, params: Record<string, string | number>, body?: 
 	}));
 }
 
-const BUILT_INS = FEATURE_MATCH_OVERLAY_PRESETS.map(preset => ({
-	id: `builtin:${preset.id}`,
-	name: preset.label,
-	layout: preset.config.layout,
+const BUILT_INS = BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.map(builtIn => ({
+	id: `builtin:${builtIn.id}`,
+	name: builtIn.label,
+	layout: builtIn.config.layout,
 }));
 
 let eventId: number;

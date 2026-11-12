@@ -18,7 +18,7 @@ import {
 	topCardsModeConfigSchema,
 	updateScreenSchema,
 } from '~~/server/schemas/api/screen';
-import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
+import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '~~/shared/builtInFeatureMatchLayoutTemplates';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, getDefaultConfigForMode, getDisplayDefaultsForMode, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
 import { maximalFeatureMatchLayoutDocument } from '~~/test/helpers/featureMatchLayoutDocument';
 
@@ -157,14 +157,14 @@ describe('featureMatchOverlayModeConfigSchema', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('accepts every built-in Feature Match Overlay Preset', () => {
-		for (const preset of FEATURE_MATCH_OVERLAY_PRESETS) {
+	it('accepts every built-in Feature Match Layout Template', () => {
+		for (const builtIn of BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES) {
 			const result = featureMatchOverlayModeConfigSchema.safeParse({
 				featureMatchId: null,
-				...preset.config,
+				...builtIn.config,
 			});
 
-			expect(result.success, `${preset.id}: ${result.success
+			expect(result.success, `${builtIn.id}: ${result.success
 				? ''
 				: JSON.stringify(result.error.issues)}`).toBe(true);
 		}

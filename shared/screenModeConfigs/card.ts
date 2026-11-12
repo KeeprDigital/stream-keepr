@@ -25,8 +25,6 @@ export const cardModeConfigContract = defineScreenModeConfigContract({
 	// The width the card fitted to a 1080-pixel-high Screen at the former scale of 1.
 	cardWidth: 583,
 }, {
-	// The card's motion is its `motion` Mode Token (#824, #844).
-	formerFields: ['scale', 'animationEnabled', 'animationSpeed'],
 	groups: {
 		card: { title: 'Card', card: 'content' },
 	},

@@ -759,6 +759,72 @@ describe('the shared graphics editor\'s Broadcast Graphics', () => {
 		expect(findGraphicItem(harness.graphic(OTHER_GRAPHIC_ID), 's')?.item.visible).toBe(true);
 	});
 
+	// An undo that may restore nothing now would otherwise spend the step for good.
+	it('keeps an undo step that only changes a Broadcast Graphic on air, and takes it once the graphic is off air', () => {
+		const harness = editing();
+		harness.editor.toggleVisible();
+		harness.onAir.value = new Set([EDITED_GRAPHIC_ID]);
+		const writes = harness.writes.length;
+
+		harness.editor.undo();
+		expect(harness.writes).toHaveLength(writes);
+		expect(harness.editor.canUndo.value).toBe(true);
+		expect(harness.editor.canRedo.value).toBe(false);
+		expect(harness.withheld).toEqual(['undo']);
+
+		harness.onAir.value = new Set();
+		harness.editor.undo();
+		expect(rect(harness, 'a')?.visible).toBe(true);
+	});
+
+	// Graphics on air composite in stack order, so their order is on program too.
+	it.each<[string, string[], boolean]>([
+		[
+			'both are on air',
+			[EDITED_GRAPHIC_ID, OTHER_GRAPHIC_ID],
+			false,
+		],
+		[
+			'one is on air',
+			[EDITED_GRAPHIC_ID],
+			true,
+		],
+	])('reorders two Broadcast Graphics while %s: %s', (_, onAir, moved) => {
+		const harness = editing();
+		harness.onAir.value = new Set(onAir);
+
+		const wrote = harness.editor.edit([
+			...harness.document(),
+		].reverse());
+
+		expect(wrote).toBe(moved);
+		expect(harness.document().map(graphic => graphic.id)).toEqual(moved
+			? [EDITED_GRAPHIC_ID, OTHER_GRAPHIC_ID]
+			: [OTHER_GRAPHIC_ID, EDITED_GRAPHIC_ID]);
+	});
+
+	it('leaves Broadcast Graphics now on air in their order when an undo would reorder them', () => {
+		const harness = editing();
+		harness.editor.edit([
+			...harness.document(),
+		].reverse());
+		harness.onAir.value = new Set([EDITED_GRAPHIC_ID, OTHER_GRAPHIC_ID]);
+
+		harness.editor.undo();
+
+		expect(harness.document().map(graphic => graphic.id)).toEqual([EDITED_GRAPHIC_ID, OTHER_GRAPHIC_ID]);
+		expect(harness.editor.canUndo.value).toBe(true);
+	});
+
+	it('answers a paste into a Broadcast Graphic on air with a refusal, writing nothing', () => {
+		const harness = editing();
+		const copied = harness.editor.copy()!;
+		harness.onAir.value = new Set([EDITED_GRAPHIC_ID]);
+
+		expect(harness.editor.paste(copied)).toEqual({ reason: 'no-destination' });
+		expect(harness.writes).toEqual([]);
+	});
+
 	// Undo covers the item tree; a Graphic Channel assignment is made outside it.
 	it('keeps the Graphic Channel each graphic is in now through an undo', () => {
 		const harness = editing();

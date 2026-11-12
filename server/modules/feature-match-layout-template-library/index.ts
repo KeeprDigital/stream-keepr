@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3';
+import type { BuiltInFeatureMatchLayoutTemplate } from '~~/shared/builtInFeatureMatchLayoutTemplates';
 import type {
 	FeatureMatchLayoutTemplateOrigin,
 	FeatureMatchLayoutTemplateSummary,
@@ -8,7 +9,7 @@ import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-library/runtime';
 import { readInstalledFeatureMatchLayoutDocument } from '~~/server/modules/template-package-payload/featureMatchLayout';
 import { featureMatchLayoutTemplateService } from '~~/server/services/featureMatchLayoutTemplate';
-import { FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
+import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '~~/shared/builtInFeatureMatchLayoutTemplates';
 import { flattenGraphicItems } from '~~/shared/modules/graphics';
 
 /**
@@ -90,7 +91,7 @@ function installedEntry(
 }
 
 /**
- * A built-in entry's identity is its preset id behind a prefix no generated
+ * A built-in entry's identity is its own id behind a prefix no generated
  * identifier can hold, so it collides with neither store's.
  */
 const BUILT_IN_ID_PREFIX = 'builtin:';
@@ -98,30 +99,31 @@ const BUILT_IN_ID_PREFIX = 'builtin:';
 /** A built-in has shipped unrevised since the application has existed. */
 const BUILT_IN_SINCE = new Date(0);
 
-function builtInEntries(): FeatureMatchLayoutTemplateLibraryEntry[] {
-	return FEATURE_MATCH_OVERLAY_PRESETS.map(preset => ({
-		id: `${BUILT_IN_ID_PREFIX}${preset.id}`,
-		name: preset.label,
-		description: preset.description,
+function builtInEntry(builtIn: BuiltInFeatureMatchLayoutTemplate): FeatureMatchLayoutTemplateLibraryEntry {
+	return {
+		id: `${BUILT_IN_ID_PREFIX}${builtIn.id}`,
+		name: builtIn.label,
+		description: builtIn.description,
 		revision: 1,
 		// Copied, so nothing a caller does to an entry reaches the layout every
 		// later read is answered from.
-		document: structuredClone(preset.config.layout),
+		document: structuredClone(builtIn.config.layout),
 		authored: false,
 		builtIn: true,
-		aspectRatio: preset.aspectRatio,
+		aspectRatio: builtIn.aspectRatio,
 		createdAt: BUILT_IN_SINCE,
 		updatedAt: BUILT_IN_SINCE,
-	}));
+	};
 }
 
-/** The built-in entry an identity names, if it names one. */
+/** The built-in entry an identity names, if it names one: that layout alone is copied. */
 export function findBuiltInFeatureMatchLayoutTemplate(
 	templateId: string,
 ): FeatureMatchLayoutTemplateLibraryEntry | undefined {
 	if (!templateId.startsWith(BUILT_IN_ID_PREFIX))
 		return undefined;
-	return builtInEntries().find(entry => entry.id === templateId);
+	const builtIn = BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.find(entry => entry.id === templateId.slice(BUILT_IN_ID_PREFIX.length));
+	return builtIn && builtInEntry(builtIn);
 }
 
 /**
@@ -142,7 +144,7 @@ export async function listFeatureMatchLayoutTemplateLibrary(
 		}),
 	]);
 	return [
-		...builtInEntries(),
+		...BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.map(builtInEntry),
 		...authored.map(template => ({
 			id: template.id,
 			name: template.name,

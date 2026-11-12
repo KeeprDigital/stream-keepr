@@ -1,6 +1,7 @@
 import type { EventListResponse } from '../api';
 import type { EventReferenceKind } from './eventReferences';
 import { z } from 'zod';
+import { isPlainRecord } from '../utils/plainObject';
 
 /**
  * The cards of a Screen's settings page, in the order it shows them (#1060):
@@ -386,10 +387,6 @@ export function screenModeConfigFields<Shape extends z.ZodRawShape>(shape: Shape
 	return fields as ScreenModeConfigFields<Shape>;
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 /**
  * A stored fragment read within its shape's bounds: every number outside its
  * field's inclusive bounds becomes the nearest bound, inside nested blocks too.
@@ -415,7 +412,7 @@ export function clampToShapeBounds<T extends Record<string, unknown>>(shape: z.Z
 			const { min, max } = inclusiveNumberBounds(inner);
 			next = Math.min(max ?? value, Math.max(min ?? value, value));
 		}
-		else if (inner instanceof z.ZodObject && isPlainObject(value)) {
+		else if (inner instanceof z.ZodObject && isPlainRecord(value)) {
 			next = clampToShapeBounds(inner.shape, value);
 		}
 		if (next !== value) {

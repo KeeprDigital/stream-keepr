@@ -3,8 +3,8 @@ import type { PlayerSide } from './types/enums';
 import type { GraphicGroupChildConfig, GraphicItemConfig, GraphicSurfaceStyle, GraphicTypography } from './types/graphics';
 import type { GraphicThemeSlot } from './types/graphicThemeBindings';
 import type {
+	BuiltInFeatureMatchLayoutTemplateId,
 	FeatureMatchOverlayModeConfig,
-	FeatureMatchOverlayPresetId,
 	FeatureMatchSourceFramingStyle,
 	FeatureMatchSourceItemConfig,
 } from './types/screenConfig';
@@ -30,8 +30,7 @@ import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from 
 
 /**
  * The built-in Feature Match Layout Templates, which the Templates library lists
- * beside the saved and installed ones (ADR-0080). They were the Feature Match
- * Overlay Presets, and this module keeps that name for them.
+ * beside the saved and installed ones (ADR-0080).
  *
  * Each is a whole Feature Match Layout: the host-owned Frame and
  * Source Items, and the shared Graphic Item tree. Nothing is carried over from a
@@ -39,22 +38,22 @@ import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from 
  * and nothing is migrated.
  *
  * `left-stacked-player-cams` is also the default Feature Match Overlay
- * configuration. Between them the three presets exercise host tokens in Graphic Text Templates, the context-gated Clock, Player
+ * configuration. Between them the three exercise host tokens in Graphic Text Templates, the context-gated Clock, Player
  * Life and Game Wins Definitions, Media Graphic Items, canvas Graphic Groups,
  * Graphic Layer Order as list order, per-corner Shape Geometry, gradient and solid
  * Graphic Fills with outline and glow, Text Overflow Policies, and — for the
  * per-side borders the shared Graphic Surface Style deliberately dropped —
  * composed rule-preset Shape Graphic Items.
  *
- * Every preset is token-bound (#831): its text follows the Theme's type and
+ * Every one is token-bound (#831): its text follows the Theme's type and
  * primary text colour, its panels and rules the Theme's `panel` surface, and
  * its branding images the Theme's `logo`. Its Frame and Source Items carry
  * only shape, and paint from the Feature Match Overlay's Mode Tokens. So a
- * placed preset looks right under any Theme, and restyles live with it.
+ * placed one looks right under any Theme, and restyles live with it.
  */
 
-export interface FeatureMatchOverlayPreset {
-	id: FeatureMatchOverlayPresetId;
+export interface BuiltInFeatureMatchLayoutTemplate {
+	id: BuiltInFeatureMatchLayoutTemplateId;
 	label: string;
 	description: string;
 	aspectRatio: number;
@@ -65,14 +64,14 @@ export interface FeatureMatchOverlayPreset {
  * Theme binding
  * ──────────────────────────────────────────────── */
 
-/** Heavy preset text sets in the Theme's heading; the rest in its body. */
+/** Heavy built-in text sets in the Theme's heading; the rest in its body. */
 const HEADING_WEIGHT = 700;
 
 /** Branding slots that keep their own picture, so a pair of slots shows the logo once. */
 const OWN_PICTURE_ITEMS: ReadonlySet<string> = new Set(['branding-image-2']);
 
-/** The Foundation Token each slot of a preset item follows. */
-function presetBindings(item: GraphicItemConfig | GraphicGroupChildConfig): Partial<Record<GraphicThemeSlot, string>> {
+/** The Foundation Token each slot of a built-in's item follows. */
+function builtInBindings(item: GraphicItemConfig | GraphicGroupChildConfig): Partial<Record<GraphicThemeSlot, string>> {
 	const typographyWeight = 'typography' in item && item.typography
 		? item.typography.fontWeight
 		: 0;
@@ -88,29 +87,29 @@ function presetBindings(item: GraphicItemConfig | GraphicGroupChildConfig): Part
 	};
 }
 
-function bindPresetItem<T extends GraphicItemConfig | GraphicGroupChildConfig>(item: T): T {
+function bindBuiltInItem<T extends GraphicItemConfig | GraphicGroupChildConfig>(item: T): T {
 	let bound = item;
-	for (const [slot, token] of Object.entries(presetBindings(item)) as [GraphicThemeSlot, string][]) {
+	for (const [slot, token] of Object.entries(builtInBindings(item)) as [GraphicThemeSlot, string][]) {
 		if (graphicThemeOwnerSupportsSlot(bound, slot))
 			bound = bindGraphicThemeOwner(bound, slot, token, DEFAULT_GRAPHIC_THEME_TOKENS);
 	}
 	return bound;
 }
 
-/** A preset's Graphic Items, each bound to the Theme and painted as the Default Theme ships it. */
+/** A built-in's Graphic Items, each bound to the Theme and painted as the Default Theme ships it. */
 function themeBound(items: GraphicItemConfig[]): GraphicItemConfig[] {
 	return items.map((item) => {
-		const bound = bindPresetItem(item);
+		const bound = bindBuiltInItem(item);
 		return bound.type === 'group'
 			? {
 					...bound,
-					children: bound.children.map(child => bindPresetItem(child)),
+					children: bound.children.map(child => bindBuiltInItem(child)),
 				}
 			: bound;
 	});
 }
 
-/** A preset's config with its composition bound to the Theme. */
+/** A built-in's config with its composition bound to the Theme. */
 function themeBoundConfig(config: Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'>): Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'> {
 	const { composition } = config.layout;
 	return {
@@ -129,7 +128,7 @@ function themeBoundConfig(config: Omit<FeatureMatchOverlayModeConfig, 'featureMa
  * Table with Left Stacked Player Cams
  * ──────────────────────────────────────────────── */
 
-/** The rounded framing every Source Item of the default preset is cut into; it paints the Theme's `source-surface`. */
+/** The rounded framing every Source Item of the default built-in is cut into; it paints the Theme's `source-surface`. */
 function roundedSourceFraming(): FeatureMatchSourceFramingStyle {
 	return {
 		borderRadius: 8,
@@ -378,7 +377,7 @@ function leftStackedPlayerCamsConfig(): Omit<FeatureMatchOverlayModeConfig, 'fea
 
 /**
  * The default Feature Match Overlay configuration, which is the
- * `left-stacked-player-cams` preset with no Feature Match Slot selected.
+ * `left-stacked-player-cams` built-in with no Feature Match Slot selected.
  */
 export const DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG: FeatureMatchOverlayModeConfig = {
 	featureMatchId: null,
@@ -903,7 +902,7 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 	};
 }
 
-export const FEATURE_MATCH_OVERLAY_PRESETS: FeatureMatchOverlayPreset[] = [
+export const BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES: BuiltInFeatureMatchLayoutTemplate[] = [
 	{
 		id: 'full-table',
 		label: 'Full Table',

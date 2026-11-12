@@ -4,7 +4,7 @@ import { BOARD_SELECTION_VALUES } from '../types/enums';
 import { METAGAME_CARD_TYPE_BUCKETS } from '../utils/metagame';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField, withEditorMeta } from './fields';
-import { BOARD_SELECTION_LABELS, DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, hasSideboard, headerConfigShape, metagameScopeShape, pageRotationPageSize, pageRotationShape } from './subShapes';
+import { BOARD_SELECTION_LABELS, DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, hasSideboard, headerConfigShape, metagameScopeShape, pageRotationPageSize, pageRotationShape, returnsToFirstPage } from './subShapes';
 
 /**
  * The Archetype Spotlight Screen Mode's config contract (#761): one Archetype's
@@ -41,6 +41,7 @@ export const archetypeSpotlightModeConfigContract = defineScreenModeConfigContra
 		card: 'content',
 		group: 'top-cards',
 		description: 'How many of the archetype\'s most-included cards to show.',
+		...returnsToFirstPage,
 	}),
 	excludedCardTypes: editorField(z.array(z.enum(METAGAME_CARD_TYPE_BUCKETS)).max(METAGAME_CARD_TYPE_BUCKETS.length), {
 		label: 'Card types',
@@ -72,8 +73,6 @@ export const archetypeSpotlightModeConfigContract = defineScreenModeConfigContra
 	rowsPerPage: 8,
 	...DEFAULT_PAGE_ROTATION,
 }, {
-	// The Conversion Target is the Event's (ADR-0061).
-	formerFields: ['conversionMetric', 'conversionThreshold'],
 	groups: {
 		'top-cards': { title: 'Top cards', card: 'content' },
 	},

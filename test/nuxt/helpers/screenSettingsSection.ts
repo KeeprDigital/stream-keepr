@@ -1,10 +1,7 @@
 /**
- * `ScreenSettingsSection` as a stub, for a test of what a surface puts in its
- * sections. Its open and remember rules are tested at its home
- * (`SettingsSection.test.ts`); this one always renders its body and its
- * `actions` slot open, and carries what the surface passes it: its title
- * (`data-section`, and as a heading), `id`, `summary`, whether it collapses,
- * and whether it starts open, the density's own default while unset.
+ * `ScreenSettingsSection` as a stub that always renders its body and `actions`
+ * slot open, and carries what the surface passes it as `data-*` and a heading.
+ * Its open and remember rules are tested at its home (`SettingsSection.test.ts`).
  */
 import { defineComponent } from 'vue';
 

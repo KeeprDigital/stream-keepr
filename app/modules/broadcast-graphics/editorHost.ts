@@ -21,7 +21,8 @@ import { compositionItemLayers, graphicsEditorSession } from '~/modules/graphics
  *
  * A Broadcast Graphic on air may not be written (#1100): an edit to it would reach
  * program at once. The editor refuses every write to it, and undo leaves it as it
- * is. While playout cannot be known, every graphic may be on air.
+ * is, in its place among the others on air. While playout cannot be known, every
+ * graphic may be on air.
  *
  * Undo covers the item tree only. A Broadcast Graphic's Graphic Channel is set
  * beside the stack, outside undo, so a restored stack keeps each graphic's channel
@@ -131,6 +132,8 @@ export interface BroadcastGraphicsEditorHostOptions extends GraphicsEditorSessio
 	selectedGraphicId: () => string | null;
 	/** Whether a Broadcast Graphic may be on a program output now. */
 	onAir: (graphicId: string) => boolean;
+	/** An undo or redo was kept because it would only change graphics on air. */
+	onStepWithheld?: (step: 'undo' | 'redo') => void;
 }
 
 /** A restored stack, each graphic in the Graphic Channel it is in now, or its own while that channel still exists. */
@@ -151,6 +154,19 @@ function keepChannels(restored: Stack, current: Stack, channels: readonly Graphi
 	});
 }
 
+/**
+ * A restored stack with the graphics on air in the order they hold among
+ * themselves now: each takes a place the restored stack gives one of them.
+ */
+function keepOnAirOrder(restored: Stack, current: Stack, onAir: (graphicId: string) => boolean): Stack {
+	const held = current.filter(graphic => onAir(graphic.id) && restored.some(entry => entry.id === graphic.id));
+	const ids = new Set(held.map(graphic => graphic.id));
+	let next = 0;
+	return restored.map(graphic => ids.has(graphic.id)
+		? held[next++]!
+		: graphic);
+}
+
 export function broadcastGraphicsEditorHost(options: BroadcastGraphicsEditorHostOptions): GraphicsEditorHostContract<Stack, Layer> {
 	const session = graphicsEditorSession(options);
 	return {
@@ -158,11 +174,12 @@ export function broadcastGraphicsEditorHost(options: BroadcastGraphicsEditorHost
 		document: {
 			read: options.graphics,
 			write: graphics => options.write([...graphics]),
-			restore: (restored, current) => keepChannels(restored, current, options.channels()),
+			restore: (restored, current) => keepChannels(keepOnAirOrder(restored, current, options.onAir), current, options.channels()),
 		},
 		forbidden: {
 			...session.forbidden,
 			composition: composition => options.onAir(composition.id),
+			stepWithheld: options.onStepWithheld,
 		},
 		canvas: session.canvas,
 	};

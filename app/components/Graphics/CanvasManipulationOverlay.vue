@@ -308,6 +308,16 @@ onBeforeUnmount(() => {
 		emit('gestureEnd');
 });
 
+// A selection the canvas may no longer move ends its drag: handles removed
+// before the first frame get no pointerup.
+watch(() => props.rect, (rect) => {
+	if (rect || !drag.value)
+		return;
+	drag.value = null;
+	live.value = null;
+	emit('gestureEnd');
+});
+
 /** The guides and gaps a drag draws, in drawn pixels. */
 const guides = computed(() => {
 	const current = live.value;

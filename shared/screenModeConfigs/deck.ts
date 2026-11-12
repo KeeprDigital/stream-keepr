@@ -76,60 +76,6 @@ const sideboardLayoutShape = {
 	}),
 };
 
-/**
- * A layout block's former fields: its size preset and stack share, which
- * `stackReveal` and a card width replaced; `dynamicCardSize`, which Card
- * Sizing replaced; and Card Sizing itself (`cardSizing`, `cardWidth`), which
- * the Card Layout replaced (ADR-0054).
- */
-const FORMER_BOARD_LAYOUT_FIELDS = [
-	'cardSize',
-	'stackOverlap',
-	'dynamicCardSize',
-	'cardSizing',
-	'cardWidth',
-] as const;
-
-/** A Fixed card's width before the board set one, under the former Card Sizing. */
-const FORMER_DEFAULT_CARD_WIDTH = 144;
-
-/**
- * The Card Layout a board's Card Sizing meant (ADR-0054): a Fixed width is the
- * max card size. A board's former default was Fixed 144 px, so a block an
- * earlier contract wrote, naming a former field, with no Card Sizing was Fixed.
- * A block naming no former field is a Card Layout, whose absent max is Auto.
- */
-function upgradeBoardCardSizing(block: unknown): unknown {
-	if (typeof block !== 'object' || block === null || Array.isArray(block))
-		return block;
-	const stored = block as Readonly<Record<string, unknown>>;
-	const earlier = FORMER_BOARD_LAYOUT_FIELDS.some(field => field in stored);
-	const fixed = stored.cardSizing === 'fixed' || (stored.cardSizing === undefined && earlier);
-	if (!fixed || 'maxCardSize' in stored)
-		return block;
-	return {
-		...stored,
-		maxCardSize: stored.cardWidth ?? FORMER_DEFAULT_CARD_WIDTH,
-	};
-}
-
-/** Each stored board block, upgraded on its own; a board not stored stays absent. */
-function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<string, unknown> {
-	const mainboard = upgradeBoardCardSizing(fragment.mainboard);
-	const sideboard = upgradeBoardCardSizing(fragment.sideboard);
-	if (mainboard === fragment.mainboard && sideboard === fragment.sideboard)
-		return fragment;
-	return {
-		...fragment,
-		...('mainboard' in fragment
-			? { mainboard }
-			: {}),
-		...('sideboard' in fragment
-			? { sideboard }
-			: {}),
-	};
-}
-
 const mainboardLayoutConfigSchema = z.object(mainboardLayoutShape).strict();
 const sideboardLayoutConfigSchema = z.object(sideboardLayoutShape).strict();
 
@@ -450,28 +396,6 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 	quantityBadgeSize: undefined,
 	pointsBadgeSize: undefined,
 }, {
-	formerFields: [
-		// Their colours are the mode's Mode Tokens (#824).
-		'deckMetaPillTextColor',
-		'deckMetaPillBgColor',
-		'deckMetaPillAccentColor',
-		'deckMetaPillBorderColor',
-		'highlanderPointedCardsTextColor',
-		'highlanderPointedCardsBgColor',
-		'highlanderPointedCardsAccentColor',
-		'highlanderPointedCardsBorderColor',
-		'highlanderPointsTextColor',
-		'highlanderPointsBgColor',
-		'quantityTextColor',
-		'quantityBgColor',
-		// Their size presets, which the px text sizes replaced (ADR-0054).
-		'deckMetaPillSize',
-		'highlanderPointedCardsSize',
-		'highlanderPointsSize',
-		'quantitySize',
-		...FORMER_BOARD_LAYOUT_FIELDS.flatMap(field => [`mainboard.${field}`, `sideboard.${field}`]),
-	],
-	upgradeFormerFields: upgradeCardSizing,
 	groups: {
 		'mainboard': { title: 'Mainboard', card: 'content' },
 		'sideboard': { title: 'Sideboard', card: 'content', showWhen: isMagic },

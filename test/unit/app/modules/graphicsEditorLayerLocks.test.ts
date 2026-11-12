@@ -6,7 +6,7 @@ import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~~/app/modules/feature-match-o
 import {
 	isLayerLocked,
 	isLockedByGroup,
-	lockedLayers,
+	lockedGraphicItems,
 	toggleLayerLocks,
 } from '~~/app/modules/graphics/editor/layerLocks';
 import { addGraphicGroupChild, addGraphicItem, flattenGraphicItems } from '~~/shared/modules/graphics';
@@ -166,12 +166,26 @@ describe('feature match layout layer locks', () => {
 		])).toBe(locked);
 	});
 
-	it('lists every locked layer of the layout, a locked group\'s children included', () => {
-		expect(lockedLayers(FEATURE_MATCH_LAYOUT_EDITOR_TREE, layout(['g', 's1']))).toEqual([
-			layer('g'),
-			layer('g1'),
-			layer('g2'),
-			layer('s1'),
-		]);
+	it.each<[string, string[], string[]]>([
+		[
+			'a locked group with its children',
+			['g'],
+			['g', 'g2', 'g1'],
+		],
+		[
+			'a child locked in its own right alone',
+			['g1'],
+			['g1'],
+		],
+		[
+			'no Source Item, which is no Graphic Item',
+			['top', 's1'],
+			['top'],
+		],
+	])('lists %s among the locked Graphic Items', (_, locked, ids) => {
+		const { composition } = layout(locked);
+
+		expect(lockedGraphicItems([composition]).map(item => item.itemId).sort()).toEqual([...ids].sort());
+		expect(lockedGraphicItems([composition]).every(item => item.graphicId === composition.id)).toBe(true);
 	});
 });

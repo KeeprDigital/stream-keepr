@@ -335,6 +335,10 @@ describe('graphicsCanvasManipulationOverlay', () => {
 			'it goes away mid-drag',
 			wrapper => wrapper.unmount(),
 		],
+		[
+			'its selection may no longer be moved',
+			wrapper => wrapper.setProps({ rect: null }),
+		],
 	])('says when a drag starts, and that it ended once %s', async (_case, finish) => {
 		const wrapper = mountOverlay();
 		const box = wrapper.get('[data-testid="canvas-manipulation-box"]');

@@ -5,7 +5,6 @@ import type { GraphicsPreviewState } from '~/modules/graphics/previewMessages';
 import type { GraphicsAnimationProjection } from '~/modules/graphics/renderModel';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { parseBroadcastGraphicsBackgroundConfig } from '~~/shared/animationEffects';
-import { broadcastGraphicsEditorTree } from '~/modules/broadcast-graphics/editorHost';
 import { resolveGraphicAnimationPreview } from '~/modules/graphics/animationPreview';
 import { lockedGraphicItems } from '~/modules/graphics/editor/layerLocks';
 import {
@@ -31,8 +30,6 @@ import { useGraphicAnimationPreviewClock } from './useGraphicAnimationPreviewClo
  * pushes in, showing the Broadcast Graphic being authored without touching live
  * Screen state.
  */
-/** The editor's item tree, read for its locks only: no graphic is selected in a frame. */
-const PREVIEW_TREE = broadcastGraphicsEditorTree(() => null);
 
 export function useBroadcastGraphicsModeData(context: ScreenContext) {
 	const { eventId, isPreview, screen, sampleDataset } = context;
@@ -171,7 +168,7 @@ export function useBroadcastGraphicsModeData(context: ScreenContext) {
 	 * a live output has none, and draws no guide to hold one anyway.
 	 */
 	const lockedItems = computed<readonly LockedGraphicItem[]>(() => previewState.value
-		? lockedGraphicItems(PREVIEW_TREE, previewState.value.graphics)
+		? lockedGraphicItems(previewState.value.graphics)
 		: []);
 
 	/*

@@ -164,6 +164,11 @@ export interface GraphicsEditorForbiddenEdits {
 	 * added to it, and undo and redo leave it as it is.
 	 */
 	composition?: (composition: GraphicComposition) => boolean;
+	/**
+	 * Told that an undo or redo was kept, not taken, because it would only change
+	 * compositions forbidden now: the host says so to its author.
+	 */
+	stepWithheld?: (step: 'undo' | 'redo') => void;
 }
 
 export interface GraphicsEditorHostContract<D, L extends GraphicsEditorLayer> {

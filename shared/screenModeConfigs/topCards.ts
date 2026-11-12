@@ -20,16 +20,15 @@ import {
 	DEFAULT_PAGE_ROTATION,
 	hasSideboard,
 	headerConfigShape,
+	METAGAME_CARD_SORT_BY_LABELS,
 	metagameArchetypeFilterField,
 	metagameScopeShape,
 	pageRotationShape,
+	returnsToFirstPage,
 } from './subShapes';
 
 /** The most cards a Most Played Cards Screen ranks. */
 const TOP_CARDS_MAX_LIMIT = 60;
-
-/** A Fixed card's width before the Screen set one, under the former Card Sizing. */
-const FORMER_DEFAULT_CARD_WIDTH = 160;
 
 /** Whether the Event points cards: a One Piece Card Game Event never does. */
 function hasPointsSystem(event: ScreenSettingsContext['event']): boolean {
@@ -47,20 +46,6 @@ const showsStatBadge = ({ config }: ScreenSettingsContext) => config.statBadge !
 const pagesRanking = ({ config }: ScreenSettingsContext) => typeof config.cardsPerPage === 'number' && config.cardsPerPage < config.limit;
 
 /**
- * The Card Layout a Card Sizing meant (ADR-0054): a Fixed width is the max card
- * size. A fragment naming no Card Sizing was Fit, the former default, which has
- * no max card size.
- */
-function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<string, unknown> {
-	if (fragment.cardSizing !== 'fixed' || 'maxCardSize' in fragment)
-		return fragment;
-	return {
-		...fragment,
-		maxCardSize: fragment.cardWidth ?? FORMER_DEFAULT_CARD_WIDTH,
-	};
-}
-
-/**
  * The Most Played Cards Screen Mode's config contract: a ranked grid of the most played
  * cards in the event's metagame, rendered as card images the way the Deck List Screen
  * renders a deck. It is scoped by the whole Metagame Scope, Minimum Points
@@ -74,15 +59,10 @@ function upgradeCardSizing(fragment: Readonly<Record<string, unknown>>): Record<
  * the space the Screen measures (ADR-0054). It is Auto while absent, the
  * default: every card on one page.
  *
- * Its badge colours (#823) are Mode Tokens; the fields it once held for them
- * are former fields, which a stored config may still carry. Its Card Layout
- * and badge text sizes are config, read only here (ADR-0054); the size presets
- * they replaced are former fields too. Its cards always fit: Card Sizing
- * (`cardSizing`, `cardWidth`) is former, and a stored one reads
- * as the Card Layout it meant (`upgradeCardSizing`). Each badge is placed and
- * sized on its own, Auto (following its card) or px, as a Deck Screen's are;
- * one `badgeSize` once sized both. A card's image prints its name, so
- * `showCardNames`, a label under it, is a former field.
+ * Its badge colours (#823) are Mode Tokens. Its Card Layout and badge text sizes
+ * are config, read only here (ADR-0054), and its cards always fit. Each badge is
+ * placed and sized on its own, Auto (following its card) or px, as a Deck
+ * Screen's are. A card's image prints its name, so it has no label under it.
  */
 export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	// Scoping
@@ -101,13 +81,15 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 		label: 'Sort by',
 		card: 'content',
 		group: 'ranking',
-		options: { inclusionRate: 'Inclusion rate', avgCopies: 'Average copies', totalCopies: 'Total copies' },
+		options: METAGAME_CARD_SORT_BY_LABELS,
+		...returnsToFirstPage,
 	}),
 	limit: editorField(z.number().int().min(1).max(TOP_CARDS_MAX_LIMIT), {
 		label: 'Limit',
 		card: 'content',
 		group: 'ranking',
 		description: 'How many of the top cards the ranking shows.',
+		...returnsToFirstPage,
 	}),
 	excludedCardTypes: editorField(z.array(z.enum(METAGAME_CARD_TYPE_BUCKETS)).max(METAGAME_CARD_TYPE_BUCKETS.length), {
 		label: 'Card types',
@@ -221,25 +203,6 @@ export const topCardsModeConfigContract = defineScreenModeConfigContract({
 	pointsBadgePosition: 'top-right',
 	pointsBadgeTextSize: undefined,
 }, {
-	formerFields: [
-		'rankBadgeTextColor',
-		'rankBadgeBgColor',
-		'statBadgeTextColor',
-		'statBadgeBgColor',
-		'cardSize',
-		'statBadgeSize',
-		'dynamicCardSize',
-		// A page held whole grid rows; it holds cards now (ADR-0054).
-		'rowsPerPage',
-		// One text size for both badges, which each badge now sets for itself.
-		'badgeSize',
-		// A card's image prints its name.
-		'showCardNames',
-		// Card Sizing: cards always fit, under a max card size (ADR-0054).
-		'cardSizing',
-		'cardWidth',
-	],
-	upgradeFormerFields: upgradeCardSizing,
 	groups: {
 		'ranking': { title: 'Ranking', card: 'content' },
 		'layout': { title: 'Layout', card: 'content' },

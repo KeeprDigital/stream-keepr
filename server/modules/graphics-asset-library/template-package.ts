@@ -31,6 +31,7 @@ import {
 	TEMPLATE_PACKAGE_TEMPLATE_ENTRY,
 	templatePackageContentEntry,
 } from '~~/shared/types/templatePackage';
+import { isPlainObject } from '~~/shared/utils/plainObject';
 
 /**
  * The provider-independent half of Template Package export: what a Template
@@ -129,13 +130,6 @@ export interface TemplateDocumentInspection {
 	issues: TemplatePackageExportIssue[];
 	/** Every Graphic Asset Reference the document itself carries, by document path. */
 	references: { path: string; reference: GraphicAssetReference }[];
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value))
-		return false;
-	const prototype = Object.getPrototypeOf(value);
-	return prototype === Object.prototype || prototype === null;
 }
 
 function graphicAssetReferenceOf(value: Record<string, unknown>): GraphicAssetReference | undefined {

@@ -169,6 +169,8 @@ function mayBeOnAir(graphicId: string): boolean {
 	return props.playoutDisconnected === true || onAirGraphicIds.value.has(graphicId);
 }
 
+const toast = useToast();
+
 /*
  * The shared graphics editor over the stack. Every write — the layer list, the
  * canvas, the keyboard and the inspector — is one of its undo steps, made only
@@ -186,6 +188,13 @@ const host = broadcastGraphicsEditorHost({
 	writable: holdsLease,
 	held: placing,
 	onAir: mayBeOnAir,
+	onStepWithheld: step => toast.add({
+		title: step === 'undo'
+			? 'Nothing undone'
+			: 'Nothing redone',
+		description: 'That step changes a Broadcast Graphic that may be on air. It is kept until the graphic is off air.',
+		color: 'warning',
+	}),
 });
 const editor = useGraphicsEditor(host);
 const { layers } = editor;

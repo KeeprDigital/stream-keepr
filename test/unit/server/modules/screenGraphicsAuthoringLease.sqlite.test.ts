@@ -11,7 +11,7 @@ import {
 	graphicAssetRevisions,
 	graphicAssets,
 } from '~~/server/db/schema/graphicsAsset';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG, FEATURE_MATCH_OVERLAY_PRESETS } from '~~/shared/featureMatchOverlayPresets';
+import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES, DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/builtInFeatureMatchLayoutTemplates';
 import { seedBroadcastGraphicsScreen } from '~~/test/helpers/broadcastGraphicsScreen';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
@@ -302,7 +302,7 @@ describe('a takeover between admission and commit', () => {
  */
 describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', () => {
 	let storedLayout: FeatureMatchOverlayModeConfig['layout'];
-	const otherPreset = structuredClone(FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === 'full-table')!.config);
+	const otherBuiltIn = structuredClone(BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.find(builtIn => builtIn.id === 'full-table')!.config);
 
 	beforeEach(async () => {
 		const [slot] = await db.insert(schema.featureMatches).values({ eventId } as never).returning();
@@ -338,7 +338,7 @@ describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', 
 	it.each([
 		[
 			'its layout',
-			{ layout: otherPreset.layout },
+			{ layout: otherBuiltIn.layout },
 		],
 	])('refuses another Session\'s mode configuration write of %s', async (_, config) => {
 		await lease(HOLDER);
@@ -351,9 +351,9 @@ describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', 
 	it('admits the holder\'s layout write', async () => {
 		await lease(HOLDER);
 
-		await modeConfigWrite(HOLDER, { layout: otherPreset.layout });
+		await modeConfigWrite(HOLDER, { layout: otherBuiltIn.layout });
 
-		expect((await overlay())?.layout).toEqual(otherPreset.layout);
+		expect((await overlay())?.layout).toEqual(otherBuiltIn.layout);
 	});
 
 	it('admits another Session\'s Feature Match Slot change', async () => {
@@ -369,7 +369,7 @@ describe('a Feature Match Overlay Screen\'s Feature Match Layout while leased', 
 		[
 			'refuses',
 			'a changed layout',
-			{ layout: otherPreset.layout },
+			{ layout: otherBuiltIn.layout },
 			true,
 		],
 		[

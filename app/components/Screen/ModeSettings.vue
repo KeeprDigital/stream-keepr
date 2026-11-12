@@ -22,7 +22,8 @@ import { cardFieldsSummary, fieldDescription, fieldLabel, fieldOptions, fieldPat
  * card ends with its Look (`ScreenSettingsLook`). A field or group whose
  * condition is false for the Screen is not rendered. Every edit writes the
  * patch naming its field; on a paginated mode it goes through the Page
- * Rotation's writes (ADR-0039), and a Source edit returns to page 1.
+ * Rotation's writes (ADR-0039), and a Source edit returns to page 1, as does a
+ * Content field that reorders or recounts the rows (`returnsToFirstPage`).
  *
  * A field no plain control can edit names a slot (`slot` on its editor
  * description), and its widget mounts as the renderer's slot of that name,

@@ -1,4 +1,4 @@
-import type { Game, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameCardSortBy, MetagameSortBy } from '../types/enums';
+import type { Game, MetagameArchetypeColumnKey, MetagameCardColumnKey, MetagameSortBy } from '../types/enums';
 import type { ScreenModeConfigOf } from './contract';
 import type { ScreenSettingsContext } from './fields';
 import { z } from 'zod';
@@ -13,7 +13,7 @@ import { isMetagameColumnOffered, isMetagameSortOffered } from '../utils/metagam
 import { METAGAME_CHART_MAX_ARCHETYPES } from '../utils/metagameChart';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField, withEditorMeta } from './fields';
-import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, headerConfigShape, metagameArchetypeFilterField, metagameScopeShape, pageRotationPageSize, pageRotationShape, tableMaxWidthField } from './subShapes';
+import { columnConfigSchema, DEFAULT_HEADER_CONFIG, DEFAULT_METAGAME_SCOPE, DEFAULT_PAGE_ROTATION, headerConfigShape, METAGAME_CARD_SORT_BY_LABELS, metagameArchetypeFilterField, metagameScopeShape, pageRotationPageSize, pageRotationShape, returnsToFirstPage, tableMaxWidthField } from './subShapes';
 
 const METAGAME_SORT_BY_LABELS = {
 	metaShare: 'Meta share',
@@ -21,12 +21,6 @@ const METAGAME_SORT_BY_LABELS = {
 	winRate: 'Win rate',
 	conversionRate: 'Conversion rate',
 } as const satisfies Record<MetagameSortBy, string>;
-
-const METAGAME_CARD_SORT_BY_LABELS = {
-	inclusionRate: 'Inclusion rate',
-	avgCopies: 'Average copies',
-	totalCopies: 'Total copies',
-} as const satisfies Record<MetagameCardSortBy, string>;
 
 /** Each Metagame table column's heading on its column list. */
 const METAGAME_COLUMN_LABELS = {
@@ -90,12 +84,14 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 		// The sorts the Event's Card Game reads (ADR-0074).
 		options: ({ event }) => Object.fromEntries(Object.entries(METAGAME_SORT_BY_LABELS)
 			.filter(([sortBy]) => isMetagameSortOffered(event?.game, sortBy as MetagameSortBy))),
+		...returnsToFirstPage,
 	}),
 	cardSortBy: editorField(z.enum(METAGAME_CARD_SORT_BY_VALUES), {
 		label: 'Sort by',
 		card: 'content',
 		group: 'cards',
 		options: METAGAME_CARD_SORT_BY_LABELS,
+		...returnsToFirstPage,
 	}),
 
 	// Column configuration (ordered arrays — order = display order)
@@ -117,6 +113,7 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 		card: 'content',
 		group: 'cards',
 		description: 'The most card rows to include.',
+		...returnsToFirstPage,
 	}),
 	archetypeLimit: editorField(z.number().int().min(1).max(500).nullable().optional(), {
 		label: 'Limit',
@@ -126,6 +123,7 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 		description: ({ config }) => config.viewMode === 'chart'
 			? `Show the top archetypes and group the rest as Other; the chart draws at most ${METAGAME_CHART_MAX_ARCHETYPES}.`
 			: 'Show the top archetypes and group the rest as Other.',
+		...returnsToFirstPage,
 	}),
 
 	// The widest the table or chart runs, centred, in Event Canvas pixels. Absent is Auto: it fills its Screen.
@@ -179,15 +177,6 @@ export const metagameModeConfigContract = defineScreenModeConfigContract({
 	...DEFAULT_PAGE_ROTATION,
 	...DEFAULT_HEADER_CONFIG,
 }, {
-	// The rows' motion is the mode's Mode Token (#851). The width the table once held
-	// as `maxTableWidth` is not read back: its `maxWidth` starts at Auto (#1081).
-	// The Conversion Target is the Event's (ADR-0061).
-	formerFields: [
-		'maxTableWidth',
-		'animateEntries',
-		'conversionMetric',
-		'conversionThreshold',
-	],
 	groups: {
 		archetypes: {
 			title: 'Archetypes',

@@ -628,7 +628,7 @@ describe('metagame reads with a hundred and more represented Archetypes', () => 
 		expect(limited.data.breakdown.entries).toHaveLength(6);
 
 		// The Conversion Rate column reads what the Metagame page shows for the same scope and target.
-		await configure({ archetypeLimit: null, conversionMetric: 'minPoints', conversionThreshold: 3 });
+		await configure({ archetypeLimit: null });
 		const converted = await outputBreakdown();
 		const page = await $fetch(`/api/events/${eventId}/metagame/archetypes`, {
 			query: {

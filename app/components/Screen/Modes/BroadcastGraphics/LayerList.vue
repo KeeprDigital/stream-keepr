@@ -15,7 +15,7 @@ import { broadcastGraphicLayers } from '~/modules/broadcast-graphics/editorHost'
  * A graphic's row selects it, which is what the inspector's graphic panel and the
  * `?graphic=` address follow, and carries the host's playout mark. Its menu moves
  * it within the stack and deletes it; a graphic on air is not deleted, since its
- * Graphic Items are not edited either. Adding a Broadcast Graphic selects it, once
+ * Graphic Items are not edited either, and no move reorders the graphics on air. Adding a Broadcast Graphic selects it, once
  * the edit is admitted. Every stack edit is one undo step of the shared editor.
  */
 const props = defineProps<{
@@ -74,17 +74,25 @@ const hostAddItems = computed<DropdownMenuItem[]>(() => [
 	},
 ]);
 
-/** Move a Broadcast Graphic within the stack: by one, or to an edge. */
-function moveGraphic(graphicId: string, to: 1 | -1 | 'front' | 'back') {
+type GraphicMove = 1 | -1 | 'front' | 'back';
+
+/** The stack with a Broadcast Graphic moved by one, or to an edge; null when it is already there. */
+function movedStack(graphicId: string, to: GraphicMove): BroadcastGraphicConfig[] | null {
 	const index = props.graphics.findIndex(graphic => graphic.id === graphicId);
 	const target = to === 'front'
 		? props.graphics.length - 1
 		: to === 'back'
 			? 0
 			: index + to;
-	if (index < 0 || target === index || target < 0 || target >= props.graphics.length)
-		return;
-	props.editor.edit(moveBroadcastGraphic(props.graphics, graphicId, target - index));
+	return index < 0 || target === index || target < 0 || target >= props.graphics.length
+		? null
+		: moveBroadcastGraphic(props.graphics, graphicId, target - index);
+}
+
+function moveGraphic(graphicId: string, to: GraphicMove) {
+	const moved = movedStack(graphicId, to);
+	if (moved)
+		props.editor.edit(moved);
 }
 
 function removeGraphic(graphicId: string) {
@@ -92,38 +100,30 @@ function removeGraphic(graphicId: string) {
 		emit('selectGraphic', null);
 }
 
+/** A move's menu entry: not offered past an edge, or where it would reorder the graphics on air. */
+function moveEntry(graphicId: string, to: GraphicMove, label: string, icon: string): DropdownMenuItem {
+	const moved = movedStack(graphicId, to);
+	const reordersOnAir = moved !== null && props.editor.changesForbidden(moved);
+	return {
+		label,
+		icon,
+		disabled: moved === null || reordersOnAir,
+		description: reordersOnAir
+			? 'Would reorder graphics on air'
+			: undefined,
+		onSelect: () => moveGraphic(graphicId, to),
+	};
+}
+
 function graphicMenu(graphicId: string): DropdownMenuItem[][] {
-	const index = props.graphics.findIndex(graphic => graphic.id === graphicId);
 	const graphic = graphicOf(graphicId);
 	const onAir = graphic !== undefined && !props.editor.mayEditComposition(graphic);
-	const forward = index < props.graphics.length - 1;
-	const backward = index > 0;
 	return [
 		[
-			{
-				label: 'Bring forward',
-				icon: 'i-lucide-arrow-up',
-				disabled: !forward,
-				onSelect: () => moveGraphic(graphicId, 1),
-			},
-			{
-				label: 'Send backward',
-				icon: 'i-lucide-arrow-down',
-				disabled: !backward,
-				onSelect: () => moveGraphic(graphicId, -1),
-			},
-			{
-				label: 'Bring to front',
-				icon: 'i-lucide-bring-to-front',
-				disabled: !forward,
-				onSelect: () => moveGraphic(graphicId, 'front'),
-			},
-			{
-				label: 'Send to back',
-				icon: 'i-lucide-send-to-back',
-				disabled: !backward,
-				onSelect: () => moveGraphic(graphicId, 'back'),
-			},
+			moveEntry(graphicId, 1, 'Bring forward', 'i-lucide-arrow-up'),
+			moveEntry(graphicId, -1, 'Send backward', 'i-lucide-arrow-down'),
+			moveEntry(graphicId, 'front', 'Bring to front', 'i-lucide-bring-to-front'),
+			moveEntry(graphicId, 'back', 'Send to back', 'i-lucide-send-to-back'),
 		],
 		[
 			{

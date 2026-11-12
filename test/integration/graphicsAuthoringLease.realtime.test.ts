@@ -1,7 +1,7 @@
 import type { ScreenResponse } from '~~/shared/api';
 import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { FEATURE_MATCH_OVERLAY_PRESETS } from '../../shared/featureMatchOverlayPresets';
+import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '../../shared/builtInFeatureMatchLayoutTemplates';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { createCommandHarness } from './featureMatchSessionHelpers';
 import { anotherBrowser } from './identities';
@@ -269,7 +269,7 @@ describe('graphics Authoring Leases', () => {
 		const patchOverlayModeConfig = (body: Record<string, unknown>, cookie: string) =>
 			request(`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`, { method: 'PATCH', body, cookie });
 
-		const layoutOf = (id: string) => FEATURE_MATCH_OVERLAY_PRESETS.find(preset => preset.id === id)!.config.layout;
+		const layoutOf = (id: string) => BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.find(builtIn => builtIn.id === id)!.config.layout;
 
 		expect((await patchOverlayModeConfig({
 			layout: layoutOf('full-table'),

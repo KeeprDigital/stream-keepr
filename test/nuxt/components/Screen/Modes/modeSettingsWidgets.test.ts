@@ -298,6 +298,63 @@ describe('a Metagame Scope', () => {
 	});
 });
 
+// A sort or a limit reorders or recounts the rows a Page Rotation pages.
+describe('a sort or limit edit on a paged Screen', () => {
+	it.each<[ScreenMode, Record<string, unknown>, string, string, Record<string, unknown>]>([
+		[
+			'top-cards',
+			{},
+			'sortBy',
+			'select',
+			{ sortBy: 'totalCopies' },
+		],
+		[
+			'top-cards',
+			{},
+			'limit',
+			'input[type="number"]',
+			{ limit: 20 },
+		],
+		[
+			'metagame',
+			{},
+			'sortBy',
+			'select',
+			{ sortBy: 'count' },
+		],
+		[
+			'metagame',
+			{},
+			'archetypeLimit',
+			'input[type="number"]',
+			{ archetypeLimit: 5 },
+		],
+		[
+			'metagame',
+			{ viewMode: 'cards' },
+			'cardSortBy',
+			'select',
+			{ cardSortBy: 'totalCopies' },
+		],
+		[
+			'metagame',
+			{ viewMode: 'cards' },
+			'limit',
+			'input[type="number"]',
+			{ limit: 20 },
+		],
+	])('on %s %j, editing %s returns to page 1', async (mode, variant, field, control, written) => {
+		const wrapper = await mountPage(mode, { ...variant, currentPage: 4 });
+
+		const input = wrapper.get(`[data-settings-field="${field}"] ${control}`);
+		await input.setValue(String(Object.values(written)[0]));
+		await input.trigger('change');
+		await input.trigger('blur');
+
+		expect(writes.at(-1)).toEqual({ ...written, currentPage: 1 });
+	});
+});
+
 describe('the card type chips', () => {
 	it.each([
 		{

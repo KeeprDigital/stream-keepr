@@ -1,4 +1,4 @@
-import type { GraphicsEditorLayer, GraphicsEditorTree } from './host';
+import type { GraphicComposition, GraphicsEditorLayer, GraphicsEditorTree } from './host';
 import { layerConfig, layerItemLocation, patchLayer } from './host';
 
 /**
@@ -48,11 +48,6 @@ export function toggleLayerLocks<D, L extends GraphicsEditorLayer>(
 		.reduce((next, layer) => patchLayer(tree, next, layer, { locked }), document);
 }
 
-/** Every locked layer of the document, in the layer list's order, a locked group's children included. */
-export function lockedLayers<D, L extends GraphicsEditorLayer>(tree: GraphicsEditorTree<D, L>, document: D): L[] {
-	return tree.order(document).filter(layer => isLayerLocked(tree, document, layer));
-}
-
 /** A Graphic Item named by its composition, as a preview frame's guides name it. */
 export interface LockedGraphicItem {
 	graphicId: string;
@@ -60,17 +55,23 @@ export interface LockedGraphicItem {
 }
 
 /**
- * Every locked Graphic Item, by composition and item id: the guides a preview
- * frame draws without offering (ADR-0063). Item ids are unique per composition
- * only, so a lock in one Broadcast Graphic never holds an item of another.
+ * Every locked Graphic Item of the compositions, by composition and item id, a
+ * locked Graphic Group's children included: the guides a preview frame draws
+ * without offering (ADR-0063). Item ids are unique per composition only, so a
+ * lock in one Broadcast Graphic never holds an item of another. It reads the
+ * compositions alone, so a Screen Output needs no editor host to ask.
  */
-export function lockedGraphicItems<D, L extends GraphicsEditorLayer>(tree: GraphicsEditorTree<D, L>, document: D): LockedGraphicItem[] {
-	return lockedLayers(tree, document).flatMap((layer) => {
-		const item = tree.item(document, layer);
-		return item
-			? [
-					{ graphicId: item.composition.id, itemId: item.itemId },
-				]
+export function lockedGraphicItems(compositions: readonly GraphicComposition[]): LockedGraphicItem[] {
+	return compositions.flatMap(composition => composition.items.flatMap((item) => {
+		const groupLocked = item.locked === true;
+		const children = item.type === 'group'
+			? item.children.filter(child => groupLocked || child.locked === true)
 			: [];
-	});
+		return [
+			...(groupLocked
+				? [item]
+				: []),
+			...children,
+		].map(entry => ({ graphicId: composition.id, itemId: entry.id }));
+	}));
 }
