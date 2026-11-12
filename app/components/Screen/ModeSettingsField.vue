@@ -12,6 +12,14 @@ import ScreenRoundField from '~/components/Screen/RoundField.vue';
 import ScreenTalentField from '~/components/Screen/TalentField.vue';
 import { fieldDescription, fieldLabel, fieldOptions, fieldValue } from '~/modules/screen-mode/settingsPage';
 
+/**
+ * One contract field's control on a generic settings page (#1094): a plain
+ * control by its kind (`ScreenConfigField`), its Event Reference kind's picker
+ * (ADR-0038), or a set's checkboxes, labelled, described, offered and bounded
+ * as its editor description says for this Screen. It emits the field's new
+ * value, a set's in the order its values run; the page writes the patch
+ * naming the field.
+ */
 const props = defineProps<{
 	entry: SettingsPageField;
 	eventId: number;
@@ -23,14 +31,6 @@ const emit = defineEmits<{
 	update: [value: unknown];
 }>();
 
-/**
- * One contract field's control on a generic settings page (#1094): a plain
- * control by its kind (`ScreenConfigField`), its Event Reference kind's picker
- * (ADR-0038), or a set's checkboxes, labelled, described, offered and bounded
- * as its editor description says for this Screen. It emits the field's new
- * value, a set's in the order its values run; the page writes the patch
- * naming the field.
- */
 /**
  * The picker of each Event Reference kind naming one id, and what it takes
  * beyond its label, description, value and none label. A Deck Source is a
