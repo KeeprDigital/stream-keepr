@@ -1011,7 +1011,9 @@ and the integration and local-auth suites) sets it unprefixed and without
 to `pnpm preview` works there; a browser that does not treat
 `http://127.0.0.1` as secure (WebKit, historically) will not keep it. `pnpm
 worker:smoke` fails if the built Worker's cookie lacks any of those
-attributes. Observing the deployed origin's cookie is still open on #451.
+attributes. The deployed origin sets the same name and attributes, host-only,
+observed on 2026-10-21 against v1.5.0 (#451). Session renewal there is not yet
+observed: #451 checks it 24 hours after a sign-in on the 1.6.0 deploy.
 
 The first deploy with this split ends every browser's sign-in once. An older
 unprefixed cookie is ignored rather than refused, so the person simply signs
