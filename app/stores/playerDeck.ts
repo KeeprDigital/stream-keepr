@@ -24,7 +24,10 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 	 */
 	const loads = createGuardedSequence();
 
-	/** Answers the loaded Decks, or null when the load was superseded. */
+	/**
+	 * Answers the loaded Decks, or null when the load was superseded, failed or not.
+	 * A failed load that is still the latest shows its failure and raises it.
+	 */
 	async function loadByEventId(eventId: number) {
 		const flight = loads.begin();
 		loading.value = true;
@@ -40,11 +43,11 @@ export const usePlayerDeckStore = defineStore('playerDeck', () => {
 			return decks.value;
 		}
 		catch (cause) {
-			if (flight.current) {
-				error.value = cause instanceof Error
-					? cause.message
-					: 'Failed to load submitted decks';
-			}
+			if (flight.stale)
+				return null;
+			error.value = cause instanceof Error
+				? cause.message
+				: 'Failed to load submitted decks';
 			throw cause;
 		}
 		finally {

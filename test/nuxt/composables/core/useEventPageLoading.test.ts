@@ -1,4 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive } from 'vue';
 import { eventDataResync } from '~/modules/event-data/resync';
@@ -54,11 +55,6 @@ mockNuxtImport('useMeleeStore', () => () => ({
 }));
 mockNuxtImport('clearPlayerDeckCache', () => () => {});
 
-async function flushPromises() {
-	await Promise.resolve();
-	await Promise.resolve();
-}
-
 /** Each page under test is mounted in its own scope, so what it consumes ends with the test. */
 let pageScope = effectScope();
 function usePage(...args: Parameters<typeof useEventPageLoading>) {
@@ -83,11 +79,13 @@ describe('useEventPageLoading', () => {
 			{
 				consumes: 'players' as const,
 				isLoaded: () => false,
+				isLoading: () => false,
 				load: vi.fn(),
 			},
 			{
 				consumes: 'rounds' as const,
 				isLoaded: () => true,
+				isLoading: () => false,
 				load: vi.fn(),
 			},
 		];
@@ -100,11 +98,13 @@ describe('useEventPageLoading', () => {
 			{
 				consumes: 'rounds' as const,
 				isLoaded: () => true,
+				isLoading: () => false,
 				load: vi.fn(),
 			},
 			{
 				consumes: 'rounds' as const,
 				isLoaded: () => true,
+				isLoading: () => false,
 				load: vi.fn(),
 			},
 		];
@@ -115,12 +115,16 @@ describe('useEventPageLoading', () => {
 
 	it('calls afterLoad after entries finish loading', async () => {
 		const afterLoad = vi.fn().mockResolvedValue(undefined);
-		const load = vi.fn().mockResolvedValue(undefined);
+		let loaded = false;
+		const load = vi.fn(async () => {
+			loaded = true;
+		});
 
 		usePage([
 			{
 				consumes: 'players',
-				isLoaded: () => false,
+				isLoaded: () => loaded,
+				isLoading: () => false,
 				load,
 			},
 		], afterLoad);
@@ -139,7 +143,12 @@ describe('useEventPageLoading', () => {
 		});
 
 		usePage([
-			{ consumes: 'players', isLoaded, load },
+			{
+				consumes: 'players',
+				isLoaded,
+				isLoading: () => false,
+				load,
+			},
 		]);
 		await flushPromises();
 
@@ -160,6 +169,7 @@ describe('useEventPageLoading', () => {
 			{
 				consumes: 'rounds' as const,
 				isLoaded: () => true,
+				isLoading: () => false,
 				load: vi.fn(),
 			},
 		], afterLoad);
@@ -175,47 +185,24 @@ describe('useEventPageLoading', () => {
 		expect(initialLoading.value).toBe(false);
 	});
 
-	it('exposes a retryable error instead of staying on the loading state', async () => {
-		let loaded = false;
-		const load = vi.fn()
-			.mockResolvedValueOnce(null)
-			.mockImplementationOnce(async () => {
-				loaded = true;
-				return [];
-			});
-
-		const { initialLoading, initialError, retry } = usePage([
-			{
-				consumes: 'players',
-				isLoaded: () => loaded,
-				load,
-			},
-		]);
-		await flushPromises();
-
-		expect(initialError.value).toBe('Unable to load this page');
-		expect(initialLoading.value).toBe(false);
-
-		await retry();
-		expect(load).toHaveBeenCalledTimes(2);
-		expect(initialError.value).toBeNull();
-		expect(initialLoading.value).toBe(false);
-	});
-
 	it('does not let an old Event load replace the state of a newer Event', async () => {
 		let resolveFirst!: () => void;
 		const first = new Promise<void>((resolve) => {
 			resolveFirst = resolve;
 		});
 		const afterLoad = vi.fn();
+		let loadedEventId: number | null = null;
 		const load = vi.fn()
 			.mockReturnValueOnce(first)
-			.mockResolvedValueOnce([]);
+			.mockImplementationOnce(async (id: number) => {
+				loadedEventId = id;
+			});
 
 		const { initialError } = usePage([
 			{
 				consumes: 'players',
-				isLoaded: () => false,
+				isLoaded: () => loadedEventId === mockEventStore.eventId,
+				isLoading: () => false,
 				load,
 			},
 		], afterLoad);
@@ -235,11 +222,13 @@ describe('useEventPageLoading', () => {
 			{
 				consumes: 'players',
 				isLoaded: () => true,
+				isLoading: () => false,
 				load: vi.fn(),
 			},
 			{
 				consumes: 'rounds',
 				isLoaded: () => true,
+				isLoading: () => false,
 				load: vi.fn(),
 			},
 		]);
@@ -263,6 +252,7 @@ describe('useEventPageLoading', () => {
 			{
 				consumes: 'players',
 				isLoaded: () => true,
+				isLoading: () => false,
 				load: vi.fn(),
 			},
 		]);

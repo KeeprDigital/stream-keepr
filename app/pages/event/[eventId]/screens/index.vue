@@ -35,7 +35,8 @@ const {
 	{
 		consumes: 'screens',
 		isLoaded: () => screenStore.isLoaded,
-		load: id => screenStore.loadScreensByEventId(id),
+		isLoading: () => screenStore.loading,
+		load: id => screenStore.loadScreensByEventId(id, { failure: 'raise' }),
 	},
 ]);
 

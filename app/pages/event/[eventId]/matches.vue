@@ -89,22 +89,26 @@ const {
 	{
 		consumes: 'featureMatchSlots',
 		isLoaded: () => featureMatchStore.isLoaded,
-		load: id => featureMatchStore.loadFeatureMatchesByEventId(id),
+		isLoading: () => featureMatchStore.loading,
+		load: id => featureMatchStore.loadFeatureMatchesByEventId(id, { failure: 'raise' }),
 	},
 	{
 		consumes: 'players',
 		isLoaded: () => playerStore.isLoaded,
-		load: id => playerStore.loadPlayersByEventId(id),
+		isLoading: () => playerStore.loading,
+		load: id => playerStore.loadPlayersByEventId(id, { failure: 'raise' }),
 	},
 	{
 		consumes: 'phases',
 		isLoaded: () => phaseStore.isLoaded,
-		load: id => phaseStore.loadPhasesByEventId(id),
+		isLoading: () => phaseStore.loading,
+		load: id => phaseStore.loadPhasesByEventId(id, { failure: 'raise' }),
 	},
 	{
 		consumes: 'rounds',
 		isLoaded: () => roundStore.isLoaded,
-		load: id => roundStore.loadRoundsByEventId(id),
+		isLoading: () => roundStore.loading,
+		load: id => roundStore.loadRoundsByEventId(id, { failure: 'raise' }),
 	},
 ]);
 

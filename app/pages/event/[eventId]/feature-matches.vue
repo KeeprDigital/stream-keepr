@@ -14,12 +14,14 @@ const { initialLoading, initialError, retry } = useEventPageLoading([
 	{
 		consumes: 'featureMatchSlots',
 		isLoaded: () => featureMatchStore.isLoaded,
-		load: id => featureMatchStore.loadFeatureMatchesByEventId(id),
+		isLoading: () => featureMatchStore.loading,
+		load: id => featureMatchStore.loadFeatureMatchesByEventId(id, { failure: 'raise' }),
 	},
 	{
 		consumes: 'screens',
 		isLoaded: () => screenStore.isLoaded,
-		load: id => screenStore.loadScreensByEventId(id),
+		isLoading: () => screenStore.loading,
+		load: id => screenStore.loadScreensByEventId(id, { failure: 'raise' }),
 	},
 ]);
 </script>

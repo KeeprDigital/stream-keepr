@@ -123,6 +123,35 @@ describe('usePlayerDeckStore', () => {
 		expect(store.loading).toBe(false);
 	});
 
+	// A failed load raises while it is the latest. One a newer load superseded answers
+	// null and shows nothing, as a superseded Event Data load does.
+	it.each([
+		{
+			superseded: false,
+			outcome: 'raises its failure and shows it',
+			error: 'decks offline',
+		},
+		{
+			superseded: true,
+			outcome: 'answers null and shows no error once a newer load superseded it',
+			error: null,
+		},
+	])('a failed load $outcome', async ({ superseded, error }) => {
+		const store = usePlayerDeckStore();
+		const failing = deferred<unknown>();
+		mockFetch.mockReturnValueOnce(failing.promise);
+
+		const load = store.loadByEventId(1).then(answer => answer, () => 'raised');
+		if (superseded) {
+			mockFetch.mockReturnValueOnce(deferred<unknown>().promise);
+			void store.loadByEventId(1);
+		}
+		failing.reject(new Error('decks offline'));
+
+		expect(await load).toBe(superseded ? null : 'raised');
+		expect(store.error).toBe(error);
+	});
+
 	it('stores deck review state and updates the primary player projection', async () => {
 		const reviewedDeck = deck({
 			archetypeId: 5,

@@ -61,6 +61,14 @@ describe('usePlayerListStore', () => {
 		]));
 	});
 
+	// The lifecycle's own suite owns how a load answers its failure; this store loads
+	// through a loader of its own, so one case shows the caller's choice reaches it.
+	it('raises a failed load to a caller that asked', async () => {
+		mockRepo.list.mockRejectedValue(new Error('Network unavailable'));
+
+		await expect(store.loadByEventId(1, { failure: 'raise' })).rejects.toThrow('Network unavailable');
+	});
+
 	it('holds a created List with no members', async () => {
 		mockRepo.create.mockResolvedValue(createMockPlayerList({ id: 3, name: 'New List' }));
 

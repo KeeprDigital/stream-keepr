@@ -171,6 +171,63 @@ describe('useScreenStore', () => {
 			expect(store.screens).toEqual(fresh);
 		});
 
+		// A caller that reports a failed load itself asks for it raised, as it asks an
+		// Event Data load. The store still shows it. Not asked, the load answers null.
+		it.each([
+			{
+				asked: 'raises it to a caller that asked',
+				load: { failure: 'raise' } as const,
+				raised: true,
+			},
+			{
+				asked: 'answers null to a caller that did not',
+				load: undefined,
+				raised: false,
+			},
+		])('a failed load $asked, and shows it either way', async ({ load, raised }) => {
+			mockRepo.list.mockRejectedValue(new Error('Network unavailable'));
+
+			const answer = store.loadScreensByEventId(1, load).then(() => 'answered', () => 'raised');
+
+			expect(await answer).toBe(raised ? 'raised' : 'answered');
+			expect(store.error).toBe('Network unavailable');
+			expect(store.isLoaded).toBe(false);
+		});
+
+		it('answers null for a failed load a newer load superseded, though asked to raise it, and shows no error', async () => {
+			const failing = deferred<unknown>();
+			mockRepo.list
+				.mockReturnValueOnce(failing.promise)
+				.mockReturnValueOnce(deferred<unknown>().promise);
+
+			const load = store.loadScreensByEventId(1, { failure: 'raise' });
+			void store.loadScreensByEventId(1);
+			failing.reject(new Error('Network unavailable'));
+
+			await expect(load).resolves.toBeNull();
+			expect(store.error).toBeNull();
+		});
+
+		it('answers null for a load superseded by one that failed, and raises that failure only to the newer caller', async () => {
+			const answers = [
+				deferred<unknown>(),
+				deferred<unknown>(),
+			];
+			mockRepo.list
+				.mockReturnValueOnce(answers[0]!.promise)
+				.mockReturnValueOnce(answers[1]!.promise);
+
+			const older = store.loadScreensByEventId(1);
+			const newer = store.loadScreensByEventId(1, { failure: 'raise' });
+			answers[0]!.resolve([
+				createMockScreen({ id: 1, name: 'Stale' }),
+			]);
+			answers[1]!.reject(new Error('Network unavailable'));
+
+			await expect(newer).rejects.toThrow('Network unavailable');
+			await expect(older).resolves.toBeNull();
+		});
+
 		it('answers nothing for a load the store reset superseded', async () => {
 			const answer = deferred<unknown>();
 			mockRepo.list.mockReturnValueOnce(answer.promise);

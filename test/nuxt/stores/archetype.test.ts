@@ -50,6 +50,14 @@ describe('useArchetypeStore', () => {
 		store.$reset();
 	});
 
+	// The lifecycle's own suite owns how a load answers its failure; one case shows
+	// the caller's choice reaches it through this store's load.
+	it('raises a failed load to a caller that asked', async () => {
+		mockRepo.list.mockRejectedValue(new Error('Network unavailable'));
+
+		await expect(store.loadByEventId(1, { failure: 'raise' })).rejects.toThrow('Network unavailable');
+	});
+
 	describe('writes follow up on what an Archetype touches', () => {
 		it('a create invalidates the Metagame', async () => {
 			const created = createMockUiArchetype({ id: 3, name: 'Boros Aggro' });

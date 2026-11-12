@@ -148,22 +148,26 @@ const { eventId, initialLoading, initialError, retry } = useEventPageLoading([
 	{
 		consumes: 'players',
 		isLoaded: () => playerStore.isLoaded,
-		load: id => playerStore.loadPlayersByEventId(id),
+		isLoading: () => playerStore.loading,
+		load: id => playerStore.loadPlayersByEventId(id, { failure: 'raise' }),
 	},
 	{
 		consumes: 'playerLists',
 		isLoaded: () => playerListStore.isLoaded,
-		load: id => playerListStore.loadByEventId(id),
+		isLoading: () => playerListStore.loading,
+		load: id => playerListStore.loadByEventId(id, { failure: 'raise' }),
 	},
 	{
 		consumes: 'phases',
 		isLoaded: () => phaseStore.isLoaded,
-		load: id => phaseStore.loadPhasesByEventId(id),
+		isLoading: () => phaseStore.loading,
+		load: id => phaseStore.loadPhasesByEventId(id, { failure: 'raise' }),
 	},
 	{
 		consumes: 'rounds',
 		isLoaded: () => roundStore.isLoaded,
-		load: id => roundStore.loadRoundsByEventId(id),
+		isLoading: () => roundStore.loading,
+		load: id => roundStore.loadRoundsByEventId(id, { failure: 'raise' }),
 	},
 ], async (id) => {
 	if (!screenStore.isLoaded || screenStore.currentEventId !== id) {
