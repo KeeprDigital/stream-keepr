@@ -7,13 +7,12 @@ import {
 	FOUNDATION_TOKENS,
 	resolveFoundationToken,
 	resolveFoundationTokens,
-	resolveThemeTokens,
 	themeMotionVars,
 	themeTokenCssProperties,
 	themeTokenVar,
 	themeTypographyStyle,
 } from '~~/shared/modules/theme';
-import { PLAIN_HOST_TOKENS, screenModeHostTokens } from '~~/shared/screenModeDefinitions';
+import { PLAIN_HOST_TOKENS, resolveScreenThemeTokens, screenModeHostTokens } from '~~/shared/screenModeDefinitions';
 import { screenModeTokenName, screenModeTokens } from '~~/shared/screenModes';
 import { themeTokenValueGraphicAssetReferences } from '~~/shared/themeAssetReferences';
 
@@ -31,13 +30,7 @@ const FOUNDATION_TYPOGRAPHY_TOKENS = ['heading', 'body'] as const satisfies read
 export function screenModeThemeTokenStyle(mode: ScreenMode, theme: StoredThemeTokens, overrides: StoredThemeTokens): Record<string, string> {
 	const modeTokens = screenModeTokens(mode);
 	const hostTokens = screenModeHostTokens(mode);
-	const { values } = resolveThemeTokens({
-		vocabulary: FOUNDATION_TOKENS,
-		modeTokens,
-		theme,
-		overrides,
-		hostTokens,
-	});
+	const { values } = resolveScreenThemeTokens(mode, theme, overrides);
 	return themeTokenCssProperties({
 		...resolveFoundationTokens({
 			vocabulary: FOUNDATION_TOKENS,
@@ -57,12 +50,7 @@ export function screenModeThemeTokenStyle(mode: ScreenMode, theme: StoredThemeTo
  */
 export function screenModeThemeFontReferences(mode: ScreenMode, theme: StoredThemeTokens, overrides: StoredThemeTokens): ScreenGraphicAssetReference[] {
 	const modeTokens = screenModeTokens(mode);
-	const { values } = resolveThemeTokens({
-		vocabulary: FOUNDATION_TOKENS,
-		modeTokens,
-		theme,
-		overrides,
-	});
+	const { values } = resolveScreenThemeTokens(mode, theme, overrides);
 	return [
 		...FOUNDATION_TYPOGRAPHY_TOKENS.flatMap(name => themeTokenValueGraphicAssetReferences(
 			'typography',

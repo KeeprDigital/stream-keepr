@@ -2,9 +2,8 @@ import type { InjectionKey, MaybeRefOrGetter } from 'vue';
 import type { StoredThemeTokens, ThemeTokenValue } from '~~/shared/modules/theme';
 import type { ThemeTokenDefinitionOf } from '~~/shared/themeTokens';
 import type { Screen } from '~/types';
-import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, resolveFoundationToken, resolveThemeTokens } from '~~/shared/modules/theme';
-import { screenModeHostTokens } from '~~/shared/screenModeDefinitions';
-import { screenModeTokens } from '~~/shared/screenModes';
+import { DEFAULT_THEME_TOKENS, FOUNDATION_TOKENS, resolveFoundationToken } from '~~/shared/modules/theme';
+import { resolveScreenThemeTokens } from '~~/shared/screenModeDefinitions';
 import { themeTokenDefinition } from '~~/shared/themeTokens';
 import { screenBackgroundLayers } from '~/modules/screen-mode/modeTokens';
 
@@ -69,18 +68,7 @@ function createScreenThemeOverrides(screen: MaybeRefOrGetter<Screen | null | und
 
 	const overrides = computed<StoredThemeTokens>(() => toValue(screen)?.themeOverrides ?? {});
 	function resolveWith(stored: StoredThemeTokens) {
-		const mode = toValue(screen)?.currentMode;
-		return resolveThemeTokens({
-			vocabulary: FOUNDATION_TOKENS,
-			modeTokens: mode
-				? screenModeTokens(mode)
-				: {},
-			theme: theme.value,
-			overrides: stored,
-			hostTokens: mode
-				? screenModeHostTokens(mode)
-				: [],
-		});
+		return resolveScreenThemeTokens(toValue(screen)?.currentMode, theme.value, stored);
 	}
 	const resolved = computed(() => resolveWith(overrides.value));
 

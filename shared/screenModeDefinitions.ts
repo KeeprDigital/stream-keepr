@@ -1,10 +1,12 @@
+import type { ResolvedThemeTokens, StoredThemeTokens } from './modules/theme';
 import type { FoundationTokenName } from './modules/theme/vocabulary';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
 import type { DisplayType, Game, ScreenMode } from './types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from './types/screenConfig';
 import { isOfferedToCardGame } from './config/games';
 import { pageRotationEdit } from './modules/page-rotation';
-import { SCREEN_MODES, screenModeSupportsBackgroundLayers } from './screenModes';
+import { FOUNDATION_TOKENS, resolveThemeTokens } from './modules/theme';
+import { SCREEN_MODES, screenModeSupportsBackgroundLayers, screenModeTokens } from './screenModes';
 import {
 	getDefaultConfigForMode,
 	getDisplayDefaultsForMode,
@@ -99,6 +101,26 @@ export function getScreenModeHostDefinition(mode: ScreenMode): ScreenModeHostDef
 /** The names of the Foundation Tokens a Screen Mode's host consumes itself. */
 export function screenModeHostTokens(mode: ScreenMode): readonly string[] {
 	return getScreenModeHostDefinition(mode).foundationTokens;
+}
+
+/**
+ * A Screen's Theme Tokens as they resolve for the mode it shows (ADR-0049):
+ * the mode's Mode Tokens and every Foundation Token they or its host consume,
+ * from `overrides`, the Screen's Screen Theme Overrides, over `theme`, its
+ * Event's Theme. With no mode it consumes no token.
+ */
+export function resolveScreenThemeTokens(mode: ScreenMode | undefined, theme: StoredThemeTokens, overrides: StoredThemeTokens): ResolvedThemeTokens {
+	return resolveThemeTokens({
+		vocabulary: FOUNDATION_TOKENS,
+		modeTokens: mode
+			? screenModeTokens(mode)
+			: {},
+		theme,
+		overrides,
+		hostTokens: mode
+			? screenModeHostTokens(mode)
+			: [],
+	});
 }
 
 export function getScreenModeConfigurationPolicy(mode: ScreenMode): ScreenModeConfigurationPolicy {

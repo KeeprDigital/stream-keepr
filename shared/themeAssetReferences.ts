@@ -5,9 +5,10 @@
 import type { StoredThemeTokens, ThemeTokenType, ThemeTokenValue, ThemeTokenValueTypes } from './modules/theme/tokens';
 import type { ScreenMode } from './types/enums';
 import type { ScreenGraphicAssetReference } from './utils/graphicsAssetReferences';
-import { resolveFoundationToken, resolveThemeTokens } from './modules/theme/resolution';
+import { resolveFoundationToken } from './modules/theme/resolution';
 import { readTokenLiteral } from './modules/theme/tokens';
 import { FOUNDATION_TOKENS } from './modules/theme/vocabulary';
+import { resolveScreenThemeTokens } from './screenModeDefinitions';
 import { screenModeTokens } from './screenModes';
 import { themeTokenDefinition } from './themeTokens';
 import { screenMediaSourceReference } from './utils/graphicsAssetReferences';
@@ -106,12 +107,7 @@ export function screenThemeGraphicAssetReferences(
 	overrides: StoredThemeTokens,
 ): ScreenGraphicAssetReference[] {
 	const modeTokens = screenModeTokens(mode);
-	const { values } = resolveThemeTokens({
-		vocabulary: FOUNDATION_TOKENS,
-		modeTokens,
-		theme,
-		overrides,
-	});
+	const { values } = resolveScreenThemeTokens(mode, theme, overrides);
 	const foundation = Object.entries(FOUNDATION_TOKENS).flatMap(([name, definition]) =>
 		themeTokenValueGraphicAssetReferences(
 			definition.type,
