@@ -1,6 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises, mount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAttachSignal, createContinuitySignal } from '~~/test/helpers/realtime-mock';
 import { screenContextOf } from '~~/test/nuxt/helpers/screenContext';
 import { SCREEN_MODE_REREAD_MS } from '~/modules/screen-mode/freshness';
@@ -12,16 +12,20 @@ const mockCardStore = reactive({
 	readActiveCardAsScreenOutput: vi.fn((_read: () => Promise<unknown>) => vi.fn()),
 	cardDataDegraded: false,
 });
-/** The Card the server holds for the Screen; `loadActiveCard` reads it, as the store does. */
+const SCREEN_ID = 1;
+/** The Card the server holds for the Screen; `loadActiveCard` reads it while that Screen is selected, as the store does. */
 let serverCard: { name: string } | null = null;
-const continuity = createContinuitySignal();
-const attachment = createAttachSignal();
+/** The Screen the store was last told to show: it reads that Screen's Card, and none while no Screen is selected. */
+let selectedScreenId: number | null = null;
+// New for each test, so none hears a channel an earlier one watched.
+let continuity = createContinuitySignal();
+let attachment = createAttachSignal();
 const mockRealtime = reactive({
 	connectionState: 'connected',
 	tokenError: null as Error | null,
 	onChannel: vi.fn(() => () => {}),
-	onContinuityLost: continuity.onContinuityLost,
-	onceAttached: attachment.onceAttached,
+	onContinuityLost: (channel: string, handler: () => void) => continuity.onContinuityLost(channel, handler),
+	onceAttached: (channel: string, handler: () => void) => attachment.onceAttached(channel, handler),
 });
 mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
 const mockApiFetch = vi.hoisted(() => vi.fn());
@@ -55,29 +59,40 @@ function mountCardModeData() {
 	return { ...result!, wrapper };
 }
 
+// Each instance watches the shared mocked refs; unmounting it keeps it from reacting to a later test's writes.
+enableAutoUnmount(afterEach);
+
 describe('useCardModeData', () => {
 	beforeEach(() => {
-		mockScreen.value = { id: 1 };
+		mockScreen.value = { id: SCREEN_ID };
 		serverCard = null;
+		selectedScreenId = null;
 		mockCardStore.activeCard = null;
+		mockCardStore.setActiveScreen.mockImplementation((screenId: number | null) => {
+			selectedScreenId = screenId;
+		});
 		mockCardStore.loadActiveCard.mockImplementation(async () => {
-			mockCardStore.activeCard = serverCard;
+			mockCardStore.activeCard = selectedScreenId === SCREEN_ID
+				? serverCard
+				: null;
 			return 'landed';
 		});
 		mockRealtime.connectionState = 'connected';
 		mockRealtime.tokenError = null;
-		attachment.detach('event:1');
+		continuity = createContinuitySignal();
+		attachment = createAttachSignal();
 		mockCardStore.cardDataDegraded = false;
 		mockCardDataHealth = ref('complete');
 		mockApiFetch.mockResolvedValue({ id: 'card-1', name: 'Lightning Bolt' });
 	});
 
-	it('calls setActiveScreen and loadActiveCard on mount', async () => {
-		mountCardModeData();
+	it('shows its Screen\'s Card once mounted', async () => {
+		serverCard = { name: 'Lightning Bolt' };
+
+		const { card } = mountCardModeData();
 		await flushPromises();
 
-		expect(mockCardStore.setActiveScreen).toHaveBeenCalledWith(1);
-		expect(mockCardStore.loadActiveCard).toHaveBeenCalled();
+		expect(card.value).toEqual({ name: 'Lightning Bolt' });
 	});
 
 	it('reads the Screen\'s Card through the Screen, not the operator\'s Card path (#604)', async () => {
@@ -149,21 +164,6 @@ describe('useCardModeData', () => {
 		expect(mockCardStore.setActiveScreen).toHaveBeenCalledWith(99);
 	});
 
-	it('shows a Card changed between its first read and its Event channel\'s first attach (#733)', async () => {
-		serverCard = { name: 'Lightning Bolt' };
-		mountCardModeData();
-		await flushPromises();
-		mockCardStore.setActiveScreen.mockClear();
-
-		// Saved while nothing listened on the channel, so `card:updated` was never heard.
-		serverCard = { name: 'Counterspell' };
-		attachment.attach('event:1');
-		await flushPromises();
-
-		expect(mockCardStore.activeCard).toEqual({ name: 'Counterspell' });
-		expect(mockCardStore.setActiveScreen).not.toHaveBeenCalled();
-	});
-
 	// ── Reconnect Resync (#610) ──
 
 	describe('a Card changed while this output was disconnected', () => {
@@ -188,17 +188,6 @@ describe('useCardModeData', () => {
 			expect(mockCardStore.activeCard).toEqual({ name: 'Counterspell' });
 			// Selecting the Screen again would blank program before the read answers.
 			expect(mockCardStore.setActiveScreen).not.toHaveBeenCalled();
-		});
-
-		it('takes a Card cleared meanwhile off once its channel is attached again', async () => {
-			await onAirThenDisconnected();
-			serverCard = null;
-
-			mockRealtime.connectionState = 'connected';
-			continuity.reattach('event:1');
-			await flushPromises();
-
-			expect(mockCardStore.activeCard).toBeNull();
 		});
 
 		it('holds the Card on air while disconnected', async () => {

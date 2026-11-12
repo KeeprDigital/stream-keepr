@@ -1,8 +1,6 @@
-import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockPlayer } from '~~/test/helpers/fixtures';
 import { transportFailure } from '~~/test/helpers/transportFailure';
-import { realtimeHandlersFor } from '~~/test/nuxt/helpers/realtimeEventSession';
 
 const mockRepo = vi.hoisted(() => ({
 	list: vi.fn(),
@@ -17,13 +15,6 @@ vi.mock('~/modules/event-data/client', async importOriginal => ({
 	useEventDataResource: () => mockRepo,
 }));
 
-const mockMetagameStore = {
-	applyRemoteInvalidated: vi.fn(),
-};
-mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
-
-const { deliver } = realtimeHandlersFor();
-
 describe('usePlayerStore', () => {
 	let store: ReturnType<typeof usePlayerStore>;
 
@@ -33,6 +24,8 @@ describe('usePlayerStore', () => {
 	});
 
 	// Watchers that depend on Player data, not just the array's length, follow `dataVersion`.
+	// The store wires one tick to loads and one to mutations; which paths mutate is the
+	// Event Data lifecycle's rule (eventDataLifecycle.test.ts).
 	describe('dataVersion ticks on every Player mutation', () => {
 		it.each([
 			[
@@ -45,23 +38,6 @@ describe('usePlayerStore', () => {
 				},
 			],
 			[
-				'a create',
-				async (s: ReturnType<typeof usePlayerStore>) => {
-					mockRepo.create.mockResolvedValue(createMockPlayer({ id: 2 }));
-					await s.createPlayer(1, { name: 'Bob' } as never);
-				},
-			],
-			[
-				'an update',
-				async (s: ReturnType<typeof usePlayerStore>) => {
-					s.players = [
-						createMockPlayer({ id: 1 }),
-					];
-					mockRepo.update.mockResolvedValue(createMockPlayer({ id: 1, name: 'Renamed' }));
-					await s.updatePlayer(1, 1, { name: 'Renamed' });
-				},
-			],
-			[
 				'a delete',
 				async (s: ReturnType<typeof usePlayerStore>) => {
 					s.players = [
@@ -69,32 +45,6 @@ describe('usePlayerStore', () => {
 					];
 					mockRepo.remove.mockResolvedValue({ success: true });
 					await s.removePlayer(1, 1);
-				},
-			],
-			[
-				'a peer\'s create',
-				async () => deliver('player:created', {
-					player: createMockPlayer({ id: 3 }),
-				} as never),
-			],
-			[
-				'a peer\'s update',
-				async (s: ReturnType<typeof usePlayerStore>) => {
-					s.players = [
-						createMockPlayer({ id: 1 }),
-					];
-					deliver('player:updated', {
-						player: createMockPlayer({ id: 1, name: 'Renamed' }),
-					} as never);
-				},
-			],
-			[
-				'a peer\'s delete',
-				async (s: ReturnType<typeof usePlayerStore>) => {
-					s.players = [
-						createMockPlayer({ id: 1 }),
-					];
-					deliver('player:deleted', { playerId: 1 } as never);
 				},
 			],
 		])('%s', async (_, mutate) => {
@@ -113,14 +63,6 @@ describe('usePlayerStore', () => {
 
 			expect(store.dataVersion).toBe(0);
 		});
-	});
-
-	it('a peer\'s Player message invalidates the Metagame', () => {
-		deliver('player:created', {
-			player: createMockPlayer({ id: 3 }),
-		} as never);
-
-		expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
 	});
 
 	describe('getPlayerById', () => {

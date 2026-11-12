@@ -247,16 +247,9 @@ describe('usePlayerDeckStore', () => {
 	 * may not retag a Deck or Player there, invalidate its Metagame, or reload its
 	 * Feature Match Slots (ADR-0024).
 	 */
-	describe.each([
-		[
-			'Event B',
-			[2],
-		],
-		[
-			'Event A, loaded again since',
-			[2, 1],
-		],
-	])('a Deck review answered after the operator moved on to %s', (_, switches) => {
+	describe('a Deck review answered after the operator moved on to Event A, loaded again since', () => {
+		const switches = [2, 1];
+
 		it('changes nothing and follows up on nothing', async () => {
 			const store = usePlayerDeckStore();
 			store.decks = [

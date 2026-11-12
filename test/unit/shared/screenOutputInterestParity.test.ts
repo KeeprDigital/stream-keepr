@@ -509,24 +509,35 @@ const REREADS = DEPENDENCIES.filter(({ rereads }) => rereads);
 /** The messages a rendering ignores of a type its Screen's rule narrows as far as it does. */
 const IGNORED_EXACTLY = DEPENDENCIES.filter(({ parityCase, type, rereads }) => !rereads && parityCase.exactly?.includes(type));
 
-describe('a Screen hears every message its rendering re-reads on', () => {
-	it.each(REREADS)('$name: $type $naming', ({ parityCase, type, payload }) => {
-		const hears = outputChangeOf(type, payload).some(change => screenHears(parityCase.screen, change, parityCase.context));
-		expect(hears).toBe(true);
+type Dependency = typeof DEPENDENCIES[number];
+
+/** Whether the row's Screen hears its message by the shared rule. */
+function hears({ parityCase, type, payload }: Dependency) {
+	return outputChangeOf(type, payload).some(change => screenHears(parityCase.screen, change, parityCase.context));
+}
+
+/** A row as a failure names it. */
+function named({ name, type, naming }: Dependency) {
+	return `${name}: ${type} ${naming}`;
+}
+
+describe('a Screen hears every message its rendering re-read on', () => {
+	it.each([
+		...new Set(CASES.map(parityCase => parityCase.declaration)),
+	])('%s: in every case, for every message type and naming', (declaration) => {
+		const rereads = REREADS.filter(({ parityCase }) => parityCase.declaration === declaration);
+
+		expect(rereads.filter(row => !hears(row)).map(named)).toEqual([]);
+
+		// No dependency goes unproven because no case made its rendering re-read.
+		const declared = new Set(CASES.filter(parityCase => parityCase.declaration === declaration).flatMap(parityCase => Object.keys(parityCase.dependsOn)));
+		const reread = new Set<string>(rereads.map(({ type }) => type));
+		expect([...declared].filter(type => !reread.has(type))).toEqual([]);
 	});
 
 	// Where the rule is told what the rendering holds, it stays as silent as the rendering.
-	it.each(IGNORED_EXACTLY)('$name hears no $type $naming', ({ parityCase, type, payload }) => {
-		const hears = outputChangeOf(type, payload).some(change => screenHears(parityCase.screen, change, parityCase.context));
-		expect(hears).toBe(false);
-	});
-
-	// No dependency goes unproven because no case made its rendering re-read.
-	it.each([
-		...new Set(CASES.map(parityCase => parityCase.declaration)),
-	])('every message type %s names re-reads in some case', (declaration) => {
-		const declared = new Set(CASES.filter(parityCase => parityCase.declaration === declaration).flatMap(parityCase => Object.keys(parityCase.dependsOn)));
-		const reread = new Set(REREADS.filter(({ parityCase }) => parityCase.declaration === declaration).map(({ type }) => type));
-		expect([...declared].filter(type => !reread.has(type as MessageType))).toEqual([]);
+	it('hears nothing a rendering ignored, of the message types it narrows as far as the rendering did', () => {
+		expect(IGNORED_EXACTLY.length).toBeGreaterThan(0);
+		expect(IGNORED_EXACTLY.filter(hears).map(named)).toEqual([]);
 	});
 });

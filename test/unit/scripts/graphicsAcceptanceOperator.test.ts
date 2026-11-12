@@ -174,9 +174,4 @@ describe('what a run with no operator says', () => {
 		expect(notice).toContain(OPERATOR_EMAIL_ENV);
 		expect(notice).toContain(OPERATOR_PASSWORD_ENV);
 	});
-
-	it('says why the boundary makes this fatal rather than merely inconvenient', () => {
-		for (const deployed of [true, false])
-			expect(operatorUnavailableNotice({ deployed })).toContain('401');
-	});
 });

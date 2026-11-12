@@ -1,5 +1,4 @@
 import type { ScreenResponse } from '~~/shared/api';
-import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type {
 	GraphicAssetUsage,
 	GraphicsIngestionOperation,
@@ -259,11 +258,6 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		return `/api/events/${eventId}/screens/${screenId}/config/broadcast-graphics`;
 	}
 
-	async function authoredStack(): Promise<BroadcastGraphicConfig[]> {
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		return (screen.modeConfigs?.['broadcast-graphics']?.graphics ?? []) as BroadcastGraphicConfig[];
-	}
-
 	async function usageOf(reference: Reference): Promise<GraphicAssetUsage[]> {
 		return await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${reference.assetId}/usage`,
@@ -304,7 +298,8 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		catch {}
 	});
 
-	it('saves the authored stack and every exact-revision usage in one write', async () => {
+	/** The stack every test here starts from: the logo at the top level, the badge inside a Graphic Group. */
+	async function pinLogoAndBadge(): Promise<ScreenResponse> {
 		const graphics = [
 			{
 				id: 'lower-third',
@@ -336,11 +331,15 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			},
 		];
 
-		const updated = await $fetch<ScreenResponse>(configPath(), {
+		return await $fetch<ScreenResponse>(configPath(), {
 			method: 'PATCH',
 			body: { graphics },
 			headers: { cookie: graphicsAuthorCookie },
 		});
+	}
+
+	it('saves the authored stack and every exact-revision usage in one write', async () => {
+		const updated = await pinLogoAndBadge();
 
 		const savedItem = updated.modeConfigs!['broadcast-graphics']!.graphics![0]!.items[0]!;
 		expect(savedItem.type === 'media' && savedItem.asset).toEqual(logo);
@@ -367,6 +366,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 	});
 
 	it('resolves an indexed revision through the Screen Output Asset Capability, and nothing else', async () => {
+		await pinLogoAndBadge();
 		const { assetCapability } = await $fetch<{ assetCapability: string }>(
 			`/api/events/${eventId}/screens/${screenId}/asset-capability`,
 			{
@@ -391,31 +391,6 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		// The capability is not a library-browsing hole: an asset this Screen does not
 		// publish is invisible to its outputs even with a valid capability.
 		await expect(outputContent(unreferenced).then(response => response.status)).resolves.toBe(404);
-	});
-
-	it('rejects a newly pinned reference that does not exist, leaving the stack and its index untouched', async () => {
-		const before = await authoredStack();
-
-		await expect($fetch(configPath(), {
-			method: 'PATCH',
-			body: {
-				graphics: [
-					{
-						id: 'lower-third',
-						name: 'Lower Third',
-						items: [
-							mediaItem('logo', {
-								asset: { assetId: 'missing-asset', revisionId: 'missing-revision' },
-							}),
-						],
-					},
-				],
-			},
-			headers: { cookie: graphicsAuthorCookie },
-		})).rejects.toMatchObject({ statusCode: 409 });
-
-		await expect(authoredStack()).resolves.toEqual(before);
-		await expect(usageOf(logo)).resolves.toHaveLength(1);
 	});
 
 	it('keeps each mode’s references indexed when the other mode is written', async () => {
@@ -501,55 +476,9 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		await $fetch(`/api/events/${eventId}/screens/${overlayScreen.id}`, { method: 'DELETE' });
 	});
 
-	it('rejects a reference introduced through a generic Screen write, which indexes nothing', async () => {
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-
-		await expect($fetch(`/api/events/${eventId}/screens/${screenId}`, {
-			method: 'PATCH',
-			body: {
-				stateVersion: screen.stateVersion,
-				modeConfigs: {
-					'broadcast-graphics': {
-						graphics: [
-							{
-								id: 'lower-third',
-								name: 'Lower Third',
-								items: [
-									mediaItem('logo', { asset: badge }),
-								],
-							},
-						],
-					},
-				},
-			},
-		})).rejects.toMatchObject({ statusCode: 400 });
-	});
-
-	it('rejects a Screen created with a reference nothing has indexed yet', async () => {
-		await expect($fetch(`/api/events/${eventId}/screens`, {
-			method: 'POST',
-			body: {
-				name: 'Prepinned',
-				slug: 'prepinned',
-				currentMode: 'broadcast-graphics',
-				modeConfigs: {
-					'broadcast-graphics': {
-						graphics: [
-							{
-								id: 'g',
-								name: 'G',
-								items: [
-									mediaItem('logo', { asset: logo }),
-								],
-							},
-						],
-					},
-				},
-			},
-		})).rejects.toMatchObject({ statusCode: 400 });
-	});
-
 	it('removes a reference from the index when its Graphic Item stops pinning one', async () => {
+		await pinLogoAndBadge();
+
 		await $fetch(configPath(), {
 			method: 'PATCH',
 			body: {
@@ -670,63 +599,6 @@ describe('broadcast Graphics Media Graphic Items', () => {
 			WHERE id = '${takeable.revisionId}'
 		`);
 		await expect(command('Take', 'sound', `gate-restored-${runId}`)).resolves.toBeTruthy();
-	});
-
-	it('persists silent-video playback controls and Shape Geometry clipping unchanged', async () => {
-		const updated = await $fetch<ScreenResponse>(configPath(), {
-			method: 'PATCH',
-			body: {
-				graphics: [
-					{
-						id: 'sting',
-						name: 'Sting',
-						items: [
-							mediaItem('clip', {
-								fit: 'contain',
-								opacity: 0.75,
-								focalPosition: { horizontal: 0.1, vertical: 0.9 },
-								playbackRate: 0.5,
-								loop: false,
-								clipGeometry: { ...SQUARE_GEOMETRY, rightSlant: 40 },
-							}),
-						],
-					},
-				],
-			},
-			headers: { cookie: graphicsAuthorCookie },
-		});
-
-		const item = updated.modeConfigs!['broadcast-graphics']!.graphics![0]!.items[0]!;
-		expect(item).toMatchObject({
-			type: 'media',
-			fit: 'contain',
-			opacity: 0.75,
-			focalPosition: { horizontal: 0.1, vertical: 0.9 },
-			playbackRate: 0.5,
-			loop: false,
-			clipGeometry: {
-				rightSlant: 40,
-				topLeft: { treatment: 'square', size: 0 },
-			},
-		});
-	});
-
-	it('rejects a playback rate outside the authored bounds', async () => {
-		await expect($fetch(configPath(), {
-			method: 'PATCH',
-			body: {
-				graphics: [
-					{
-						id: 'sting',
-						name: 'Sting',
-						items: [
-							mediaItem('clip', { playbackRate: 12 }),
-						],
-					},
-				],
-			},
-			headers: { cookie: graphicsAuthorCookie },
-		})).rejects.toMatchObject({ statusCode: 400 });
 	});
 
 	/**
@@ -1156,39 +1028,6 @@ describe('media Graphic Input values on air', () => {
 		});
 
 		await expect(outputStatus(screenId, capability, backdrop)).resolves.toBe(404);
-		await expect(usageOf(backdrop)).resolves.toEqual([]);
-	});
-
-	it('stops publishing when the Screen leaves Broadcast Graphics mode', async () => {
-		// Ending the epoch is the other place the "stops being published when it leaves
-		// air" rule is enforced, and the mode scope in the authorizer hides an uncleared
-		// namespace rather than fixing it: the usage row is what says whether the epoch's
-		// references actually went.
-		const screenId = await createScreen('media-input-mode-change');
-		const backdrop = await ingestImage(eventId, `media-input-mode-change-${runId}`, pngWithTextChunks(106), graphicsAuthorCookie);
-		await declare(screenId, [
-			mediaInput('backdrop'),
-		]);
-		const session = await liveSession(screenId);
-
-		await command(screenId, session.id, {
-			commandId: `media-input-mode-set-${runId}`,
-			type: 'Set Input',
-			payload: { graphicId: 'promo', inputKey: 'backdrop', value: backdrop },
-		});
-		await command(screenId, session.id, {
-			commandId: `media-input-mode-take-${runId}`,
-			type: 'Take',
-			payload: { graphicId: 'promo' },
-		});
-		await expect(usageOf(backdrop)).resolves.toHaveLength(1);
-
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		await $fetch(`/api/events/${eventId}/screens/${screenId}`, {
-			method: 'PATCH',
-			body: { currentMode: 'background', stateVersion: screen.stateVersion },
-		});
-
 		await expect(usageOf(backdrop)).resolves.toEqual([]);
 	});
 

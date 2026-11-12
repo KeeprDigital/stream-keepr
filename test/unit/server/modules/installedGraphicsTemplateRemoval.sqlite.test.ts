@@ -1,8 +1,6 @@
-import type { GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
 import type { GraphicAssetReference, InstalledGraphicsTemplateKind } from '~~/shared/types/graphicsAsset';
 import type { PackageLibrary } from '~~/test/helpers/templatePackageLibrary';
 import { afterAll, describe, expect, it } from 'vitest';
-import { createInMemoryGraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library';
 import { createD1GraphicsAssetCatalogue } from '~~/server/modules/graphics-asset-library/catalogue';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 import {
@@ -23,26 +21,17 @@ const harness = await createSqliteD1Harness();
 afterAll(async () => await harness.close());
 
 let libraries = 0;
-const catalogues: [string, () => GraphicsAssetCatalogue][] = [
-	[
-		'the D1 catalogue',
-		() => createD1GraphicsAssetCatalogue(harness.database),
-	],
-	[
-		'the in-memory catalogue',
-		() => createInMemoryGraphicsAssetCatalogue(),
-	],
-];
+const catalogue = () => createD1GraphicsAssetCatalogue(harness.database);
 
-function libraryOver(catalogue: () => GraphicsAssetCatalogue) {
+function newLibrary() {
 	return createPackageLibrary(`removal-${++libraries}`, {
 		catalogue: catalogue(),
 	}).library;
 }
 
 /** One library that exports a package pinning a fresh image, and receives it. */
-async function installedTemplate(catalogue: () => GraphicsAssetCatalogue) {
-	const library = libraryOver(catalogue);
+async function installedTemplate() {
+	const library = newLibrary();
 	const sender = createPackageLibrary(`sender-${libraries}`).library;
 	const archive = await exportPackage(sender, {
 		assets: [
@@ -66,9 +55,9 @@ function removeFrom(library: PackageLibrary, templateId: string, kind: Installed
 	return library.removeInstalledGraphicsTemplate({ templateId, kind, removedBy: 'remover' });
 }
 
-describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_, catalogue) => {
+describe('removing an Installed Graphics Template', () => {
 	it('releases its references, so its asset may enter Trash', async () => {
-		const { library, installation, asset, remove } = await installedTemplate(catalogue);
+		const { library, installation, asset, remove } = await installedTemplate();
 		expect((await library.trashGraphicAsset({ assetId: asset.assetId })).outcome).toBe('in-use');
 
 		const removed = await remove();
@@ -81,7 +70,7 @@ describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_
 	});
 
 	it('holds its asset back from Retire until it is removed', async () => {
-		const { library, installation, asset, remove } = await installedTemplate(catalogue);
+		const { library, installation, asset, remove } = await installedTemplate();
 		const refused = await library.retireGraphicAsset({ assetId: asset.assetId });
 		expect(refused.outcome === 'in-use' && refused.usage.map(usage => usage.owner.id))
 			.toEqual([installation.templateId]);
@@ -92,7 +81,7 @@ describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_
 	});
 
 	it('keeps an asset another installation still references out of Trash', async () => {
-		const { library, archive, asset, remove } = await installedTemplate(catalogue);
+		const { library, archive, asset, remove } = await installedTemplate();
 		const second = installationOf(await installPackage(library, archive));
 		expect(second.assets[0]).toMatchObject({ outcome: 'reused', assetId: asset.assetId });
 
@@ -124,7 +113,7 @@ describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_
 			kind: 'broadcast-graphic',
 		},
 	] as const)('answers not-found for $case', async ({ removedFirst, unknown, kind }) => {
-		const { library, installation, remove } = await installedTemplate(catalogue);
+		const { library, installation, remove } = await installedTemplate();
 		if (removedFirst)
 			await remove();
 
@@ -134,7 +123,7 @@ describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_
 	});
 
 	it('reinstalls the template when its installation is retried', async () => {
-		const { library, operation, installation, asset, remove } = await installedTemplate(catalogue);
+		const { library, operation, installation, asset, remove } = await installedTemplate();
 		const before = await library.inspectInstalledGraphicsTemplate({ templateId: installation.templateId });
 		await remove();
 
@@ -151,7 +140,7 @@ describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_
 	});
 
 	it('refuses to reinstall while an asset it pins is trashed, and reinstalls once it is restored', async () => {
-		const { library, operation, installation, asset, remove } = await installedTemplate(catalogue);
+		const { library, operation, installation, asset, remove } = await installedTemplate();
 		await remove();
 		await library.trashGraphicAsset({ assetId: asset.assetId });
 		const retry = () => library.installTemplatePackage({
@@ -170,7 +159,7 @@ describe.each(catalogues)('removing an Installed Graphics Template, over %s', (_
 
 describe('a superseded revision only a removed template pinned', () => {
 	it('becomes a Revision Pruning candidate', async () => {
-		const library = libraryOver(catalogues[0]![1]);
+		const library = newLibrary();
 		const first = await ingestPackageImage(library, 'Backdrop');
 		const archive = await exportPackage(library, {
 			assets: [

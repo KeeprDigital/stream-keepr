@@ -253,153 +253,15 @@ describe('useHeadToHeadModeData', () => {
 			expect(mockFetch).not.toHaveBeenCalled();
 		});
 
-		// The Session owns which side each Player sits on (ADR-0058).
-		it.each([
-			{
-				change: 'a swap of its Slot\'s Session',
-				slotId: 4,
-				seated: [BOB, ALICE],
-				reads: 1,
-			},
-			{
-				change: 'a Session event that keeps its sides',
-				slotId: 4,
-				seated: [ALICE, BOB],
-				reads: 1,
-			},
-			{
-				change: 'a swap of another Slot\'s Session',
-				slotId: 5,
-				seated: [BOB, ALICE],
-				reads: 0,
-			},
-		])('re-reads on $change: $reads', async ({ slotId, seated, reads }) => {
+		// The Players' records come from any Round, and Melee names no Players in a
+		// Round sync. Which kinds a Head-to-Head follows is `screenOutputInterest`'s own test.
+		it('re-reads when Melee stores any Round\'s Round Standings', async () => {
 			await showingSlot();
 
-			deliver('featureMatchSession:eventApplied', {
-				slotId,
-				sessionId: 90,
-				sequence: 2,
-				eventType: 'SwapPlayers',
-				sourceSnapshot: {
-					player1: { playerId: seated[0], data: null },
-					player2: { playerId: seated[1], data: null },
-				},
-			} as never);
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(reads);
-		});
-
-		it('follows its Slot being synced from Melee or deleted', async () => {
-			await showingSlot();
-
-			deliver('melee:featureMatchesSynced', {
-				slotIds: [4],
-			});
-			await flushPromises();
-			deliver('featureMatch:deleted', { featureMatchId: 4 });
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(2);
-		});
-
-		it('follows a result reported between the two', async () => {
-			await showingSlot();
-
-			deliver('match:updated', {
-				match: {
-					id: 21,
-					roundId: 32,
-					player1Id: BOB,
-					player2Id: ALICE,
-				},
-			});
-			await flushPromises();
-			deliver('match:created', {
-				match: {
-					id: 22,
-					roundId: 33,
-					player1Id: ALICE,
-					player2Id: BOB,
-				},
-			});
-			await flushPromises();
-			deliver('match:deleted', { matchId: 20 });
-			await flushPromises();
-			expect(mockFetch).toHaveBeenCalledTimes(3);
-		});
-
-		it('follows a change to either Player', async () => {
-			await showingSlot();
-
-			deliver('player:updated', {
-				player: { id: BOB },
-			});
-			await flushPromises();
-			deliver('player:deleted', { playerId: ALICE });
-			await flushPromises();
-			expect(mockFetch).toHaveBeenCalledTimes(2);
-		});
-
-		it('follows Archetype changes', async () => {
-			await showingSlot();
-
-			deliver('archetype:updated', {
-				archetype: { id: 3, name: 'Boros Energy' },
-			});
+			deliver('melee:roundStandingsSynced', { roundId: 40 });
 			await flushPromises();
 
 			expect(mockFetch).toHaveBeenCalledTimes(1);
-		});
-
-		// Earlier Matches and the Players' records come from any Round, and Melee
-		// names no Players in a Round sync.
-		it.each([
-			{
-				type: 'melee:matchResultsSynced',
-				payload: {
-					roundId: 40,
-					matchIds: [99],
-				},
-				rereads: true,
-			},
-			{
-				type: 'melee:pairingsSynced',
-				payload: { roundId: 40 },
-				rereads: true,
-			},
-			{
-				type: 'melee:roundStandingsSynced',
-				payload: { roundId: 40 },
-				rereads: true,
-			},
-		])('$type re-reads: $rereads', async ({ type, payload, rereads }) => {
-			await showingSlot();
-
-			deliver(type, payload);
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(rereads ? 1 : 0);
-		});
-
-		it('shows a result missed while disconnected once its channel is attached again', async () => {
-			const { earlierMatches } = await showingSlot();
-
-			realtime.transport.connectionState = 'disconnected';
-			await nextTick();
-			mockFetch.mockResolvedValue(answer({
-				earlierMatches: [
-					earlierMatch(),
-					earlierMatch({ matchId: 21, roundName: 'Round 5' }),
-				],
-			}));
-			realtime.transport.connectionState = 'connected';
-			realtime.reattach();
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(earlierMatches.value).toHaveLength(2);
 		});
 	});
 });

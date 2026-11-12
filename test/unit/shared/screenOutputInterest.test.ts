@@ -4,7 +4,6 @@ import type { MessageType } from '~~/shared/types/messages';
 import type { ModeConfigTypeMap } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import { OUTPUT_CHANGE_KINDS, outputChangeOf, screenHears, slotNarrowingOf } from '~~/shared/screenOutputInterest';
-import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { getDefaultConfigForMode } from '~~/shared/types/screenConfig';
 import { eventMessageSamples } from '~~/test/helpers/eventMessageSamples';
 
@@ -409,6 +408,94 @@ describe('outputChangeOf', () => {
 				{ kind: 'screen', screenId: SCREEN },
 			],
 		],
+		// What is new names its id as what changes it does, so an output following every one shows it.
+		[
+			'talent:created',
+			[
+				{
+					kind: 'talent',
+					talentIds: [TALENT],
+				},
+			],
+		],
+		[
+			'phase:created',
+			[
+				{
+					kind: 'phase',
+					phaseIds: [PHASE],
+				},
+			],
+		],
+		[
+			'round:created',
+			[
+				{
+					kind: 'round',
+					roundIds: [ROUND],
+				},
+			],
+		],
+		[
+			'featureMatch:created',
+			[
+				{
+					kind: 'featureMatchSlot',
+					slotIds: [SLOT],
+				},
+			],
+		],
+		[
+			'playerList:created',
+			[
+				{
+					kind: 'playerList',
+					playerListIds: [LIST],
+				},
+			],
+		],
+		[
+			'broadcastDeckList:created',
+			[
+				{
+					kind: 'broadcastDeckList',
+					broadcastDeckListIds: [DECK_LIST],
+				},
+			],
+		],
+		[
+			'broadcastDeckList:deleted',
+			[
+				{
+					kind: 'broadcastDeckList',
+					broadcastDeckListIds: [DECK_LIST],
+				},
+			],
+		],
+		[
+			'archetype:created',
+			[
+				{
+					kind: 'archetype',
+					archetypeIds: [91],
+				},
+			],
+		],
+		[
+			'archetype:deleted',
+			[
+				{
+					kind: 'archetype',
+					archetypeIds: [91],
+				},
+			],
+		],
+		[
+			'screen:created',
+			[
+				{ kind: 'screen', screenId: SCREEN },
+			],
+		],
 	])('%s names what it changed', (type, changes) => {
 		expect(outputChangeOf(type, SAMPLES[type])).toEqual(changes);
 	});
@@ -476,13 +563,14 @@ describe('screenHears', () => {
 			: { kind };
 	}
 
-	describe.each(SCREEN_MODE_VALUES)('a %s Screen', (mode) => {
+	// Decided before the mode is read: Background, which declares nothing, shows it.
+	describe('a Screen whose mode follows nothing', () => {
 		it.each(EVERY_SCREEN_FOLLOWS)('hears its own %s change', (kind) => {
-			expect(screenHears(screenIn(mode), wholeKind(kind))).toBe(true);
+			expect(screenHears(screenIn('background'), wholeKind(kind))).toBe(true);
 		});
 
-		it.each(SCREEN_ADDRESSED)('does not hear another Screen\'s %s change', (kind) => {
-			expect(screenHears(screenIn(mode), wholeKind(kind, OTHER_SCREEN))).toBe(false);
+		it('does not hear another Screen\'s screen change', () => {
+			expect(screenHears(screenIn('background'), wholeKind('screen', OTHER_SCREEN))).toBe(false);
 		});
 	});
 

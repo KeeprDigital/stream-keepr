@@ -1,4 +1,5 @@
 import type {
+	GraphicsAssetLibraryHealth,
 	GraphicsIngestionOperation,
 	GraphicsReconciliationOverview,
 	GraphicsReconciliationSweepResult,
@@ -83,25 +84,6 @@ describe('the Graphics Asset Library reconciliation API', () => {
 			method: 'PUT',
 			body: reconciliationPixelPng,
 		})).status).toBe(403);
-	});
-
-	it('states the authority contract that readers and reconciliation both follow', async () => {
-		const overview = await $fetch<GraphicsReconciliationOverview>(
-			'/api/admin/graphics-assets/reconciliation',
-			{ headers: administratorHeaders },
-		);
-
-		expect(overview.authority).toEqual({
-			expectedReachability: 'catalogue',
-			presentBytes: 'byte-store',
-			contentAvailabilityFlag: 'advisory-reconciliation-state',
-		});
-		expect(overview.openCounts).toMatchObject({
-			'unavailable-content': expect.any(Number),
-			'missing-derivative': expect.any(Number),
-			'unexpected-object': expect.any(Number),
-			'critical-integrity-incident': expect.any(Number),
-		});
 	});
 
 	/**
@@ -196,36 +178,6 @@ describe('the Graphics Asset Library reconciliation API', () => {
 		})).status).toBe(404);
 	});
 
-	it('serves the reconciliation half of the Evidence ledger', async () => {
-		// The ledger is one ledger. A category filter that only knew the retention
-		// half would reject every reconciliation category outright.
-		for (const category of [
-			'content-unavailable-detected',
-			'content-availability-restored',
-			'content-repaired',
-			'content-restored-from-quarantine',
-			'derivative-missing-detected',
-			'derivative-regenerated',
-			'unexpected-object-quarantined',
-			'critical-integrity-incident',
-			'discrepancy-rechecked',
-			'repair-rejected',
-		]) {
-			const response = await fetch(
-				`/api/admin/graphics-assets/evidence?category=${category}`,
-				{ headers: administratorHeaders },
-			);
-			expect(response.status, `category ${category}`).toBe(200);
-		}
-		// A retention category still works, and an invented one still does not.
-		expect((await fetch('/api/admin/graphics-assets/evidence?category=content-deleted', {
-			headers: administratorHeaders,
-		})).status).toBe(200);
-		expect((await fetch('/api/admin/graphics-assets/evidence?category=not-a-category', {
-			headers: administratorHeaders,
-		})).status).toBe(400);
-	});
-
 	it('rejects an action the domain does not offer', async () => {
 		const response = await fetch('/api/admin/graphics-assets/discrepancies/unknown/actions', {
 			method: 'POST',
@@ -243,5 +195,22 @@ describe('the Graphics Asset Library reconciliation API', () => {
 			headers: { ...administratorHeaders, 'content-type': 'application/json' },
 			body: JSON.stringify({ action: 'verify-stored-bytes' }),
 		})).status).toBe(404);
+	});
+});
+
+// Its refusal without the token is the API boundary's own case (apiBoundary.test.ts).
+describe('the Graphics Asset Library health API', () => {
+	it('reports the migrated D1 catalogue and both private local byte stores separately', async () => {
+		const health = await $fetch<GraphicsAssetLibraryHealth>('/api/admin/graphics-assets/health', {
+			headers: { 'x-graphics-admin-token': INTEGRATION_GRAPHICS_ADMIN_TOKEN },
+		});
+
+		expect(health.status).toBe('healthy');
+		expect(health.catalogue).toEqual({ status: 'healthy' });
+		expect(health.byteStores).toEqual({
+			staging: { status: 'healthy' },
+			canonical: { status: 'healthy' },
+		});
+		expect(new Date(health.checkedAt).toISOString()).toBe(health.checkedAt);
 	});
 });

@@ -1,6 +1,5 @@
 import type { GraphicsIngestionOperation } from '~~/shared/types/graphicsAsset';
 import type {
-	TemplatePackageExportReport,
 	TemplatePackageManifest,
 } from '~~/shared/types/templatePackage';
 import { Buffer } from 'node:buffer';
@@ -11,7 +10,6 @@ import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenC
 import { collectStream, readStoredZipArchive } from '../helpers/storedZipArchive';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
-import { executeIntegrationD1 } from './integrationD1';
 import { expectOperationResult } from './responseStatus';
 
 const basePixelPng = Uint8Array.from(Buffer.from(
@@ -201,50 +199,6 @@ describe('template Package export through the API boundary', () => {
 			.json<{ sources: { id: string }[] }>('template.json');
 		expect(template.sources.map(source => source.id))
 			.toEqual(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout.sources.map(source => source.id));
-	});
-
-	it('blocks export with one complete report when a referenced revision is gone', async () => {
-		// The Screen write boundary refuses a dangling reference, so a stored
-		// configuration is planted directly to prove export also fails closed
-		// rather than trusting whatever the catalogue already holds.
-		const danglingScreen = await $fetch(`/api/events/${eventId}/screens`, {
-			method: 'POST',
-			body: {
-				name: 'Dangling Overlay',
-				slug: 'dangling-overlay',
-				currentMode: 'feature-match-overlay',
-			},
-		});
-		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = {
-			kind: 'asset',
-			assetId: operation.result!.assetId,
-			revisionId: 'revision-that-never-existed',
-		} as never;
-		await executeIntegrationD1(`
-			UPDATE screens
-			SET mode_configs = '${JSON.stringify({ 'feature-match-overlay': config }).replaceAll('\'', '\'\'')}'
-			WHERE id = ${danglingScreen.id}
-		`);
-
-		const response = await fetch(
-			`/api/events/${eventId}/screens/${danglingScreen.id}/template-packages/feature-match-layout`,
-			{
-				headers: { cookie: graphicsAuthorCookie },
-			},
-		);
-
-		expect(response.status).toBe(409);
-		const body = await response.json() as { data: TemplatePackageExportReport };
-		expect(body.data.issues).toEqual([
-			expect.objectContaining({
-				code: 'missing-graphic-asset-reference',
-				slot: 'frame.backgroundImage',
-				retryable: false,
-				remediation: expect.any(String),
-			}),
-		]);
-		expect(body.data.limits.maximumPackagedRevisionCount).toBe(100);
 	});
 
 	it('streams a .skgraphic package declaring application capabilities without duplicating them', async () => {

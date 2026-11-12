@@ -1,7 +1,6 @@
+import type { ScreenMode } from '~~/shared/types/enums';
 import { describe, expect, it } from 'vitest';
 import { FOUNDATION_TOKENS } from '~~/shared/modules/theme';
-import { SCREEN_MODES } from '~~/shared/screenModes';
-import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import {
 	foundationMotionVars,
 	foundationTokenVar,
@@ -23,10 +22,16 @@ function propertyOf(read: string) {
 	return /^var\((--[\w-]+)\)$/.exec(read)![1]!;
 }
 
-const DISPLAY_MODES = SCREEN_MODE_VALUES.filter(mode => SCREEN_MODES[mode].displayType !== 'control');
+/** A plain host and an edge-to-edge one, each with a mode declaring Mode Tokens and one declaring none. */
+const HOSTED_MODES = [
+	'standings',
+	'talent',
+	'feature-match-overlay',
+	'background',
+] as const satisfies readonly ScreenMode[];
 
 describe('the custom properties a Screen host sets', () => {
-	it.each(DISPLAY_MODES)('carry the Theme\'s Foundation Tokens to the %s display, whatever Mode Tokens it declares', (mode) => {
+	it.each(HOSTED_MODES)('carry the Theme\'s Foundation Tokens to the %s display, whatever Mode Tokens it declares', (mode) => {
 		const style = screenModeThemeTokenStyle(mode, THEME, {});
 
 		expect({

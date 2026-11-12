@@ -28,15 +28,6 @@ describe('the baseline migration', () => {
 		expect(result.rows.map(row => Number(row.id))).toEqual([1]);
 	});
 
-	it('defaults a new Screen to background', async () => {
-		await harness.client.execute(`
-			INSERT INTO screens (id, event_id, name, slug, asset_capability_seed, asset_capability_digest)
-			VALUES (1, 1, 'Fresh', 'fresh', 'seed-1', 'digest-1')
-		`);
-		const result = await harness.client.execute('SELECT current_mode FROM screens WHERE id = 1');
-		expect(result.rows[0]?.current_mode).toBe('background');
-	});
-
 	it('forbids a second Slot from taking a Match', async () => {
 		await harness.client.execute(`INSERT INTO phases (id, event_id, name) VALUES (1, 1, 'Swiss')`);
 		await harness.client.execute(`

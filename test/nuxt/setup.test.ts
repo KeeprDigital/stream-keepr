@@ -20,8 +20,7 @@
  */
 
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { flushPromises } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { eventRealtimeChannel } from '~~/shared/utils/realtimeChannels';
 import { callsTo } from '~~/test/helpers/lastCallTo';
 
@@ -31,17 +30,19 @@ const { mockFetch } = vi.hoisted(() => ({
 mockNuxtImport('$fetch', () => mockFetch);
 
 /**
- * Long enough for every stray the singleton would send to have landed: the
- * clock sync fires its first sample in the same tick and two more at 50ms
- * spacing, so 130ms covers the full salvo.
+ * Past every stray a singleton would send: the clock sync fires its first sample
+ * in the same tick and two more at 50ms spacing, so 130ms covers the salvo. On a
+ * fake clock, because a real wait can end before a loaded machine reaches them.
  */
 async function settle() {
-	await flushPromises();
-	await new Promise(resolve => setTimeout(resolve, 130));
-	await flushPromises();
+	await vi.advanceTimersByTimeAsync(130);
 }
 
 describe('shared nuxt suite setup', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it('a useServerTime consumer starts no clock sync against the suite $fetch mock', async () => {
 		// The singleton auto-started when the app booted for this file (the default
 		// layout renders UIServerTimeStatus), which is exactly how a victim suite
@@ -50,6 +51,8 @@ describe('shared nuxt suite setup', () => {
 		// Re-arm it here so this test owns the whole salvo.
 		const { getServerTime, stopSync, startSync } = useServerTime();
 		stopSync();
+		// After the stop, which clears an interval the boot set on the real clock.
+		vi.useFakeTimers();
 		startSync();
 		await settle();
 
@@ -60,6 +63,7 @@ describe('shared nuxt suite setup', () => {
 	});
 
 	it('an Event-scoped room subscription mints no token against the suite $fetch mock', async () => {
+		vi.useFakeTimers();
 		const realtime = useRealtime();
 		realtime.setRoom(eventRealtimeChannel(7));
 		await settle();

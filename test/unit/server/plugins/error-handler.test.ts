@@ -743,7 +743,8 @@ describe('error-handler mapping logic', () => {
 			},
 		];
 
-		it.each(preserved)('says something an operator can act on for $family', ({ cause, sentence }) => {
+		// A family raised at 500 would be quoted by nothing: the client refuses that status.
+		it.each(preserved)('says something an operator can act on, away from 500, for $family', ({ cause, sentence }) => {
 			const error: MappableNitroError = {
 				statusCode: 500,
 				message: 'Something went wrong',
@@ -755,15 +756,6 @@ describe('error-handler mapping logic', () => {
 
 			expect(error.message).toBe(sentence);
 			expect(error.unhandled).toBe(false);
-		});
-
-		// A family raised at 500 would be quoted by nothing: the client refuses that status.
-		it.each(preserved)('answers away from 500 for $family', ({ cause }) => {
-			const error: MappableNitroError = { statusCode: 500, message: 'Something went wrong', cause };
-
-			mapPublicNitroError(error);
-
-			expect(error.statusCode).not.toBe(500);
 			expect([502, 503, 504, 507]).toContain(error.statusCode);
 		});
 	});

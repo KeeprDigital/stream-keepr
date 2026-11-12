@@ -241,12 +241,6 @@ describe('useFeatureMatchStateStore actions', () => {
 				},
 			],
 			[
-				'adjustLife',
-				(s: ReturnType<typeof useFeatureMatchStateStore>) => s.adjustLife(EVENT_ID, MATCH_ID, 'player2', -5),
-				'player2',
-				{ lifeTotal: 15 },
-			],
-			[
 				'setLife',
 				(s: ReturnType<typeof useFeatureMatchStateStore>) => s.setLife(EVENT_ID, MATCH_ID, 'player1', 40),
 				'player1',

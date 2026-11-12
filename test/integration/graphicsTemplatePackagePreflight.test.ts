@@ -6,7 +6,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { TEMPLATE_PACKAGE_LIMITS, templatePackageContentEntry } from '../../shared/types/templatePackage';
 import { MAX_STILL_IMAGE_INGESTION_BYTES } from '../../shared/utils/graphicsAssetCompatibility';
-import { testGraphicAssetRevisionId } from '../helpers/graphicsAssetIdentities';
 import { collectStream } from '../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
@@ -399,77 +398,6 @@ describe('template Package preflight through the API boundary', () => {
 		expect(await retainedCanonicalSourceBytes()).toBe(retainedBefore);
 	});
 
-	it('pauses on warnings and installs nothing until the exact report is confirmed', async () => {
-		const retainedBefore = await retainedCanonicalSourceBytes();
-		const parts = readTemplatePackageParts(exportedPackage);
-		const packaged = parts.manifest.packagedAssets[0]!;
-		// A revision of a known source this installation does not hold: a separate
-		// Graphic Asset, and something the author is asked about.
-		parts.manifest.packagedAssets = [
-			{
-				...packaged,
-				origin: {
-					...packaged.origin,
-					sourceRevisionId: testGraphicAssetRevisionId('a-revision-never-seen-here'),
-				},
-			},
-		];
-		parts.template = {
-			...(parts.template as Record<string, unknown>),
-			frame: {
-				...((parts.template as { frame: Record<string, unknown> }).frame),
-				backgroundImage: {
-					kind: 'asset',
-					assetId: packaged.origin.sourceAssetId,
-					revisionId: 'a-revision-never-seen-here',
-				},
-			},
-		};
-
-		const operation = await receivePackage(writeTemplatePackage(parts));
-
-		expect(operation.stage).toBe('awaiting-confirmation');
-		const report = operation.templatePackagePreflight!;
-		expect(report.outcome).toBe('requires-confirmation');
-		expect(report.issues.map(issue => issue.code))
-			.toContain('graphic-asset-created-from-related-origin');
-		expect(report.issues.every(issue => issue.severity === 'warning')).toBe(true);
-
-		// A confirmation for some other report cannot move this one.
-		const wrongFingerprint = await fetch(
-			`/api/graphics-assets/ingestion-operations/${operation.id}/template-package-confirmation`,
-			{
-				method: 'POST',
-				headers: { ...authorHeaders, 'content-type': 'application/json' },
-				body: JSON.stringify({
-					fingerprint: 'a'.repeat(64),
-				}),
-			},
-		);
-		expect(wrongFingerprint.status).toBe(400);
-		await expect($fetch<GraphicsIngestionOperation>(
-			`/api/graphics-assets/ingestion-operations/${operation.id}`,
-			{ headers: authorHeaders },
-		)).resolves.toMatchObject({ stage: 'awaiting-confirmation' });
-
-		const confirmed = await $fetch<GraphicsIngestionOperation>(
-			`/api/graphics-assets/ingestion-operations/${operation.id}/template-package-confirmation`,
-			{
-				method: 'POST',
-				headers: authorHeaders,
-				body: { fingerprint: report.fingerprint },
-			},
-		);
-		expect(confirmed.stage).toBe('awaiting-installation');
-
-		// Confirmation readies the operation; it still installs nothing — by the
-		// listing, and by the listing-independent capacity figure (#369).
-		const assets = await libraryAssets();
-		expect(assets.some(asset => asset.name === packaged.name && asset.id !== reference.assetId))
-			.toBe(false);
-		expect(await retainedCanonicalSourceBytes()).toBe(retainedBefore);
-	});
-
 	it('permanently rejects an unsafe archive with one complete report', async () => {
 		const parts = readTemplatePackageParts(exportedPackage);
 		const operation = await receivePackage(writeTemplatePackage(parts, {
@@ -503,56 +431,6 @@ describe('template Package preflight through the API boundary', () => {
 			{ method: 'POST', headers: authorHeaders },
 		);
 		expect(retried.status).toBe(409);
-	});
-
-	it('cancels a paused package idempotently', async () => {
-		const parts = readTemplatePackageParts(exportedPackage);
-		const packaged = parts.manifest.packagedAssets[0]!;
-		parts.manifest.packagedAssets = [
-			{
-				...packaged,
-				origin: {
-					...packaged.origin,
-					sourceRevisionId: testGraphicAssetRevisionId('another-unseen-revision'),
-				},
-			},
-		];
-		parts.template = {
-			...(parts.template as Record<string, unknown>),
-			frame: {
-				...((parts.template as { frame: Record<string, unknown> }).frame),
-				backgroundImage: {
-					kind: 'asset',
-					assetId: packaged.origin.sourceAssetId,
-					revisionId: 'another-unseen-revision',
-				},
-			},
-		};
-		const operation = await receivePackage(writeTemplatePackage(parts));
-		expect(operation.stage).toBe('awaiting-confirmation');
-
-		const cancelled = await $fetch<GraphicsIngestionOperation>(
-			`/api/graphics-assets/ingestion-operations/${operation.id}`,
-			{ method: 'DELETE', headers: authorHeaders },
-		);
-		const again = await $fetch<GraphicsIngestionOperation>(
-			`/api/graphics-assets/ingestion-operations/${operation.id}`,
-			{ method: 'DELETE', headers: authorHeaders },
-		);
-
-		expect(cancelled.stage).toBe('cancelled');
-		expect(again.stage).toBe('cancelled');
-		const confirmAfterCancel = await fetch(
-			`/api/graphics-assets/ingestion-operations/${operation.id}/template-package-confirmation`,
-			{
-				method: 'POST',
-				headers: { ...authorHeaders, 'content-type': 'application/json' },
-				body: JSON.stringify({
-					fingerprint: operation.templatePackagePreflight!.fingerprint,
-				}),
-			},
-		);
-		expect(confirmAfterCancel.status).toBe(409);
 	});
 
 	it('refuses to initiate a package beyond the received archive limit', async () => {

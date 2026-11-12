@@ -31,7 +31,6 @@ const stores = [
 			const store = usePhaseStore();
 			return {
 				load: store.loadPhasesByEventId,
-				update: store.updatePhase,
 				items: () => store.phases,
 				store,
 			};
@@ -47,7 +46,6 @@ const stores = [
 			const store = useRoundStore();
 			return {
 				load: store.loadRoundsByEventId,
-				update: store.updateRound,
 				items: () => store.rounds,
 				store,
 			};
@@ -82,19 +80,26 @@ describe.each(stores)('the $name store', ({ store: useStore, entity, created, up
 
 		expect(subject.items()).toEqual([]);
 	});
+});
 
-	it('reports the server\'s sentence for a refused update and rolls it back', async () => {
-		created(entity({ id: 1, eventId: 1, name: 'Before' }) as never);
-		mockRepo.update.mockRejectedValue(transportFailure({
-			status: 409,
-			body: { message: 'It has already started' },
-		}));
+// The lifecycle's own suite owns the rollback. What it does not show is the server's
+// sentence in place of the transport line; both stores update through one alias, so one shows it.
+it('reports the server\'s sentence for a refused update', async () => {
+	const store = useRoundStore();
+	store.$reset();
+	mockRepo.list.mockResolvedValue([]);
+	await store.loadRoundsByEventId(1);
+	deliver('round:created', {
+		round: createMockRound({ id: 1, eventId: 1, name: 'Before' }),
+	} as never);
+	mockRepo.update.mockRejectedValue(transportFailure({
+		status: 409,
+		body: { message: 'It has already started' },
+	}));
 
-		await subject.update(1, 1, { name: 'After' });
+	await store.updateRound(1, 1, { name: 'After' });
 
-		expect(subject.store.error).toBe('It has already started');
-		expect(subject.items()[0]!.name).toBe('Before');
-	});
+	expect(store.error).toBe('It has already started');
 });
 
 it('ignores this client\'s own Event Data messages, which it already applied', async () => {

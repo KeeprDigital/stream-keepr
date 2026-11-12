@@ -122,14 +122,18 @@ export const rootAliases = {
 	'h3': nitroH3Directory,
 };
 
+/** App code tested in the unit suite alone: measured there, and left out of the Nuxt suite's floor. */
 const nodeOnlyAppCoverageInclude = [
+	'app/composables/screen/screenSettingsSummaries.ts',
 	'app/composables/screen/useScreenRealtimeSession.ts',
-	'app/composables/workflows/useEventRealtimeSession.ts',
 	'app/modules/auth/pageGate.ts',
 	'app/modules/event-data/client.ts',
 	'app/modules/feature-match-session/client.ts',
 	'app/modules/metagame/client.ts',
 	'app/plugins/realtime.client.ts',
+	'app/utils/animation-effects/{connectionLines,dots,globe,net,random,rendererHarness,rings,sceneEffect,shaderPlane,waves}.ts',
+	'app/utils/broadcastGraphicsCommandRefusal.ts',
+	'app/utils/featureMatchSetup.ts',
 	'app/utils/metagame.ts',
 	'app/utils/uuid.ts',
 ];
@@ -177,7 +181,9 @@ export const unitCoverageConfig: CoverageOptions = {
 		...nodeOnlyAppCoverageInclude,
 		// Unit-tested here and still exercised by the Nuxt suite, so measured in both.
 		'app/composables/core/useRealtimeMessageGate.ts',
+		'app/composables/workflows/useEventRealtimeSession.ts',
 		'app/modules/screen-mode/index.ts',
+		'app/modules/screen-mode/modeTokens.ts',
 	],
 	exclude: coverageExclude,
 };

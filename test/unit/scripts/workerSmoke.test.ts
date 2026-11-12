@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { EventEmitter } from 'node:events';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -172,12 +172,19 @@ describe('the built Worker smoke runner', () => {
 		const originalDevVars = Buffer.from('original dev vars\n');
 		await writeFile(stagedEnv, originalEnv);
 		await writeFile(stagedDevVars, originalDevVars);
-		const before = new Set((await readdir(tmpdir())).filter(name => name.startsWith('stream-keepr-worker-smoke-')));
+		// This run's own: the shared temporary directory also holds other runs' state.
+		const temporaryRoot = await mkdtemp(join(tmpdir(), 'stream-keepr-worker-smoke-test-'));
+		temporaryRoots.push(temporaryRoot);
 		const migration = livingProcess();
+		let bindingStateDuringMigration: string[] = [];
 
 		await expect(runWorkerSmoke({
 			repositoryRoot,
-			spawnProcess: vi.fn(() => migration),
+			temporaryRoot,
+			spawnProcess: vi.fn(() => {
+				bindingStateDuringMigration = readdirSync(temporaryRoot);
+				return migration;
+			}),
 			hardTimeoutMs: 5,
 		})).rejects.toMatchObject({
 			probe: 'runner',
@@ -187,8 +194,8 @@ describe('the built Worker smoke runner', () => {
 		expect(migration.kill).toHaveBeenCalledWith('SIGTERM');
 		expect(await readFile(stagedEnv)).toEqual(originalEnv);
 		expect(await readFile(stagedDevVars)).toEqual(originalDevVars);
-		const after = (await readdir(tmpdir())).filter(name => name.startsWith('stream-keepr-worker-smoke-'));
-		expect(after.filter(name => !before.has(name))).toEqual([]);
+		expect(bindingStateDuringMigration).toHaveLength(1);
+		expect(await readdir(temporaryRoot)).toEqual([]);
 	});
 
 	it('terminates setup when the caller interrupts the smoke run', async () => {

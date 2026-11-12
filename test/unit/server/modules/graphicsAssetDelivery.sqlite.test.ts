@@ -30,8 +30,9 @@ afterEach(async () => {
 	await harness.close();
 });
 
-// Delivery's contract holds over both catalogue adapters: their delivery
-// reads truly match, so one table runs against each.
+// The fake-parity contract for the in-memory catalogue the library's other unit
+// tests run on: it answers delivery's reads as the D1 catalogue does, so one
+// table runs against each. No other file runs over both.
 const CATALOGUES: [string, () => GraphicsAssetCatalogue][] = [
 	[
 		'the in-memory catalogue',

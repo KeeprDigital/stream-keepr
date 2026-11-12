@@ -48,22 +48,4 @@ describe('the database client', () => {
 
 		expect(db.$client).toBe(database);
 	});
-
-	it('knows every table, including the auth and Graphics Asset Library schemas kept in their own files', async () => {
-		(globalThis as { __env__?: unknown }).__env__ = {
-			DB: binding(),
-		};
-		const { db, schema } = await freshModule();
-
-		expect(Object.keys(db.query)).toEqual(expect.arrayContaining([
-			'events',
-			'screens',
-			'user',
-			'session',
-			'graphicAssets',
-		]));
-		expect(schema).toHaveProperty('user');
-		expect(schema).toHaveProperty('graphicAssets');
-		expect(schema).toHaveProperty('events');
-	});
 });

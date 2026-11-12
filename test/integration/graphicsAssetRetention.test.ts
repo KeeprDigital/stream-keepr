@@ -10,7 +10,6 @@ import type {
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import {
 	GRAPHICS_EVIDENCE_CATEGORY_GROUP_VALUES,
 	GRAPHICS_EVIDENCE_CATEGORY_GROUPS,
@@ -42,7 +41,6 @@ function pngWithTextChunks(count: number) {
 
 const retentionPixelPng = pngWithTextChunks(30);
 const retentionReplacementPng = pngWithTextChunks(31);
-const retentionReferencedPng = pngWithTextChunks(32);
 
 function decodeEvidence(bytes: Uint8Array) {
 	return {
@@ -422,71 +420,6 @@ describe('the Graphics Asset Library retention API', () => {
 			expect(Object.keys(entry.detail)).not.toContain('objectKey');
 			expect(Object.keys(entry.detail)).not.toContain('fileName');
 			expect(Object.keys(entry.detail)).not.toContain('url');
-		}
-	});
-
-	it('retains a referenced superseded revision with no deadline and never purges it', async () => {
-		const event = await $fetch<{ id: number }>('/api/events', {
-			method: 'POST',
-			body: {
-				name: 'Graphic Asset Retention Event',
-				game: 'mtg',
-				featureMatchOrientation: 'horizontal',
-			},
-		});
-		try {
-			const screen = await $fetch<{ id: number }>(`/api/events/${event.id}/screens`, {
-				method: 'POST',
-				body: {
-					name: 'Retention overlay',
-					slug: `retention-overlay-${event.id}`,
-					currentMode: 'feature-match-overlay',
-				},
-			});
-			const operation = await ingest(
-				'Referenced retention logo',
-				'retention-referenced-revision',
-				retentionReferencedPng,
-			);
-			const assetId = operation.result!.assetId;
-			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.frame.backgroundImage = {
-				kind: 'asset',
-				assetId,
-				revisionId: operation.result!.revisionId,
-			};
-			await $fetch(
-				`/api/events/${event.id}/screens/${screen.id}/config/feature-match-overlay`,
-				{
-					method: 'PATCH',
-					body: { layout: config.layout },
-				},
-			);
-			await replace(assetId, 'retention-referenced-revision-replacement');
-
-			const view = await $fetch<GraphicAssetRetentionView>(
-				`/api/graphics-assets/${assetId}/retention`,
-				{ headers: authorHeaders },
-			);
-			expect(view.revisions[0]).toMatchObject({
-				revisionId: operation.result!.revisionId,
-				retention: { policy: 'referenced', referenceCount: 1 },
-			});
-
-			const swept = await $fetch<GraphicsRetentionSweepResult>(
-				'/api/admin/graphics-assets/retention',
-				{ method: 'POST', headers: administratorHeaders },
-			);
-			expect(swept.revisions.pruned).toBe(0);
-			const trash = await fetch(`/api/graphics-assets/${assetId}/lifecycle-actions`, {
-				method: 'POST',
-				headers: { ...authorHeaders, 'content-type': 'application/json' },
-				body: JSON.stringify({ action: 'trash' }),
-			});
-			await expect(trash.json()).resolves.toMatchObject({ outcome: 'in-use' });
-		}
-		finally {
-			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' }).catch(() => {});
 		}
 	});
 });

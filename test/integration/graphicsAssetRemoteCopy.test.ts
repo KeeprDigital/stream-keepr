@@ -91,50 +91,20 @@ describe('the approved remote HTTPS copy API', () => {
 		expect(response.status).toBe(400);
 	});
 
-	it.each([
-		{
-			label: 'a plaintext HTTP destination',
-			sourceUrl: 'http://cdn.example.test/scoreboard.png',
-			code: 'remote-source-not-https',
-		},
-		{
-			label: 'the loopback interface',
-			sourceUrl: 'https://127.0.0.1/scoreboard.png',
-			code: 'remote-source-destination-not-public',
-		},
-		{
-			label: 'the loopback hostname',
-			sourceUrl: 'https://localhost:3000/api/graphics-assets',
-			code: 'remote-source-destination-not-public',
-		},
-		{
-			label: 'a private network address',
-			sourceUrl: 'https://192.168.1.1/scoreboard.png',
-			code: 'remote-source-destination-not-public',
-		},
-		{
-			label: 'the cloud metadata address',
-			sourceUrl: 'https://169.254.169.254/latest/meta-data/iam/security-credentials/',
-			code: 'remote-source-destination-not-public',
-		},
-		{
-			label: 'embedded credentials',
-			sourceUrl: 'https://user:secret@cdn.example.test/scoreboard.png',
-			code: 'remote-source-credentials-present',
-		},
-	] as const)('reports $label as a permanent failure and leaves the library unchanged', async ({
-		label,
-		sourceUrl,
-		code,
-	}) => {
+	// Each refusal and every address range is unit-owned; this proves the deployed copy
+	// runs that source policy behind the route, and that its report keeps the secret out.
+	it('reports embedded credentials as a permanent failure and leaves the library unchanged', async () => {
 		// The idempotency key is durable author-supplied state, so it must never
 		// be derived from the source URL.
 		const initiated = await initiateRemoteCopy(
-			`integration-remote-copy-rejection-${label.replaceAll(' ', '-')}`,
-			`Rejected remote copy ${code}`,
+			'integration-remote-copy-rejection-embedded-credentials',
+			'Rejected remote copy remote-source-credentials-present',
 		);
 
-		const { status, operation } = await copyRemoteSource(initiated.id, sourceUrl);
+		const { status, operation } = await copyRemoteSource(
+			initiated.id,
+			'https://user:secret@cdn.example.test/scoreboard.png',
+		);
 		expect(status).toBe(200);
 		expect(operation).toMatchObject({
 			stage: 'failed',
@@ -143,7 +113,7 @@ describe('the approved remote HTTPS copy API', () => {
 			report: {
 				outcome: 'rejected',
 				issues: [
-					{ code },
+					{ code: 'remote-source-credentials-present' },
 				],
 			},
 		});

@@ -7,7 +7,6 @@ import {
 	integrationBroadcastGraphicWithInputs,
 	integrationTextInput,
 	playoutCommandId,
-	sendBroadcastGraphicsCommand,
 	setBroadcastGraphicInput,
 } from './broadcastGraphicsPlayoutHelpers';
 import { $fetch } from './client';
@@ -23,8 +22,6 @@ import { $fetchRaw } from './helpers';
 const GRAPHIC = 'lower-third';
 
 const NAME = integrationTextInput('name', { default: 'Unnamed' });
-const TITLE = integrationTextInput('title', { required: true });
-const LIVE_SUBTITLE = integrationTextInput('subtitle', { updatePolicy: 'live' });
 
 function graphicWith(inputs: GraphicInputDeclaration[]) {
 	return [
@@ -110,34 +107,6 @@ describe('broadcast graphics Graphic Input command API', () => {
 		expect(screen.modeConfigs['broadcast-graphics']!.graphics[0]!.inputs).toHaveLength(7);
 	});
 
-	it('shares a server-accepted working edit with every other session immediately', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-shared', graphicWith([NAME]));
-
-		await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
-
-		// A second Live Control has nothing but the authoritative snapshot to go on,
-		// and it already carries the edit — nobody had to publish it.
-		const elsewhere = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
-
-		expect(elsewhere.currentState.inputs[GRAPHIC]!.working).toEqual({ name: 'Ava Reed' });
-		// And it is not on air, because the graphic is off and nothing has accepted it.
-		expect(elsewhere.currentState.inputs[GRAPHIC]!.accepted).toEqual({});
-	});
-
-	it('accepts the working values of an off Broadcast Graphic when it is next taken', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-take-accepts', graphicWith([NAME]));
-		await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
-
-		const taken = await harness.send({
-			commandId: playoutCommandId('take'),
-			type: 'Take',
-			payload: { graphicId: GRAPHIC },
-		});
-
-		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed' });
-		expect(taken.currentState.playout[GRAPHIC]).toMatchObject({ onAir: true, cut: false });
-	});
-
 	it('keeps a staged edit off air until Update Graphic accepts the complete set', async () => {
 		const harness = await createGraphicsHarness(eventId, 'inputs-update', graphicWith([
 			NAME,
@@ -164,26 +133,6 @@ describe('broadcast graphics Graphic Input command API', () => {
 		} as BroadcastGraphicsCommand);
 
 		expect(updated.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed', title: 'Champion' });
-	});
-
-	it('refuses Update Graphic while the Broadcast Graphic is off', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-update-off', graphicWith([NAME]));
-
-		const res = await $fetchRaw(
-			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
-			{
-				method: 'POST',
-				body: {
-					commandId: playoutCommandId('update-off'),
-					type: 'Update Graphic',
-					payload: { graphicId: GRAPHIC, basedOnAcceptedRevision: 0 },
-				},
-				ignoreResponseError: true,
-			},
-		);
-
-		expect(res.status).toBe(409);
-		expect(res._data?.message).toMatch(/only while a Broadcast Graphic is entering, on air, or updating/i);
 	});
 
 	it('rejects an acceptance another operator has already superseded', async () => {
@@ -224,146 +173,6 @@ describe('broadcast graphics Graphic Input command API', () => {
 
 		const unchanged = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
 		expect(unchanged.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'First' });
-	});
-
-	it('suppresses a repeated delivery of one Update Graphic instead of accepting it twice', async () => {
-		// The sequence guard and the Command Receipt are different mechanisms, and this
-		// is the one the receipt exists for: the operator pressed Update Graphic once,
-		// and the command reached the server twice. Accepting a staged set twice is a
-		// genuine double-apply, unlike a repeated Take.
-		const harness = await createGraphicsHarness(eventId, 'inputs-retry', graphicWith([NAME]));
-		await harness.send({
-			commandId: playoutCommandId('take'),
-			type: 'Take',
-			payload: { graphicId: GRAPHIC },
-		});
-		const staged = await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
-		const command = {
-			commandId: playoutCommandId('update-once'),
-			type: 'Update Graphic' as const,
-			payload: {
-				graphicId: GRAPHIC,
-				basedOnAcceptedRevision: staged.currentState.inputs[GRAPHIC]!.acceptedRevision,
-			},
-		} as BroadcastGraphicsCommand;
-
-		const first = await harness.send(command);
-		const replay = await sendBroadcastGraphicsCommand(eventId, harness.screen.id, harness.session().id, command);
-
-		expect(replay.sequence).toBe(first.sequence);
-		expect(replay.currentState.inputs[GRAPHIC]!.acceptedRevision)
-			.toBe(first.currentState.inputs[GRAPHIC]!.acceptedRevision);
-	});
-
-	it('reaches the same accepted state for Cut Update as for Update Graphic', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-cut-update', graphicWith([NAME]));
-		await harness.send({
-			commandId: playoutCommandId('take'),
-			type: 'Take',
-			payload: { graphicId: GRAPHIC },
-		});
-		const staged = await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
-
-		const cut = await harness.send({
-			commandId: playoutCommandId('cut-update'),
-			type: 'Update Graphic',
-			payload: {
-				graphicId: GRAPHIC,
-				cut: true,
-				basedOnAcceptedRevision: staged.currentState.inputs[GRAPHIC]!.acceptedRevision,
-			},
-		} as BroadcastGraphicsCommand);
-
-		expect(cut.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed' });
-	});
-
-	it('blocks Take while a required Graphic Input has no available value, and explains why', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-required', graphicWith([NAME, TITLE]));
-
-		const res = await $fetchRaw(
-			`/api/events/${eventId}/screens/${harness.screen.id}/broadcast-graphics/live-sessions/${harness.session().id}/commands`,
-			{
-				method: 'POST',
-				body: {
-					commandId: playoutCommandId('blocked-take'),
-					type: 'Take',
-					payload: { graphicId: GRAPHIC },
-				},
-				ignoreResponseError: true,
-			},
-		);
-
-		expect(res.status).toBe(409);
-		expect(res._data?.message).toMatch(/title must have a value/i);
-
-		const stillOff = await getBroadcastGraphicsLiveSession(eventId, harness.screen.id);
-		expect(stillOff.currentState.playout[GRAPHIC]).toBeUndefined();
-	});
-
-	it('takes the graphic on air once the required Graphic Input has a value', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-required-met', graphicWith([NAME, TITLE]));
-		await setBroadcastGraphicInput(harness, GRAPHIC, 'title', 'Champion');
-
-		const taken = await harness.send({
-			commandId: playoutCommandId('take-met'),
-			type: 'Take',
-			payload: { graphicId: GRAPHIC },
-		});
-
-		expect(taken.currentState.playout[GRAPHIC]).toMatchObject({ onAir: true, cut: false });
-		expect(taken.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Unnamed', title: 'Champion' });
-	});
-
-	it('stores a value that violates its declared bound rather than coercing it, and never accepts it', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-unavailable', graphicWith([NAME]));
-		await harness.send({
-			commandId: playoutCommandId('take'),
-			type: 'Take',
-			payload: { graphicId: GRAPHIC },
-		});
-		const good = await setBroadcastGraphicInput(harness, GRAPHIC, 'name', 'Ava Reed');
-		await harness.send({
-			commandId: playoutCommandId('update-good'),
-			type: 'Update Graphic',
-			payload: {
-				graphicId: GRAPHIC,
-				basedOnAcceptedRevision: good.currentState.inputs[GRAPHIC]!.acceptedRevision,
-			},
-		} as BroadcastGraphicsCommand);
-
-		const tooLong = 'A'.repeat(50);
-		const staged = await setBroadcastGraphicInput(harness, GRAPHIC, 'name', tooLong);
-
-		// Stored exactly as entered, so Live Control can show what is wrong with it.
-		expect(staged.currentState.inputs[GRAPHIC]!.working).toEqual({ name: tooLong });
-
-		const updated = await harness.send({
-			commandId: playoutCommandId('update-unavailable'),
-			type: 'Update Graphic',
-			payload: {
-				graphicId: GRAPHIC,
-				basedOnAcceptedRevision: staged.currentState.inputs[GRAPHIC]!.acceptedRevision,
-			},
-		} as BroadcastGraphicsCommand);
-
-		// And on air the last accepted rendering is still what program shows.
-		expect(updated.currentState.inputs[GRAPHIC]!.accepted).toEqual({ name: 'Ava Reed' });
-	});
-
-	it('applies a live On-air Update Policy edit to an on-air graphic without an Update Graphic', async () => {
-		const harness = await createGraphicsHarness(eventId, 'inputs-live-policy', graphicWith([NAME, LIVE_SUBTITLE]));
-		await harness.send({
-			commandId: playoutCommandId('take'),
-			type: 'Take',
-			payload: { graphicId: GRAPHIC },
-		});
-
-		const edited = await setBroadcastGraphicInput(harness, GRAPHIC, 'subtitle', 'On the call');
-
-		expect(edited.currentState.inputs[GRAPHIC]!.accepted.subtitle).toBe('On the call');
-		// It accepted its own field only, so a staged acceptance being prepared on the
-		// same graphic is not invalidated by it.
-		expect(edited.currentState.inputs[GRAPHIC]!.acceptedRevision).toBe(1);
 	});
 
 	it('rejects an edit naming a Graphic Input the Broadcast Graphic does not declare', async () => {

@@ -113,9 +113,7 @@ export function assertRealtimeTestFile(env: NodeJS.ProcessEnv = process.env) {
  * suite?" is the same in the parent and the child, and is the same question
  * `nuxt.config.ts` already asks.
  *
- * Called before the servers start, which
- * `test/unit/integration/integrationModeAnnouncement.test.ts` enforces rather
- * than trusts.
+ * `globalSetup.ts` calls it first, before any server starts.
  */
 export function announceIntegrationMode(env: NodeJS.ProcessEnv = process.env) {
 	env[INTEGRATION_MODE_ENV] = 'true';

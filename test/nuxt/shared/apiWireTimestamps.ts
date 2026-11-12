@@ -1,20 +1,20 @@
 import type { Event } from '~/types';
-import { describe, expectTypeOf, it } from 'vitest';
+import { expectTypeOf } from 'vitest';
 
 /**
  * Tripwires for the divergence recorded in `shared/api/index.ts` (#272): response types
  * say `Date`, the wire delivers a string. A failure here is a prompt to re-read that
  * decision, not a regression to undo.
+ *
+ * Compiled by `pnpm typecheck` with the rest of `test/nuxt/**` and never run: a type
+ * assertion does nothing at runtime, so this is no suite's test file.
  */
-describe('api response timestamps at the wire boundary', () => {
-	it('is inferred correctly by a typed $fetch that is left to infer', () => {
-		expectTypeOf<Awaited<ReturnType<typeof _inferredFetch>>>().toEqualTypeOf<string>();
-	});
-
-	it('is overridden back to Date by the explicit generic every call site passes', () => {
-		expectTypeOf<Awaited<ReturnType<typeof _explicitFetch>>>().toEqualTypeOf<Date>();
-	});
-});
+export function apiResponseTimestampsAtTheWireBoundary() {
+	// Inferred correctly by a typed `$fetch` that is left to infer.
+	expectTypeOf<Awaited<ReturnType<typeof _inferredFetch>>>().toEqualTypeOf<string>();
+	// Overridden back to `Date` by the explicit generic every call site passes.
+	expectTypeOf<Awaited<ReturnType<typeof _explicitFetch>>>().toEqualTypeOf<Date>();
+}
 
 /** Nitro's inferred type applies the serialisation transform, so it says `string`. */
 async function _inferredFetch() {

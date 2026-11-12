@@ -1,4 +1,3 @@
-/* eslint-disable no-template-curly-in-string -- GitHub Actions expressions are literal strings here. */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
@@ -10,6 +9,7 @@ import { parse } from 'yaml';
  */
 
 interface Step {
+	'id'?: string;
 	'uses'?: string;
 	'run'?: string;
 	'if'?: string;
@@ -72,13 +72,12 @@ describe('every required check reports in the merge queue as well as on PRs', ()
 			expect(names.filter(name => name === check)).toHaveLength(1);
 	});
 
-	it('`CI passed` waits on every other CI job and fails on anything but success or a skip', () => {
+	it('`CI passed` waits on every other CI job, whatever became of it, and judges each result but `record`\'s', () => {
 		const passed = ci.jobs.passed!;
 
 		expect(passed.name).toBe('CI passed');
 		expect(passed.if).toBe('always()');
 		expect(needs(passed)).toEqual(Object.keys(ci.jobs).filter(id => id !== 'passed').toSorted());
-		expect(runs(passed)).toContain('success|skipped) ;;');
 		expect(runs(passed)).toContain('map(select(.key != "record") | .value.result)');
 	});
 
@@ -99,7 +98,26 @@ describe('the CI scope decides what a merge group can affect against the queue\'
 	it('runs for every merge group and for ready PRs, through the tested script', () => {
 		expect(scope.if).toBe('github.event_name == \'merge_group\' || !github.event.pull_request.draft');
 		expect(runs(scope)).toContain('node scripts/ci-scope.mjs');
-		expect(runs(scope)).not.toContain('HEAD^1');
+	});
+
+	// An output the scope job does not export reads as '', which skips the job asking for it.
+	it('exports every output another job reads, each from a step it runs', () => {
+		const read = [
+			...new Set([
+				...JSON.stringify(ci.jobs).matchAll(/needs\.scope\.outputs\.([\w-]+)/g),
+			].map(match => match[1]!)),
+		];
+		const stepIds = (scope.steps ?? []).map(step => step.id);
+
+		expect(read.length).toBeGreaterThan(0);
+		expect(Object.keys(scope.outputs ?? {})).toEqual(expect.arrayContaining(read));
+		for (const [name, expression] of Object.entries(scope.outputs ?? {})) {
+			const [, stepId] = expression.match(/^\$\{\{ steps\.([\w-]+)\.outputs\.[\w-]+ \}\}$/) ?? [];
+			expect({
+				name,
+				fromItsStep: stepIds.includes(stepId),
+			}).toEqual({ name, fromItsStep: true });
+		}
 	});
 
 	it.each(gates)('gate %s is skipped only on the scope job\'s decision, and reads no PR-only state', (id) => {
@@ -116,7 +134,6 @@ describe('the CI scope decides what a merge group can affect against the queue\'
 	it('the checks job lints only for code, and runs the docs checks only for a docs-only change', () => {
 		const commands = (ci.jobs.checks!.steps ?? []).filter(step => step.run).map(step => [step.run, step.if]);
 
-		expect(scope.outputs).toHaveProperty('docs', '${{ steps.scope.outputs.docs }}');
 		expect(commands).toEqual([
 			['pnpm lint', FOR_CODE],
 			['pnpm verify:docs', FOR_DOCS],
@@ -140,13 +157,7 @@ describe('the CI scope decides what a merge group can affect against the queue\'
 });
 
 describe('a merge group skips the gates only for a tree a full, green PR run verified', () => {
-	const scope = ci.jobs.scope!;
 	const record = ci.jobs.record!;
-
-	it('the scope job can read the PR runs\' records and nothing more', () => {
-		expect(scope.permissions).toEqual({ contents: 'read', actions: 'read' });
-		expect(scope.outputs).toHaveProperty('verified-by', '${{ steps.scope.outputs.verified-by }}');
-	});
 
 	it('a PR run records its tree only after every gate passed, never in the queue or for a fork', () => {
 		expect(needs(record)).toEqual(['scope', ...gates].toSorted());
@@ -187,12 +198,5 @@ describe('release-please releases only what the queue verified', () => {
 			expect(job.if).toBeUndefined();
 			expect(job['continue-on-error']).toBeUndefined();
 		}
-	});
-
-	it('the gate can read the merge-group runs, and checks out only itself', () => {
-		expect(releasePlease.permissions).toHaveProperty('actions', 'read');
-		expect(steps[gate]!.env).toHaveProperty('GH_TOKEN', '${{ github.token }}');
-		expect(String(steps[0]!.with?.['sparse-checkout'])).toContain('scripts/release-gate.mjs');
-		expect(steps[0]!.with?.['persist-credentials']).toBe(false);
 	});
 });

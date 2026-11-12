@@ -174,8 +174,12 @@ function lowerThirdGraphic(id) {
 	};
 }
 
-async function main() {
-	origin = probeOrigin();
+/**
+ * The command line names neither dependency. The unit test names both, so a
+ * refusal that regressed would reach its stand-in and never an installation.
+ */
+export async function main({ env = process.env, openOperatorSession = openOperatorSessionForOrigin } = {}) {
+	origin = probeOrigin(env);
 	// Said out loud before anything is created, because the failure this guards
 	// against is writing to an installation nobody meant to name.
 	process.stderr.write(`measure-realtime-fanout: provisioning against ${origin}\n`);
@@ -189,7 +193,7 @@ async function main() {
 	// environment, or one this probe creates through the first-admin bootstrap —
 	// is `graphics-acceptance/operator.mjs`'s decision, and it is not defaulted to
 	// a local file for a remote origin.
-	const sessionCookies = await openOperatorSessionForOrigin(origin);
+	const sessionCookies = await openOperatorSession(origin);
 	cookie = sessionCookies.join('; ');
 
 	const event = await api('/api/events', {

@@ -11,7 +11,6 @@ import {
 	getStartingTurnNumber,
 	isOfferedToCardGame,
 	MTG_ONLY,
-	SCREEN_MODE_CARD_GAMES,
 } from '~~/shared/config/games';
 import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '~~/shared/types/featureMatchDefaults';
 
@@ -49,44 +48,17 @@ describe('card Game support', () => {
 
 describe('the Event pages each Card Game is offered', () => {
 	// A One Piece Card Game Event has Players and a TCG+ Import Sync (ADR-0074); what needs Rounds, Matches or Melee stays Magic's.
-	it.each([
-		['players', true],
-		['matches', false],
-		['eventStructure', false],
-		['sync', true],
-		['metagame', true],
-		['archetypeReview', false],
-		['cards', true],
-		['integrations', false],
-	] as const)('offers %s to a One Piece Event: %s', (page, offered) => {
-		expect(isOfferedToCardGame(EVENT_PAGE_CARD_GAMES[page], 'op')).toBe(offered);
-		expect(isOfferedToCardGame(EVENT_PAGE_CARD_GAMES[page], 'mtg')).toBe(true);
-	});
-});
+	it('keeps exactly the pages needing Rounds, Matches or Melee from a One Piece Event, and none from a Magic one', () => {
+		const pages = Object.keys(EVENT_PAGE_CARD_GAMES) as (keyof typeof EVENT_PAGE_CARD_GAMES)[];
 
-describe('the Screen Modes each Card Game is offered', () => {
-	// A One Piece Card Game Event's Metagame reads participation only (ADR-0074); what needs results stays Magic's.
-	// Top Cut Bracket's Manual Bracket needs neither (ADR-0075).
-	it.each([
-		['background', true],
-		['card', true],
-		['deck', true],
-		['standings', false],
-		['top-cut', true],
-		['feature-match', true],
-		['feature-match-overlay', true],
-		['broadcast-graphics', true],
-		['metagame', true],
-		['top-cards', true],
-		['player-history', false],
-		['pairings', false],
-		['archetype-spotlight', true],
-		['head-to-head', false],
-		['round-clock', false],
-		['talent', true],
-	] as const)('offers %s to a One Piece Event: %s', (mode, offered) => {
-		expect(isOfferedToCardGame(SCREEN_MODE_CARD_GAMES[mode], 'op')).toBe(offered);
-		expect(isOfferedToCardGame(SCREEN_MODE_CARD_GAMES[mode], 'mtg')).toBe(true);
+		expect(pages.filter(page => !isOfferedToCardGame(EVENT_PAGE_CARD_GAMES[page], 'op')))
+			.toEqual([
+				'matches',
+				'eventStructure',
+				'archetypeReview',
+				'integrations',
+			]);
+		expect(pages.filter(page => !isOfferedToCardGame(EVENT_PAGE_CARD_GAMES[page], 'mtg'))).toEqual([]);
 	});
 });
 

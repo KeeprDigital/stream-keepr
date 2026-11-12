@@ -78,7 +78,7 @@ function* scannableFiles(directory) {
  * Prove the search bites, in both directions, before trusting it to stay quiet.
  * Returns the ways it is broken, empty when it is sound.
  */
-export function selfTest() {
+function selfTest() {
 	// What `build/wasmModulePlugin.ts` emits, which this must always report.
 	const planted = 'export default new WebAssembly.Module(bytes);';
 	// Verbatim from a correct bundle, which this must never report.

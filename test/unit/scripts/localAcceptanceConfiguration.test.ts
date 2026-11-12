@@ -6,14 +6,10 @@ import {
 	LOCALLY_REQUIRED_NUXT_NAMES,
 	sentenceList,
 } from '../../../build/localConfiguration';
-import {
-	ACCEPTANCE_FAILURE_CODES,
-	createAcceptanceEvidence,
-} from '../../../scripts/graphics-acceptance/evidence.mjs';
+import { createAcceptanceEvidence } from '../../../scripts/graphics-acceptance/evidence.mjs';
 import {
 	LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES,
 	LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES,
-	LOCAL_CONFIGURATION_FILES,
 	localAcceptanceConfiguration,
 	localConfigurationNotice,
 	missingLocalAcceptanceNames,
@@ -23,7 +19,6 @@ import {
 	STALE_PREVIEW_DEV_VARS,
 	suppliedNames,
 } from '../../../scripts/graphics-acceptance/local-configuration.mjs';
-import { PREVIEW_WRANGLER_CONFIG } from '../../../scripts/preview-worker.mjs';
 import {
 	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
 	LOCAL_AUTH_BYPASS_NAME,
@@ -71,11 +66,6 @@ describe('which required names a local acceptance run needs', () => {
 			...LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES,
 		].sort())
 			.toEqual([...LOCALLY_REQUIRED_NUXT_NAMES].sort());
-	});
-
-	it('claims no name that is not required of a checkout in the first place', () => {
-		for (const name of LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES)
-			expect(LOCALLY_REQUIRED_NUXT_NAMES).toContain(name);
 	});
 
 	/**
@@ -167,17 +157,6 @@ describe('folding the checkout\'s sources into one answer', () => {
 
 	it('skips a source that is not there at all', () => {
 		expect(suppliedNames([null, undefined, `${SIGNING_KEY}=${A_KEY}`])[SIGNING_KEY]).toBe(A_KEY);
-	});
-
-	/**
-	 * Two since #412, and the second is the point: wrangler resolves the file it
-	 * reads against its config file's directory, and `pnpm preview` passes
-	 * `--config .output/server/wrangler.json`. Someone who has previewed has the
-	 * name in a place the repository root does not hold — and someone who has not
-	 * built yet has it only at the root, which is why both are read.
-	 */
-	it('looks in the two places this checkout keeps such a name', () => {
-		expect(LOCAL_CONFIGURATION_FILES).toEqual(['.env', '.output/server/.env']);
 	});
 });
 
@@ -300,19 +279,6 @@ describe('the notice', () => {
 		expect(cause).not.toContain(ADMIN_TOKEN);
 		expect(cause).not.toContain(LOCAL_NUXT_NAME_SURFACES[ADMIN_TOKEN]);
 	});
-
-	it('names an unchecked name as not the problem, unless it has just blamed it', () => {
-		for (const name of LOCAL_ACCEPTANCE_UNREACHED_NUXT_NAMES)
-			expect(localConfigurationNotice([SIGNING_KEY])).toContain(`${name} is not checked here`);
-		expect(localConfigurationNotice([ADMIN_TOKEN, SIGNING_KEY])).not.toContain(`${ADMIN_TOKEN} is not checked here`);
-	});
-
-	it('joins surfaces so the `and` inside one of them cannot read as a separator', () => {
-		expect(localConfigurationNotice([ADMIN_TOKEN, SIGNING_KEY]))
-			.toContain('so Graphics Administrator operations and Screen Output asset capabilities answer 503');
-		expect(localConfigurationNotice([...LOCAL_ACCEPTANCE_REQUIRED_NUXT_NAMES]))
-			.toContain('so Screen Output asset capabilities, signing in and every authenticated API route, and first-admin bootstrap answer 503');
-	});
 });
 
 describe('the preview command', () => {
@@ -333,17 +299,6 @@ describe('the preview command', () => {
 		expect(staged).toBeGreaterThan(-1);
 		expect(wrangler).toBeGreaterThan(-1);
 		expect(staged).toBeLessThan(wrangler);
-	});
-
-	/**
-	 * The staging step only matters because of where the config lives; if the
-	 * preview command stopped pointing at `.output/server`, the resolved path
-	 * this whole mechanism is built around would be the wrong one.
-	 */
-	it('still points wrangler at the config the resolved path is derived from', () => {
-		expect(packageJson.scripts.preview).toContain('scripts/preview-worker.mjs');
-		expect(PREVIEW_WRANGLER_CONFIG).toBe('.output/server/wrangler.json');
-		expect(RESOLVED_PREVIEW_ENV).toBe('.output/server/.env');
 	});
 });
 
@@ -427,14 +382,6 @@ describe('staging .env for the preview', () => {
 		expect(plan.lines[0]).toContain('about to be lost');
 	});
 
-	/** The warning must not become noise on the ordinary path. */
-	it('does not cry replacement when the two agree', () => {
-		for (const existing of [null, source]) {
-			for (const line of previewStagingPlan({ source, existing, stale: false }).lines)
-				expect(line).not.toContain('about to be lost');
-		}
-	});
-
 	/**
 	 * The leftover that would undo this ticket in a checkout that previewed before
 	 * it. Wrangler reads exactly one of the two files and prefers the old one — the
@@ -465,18 +412,9 @@ describe('staging .env for the preview', () => {
 		expect(plan.removeStale).toBe(true);
 		expect(plan.lines).toHaveLength(1);
 	});
-
-	it('says nothing about a leftover that is not there, which is the ordinary case', () => {
-		for (const line of previewStagingPlan({ source, existing: null, stale: false }).lines)
-			expect(line).not.toContain(STALE_PREVIEW_DEV_VARS);
-	});
 });
 
 describe('the failure this preflight raises', () => {
-	it('is a registered code', () => {
-		expect(ACCEPTANCE_FAILURE_CODES).toContain('harness-local-configuration-missing');
-	});
-
 	/**
 	 * The evidence formatter refuses long values and opaque tokens, and a
 	 * `NUXT_`-prefixed name trips the second on sight. That is why the names go

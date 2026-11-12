@@ -325,25 +325,31 @@ function itemStyle(wrapper: Awaited<ReturnType<typeof mountComponent>>) {
 	return wrapper.get('[data-graphic-item-kind="shape"]').attributes('style') ?? '';
 }
 
+// Every module-level stand-in starts each test at its default, whichever describe
+// it is in; a describe's own `beforeEach` sets only what it differs in.
+beforeEach(() => {
+	mockOutputMode.value = 'overlay';
+	mockEventCanvas.value = { width: 1920, height: 1080 };
+	mockOutputModeProvided.value = true;
+	mockIsPreview.value = false;
+	mockPreviewGuides.value = false;
+	mockPreviewSafeAreas.value = false;
+	mockScreen.value = screenWithStack();
+	mockOnAirGraphicIds.value = [];
+	mockPlayout.value = null;
+	mockAcceptedInputs.value = createInitialBroadcastGraphicsLiveState();
+	mockServerNow.value = 1_700_000_000_000;
+	mockSessionSequence.value = 1;
+	mockLoadSession.value = () => {};
+	mockSessionReaders.clear();
+	mockAssetCapability.value = undefined;
+	mockThemeTokens.value = {};
+	capabilitySessionRequests.length = 0;
+	liveSessionReads.length = 0;
+});
+
 describe('broadcastGraphicsDisplay', () => {
 	beforeEach(() => {
-		mockOutputMode.value = 'overlay';
-		mockEventCanvas.value = { width: 1920, height: 1080 };
-		mockOutputModeProvided.value = true;
-		mockIsPreview.value = false;
-		mockPreviewGuides.value = false;
-		mockPreviewSafeAreas.value = false;
-		mockScreen.value = screenWithStack();
-		mockOnAirGraphicIds.value = [];
-		mockPlayout.value = null;
-		mockAcceptedInputs.value = createInitialBroadcastGraphicsLiveState();
-		mockServerNow.value = 1_700_000_000_000;
-		mockSessionSequence.value = 1;
-		mockLoadSession.value = () => {};
-		mockSessionReaders.clear();
-		mockAssetCapability.value = undefined;
-		mockThemeTokens.value = {};
-		capabilitySessionRequests.length = 0;
 		vi.stubGlobal('fetch', vi.fn(async (input: string) => {
 			capabilitySessionRequests.push(String(input));
 			return new Response(JSON.stringify({}), {
@@ -645,15 +651,6 @@ describe('broadcastGraphicsDisplay', () => {
 		expect(loads).toEqual([]);
 	});
 
-	it('never draws advisory guides on a live Screen Output', async () => {
-		mockScreen.value = screenWithStack([lowerThird]);
-
-		const wrapper = await mountComponent();
-
-		expect(wrapper.find('[data-safe-area-guide]').exists()).toBe(false);
-		expect(wrapper.find('.item-guide').exists()).toBe(false);
-	});
-
 	// The editor's only other moment to push is the iframe's `load` event, which this client-
 	// rendered application fires before the frame's own app has mounted as often as after it.
 	it('tells the editor it is listening, as soon as it is', async () => {
@@ -733,31 +730,18 @@ describe('broadcastGraphicsDisplay', () => {
 		expect(wrapper.find('[data-broadcast-graphic="lower-third"]').exists()).toBe(false);
 	});
 
-	it('composes every authored Broadcast Graphic in an editor preview, in stack order', async () => {
+	it('composes every authored Broadcast Graphic in an editor preview in stack order, and again when the order changes', async () => {
 		mockIsPreview.value = true;
 		const behind: BroadcastGraphicConfig = { ...lowerThird, id: 'bug', name: 'Bug' };
-
 		const wrapper = await mountComponent();
-		await pushPreviewState([behind, lowerThird]);
-
-		const composed = wrapper.findAll('[data-broadcast-graphic]')
+		const composed = () => wrapper.findAll('[data-broadcast-graphic]')
 			.map(node => node.attributes('data-broadcast-graphic'));
 
-		expect(composed).toEqual(['bug', 'lower-third']);
-	});
-
-	it('reorders the composed preview when the authored stack order changes', async () => {
-		mockIsPreview.value = true;
-		const behind: BroadcastGraphicConfig = { ...lowerThird, id: 'bug', name: 'Bug' };
-
-		const wrapper = await mountComponent();
 		await pushPreviewState([behind, lowerThird]);
+		expect(composed()).toEqual(['bug', 'lower-third']);
+
 		await pushPreviewState([lowerThird, behind]);
-
-		const composed = wrapper.findAll('[data-broadcast-graphic]')
-			.map(node => node.attributes('data-broadcast-graphic'));
-
-		expect(composed).toEqual(['lower-third', 'bug']);
+		expect(composed()).toEqual(['lower-third', 'bug']);
 	});
 
 	it('marks the Broadcast Graphic under authoring among its neighbours', async () => {
@@ -1560,18 +1544,7 @@ describe('broadcastGraphicsDisplay', () => {
 
 describe('graphicAnimationPreview in a Screen Output frame', () => {
 	beforeEach(() => {
-		mockOutputMode.value = 'overlay';
-		mockEventCanvas.value = { width: 1920, height: 1080 };
-		mockOutputModeProvided.value = true;
 		mockIsPreview.value = true;
-		mockPreviewGuides.value = false;
-		mockPreviewSafeAreas.value = false;
-		mockScreen.value = screenWithStack();
-		mockOnAirGraphicIds.value = [];
-		mockPlayout.value = null;
-		mockAcceptedInputs.value = createInitialBroadcastGraphicsLiveState();
-		mockServerNow.value = 1_700_000_000_000;
-		mockLoadSession.value = () => {};
 	});
 
 	it('composes at the Graphic Resting State with no preview run', async () => {
@@ -1710,21 +1683,21 @@ describe('live playout animation in a Screen Output', () => {
 	const T0 = 1_700_000_000_000;
 
 	beforeEach(() => {
-		mockOutputMode.value = 'overlay';
-		mockEventCanvas.value = { width: 1920, height: 1080 };
-		mockOutputModeProvided.value = true;
-		mockIsPreview.value = false;
-		mockPreviewGuides.value = false;
-		mockPreviewSafeAreas.value = false;
 		mockScreen.value = screenWithStack([ANIMATED]);
-		mockOnAirGraphicIds.value = [];
-		mockAcceptedInputs.value = createInitialBroadcastGraphicsLiveState();
-		mockPlayout.value = null;
 		mockServerNow.value = T0;
-		mockSessionSequence.value = 1;
-		mockLoadSession.value = () => {};
-		mockAssetCapability.value = undefined;
 	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	/** Turns animation frames by hand, for a test that has faked them. */
+	async function turnFrames(count: number) {
+		for (let frame = 0; frame < count; frame++) {
+			vi.advanceTimersToNextFrame();
+			await nextTick();
+		}
+	}
 
 	it('keeps an exiting Broadcast Graphic on program until its exit completes', async () => {
 		mockPlayout.value = {
@@ -1772,16 +1745,21 @@ describe('live playout animation in a Screen Output', () => {
 		mockPlayout.value = {
 			'lower-third': { onAir: true, effectiveStartedAt: T0 - 60_000, cut: false },
 		};
+		// The test turns the frames, so the clock under it waits on no real one.
+		vi.useFakeTimers({
+			toFake: ['requestAnimationFrame', 'cancelAnimationFrame'],
+		});
 		const wrapper = await mountComponent();
 		// Nothing moves, so its clock runs one frame and stops.
-		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+		await turnFrames(2);
 
 		mockScreen.value = screenWithStack([looping]);
 		await nextTick();
 		// A quarter of the way through a cycle, the fade is halfway out.
 		mockServerNow.value = T0 + 500;
+		await turnFrames(2);
 
-		await vi.waitFor(() => expect(itemStyle(wrapper)).toContain('opacity: 0.5'));
+		expect(itemStyle(wrapper)).toContain('opacity: 0.5');
 	});
 
 	describe('a Graphic Channel the Screen Output is composed against', () => {

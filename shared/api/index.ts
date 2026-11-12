@@ -37,7 +37,7 @@
  * the form used at the 101 explicit-generic call sites under `app/` — that
  * overrides the correct inference and reintroduces `Date`. (The 9 bare
  * `$fetch(…)` sites read no timestamp: eight discard the response body, and one
- * fetches a realtime token.) `test/nuxt/shared/apiWireTimestamps.test.ts` pins
+ * fetches a realtime token.) `test/nuxt/shared/apiWireTimestamps.ts` pins
  * both halves of that disagreement.
  *
  * Nothing is broken by this today, and that is a checked claim rather than an

@@ -11,7 +11,6 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 // Screen Output surface's one 404; only a storage failure is anything else.
 
 const signingKey = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
-const otherSigningKey = 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=';
 
 const harness = await createSqliteD1Harness();
 const realDb = drizzle(harness.database, { schema });
@@ -82,7 +81,6 @@ const getAssetCapability = (await import('~~/server/api/events/[id]/screens/[scr
 const rotateAssetCapability = (await import('~~/server/api/events/[id]/screens/[screenId]/asset-capability.post')).default as unknown as Handler;
 const getOutputScreen = (await import('~~/server/api/screen-output/events/[id]/screens/[screenId]/index.get')).default as unknown as Handler;
 const { createScreenOutputAssetCapabilityManager } = await import('~~/server/modules/screen-output-assets/manager');
-const { createScreenOutputLink } = await import('~~/server/modules/screen-output-assets/link');
 const { screenService } = await import('~~/server/services/screen');
 
 const manager = createScreenOutputAssetCapabilityManager({
@@ -311,34 +309,11 @@ describe('exchanging a Screen Output Link', () => {
 				body: { link: outputLink, screenId },
 			}),
 		],
-		[
-			'an empty link',
-			() => ({
-				body: { link: '' },
-			}),
-		],
+		// One of each way a link fails; its grammar and MAC cases are `screenOutputLink.test.ts`'s.
 		[
 			'text that is not a link',
 			() => ({
 				body: { link: 'not a link at all' },
-			}),
-		],
-		[
-			'a character outside the alphabet',
-			({ outputLink }) => ({
-				body: { link: `${outputLink.slice(0, -1)}0` },
-			}),
-		],
-		[
-			'a second spelling of the right link',
-			({ outputLink }) => ({
-				body: { link: `1${outputLink}` },
-			}),
-		],
-		[
-			'the right link and a trailing space',
-			({ outputLink }) => ({
-				body: { link: `${outputLink} ` },
 			}),
 		],
 		[
@@ -348,47 +323,6 @@ describe('exchanging a Screen Output Link', () => {
 					link: lastCharacterChanged(outputLink),
 				},
 			}),
-		],
-		[
-			'the capability presented as a link',
-			({ assetCapability }) => ({
-				body: { link: assetCapability },
-			}),
-		],
-		[
-			'a link signed with another key',
-			async () => ({
-				body: {
-					link: await createScreenOutputLink({
-						signingKey: otherSigningKey,
-						screenId,
-						seed: 'seed',
-						version: 1,
-					}),
-				},
-			}),
-		],
-		[
-			'a Screen that does not exist',
-			async () => ({
-				body: {
-					link: await createScreenOutputLink({
-						signingKey,
-						screenId: 999_999,
-						seed: 'seed',
-						version: 1,
-					}),
-				},
-			}),
-		],
-		[
-			'a link from before a rotation',
-			async ({ outputLink }) => {
-				await rotated();
-				return {
-					body: { link: outputLink },
-				};
-			},
 		],
 		[
 			'a link to a deleted Screen',

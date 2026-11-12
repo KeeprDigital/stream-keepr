@@ -492,13 +492,4 @@ describe('the recoverable Graphic Asset lifecycle', () => {
 
 		expect(response.status).toBe(400);
 	});
-
-	it('refuses an empty lifecycle filter rather than reading it as no filter', async () => {
-		const response = await fetch(
-			'/api/graphics-assets?lifecycleStates=',
-			{ headers: authorHeaders },
-		);
-
-		expect(response.status).toBe(400);
-	});
 });

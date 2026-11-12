@@ -17,7 +17,7 @@ import { LIVE_RESULTS_CRON, LIVE_RESULTS_CRON_INTERVAL_MS } from '../server/util
 import { startLocalCron } from '../server/utils/localCron.ts';
 
 /** The generated config Wrangler runs; `.output/server/.env` is read beside it. */
-export const PREVIEW_WRANGLER_CONFIG = '.output/server/wrangler.json';
+const PREVIEW_WRANGLER_CONFIG = '.output/server/wrangler.json';
 const DEFAULT_PORT = 8787;
 const STOP_SIGNALS = ['SIGINT', 'SIGTERM'];
 

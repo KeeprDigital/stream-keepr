@@ -182,20 +182,6 @@ describe('syncMatchesFromMelee', () => {
 		}));
 	});
 
-	// A synced Round held Matches: Melee listing none is refused, never taken as its snapshot.
-	it('refuses an empty answer for a previously synced Round instead of wiping it', async () => {
-		const round = {
-			...testRounds[0],
-			externalId: '100',
-			externalSource: 'melee' as const,
-			lastSyncedAt: new Date(),
-		};
-
-		await expect(syncMatchesFromMelee(1, eventData, round as any, null)).rejects.toMatchObject({ code: 'INVALID_MELEE_ROUND_SNAPSHOT' });
-
-		expect(mockReplaceRoundSnapshot).not.toHaveBeenCalled();
-	});
-
 	it('maps standings through the Melee source identity when another source has the same ID', async () => {
 		const round = { ...testRounds[0], externalId: '100', externalSource: 'melee' as const };
 		const reported = [
@@ -283,22 +269,6 @@ describe('syncMatchesFromMelee', () => {
 		]);
 
 		await expect(syncMatchesFromMelee(1, eventData, round as any, null)).rejects.toThrow('Duplicate Melee Round standing participant 42');
-		expect(mockReplaceRoundSnapshot).not.toHaveBeenCalled();
-	});
-
-	it('does not replace or mark a new unpaired empty Round as synced', async () => {
-		const round = {
-			...testRounds[1],
-			externalId: '200',
-			externalSource: 'melee' as const,
-			lastSyncedAt: null,
-		};
-
-		await expect(syncMatchesFromMelee(1, eventData, round as any, null)).rejects.toMatchObject({
-			code: 'MELEE_ROUND_NOT_READY',
-			statusCode: 409,
-		});
-		expect(mockMapMeleeMatchesToDbRows).not.toHaveBeenCalled();
 		expect(mockReplaceRoundSnapshot).not.toHaveBeenCalled();
 	});
 

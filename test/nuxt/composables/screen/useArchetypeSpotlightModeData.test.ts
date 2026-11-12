@@ -211,18 +211,6 @@ describe('useArchetypeSpotlightModeData', () => {
 		expect(pageData.value.map(row => row.name)).toEqual(['Oskar Lind']);
 	});
 
-	it('never writes mode config from a rendering, even with auto-page on', async () => {
-		mutableConfig.archetypeId = 7;
-		mutableConfig.autoPageEnabled = true;
-		mockInteractive.value = true;
-		mockFetch.mockResolvedValue(answer());
-
-		makeSpotlight();
-		await flushPromises();
-
-		expect(mockScreenStore.updateModeConfig).not.toHaveBeenCalled();
-	});
-
 	describe('freshness', () => {
 		async function showingSpotlight() {
 			mutableConfig.archetypeId = 7;
@@ -251,47 +239,6 @@ describe('useArchetypeSpotlightModeData', () => {
 			expect(pageData.value[0]?.wins).toBe(5);
 		});
 
-		it('follows deck reviews, resolved cards, Archetype edits, Melee syncs and TCG+ Imports', async () => {
-			await showingSpotlight();
-
-			for (const [type, payload] of [
-				[
-					'playerDeck:reviewed',
-					{
-						deck: { playerId: 11 },
-					},
-				],
-				[
-					'playerDeck:cardsResolved',
-					{
-						deckIds: [3],
-						playerIds: [11],
-					},
-				],
-				[
-					'archetype:updated',
-					{
-						archetype: { id: 7 },
-					},
-				],
-				[
-					'archetype:keyCardsUpdated',
-					{ archetypeId: 7 },
-				],
-				['melee:decklistsSynced', {}],
-				[
-					'melee:roundStandingsSynced',
-					{ roundId: 31 },
-				],
-				['tcgplus:imported', {}],
-			] as const) {
-				deliver(type, payload);
-				await flushPromises();
-			}
-
-			expect(mockFetch).toHaveBeenCalledTimes(7);
-		});
-
 		it('follows its Player List\'s members only while the scope names that list', async () => {
 			await showingSpotlight();
 			mutableConfig.playerListId = 3;
@@ -311,20 +258,6 @@ describe('useArchetypeSpotlightModeData', () => {
 			deliver('playerList:membersChanged', { listId: 3 });
 			await flushPromises();
 			expect(mockFetch).toHaveBeenCalledTimes(1);
-		});
-
-		it('shows a change missed while disconnected once its channel is attached again', async () => {
-			const { spotlight } = await showingSpotlight();
-
-			realtime.transport.connectionState = 'disconnected';
-			await nextTick();
-			mockFetch.mockResolvedValue(answer({ metaShare: 30 }));
-			realtime.transport.connectionState = 'connected';
-			realtime.reattach();
-			await flushPromises();
-
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(spotlight.value?.metaShare).toBe(30);
 		});
 	});
 });

@@ -995,6 +995,18 @@ function expectedPaint(type: ThemeTokenType, value: unknown) {
 	};
 }
 
+/**
+ * The first Mode Token declared of each value type. A host carries a type's shipped default
+ * as it carries its override, whichever mode declares it (`themeTokenResolution.test.ts` pins each default).
+ */
+const FIRST_TOKEN_OF_EACH_TYPE = new Map<ThemeTokenType, string>();
+for (const mode of SCREEN_MODE_VALUES) {
+	for (const [token, { type }] of Object.entries(SCREEN_MODES[mode].modeTokens ?? {})) {
+		if (!FIRST_TOKEN_OF_EACH_TYPE.has(type))
+			FIRST_TOKEN_OF_EACH_TYPE.set(type, screenModeTokenName(mode, token));
+	}
+}
+
 /** The graphics hosts: their Graphic Items bind Foundation Tokens, and the Feature Match Overlay's Frame and Source Items paint Mode Tokens. */
 const GRAPHICS_HOSTS = ['broadcast-graphics', 'feature-match-overlay'] as const satisfies readonly ScreenMode[];
 
@@ -1070,8 +1082,11 @@ describe.each(SCREEN_MODE_VALUES)('the %s display', (mode) => {
 		expect(painted(probe, definition.type)).toEqual(expectedPaint(definition.type, sample));
 	});
 
-	// What each default resolves to under the Default Theme is pinned where it resolves.
-	it.each(tokens)('paints $name as the Default Theme ships it when its Event has no Theme', async ({ name, definition, probe }) => {
+	const shippedDefaults = tokens.filter(({ name, definition }) => FIRST_TOKEN_OF_EACH_TYPE.get(definition.type) === name);
+	if (!shippedDefaults.length)
+		return;
+
+	it.each(shippedDefaults)('paints $name as the Default Theme ships it when its Event has no Theme', async ({ name, definition, probe }) => {
 		const shipped = resolveThemeTokens({
 			vocabulary: FOUNDATION_TOKENS,
 			modeTokens: declared,
@@ -1162,7 +1177,11 @@ describe('a Metagame Screen\'s chart', () => {
 		expect(painted(probe, 'color')).toBe('rgb(12, 34, 56)');
 	});
 
-	it.each(SERIES)('fills slot $slot as the Default Theme ships $token when its Event has no Theme', async ({ token, slot }) => {
+	// The host sets every series' default one way: a numbered slot and `other` wire the chart's two reads.
+	it.each([
+		SERIES[0]!,
+		SERIES.at(-1)!,
+	])('fills slot $slot as the Default Theme ships $token when its Event has no Theme', async ({ token, slot }) => {
 		const probe = fill(slot);
 		await mountMode('metagame', undefined, { config: probe.config });
 		await shown(probe);
@@ -1317,7 +1336,11 @@ describe('the Screen inset and alignment', () => {
 		return { padding: style.padding, justifyItems: style.justifyItems, alignItems: style.alignItems };
 	}
 
-	it.each(PLAIN_MODES)('places %s inside the inset, where its Theme aligns it', async (mode) => {
+	// A host insets and aligns by its kind, never its mode (`screenModeHost.test.ts`): two plain modes wire it.
+	it.each([
+		PLAIN_MODES[0]!,
+		PLAIN_MODES.at(-1)!,
+	])('places %s inside the inset, where its Theme aligns it', async (mode) => {
 		await mountMode(mode, LAYOUT);
 
 		expect(placement()).toEqual({ padding: '40px', justifyItems: 'end', alignItems: 'end' });

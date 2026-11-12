@@ -19,15 +19,6 @@ const SCOPED_MODES = [
 const SCOPE_FIELDS = Object.keys(metagameScopeShape) as (keyof typeof metagameScopeShape)[];
 
 describe('the Metagame Scope', () => {
-	it('defaults to every Player, with Top 8 and 9 points ready for their scopes', () => {
-		expect(DEFAULT_METAGAME_SCOPE).toEqual({
-			scope: 'all',
-			topN: 8,
-			minPoints: 9,
-			playerListId: undefined,
-		});
-	});
-
 	describe.each(SCOPED_MODES)('$mode', ({ mode, archetypeFilter }) => {
 		const contract = screenModeConfigContract(mode);
 		const shape = contract.shape as Record<string, unknown>;

@@ -9,7 +9,6 @@ import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
-import { screenMediaSourceReference } from '../../shared/utils/graphicsAssetReferences';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { expectOperationResult } from './responseStatus';
@@ -86,21 +85,6 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 	let eventId: number;
 	let screenId: number;
 	let authorHeaders: Record<string, string>;
-	/**
-	 * The scenarios below are one chain of state deliberately, in declaration
-	 * order: a replacement can only be observed against an asset some Screen has
-	 * already pinned, and the concurrency scenario needs a revision to race
-	 * against. Splitting them is what makes a stall legible; sharing the chain is
-	 * what keeps each one about a single operation.
-	 *
-	 * The chain's cost is that one failure reddens its successors, which read this
-	 * state and will throw on it being unset. Read the FIRST red test: the ones
-	 * below it are consequences, and their errors describe the missing state rather
-	 * than anything about themselves.
-	 */
-	let config: FeatureMatchOverlayModeConfig;
-	let originalReference: GraphicAssetReference;
-	let replaced: GraphicsIngestionOperation;
 
 	beforeAll(async () => {
 		authorHeaders = { cookie: await operatorSessionCookie() };
@@ -145,15 +129,21 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		catch {}
 	});
 
-	it('publishes the Graphic Asset its owning Screen pins', async () => {
+	/**
+	 * Each scenario publishes a Graphic Asset of its own and replaces that one, so
+	 * none reads a revision another left behind and any of them runs alone. They
+	 * share the one Screen, which pins whichever asset the running scenario gives it.
+	 */
+	async function publish(key: string): Promise<{ reference: GraphicAssetReference; name: string }> {
+		const name = `Replaceable integration logo ${key}`;
 		const initiated = await step('initiate original ingestion', async () => await $fetch<GraphicsIngestionOperation>(
 			'/api/graphics-assets/ingestion-operations',
 			{
 				method: 'POST',
 				headers: authorHeaders,
 				body: graphicsIngestionRequest({
-					idempotencyKey: 'replacement-integration-original',
-					name: 'Replaceable integration logo',
+					idempotencyKey: `replacement-integration-original-${key}`,
+					name,
 					defaultEventId: eventId,
 					browserDecodeEvidence: decodeEvidence(pngPixel),
 					declaredByteLength: pngPixel.byteLength,
@@ -166,20 +156,25 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 		).then(expectOperationResult));
 		expect(original.stage).toBe('completed');
 
-		originalReference = {
-			assetId: original.result!.assetId,
-			revisionId: original.result!.revisionId,
+		return {
+			reference: { assetId: original.result.assetId, revisionId: original.result.revisionId },
+			name,
 		};
-		config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-		config.layout.frame.backgroundImage = { kind: 'asset', ...originalReference };
-		// A Screen mutation, so this is one of the two operations #123 suspects: it
-		// awaits a real Ably REST publish before it answers.
-		// This is one of the two `$fetch` calls here with no explicit response type,
-		// so `step`'s type parameter would be inferred through Nitro's route table —
-		// which overflows the checker with TS2321, which surfaces about two at a
-		// time. Annotating
-		// the callback settles the type before it reaches the generic.
-		await step('pin the original revision to the Screen', async (): Promise<void> => {
+	}
+
+	/**
+	 * A Screen mutation, so this is one of the two operations #123 suspects: it
+	 * awaits a real Ably REST publish before it answers.
+	 *
+	 * The `$fetch` here has no explicit response type, so `step`'s type parameter
+	 * would be inferred through Nitro's route table — which overflows the checker
+	 * with TS2321. Annotating the callback settles the type before it reaches the
+	 * generic.
+	 */
+	async function pin(reference: GraphicAssetReference): Promise<void> {
+		const config: FeatureMatchOverlayModeConfig = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.frame.backgroundImage = { kind: 'asset', ...reference };
+		await step('pin the revision to the Screen', async (): Promise<void> => {
 			await $fetch(
 				`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
 				{
@@ -188,44 +183,81 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 				},
 			);
 		});
-	});
+	}
 
-	it('records replaced content as a new Graphic Asset Revision of the same Graphic Asset', async () => {
-		const replacementOperation = await step('initiate replacement', async () => await $fetch<GraphicsIngestionOperation>(
-			`/api/graphics-assets/${originalReference.assetId}/replacement-operations`,
+	async function initiateReplacement(assetId: string, idempotencyKey: string): Promise<GraphicsIngestionOperation> {
+		return await $fetch<GraphicsIngestionOperation>(
+			`/api/graphics-assets/${assetId}/replacement-operations`,
 			{
 				method: 'POST',
 				headers: authorHeaders,
 				body: {
-					idempotencyKey: 'replacement-integration-jpeg',
-					sourceFileName: 'new-logo.png',
+					idempotencyKey,
+					sourceFileName: `${idempotencyKey}.png`,
 					declaredMime: 'image/png',
 					browserDecodeEvidence: decodeEvidence(replacementPng),
 					declaredByteLength: replacementPng.byteLength,
 				},
 			},
-		));
-		replaced = await step('upload replacement content', async () => await fetch(
-			`/api/graphics-assets/ingestion-operations/${replacementOperation.id}/content`,
+		);
+	}
+
+	async function uploadReplacement(operation: GraphicsIngestionOperation) {
+		return await fetch(
+			`/api/graphics-assets/ingestion-operations/${operation.id}/content`,
 			{
 				method: 'PUT',
 				headers: { ...authorHeaders, 'content-type': 'image/png' },
 				body: replacementPng,
 			},
-		).then(expectOperationResult));
+		).then(expectOperationResult);
+	}
+
+	async function replace(assetId: string, key: string) {
+		const operation = await step('initiate replacement', async () => await initiateReplacement(assetId, `replacement-integration-${key}`));
+		return await step('upload replacement content', async () => await uploadReplacement(operation));
+	}
+
+	async function usageOf(assetId: string): Promise<GraphicAssetUsage[]> {
+		return await step('read usage', async () => await $fetch<GraphicAssetUsage[]>(
+			`/api/graphics-assets/${assetId}/usage`,
+			{ headers: authorHeaders },
+		));
+	}
+
+	async function inLibrary(name: string, assetId: string): Promise<GraphicAsset | undefined> {
+		const found = await step('search the library', async () => await $fetch<GraphicAsset[]>('/api/graphics-assets', {
+			headers: authorHeaders,
+			query: { search: name },
+		}));
+		return found.find(asset => asset.id === assetId);
+	}
+
+	it('records replaced content as a new Graphic Asset Revision of the same Graphic Asset, current in the library', async () => {
+		const { reference, name } = await publish('revision');
+
+		const replaced = await replace(reference.assetId, 'revision');
+
 		expect(replaced.result).toMatchObject({
 			outcome: 'revision-created',
-			assetId: originalReference.assetId,
+			assetId: reference.assetId,
+		});
+		expect(await inLibrary(name, reference.assetId)).toMatchObject({
+			id: reference.assetId,
+			revisionId: replaced.result.revisionId,
+			revisionNumber: 2,
 		});
 	});
 
 	it('keeps the Screen pinned to the Graphic Asset Revision it adopted, whose bytes still resolve', async () => {
-		await expect(step('read usage after replacement', async () => await $fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${originalReference.assetId}/usage`,
-			{ headers: authorHeaders },
-		))).resolves.toEqual([
+		const { reference } = await publish('pinned');
+		await pin(reference);
+
+		await replace(reference.assetId, 'pinned');
+
+		expect(await usageOf(reference.assetId)).toEqual([
 			expect.objectContaining({
-				reference: originalReference,
+				reference,
 				owner: {
 					kind: 'screen',
 					id: String(screenId),
@@ -236,71 +268,50 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 			}),
 		]);
 		const oldContent = await step('read superseded revision content', async () => await fetch(
-			`/api/graphics-assets/${originalReference.assetId}/revisions/${originalReference.revisionId}/content`,
+			`/api/graphics-assets/${reference.assetId}/revisions/${reference.revisionId}/content`,
 			{ headers: authorHeaders },
 		));
 		expect(oldContent.status).toBe(200);
 		expect(new Uint8Array(await oldContent.arrayBuffer())).toEqual(pngPixel);
 	});
 
-	it('reports the replacement as the current Graphic Asset Revision in the library', async () => {
-		const [latest] = await step('search the library', async () => await $fetch<GraphicAsset[]>('/api/graphics-assets', {
-			headers: authorHeaders,
-			query: { search: 'Replaceable integration logo' },
-		}));
-		expect(latest).toMatchObject({
-			id: originalReference.assetId,
-			revisionId: replaced.result?.revisionId,
-			revisionNumber: 2,
-		});
-	});
-
 	it('keeps every Graphic Asset Reference pinned across a rename of the Graphic Asset', async () => {
+		const { reference } = await publish('renamed');
+		await pin(reference);
+		const replaced = await replace(reference.assetId, 'renamed');
+
 		const renamed = await step('rename the asset', async () => await $fetch<GraphicAsset>(
-			`/api/graphics-assets/${originalReference.assetId}`,
+			`/api/graphics-assets/${reference.assetId}`,
 			{
 				method: 'PATCH',
 				headers: authorHeaders,
 				body: { name: 'Renamed integration logo', eventIds: [] },
 			},
 		));
+
 		expect(renamed).toMatchObject({
-			revisionId: replaced.result?.revisionId,
+			revisionId: replaced.result.revisionId,
 			revisionNumber: 2,
 			name: 'Renamed integration logo',
 			eventIds: [],
 		});
-		await expect(step('read usage after rename', async () => await $fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${originalReference.assetId}/usage`,
-			{ headers: authorHeaders },
-		))).resolves.toEqual([
-			expect.objectContaining({ reference: originalReference }),
+		expect(await usageOf(reference.assetId)).toEqual([
+			expect.objectContaining({ reference }),
 		]);
 	});
 
 	it('moves the pin only once its owning Screen explicitly adopts the newer Graphic Asset Revision', async () => {
-		config.layout.frame.backgroundImage = {
-			kind: 'asset',
-			assetId: originalReference.assetId,
-			revisionId: replaced.result!.revisionId,
-		};
-		// The second Screen mutation, and the second real Ably REST publish. Typed
-		// like the pin above, and for the same TS2321 reason.
-		await step('adopt the new revision on the Screen', async (): Promise<void> => {
-			await $fetch(
-				`/api/events/${eventId}/screens/${screenId}/config/feature-match-overlay`,
-				{
-					method: 'PATCH',
-					body: { layout: config.layout },
-				},
-			);
-		});
-		await expect(step('read usage after adoption', async () => await $fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${originalReference.assetId}/usage`,
-			{ headers: authorHeaders },
-		))).resolves.toEqual([
+		const { reference } = await publish('adopted');
+		await pin(reference);
+		const replaced = await replace(reference.assetId, 'adopted');
+		const adopted: GraphicAssetReference = { assetId: reference.assetId, revisionId: replaced.result.revisionId };
+
+		// The second Screen mutation, and the second real Ably REST publish.
+		await pin(adopted);
+
+		expect(await usageOf(reference.assetId)).toEqual([
 			expect.objectContaining({
-				reference: screenMediaSourceReference(config.layout.frame.backgroundImage),
+				reference: adopted,
 				owner: expect.objectContaining({
 					eventId,
 					id: String(screenId),
@@ -312,63 +323,37 @@ describe('the Graphic Asset replacement and explicit adoption', () => {
 	/**
 	 * The other operation #123 suspects of stalling, and the reason it has a test
 	 * to itself: two replacements of one Graphic Asset are issued together on
-	 * purpose, so whichever of the four steps below hangs is named by itself
-	 * rather than by whatever the chain reached first.
+	 * purpose, so whichever of the steps below hangs is named by itself rather than
+	 * by whatever a chain reached first.
 	 */
 	it('settles two concurrent replacements of one Graphic Asset into a single new Revision', async () => {
+		const { reference, name } = await publish('concurrent');
+		await pin(reference);
+
 		const concurrentOperations = await step('initiate both replacements', async () => await Promise.all(
 			['replacement-integration-concurrent-a', 'replacement-integration-concurrent-b'].map(
-				async idempotencyKey => await $fetch<GraphicsIngestionOperation>(
-					`/api/graphics-assets/${originalReference.assetId}/replacement-operations`,
-					{
-						method: 'POST',
-						headers: authorHeaders,
-						body: {
-							idempotencyKey,
-							sourceFileName: `${idempotencyKey}.png`,
-							declaredMime: 'image/png',
-							browserDecodeEvidence: decodeEvidence(pngPixel),
-							declaredByteLength: pngPixel.byteLength,
-						},
-					},
-				),
+				async idempotencyKey => await initiateReplacement(reference.assetId, idempotencyKey),
 			),
 		));
 		const concurrentReplacements = await step('upload both replacements', async () => await Promise.all(
-			concurrentOperations.map(
-				async operation => await fetch(
-					`/api/graphics-assets/ingestion-operations/${operation.id}/content`,
-					{
-						method: 'PUT',
-						headers: { ...authorHeaders, 'content-type': 'image/png' },
-						body: pngPixel,
-					},
-				).then(expectOperationResult),
-			),
+			concurrentOperations.map(async operation => await uploadReplacement(operation)),
 		));
+
 		expect(concurrentReplacements.map(operation => operation.result.outcome).sort()).toEqual([
 			'replacement-noop',
 			'revision-created',
 		]);
 		expect(new Set(
-			concurrentReplacements.map(operation => operation.result?.revisionId),
+			concurrentReplacements.map(operation => operation.result.revisionId),
 		).size).toBe(1);
-		const [concurrentLatest] = await step('search the library again', async () => await $fetch<GraphicAsset[]>('/api/graphics-assets', {
-			headers: authorHeaders,
-			query: { search: 'Renamed integration logo' },
-		}));
-		expect(concurrentLatest).toMatchObject({
-			id: originalReference.assetId,
-			revisionId: concurrentReplacements[0]!.result?.revisionId,
-			revisionNumber: 3,
+		expect(await inLibrary(name, reference.assetId)).toMatchObject({
+			id: reference.assetId,
+			revisionId: concurrentReplacements[0]!.result.revisionId,
+			revisionNumber: 2,
 		});
-		await expect(step('read usage after the concurrent replacements', async () => await $fetch<GraphicAssetUsage[]>(
-			`/api/graphics-assets/${originalReference.assetId}/usage`,
-			{ headers: authorHeaders },
-		))).resolves.toEqual([
-			expect.objectContaining({
-				reference: screenMediaSourceReference(config.layout.frame.backgroundImage),
-			}),
+		// The Screen adopted neither: its pin is still the revision it was given.
+		expect(await usageOf(reference.assetId)).toEqual([
+			expect.objectContaining({ reference }),
 		]);
 	});
 });

@@ -491,16 +491,7 @@ describe('useEventStore', () => {
 			expect(store.eventsList.map(event => event.name)).toEqual(['Event A renamed', 'Event B']);
 		});
 
-		it.each([
-			[
-				'Event B',
-				[2],
-			],
-			[
-				'Event A, loaded again since',
-				[2, 1],
-			],
-		])('a late failed save of Event A neither rolls back nor reports into %s', async (_, switches) => {
+		it('a late failed save of Event A neither rolls back nor reports into Event A, loaded again since', async () => {
 			const eventA = createEventResponse({ id: 1, name: 'Event A' });
 			store.event = eventA;
 			const save = deferred<never>();
@@ -508,7 +499,7 @@ describe('useEventStore', () => {
 
 			const saving = store.updateEvent({ name: 'Event A renamed' });
 			let shown = eventA;
-			for (const id of switches) {
+			for (const id of [2, 1]) {
 				shown = createEventResponse({ id, name: `Event ${id} as loaded` });
 				await switchTo(shown);
 			}
@@ -572,16 +563,8 @@ describe('useEventStore', () => {
 			expect(store.eventsList).toEqual([]);
 		});
 
-		describe.each([
-			[
-				'Event B',
-				[2],
-			],
-			[
-				'Event A, loaded again since',
-				[2, 1],
-			],
-		])('talent writes answered in %s', (_, switches) => {
+		describe('talent writes answered in Event A, loaded again since', () => {
+			const switches = [2, 1];
 			const talent = createMockTalent({ id: 10, eventId: 1, name: 'Ana' });
 
 			/** Ends on an Event, whichever it is, whose Talents are one other person. */

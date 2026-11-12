@@ -61,7 +61,10 @@ describe('request body limits', () => {
 		expect(response.status).toBe(413);
 	});
 
-	it.each(['DELETE', 'PATCH', 'POST', 'PUT'] as const)(
+	// Every mutation method is bounded in
+	// `test/unit/server/middleware/requestBodyLimitMethods.test.ts`; a real server
+	// answers the commonest one here, and the one whose body is the oddest to send.
+	it.each(['DELETE', 'POST'] as const)(
 		'keeps the general limit on ordinary %s mutations',
 		async (method) => {
 			const response = await fetch(

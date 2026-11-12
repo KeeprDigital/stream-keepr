@@ -36,13 +36,10 @@ describe('the Event existence middleware', () => {
 		['/api/events/7', 'passed', 7],
 		['/api/events/7/players', 'passed', 7],
 		['/api/events/8/players', 404, undefined],
+		// The id grammar's cases are `eventId.test.ts`'s: here, one spelling `Number()` would
+		// coerce, and one that names an Event only once decoded.
 		['/api/events/9e9/players', 400, undefined],
-		['/api/events/0x10/players', 400, undefined],
-		['/api/events/07/players', 400, undefined],
-		['/api/events/0/players', 400, undefined],
-		['/api/events/7.0/players', 400, undefined],
 		['/api/events/%37/players', 400, undefined],
-		['/api/events/seven', 400, undefined],
 		// Not an Event path at all: the collection, and everything else.
 		['/api/events', 'passed', undefined],
 		['/api/events/', 'passed', undefined],

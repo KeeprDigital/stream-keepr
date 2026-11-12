@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { fetch, url } from './client';
-import { INTEGRATION_ADMIN_BOOTSTRAP_TOKEN, INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
+import { INTEGRATION_ADMIN_BOOTSTRAP_TOKEN } from './helpers';
 import { executeIntegrationD1 } from './integrationD1';
 
 /**
@@ -13,6 +13,8 @@ import { executeIntegrationD1 } from './integrationD1';
  * lands in the real D1 the sign-in path then reads. The ensure semantics
  * themselves are unit-tested against a Better Auth instance, and the disarmed
  * 503 with them, since a spawned server holds one environment for a whole run.
+ * The token and body refusals are unit-tested too; `apiBoundary.test.ts` meets
+ * the wrong-token 403 through the server.
  *
  * Everything is asserted through HTTP rather than by reading rows: the question
  * this route exists to answer is "can somebody sign in now", and a row that
@@ -32,12 +34,10 @@ interface EnsureAdminResponse {
 	grantedAdminRole: boolean;
 }
 
-async function ensureAdmin(body: unknown, headers: Record<string, string> = {
-	'x-admin-bootstrap-token': INTEGRATION_ADMIN_BOOTSTRAP_TOKEN,
-}) {
+async function ensureAdmin(body: unknown) {
 	return fetch(ROUTE, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json', ...headers },
+		headers: { 'Content-Type': 'application/json', 'x-admin-bootstrap-token': INTEGRATION_ADMIN_BOOTSTRAP_TOKEN },
 		body: JSON.stringify(body),
 	});
 }
@@ -77,34 +77,9 @@ describe('first-admin bootstrap', () => {
 		// from an installation that has never had this one — including on a rerun
 		// against a persisted local D1.
 		await executeIntegrationD1(`
-			DELETE FROM account WHERE user_id IN (SELECT id FROM user WHERE email IN ('${EMAIL}', 'too-short@keepr.digital', 'typo@keepr.digital'));
-			DELETE FROM user WHERE email IN ('${EMAIL}', 'too-short@keepr.digital', 'typo@keepr.digital');
+			DELETE FROM account WHERE user_id IN (SELECT id FROM user WHERE email = '${EMAIL}');
+			DELETE FROM user WHERE email = '${EMAIL}';
 		`);
-	});
-
-	it('refuses a caller with no bootstrap token', async () => {
-		expect((await ensureAdmin({ email: EMAIL, password: PASSWORD }, {})).status).toBe(403);
-	});
-
-	it('refuses a caller with the wrong bootstrap token', async () => {
-		const response = await ensureAdmin(
-			{ email: EMAIL, password: PASSWORD },
-			{ 'x-admin-bootstrap-token': 'not-the-token' },
-		);
-
-		expect(response.status).toBe(403);
-	});
-
-	it('does not admit the Graphics Administrator token in its place', async () => {
-		// Two separate secrets on purpose: this one is armed for a minute and
-		// deleted, that one lives set. A route admitting either could not be
-		// disarmed without turning off Graphics Administrator operations too.
-		const response = await ensureAdmin(
-			{ email: EMAIL, password: PASSWORD },
-			{ 'x-graphics-admin-token': INTEGRATION_GRAPHICS_ADMIN_TOKEN },
-		);
-
-		expect(response.status).toBe(403);
 	});
 
 	it('creates an admin account that can sign in', async () => {
@@ -112,9 +87,6 @@ describe('first-admin bootstrap', () => {
 
 		expect(response.status).toBe(200);
 		const body = await response.json() as EnsureAdminResponse;
-		// `created` rather than `updated` is also the proof that none of the three
-		// refusals above wrote anything: this file runs in order, and an account
-		// they had created would have sent this down the reset branch.
 		expect(body).toMatchObject({ outcome: 'created', email: EMAIL, grantedAdminRole: true });
 
 		const session = await sessionFrom(await signIn(EMAIL, PASSWORD));
@@ -131,36 +103,6 @@ describe('first-admin bootstrap', () => {
 		// The forgotten password stops working, or a lockout recovery would leave
 		// two live credentials on one admin account.
 		expect((await signIn(EMAIL, PASSWORD)).status).toBe(401);
-	});
-
-	it('finds the same account whatever case the operator typed the email in', async () => {
-		const response = await ensureAdmin({
-			email: EMAIL.toUpperCase(),
-			password: RECOVERY_PASSWORD,
-		});
-
-		expect(response.status).toBe(200);
-		// One account, reported under the email it is keyed on rather than the one
-		// that was typed — which is what an operator repeating a curl from their
-		// shell history needs to see.
-		expect(await response.json()).toMatchObject({ outcome: 'updated', email: EMAIL });
-	});
-
-	it('refuses a password shorter than Better Auth accepts', async () => {
-		const response = await ensureAdmin({ email: 'too-short@keepr.digital', password: 'short' });
-
-		expect(response.status).toBe(400);
-		expect((await signIn('too-short@keepr.digital', 'short')).status).toBe(401);
-	});
-
-	it('refuses a body with a key it does not know', async () => {
-		// A misspelt `password` silently ignored would create an admin account with
-		// a password nobody has, discovered at the sign-in screen with the secret
-		// already deleted.
-		const response = await ensureAdmin({ email: 'typo@keepr.digital', passwrd: PASSWORD });
-
-		expect(response.status).toBe(400);
-		expect((await signIn('typo@keepr.digital', PASSWORD)).status).toBe(401);
 	});
 
 	it('does nothing on GET, so a password cannot travel in a query string', async () => {

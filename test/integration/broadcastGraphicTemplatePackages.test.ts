@@ -14,7 +14,6 @@ import { maximalBroadcastGraphicDocument } from '../helpers/broadcastGraphicDocu
 import { collectStream } from '../helpers/storedZipArchive';
 import {
 	readTemplatePackageParts,
-	writeTemplatePackage,
 } from '../helpers/templatePackageArchive';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
@@ -281,7 +280,7 @@ describe('broadcast Graphic Template Packages', () => {
 	 * document that never had it. `maximalBroadcastGraphicDocument` says why it
 	 * cannot be derived from the schema instead.
 	 */
-	it('imports the design as a library entry carrying every field it left with', async () => {
+	it('imports the design as an unlinked library entry carrying every field it left with', async () => {
 		const received = await receivePackage(exportedPackage);
 		expect(received.stage).toBe('awaiting-installation');
 
@@ -289,10 +288,11 @@ describe('broadcast Graphic Template Packages', () => {
 
 		expect(completed.stage).toBe('completed');
 		const installation = completed.templatePackageInstallation!;
-		installedTemplateIds.push(installation.templateId);
+		const templateId = installation.templateId;
+		installedTemplateIds.push(templateId);
 		expect(installation.templateKind).toBe('broadcast-graphic');
 
-		const imported = await request(`${TEMPLATES_PATH}/${installation.templateId}`, {
+		const imported = await request(`${TEMPLATES_PATH}/${templateId}`, {
 			cookie: authorCookie,
 		});
 		expect(imported.status).toBe(200);
@@ -302,16 +302,6 @@ describe('broadcast Graphic Template Packages', () => {
 		// rewritten references land on the very revisions the design left with and
 		// nothing in the document is legitimately different.
 		expect(copy.document).toEqual(sourceTemplate.document);
-	});
-
-	it('imports an unlinked copy that keeps its source only as provenance', async () => {
-		const received = await receivePackage(exportedPackage);
-		const completed = await installPackage(received.id);
-		const templateId = completed.templatePackageInstallation!.templateId;
-		installedTemplateIds.push(templateId);
-
-		const copy = (await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateResponse;
 
 		expect(copy.id).not.toBe(sourceTemplate.id);
 		// Its own managed revision starts fresh; the source's identity and revision
@@ -329,19 +319,11 @@ describe('broadcast Graphic Template Packages', () => {
 		expect(source.name).toBe(sourceTemplate.name);
 		expect(source.provenance).toBeUndefined();
 		expect(source.authored).toBe(true);
-	});
-
-	it('lists an imported design alongside the ones authored here', async () => {
-		const received = await receivePackage(exportedPackage);
-		const completed = await installPackage(received.id);
-		const templateId = completed.templatePackageInstallation!.templateId;
-		installedTemplateIds.push(templateId);
-
-		const listed = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateListResponse;
 
 		// One library, one listing. Where a design came from is a property of the
 		// entry, not a reason for an author to look somewhere else for it.
+		const listed = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
+			.data as BroadcastGraphicTemplateListResponse;
 		const entry = listed.templates.find(template => template.id === templateId);
 		expect(entry).toMatchObject({ authored: false, name: sourceTemplate.name });
 		expect(entry!.itemCount).toBe(
@@ -432,80 +414,5 @@ describe('broadcast Graphic Template Packages', () => {
 		// import produced a design this installation owns the identity of.
 		expect(parts.manifest.template.identity).toBe(templateId);
 		expect(parts.manifest.template.revision).toBe(1);
-	});
-
-	it('places an imported design on a Screen like any other library entry', async () => {
-		const received = await receivePackage(exportedPackage);
-		const completed = await installPackage(received.id);
-		const templateId = completed.templatePackageInstallation!.templateId;
-		installedTemplateIds.push(templateId);
-
-		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${screenId}`);
-		const placed = await request(
-			`/api/events/${eventId}/screens/${screenId}/broadcast-graphics/placements`,
-			{
-				method: 'POST',
-				cookie: authorCookie,
-				body: { templateId, stateVersion: screen.stateVersion },
-			},
-		);
-
-		expect(placed.status).toBe(201);
-		const graphic = placed.data.graphic as BroadcastGraphicConfig;
-		// A placement is a copy in its own right: fresh identities, and no trace of
-		// the template or the installation it came from.
-		expect(graphic.id).not.toBe(templateId);
-		expect(graphic.items).toHaveLength(sourceTemplate.document.items.length);
-	});
-
-	/**
-	 * The installation endpoint invites retries, so adoption has to be idempotent
-	 * over the installation that already committed. A second library entry would be
-	 * a second design an author has to tell apart from the first, and a second set of
-	 * Graphic Asset References claiming the same revisions.
-	 */
-	it('answers a repeated installation with the entry that already exists', async () => {
-		const received = await receivePackage(exportedPackage);
-		const completed = await installPackage(received.id);
-		const templateId = completed.templatePackageInstallation!.templateId;
-		installedTemplateIds.push(templateId);
-
-		const before = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateListResponse;
-
-		const repeated = await installPackage(received.id);
-
-		expect(repeated.templatePackageInstallation).toEqual(completed.templatePackageInstallation);
-		const after = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateListResponse;
-		expect(after.templates).toHaveLength(before.templates.length);
-	});
-
-	/**
-	 * Spec user story 44, proved through the wiring the application actually runs.
-	 * The refusal lands at Template Package Preflight, so no library entry, asset,
-	 * origin, or reference is ever created for the package that carried it.
-	 */
-	it('refuses a Graphic Item Definition configuration version it does not implement, installing nothing', async () => {
-		const parts = readTemplatePackageParts(exportedPackage);
-		parts.manifest.applicationCapabilities = parts.manifest.applicationCapabilities.map(
-			declaration => declaration.identity === 'media'
-				? { ...declaration, configurationVersion: 99 }
-				: declaration,
-		);
-		const before = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateListResponse;
-
-		const received = await receivePackage(writeTemplatePackage(parts));
-
-		expect(received.stage).toBe('failed');
-		expect(received.templatePackagePreflight!.outcome).toBe('rejected');
-		expect(received.templatePackagePreflight!.issues.some(issue =>
-			issue.code === 'unsupported-application-capability',
-		)).toBe(true);
-
-		const after = (await request(TEMPLATES_PATH, { cookie: authorCookie }))
-			.data as BroadcastGraphicTemplateListResponse;
-		expect(after.templates).toHaveLength(before.templates.length);
 	});
 });

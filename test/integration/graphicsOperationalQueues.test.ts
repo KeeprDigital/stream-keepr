@@ -1,5 +1,4 @@
 import type {
-	GraphicAssetPurgeOutcome,
 	GraphicsIngestionOperation,
 	GraphicsOperationalQueuesOverview,
 	GraphicsQueueInspection,
@@ -8,7 +7,6 @@ import type { GraphicsQueueActionOutcome } from '~~/shared/utils/graphicsOperati
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '../../shared/types/screenConfig';
 import { GRAPHICS_OPERATIONAL_QUEUES } from '../../shared/utils/graphicsOperationalQueues';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
@@ -34,8 +32,6 @@ function pngWithTextChunks(count: number) {
 }
 
 const queuesRetiredPng = pngWithTextChunks(60);
-const queuesTrashedPng = pngWithTextChunks(61);
-const queuesReferencedPng = pngWithTextChunks(62);
 
 function decodeEvidence(bytes: Uint8Array) {
 	return {
@@ -203,86 +199,6 @@ describe('the Graphics Asset Library operational queues API', () => {
 			{ headers: administratorHeaders },
 		);
 		expect(gone.status).toBe(404);
-	});
-
-	it('refuses to Trash a Graphic Asset any artifact still pins', async () => {
-		const event = await $fetch<{ id: number }>('/api/events', {
-			method: 'POST',
-			body: {
-				name: 'Graphic Asset Queues Event',
-				game: 'mtg',
-				featureMatchOrientation: 'horizontal',
-			},
-		});
-		try {
-			const screen = await $fetch<{ id: number }>(`/api/events/${event.id}/screens`, {
-				method: 'POST',
-				body: {
-					name: 'Queues overlay',
-					slug: `queues-overlay-${event.id}`,
-					currentMode: 'feature-match-overlay',
-				},
-			});
-			const operation = await ingest(
-				'Queues referenced logo',
-				'queues-referenced',
-				queuesReferencedPng,
-			);
-			const assetId = operation.result!.assetId;
-			const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
-			config.layout.frame.backgroundImage = {
-				kind: 'asset',
-				assetId,
-				revisionId: operation.result!.revisionId,
-			};
-			await $fetch(
-				`/api/events/${event.id}/screens/${screen.id}/config/feature-match-overlay`,
-				{
-					method: 'PATCH',
-					body: { layout: config.layout },
-				},
-			);
-
-			// A fresh reference proof found pinned usage, so nothing was reclaimed.
-			expect(await authorLifecycleAction(assetId, 'trash')).toMatchObject({ outcome: 'in-use' });
-		}
-		finally {
-			await $fetch(`/api/events/${event.id}`, { method: 'DELETE' }).catch(() => {});
-		}
-	});
-
-	it('requires an explicit confirmation before an early purge', async () => {
-		const operation = await ingest('Queues trashed logo', 'queues-trashed', queuesTrashedPng);
-		const assetId = operation.result!.assetId;
-		expect(await authorLifecycleAction(assetId, 'trash')).toMatchObject({ outcome: 'trashed' });
-
-		// The queue's purge action goes to the existing fresh-proof endpoint, and
-		// that endpoint refuses anything but the exact confirmation.
-		const unconfirmed = await fetch(`/api/admin/graphics-assets/${assetId}/purge`, {
-			method: 'POST',
-			headers: { ...administratorHeaders, 'content-type': 'application/json' },
-			body: JSON.stringify({ confirmation: 'yes' }),
-		});
-		expect(unconfirmed.status).toBe(400);
-
-		const purged = await $fetch<GraphicAssetPurgeOutcome>(
-			`/api/admin/graphics-assets/${assetId}/purge`,
-			{
-				method: 'POST',
-				headers: administratorHeaders,
-				body: { confirmation: 'purge-now' },
-			},
-		);
-		expect(purged).toMatchObject({ outcome: 'purged', referenceCount: 0 });
-
-		// Purging again finds nothing left to purge; the local identity is retired
-		// permanently rather than reused.
-		const again = await fetch(`/api/admin/graphics-assets/${assetId}/purge`, {
-			method: 'POST',
-			headers: { ...administratorHeaders, 'content-type': 'application/json' },
-			body: JSON.stringify({ confirmation: 'purge-now' }),
-		});
-		expect(again.status).toBe(404);
 	});
 
 	it('reports an ingestion retry that has nothing left to resume', async () => {

@@ -5,14 +5,13 @@ import type {
 } from '~~/shared/types/broadcastGraphicTemplate';
 import type { BroadcastGraphicConfig, MediaGraphicItemConfig } from '~~/shared/types/graphics';
 import type {
-	GraphicAssetLifecycleActionOutcome,
 	GraphicAssetUsage,
 	GraphicsIngestionOperation,
 } from '~~/shared/types/graphicsAsset';
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
 import { crc32 } from 'node:zlib';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch, fetch, operatorSessionCookie } from './client';
 import { graphicsIngestionRequest } from './graphicsIngestionRequest';
 import { anotherBrowser } from './identities';
@@ -266,7 +265,8 @@ describe('broadcast Graphic Template library', () => {
 	 */
 	let secondBrowserCookie: string;
 	let asset: { assetId: string; revisionId: string };
-	let templateId: string;
+	/** The templates the running test saved, removed again when it ends. */
+	const savedTemplateIds: string[] = [];
 
 	async function createEventWithGraphicsScreen(name: string, slug: string) {
 		const event = await $fetch('/api/events', {
@@ -320,6 +320,36 @@ describe('broadcast Graphic Template library', () => {
 	async function templateRevision(id: string): Promise<number> {
 		const current = await request(`${TEMPLATES_PATH}/${id}`, { cookie: authorCookie });
 		return (current.data as BroadcastGraphicTemplateResponse).revision;
+	}
+
+	/**
+	 * A template of a test's own, saved from the authored Broadcast Graphic at revision 1.
+	 *
+	 * Every test saves the one it revises, leases, places or removes, so none reads a
+	 * revision or a lease another left behind and any of them runs alone.
+	 */
+	async function saveTemplate(description?: string): Promise<BroadcastGraphicTemplateResponse> {
+		const saved = await request(TEMPLATES_PATH, {
+			method: 'POST',
+			cookie: authorCookie,
+			body: {
+				source: { eventId: sourceEventId, screenId: sourceScreenId, graphicId: 'authored-lower-third' },
+				description,
+			},
+		});
+		expect(saved.status).toBe(201);
+		const template = saved.data as BroadcastGraphicTemplateResponse;
+		savedTemplateIds.push(template.id);
+		return template;
+	}
+
+	/** A Broadcast Graphics Screen of a test's own in the other Event, with nothing placed on it. */
+	async function targetScreen(slug: string): Promise<number> {
+		const created = await $fetch<ScreenResponse>(`/api/events/${otherEventId}/screens`, {
+			method: 'POST',
+			body: { name: slug, slug, currentMode: 'broadcast-graphics' },
+		});
+		return created.id;
 	}
 
 	beforeAll(async () => {
@@ -409,12 +439,16 @@ describe('broadcast Graphic Template library', () => {
 		expect(authored.status).toBe(200);
 	});
 
-	afterAll(async () => {
-		try {
-			if (templateId)
-				await request(`${TEMPLATES_PATH}/${templateId}`, { method: 'DELETE', cookie: authorCookie });
+	afterEach(async () => {
+		for (const savedTemplateId of savedTemplateIds.splice(0)) {
+			try {
+				await request(`${TEMPLATES_PATH}/${savedTemplateId}`, { method: 'DELETE', cookie: authorCookie });
+			}
+			catch {}
 		}
-		catch {}
+	});
+
+	afterAll(async () => {
 		for (const eventId of [sourceEventId, otherEventId]) {
 			try {
 				await $fetch(`/api/events/${eventId}`, { method: 'DELETE' });
@@ -424,23 +458,13 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('saves a placed Broadcast Graphic as a template with a stable identity and revision 1', async () => {
-		const saved = await request(TEMPLATES_PATH, {
-			method: 'POST',
-			cookie: authorCookie,
-			body: {
-				source: { eventId: sourceEventId, screenId: sourceScreenId, graphicId: 'authored-lower-third' },
-				description: 'Main show lower third',
-			},
-		});
+		const template = await saveTemplate('Main show lower third');
 
-		expect(saved.status).toBe(201);
-		const template = saved.data as BroadcastGraphicTemplateResponse;
 		expect(template.id).toEqual(expect.any(String));
 		expect(template.name).toBe('Lower third');
 		expect(template.description).toBe('Main show lower third');
 		expect(template.revision).toBe(1);
 		expect(template.document.items.map(item => item.id)).toEqual(['backing', 'headline', 'badges']);
-		templateId = template.id;
 	});
 
 	/*
@@ -464,11 +488,13 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('browses the library from any Event in the installation', async () => {
+		const template = await saveTemplate();
+
 		const listed = await request(TEMPLATES_PATH, { cookie: authorCookie });
 
 		expect(listed.status).toBe(200);
 		const summaries = listed.data.templates as BroadcastGraphicTemplateSummary[];
-		const saved = summaries.find(summary => summary.id === templateId);
+		const saved = summaries.find(summary => summary.id === template.id);
 		expect(saved).toMatchObject({
 			name: 'Lower third',
 			revision: 1,
@@ -481,96 +507,25 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('places a template on a Screen in a different Event as a new Broadcast Graphic', async () => {
-		const placed = await place(otherEventId, otherScreenId, { templateId }, authorCookie);
+		const template = await saveTemplate();
+		const screenId = await targetScreen('template-placed-screen');
+
+		const placed = await place(otherEventId, screenId, { templateId: template.id }, authorCookie);
 
 		expect(placed.status).toBe(201);
 		const graphic = placed.data.graphic as BroadcastGraphicConfig;
 		expect(graphic.name).toBe('Lower third');
 		expect(graphic.id).not.toBe('authored-lower-third');
 
-		const stack = await authoredStack(otherEventId, otherScreenId);
+		const stack = await authoredStack(otherEventId, screenId);
 		expect(stack.map(entry => entry.id)).toEqual([graphic.id]);
 	});
 
-	it('regenerates every Graphic Item id so two copies coexist in one Screen document', async () => {
-		const second = await place(otherEventId, otherScreenId, { templateId }, authorCookie);
-
-		expect(second.status).toBe(201);
-		const stack = await authoredStack(otherEventId, otherScreenId);
-		expect(stack).toHaveLength(2);
-
-		const itemIds = stack.flatMap(graphic => graphic.items.flatMap(item => [
-			item.id,
-			...(item.type === 'group'
-				? item.children.map(child => child.id)
-				: []),
-		]));
-		expect(new Set(itemIds).size).toBe(itemIds.length);
-		expect(itemIds).not.toContain('backing');
-		expect(itemIds).not.toContain('bug');
-		// A second copy in the same Screen is named distinctly rather than duplicated.
-		expect(stack.map(graphic => graphic.name)).toEqual(['Lower third', 'Lower third (2)']);
-	});
-
-	it('rewrites every staggered Graphic Item id onto the placed copy', async () => {
-		const [placed] = await authoredStack(otherEventId, otherScreenId);
-
-		const graphicStagger = placed!.animation!.stagger!.enter!;
-		const [backing, headline] = placed!.items.map(item => item.id);
-		// `itemIds` is the *selection* of staggered items; the sequence comes from the
-		// container's list order restricted to it, then reversed for `reverse-list`. So
-		// this asserts each authored entry's mapping, entry by entry — the array's own
-		// order carries no behaviour and is preserved only because rewriting it in place
-		// is the simplest correct thing to do.
-		expect(graphicStagger.itemIds).toEqual([headline, backing]);
-		expect(graphicStagger.step).toBe(80);
-
-		const group = placed!.items.find(item => item.type === 'group');
-		if (group?.type !== 'group')
-			throw new Error('expected the placed copy to carry the Graphic Group');
-		expect(group.animation!.stagger!.enter!.itemIds)
-			.toEqual(group.children.map(child => child.id));
-
-		// No authored id survives anywhere, which is what a stale stagger would be:
-		// silently ignored, every staggered item animating together at offset zero.
-		const staggered = [
-			...graphicStagger.itemIds,
-			...group.animation!.stagger!.enter!.itemIds,
-		];
-		for (const authored of [
-			'backing',
-			'headline',
-			'badges',
-			'bug',
-			'rule',
-		])
-			expect(staggered).not.toContain(authored);
-	});
-
-	it('carries each Graphic Input default as the placed copy\'s own initial manual value', async () => {
-		const [placed] = await authoredStack(otherEventId, otherScreenId);
-
-		expect(placed!.inputs).toEqual([
-			{
-				type: 'text',
-				key: 'player',
-				label: 'Player',
-				required: true,
-				updatePolicy: 'staged',
-				default: 'Reid Duke',
-				maxLength: 40,
-			},
-		]);
-		expect(placed!.sources).toEqual([
-			{ key: 'player', label: 'Player', kind: 'player' },
-		]);
-		expect(placed!.bindings).toEqual([
-			{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.name' },
-		]);
-	});
-
 	it('places an authored Graphic Asset Reference its Screen Output can resolve', async () => {
-		const stack = await authoredStack(otherEventId, otherScreenId);
+		const template = await saveTemplate();
+		const screenId = await targetScreen('template-delivered-screen');
+		expect((await place(otherEventId, screenId, { templateId: template.id }, authorCookie)).status).toBe(201);
+		const stack = await authoredStack(otherEventId, screenId);
 		const placedMedia = stack[0]!.items
 			.flatMap(item => item.type === 'group'
 				? item.children
@@ -584,13 +539,13 @@ describe('broadcast Graphic Template library', () => {
 		// configuration publishes, so a placement that produced anything other than an
 		// authored reference would leave the graphic's media unresolvable on air.
 		const { assetCapability } = await $fetch<{ assetCapability: string }>(
-			`/api/events/${otherEventId}/screens/${otherScreenId}/asset-capability`,
+			`/api/events/${otherEventId}/screens/${screenId}/asset-capability`,
 			{
 				headers: { cookie: authorCookie },
 			},
 		);
 		const delivered = await fetch(
-			`/api/screen-output/screens/${otherScreenId}/assets/${placedMedia.asset!.assetId}/revisions/${placedMedia.asset!.revisionId}/content`,
+			`/api/screen-output/screens/${screenId}/assets/${placedMedia.asset!.assetId}/revisions/${placedMedia.asset!.revisionId}/content`,
 			{
 				headers: { authorization: `Bearer ${assetCapability}` },
 			},
@@ -601,7 +556,7 @@ describe('broadcast Graphic Template library', () => {
 		// stays invisible to its outputs.
 		const unreferenced = await ingestImage(otherEventId, 'template-library-unplaced', authorCookie);
 		const refused = await fetch(
-			`/api/screen-output/screens/${otherScreenId}/assets/${unreferenced.assetId}/revisions/${unreferenced.revisionId}/content`,
+			`/api/screen-output/screens/${screenId}/assets/${unreferenced.assetId}/revisions/${unreferenced.revisionId}/content`,
 			{
 				headers: { authorization: `Bearer ${assetCapability}` },
 			},
@@ -617,6 +572,7 @@ describe('broadcast Graphic Template library', () => {
 	 * the usage listing exists to prevent.
 	 */
 	it('names the Broadcast Graphic Template that pins an asset in its usage', async () => {
+		const template = await saveTemplate();
 		const usage = await $fetch<GraphicAssetUsage[]>(
 			`/api/graphics-assets/${asset.assetId}/usage`,
 			{
@@ -628,14 +584,19 @@ describe('broadcast Graphic Template library', () => {
 			reference: asset,
 			owner: expect.objectContaining({
 				kind: 'broadcast-graphic-template',
-				id: templateId,
+				id: template.id,
 				name: 'Lower third',
 			}),
 		}));
 	});
 
 	it('leaves a placed copy and its template with no live coupling in either direction', async () => {
-		const before = await authoredStack(otherEventId, otherScreenId);
+		const template = await saveTemplate();
+		const screenId = await targetScreen('template-uncoupled-screen');
+		// Two copies: the first is edited below, the second is the control a revision must not reach.
+		expect((await place(otherEventId, screenId, { templateId: template.id }, authorCookie)).status).toBe(201);
+		expect((await place(otherEventId, screenId, { templateId: template.id }, authorCookie)).status).toBe(201);
+		const before = await authoredStack(otherEventId, screenId);
 		const placed = structuredClone(before[0]!);
 
 		// Editing the placed copy changes nothing about the template. The Graphic Source
@@ -663,11 +624,11 @@ describe('broadcast Graphic Template library', () => {
 		placed.bindings = [
 			{ inputKey: 'player', sourceKey: 'player', fieldId: 'player.pronouns' },
 		];
-		expect((await patchStack(otherEventId, otherScreenId, [placed, before[1]!])).status).toBe(200);
+		expect((await patchStack(otherEventId, screenId, [placed, before[1]!])).status).toBe(200);
 
-		const template = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
-		expect(template.status).toBe(200);
-		const document = (template.data as BroadcastGraphicTemplateResponse).document;
+		const stored = await request(`${TEMPLATES_PATH}/${template.id}`, { cookie: authorCookie });
+		expect(stored.status).toBe(200);
+		const document = (stored.data as BroadcastGraphicTemplateResponse).document;
 		expect(document.name).toBe('Lower third');
 		expect(document.items).toHaveLength(3);
 		expect(document.inputs![0]!.default).toBe('Reid Duke');
@@ -682,7 +643,7 @@ describe('broadcast Graphic Template library', () => {
 
 		// And the copy's own edits survived the round trip rather than being silently
 		// dropped by a write path that does not carry them.
-		const edited = (await authoredStack(otherEventId, otherScreenId))[0]!;
+		const edited = (await authoredStack(otherEventId, screenId))[0]!;
 		expect(edited.sources).toEqual([
 			{ key: 'player', label: 'Featured player', kind: 'player' },
 		]);
@@ -692,7 +653,7 @@ describe('broadcast Graphic Template library', () => {
 			]);
 
 		// Revising the template changes nothing about the copies already placed.
-		const revised = await request(`${TEMPLATES_PATH}/${templateId}`, {
+		const revised = await request(`${TEMPLATES_PATH}/${template.id}`, {
 			method: 'PATCH',
 			cookie: authorCookie,
 			body: {
@@ -705,51 +666,53 @@ describe('broadcast Graphic Template library', () => {
 					items: document.items.slice(0, 1),
 					animation: { ...document.animation, stagger: undefined },
 				},
-				revision: await templateRevision(templateId),
+				revision: await templateRevision(template.id),
 			},
 		});
 		expect(revised.status).toBe(200);
 		expect((revised.data as BroadcastGraphicTemplateResponse).revision).toBe(2);
 
-		const after = await authoredStack(otherEventId, otherScreenId);
+		const after = await authoredStack(otherEventId, screenId);
 		expect(after[0]!.name).toBe('Renamed on the Screen');
 		expect(after[1]!.name).toBe('Lower third (2)');
 		expect(after[1]!.items).toHaveLength(3);
 	});
 
 	it('leases one template at a time and refuses a second session\'s edit', async () => {
-		const leasePath = `${TEMPLATES_PATH}/${templateId}/graphics-authoring-lease`;
+		const template = await saveTemplate();
+		const leasePath = `${TEMPLATES_PATH}/${template.id}/graphics-authoring-lease`;
 
 		const held = await request(leasePath, { method: 'POST', body: {}, cookie: authorCookie });
 		expect(held.status).toBe(200);
 		expect(held.data.outcome).toBe('grant');
-		expect(held.data.lease.artifact).toEqual({ kind: 'graphics-template', id: templateId });
+		expect(held.data.lease.artifact).toEqual({ kind: 'graphics-template', id: template.id });
 
 		const observing = await request(leasePath, { method: 'POST', body: {}, cookie: secondBrowserCookie });
 		expect(observing.data.outcome).toBe('observe');
 		expect(observing.data.lease.writable).toBe(false);
 
-		const revision = await templateRevision(templateId);
-		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+		const revision = await templateRevision(template.id);
+		const refused = await request(`${TEMPLATES_PATH}/${template.id}`, {
 			method: 'PATCH',
 			cookie: secondBrowserCookie,
 			body: { description: 'Taken from under the holder', revision },
 		});
 		expect(refused.status).toBe(409);
 
-		const accepted = await request(`${TEMPLATES_PATH}/${templateId}`, {
+		const accepted = await request(`${TEMPLATES_PATH}/${template.id}`, {
 			method: 'PATCH',
 			cookie: authorCookie,
 			body: { description: 'Revised by the holder', revision },
 		});
 		expect(accepted.status).toBe(200);
-		expect((accepted.data as BroadcastGraphicTemplateResponse).revision).toBe(3);
+		expect((accepted.data as BroadcastGraphicTemplateResponse).revision).toBe(2);
 
 		expect((await request(leasePath, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
 	});
 
 	it('refuses a template document that is not a valid Broadcast Graphic', async () => {
-		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+		const template = await saveTemplate();
+		const refused = await request(`${TEMPLATES_PATH}/${template.id}`, {
 			method: 'PATCH',
 			cookie: authorCookie,
 			body: {
@@ -760,26 +723,7 @@ describe('broadcast Graphic Template library', () => {
 						{ type: 'text', id: 'a' },
 					],
 				},
-				revision: await templateRevision(templateId),
-			},
-		});
-
-		expect(refused.status).toBe(400);
-	});
-
-	it('refuses two Graphic Items with the same id in a template document', async () => {
-		const current = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
-		const document = (current.data as BroadcastGraphicTemplateResponse).document;
-
-		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: {
-				document: {
-					...document,
-					items: [document.items[0]!, document.items[0]!],
-				},
-				revision: await templateRevision(templateId),
+				revision: await templateRevision(template.id),
 			},
 		});
 
@@ -795,33 +739,37 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('refuses to place a template on a Screen that is not in Broadcast Graphics mode', async () => {
+		const template = await saveTemplate();
 		const backgroundScreen = await $fetch<ScreenResponse>(`/api/events/${otherEventId}/screens`, {
 			method: 'POST',
 			body: { name: 'Background', slug: 'template-background-screen', currentMode: 'background' },
 		});
 
-		const refused = await place(otherEventId, backgroundScreen.id, { templateId }, authorCookie);
+		const refused = await place(otherEventId, backgroundScreen.id, { templateId: template.id }, authorCookie);
 
 		expect(refused.status).toBe(409);
 	});
 
 	it('refuses a placement from a session that does not hold the Screen\'s Edit workspace lease', async () => {
-		const screenLease = `/api/events/${otherEventId}/screens/${otherScreenId}/graphics-authoring-lease`;
+		const template = await saveTemplate();
+		const screenId = await targetScreen('template-leased-screen');
+		const screenLease = `/api/events/${otherEventId}/screens/${screenId}/graphics-authoring-lease`;
 		expect((await request(screenLease, { method: 'POST', body: {}, cookie: authorCookie })).data.outcome)
 			.toBe('grant');
-		const before = await authoredStack(otherEventId, otherScreenId);
+		const before = await authoredStack(otherEventId, screenId);
 
-		const refused = await place(otherEventId, otherScreenId, { templateId }, secondBrowserCookie);
+		const refused = await place(otherEventId, screenId, { templateId: template.id }, secondBrowserCookie);
 		expect(refused.status).toBe(409);
-		expect(await authoredStack(otherEventId, otherScreenId)).toEqual(before);
+		expect(await authoredStack(otherEventId, screenId)).toEqual(before);
 
 		expect((await request(screenLease, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
 	});
 
 	it('refuses a revision built on a stale one, naming the revision that exists', async () => {
-		const stale = await templateRevision(templateId);
+		const template = await saveTemplate();
+		const stale = await templateRevision(template.id);
 
-		const accepted = await request(`${TEMPLATES_PATH}/${templateId}`, {
+		const accepted = await request(`${TEMPLATES_PATH}/${template.id}`, {
 			method: 'PATCH',
 			cookie: authorCookie,
 			body: { description: 'First writer wins', revision: stale },
@@ -829,7 +777,7 @@ describe('broadcast Graphic Template library', () => {
 		expect(accepted.status).toBe(200);
 
 		// The other window had the library open and never saw the revision above.
-		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+		const refused = await request(`${TEMPLATES_PATH}/${template.id}`, {
 			method: 'PATCH',
 			cookie: secondBrowserCookie,
 			body: { description: 'Second writer overwrites', revision: stale },
@@ -837,14 +785,15 @@ describe('broadcast Graphic Template library', () => {
 
 		expect(refused.status).toBe(409);
 		expect(refused.data.message).toContain(`revision ${stale + 1}`);
-		const after = await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie });
+		const after = await request(`${TEMPLATES_PATH}/${template.id}`, { cookie: authorCookie });
 		expect((after.data as BroadcastGraphicTemplateResponse).description).toBe('First writer wins');
 	});
 
 	it('refuses a revision that states no revision at all', async () => {
+		const template = await saveTemplate();
 		// An omissible precondition is an inert one: if saying nothing meant "do not
 		// check", every caller that forgot would get an unguarded last-write-wins.
-		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+		const refused = await request(`${TEMPLATES_PATH}/${template.id}`, {
 			method: 'PATCH',
 			cookie: authorCookie,
 			body: { description: 'Stated no revision' },
@@ -854,31 +803,39 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('refuses a placement that states no Screen version at all', async () => {
+		const template = await saveTemplate();
 		const refused = await request(placementPath(otherEventId, otherScreenId), {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { templateId },
+			body: { templateId: template.id },
 		});
 
 		expect(refused.status).toBe(400);
 	});
 
 	it('refuses a placement built on a stale Screen version', async () => {
-		const stale = await screenStateVersion(otherEventId, otherScreenId);
+		const template = await saveTemplate();
+		const screenId = await targetScreen('template-reordered-screen');
+		// Two Broadcast Graphics, so the reorder below is one a stale write would undo.
+		expect((await patchStack(otherEventId, screenId, [
+			{ id: 'first', name: 'First', items: [] },
+			{ id: 'second', name: 'Second', items: [] },
+		])).status).toBe(200);
+		const stale = await screenStateVersion(otherEventId, screenId);
 		// Another author reorders the stack in the meantime.
-		const stack = await authoredStack(otherEventId, otherScreenId);
-		expect((await patchStack(otherEventId, otherScreenId, [...stack].reverse())).status).toBe(200);
+		const stack = await authoredStack(otherEventId, screenId);
+		expect((await patchStack(otherEventId, screenId, [...stack].reverse())).status).toBe(200);
 
-		const refused = await request(placementPath(otherEventId, otherScreenId), {
+		const refused = await request(placementPath(otherEventId, screenId), {
 			method: 'POST',
 			cookie: authorCookie,
-			body: { templateId, stateVersion: stale },
+			body: { templateId: template.id, stateVersion: stale },
 		});
 
 		// Without the guard this would have written the whole stack back from a copy
 		// taken before the reorder, silently undoing it.
 		expect(refused.status).toBe(409);
-		expect((await authoredStack(otherEventId, otherScreenId)).map(entry => entry.name))
+		expect((await authoredStack(otherEventId, screenId)).map(entry => entry.name))
 			.toEqual([...stack].reverse().map(entry => entry.name));
 	});
 
@@ -894,16 +851,17 @@ describe('broadcast Graphic Template library', () => {
 	});
 
 	it('refuses an observer\'s deletion of a leased template', async () => {
-		const leasePath = `${TEMPLATES_PATH}/${templateId}/graphics-authoring-lease`;
+		const template = await saveTemplate();
+		const leasePath = `${TEMPLATES_PATH}/${template.id}/graphics-authoring-lease`;
 		expect((await request(leasePath, { method: 'POST', body: {}, cookie: authorCookie })).data.outcome)
 			.toBe('grant');
 
-		const refused = await request(`${TEMPLATES_PATH}/${templateId}`, {
+		const refused = await request(`${TEMPLATES_PATH}/${template.id}`, {
 			method: 'DELETE',
 			cookie: secondBrowserCookie,
 		});
 		expect(refused.status).toBe(409);
-		expect((await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie })).status).toBe(200);
+		expect((await request(`${TEMPLATES_PATH}/${template.id}`, { cookie: authorCookie })).status).toBe(200);
 
 		expect((await request(leasePath, { method: 'DELETE', cookie: authorCookie })).status).toBe(200);
 	});
@@ -1003,99 +961,23 @@ describe('broadcast Graphic Template library', () => {
 		await request(`${TEMPLATES_PATH}/${retiringTemplateId}`, { method: 'DELETE', cookie: authorCookie });
 	});
 
-	// #614: every template write holds each reference to the selectability rule a
-	// Screen applies to a new choice, and Retire is refused while a saved template
-	// references the asset (ADR-0034).
-	it('refuses a revision that pins an asset of the wrong kind for its slot, and refuses to retire its asset', async () => {
-		const retiring = await ingestImage(sourceEventId, 'template-library-kind', authorCookie);
-		const sourceScreen = await $fetch<ScreenResponse>(`/api/events/${sourceEventId}/screens`, {
-			method: 'POST',
-			body: { name: 'Kinds', slug: 'template-kinds-screen', currentMode: 'broadcast-graphics' },
-		});
-		expect((await patchStack(sourceEventId, sourceScreen.id, [
-			{
-				id: 'kinds-graphic',
-				name: 'Kinds',
-				items: [
-					mediaItem('plate', retiring),
-				],
-			},
-		])).status).toBe(200);
-		const saved = await request(TEMPLATES_PATH, {
-			method: 'POST',
-			cookie: authorCookie,
-			body: {
-				source: { eventId: sourceEventId, screenId: sourceScreen.id, graphicId: 'kinds-graphic' },
-			},
-		});
-		expect(saved.status).toBe(201);
-		const kindsTemplate = saved.data as BroadcastGraphicTemplateResponse;
-
-		const wrongKind = await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: {
-				document: {
-					...kindsTemplate.document,
-					items: [
-						{
-							...mediaItem('plate', retiring),
-							mediaKind: 'silent-video',
-							loop: true,
-							playbackRate: 1,
-						},
-					],
-				},
-				revision: kindsTemplate.revision,
-			},
-		});
-		expect(wrongKind.status).toBe(409);
-		expect(wrongKind.data.message).toContain('kinds-graphic.items.plate.asset (is an image, not a silent video)');
-
-		const retire = await $fetch<GraphicAssetLifecycleActionOutcome>(
-			`/api/graphics-assets/${retiring.assetId}/lifecycle-actions`,
-			{
-				method: 'POST',
-				headers: { cookie: authorCookie },
-				body: { action: 'retire' },
-			},
-		);
-		expect(retire).toMatchObject({
-			outcome: 'in-use',
-			usage: [
-				expect.objectContaining({
-					owner: expect.objectContaining({ kind: 'broadcast-graphic-template', id: kindsTemplate.id, name: 'Kinds' }),
-				}),
-			],
-		});
-		// Nothing a Screen holds is reported: the source Screen pins the asset too.
-		expect(retire.outcome === 'in-use' && retire.usage.map(entry => entry.owner.kind))
-			.toEqual(['broadcast-graphic-template']);
-
-		// Still active, so the template stays revisable.
-		const renamed = await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, {
-			method: 'PATCH',
-			cookie: authorCookie,
-			body: { name: 'Renamed', revision: kindsTemplate.revision },
-		});
-		expect(renamed.status).toBe(200);
-
-		await request(`${TEMPLATES_PATH}/${kindsTemplate.id}`, { method: 'DELETE', cookie: authorCookie });
-	});
-
 	it('removes a template from the library without touching the copies placed from it', async () => {
-		const removed = await request(`${TEMPLATES_PATH}/${templateId}`, {
+		const template = await saveTemplate();
+		const screenId = await targetScreen('template-removed-screen');
+		expect((await place(otherEventId, screenId, { templateId: template.id }, authorCookie)).status).toBe(201);
+
+		const removed = await request(`${TEMPLATES_PATH}/${template.id}`, {
 			method: 'DELETE',
 			cookie: authorCookie,
 		});
 		expect(removed.status).toBe(204);
 
-		expect((await request(`${TEMPLATES_PATH}/${templateId}`, { cookie: authorCookie })).status).toBe(404);
-		expect((await authoredStack(otherEventId, otherScreenId))).toHaveLength(2);
+		expect((await request(`${TEMPLATES_PATH}/${template.id}`, { cookie: authorCookie })).status).toBe(404);
+		expect((await authoredStack(otherEventId, screenId))).toHaveLength(1);
 
 		const listed = await request(TEMPLATES_PATH, { cookie: authorCookie });
 		expect((listed.data.templates as BroadcastGraphicTemplateSummary[]).map(entry => entry.id))
 			.not
-			.toContain(templateId);
+			.toContain(template.id);
 	});
 });

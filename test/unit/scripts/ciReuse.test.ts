@@ -2,12 +2,12 @@ import type { AddressInfo } from 'node:net';
 import { Buffer } from 'node:buffer';
 import { execFileSync, spawn } from 'node:child_process';
 import { createSign, generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { findVerifiedRun, recordName } from '../../../scripts/ci-reuse.mjs';
 
 const repositoryRoot = join(import.meta.dirname, '../../..');
@@ -19,24 +19,37 @@ const GROUP_TREE = 'a'.repeat(40);
 const MERGE_COMMIT = 'b'.repeat(40);
 const PR_HEAD = 'c'.repeat(40);
 
-const github = generateKeyPairSync('rsa', { modulusLength: 2048 });
-const githubJwks = {
-	keys: [
-		{
-			...github.publicKey.export({ format: 'jwk' }),
-			kid: 'github-key',
-			alg: 'RS256',
-			use: 'sig',
-		},
-	],
-};
+const generateKeyPair = () => generateKeyPairSync('rsa', { modulusLength: 2048 });
+
+/** A key pair is made by the first case that signs or verifies with it, and made once. */
+function keyPair() {
+	let pair: ReturnType<typeof generateKeyPair> | undefined;
+	return () => pair ??= generateKeyPair();
+}
+
+const github = keyPair();
+/** Any key that is not GitHub's: what a forger can sign with. */
+const attacker = keyPair();
+
+function githubJwks() {
+	return {
+		keys: [
+			{
+				...github().publicKey.export({ format: 'jwk' }),
+				kid: 'github-key',
+				alg: 'RS256',
+				use: 'sig',
+			},
+		],
+	};
+}
 
 function base64url(value: string | Buffer) {
 	return Buffer.from(value).toString('base64url');
 }
 
 /** A token as GitHub's OIDC provider would sign it, for a job of a full PR run of CI. */
-function token(claims: Record<string, unknown> = {}, { key = github.privateKey, kid = 'github-key', alg = 'RS256' } = {}) {
+function token(claims: Record<string, unknown> = {}, { key = github().privateKey, kid = 'github-key', alg = 'RS256' } = {}) {
 	const header = base64url(JSON.stringify({ alg, typ: 'JWT', kid }));
 	const payload = base64url(JSON.stringify({
 		iss: 'https://token.actions.githubusercontent.com',
@@ -79,6 +92,18 @@ interface World {
 	trees: Record<string, string>;
 }
 
+/** GitHub's own record of a full, green PR run of CI. */
+const RUN = {
+	id: RUN_ID,
+	path: '.github/workflows/ci.yml',
+	event: 'pull_request',
+	status: 'completed',
+	conclusion: 'success',
+	head_sha: PR_HEAD,
+	repository: { full_name: REPOSITORY },
+	html_url: `https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}`,
+};
+
 /** What GitHub holds after a full, green PR run of CI on a merge commit whose tree is the group's. */
 function world(overrides: Partial<World> = {}): World {
 	return {
@@ -92,17 +117,8 @@ function world(overrides: Partial<World> = {}): World {
 			},
 		],
 		record: token(),
-		jwks: githubJwks,
-		run: {
-			id: RUN_ID,
-			path: '.github/workflows/ci.yml',
-			event: 'pull_request',
-			status: 'completed',
-			conclusion: 'success',
-			head_sha: PR_HEAD,
-			repository: { full_name: REPOSITORY },
-			html_url: `https://github.com/${REPOSITORY}/actions/runs/${RUN_ID}`,
-		},
+		jwks: githubJwks(),
+		run: RUN,
 		jobs: JOBS.map(name => ({ name, status: 'completed', conclusion: 'success' })),
 		trees: { [MERGE_COMMIT]: GROUP_TREE },
 		...overrides,
@@ -184,7 +200,7 @@ describe('which records it considers', () => {
 		const result = await find(state, {
 			record: async (runId: number) => runId === RUN_ID
 				? token()
-				: token({ run_id: '666' }, { key: generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey }),
+				: token({ run_id: '666' }, { key: attacker().privateKey }),
 		});
 
 		expect(result.run).toMatchObject({ id: RUN_ID });
@@ -238,30 +254,45 @@ describe('which records it considers', () => {
 });
 
 describe('only GitHub\'s signature makes a record: a PR\'s own workflow code can write any artifact', () => {
-	const attacker = generateKeyPairSync('rsa', { modulusLength: 2048 });
-	const [header, payload] = token().split('.');
-
-	it.each([
+	// Each record is built by its own case, so collecting the file signs nothing.
+	it.each<[string, () => string]>([
 		[
 			'signed by a key that is not GitHub\'s',
-			token({}, { key: attacker.privateKey }),
+			() => token({}, { key: attacker().privateKey }),
 		],
 		[
 			'signed under a key id GitHub does not publish',
-			token({}, { kid: 'attacker-key' }),
+			() => token({}, { kid: 'attacker-key' }),
 		],
-		['claiming no signature at all', `${base64url(JSON.stringify({ alg: 'none', typ: 'JWT', kid: 'github-key' }))}.${payload}.`],
+		[
+			'claiming no signature at all',
+			() => `${base64url(JSON.stringify({ alg: 'none', typ: 'JWT', kid: 'github-key' }))}.${token().split('.')[1]}.`,
+		],
 		[
 			'claiming another algorithm',
-			token({}, { alg: 'HS256' }),
+			() => token({}, { alg: 'HS256' }),
 		],
-		['with its claims edited after signing', `${header}.${base64url(JSON.stringify({
-			...JSON.parse(Buffer.from(payload!, 'base64url').toString()),
-			sha: 'd'.repeat(40),
-		}))}.${token().split('.')[2]}`],
-		['not a token', 'not-a-token'],
-		['empty', ''],
-	])('a token %s', async (_case, record) => {
+		[
+			'with its claims edited after signing',
+			() => {
+				const [header, payload, signature] = token().split('.');
+				return `${header}.${base64url(JSON.stringify({
+					...JSON.parse(Buffer.from(payload!, 'base64url').toString()),
+					sha: 'd'.repeat(40),
+				}))}.${signature}`;
+			},
+		],
+		[
+			'not a token',
+			() => 'not-a-token',
+		],
+		[
+			'empty',
+			() => '',
+		],
+	])('a token %s', async (_case, forge) => {
+		const record = forge();
+
 		await expectFullRun(world({ record }), /signature|token/i);
 	});
 
@@ -361,7 +392,7 @@ describe('the run, as GitHub records it, must show every one of its jobs ran and
 			'the run failed',
 			{
 				run: {
-					...world().run,
+					...RUN,
 					conclusion: 'failure',
 				},
 			},
@@ -370,7 +401,7 @@ describe('the run, as GitHub records it, must show every one of its jobs ran and
 			'the run is another workflow\'s',
 			{
 				run: {
-					...world().run,
+					...RUN,
 					path: '.github/workflows/pr-title.yml',
 				},
 			},
@@ -379,7 +410,7 @@ describe('the run, as GitHub records it, must show every one of its jobs ran and
 			'the run is not a PR run',
 			{
 				run: {
-					...world().run,
+					...RUN,
 					event: 'merge_group',
 				},
 			},
@@ -388,7 +419,7 @@ describe('the run, as GitHub records it, must show every one of its jobs ran and
 			'the run is another repository\'s',
 			{
 				run: {
-					...world().run,
+					...RUN,
 					repository: { full_name: 'someone/stream-keepr' },
 				},
 			},
@@ -441,7 +472,7 @@ describe('the run, as GitHub records it, must show every one of its jobs ran and
 	it('runs everything when the run never concludes', async () => {
 		await expectFullRun(world({
 			run: {
-				...world().run,
+				...RUN,
 				status: 'in_progress',
 				conclusion: null,
 			},
@@ -451,21 +482,18 @@ describe('the run, as GitHub records it, must show every one of its jobs ran and
 
 /**
  * The PR run's `record` job against a stand-in for the runner's OIDC endpoint
- * and a real git checkout. Nothing remote.
+ * and a real git checkout, which it only reads, so the cases share one.
+ * Nothing remote.
  */
 describe('the record job\'s command line', () => {
-	const directories: string[] = [];
+	let workspace: string;
+	let checkout: { directory: string; tree: string };
 
-	afterEach(() => {
-		for (const directory of directories.splice(0))
-			rmSync(directory, { recursive: true, force: true });
-	});
-
-	function checkout() {
-		const directory = mkdtempSync(join(tmpdir(), 'ci-reuse-checkout-'));
-		directories.push(directory);
+	beforeAll(() => {
+		workspace = mkdtempSync(join(tmpdir(), 'ci-reuse-'));
+		const directory = join(workspace, 'checkout');
 		const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
-		execFileSync('git', ['init', '-q'], { cwd: directory, env });
+		execFileSync('git', ['init', '-q', directory], { env });
 		writeFileSync(join(directory, 'README.md'), 'the merge commit\n');
 		execFileSync('git', ['add', '.'], { cwd: directory, env });
 		execFileSync('git', [
@@ -478,23 +506,29 @@ describe('the record job\'s command line', () => {
 			'-m',
 			'merge',
 		], { cwd: directory, env });
-		return {
+		checkout = {
 			directory,
 			tree: execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: directory, env, encoding: 'utf8' }).trim(),
 		};
-	}
+	});
 
-	function record(cwd: string, env: Record<string, string>) {
-		const output = join(cwd, '..', `${cwd.split('/').at(-1)}-output`);
-		const runnerTemp = mkdtempSync(join(tmpdir(), 'ci-reuse-temp-'));
-		directories.push(output, runnerTemp);
+	afterAll(() => {
+		rmSync(workspace, { recursive: true, force: true });
+	});
+
+	/** One run of the job, with an output file and a runner temp of its own. */
+	function record(env: Record<string, string>) {
+		const job = mkdtempSync(join(workspace, 'job-'));
+		const output = join(job, 'output');
+		const runnerTemp = join(job, 'temp');
+		mkdirSync(runnerTemp);
 		writeFileSync(output, '');
 		return new Promise<{ status: number | null; stdout: string; output: string }>((resolve) => {
 			const child = spawn(process.execPath, [
 				join(repositoryRoot, 'scripts/ci-reuse.mjs'),
 				'record',
 			], {
-				cwd,
+				cwd: checkout.directory,
 				env: {
 					...process.env,
 					ACTIONS_ID_TOKEN_REQUEST_URL: '',
@@ -519,7 +553,6 @@ describe('the record job\'s command line', () => {
 	}
 
 	it('records the token GitHub mints for this job, under the checked-out tree\'s name', async () => {
-		const { directory, tree } = checkout();
 		const requests: { url: string; authorization?: string }[] = [];
 		const server = createServer((request, response) => {
 			requests.push({ url: request.url ?? '', authorization: request.headers.authorization });
@@ -528,14 +561,14 @@ describe('the record job\'s command line', () => {
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		const { port } = server.address() as AddressInfo;
 		try {
-			const result = await record(directory, { ACTIONS_ID_TOKEN_REQUEST_URL: `http://127.0.0.1:${port}/token?api-version=2.0`, ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'runner-token' });
+			const result = await record({ ACTIONS_ID_TOKEN_REQUEST_URL: `http://127.0.0.1:${port}/token?api-version=2.0`, ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'runner-token' });
 
 			expect(result.status).toBe(0);
 			expect(requests).toEqual([
 				{ url: `/token?api-version=2.0&audience=${encodeURIComponent('stream-keepr:ci-verified-tree')}`, authorization: 'bearer runner-token' },
 			]);
 			const recorded = Object.fromEntries(result.output.trim().split('\n').map(line => line.split('=', 2) as [string, string]));
-			expect(recorded.name).toBe(`ci-verified-tree-${tree}`);
+			expect(recorded.name).toBe(`ci-verified-tree-${checkout.tree}`);
 			expect(readFileSync(recorded.path!, 'utf8')).toBe('header.payload.signature');
 		}
 		finally {
@@ -544,8 +577,7 @@ describe('the record job\'s command line', () => {
 	});
 
 	it('records nothing, and fails nothing, when the job has no OIDC token: a fork\'s PR', async () => {
-		const { directory } = checkout();
-		const result = await record(directory, {});
+		const result = await record({});
 
 		expect(result.status).toBe(0);
 		expect(result.output).toBe('');

@@ -217,8 +217,9 @@ describe('event.global middleware', () => {
 			expect(mockNavigateTo).toHaveBeenCalledWith('/event/1');
 		});
 
+		// One Magic page reads the Event's Card Game; each page declares its own, so each OP page is a case.
 		it.each([
-			...MTG_ONLY_PAGES.map(path => ['mtg', path] as const),
+			['mtg', MTG_ONLY_PAGES[0]!] as const,
 			...EVERY_CARD_GAME_PAGES.map(path => ['op', path] as const),
 		])('lets a %s Event stay on %s', async (game, path) => {
 			mockEventStore.event = { id: 1, game };

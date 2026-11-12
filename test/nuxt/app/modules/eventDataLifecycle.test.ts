@@ -138,6 +138,28 @@ describe('event data lifecycle module', () => {
 		expect(harness.onMutation).toHaveBeenCalledOnce();
 	});
 
+	// An update shows at once; a refusal puts back what was there and says why.
+	it('shows an update while it is pending, and puts the item back when it is refused', async () => {
+		const harness = createHarness();
+		const item = { id: 1, eventId: 10, name: 'One' };
+		harness.lifecycle.items.value = [item];
+		const refused = deferred<never>();
+		harness.repository.update.mockReturnValue(refused.promise);
+
+		const renaming = harness.lifecycle.update(10, 1, { name: 'Renamed' });
+
+		expect(harness.lifecycle.items.value).toEqual([
+			{ ...item, name: 'Renamed' },
+		]);
+
+		refused.reject(new Error('Name is taken'));
+
+		await expect(renaming).resolves.toBeNull();
+		expect(harness.lifecycle.items.value).toEqual([item]);
+		expect(harness.lifecycle.error.value).toBe('Name is taken');
+		expect(harness.onMutation).not.toHaveBeenCalled();
+	});
+
 	it('filters remote mutations by Event and loaded scope', () => {
 		const harness = createHarness();
 		harness.lifecycle.currentEventId.value = 10;

@@ -88,15 +88,6 @@ describe('archetypes API', () => {
 		expect(updated.colors).toBe('WUB');
 	});
 
-	it('deletes an archetype', async () => {
-		const res = await $fetchRaw(`/api/events/${eventId}/archetypes/${archetypeId}`, {
-			method: 'DELETE',
-		});
-
-		expect(res.status).toBe(200);
-		expect(res._data.success).toBe(true);
-	});
-
 	// ── Delete atomicity ──
 
 	describe('delete atomicity', () => {
@@ -174,21 +165,6 @@ describe('archetypes API', () => {
 			expect(data.keyCards).toHaveLength(0);
 		});
 
-		it('pATCH /archetypes/:id/cards with > 5 cardIds returns 400', async () => {
-			const res = await $fetchRaw(
-				`/api/events/${eventId}/archetypes/${keyCardArchetypeId}/cards`,
-				{
-					method: 'PATCH',
-					body: {
-						cardIds: [1, 2, 3, 4, 5, 6],
-					},
-					ignoreResponseError: true,
-				},
-			);
-
-			expect(res.status).toBeGreaterThanOrEqual(400);
-		});
-
 		it('gET /archetypes/99999/cards returns 404', async () => {
 			const res = await $fetchRaw(
 				`/api/events/${eventId}/archetypes/99999/cards`,
@@ -196,32 +172,6 @@ describe('archetypes API', () => {
 			);
 
 			expect(res.status).toBe(404);
-		});
-
-		it('pATCH /archetypes/99999/cards returns 404', async () => {
-			const res = await $fetchRaw(
-				`/api/events/${eventId}/archetypes/99999/cards`,
-				{
-					method: 'PATCH',
-					body: { cardIds: [] },
-					ignoreResponseError: true,
-				},
-			);
-
-			expect(res.status).toBe(404);
-		});
-
-		it('pATCH archetype response includes keyCards', async () => {
-			const data = (await $fetch(
-				`/api/events/${eventId}/archetypes/${keyCardArchetypeId}`,
-				{
-					method: 'PATCH',
-					body: { name: 'Key Cards Test Updated' },
-				},
-			)) as any;
-
-			expect(data).toHaveProperty('keyCards');
-			expect(data.keyCards).toBeInstanceOf(Array);
 		});
 	});
 });

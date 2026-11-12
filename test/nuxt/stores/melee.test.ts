@@ -1,8 +1,14 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '~~/test/helpers/deferred';
-import { createMockEvent } from '~~/test/helpers/fixtures';
+import { createMockEvent, createMockFeatureMatch, createMockMatch, createMockPhase, createMockPlayer, createMockRound } from '~~/test/helpers/fixtures';
 import { transportFailure } from '~~/test/helpers/transportFailure';
+
+/*
+ * The Melee store over the real Event-scoped stores it reloads. Faked: the Event
+ * repository, whose Melee commands are the contract, and `$fetch`, the network
+ * every sibling store reads through.
+ */
 
 const mockEventRepo = {
 	list: vi.fn(),
@@ -20,59 +26,66 @@ const mockEventRepo = {
 
 mockNuxtImport('useEventRepository', () => () => mockEventRepo);
 
-// reactive() stands in for a Pinia store's auto-unwrapped refs.
-const mockEventState = reactive({
-	event: null as any,
-	eventId: null as number | null,
-	loadEvent: vi.fn(),
-	updateEvent: vi.fn(),
-});
+const { mockFetch } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+}));
+mockNuxtImport('$fetch', () => mockFetch);
 
-const mockRoundStore = reactive({
-	rounds: [] as any[],
-	isLoaded: false,
-	loadRoundsByEventId: vi.fn(),
-	getRoundById: vi.fn(),
-});
+interface Served {
+	event: any;
+	phases: unknown[];
+	rounds: unknown[];
+	players: unknown[];
+	decks: unknown[];
+	slots: unknown[];
+	matches: Array<{ roundId: number | null }>;
+}
 
-const mockPhaseStore = reactive({
-	phases: [] as any[],
-	isLoaded: false,
-	loadPhasesByEventId: vi.fn(),
-	getPhaseById: vi.fn(),
-});
+/** What the server holds for the Event. Every read answers from it, so a test sets what its sync imported. */
+let server: Served;
 
-const mockMatchStore = reactive({
-	matches: [] as any[],
-	isLoaded: true,
-	loadedRoundId: null as number | null,
-	loadMatchesByRoundId: vi.fn(),
-	loadMatchesByEventId: vi.fn(),
-	clearMatches: vi.fn(),
-});
+/** The Event-scoped reads the sibling stores make, answered from `server`. */
+async function serve(path: string, options?: { query?: { roundId?: number } }) {
+	const roundId = options?.query?.roundId;
+	switch (path.replace(/^\/api\/events\/\d+\//, '')) {
+		case 'phases':
+			return [...server.phases];
+		case 'rounds':
+			return [...server.rounds];
+		case 'players':
+			return [...server.players];
+		case 'decks':
+			return {
+				decks: [...server.decks],
+			};
+		case 'feature-match-slots':
+			return [...server.slots];
+		case 'matches':
+			return roundId
+				? {
+						matches: server.matches.filter(match => match.roundId === roundId),
+					}
+				: [...server.matches];
+		default:
+			throw new Error(`unrouted ${path}`);
+	}
+}
 
-const mockPlayerStore = reactive({
-	players: [] as any[],
-	loadPlayersByEventId: vi.fn(),
-});
-const mockPlayerDeckStore = reactive({
-	loadByEventId: vi.fn(),
-});
-const mockFeatureMatchStore = reactive({
-	loadFeatureMatchesByEventId: vi.fn(),
-});
-const mockMetagameStore = reactive({
-	applyRemoteInvalidated: vi.fn(),
-});
-
-mockNuxtImport('useEventStore', () => () => mockEventState);
-mockNuxtImport('useRoundStore', () => () => mockRoundStore);
-mockNuxtImport('usePhaseStore', () => () => mockPhaseStore);
-mockNuxtImport('useMatchStore', () => () => mockMatchStore);
-mockNuxtImport('usePlayerStore', () => () => mockPlayerStore);
-mockNuxtImport('usePlayerDeckStore', () => () => mockPlayerDeckStore);
-mockNuxtImport('useFeatureMatchStore', () => () => mockFeatureMatchStore);
-mockNuxtImport('useMetagameStore', () => () => mockMetagameStore);
+/** What this client holds of the Event, by store. */
+function held() {
+	return {
+		event: useEventStore().event?.name,
+		phases: usePhaseStore().phases.map(phase => phase.id),
+		rounds: useRoundStore().rounds.map(round => round.id),
+		players: usePlayerStore().players.map(player => player.id),
+		decks: usePlayerDeckStore().decks.map(deck => deck.id),
+		slots: useFeatureMatchStore().featureMatches.map(slot => slot.id),
+		matches: useMatchStore().matches.map(match => match.id),
+		metagame: useMetagameStore().summaryData === null
+			? 'invalidated'
+			: 'held',
+	};
+}
 
 const testRounds = [
 	{
@@ -152,40 +165,82 @@ describe('useMeleeStore', () => {
 	let store: ReturnType<typeof useMeleeStore>;
 
 	beforeEach(() => {
+		for (const sibling of [
+			useMeleeStore(),
+			useEventStore(),
+			usePhaseStore(),
+			useRoundStore(),
+			useMatchStore(),
+			usePlayerStore(),
+			usePlayerDeckStore(),
+			useFeatureMatchStore(),
+			useFeatureMatchStateStore(),
+			useMetagameStore(),
+		])
+			sibling.$reset();
 		store = useMeleeStore();
-		store.$reset();
-		mockEventState.event = null;
-		mockEventState.eventId = null;
-		mockEventState.loadEvent = vi.fn();
-		mockEventState.updateEvent = vi.fn();
-		mockRoundStore.rounds = [];
-		mockRoundStore.isLoaded = false;
-		mockRoundStore.getRoundById = vi.fn();
-		mockPhaseStore.phases = [];
-		mockPhaseStore.isLoaded = false;
-		mockPhaseStore.getPhaseById = vi.fn();
-		mockMatchStore.matches = [];
-		mockMatchStore.isLoaded = true;
-		mockMatchStore.loadedRoundId = null;
-		mockPlayerStore.players = [];
-		mockPlayerDeckStore.loadByEventId = vi.fn();
+		server = {
+			event: null,
+			phases: [],
+			rounds: [],
+			players: [],
+			decks: [],
+			slots: [],
+			matches: [],
+		};
+		mockFetch.mockImplementation(serve);
+		mockEventRepo.getById.mockImplementation(async () => server.event);
 	});
 
+	// A test that fails before its last line must not leave fake timers to the ones after it.
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	/** The operator's Event, held and served alike, so its reload answers the same Event. */
 	function setEvent(extra?: Record<string, any>) {
-		const evt = {
+		const event = {
 			...createMockEvent(),
 			talents: [],
 			meleeConfigured: false,
 			...extra,
 		};
-		mockEventState.event = evt;
-		mockEventState.eventId = evt.id;
+		server.event = event;
+		useEventStore().setEvent(event as never);
 	}
 
 	function setRoundsAndPhases() {
-		mockRoundStore.rounds = [...testRounds];
-		mockPhaseStore.phases = [...testPhases];
-		mockPhaseStore.getPhaseById = vi.fn((id: number) => testPhases.find(p => p.id === id) ?? null);
+		useRoundStore().rounds = [...testRounds] as never;
+		usePhaseStore().phases = [...testPhases] as never;
+	}
+
+	/**
+	 * The Event as the server holds it once a Melee command has imported: one of
+	 * everything no store holds yet, and a Metagame summary held from before.
+	 */
+	function importOnServer() {
+		server.event = { ...server.event, name: 'Imported Event' };
+		server.phases = [
+			createMockPhase({ id: 1, eventId: 1 }),
+		];
+		server.rounds = [
+			createMockRound({ id: 10, eventId: 1, phaseId: 1 }),
+			createMockRound({ id: 20, eventId: 1, phaseId: 1 }),
+		];
+		server.players = [
+			createMockPlayer({ id: 7, eventId: 1 }),
+		];
+		server.decks = [
+			{ id: 70, eventId: 1, playerId: 7 },
+		];
+		server.slots = [
+			createMockFeatureMatch({ id: 5, eventId: 1 }),
+		];
+		server.matches = [
+			createMockMatch({ id: 100, eventId: 1, roundId: 10 }),
+			createMockMatch({ id: 200, eventId: 1, roundId: 20 }),
+		];
+		useMetagameStore().summaryData = { totalPlayers: 4 } as never;
 	}
 
 	it.each([
@@ -208,50 +263,51 @@ describe('useMeleeStore', () => {
 	});
 
 	it('tracks sync progress through the Event\'s Rounds in order', () => {
+		const rounds = useRoundStore();
 		setRoundsAndPhases();
 
 		expect(store.nextUnsyncedRound).toEqual(testRounds[0]);
 		expect(store.nextRoundLabel).toBe('Sync Round 1');
 		expect(store.allRoundsSynced).toBe(false);
 
-		mockRoundStore.rounds[0] = {
+		rounds.rounds[0] = {
 			...testRounds[0],
 			lastSyncedAt: new Date(),
-		};
+		} as never;
 
 		expect(store.nextUnsyncedRound).toEqual(testRounds[1]);
 		expect(store.syncedRoundCount).toBe(1);
 
-		mockRoundStore.rounds = testRounds.map(r => ({
+		rounds.rounds = testRounds.map(r => ({
 			...r,
 			lastSyncedAt: new Date(),
-		}));
+		})) as never;
 
 		expect(store.allRoundsSynced).toBe(true);
 	});
 
 	it('excludes local, foreign-source, and manual-override rounds from sync progress', () => {
 		setRoundsAndPhases();
-		mockRoundStore.rounds.push(
+		useRoundStore().rounds.push(
 			{
 				...testRounds[0],
 				id: 40,
 				externalId: null,
 				externalSource: null,
-			},
+			} as never,
 			{
 				...testRounds[0],
 				id: 50,
 				externalId: 'other-50',
 				externalSource: 'other',
-			},
+			} as never,
 			{
 				...testRounds[0],
 				id: 60,
 				externalId: 'melee-60',
 				externalSource: 'melee',
 				controlMode: 'manual_override',
-			},
+			} as never,
 		);
 
 		expect(store.availableRounds.map(round => round.id)).toEqual([10, 20, 30]);
@@ -259,8 +315,10 @@ describe('useMeleeStore', () => {
 	});
 
 	describe('syncEvent', () => {
-		it('calls repo and reloads phases and rounds', async () => {
+		it('holds the Event, its structure, its Slots and the Matches on view as the server has them after the sync', async () => {
 			setEvent();
+			await useMatchStore().loadMatchesByEventId(1);
+			importOnServer();
 			mockEventRepo.syncMelee.mockResolvedValue({
 				success: true,
 				event: { name: 'Test Event' },
@@ -272,13 +330,14 @@ describe('useMeleeStore', () => {
 			await store.syncEvent();
 
 			expect(mockEventRepo.syncMelee).toHaveBeenCalledWith(1);
-			expect(mockEventState.loadEvent).toHaveBeenCalledWith(1);
-			expect(mockPhaseStore.loadPhasesByEventId).toHaveBeenCalledWith(1);
-			expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
-			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-			expect(mockMatchStore.loadMatchesByEventId).toHaveBeenCalledWith(1);
-			expect(store.lastOperation?.title).toBe('Event Synced');
-			expect(store.lastOperation?.status).toBe('success');
+			expect(held()).toMatchObject({
+				event: 'Imported Event',
+				phases: [1],
+				rounds: [10, 20],
+				slots: [5],
+				matches: [100, 200],
+			});
+			expect(store.lastOperation).toMatchObject({ kind: 'event', status: 'success' });
 			expect(store.lastOperation?.details).toContain('Structure notification could not be delivered');
 		});
 	});
@@ -300,8 +359,9 @@ describe('useMeleeStore', () => {
 	});
 
 	describe('syncPlayers', () => {
-		it('calls repo and reloads player store', async () => {
+		it('holds the Event, its Players and its Slots as the server has them, and drops the Metagame summary', async () => {
 			setEvent();
+			importOnServer();
 			mockEventRepo.syncPlayers.mockResolvedValue({
 				success: true,
 				results: {
@@ -317,24 +377,23 @@ describe('useMeleeStore', () => {
 			await store.syncPlayers();
 
 			expect(mockEventRepo.syncPlayers).toHaveBeenCalledWith(1);
-			expect(mockEventState.loadEvent).toHaveBeenCalledWith(1);
-			expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
-			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
-			expect(store.lastOperation?.title).toBe('Players Synced');
-			expect(store.lastOperation?.status).toBe('success');
+			expect(held()).toMatchObject({
+				event: 'Imported Event',
+				players: [7],
+				slots: [5],
+				metagame: 'invalidated',
+			});
+			expect(store.lastOperation).toMatchObject({ kind: 'players', status: 'success' });
 			expect(store.lastOperation?.details).toContain('1 deactivated');
 			expect(store.lastOperation?.details).toContain('Player notification could not be delivered');
 		});
 	});
 
 	describe('updateFromMelee', () => {
-		it('calls the unified repo action and reloads event-scoped data', async () => {
+		it('holds everything the update can change as the server has it, with the Matches of the Round on view', async () => {
 			setEvent();
-			mockMatchStore.loadedRoundId = 10;
-			mockRoundStore.rounds = [
-				{ id: 10 },
-			] as any;
+			await useMatchStore().loadMatchesByRoundId(1, 10);
+			importOnServer();
 			mockEventRepo.updateFromMelee.mockResolvedValue({
 				success: true,
 				warnings: ['Round notification could not be delivered'],
@@ -375,16 +434,17 @@ describe('useMeleeStore', () => {
 
 			expect(result.success).toBe(true);
 			expect(mockEventRepo.updateFromMelee).toHaveBeenCalledWith(1, { includeDeckLists: true });
-			expect(mockEventState.loadEvent).toHaveBeenCalledWith(1);
-			expect(mockPhaseStore.loadPhasesByEventId).toHaveBeenCalledWith(1);
-			expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
-			expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
-			expect(mockPlayerDeckStore.loadByEventId).toHaveBeenCalledWith(1);
-			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-			expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 10);
-			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
-			expect(store.lastOperation?.title).toBe('Melee Updated');
-			expect(store.lastOperation?.status).toBe('success');
+			expect(held()).toEqual({
+				event: 'Imported Event',
+				phases: [1],
+				rounds: [10, 20],
+				players: [7],
+				decks: [70],
+				slots: [5],
+				matches: [100],
+				metagame: 'invalidated',
+			});
+			expect(store.lastOperation).toMatchObject({ kind: 'update', status: 'success' });
 			expect(store.lastOperation?.details).toContain('Imported Round 1');
 			expect(store.lastOperation?.details).toContain('Round notification could not be delivered');
 		});
@@ -431,6 +491,7 @@ describe('useMeleeStore', () => {
 			expect(store.lastOperation?.status).toBe('success');
 		});
 
+		// A reload that fails after the command landed is this browser's problem, not the sync's.
 		it('reports a committed source update separately from a local projection refresh failure', async () => {
 			setEvent();
 			mockEventRepo.updateFromMelee.mockResolvedValue({
@@ -449,7 +510,11 @@ describe('useMeleeStore', () => {
 				advancedRound: null,
 				refreshedRound: null,
 			});
-			mockPlayerStore.loadPlayersByEventId.mockRejectedValueOnce(new Error('Player projection offline'));
+			mockFetch.mockImplementation(async (path: string, options?: { query?: { roundId?: number } }) => {
+				if (path.endsWith('/decks'))
+					throw new Error('Deck Lists offline');
+				return serve(path, options);
+			});
 
 			const result = await store.updateFromMelee();
 
@@ -457,16 +522,16 @@ describe('useMeleeStore', () => {
 			expect(store.lastOperation?.status).toBe('warning');
 			expect(store.lastOperation?.title).toBe('Melee Updated — Reload Needed');
 			expect(store.lastOperation?.description).toContain('source changes were committed');
-			expect(store.lastOperation?.details).toContain('Local players refresh failed: Player projection offline');
+			expect(store.lastOperation?.details).toContain('Local deck lists refresh failed: Deck Lists offline');
 			expect(store.error).toBeNull();
 		});
 	});
 
 	describe('syncSpecificRound', () => {
-		it('calls repo with roundId and reloads data including player store', async () => {
+		it('holds the Event, Players, Rounds and Slots as the server has them, with the synced Round\'s Matches on view', async () => {
 			setEvent();
-			setRoundsAndPhases();
-			mockMatchStore.loadedRoundId = 20;
+			await useMatchStore().loadMatchesByRoundId(1, 20);
+			importOnServer();
 			mockEventRepo.syncSpecificRound.mockResolvedValue({
 				success: true,
 				round: {
@@ -480,19 +545,21 @@ describe('useMeleeStore', () => {
 				updated: 1,
 				warnings: ['Match notification could not be delivered'],
 			});
-			mockEventRepo.syncPlayers.mockResolvedValue({ success: true });
 
 			const result = await store.syncSpecificRound(20);
 
 			expect(result.success).toBe(true);
 			expect(mockEventRepo.syncSpecificRound).toHaveBeenCalledWith(1, 20);
 			expect(mockEventRepo.syncPlayers).not.toHaveBeenCalled();
-			expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
-			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-			expect(mockMatchStore.loadMatchesByRoundId).toHaveBeenCalledWith(1, 20);
-			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
-			expect(mockEventState.loadEvent).toHaveBeenCalledWith(1);
-			expect(store.lastOperation?.status).toBe('success');
+			expect(held()).toMatchObject({
+				event: 'Imported Event',
+				rounds: [10, 20],
+				players: [7],
+				slots: [5],
+				matches: [200],
+				metagame: 'invalidated',
+			});
+			expect(store.lastOperation).toMatchObject({ kind: 'specific-round', status: 'success' });
 			expect(store.lastOperation?.details).toContain('Match notification could not be delivered');
 		});
 
@@ -543,13 +610,13 @@ describe('useMeleeStore', () => {
 				warnings: [],
 			});
 			await newerSync;
-			vi.useRealTimers();
 		});
 	});
 
 	describe('syncDecklists', () => {
-		it('calls repo and reloads player and effective deck stores', async () => {
+		it('holds the Event, Players, Deck Lists and Slots as the server has them, and drops the Metagame summary', async () => {
 			setEvent();
+			importOnServer();
 			mockEventRepo.syncDecklists.mockResolvedValue({
 				success: true,
 				results: {
@@ -564,20 +631,27 @@ describe('useMeleeStore', () => {
 			await store.syncDecklists();
 
 			expect(mockEventRepo.syncDecklists).toHaveBeenCalledWith(1);
-			expect(mockEventState.loadEvent).toHaveBeenCalledWith(1);
-			expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
-			expect(mockPlayerDeckStore.loadByEventId).toHaveBeenCalledWith(1);
-			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
-			expect(store.lastOperation?.title).toBe('Deck Lists Synced');
-			expect(store.lastOperation?.status).toBe('success');
+			expect(held()).toMatchObject({
+				event: 'Imported Event',
+				players: [7],
+				decks: [70],
+				slots: [5],
+				metagame: 'invalidated',
+			});
+			expect(store.lastOperation).toMatchObject({ kind: 'decklists', status: 'success' });
 			expect(store.lastOperation?.details).toContain('One deck entry remains unresolved');
 		});
 	});
 
 	describe('runInitialSetup', () => {
-		it('uses one server command and reloads all imported state once', async () => {
+		/** Reads of one Event-scoped resource that reached the network. */
+		function readsOf(resource: string) {
+			return mockFetch.mock.calls.filter(([path]) => path === `/api/events/1/${resource}`).length;
+		}
+
+		it('uses one server command and holds all it imported, each read once', async () => {
 			setEvent();
+			importOnServer();
 			mockEventRepo.runInitialSetup.mockResolvedValue({
 				...initialSetupResponse,
 				warnings: ['Setup notification could not be delivered'],
@@ -591,15 +665,17 @@ describe('useMeleeStore', () => {
 			expect(mockEventRepo.syncMelee).not.toHaveBeenCalled();
 			expect(mockEventRepo.syncPlayers).not.toHaveBeenCalled();
 			expect(mockEventRepo.syncDecklists).not.toHaveBeenCalled();
-			expect(mockEventState.loadEvent).toHaveBeenCalledWith(1);
-			expect(mockPhaseStore.loadPhasesByEventId).toHaveBeenCalledWith(1);
-			expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
-			expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledOnce();
-			expect(mockPlayerDeckStore.loadByEventId).toHaveBeenCalledWith(1);
-			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
-			expect(store.lastOperation?.title).toBe('Initial Setup Complete');
-			expect(store.lastOperation?.status).toBe('success');
+			expect(held()).toMatchObject({
+				event: 'Imported Event',
+				phases: [1],
+				rounds: [10, 20],
+				players: [7],
+				decks: [70],
+				slots: [5],
+				metagame: 'invalidated',
+			});
+			expect(readsOf('players')).toBe(1);
+			expect(store.lastOperation).toMatchObject({ kind: 'setup', status: 'success' });
 			expect(store.lastOperation?.details).toContain('Setup notification could not be delivered');
 		});
 
@@ -610,8 +686,9 @@ describe('useMeleeStore', () => {
 			expect(result.error).toBe('No event loaded');
 		});
 
-		it('surfaces the aggregate setup failure and reloads Event status', async () => {
+		it('surfaces the aggregate setup failure and still holds what the setup imported', async () => {
 			setEvent();
+			importOnServer();
 			mockEventRepo.runInitialSetup.mockResolvedValue({
 				...initialSetupResponse,
 				success: false,
@@ -623,13 +700,15 @@ describe('useMeleeStore', () => {
 
 			expect(result.success).toBe(false);
 			expect(result.error).toBe('Deck list sync skipped 1 player');
-			expect(mockEventState.loadEvent).toHaveBeenCalledWith(1);
-			expect(mockPhaseStore.loadPhasesByEventId).toHaveBeenCalledWith(1);
-			expect(mockRoundStore.loadRoundsByEventId).toHaveBeenCalledWith(1);
-			expect(mockPlayerStore.loadPlayersByEventId).toHaveBeenCalledWith(1);
-			expect(mockPlayerDeckStore.loadByEventId).toHaveBeenCalledWith(1);
-			expect(mockFeatureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(1);
-			expect(mockMetagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
+			expect(held()).toMatchObject({
+				event: 'Imported Event',
+				phases: [1],
+				rounds: [10, 20],
+				players: [7],
+				decks: [70],
+				slots: [5],
+				metagame: 'invalidated',
+			});
 			expect(store.lastOperation?.status).toBe('error');
 		});
 
@@ -640,8 +719,9 @@ describe('useMeleeStore', () => {
 				stepsObserved.push(store.setupStep!);
 				return initialSetupResponse;
 			});
-			mockEventState.loadEvent.mockImplementation(async () => {
+			mockEventRepo.getById.mockImplementation(async () => {
 				stepsObserved.push(store.setupStep!);
+				return server.event;
 			});
 
 			const result = await store.runInitialSetup();
@@ -679,24 +759,14 @@ describe('useMeleeStore', () => {
 
 			vi.advanceTimersByTime(1500);
 			expect(store.setupStep).toBeNull();
-
-			vi.useRealTimers();
 		});
 	});
 
 	// A Melee operation's answer reloads, reports and answers nothing in a later Event Lifetime (ADR-0024).
-	describe.each([
-		[
-			'Event B',
-			[2],
-		],
-		[
-			'Event A, loaded again since',
-			[2, 1],
-		],
-	])('an operation answered after the operator moved on to %s', (_, switches) => {
+	// Back in the same Event is the case an Event-id comparison would miss.
+	describe('an operation answered after the operator moved on to Event A, loaded again since', () => {
 		function switchAway() {
-			for (const eventId of switches) {
+			for (const eventId of [2, 1]) {
 				store.$reset();
 				setEvent({ id: eventId });
 			}
@@ -709,6 +779,7 @@ describe('useMeleeStore', () => {
 
 			const syncing = store.syncEvent();
 			switchAway();
+			importOnServer();
 			sync.resolve({
 				success: true,
 				event: { name: 'Test Event' },
@@ -717,9 +788,12 @@ describe('useMeleeStore', () => {
 			});
 			await syncing;
 
-			expect(mockEventState.loadEvent).not.toHaveBeenCalled();
-			expect(mockPhaseStore.loadPhasesByEventId).not.toHaveBeenCalled();
-			expect(mockRoundStore.loadRoundsByEventId).not.toHaveBeenCalled();
+			expect(held()).toMatchObject({
+				event: 'Test Event',
+				phases: [],
+				rounds: [],
+				slots: [],
+			});
 			expect(store.lastOperation).toBeNull();
 			expect(store.syncing).toBe(false);
 		});
@@ -731,10 +805,11 @@ describe('useMeleeStore', () => {
 
 			const syncing = store.syncEvent();
 			switchAway();
+			importOnServer();
 			sync.reject(new Error('Melee refused the sync'));
 			await syncing;
 
-			expect(mockEventState.loadEvent).not.toHaveBeenCalled();
+			expect(held().event).toBe('Test Event');
 			expect(store.lastOperation).toBeNull();
 			expect(store.error).toBeNull();
 		});
@@ -762,7 +837,7 @@ describe('useMeleeStore', () => {
 			});
 			await earlierSync;
 
-			expect(mockEventRepo.syncMelee).toHaveBeenLastCalledWith(switches.at(-1));
+			expect(mockEventRepo.syncMelee).toHaveBeenLastCalledWith(1);
 			expect(currentSync).toEqual(expect.objectContaining({
 				event: { name: 'Current Event' },
 			}));

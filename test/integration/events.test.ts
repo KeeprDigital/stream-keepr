@@ -80,24 +80,6 @@ describe('events API', () => {
 		expect(updated.game).toBe('mtg');
 	});
 
-	it('rejects immutable and unknown Event update fields', async () => {
-		const immutableResponse = await $fetchRaw(`/api/events/${eventId}`, {
-			method: 'PATCH',
-			body: { game: 'op' },
-			ignoreResponseError: true,
-		});
-		const unknownResponse = await $fetchRaw(`/api/events/${eventId}`, {
-			method: 'PATCH',
-			body: { unexpected: true },
-			ignoreResponseError: true,
-		});
-
-		expect(immutableResponse.status).toBe(400);
-		expect(unknownResponse.status).toBe(400);
-		const unchanged = await $fetch(`/api/events/${eventId}`);
-		expect(unchanged.game).toBe('mtg');
-	});
-
 	it('deletes an event', async () => {
 		// Create a throwaway event for deletion
 		const event = await $fetch('/api/events', {

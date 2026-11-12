@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -41,6 +41,28 @@ function headingAnchors(markdown: string): Set<string> {
 	return anchors;
 }
 
+/** Where a document names repository files: a word of code starting at one of these. */
+const NAMED_PATH = /^(?:test|scripts|server|app|shared)\//u;
+
+/**
+ * The repository paths a document names in code, inline or fenced, without a
+ * trailing `:line` or `#anchor`. A glob or a placeholder (`*`, `<gate>`,
+ * `{a,b}`, `…`) names no one path.
+ */
+function namedRepositoryPaths(markdown: string): string[] {
+	const code = [
+		...markdown.matchAll(/^```[\s\S]+?^```/gmu),
+		...withoutFences(markdown).matchAll(/`[^`\n]+`/gu),
+	].map(([block]) => block.replaceAll('`', ' '));
+	const words = code.flatMap(block => block.split(/\s+/u)).map(word => word.replace(/^['"(]+/u, ''));
+	const paths = words
+		.filter(word => NAMED_PATH.test(word) && !/[*<>{}$…]|\.{3}/u.test(word))
+		.map(word => word.replace(/[:#].*$/u, '').replace(/['",;)]+$/u, ''));
+	return [
+		...new Set(paths),
+	];
+}
+
 describe('local document references', () => {
 	it('derives anchors the way GitHub renders them', () => {
 		const anchors = headingAnchors([
@@ -80,5 +102,29 @@ describe('local document references', () => {
 		}
 
 		expect(broken).toEqual([]);
+	});
+
+	it('reads the repository paths a document names in code, and nothing that names no one path', () => {
+		const paths = namedRepositoryPaths([
+			'`scripts/accept.mjs` is run as `node scripts/verify.mjs --quick`; see `server/api/events/[eventId]/index.get.ts:12`.',
+			'No one path: `test/unit/**/*.test.ts`, `scripts/run-<gate>.mjs`, `pnpm test`, and scripts/prose.mjs outside code.',
+			'```bash',
+			'node "scripts/fenced.mjs"',
+			'```',
+		].join('\n'));
+
+		expect(paths).toEqual([
+			'scripts/fenced.mjs',
+			'scripts/accept.mjs',
+			'scripts/verify.mjs',
+			'server/api/events/[eventId]/index.get.ts',
+		]);
+	});
+
+	// A document that names a file a later change moved or deleted sends its reader nowhere.
+	it.each(NAVIGATED_DOCUMENTS)('%s names only repository paths that exist', (name) => {
+		const missing = namedRepositoryPaths(readDocument(name)).filter(path => !existsSync(join(repositoryRoot, path)));
+
+		expect(missing).toEqual([]);
 	});
 });

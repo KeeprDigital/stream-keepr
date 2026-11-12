@@ -136,7 +136,7 @@ export const STALE_PREVIEW_DEV_VARS = '.output/server/.dev.vars';
  * the test suites read *and* what the preview stages, so the third source this
  * list carried is now the same file under a different name.
  */
-export const LOCAL_CONFIGURATION_FILES = ['.env', RESOLVED_PREVIEW_ENV];
+const LOCAL_CONFIGURATION_FILES = ['.env', RESOLVED_PREVIEW_ENV];
 
 /**
  * Which of the names an acceptance run needs the merged environment cannot

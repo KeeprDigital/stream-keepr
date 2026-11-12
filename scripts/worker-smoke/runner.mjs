@@ -79,8 +79,10 @@ export function formatWorkerSmokeFailure(error) {
  *   fetchRequest?: Function,
  *   readinessTimeoutMs?: number,
  *   hardTimeoutMs?: number,
+ *   temporaryRoot?: string,
  *   signal?: AbortSignal,
- * }} options
+ * }} options `temporaryRoot` is where the run's local binding state is created
+ *   and removed; the system temporary directory unless a caller owns another.
  */
 export async function runWorkerSmoke({
 	repositoryRoot,
@@ -88,6 +90,7 @@ export async function runWorkerSmoke({
 	fetchRequest = fetch,
 	readinessTimeoutMs = 30_000,
 	hardTimeoutMs = 300_000,
+	temporaryRoot = tmpdir(),
 	signal,
 }) {
 	const configPath = join(repositoryRoot, '.output/server/wrangler.json');
@@ -126,7 +129,7 @@ export async function runWorkerSmoke({
 		]);
 		await writeFile(stagedEnvPath, generated.body, { mode: 0o600 });
 		await rm(stagedDevVarsPath, { force: true });
-		persistencePath = await mkdtemp(join(tmpdir(), 'stream-keepr-worker-smoke-'));
+		persistencePath = await mkdtemp(join(temporaryRoot, 'stream-keepr-worker-smoke-'));
 		const childProcessOptions = {
 			cwd: repositoryRoot,
 			env: hermeticChildEnvironment(),

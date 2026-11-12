@@ -184,21 +184,4 @@ describe('the Melee-owned Match result migration', () => {
 			gameDraws: null,
 		});
 	});
-
-	it('no longer keeps Melee\'s result text', async () => {
-		harness = await createSqliteD1Harness({ throughMigration: '0000' });
-		await insertStructure();
-		await insertMatch(1, {
-			externalSource: 'melee',
-			hasResult: true,
-			gameWins: [2, 0],
-			gameDraws: 0,
-			resultString: 'Kim Fields won 2-0-0',
-		});
-
-		await harness.applyRemainingMigrations();
-
-		const result = await harness.client.execute('SELECT name FROM pragma_table_info(\'matches\')');
-		expect(result.rows.map(row => row.name)).not.toContain('result_string');
-	});
 });

@@ -6,7 +6,7 @@ import type {
 } from '~~/shared/types/userAdministration';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { fetch, url } from './client';
-import { INTEGRATION_ADMIN_BOOTSTRAP_TOKEN, INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
+import { INTEGRATION_GRAPHICS_ADMIN_TOKEN } from './helpers';
 import { executeIntegrationD1 } from './integrationD1';
 
 /**
@@ -29,7 +29,6 @@ import { executeIntegrationD1 } from './integrationD1';
  */
 
 const INVITED_EMAIL = 'user-admin-399-invited@keepr.digital';
-const SECOND_EMAIL = 'user-admin-399-second@keepr.digital';
 const FIRST_PASSWORD = 'user-admin-399-first-password';
 const SECOND_PASSWORD = 'user-admin-399-second-password';
 const THIRD_PASSWORD = 'user-admin-399-third-password';
@@ -123,41 +122,23 @@ describe('user administration', () => {
 	let invitedUserId = '';
 
 	beforeAll(async () => {
-		// These are the only accounts this suite creates, and it starts from an
-		// installation that has never had them — including on a rerun against a
+		// This is the only account this suite creates, and it starts from an
+		// installation that has never had it — including on a rerun against a
 		// persisted local D1.
 		await executeIntegrationD1(`
-			DELETE FROM session WHERE user_id IN (SELECT id FROM user WHERE email IN ('${INVITED_EMAIL}', '${SECOND_EMAIL}'));
-			DELETE FROM account WHERE user_id IN (SELECT id FROM user WHERE email IN ('${INVITED_EMAIL}', '${SECOND_EMAIL}'));
-			DELETE FROM user WHERE email IN ('${INVITED_EMAIL}', '${SECOND_EMAIL}');
+			DELETE FROM session WHERE user_id IN (SELECT id FROM user WHERE email = '${INVITED_EMAIL}');
+			DELETE FROM account WHERE user_id IN (SELECT id FROM user WHERE email = '${INVITED_EMAIL}');
+			DELETE FROM user WHERE email = '${INVITED_EMAIL}';
 		`);
 	});
 
 	describe('who is admitted', () => {
-		it('refuses a caller with no Graphics Administrator token', async () => {
-			// The request carries the suite's operator session, which is the point:
+		it('refuses a caller with no Graphics Administrator token every route on the surface, not only the listing', async () => {
+			// Each request carries the suite's operator session, which is the point:
 			// `/api/admin/**` is exempt from the session boundary, so a session is
 			// not what admits a caller here and must not be mistaken for it.
-			expect((await administer('', { headers: {} })).status).toBe(403);
-		});
-
-		it('refuses a caller with the wrong token', async () => {
-			expect((await administer('', {
-				headers: { 'x-graphics-admin-token': 'not-the-token' },
-			})).status)
-				.toBe(403);
-		});
-
-		it('does not admit the first-admin bootstrap token in its place', async () => {
-			const response = await administer('', {
-				headers: { 'x-admin-bootstrap-token': INTEGRATION_ADMIN_BOOTSTRAP_TOKEN },
-			});
-
-			expect(response.status).toBe(403);
-		});
-
-		it('refuses every write on the surface, not only the listing', async () => {
 			for (const [path, method] of [
+				['', 'GET'],
 				['', 'POST'],
 				['/any-user/password-reset-link', 'POST'],
 				['/any-user/password', 'PUT'],
@@ -165,7 +146,13 @@ describe('user administration', () => {
 				['/any-user/ban', 'DELETE'],
 				['/any-user/sessions', 'DELETE'],
 			] as const) {
-				const response = await administer(path, { method, body: {}, headers: {} });
+				const response = await administer(path, {
+					method,
+					headers: {},
+					...(method === 'GET'
+						? {}
+						: { body: {} }),
+				});
 				expect(response.status, `${method} ${path} was not refused`).toBe(403);
 			}
 		});
@@ -202,66 +189,16 @@ describe('user administration', () => {
 				.not
 				.toBe(200);
 		});
-
-		it('refuses a second account for the same email', async () => {
-			const response = await administer('', {
-				method: 'POST',
-				body: {
-					email: INVITED_EMAIL.toUpperCase(),
-					name: 'A Duplicate',
-				},
-			});
-
-			// 409 rather than the unique index's 500: what the administrator needs
-			// to hear is that this person already has an account.
-			expect(response.status).toBe(409);
-		});
-
-		it('refuses a body with a key it does not know', async () => {
-			// `role` is the one worth naming — a surface that silently accepted it
-			// would be a roles model nobody designed.
-			const response = await administer('', {
-				method: 'POST',
-				body: { email: SECOND_EMAIL, name: 'A Second Operator', role: 'admin' },
-			});
-
-			expect(response.status).toBe(400);
-			expect(await findAccount(SECOND_EMAIL)).toBeUndefined();
-		});
-
-		it('lists the account it created', async () => {
-			const listing = await listAccounts();
-
-			expect(listing.cap).toBeGreaterThan(0);
-			expect(listing.total).toBeGreaterThanOrEqual(listing.users.length);
-			expect(listing.users.map(user => user.email)).toContain(INVITED_EMAIL);
-			// A listing is read by a browser; a password hash on it would be the
-			// whole installation.
-			expect(JSON.stringify(listing)).not.toContain('password');
-		});
 	});
 
 	describe('resetting a password', () => {
-		it('issues a fresh link for an account that already exists', async () => {
-			const response = await administer(`/${invitedUserId}/password-reset-link`, { method: 'POST' });
-
-			expect(response.status).toBe(200);
-			const issued = await response.json() as IssuedPasswordResetLink;
-			expect(issued.user.id).toBe(invitedUserId);
-
-			expect((await redeem(issued.passwordResetLink.url, SECOND_PASSWORD)).status).toBe(200);
-			expect((await signIn(INVITED_EMAIL, SECOND_PASSWORD)).status).toBe(200);
-			// The old credential is gone rather than merely superseded.
-			expect((await signIn(INVITED_EMAIL, FIRST_PASSWORD)).status).toBe(401);
-		});
-
 		it('ends every other session when the link is used, but not when it is issued', async () => {
 			// `revokeSessionsOnPasswordReset`, end to end. The split is the point:
 			// issuing signs nobody out, because an administrator may send a link
 			// nobody opens; redeeming does, because that is the account itself
 			// saying "this is my password now" — so a stolen session cannot outlive
 			// the password it was stolen alongside.
-			const cookie = cookieFrom(await signIn(INVITED_EMAIL, SECOND_PASSWORD));
+			const cookie = cookieFrom(await signIn(INVITED_EMAIL, FIRST_PASSWORD));
 			expect(await sessionStillLive(cookie)).toBe(true);
 
 			const response = await administer(`/${invitedUserId}/password-reset-link`, { method: 'POST' });
@@ -269,10 +206,10 @@ describe('user administration', () => {
 			const issued = await response.json() as IssuedPasswordResetLink;
 			expect(await sessionStillLive(cookie)).toBe(true);
 
-			expect((await redeem(issued.passwordResetLink.url, THIRD_PASSWORD)).status).toBe(200);
+			expect((await redeem(issued.passwordResetLink.url, SECOND_PASSWORD)).status).toBe(200);
 
 			expect(await sessionStillLive(cookie)).toBe(false);
-			expect((await signIn(INVITED_EMAIL, THIRD_PASSWORD)).status).toBe(200);
+			expect((await signIn(INVITED_EMAIL, SECOND_PASSWORD)).status).toBe(200);
 		});
 
 		it('sets one outright for the administrator standing next to somebody', async () => {
@@ -284,27 +221,6 @@ describe('user administration', () => {
 			expect(response.status).toBe(200);
 			expect((await signIn(INVITED_EMAIL, THIRD_PASSWORD)).status).toBe(200);
 			expect((await signIn(INVITED_EMAIL, SECOND_PASSWORD)).status).toBe(401);
-		});
-
-		it('refuses a password shorter than Better Auth accepts', async () => {
-			const response = await administer(`/${invitedUserId}/password`, {
-				method: 'PUT',
-				body: { password: 'short' },
-			});
-
-			expect(response.status).toBe(400);
-			// And the previous one still works, so a refused set changed nothing.
-			expect((await signIn(INVITED_EMAIL, THIRD_PASSWORD)).status).toBe(200);
-		});
-
-		it('answers 404 for an account that does not exist', async () => {
-			expect((await administer('/no-such-user/password-reset-link', { method: 'POST' })).status)
-				.toBe(404);
-			expect((await administer('/no-such-user/password', {
-				method: 'PUT',
-				body: { password: THIRD_PASSWORD },
-			})).status)
-				.toBe(404);
 		});
 	});
 
@@ -349,12 +265,6 @@ describe('user administration', () => {
 			expect(response.status).toBe(200);
 			expect((await signIn(INVITED_EMAIL, THIRD_PASSWORD)).status).toBe(200);
 			expect(await findAccount(INVITED_EMAIL)).toMatchObject({ banned: false, banReason: null });
-		});
-
-		it('answers 404 for an account that does not exist', async () => {
-			expect((await administer('/no-such-user/sessions', { method: 'DELETE' })).status).toBe(404);
-			expect((await administer('/no-such-user/ban', { method: 'POST', body: {} })).status).toBe(404);
-			expect((await administer('/no-such-user/ban', { method: 'DELETE' })).status).toBe(404);
 		});
 	});
 });

@@ -11,17 +11,17 @@ import { fakeChrome } from './fixtures/fake-chrome';
  *
  * CI's browser gate failed with only "Chrome DevTools endpoint timed out.", so
  * nothing in the log could tell a hung Chrome from a crashed one or from one
- * that listened without saying so. These drive the real launcher against the
- * stand-in, which writes to stderr what a real Chrome would log.
+ * that listened without saying so. These drive the real launcher against a
+ * stand-in that writes to stderr what a real Chrome would log. A bound is short
+ * only where it is meant to run out, and then nothing has to happen before it
+ * does: a spawned stand-in is still booting when a short one ends on a busy machine.
  */
 const STUBBORN_CHROME = fileURLToPath(new URL('./fixtures/stubborn-chrome.mjs', import.meta.url));
 
 chmodSync(STUBBORN_CHROME, 0o755);
 
-const quick = { startupTimeoutMs: 300, terminateGraceMs: 200 };
-
-async function startupFailure(args: string[]): Promise<string> {
-	const error = await launchChromium(STUBBORN_CHROME, args, quick).then(
+async function startupFailure(...launch: Parameters<typeof launchChromium>): Promise<string> {
+	const error = await launchChromium(...launch).then(
 		() => { throw new Error('the stand-in launched'); },
 		(failure: Error) => failure,
 	);
@@ -30,17 +30,29 @@ async function startupFailure(args: string[]): Promise<string> {
 
 describe('the acceptance browser\'s startup', () => {
 	it('says what a browser that never announced itself printed, and how it was stopped', async () => {
-		const message = await startupFailure(['--silent', '--say=ERROR:bus.cc(407)] Failed to connect to the bus']);
+		// In this process, and heard from as it is spawned: before either bound starts.
+		const chrome = fakeChrome({
+			diesOn: ['SIGKILL'],
+		});
+		const message = await startupFailure('chrome', [], {
+			startupTimeoutMs: 50,
+			terminateGraceMs: 50,
+			spawnProcess: (command: string, args: readonly string[]) => {
+				const child = chrome.spawn(command, args);
+				chrome.say('ERROR:bus.cc(407)] Failed to connect to the bus\n');
+				return child;
+			},
+		});
 
 		expect(message).toContain('Chrome DevTools endpoint timed out.');
 		expect(message).toContain('ERROR:bus.cc(407)] Failed to connect to the bus');
-		expect(message).toContain('still running after 300 ms');
+		expect(message).toContain('still running after 50 ms');
 		expect(message).toContain('stopped by SIGKILL');
 		expect(message).toContain('no DevToolsActivePort');
 	});
 
 	it('says how a browser that left before announcing itself exited, and what it printed', async () => {
-		const message = await startupFailure(['--say=FATAL:zygote_host_impl_linux.cc(127)] No usable sandbox!', '--exit=0']);
+		const message = await startupFailure(STUBBORN_CHROME, ['--say=FATAL:zygote_host_impl_linux.cc(127)] No usable sandbox!', '--exit=0']);
 
 		expect(message).toMatch(/^Chromium exited with code 0 before announcing its DevTools endpoint\./);
 		expect(message).toContain('FATAL:zygote_host_impl_linux.cc(127)] No usable sandbox!');
@@ -61,7 +73,7 @@ describe('the acceptance browser\'s DevTools endpoint', () => {
 		},
 	])('is read from a complete line however stderr splits it: $chunks', async ({ chunks }) => {
 		const chrome = fakeChrome();
-		const launching = launchChromium('chrome', [], { ...quick, spawnProcess: chrome.spawn });
+		const launching = launchChromium('chrome', [], { spawnProcess: chrome.spawn });
 		await chrome.started();
 		for (const chunk of chunks) {
 			chrome.say(chunk);
@@ -96,16 +108,5 @@ describe('warming the acceptance browser', () => {
 
 		const ps = execFileSync('ps', ['-axo', 'pid=,command='], { encoding: 'utf8' });
 		expect(ps.split('\n').filter(line => line.includes(tag))).toEqual([]);
-	});
-
-	it('says why a browser could not start even on an idle machine', async () => {
-		process.env.CHROME_BIN = STUBBORN_CHROME;
-
-		await expect(warmChromium({
-			extraArgs: ['--silent', '--say=still loading fonts'],
-			...quick,
-		}))
-			.rejects
-			.toThrow(/Chrome DevTools endpoint timed out\.[\s\S]*still loading fonts/);
 	});
 });

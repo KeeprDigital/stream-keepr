@@ -320,20 +320,6 @@ describe('what a Screen\'s channel is sent', () => {
 			},
 		},
 		{
-			name: 'Round Standings reach the modes that show them',
-			messages: [
-				message('melee:roundStandingsSynced'),
-			],
-			screens: {
-				standings: [
-					changed('standings', 'roundStandings'),
-				],
-				headToHead: [
-					changed('headToHead', 'roundStandings'),
-				],
-			},
-		},
-		{
 			name: 'a Player change reaches the Screens whose Slot seats that Player',
 			messages: [
 				message('player:updated'),
@@ -419,15 +405,6 @@ describe('what a Screen\'s channel is sent', () => {
 					changed('headToHead', 'featureMatchSlot'),
 				],
 			},
-		},
-		{
-			name: 'a Feature Match Assignment reaches no Screen',
-			messages: [
-				message('featureMatchAssignment:created'),
-				message('featureMatchAssignment:updated'),
-				message('featureMatchAssignment:deleted'),
-			],
-			screens: {},
 		},
 		{
 			name: 'a run tells each Screen once, with every cause it shows',
@@ -647,6 +624,7 @@ describe('what a Feature Match Overlay is told of Matches, Rounds and Phases', a
 
 	// An Overlay hears the one Match its Slot follows, and that Match's Round
 	// and Phase. A change naming no Match may have taken its Match away.
+	// One pair per id the Slot's row supplies; the narrowing's cases are `screenOutputInterest.test.ts`'s.
 	it.each<{ name: string; type: MessageType; payload: object; kind: OutputChangeKind; told: Told[] }>([
 		{
 			name: 'the Match its Slot follows',
@@ -667,45 +645,9 @@ describe('what a Feature Match Overlay is told of Matches, Rounds and Phases', a
 			told: ['headToHead'],
 		},
 		{
-			name: 'a new Match',
-			type: 'match:created',
-			payload: {
-				match: { id: 999_999, roundId: itsRound!.id },
-			},
-			kind: 'match',
-			told: ['headToHead'],
-		},
-		{
-			name: 'a results sync naming its Match',
-			type: 'melee:matchResultsSynced',
-			payload: {
-				roundId: itsRound!.id,
-				matchIds: [anotherMatch!.id, followed!.id],
-			},
-			kind: 'match',
-			told: ['following', 'headToHead'],
-		},
-		{
-			name: 'a results sync naming other Matches',
-			type: 'melee:matchResultsSynced',
-			payload: {
-				roundId: itsRound!.id,
-				matchIds: [anotherMatch!.id],
-			},
-			kind: 'match',
-			told: ['headToHead'],
-		},
-		{
 			name: 'a deleted Match, which names none',
 			type: 'match:deleted',
 			payload: { matchId: anotherMatch!.id },
-			kind: 'match',
-			told: ['following', 'idle', 'headToHead'],
-		},
-		{
-			name: 'a pairings sync, which names none',
-			type: 'melee:pairingsSynced',
-			payload: { roundId: anotherRound!.id },
 			kind: 'match',
 			told: ['following', 'idle', 'headToHead'],
 		},

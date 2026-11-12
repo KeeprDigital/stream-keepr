@@ -44,14 +44,14 @@ const props = defineProps<{
 	leaseStatus?: GraphicsAuthoringLeaseStatus;
 	canTakeOver?: boolean;
 	/** Who holds it, where the server could resolve their session to a person. */
-	holderName?: string | null;
+	holderName: string | null;
 	/**
 	 * Whether the realtime connection feeding the Broadcast Graphics Live Session
 	 * is currently down, from the sync the settings surface holds. While it is,
 	 * this client cannot know what is on air, and the on-air marks below say so
 	 * instead of claiming anything.
 	 */
-	playoutDisconnected?: boolean;
+	playoutDisconnected: boolean;
 	/**
 	 * The authored save's answer, from the mode-config write this workspace's
 	 * edits funnel into (#381). `committed` is an affirmative fact rather than
@@ -59,18 +59,18 @@ const props = defineProps<{
 	 * remote D1 (#374), and an author who looked away needs the difference
 	 * between "it landed" and "the failure toast was missed" said out loud.
 	 */
-	saveState?: 'idle' | 'saving' | 'committed' | 'failed';
+	saveState: 'idle' | 'saving' | 'committed' | 'failed';
 	/**
 	 * The sentence the authority wrote about a failed save — a CAS refusal names
 	 * the slot to repair — shown verbatim in place of generic wording.
 	 */
-	saveError?: string | null;
+	saveError: string | null;
 	/**
 	 * Lands every unsaved edit of this workspace and answers whether none is left,
 	 * for the Template library: a placement rewrites the stored stack and a save
 	 * reads it, so neither may run ahead of an edit still on its way.
 	 */
-	flushEdits?: () => Promise<boolean>;
+	flushEdits: () => Promise<boolean>;
 }>();
 
 const emit = defineEmits<{

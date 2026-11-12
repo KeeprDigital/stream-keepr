@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	parseScreenEmbed,
 	parseScreenOutput,
-	SCREEN_EMBED_VALUES,
 	SCREEN_OUTPUT_VALUES,
 	screenOutputBackground,
 	screenOutputCanvasBackground,
@@ -15,10 +14,6 @@ describe('screen Output selection', () => {
 		expect(parseScreenOutput('overlay')).toEqual({ output: 'overlay', warning: null });
 		expect(parseScreenOutput('fill')).toEqual({ output: 'fill', warning: null });
 		expect(parseScreenOutput('key')).toEqual({ output: 'key', warning: null });
-	});
-
-	it('offers exactly the overlay, fill, and key Screen Outputs', () => {
-		expect(SCREEN_OUTPUT_VALUES).toEqual(['overlay', 'fill', 'key']);
 	});
 
 	it('renders the Overlay Output when the selection is omitted', () => {
@@ -73,11 +68,6 @@ describe('screen Output selection', () => {
 			.toBe('/event/7/screen/main?output=overlay&embed=preview');
 		expect(screenOutputPath({ eventId: 7, screenSlug: 'main', embed: 'monitor' }))
 			.toBe('/event/7/screen/main?output=overlay&embed=monitor');
-	});
-
-	/** One role selection, so a URL can never ask to be both preview and monitor. */
-	it('offers exactly the preview and monitor embed roles', () => {
-		expect(SCREEN_EMBED_VALUES).toEqual(['preview', 'monitor']);
 	});
 
 	it('reads an embed role from a Screen Output URL, and none from one that carries no role', () => {

@@ -1,9 +1,9 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { diffRange, scopeOf } from '../../../scripts/ci-scope.mjs';
 
 const repositoryRoot = join(import.meta.dirname, '../../..');
@@ -134,48 +134,95 @@ describe('which revisions the change is measured between', () => {
 
 /**
  * The command line against real git: a local "origin" and a checkout shaped
- * like CI's (`fetch-depth: 2` of the event's revision). Nothing remote.
+ * like CI's (`fetch-depth: 2` of the event's revision), copied for each case
+ * because the command fetches into it. Nothing remote.
  */
 describe('the scope job\'s command line', () => {
-	const directories: string[] = [];
+	/** The two squashed PRs each merge group queues above main, by the file each changes. */
+	const QUEUED = {
+		codeThenDocs: ['server/api/time.get.ts', 'docs/second.md'],
+		docsOnly: ['docs/first.md', 'docs/second.md'],
+	} as const;
 
-	afterEach(() => {
-		for (const directory of directories.splice(0))
-			rmSync(directory, { recursive: true, force: true });
-	});
+	let workspace: string;
+	/** Per group: the main revision it lands on, its head, and its checkout as first fetched. */
+	let groups: Record<keyof typeof QUEUED, { base: string; head: string; pristine: string }>;
+
+	const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
 
 	function git(cwd: string, ...args: string[]) {
-		return execFileSync('git', args, {
-			cwd,
-			encoding: 'utf8',
-			env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
-		}).trim();
+		return execFileSync('git', args, { cwd, encoding: 'utf8', env: gitEnv }).trim();
 	}
 
-	function commit(cwd: string, file: string, message: string) {
-		mkdirSync(join(cwd, dirname(file)), { recursive: true });
-		writeFileSync(join(cwd, file), `${message}\n`);
-		git(cwd, 'add', '.');
-		git(cwd, '-c', 'user.name=test', '-c', 'user.email=test@example.invalid', 'commit', '-q', '-m', message);
-		return git(cwd, 'rev-parse', 'HEAD');
+	/** A `git fast-import` commit adding `file` to `branch`, which forks from `from` when new. */
+	function commit(branch: string, file: string, message: string, from?: string) {
+		return [
+			`commit refs/heads/${branch}`,
+			'committer test <test@example.invalid> 1700000000 +0000',
+			'data <<END',
+			message,
+			'END',
+			...(from
+				? [`from refs/heads/${from}`]
+				: []),
+			`M 100644 inline ${file}`,
+			'data <<END',
+			message,
+			'END',
+			'',
+		].join('\n');
 	}
 
-	/** A main revision with a merge group of two squashed PRs above it. */
-	function mergeGroup(firstFile: string, secondFile: string) {
-		const origin = mkdtempSync(join(tmpdir(), 'ci-scope-origin-'));
-		directories.push(origin);
-		git(origin, 'init', '-q', '-b', 'main');
-		commit(origin, 'README.md', 'chore: the base');
-		const base = commit(origin, 'docs/notes.md', 'docs: main moves on');
-		commit(origin, firstFile, 'fix(server): the first queued PR');
-		const head = commit(origin, secondFile, 'docs: the second queued PR');
-
-		const checkout = mkdtempSync(join(tmpdir(), 'ci-scope-checkout-'));
-		directories.push(checkout);
-		git(checkout, 'init', '-q');
+	/** A checkout as `actions/checkout` leaves it: `head` and its parent, the base further back. */
+	function shallowCheckout(origin: string, head: string, checkout: string) {
+		git(workspace, 'init', '-q', checkout);
 		git(checkout, 'remote', 'add', 'origin', `file://${origin}`);
 		git(checkout, 'fetch', '-q', '--no-tags', '--depth=2', 'origin', head);
 		git(checkout, 'checkout', '-q', head);
+		return checkout;
+	}
+
+	beforeAll(() => {
+		workspace = mkdtempSync(join(tmpdir(), 'ci-scope-'));
+		const origin = join(workspace, 'origin');
+		git(workspace, 'init', '-q', '--bare', '-b', 'main', origin);
+		// One git process writes main and both queues above it.
+		execFileSync('git', ['fast-import', '--quiet'], {
+			cwd: origin,
+			env: gitEnv,
+			input: [
+				commit('main', 'README.md', 'chore: the base'),
+				commit('main', 'docs/notes.md', 'docs: main moves on'),
+				...Object.entries(QUEUED).flatMap(([group, [first, second]]) => [
+					commit(`queue/${group}`, first, 'fix(server): the first queued PR', 'main'),
+					commit(`queue/${group}`, second, 'docs: the second queued PR'),
+				]),
+			].join('\n'),
+		});
+		const [base, codeThenDocs, docsOnly] = git(origin, 'rev-parse', 'main', 'queue/codeThenDocs', 'queue/docsOnly').split('\n') as [string, string, string];
+		groups = {
+			codeThenDocs: {
+				base,
+				head: codeThenDocs,
+				pristine: shallowCheckout(origin, codeThenDocs, join(workspace, 'codeThenDocs')),
+			},
+			docsOnly: {
+				base,
+				head: docsOnly,
+				pristine: shallowCheckout(origin, docsOnly, join(workspace, 'docsOnly')),
+			},
+		};
+	});
+
+	afterAll(() => {
+		rmSync(workspace, { recursive: true, force: true });
+	});
+
+	/** A main revision with a merge group of two squashed PRs above it, in a checkout of this case's own. */
+	function mergeGroup(group: keyof typeof QUEUED) {
+		const { base, head, pristine } = groups[group];
+		const checkout = join(mkdtempSync(join(workspace, 'job-')), 'checkout');
+		cpSync(pristine, checkout, { recursive: true });
 		return { checkout, base, head };
 	}
 
@@ -183,9 +230,8 @@ describe('the scope job\'s command line', () => {
 	const offline = { GH_TOKEN: '', GITHUB_REPOSITORY: '', GITHUB_REPOSITORY_ID: '' };
 
 	function scope(cwd: string, eventName: string, event: unknown, env: Record<string, string> = offline) {
-		const eventPath = join(cwd, '..', `${cwd.split('/').at(-1)}-event.json`);
-		const output = join(cwd, '..', `${cwd.split('/').at(-1)}-output`);
-		directories.push(eventPath, output);
+		const eventPath = join(dirname(cwd), 'event.json');
+		const output = join(dirname(cwd), 'output');
 		writeFileSync(eventPath, JSON.stringify(event));
 		writeFileSync(output, '');
 		const result = spawnSync(process.execPath, [
@@ -211,9 +257,9 @@ describe('the scope job\'s command line', () => {
 	}
 
 	it('a merge group that cannot read GitHub for a PR run\'s record is scoped as usual, never skipped', () => {
-		const { checkout, base, head } = mergeGroup('server/api/time.get.ts', 'docs/second.md');
-		const bin = mkdtempSync(join(tmpdir(), 'ci-scope-gh-'));
-		directories.push(bin);
+		const { checkout, base, head } = mergeGroup('codeThenDocs');
+		const bin = join(dirname(checkout), 'bin');
+		mkdirSync(bin);
 		writeFileSync(join(bin, 'gh'), '#!/bin/sh\necho "HTTP 502: Bad Gateway" >&2\nexit 1\n', { mode: 0o755 });
 
 		const { output, log } = scope(checkout, 'merge_group', {
@@ -231,7 +277,7 @@ describe('the scope job\'s command line', () => {
 	});
 
 	it('a merge group whose last PR is docs-only still runs the gates its first PR needs', () => {
-		const { checkout, base, head } = mergeGroup('server/api/time.get.ts', 'docs/second.md');
+		const { checkout, base, head } = mergeGroup('codeThenDocs');
 
 		expect(scope(checkout, 'merge_group', {
 			merge_group: { base_sha: base, head_sha: head },
@@ -239,7 +285,7 @@ describe('the scope job\'s command line', () => {
 	});
 
 	it('a merge group of docs-only PRs skips the code gates and checks the docs', () => {
-		const { checkout, base, head } = mergeGroup('docs/first.md', 'docs/second.md');
+		const { checkout, base, head } = mergeGroup('docsOnly');
 
 		expect(scope(checkout, 'merge_group', {
 			merge_group: { base_sha: base, head_sha: head },
@@ -247,7 +293,7 @@ describe('the scope job\'s command line', () => {
 	});
 
 	it('a base it cannot fetch runs everything', () => {
-		const { checkout, head } = mergeGroup('docs/first.md', 'docs/second.md');
+		const { checkout, head } = mergeGroup('docsOnly');
 
 		expect(scope(checkout, 'merge_group', {
 			merge_group: {

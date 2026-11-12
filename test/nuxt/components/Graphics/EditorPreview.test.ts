@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { nextTick, ref } from 'vue';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
@@ -63,6 +63,8 @@ function message(origin: string, source: MessageEventSource | null, data: object
 	window.dispatchEvent(new MessageEvent('message', { origin, source, data }));
 }
 
+// Unmounted, not only detached: a preview left mounted goes on hearing `message` events.
+enableAutoUnmount(afterEach);
 afterEach(() => {
 	document.body.innerHTML = '';
 });

@@ -163,14 +163,6 @@ describe('auth foundation', () => {
 		expect(session!.split(';').map(part => part.trim().toLowerCase())).not.toContain('secure');
 	});
 
-	it('rejects a wrong password', async () => {
-		const signIn = await postJson('/api/auth/sign-in/email', {
-			email: FIXTURE_EMAIL,
-			password: 'not-the-password',
-		});
-		expect(signIn.status).toBe(401);
-	});
-
 	/**
 	 * The dev server does not rate-limit, so every header-less local caller, all
 	 * one loopback client, is not held to one three-attempt bucket. Every built

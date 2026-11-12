@@ -137,16 +137,9 @@ describe('useArchetypeStore', () => {
 	});
 
 	// A write is answered for the Event it was made in; its follow-ups belong to that Event's lifetime (#606).
-	describe.each([
-		[
-			'Event B',
-			[2],
-		],
-		[
-			'Event A, loaded again since',
-			[2, 1],
-		],
-	])('an Archetype write answered after the operator moved on to %s', (_, switches) => {
+	// Back in the same Event is the case an Event-id comparison would miss.
+	describe('an Archetype write answered after the operator moved on to Event A, loaded again since', () => {
+		const switches = [2, 1];
 		const archetype = createMockUiArchetype({ id: 1, name: 'Azorius Control' });
 
 		/** Ends on a collection holding Archetype 1, as Event A's own does when loaded again. */

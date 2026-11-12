@@ -15,9 +15,8 @@ import { getDefaultConfigForMode, getDisplayDefaultsForMode, resolveScreenModeCo
  *
  * Every mode's config type, defaults, and write forms come from its contract.
  * Its defaults parse against its complete schema and both write paths and
- * round-trip through a PATCH; each field's PATCH form takes the field alone, and
- * `null` puts its default back, except an authored stack, which `null` cannot
- * delete.
+ * round-trip through a PATCH, which injects nothing it leaves out; `null` cannot
+ * delete an authored stack.
  */
 it('declares the Background Layer stack and the Broadcast Graphics stack authored, and nothing else', () => {
 	const declared = Object.fromEntries(SCREEN_MODE_VALUES
@@ -34,10 +33,6 @@ describe.each(SCREEN_MODE_VALUES)('the %s config contract', (mode) => {
 	const contract = screenModeConfigContract(mode);
 	const defaults = getDefaultConfigForMode(mode);
 	const patchSchema = modeConfigPatchSchemaMap[mode];
-
-	it('is where the mode\'s defaults come from', () => {
-		expect(defaults).toBe(contract.defaults);
-	});
 
 	it('has defaults that parse unchanged against the complete config and both write paths', () => {
 		expect(modeConfigCompleteSchemaMap[mode].parse(defaults)).toEqual(defaults);
@@ -58,15 +53,6 @@ describe.each(SCREEN_MODE_VALUES)('the %s config contract', (mode) => {
 	});
 
 	const authoredStacks: readonly string[] = contract.authoredStacks;
-	const fields = Object.entries(contract.defaults).filter(([key]) => !authoredStacks.includes(key));
-
-	it.each(fields)('takes %s on its own, and null puts its default back', (key, value) => {
-		expect(patchSchema.parse({ [key]: value })).toEqual({ [key]: value });
-
-		const cleared = parseModeConfigPatchResult({}, mode, patchSchema.parse({ [key]: null }) as Record<string, unknown>);
-		expect(Object.keys(cleared[mode] ?? {})).not.toContain(key);
-		expect(resolveScreenModeConfig(cleared, mode)).toEqual(contract.defaults);
-	});
 
 	it.each(authoredStacks)('replaces its authored %s stack, but refuses to delete it with null', (key) => {
 		// `null` deletes a stored key, which would empty an authored stack with no

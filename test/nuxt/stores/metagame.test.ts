@@ -149,12 +149,23 @@ describe('useMetagameStore', () => {
 			expect(store.invalidationVersion).toBe(version + 1);
 		});
 
+		// Each message has a handler of its own, so each is heard, or not, by itself.
 		it.each([
+			[
+				'player:created',
+				{
+					player: createMockPlayer({ id: 2 }),
+				},
+			],
 			[
 				'player:updated',
 				{
 					player: createMockPlayer({ id: 1 }),
 				},
+			],
+			[
+				'player:deleted',
+				{ playerId: 1 },
 			],
 			[
 				'archetype:created',

@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { acceptanceProfilePrefix, checkoutProfileMarker } from '../../../scripts/graphics-acceptance/chromium-profile.mjs';
 import {
 	discoverCheckoutRoots,
@@ -243,12 +243,18 @@ describe('selecting leaked acceptance Chrome', () => {
 	});
 });
 
+/** Discovery only reads what Git registered, so one layout is built once for both cases. */
 describe('discovering this repository\'s checkout roots', () => {
-	const directories: string[] = [];
+	let base: string;
+	let checkouts: { main: string; nested: string; external: string; unrelated: string };
 
-	afterEach(() => {
-		for (const directory of directories.splice(0))
-			rmSync(directory, { recursive: true, force: true });
+	beforeAll(() => {
+		base = realpathSync(mkdtempSync(join(tmpdir(), 'stream-keepr-reap-')));
+		checkouts = layout();
+	});
+
+	afterAll(() => {
+		rmSync(base, { recursive: true, force: true });
 	});
 
 	function git(cwd: string, ...args: string[]) {
@@ -277,8 +283,6 @@ describe('discovering this repository\'s checkout roots', () => {
 
 	/** A main checkout with a nested and an external worktree, beside an unrelated repository. */
 	function layout() {
-		const base = realpathSync(mkdtempSync(join(tmpdir(), 'stream-keepr-reap-')));
-		directories.push(base);
 		const main = repository(join(base, 'stream keepr'));
 		const nested = join(main, '.claude/worktrees/issue-620');
 		const external = join(base, 'codex worktrees/a1b2/stream-keepr');
@@ -289,14 +293,14 @@ describe('discovering this repository\'s checkout roots', () => {
 	}
 
 	it('finds every registered worktree from whichever checkout runs the reap', () => {
-		const { main, nested, external } = layout();
+		const { main, nested, external } = checkouts;
 
 		for (const checkout of [main, nested, external])
 			expect(discoverCheckoutRoots(checkout).sort()).toEqual([main, nested, external].sort());
 	});
 
 	it('leaves out unrelated repositories', () => {
-		const { main, unrelated } = layout();
+		const { main, unrelated } = checkouts;
 
 		expect(discoverCheckoutRoots(main)).not.toContain(unrelated);
 		expect(discoverCheckoutRoots(unrelated)).toEqual([unrelated]);

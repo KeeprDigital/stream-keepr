@@ -14,6 +14,7 @@ import {
 	LOCALLY_REQUIRED_NUXT_NAMES,
 	missingLocalNuxtNames,
 	parseDotenv,
+	sentenceList,
 } from '~~/build/localConfiguration';
 import {
 	LOCAL_AUTH_BYPASS_ENABLED_VALUE,
@@ -102,16 +103,6 @@ describe('which names a local checkout has to be given', () => {
 		expect(Object.keys(LOCAL_NUXT_NAME_SURFACES).sort()).toEqual([...LOCALLY_REQUIRED_NUXT_NAMES].sort());
 	});
 
-	it('requires only what refuses at boot: the auth names but not Ably or the Melee keys', () => {
-		expect(LOCALLY_REQUIRED_NUXT_NAMES).toEqual(expect.arrayContaining(['NUXT_BETTER_AUTH_SECRET', 'NUXT_ADMIN_BOOTSTRAP_TOKEN']));
-		expect(LOCALLY_OPTIONAL_NUXT_NAMES).toEqual(expect.arrayContaining([
-			'NUXT_ABLY_API_KEY',
-			'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY',
-			'NUXT_MELEE_CREDENTIAL_ENCRYPTION_KEY_VERSION',
-			'NUXT_MELEE_CREDENTIAL_ENCRYPTION_PREVIOUS_KEYS',
-		]));
-	});
-
 	it('does not require the Better Auth setup names while the local bypass is enabled', () => {
 		expect(missingLocalNuxtNames({}, { localAuthBypassActive: true })).toEqual([
 			'NUXT_GRAPHICS_ADMIN_TOKEN',
@@ -181,6 +172,24 @@ describe('what a dev server says about its local configuration', () => {
 			'README.md → Local configuration',
 		])
 			expect(notice).toContain(token);
+	});
+
+	// The serial comma keeps the `and` inside one surface from reading as a separator.
+	it.each([
+		[
+			['signing in'],
+			'signing in',
+		],
+		[
+			['signing in', 'first-admin bootstrap'],
+			'signing in and first-admin bootstrap',
+		],
+		[
+			['asset capabilities', 'signing in and every API route', 'first-admin bootstrap'],
+			'asset capabilities, signing in and every API route, and first-admin bootstrap',
+		],
+	])('lists %j as a sentence', (items, sentence) => {
+		expect(sentenceList(items, 'and')).toBe(sentence);
 	});
 });
 

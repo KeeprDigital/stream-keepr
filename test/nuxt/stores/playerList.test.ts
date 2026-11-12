@@ -345,16 +345,9 @@ describe('usePlayerListStore', () => {
 	});
 
 	// A write is answered for the Event it was made in; neither its answer nor its rollback lands in another (#606).
-	describe.each([
-		[
-			'Event B',
-			[2],
-		],
-		[
-			'Event A, loaded again since',
-			[2, 1],
-		],
-	])('a Player List write answered after the operator moved on to %s', (_, switches) => {
+	// Back in the same Event is the case an Event-id comparison would miss.
+	describe('a Player List write answered after the operator moved on to Event A, loaded again since', () => {
+		const switches = [2, 1];
 		/** Ends on Lists 1 and 2 with members cached, as Event A's own are when loaded again. */
 		async function switchAway() {
 			for (const eventId of switches) {

@@ -1,33 +1,9 @@
-import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { lastCallTo } from '~~/test/helpers/lastCallTo';
 
-type RealtimeHandlerMap = Record<string, (data: Record<string, unknown>) => void>;
-type FakeStore = Record<string, Mock>;
-
-/** A store whose every method is a resolving mock, so only the methods a test reads are named. */
-function fakeStore(state: Record<string, unknown> = {}): FakeStore {
-	return new Proxy(state, {
-		// State set to null stays null: only a name never set is a method.
-		get: (target, key: string) => key in target
-			? target[key]
-			: (target[key] = vi.fn().mockResolvedValue(undefined)),
-	}) as FakeStore;
-}
-
-// Exhaustive routing of every Event-room message is a compile-time check
-// (`createEventRealtimeHandlers` satisfies `EventRoomHandlers`), and each store's
-// handling is tested through the real handlers in `test/nuxt/stores`.
+// The session's calls on the transport, which are its contract there: the room
+// it enters and leaves, and the one handler map it registers. What a message or a
+// resync does is tested through the real stores in `test/nuxt/modules/realtimeEventSession.test.ts`.
 describe('useEventRealtimeSession', () => {
-	const mockResetAllEventStores = vi.fn();
-	const mockNavigateTo = vi.fn();
-	const mockClearPlayerDeckCache = vi.fn();
-	const useReconnectResync = vi.fn();
-	const eventDataResync = {
-		resync: vi.fn(),
-	};
-	const refreshMeleeStructureData = vi.fn();
-	const refreshAfterMeleeReset = vi.fn();
 	const realtime = {
 		connectionId: 'connection-1',
 		tokenError: null as Error | null,
@@ -35,75 +11,56 @@ describe('useEventRealtimeSession', () => {
 		onRoom: vi.fn(),
 		offRoom: vi.fn(),
 	};
-	const eventState = {
-		eventId: 12 as number | null,
+	const eventStore = {
+		eventId: 12,
 		// The Event whose room this client joins: none on a live rendering of a Screen.
-		roomEventId: 12 as number | null,
+		roomEventId: 12,
 		event: { id: 12 },
 	};
-	const eventStore = fakeStore(eventState);
-	const stores = {
-		useEventStore: eventStore,
-		usePlayerStore: fakeStore(),
-		usePlayerDeckStore: fakeStore(),
-		useMetagameStore: fakeStore(),
-		useArchetypeStore: fakeStore(),
-		usePlayerListStore: fakeStore(),
-		usePhaseStore: fakeStore(),
-		useRoundStore: fakeStore(),
-		useMatchStore: fakeStore(),
-		useFeatureMatchStore: fakeStore(),
-		useFeatureMatchStateStore: fakeStore(),
-		useFeatureMatchAssignmentStore: fakeStore(),
-		useBroadcastDeckListStore: fakeStore(),
-		useBroadcastGraphicsLiveSessionStore: fakeStore(),
-		useScreenStore: fakeStore(),
-		useCardStore: fakeStore(),
-	};
-	const { usePlayerStore: playerStore, useMetagameStore: metagameStore, useFeatureMatchStore: featureMatchStore } = stores;
 
 	let watchCallback: ((room: string | null) => void) | undefined;
-	let tokenWaitCallback: ((waiting: boolean, wasWaiting: boolean) => void) | undefined;
 	let disposeCallback: (() => void) | undefined;
 
-	async function startSession(): Promise<RealtimeHandlerMap> {
+	async function startSession() {
 		const { useEventRealtimeSession } = await import('~~/app/composables/workflows/useEventRealtimeSession');
 		useEventRealtimeSession();
-		const [, handlers] = lastCallTo(realtime.onRoom, 'event-session');
-		return handlers as RealtimeHandlerMap;
 	}
-
-	const message = { eventId: 12, originConnectionId: 'connection-2' };
 
 	beforeEach(() => {
 		vi.resetModules();
-		eventState.eventId = 12;
-		eventState.roomEventId = 12;
 		watchCallback = undefined;
-		tokenWaitCallback = undefined;
 		disposeCallback = undefined;
 
-		vi.doMock('~/utils/eventStores', () => ({ resetAllEventStores: mockResetAllEventStores }));
-		vi.doMock('~/modules/event-data/resync', () => ({ eventDataResync }));
-		vi.doMock('~/composables/data/usePlayerDeckCache', () => ({ clearPlayerDeckCache: mockClearPlayerDeckCache }));
-		vi.stubGlobal('useRealtime', () => realtime);
-		for (const [name, store] of Object.entries(stores))
-			vi.stubGlobal(name, () => store);
-		vi.stubGlobal('useMeleeDataRefresh', () => ({ refreshMeleeStructureData, refreshAfterMeleeReset }));
-		vi.stubGlobal('useTournamentStructureRefresh', () => ({
-			refreshAfterPhaseDelete: vi.fn(),
-			refreshAfterRoundDelete: vi.fn(),
+		// The modules behind these reach the stores, which only a Nuxt app defines.
+		vi.doMock('~/utils/eventStores', () => ({
+			resetAllEventStores: vi.fn(),
 		}));
-		vi.stubGlobal('useReconnectResync', useReconnectResync);
-		vi.stubGlobal('navigateTo', mockNavigateTo);
-		vi.stubGlobal('watch', (source: () => unknown, callback: (value: never, previous: never) => void, options?: { immediate?: boolean }) => {
-			if (typeof source() === 'boolean') {
-				tokenWaitCallback = callback as typeof tokenWaitCallback;
+		vi.doMock('~/modules/event-data/resync', () => ({
+			eventDataResync: {
+				resync: vi.fn(),
+			},
+		}));
+		vi.doMock('~/composables/data/usePlayerDeckCache', () => ({
+			clearPlayerDeckCache: vi.fn(),
+		}));
+		vi.stubGlobal('useRealtime', () => realtime);
+		vi.stubGlobal('useEventStore', () => eventStore);
+		// Read as the session and its handler map are built; none is called here.
+		for (const name of [
+			'useFeatureMatchAssignmentStore',
+			'useBroadcastDeckListStore',
+			'useMeleeDataRefresh',
+			'useTournamentStructureRefresh',
+		])
+			vi.stubGlobal(name, () => ({}));
+		vi.stubGlobal('useReconnectResync', vi.fn());
+		vi.stubGlobal('watch', (source: () => unknown, callback: (value: never) => void, options?: { immediate?: boolean }) => {
+			// The token wait's watcher, which reads a boolean; only the room's is followed.
+			if (typeof source() === 'boolean')
 				return;
-			}
 			watchCallback = callback as typeof watchCallback;
 			if (options?.immediate)
-				callback(source() as never, undefined as never);
+				callback(source() as never);
 		});
 		vi.stubGlobal('onScopeDispose', (callback: () => void) => {
 			disposeCallback = callback;
@@ -122,20 +79,6 @@ describe('useEventRealtimeSession', () => {
 		expect(realtime.setRoom).toHaveBeenLastCalledWith(null);
 	});
 
-	// A Screen Output or Program monitor holds an Event context and joins no room:
-	// it follows only its Screen's own channel.
-	it('joins no room, and resyncs nothing, while this client has no room Event', async () => {
-		eventState.roomEventId = null;
-		await startSession();
-
-		expect(realtime.setRoom).toHaveBeenLastCalledWith(null);
-		const [resync, room] = useReconnectResync.mock.calls.at(-1)!;
-		expect(room()).toBeNull();
-		resync();
-		expect(eventDataResync.resync).not.toHaveBeenCalled();
-		expect(mockClearPlayerDeckCache).not.toHaveBeenCalled();
-	});
-
 	it('starts once per scope, and again after disposal', async () => {
 		const { useEventRealtimeSession } = await import('~~/app/composables/workflows/useEventRealtimeSession');
 
@@ -146,161 +89,5 @@ describe('useEventRealtimeSession', () => {
 		disposeCallback?.();
 		useEventRealtimeSession();
 		expect(realtime.onRoom).toHaveBeenCalledTimes(2);
-	});
-
-	it.each([
-		'player:updated',
-		'playerDeck:cardsResolved',
-		'archetype:keyCardsUpdated',
-		'playerList:membersChanged',
-	])(
-		'invalidates the metagame on %s',
-		async (type) => {
-			const handlers = await startSession();
-
-			handlers[type]!(message);
-
-			expect(metagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
-		},
-	);
-
-	it('reloads Players, Deck Lists and Feature Matches after a Melee Deck List sync', async () => {
-		const handlers = await startSession();
-
-		handlers['melee:decklistsSynced']!(message);
-
-		await vi.waitFor(() => {
-			expect(metagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
-			expect(playerStore.loadPlayersByEventId).toHaveBeenCalledWith(12);
-			expect(stores.usePlayerDeckStore.loadByEventId).toHaveBeenCalledWith(12);
-			expect(featureMatchStore.loadFeatureMatchesByEventId).toHaveBeenCalledWith(12);
-		});
-	});
-
-	it('reloads Players and drops cached Deck Lists after a TCG+ Import', async () => {
-		const handlers = await startSession();
-
-		handlers['tcgplus:imported']!({ ...message, playerCount: 2, deckCount: 2 });
-
-		await vi.waitFor(() => {
-			expect(metagameStore.applyRemoteInvalidated).toHaveBeenCalledOnce();
-			expect(mockClearPlayerDeckCache).toHaveBeenCalledOnce();
-			expect(playerStore.loadPlayersByEventId).toHaveBeenCalledWith(12);
-		});
-	});
-
-	it('refreshes structure after a Melee structure sync and a Melee reset', async () => {
-		const handlers = await startSession();
-
-		handlers['melee:structureSynced']!({ ...message, phaseCount: 2, roundCount: 8 });
-		handlers['melee:dataReset']!({ ...message, reason: 'event-changed' });
-
-		await vi.waitFor(() => {
-			expect(refreshMeleeStructureData).toHaveBeenCalledWith(12);
-			expect(refreshAfterMeleeReset).toHaveBeenCalledWith(12);
-		});
-	});
-
-	// Each Round sync message reloads only what that kind of change touches.
-	it.each([
-		{
-			type: 'melee:matchResultsSynced',
-			data: {
-				roundId: 3,
-				matchIds: [7],
-			},
-			reloads: ['matches'],
-		},
-		{
-			type: 'melee:pairingsSynced',
-			data: { roundId: 3 },
-			reloads: ['rounds', 'matches', 'featureMatches'],
-		},
-		{
-			type: 'melee:roundStandingsSynced',
-			data: { roundId: 3 },
-			reloads: ['rounds'],
-		},
-	] as const)('after $type reloads $reloads', async ({ type, data, reloads }) => {
-		const handlers = await startSession();
-		const delivered = {
-			...message,
-			...data,
-		};
-		const reloadArguments = {
-			rounds: [12],
-			matches: [delivered],
-			featureMatches: [12],
-		};
-
-		handlers[type]!(delivered);
-
-		await vi.waitFor(() => {
-			expect({
-				rounds: stores.useRoundStore.loadRoundsByEventId!.mock.calls,
-				matches: stores.useMatchStore.applyRemoteMatchesRefreshed!.mock.calls,
-				featureMatches: featureMatchStore.loadFeatureMatchesByEventId!.mock.calls,
-			}).toEqual({
-				rounds: [],
-				matches: [],
-				featureMatches: [],
-				...Object.fromEntries(reloads.map(store => [
-					store,
-					[reloadArguments[store]],
-				])),
-			});
-		});
-	});
-
-	it('resets Event state and navigates home when the active Event is deleted', async () => {
-		const handlers = await startSession();
-
-		handlers['event:deleted']!({ eventId: 12 });
-
-		expect(realtime.setRoom).toHaveBeenLastCalledWith(null);
-		expect(mockResetAllEventStores).toHaveBeenCalledOnce();
-		expect(mockNavigateTo).toHaveBeenCalledWith('/');
-	});
-
-	it('logs a handler that throws instead of breaking the room', async () => {
-		const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-		const error = new Error('player update failed');
-		playerStore.applyRemoteUpdated!.mockImplementationOnce(() => {
-			throw error;
-		});
-		const handlers = await startSession();
-
-		handlers['player:updated']!(message);
-
-		expect(consoleSpy).toHaveBeenCalledWith('Failed to handle realtime message "player:updated":', error);
-	});
-
-	describe('resync', () => {
-		function expectFullResync() {
-			expect(mockClearPlayerDeckCache).toHaveBeenCalledOnce();
-			expect(stores.useFeatureMatchAssignmentStore.reloadConsumedRounds).toHaveBeenCalledOnce();
-			expect(stores.useBroadcastDeckListStore.reloadAuthoritativeState).toHaveBeenCalledOnce();
-			expect(eventDataResync.resync).toHaveBeenCalledOnce();
-		}
-
-		it('reloads Assignments, Broadcast Deck Lists, Event Data and the Deck List cache on reconnect', async () => {
-			await startSession();
-			const [resync, room] = useReconnectResync.mock.calls.at(-1)!;
-
-			expect(room()).toBe('event:12');
-			resync();
-
-			expectFullResync();
-		});
-
-		it('runs once its subscriptions stop waiting on a token', async () => {
-			await startSession();
-
-			tokenWaitCallback?.(true, false);
-			expect(eventDataResync.resync).not.toHaveBeenCalled();
-			tokenWaitCallback?.(false, true);
-
-			expectFullResync();
-		});
 	});
 });

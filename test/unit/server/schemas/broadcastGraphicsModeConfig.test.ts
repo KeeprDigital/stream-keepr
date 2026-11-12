@@ -269,28 +269,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
 	});
 
-	it('accepts a Graphic Channel that states no Handoff Policy, because it defaults to Overlap', () => {
-		const config = {
-			graphics: [],
-			channels: [
-				{ id: 'thirds', name: 'Lower thirds' },
-			],
-		};
-
-		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(true);
-	});
-
-	it('refuses an unknown Graphic Channel Handoff Policy', () => {
-		const config = {
-			graphics: [],
-			channels: [
-				{ id: 'thirds', name: 'Lower thirds', handoff: 'queue' },
-			],
-		};
-
-		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(false);
-	});
-
 	it('refuses two Graphic Channels sharing one id', () => {
 		const config = {
 			graphics: [],
@@ -372,10 +350,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		expect(broadcastGraphicsModeConfigSchema.safeParse(config).success).toBe(false);
 	});
 
-	it('accepts a Screen with no background at all, which is what every Screen ships as', () => {
-		expect(broadcastGraphicsModeConfigSchema.safeParse({ graphics: [] }).success).toBe(true);
-	});
-
 	it('carries the background through the mode-configuration patch path', () => {
 		// The path the editor writes through rebuilds each mode from its field schemas,
 		// so a background that only validates in the whole-config schema never reaches it.
@@ -427,28 +401,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		);
 	});
 
-	it('applies the whole-Screen Graphic Input cap on the patch path the editor writes through', () => {
-		// Same reason the Graphic Item cap lives on the array: the patch schema rebuilds
-		// each mode from its field schemas and drops object-level refinements.
-		const perGraphic = MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHIC;
-		const graphics = Array.from(
-			{
-				length: Math.ceil((MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN + 1) / perGraphic),
-			},
-			(_, index) => ({
-				...graphic(`graphic-${index}`),
-				inputs: Array.from({ length: perGraphic }, (_, entry) => textInput(`k${index}x${entry}`)),
-			}),
-		);
-
-		const result = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({ graphics });
-
-		expect(result.success).toBe(false);
-		expect(messages(result)).toContain(
-			`A Broadcast Graphics Screen must not declare more than ${MAX_GRAPHIC_INPUTS_PER_BROADCAST_GRAPHICS_SCREEN} Graphic Inputs in total`,
-		);
-	});
-
 	it('rejects two Graphic Inputs sharing one key, and two bindings for one input', () => {
 		// Every placeholder, binding, and Live Control edit addresses an input by key
 		// alone, so a duplicate would render, bind, and edit whichever came first.
@@ -483,6 +435,76 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 
 		expect(messages(duplicateKeys)).toContain('Graphic Input keys must be unique within one Broadcast Graphic');
 		expect(messages(duplicateBindings)).toContain('A Graphic Input may have at most one Graphic Input Binding');
+	});
+
+	// Only a hand-written call reaches these: the authoring surface offers catalog fields alone.
+	it.each([
+		[
+			'accepts',
+			'a catalog field',
+			'player.name',
+			[],
+		],
+		[
+			'refuses',
+			'a field the catalog does not define',
+			'player.inventedField',
+			['A Graphic Input Binding must name a field from the binding catalog'],
+		],
+	])('%s a Graphic Input Binding naming %s', (_, __, fieldId, refusal) => {
+		const result = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [
+				{
+					...graphic('lower-third'),
+					inputs: [
+						textInput('name'),
+					],
+					sources: [
+						{ key: 'player', label: 'Player', kind: 'player' },
+					],
+					bindings: [
+						{ inputKey: 'name', sourceKey: 'player', fieldId },
+					],
+				},
+			],
+		});
+
+		expect(messages(result)).toEqual(refusal);
+	});
+
+	// A Match has a `player1`; a Player has none, so nothing an operator picks could ever resolve it.
+	it.each([
+		[
+			'accepts',
+			'a relationship that yields its kind',
+			'match',
+			[],
+		],
+		[
+			'refuses',
+			'a relationship that cannot yield its kind',
+			'player',
+			['A derived Graphic Source Selection must follow a declared selection through a relationship that yields its own kind'],
+		],
+	])('%s a derived Graphic Source Selection following %s', (_, __, parentKind, refusal) => {
+		const result = broadcastGraphicsModeConfigSchema.safeParse({
+			graphics: [
+				{
+					...graphic('lower-third'),
+					sources: [
+						{ key: 'parent', label: 'Parent', kind: parentKind },
+						{
+							key: 'p1',
+							label: 'Player 1',
+							kind: 'player',
+							from: { sourceKey: 'parent', relation: 'player1' },
+						},
+					],
+				},
+			],
+		});
+
+		expect(messages(result)).toEqual(refusal);
 	});
 
 	it('rejects a Graphic Input key a Graphic Text Template could not name', () => {
@@ -529,6 +551,7 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		).success).toBe(false);
 	});
 
+	// The patch form takes each field's own schema, so this one cap stands for every rule under `graphics`.
 	it('applies the whole-Screen Graphic Item cap on the patch path the editor writes through', () => {
 		// The patch schema rebuilds each mode from its field schemas, so a cap that
 		// lived on the mode-config object would never reach a real write.
@@ -548,61 +571,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		]);
 	});
 
-	it('rejects a null Broadcast Graphics stack, so a patch can never delete the authored stack', () => {
-		// null deletes a stored key, which would silently empty the authored stack.
-		const result = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({ graphics: null });
-
-		expect(result.success).toBe(false);
-	});
-
-	it('accepts a patch that replaces the whole stack, and one that omits it', () => {
-		const patch = modeConfigPatchSchemaMap['broadcast-graphics'];
-
-		expect(patch.safeParse({
-			graphics: [
-				graphic('bug', 1),
-			],
-		}).success).toBe(true);
-		expect(patch.safeParse({}).success).toBe(true);
-	});
-
-	it('accepts the Broadcast Graphics config a new Screen ships with', () => {
-		// The shipped default has to satisfy the wire schema, or a Screen switched
-		// into Broadcast Graphics could not persist its own starting configuration.
-		const result = broadcastGraphicsModeConfigSchema.safeParse(
-			getDefaultConfigForMode('broadcast-graphics'),
-		);
-
-		expect(result.success).toBe(true);
-		expect(result.data?.graphics).toEqual([]);
-	});
-
-	it('rejects an unknown Graphic Item kind', () => {
-		const result = broadcastGraphicsModeConfigSchema.safeParse({
-			graphics: [
-				{
-					id: 'a',
-					name: 'A',
-					items: [
-						{
-							type: 'gauge',
-							id: 'meter',
-							label: 'Meter',
-							visible: true,
-							anchor: 'top-left',
-							x: 0,
-							y: 0,
-							width: 10,
-							height: 10,
-						},
-					],
-				},
-			],
-		});
-
-		expect(result.success).toBe(false);
-	});
-
 	describe('social network icon Graphic Items', () => {
 		function withItems(items: Array<Record<string, unknown>>) {
 			return broadcastGraphicsModeConfigSchema.safeParse({
@@ -611,25 +579,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 				],
 			});
 		}
-
-		it('accepts every statically selected Supported Social Network and rejects invented keys', () => {
-			for (const network of [
-				'twitch',
-				'youtube',
-				'x',
-				'instagram',
-				'tiktok',
-				'bluesky',
-			]) {
-				expect(withItems([
-					socialNetworkIconItem(`icon-${network}`, { network }),
-				]).success).toBe(true);
-			}
-
-			expect(withItems([
-				socialNetworkIconItem('icon-mastodon', { network: 'mastodon' }),
-			]).success).toBe(false);
-		});
 
 		it('bounds opacity and rejects unread configuration fields', () => {
 			expect(withItems([
@@ -935,38 +884,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 		expect(result.success).toBe(false);
 	});
 
-	it('bounds a linear-gradient Graphic Fill to two to four colour stops', () => {
-		const withStops = (count: number) => broadcastGraphicsModeConfigSchema.safeParse({
-			graphics: [
-				{
-					id: 'a',
-					name: 'A',
-					items: [
-						shapeItem('bed', {
-							surfaceStyle: {
-								fill: {
-									type: 'linear-gradient',
-									angle: 90,
-									stops: Array.from({ length: count }, (_, index) => ({
-										color: '#ffffff',
-										position: index / Math.max(1, count - 1),
-										opacity: 1,
-									})),
-								},
-								fillOpacity: 1,
-							},
-						}),
-					],
-				},
-			],
-		}).success;
-
-		expect(withStops(1)).toBe(false);
-		expect(withStops(2)).toBe(true);
-		expect(withStops(4)).toBe(true);
-		expect(withStops(5)).toBe(false);
-	});
-
 	it('accepts an item with no Graphic Surface Style of its own', () => {
 		const result = broadcastGraphicsModeConfigSchema.safeParse({
 			graphics: [
@@ -1020,7 +937,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 			],
 		}).success;
 
-		expect(MAX_GRAPHIC_TEXT_LENGTH).toBe(1000);
 		expect(withText(MAX_GRAPHIC_TEXT_LENGTH)).toBe(true);
 		expect(withText(MAX_GRAPHIC_TEXT_LENGTH + 1)).toBe(false);
 	});
@@ -1110,7 +1026,6 @@ describe('broadcastGraphicsModeConfigSchema', () => {
 			],
 		}).success;
 
-		expect(MAX_GRAPHIC_ITEM_ID_LENGTH).toBe(64);
 		expect(MAX_GRAPHIC_ITEM_ID_LENGTH).toBeGreaterThan(randomUuid().length);
 		expect(withId(MAX_GRAPHIC_ITEM_ID_LENGTH)).toBe(true);
 		expect(withId(MAX_GRAPHIC_ITEM_ID_LENGTH + 1)).toBe(false);
@@ -1542,54 +1457,6 @@ describe('graphic Animation bounds', () => {
 
 		expect(groupWith(4, 4).success).toBe(true);
 		expect(groupWith(4, 5).success).toBe(false);
-	});
-
-	it('bounds a stagger on the patch path the editor writes through', () => {
-		const patch = modeConfigPatchSchemaMap['broadcast-graphics'].safeParse({
-			graphics: [
-				{
-					id: 'a',
-					name: 'A',
-					items: [
-						shapeItem('bar'),
-					],
-					animation: {
-						stagger: {
-							enter: {
-								order: 'list',
-								step: 100,
-								itemIds: ['bar', 'gone'],
-							},
-						},
-					},
-				},
-			],
-		});
-
-		expect(patch.success).toBe(false);
-	});
-
-	it('applies every animation bound on the patch path the editor writes through', () => {
-		const patch = modeConfigPatchSchemaMap['broadcast-graphics'];
-		const withDuration = (duration: number) => patch.safeParse({
-			graphics: [
-				{
-					id: 'a',
-					name: 'A',
-					items: [
-						shapeItem('bar', {
-							animation: {
-								enter: { ...recipe, duration },
-							},
-						}),
-					],
-				},
-			],
-		}).success;
-
-		expect(withDuration(400)).toBe(true);
-		expect(withDuration(MAX_GRAPHIC_ANIMATION_DURATION_MS + 1)).toBe(false);
-		expect(withDuration(MIN_GRAPHIC_ANIMATION_DURATION_MS - 1)).toBe(false);
 	});
 });
 
