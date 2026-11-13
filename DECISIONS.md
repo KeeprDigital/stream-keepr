@@ -98,7 +98,7 @@ Accepted · 2026-08-02 · [#153](https://github.com/KeeprDigital/stream-keepr/is
 
 ### Why
 
-`public/fonts/mplantin.ttf` passed every server-side check yet Chromium's sanitiser refused it, because its Microsoft-platform subtable declares `language` 1. The platform split was settled by experiment, restating each subtable independently and loading all four combinations in real Chromium: only a zero Microsoft-platform language loads, and the wrong `rangeShift` the sanitiser also logs does not matter.
+A bundled application font, `mplantin.ttf`, passed every server-side check yet Chromium's sanitiser refused it, because its Microsoft-platform subtable declares `language` 1. That font is gone; `public/fonts/mana-cmap-language.ttf` reproduces the defect. The platform split was settled by experiment, restating each subtable independently and loading all four combinations in real Chromium: only a zero Microsoft-platform language loads, and the wrong `rangeShift` the sanitiser also logs does not matter.
 
 A font sanitiser is a large, versioned, adversarially maintained program whose refusals track browser releases; reimplementing it means maintaining a second copy of someone else's moving contract and being wrong silently. The actual requirement is "this face loads and renders in the browser that shows it on air", and only a browser answers that — the same shape as silent-video validation (#38): where proof needs a runtime the validator is not, the validator bounds and describes the bytes and the runtime's evidence decides publication.
 
@@ -106,9 +106,9 @@ Server rules still earn a place because they fail earlier and more legibly: with
 
 ### Consequences
 
-- `mplantin.ttf` is only a negative fixture; accepted-TTF fixtures use `mana.ttf`. It is removed from the `MPlantin` `@font-face` in `app/assets/css/main.css`, where it was an unreachable fallback that could only ever have produced the silent substitution #28 forbids; MPlantin renders from `mplantin.woff`.
+- `public/fonts/mana-cmap-language.ttf` is the negative fixture: `mana.ttf` with every non-Unicode cmap `language` restated to 1 by `refusedCmapLanguage`, committed and pinned byte-for-byte to that derivation by a unit test. Accepted-TTF fixtures use `mana.ttf`, and the Macintosh-exemption variant is `mana.ttf` run through `macintoshCmapLanguage`. (The original defect was a TTF listed as an unreachable fallback in a font's `@font-face`, which could only ever have produced the silent substitution #28 forbids.)
 - The harness proves both directions: `refusedFaces` in `public/_acceptance/static-font-v1.json` lists faces the profile rejects, and the run fails with `font-refused-face-loaded` if the browser loads one.
-- The unreferenced `mplantin.eot`/`.svg` and `mana.eot`/`.svg` were left alone and not investigated.
+- The unreferenced legacy `.eot`/`.svg` formats of both fonts were deleted with the fixtures' move to Mana.
 
 ## ADR-0006: Over-broad Graphic Style Set override pins are not migrated
 

@@ -22,12 +22,12 @@ afterEach(async () => {
 // graphicsAssetIngestionFont.sqlite.test.ts.
 describe('static font ingestion through the Graphics Asset Library public module', () => {
 	it('publishes one browser-proven static face and resolves its exact source revision', async () => {
-		const source = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+		const source = new Uint8Array(await readFile('public/fonts/mana.woff'));
 		const { library } = createTestGraphicsLibrary({
 			catalogue: createD1GraphicsAssetCatalogue(harness.database),
 		});
 
-		const reference = await ingestPackageStaticFont(library, 'MPlantin');
+		const reference = await ingestPackageStaticFont(library, 'Mana');
 
 		await expect(library.listGraphicAssets({})).resolves.toMatchObject([
 			{

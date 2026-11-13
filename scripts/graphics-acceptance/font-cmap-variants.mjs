@@ -56,15 +56,27 @@ export function withCmapLanguages(source, languageForPlatform) {
 }
 
 /**
- * The one variant both sides name: the bundled MPlantin TTF with its Microsoft
- * subtable's language zeroed and its Macintosh one left at 1.
+ * The variant both sides name for the Macintosh exemption: the bundled Mana TTF
+ * with its Microsoft subtable's language zeroed and its Macintosh one left at 1.
  *
  * The profile accepts it and a browser loads and renders it, which is the pair of
- * facts the platform exemption rests on — and which the bundled face itself
- * cannot establish, since a rule with or without the exemption rejects that.
+ * facts the platform exemption rests on — and which the refused face cannot
+ * establish, since a rule with or without the exemption rejects that.
  */
 export function macintoshCmapLanguage(platformId) {
 	return platformId === 1
 		? 1
 		: 0;
+}
+
+/**
+ * Language 1 on every platform but Unicode: the subtables a browser refuses.
+ *
+ * `public/fonts/mana-cmap-language.ttf` is `mana.ttf` run through this, so the
+ * committed refused face and the unit test's derivation cannot drift apart.
+ */
+export function refusedCmapLanguage(platformId) {
+	return platformId === 0
+		? 0
+		: 1;
 }

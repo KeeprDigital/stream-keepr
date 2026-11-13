@@ -1,11 +1,11 @@
 {
 	"faces": [
 		{ "format": "ttf", "url": "/fonts/mana.ttf", "codePoint": 48 },
-		{ "format": "woff", "url": "/fonts/mplantin.woff", "codePoint": 48 },
+		{ "format": "woff", "url": "/fonts/mana.woff", "codePoint": 48 },
 		{ "format": "woff2", "url": "/fonts/mana.woff2", "codePoint": 48 }
 	],
 	"fallbackProbe": { "format": "woff2", "url": "/fonts/mana.woff2", "codePoint": 81 },
 	"refusedFaces": [
-		{ "format": "ttf", "url": "/fonts/mplantin.ttf", "reason": "cmap subtables declare language 1" }
+		{ "format": "ttf", "url": "/fonts/mana-cmap-language.ttf", "reason": "cmap subtables declare language 1" }
 	]
 }

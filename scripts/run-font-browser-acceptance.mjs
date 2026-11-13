@@ -59,7 +59,7 @@ const LIBRARY_FACE = 'public/fonts/mana.woff2';
 const fromRepository = path => new URL(`../${path}`, import.meta.url);
 
 /**
- * `public/fonts/mplantin.ttf` with its cmap subtable languages restated.
+ * `public/fonts/mana.ttf` with its cmap subtable languages restated.
  *
  * The restating itself lives in `graphics-acceptance/font-cmap-variants.mjs`,
  * shared with the `static-font-v1` unit tests so both sides build byte-identical
@@ -74,7 +74,7 @@ const fromRepository = path => new URL(`../${path}`, import.meta.url);
  */
 async function cmapLanguageVariant(languageForPlatform) {
 	return withCmapLanguages(
-		new Uint8Array(await readFile(fromRepository('public/fonts/mplantin.ttf'))),
+		new Uint8Array(await readFile(fromRepository('public/fonts/mana.ttf'))),
 		languageForPlatform,
 	);
 }
@@ -86,9 +86,9 @@ async function cmapLanguageVariant(languageForPlatform) {
  *
  * The Macintosh-language face is the one that matters. The profile permits a
  * non-zero `language` on that platform, because OpenType defines it there as the
- * Mac language ID plus one — and the bundled face is refused by a rule with or
- * without that exemption, so nothing committed can tell the two apart. This face
- * can: it is exactly the bundled one with its Microsoft subtable's language
+ * Mac language ID plus one — and the committed refused face is refused by a rule with or
+ * without that exemption, so it cannot tell the two apart. This face
+ * can: it is exactly `mana.ttf` with its Microsoft subtable's language
  * zeroed, and requiring it to load *and render* is what stops the rule quietly
  * widening back into a false positive (#153).
  */
@@ -114,10 +114,10 @@ async function serveLocally() {
 			type: 'application/json',
 		}),
 		'/fonts/mana.ttf': () => file('public/fonts/mana.ttf', 'font/ttf'),
-		'/fonts/mplantin.woff': () => file('public/fonts/mplantin.woff', 'font/woff'),
+		'/fonts/mana.woff': () => file('public/fonts/mana.woff', 'font/woff'),
 		// Served to be refused: the profile rejects these bytes, and this run is what
 		// proves the browser does too (#153).
-		'/fonts/mplantin.ttf': () => file('public/fonts/mplantin.ttf', 'font/ttf'),
+		'/fonts/mana-cmap-language.ttf': () => file('public/fonts/mana-cmap-language.ttf', 'font/ttf'),
 		'/fonts/mana.woff2': () => file('public/fonts/mana.woff2', 'font/woff2'),
 		'/_acceptance/fonts/otf-face': () =>
 			file('node_modules/mana-font/docs/fonts/beleren.otf', 'font/otf'),

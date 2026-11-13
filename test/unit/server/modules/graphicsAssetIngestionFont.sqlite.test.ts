@@ -57,14 +57,14 @@ function successfulBrowserEvidence(operation: GraphicsIngestionOperation) {
 
 describe('static font ingestion at the Graphic Asset ingestion seam', () => {
 	it('publishes one browser-proven static face and stores its exact source revision', async () => {
-		const source = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+		const source = new Uint8Array(await readFile('public/fonts/mana.woff'));
 		const context = createIngestion();
 		const assets = context.ingestion;
 		const operation = await assets.initiateGraphicsIngestion({
-			idempotencyKey: 'mplantin-static-face',
+			idempotencyKey: 'mana-static-face',
 			initiatedBy: 'graphics-author-1',
-			name: 'MPlantin',
-			sourceFileName: 'mplantin.woff',
+			name: 'Mana',
+			sourceFileName: 'mana.woff',
 			declaredMime: 'font/woff',
 			declaredByteLength: source.byteLength,
 		});
@@ -104,7 +104,7 @@ describe('static font ingestion at the Graphic Asset ingestion seam', () => {
 				compatibilityProfile: 'static-font-v1',
 				facts: {
 					kind: 'font',
-					family: 'MPlantin',
+					family: 'Mana',
 					browserLoadable: true,
 					representativeGlyphsRendered: true,
 				},
@@ -238,15 +238,15 @@ describe('static font ingestion at the Graphic Asset ingestion seam', () => {
 	});
 
 	it('replaces font Graphic Asset Content with an immutable exact Graphic Asset Revision', async () => {
-		const originalSource = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+		const originalSource = new Uint8Array(await readFile('public/fonts/mana.woff'));
 		const replacementSource = new Uint8Array(await readFile('public/fonts/mana.ttf'));
 		const context = createIngestion();
 		const assets = context.ingestion;
 		const initiated = await assets.initiateGraphicsIngestion({
 			idempotencyKey: 'replaceable-font-original',
 			initiatedBy: 'graphics-author-1',
-			name: 'Replaceable MPlantin',
-			sourceFileName: 'mplantin.woff',
+			name: 'Replaceable Mana',
+			sourceFileName: 'mana.woff',
 			declaredMime: 'font/woff',
 			declaredByteLength: originalSource.byteLength,
 		});

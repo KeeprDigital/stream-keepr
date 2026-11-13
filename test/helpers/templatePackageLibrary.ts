@@ -183,14 +183,14 @@ export async function ingestPackageSilentVideo(library: PackageLibrary, name: st
 	}));
 }
 
-/** The bundled MPlantin WOFF, through validation and a passing browser proof. */
+/** The bundled Mana WOFF, through validation and a passing browser proof. */
 export async function ingestPackageStaticFont(library: PackageLibrary, name: string): Promise<GraphicAssetReference> {
-	const source = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+	const source = new Uint8Array(await readFile('public/fonts/mana.woff'));
 	const operation = await library.initiateGraphicsIngestion({
 		idempotencyKey: `ingest-${name}-${++sequence}`,
 		initiatedBy: author,
 		name,
-		sourceFileName: 'mplantin.woff',
+		sourceFileName: 'mana.woff',
 		declaredMime: 'font/woff',
 		declaredByteLength: source.byteLength,
 	});
