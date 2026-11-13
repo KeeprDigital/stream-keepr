@@ -19,7 +19,9 @@ export interface FontFaceState {
  * and paints the fallback until it arrives, so on a cold cache the display cuts
  * to air in the wrong face and reflows. `document.fonts.load` fetches each face
  * ahead. With its default text it selects the faces whose `unicode-range` covers
- * a space, the Latin subset; a face for another script swaps in when first painted.
+ * a space, the Latin subset. Every other subset, Latin Extended included, and
+ * any weight or style a display's own stylesheet asks for beyond the requested
+ * face, swaps in when first painted (ADR-0053).
  *
  * A load that rejects, or answers no face because the family is not declared,
  * fails rather than waits: its host shows the fallback, as for a library font.
