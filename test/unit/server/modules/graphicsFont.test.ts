@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { processStaticFont } from '~~/server/modules/graphics-asset-library/font';
 import { digestOf } from '~~/test/helpers/graphicsFixtures';
 import {
+	cmapRecords,
 	macintoshCmapLanguage,
+	refusedCmapLanguage,
 	withCmapLanguages,
+	withSeparateCmapSubtables,
 } from '../../../../scripts/graphics-acceptance/font-cmap-variants.mjs';
 
 describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
@@ -17,7 +20,7 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 		],
 		[
 			'WOFF',
-			'public/fonts/mplantin.woff',
+			'public/fonts/mana.woff',
 			'font/woff',
 			'woff',
 		],
@@ -135,7 +138,7 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 			issue: { code: 'font-source-size-exceeded' },
 		});
 
-		const woff = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+		const woff = new Uint8Array(await readFile('public/fonts/mana.woff'));
 		new DataView(woff.buffer, woff.byteOffset, woff.byteLength)
 			.setUint32(16, 32 * 1024 * 1024 + 1);
 		await expect(processStaticFont(woff, {
@@ -145,7 +148,7 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 			issue: { code: 'font-expanded-size-exceeded' },
 		});
 
-		const oversizedTable = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+		const oversizedTable = new Uint8Array(await readFile('public/fonts/mana.woff'));
 		new DataView(oversizedTable.buffer, oversizedTable.byteOffset, oversizedTable.byteLength)
 			.setUint32(44 + 12, 32 * 1024 * 1024);
 		await expect(processStaticFont(oversizedTable, {
@@ -166,38 +169,94 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 		});
 	});
 
+	async function splitMana() {
+		return withSeparateCmapSubtables(new Uint8Array(await readFile('public/fonts/mana.ttf')));
+	}
+
 	async function processTtf(bytes: Uint8Array) {
 		return await processStaticFont(bytes, {
-			sourceFileName: 'mplantin.ttf',
+			sourceFileName: 'mana.ttf',
 			declaredMime: 'font/ttf',
 		});
 	}
 
 	// Its Microsoft-platform (3, 1) cmap subtable declares language 1, which the browser's
 	// font sanitiser rejects outright (#153).
-	it('rejects the bundled MPlantin TTF, whose Microsoft cmap subtable no browser will parse', async () => {
-		const bytes = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
+	it('rejects the committed refused fixture, whose Microsoft cmap subtable no browser will parse', async () => {
+		const bytes = new Uint8Array(await readFile('public/fonts/mana-cmap-language.ttf'));
 
 		await expect(processTtf(bytes)).rejects.toMatchObject({
 			issue: { code: 'font-cmap-language-invalid' },
 		});
 	});
 
+	// The browser acceptance run serves the committed file as the refused face, so it
+	// has to be exactly what the shared builder derives from the split mana.ttf.
+	it('commits the refused fixture as split mana.ttf with every non-Unicode cmap language restated to 1', async () => {
+		const committed = new Uint8Array(await readFile('public/fonts/mana-cmap-language.ttf'));
+
+		expect(committed).toEqual(withCmapLanguages(await splitMana(), refusedCmapLanguage));
+	});
+
+	// Mana's records share one subtable; a variant that fails to split would silently equal
+	// the stock font and stop pinning the platform rules.
+	it.each([
+		[
+			'the Macintosh variant',
+			macintoshCmapLanguage,
+			{ 0: 0, 1: 1, 3: 0 },
+		],
+		[
+			'the refused variant',
+			refusedCmapLanguage,
+			{ 0: 0, 1: 1, 3: 1 },
+		],
+	])('%s carries the language each platform is meant to', async (_, languageForPlatform, expected) => {
+		const variant = withCmapLanguages(await splitMana(), languageForPlatform);
+
+		expect(Object.fromEntries(cmapRecords(variant).map(({ platformId, language }) => [platformId, language])))
+			.toEqual(expected);
+	});
+
+	// The helpers read a subtable's length and language where formats 0-6 keep them; on any
+	// other format those bytes mean something else, so they refuse rather than misread.
+	it.each([
+		[
+			'withSeparateCmapSubtables',
+			(bytes: Uint8Array) => withSeparateCmapSubtables(bytes),
+		],
+		[
+			'cmapRecords',
+			(bytes: Uint8Array) => cmapRecords(bytes),
+		],
+		[
+			'withCmapLanguages',
+			(bytes: Uint8Array) => withCmapLanguages(bytes, macintoshCmapLanguage),
+		],
+	])('%s refuses a format 12 cmap subtable', async (_, read) => {
+		const bytes = new Uint8Array(await readFile('public/fonts/mana.ttf'));
+		const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+		const entry = Array.from({
+			length: view.getUint16(4),
+		}, (__, index) => 12 + index * 16)
+			.find(candidate => String.fromCharCode(...bytes.subarray(candidate, candidate + 4)) === 'cmap')!;
+		const cmap = view.getUint32(entry + 8);
+		view.setUint16(cmap + view.getUint32(cmap + 8), 12);
+
+		expect(() => read(bytes)).toThrow(/cmap subtable format 12/);
+	});
+
 	// OpenType defines a non-zero Macintosh-platform language; only the Microsoft-platform
 	// one is fatal. Measured in Chromium: a Mac-only language loads, a Microsoft one does not.
 	it('accepts a Macintosh-platform cmap language, which OpenType defines there', async () => {
-		const source = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
-
-		const accepted = await processTtf(withCmapLanguages(source, macintoshCmapLanguage));
+		const accepted = await processTtf(withCmapLanguages(await splitMana(), macintoshCmapLanguage));
 
 		expect(accepted.report).toMatchObject({ outcome: 'accepted', issues: [] });
 	});
 
 	it('rejects a Microsoft-platform cmap language even when every other subtable is zero', async () => {
-		const source = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
-
 		await expect(processTtf(
-			withCmapLanguages(source, platform => (platform === 3
+			withCmapLanguages(await splitMana(), platform => (platform === 3
 				? 1
 				: 0)),
 		)).rejects.toMatchObject({
@@ -207,7 +266,7 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 
 	it('accepts the same face once every cmap language is zero', async () => {
 		// Proves the helper really restates what the profile reads, so the rejections above mean something.
-		const source = new Uint8Array(await readFile('public/fonts/mplantin.ttf'));
+		const source = new Uint8Array(await readFile('public/fonts/mana.ttf'));
 
 		const accepted = await processTtf(withCmapLanguages(source, () => 0));
 

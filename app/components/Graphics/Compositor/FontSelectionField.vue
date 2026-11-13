@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { GraphicApplicationFontId } from '~~/shared/modules/graphics';
+import type { SelectItem } from '@nuxt/ui';
+import type { GraphicApplicationFontId, GraphicFontOptionGroup } from '~~/shared/modules/graphics';
 import type { GraphicFontSelection, GraphicFontSource } from '~~/shared/types/graphics';
 import type { GraphicAsset, GraphicAssetReference } from '~~/shared/types/graphicsAsset';
-import { GRAPHIC_FONT_OPTIONS } from '~~/shared/modules/graphics';
+import { GRAPHIC_FONT_OPTION_GROUPS } from '~~/shared/modules/graphics';
 
 /**
  * The property controls for one Graphic Font Selection: which arm it is on, and the
@@ -76,6 +77,14 @@ const SOURCE_OPTIONS = computed<{ label: string; value: GraphicFontSource }[]>((
 	{ label: 'Library font', value: 'asset' },
 ]);
 
+type GraphicFontOption = GraphicFontOptionGroup['options'][number];
+
+/** One Nuxt UI group per category, headed by a non-selectable label, as `USelect` takes grouped items. */
+const APPLICATION_FONT_ITEMS: SelectItem[][] = GRAPHIC_FONT_OPTION_GROUPS.map(group => [
+	{ type: 'label' as const, label: group.label },
+	...group.options,
+]);
+
 const applicationFontId = computed(() =>
 	props.font?.kind === 'application'
 		? props.font.fontId
@@ -110,14 +119,21 @@ const assetReference = computed(() =>
 	>
 		<USelect
 			:model-value="applicationFontId"
-			:items="GRAPHIC_FONT_OPTIONS"
+			:items="APPLICATION_FONT_ITEMS"
 			value-key="value"
 			size="sm"
 			class="w-full"
 			:disabled="disabled"
 			:data-testid="`${testIdPrefix}-font`"
 			@update:model-value="emit('application', $event as GraphicApplicationFontId)"
-		/>
+		>
+			<template #item-label="{ item }">
+				<span
+					:data-font-id="(item as GraphicFontOption).value"
+					:style="{ fontFamily: (item as GraphicFontOption).cssFamily }"
+				>{{ (item as GraphicFontOption).label }}</span>
+			</template>
+		</USelect>
 	</UFormField>
 
 	<UFormField v-else-if="source === 'asset'" label="Library font" :size="size">

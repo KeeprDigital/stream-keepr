@@ -165,7 +165,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 				body: graphicsIngestionRequest({
 					idempotencyKey,
 					name: idempotencyKey,
-					sourceFileName: 'mplantin.woff',
+					sourceFileName: 'mana.woff',
 					declaredMime: 'font/woff',
 					declaredByteLength: fontBytes.byteLength,
 				}),
@@ -209,7 +209,7 @@ describe('graphics author authorisation across the ingestion and lifecycle route
 	}
 
 	beforeAll(async () => {
-		fontBytes = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+		fontBytes = new Uint8Array(await readFile('public/fonts/mana.woff'));
 		authorCookie = await operatorSessionCookie();
 	});
 

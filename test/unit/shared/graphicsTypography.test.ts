@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
 	getGraphicFontDefinition,
+	GRAPHIC_FONT_IDS,
+	GRAPHIC_FONT_OPTION_GROUPS,
 	GRAPHIC_FONTS,
 	graphicAssetFontFaceFamily,
 	resolveGraphicFontFamily,
@@ -23,6 +25,11 @@ describe('shared graphics typography', () => {
 		expect(resolveGraphicFontFamily({ kind: 'application', fontId: fontId as never }))
 			.toBe(`var(--font-${fontId})`);
 		expect(definition?.package !== undefined).toBe(packaged);
+	});
+
+	it('offers every application font once, grouped, in registry order', () => {
+		expect(GRAPHIC_FONT_OPTION_GROUPS.flatMap(group => group.options.map(option => option.value)))
+			.toEqual([...GRAPHIC_FONT_IDS]);
 	});
 
 	it('does not resolve unknown application font capabilities to CSS', () => {

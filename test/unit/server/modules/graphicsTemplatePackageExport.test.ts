@@ -404,7 +404,7 @@ describe('the Template Package export contract', () => {
 		const { library } = await createExportLibrary();
 		const image = await ingestImage(library, 'Backdrop', transparentPixelPng);
 		const video = await ingestSilentVideo(library, 'Sting');
-		const font = await ingestStaticFont(library, 'MPlantin');
+		const font = await ingestStaticFont(library, 'Mana');
 
 		const result = await library.exportTemplatePackage({
 			packageKind: 'skgraphic',
