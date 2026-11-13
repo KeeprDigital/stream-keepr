@@ -15,7 +15,7 @@ export interface FeatureMatchSlotSides {
 
 /** The Slot field holding each side's data, in the Slot's own order. */
 export const SLOT_SIDE_DATA_KEY = { player1: 'player1Data', player2: 'player2Data' } as const satisfies Record<PlayerSide, keyof FeatureMatchSlotSides>;
-/** The Slot field holding each Seat's data: the pair every Slot has, then a Commander Slot's Seats 3 and 4 (ADR-0086). */
+/** The Slot field holding each Seat's data: the pair every Slot has, then a Commander Slot's Seats 3 and 4 (ADR-0087). */
 export const SLOT_SEAT_DATA_KEY = {
 	...SLOT_SIDE_DATA_KEY,
 	player3: 'player3Data',

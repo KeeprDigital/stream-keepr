@@ -41,7 +41,7 @@ export const playerGameDataSchema = z.discriminatedUnion('type', [mtgGameDataSch
 
 /**
  * A picked Commander as a save sends it: one printing of a Magic: The Gathering
- * card, by its Scryfall id (ADR-0086). Nothing checks that the card may be one.
+ * card, by its Scryfall id (ADR-0087). Nothing checks that the card may be one.
  */
 const commanderSchema = z.object({
 	scryfallId: z.uuid(),
@@ -61,7 +61,7 @@ const commanderSchema = z.object({
  * (ADR-0074), so it is dropped.
  */
 export const slotSideGameDataSchema = z.discriminatedUnion('type', [
-	// Only a Commander Event's Seat holds Commanders, which the setup write checks (ADR-0086).
+	// Only a Commander Event's Seat holds Commanders, which the setup write checks (ADR-0087).
 	mtgGameDataSchema.extend({
 		commanders: z.array(commanderSchema).max(MAX_SEAT_COMMANDERS).nullable().optional(),
 	}).strict(),

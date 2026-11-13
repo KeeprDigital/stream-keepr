@@ -6,7 +6,7 @@ import { ATRAXA, KRAUM, scryfallCardOf, TYMNA } from '~~/test/helpers/commanders
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import CommanderFields from '~/components/FeatureMatch/Setup/CommanderFields.vue';
 
-// A Seat's Commander picker (ADR-0086). Scryfall's card search is faked at `$fetch`.
+// A Seat's Commander picker (ADR-0087). Scryfall's card search is faked at `$fetch`.
 
 const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),

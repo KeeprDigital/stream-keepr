@@ -3,7 +3,7 @@ import type { ScryfallCommanderCard } from '~~/shared/utils/commander';
 import { commanderOfScryfallCard } from '~~/shared/utils/commander';
 
 /**
- * Scryfall's card search, as a Seat's Commander picker asks it (ADR-0086): any
+ * Scryfall's card search, as a Seat's Commander picker asks it (ADR-0087): any
  * paper Magic: The Gathering card may be a Commander, and each answer is one printing.
  */
 

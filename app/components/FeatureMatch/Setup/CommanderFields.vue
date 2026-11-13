@@ -6,7 +6,7 @@ import { COMMANDER_SEARCH_MIN_LENGTH, searchCommanderCards, searchCommanderPrint
 
 /**
  * A Seat's one or two Commanders, picked from Scryfall's card search and each
- * held as one printing (ADR-0086). Any card may be picked: nothing checks that
+ * held as one printing (ADR-0087). Any card may be picked: nothing checks that
  * it can be a Commander or that a pair may share a deck.
  */
 const modelValue = defineModel<MtgPlayerGameData>({

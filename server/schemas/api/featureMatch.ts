@@ -123,7 +123,7 @@ export const createFeatureMatchSchema = createInsertSchema(featureMatches)
 		activeSessionId: true,
 		externalId: true,
 		externalSource: true,
-		// Seats 3 and 4 are a Commander Event's, written by a setup save (ADR-0086).
+		// Seats 3 and 4 are a Commander Event's, written by a setup save (ADR-0087).
 		player3Data: true,
 		player4Data: true,
 	})

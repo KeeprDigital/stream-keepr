@@ -3030,7 +3030,7 @@ The name rule lives in the write and not in the index because existing Events ho
 - **Merge by deleting A and re-reviewing its decks into B**, client-side. Not atomic, one write per deck, and every Screen naming A released on the way.
 - **A new `archetype:merged` message.** Every consumer of `archetype:deleted` would need a second handler for what is, to all but the deck stores, the same change.
 
-## ADR-0086: A Commander Event is a Variant of a Magic: The Gathering Event, produced from Feature Match Slots that seat up to four
+## ADR-0087: A Commander Event is a Variant of a Magic: The Gathering Event, produced from Feature Match Slots that seat up to four
 
 Accepted · 2026-11-13 · [#1173](https://github.com/KeeprDigital/stream-keepr/issues/1173). Built in slices: the Variant and what a Commander Event is offered are in ([#1174](https://github.com/KeeprDigital/stream-keepr/issues/1174)), and so are a Slot's four typed Seats, their Commanders and Swap Seats ([#1175](https://github.com/KeeprDigital/stream-keepr/issues/1175)); the Session, the overlay, deck paste and the public read are not yet. Follows ADR-0057's shape; extends ADR-0056 and ADR-0080; leaves ADR-0058's Session-only swap to Two-Player Events.
 

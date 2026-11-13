@@ -165,7 +165,7 @@ describe('event Broadcast Deck List library', () => {
 		expect(wrapper.text()).toContain('Companion');
 		expect(button(wrapper, 'Add Deck List').exists()).toBe(true);
 
-		// A Commander Event holds no Broadcast Deck Lists (ADR-0086).
+		// A Commander Event holds no Broadcast Deck Lists (ADR-0087).
 		const commander = await mountComponent(event({ game: 'mtg', variant: 'commander' }));
 		expect(commander.text()).toBe('');
 		expect(commander.find('button').exists()).toBe(false);

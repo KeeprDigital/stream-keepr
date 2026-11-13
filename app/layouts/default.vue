@@ -121,7 +121,7 @@ interface NavGroup {
 /**
  * An Event page's nav entry, declaring the kinds of Event it is offered to: a
  * page for Rounds, Matches or results is Two-Player Magic: The Gathering only
- * (ADR-0057), and a Commander Event has no Players page either (ADR-0086).
+ * (ADR-0057), and a Commander Event has no Players page either (ADR-0087).
  * Each child declares its own.
  */
 interface EventNavItem extends Omit<NavigationMenuItem, 'children'> {

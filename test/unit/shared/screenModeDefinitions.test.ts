@@ -23,7 +23,7 @@ describe('screen Mode Definition module', () => {
 				'talent',
 			],
 		],
-		// A Commander Event is its Feature Match Slots alone (ADR-0086).
+		// A Commander Event is its Feature Match Slots alone (ADR-0087).
 		[
 			'mtg-commander',
 			[

@@ -29,7 +29,7 @@ export type DbFeatureMatchWithSession = DbFeatureMatch & { activeSession?: DbFea
 
 /**
  * A Slot as every read and realtime message answers it. Seats 3 and 4 are a
- * Commander Event's alone (ADR-0086): an empty one is left out, so a Slot of
+ * Commander Event's alone (ADR-0087): an empty one is left out, so a Slot of
  * any other Event reads exactly as it did before they existed.
  */
 export function mapFeatureMatchToResponse(match: DbFeatureMatchWithSession): FeatureMatchResponse {

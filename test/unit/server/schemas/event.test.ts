@@ -61,7 +61,7 @@ describe('createEventSchema', () => {
 		expect(createEventSchema.safeParse({ ...mtgEvent, variant: 'commander', broadcastDeckListsEnabled: true }).success).toBe(false);
 	});
 
-	// Only a Magic: The Gathering Event has a Variant, Two-Player unless it says Commander (ADR-0086).
+	// Only a Magic: The Gathering Event has a Variant, Two-Player unless it says Commander (ADR-0087).
 	it.each([
 		[
 			{ game: 'mtg' },
@@ -114,7 +114,7 @@ describe('updateEventSchema', () => {
 		expect(updateEventSchema.safeParse({ game: 'op', name: 'Still MTG' }).success).toBe(false);
 	});
 
-	// Its Variant decides what an Event holds, as its Card Game does (ADR-0086).
+	// Its Variant decides what an Event holds, as its Card Game does (ADR-0087).
 	it('refuses to change an existing Event\'s Variant', () => {
 		expect(updateEventSchema.safeParse({ variant: 'commander', name: 'Still Two-Player' }).success).toBe(false);
 	});

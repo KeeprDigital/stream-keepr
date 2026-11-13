@@ -487,7 +487,7 @@ describe('a write to an Event that holds no Broadcast Deck Lists', () => {
 			write: 'a delete',
 			attempt: (eventId: number, listId: number) => write.deleteBroadcastDeckList({ eventId, listId, expectedRevision: 1 }),
 		},
-	// Which Events hold Broadcast Deck Lists is `holdsBroadcastDeckLists`'s; a Commander Event holds none (ADR-0086).
+	// Which Events hold Broadcast Deck Lists is `holdsBroadcastDeckLists`'s; a Commander Event holds none (ADR-0087).
 	])('refuses $write in an Event that holds no Broadcast Deck Lists before resolving or storing anything', async ({ attempt }) => {
 		const eventId = await stageEvent({ game: 'mtg', variant: 'commander' });
 		const [list] = await db.insert(schema.broadcastDeckLists)

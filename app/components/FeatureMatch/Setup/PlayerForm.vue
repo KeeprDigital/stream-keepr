@@ -16,7 +16,7 @@ const props = defineProps<{
 	playerId?: number | null;
 	formId: string;
 	/**
-	 * A Commander Event's Seat (ADR-0086): the Event has no Players, so the Seat
+	 * A Commander Event's Seat (ADR-0087): the Event has no Players, so the Seat
 	 * is typed, and it holds Commanders in place of a deck name and a record.
 	 */
 	commanders?: boolean;

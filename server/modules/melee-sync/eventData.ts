@@ -21,7 +21,7 @@ export async function requireMeleeSyncEventData(eventId: number) {
 /**
  * Refuses to configure or run Melee Sync for an Event it is not offered to:
  * neither a One Piece Card Game Event (ADR-0057) nor a Commander Event
- * (ADR-0086) ever runs it. Checked
+ * (ADR-0087) ever runs it. Checked
  * before the sync lease, so a refusal records nothing on the Event.
  */
 export async function requireMeleeSyncOffered(eventId: number): Promise<void> {

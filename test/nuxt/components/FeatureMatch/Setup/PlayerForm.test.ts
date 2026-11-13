@@ -195,7 +195,7 @@ describe('linking a One Piece Card Game Player into a side', () => {
 	});
 });
 
-// A Commander Event has no Players: its Seat is typed, and its deck is its Commanders (ADR-0086).
+// A Commander Event has no Players: its Seat is typed, and its deck is its Commanders (ADR-0087).
 describe('a Commander Event\'s Seat', () => {
 	function mountSeat(commanders: boolean) {
 		const player = reactive<PlayerData>({ ...DEFAULT_PLAYER_DATA });

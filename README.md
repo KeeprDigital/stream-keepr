@@ -534,7 +534,7 @@ database is wiped before that release ships (ADR-0083, after ADR-0019's first
 squash). Migrations after it are ordinary ones: `0001_event_variant.sql` adds
 an Event's Variant and makes each existing Magic: The Gathering Event
 Two-Player, and `0002_feature_match_slot_seats.sql` adds a Feature Match
-Slot's Seats 3 and 4 (ADR-0086). The baseline has two parts:
+Slot's Seats 3 and 4 (ADR-0087). The baseline has two parts:
 
 - **Generated**: every table, index (the partial unique ones too) and foreign
   key, written by `pnpm db:generate` from the schema.

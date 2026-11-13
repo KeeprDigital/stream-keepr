@@ -95,7 +95,7 @@ describe('useFeatureMatchSetupActions', () => {
 		});
 	});
 
-	// Swap Seats is the Slot's own (ADR-0086): the server swaps, and this client holds the Slot it answers.
+	// Swap Seats is the Slot's own (ADR-0087): the server swaps, and this client holds the Slot it answers.
 	describe('swapping Seats', () => {
 		const swapped = {
 			id: 1,

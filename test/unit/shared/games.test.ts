@@ -25,7 +25,7 @@ describe('game config lookups', () => {
 		expect(GAME_CONFIGS.mtg.defaults.startingLife).not.toBe(1);
 	});
 
-	// A Commander game is one game at 40 life with no round clock (ADR-0086).
+	// A Commander game is one game at 40 life with no round clock (ADR-0087).
 	it('seeds a Commander Event at 40 life, untimed, as a single game with no extra turns', () => {
 		expect(getMatchFormatDefaults('mtg-commander')).toMatchObject({
 			startingLife: 40,
@@ -47,7 +47,7 @@ describe('game config lookups', () => {
 });
 
 describe('the kind of Event', () => {
-	// A Commander Event is a Magic: The Gathering Event of the Commander Variant (ADR-0086).
+	// A Commander Event is a Magic: The Gathering Event of the Commander Variant (ADR-0087).
 	it.each([
 		['mtg', 'two-player', 'mtg-two-player'],
 		['mtg', 'commander', 'mtg-commander'],
@@ -57,7 +57,7 @@ describe('the kind of Event', () => {
 	});
 });
 
-// Only a Two-Player Magic: The Gathering Event holds Broadcast Deck Lists (ADR-0086).
+// Only a Two-Player Magic: The Gathering Event holds Broadcast Deck Lists (ADR-0087).
 describe('the Events that hold Broadcast Deck Lists', () => {
 	it.each([
 		['mtg', 'two-player', true],
@@ -85,7 +85,7 @@ describe('what an Event is offered', () => {
 
 describe('the Event pages each kind of Event is offered', () => {
 	// A One Piece Card Game Event lacks Rounds, Matches and Melee (ADR-0057, ADR-0074); a
-	// Commander Event lacks Players too, so it keeps only the Cards page (ADR-0086).
+	// Commander Event lacks Players too, so it keeps only the Cards page (ADR-0087).
 	it.each([
 		['mtg-two-player', []],
 		[

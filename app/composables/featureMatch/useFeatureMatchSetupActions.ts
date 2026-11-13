@@ -57,7 +57,7 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 	}
 
 	/**
-	 * Swap Seats (ADR-0086): two Seats' players change places in a Commander Slot
+	 * Swap Seats (ADR-0087): two Seats' players change places in a Commander Slot
 	 * itself, each with everything its Seat holds. The server swaps what it has
 	 * stored, so the panel offers it only while the form has nothing unsaved, and
 	 * the form follows the Slot the server answers.
@@ -83,7 +83,7 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 
 		formData.value.player1Data = { ...DEFAULT_PLAYER_DATA };
 		formData.value.player2Data = { ...DEFAULT_PLAYER_DATA };
-		// Seats 3 and 4 are in a Commander Slot's form alone (ADR-0086).
+		// Seats 3 and 4 are in a Commander Slot's form alone (ADR-0087).
 		for (const key of COMMANDER_SEAT_DATA_KEYS) {
 			if (formData.value[key] !== undefined)
 				formData.value[key] = { ...DEFAULT_PLAYER_DATA };

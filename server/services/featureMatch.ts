@@ -375,7 +375,7 @@ export function featureMatchService() {
 	};
 
 	/**
-	 * Swap Seats (ADR-0086): two Seats' players change places in the Slot itself,
+	 * Swap Seats (ADR-0087): two Seats' players change places in the Slot itself,
 	 * each with everything its Seat holds, and the active Session's snapshot is
 	 * corrected to match. One statement, which reads both Seats as they were
 	 * before it, so no save between a read and a write can be lost.

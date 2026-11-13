@@ -45,7 +45,7 @@ export function useFeatureMatchRepository() {
 		);
 	};
 
-	/** Swap Seats: two Seats' players change places in a Commander Slot itself (ADR-0086). Answers the Slot. */
+	/** Swap Seats: two Seats' players change places in a Commander Slot itself (ADR-0087). Answers the Slot. */
 	const swapSeats = async (eventId: number, slotId: number, seats: [Seat, Seat]): Promise<FeatureMatch> => {
 		return await eventData.command<FeatureMatch, SwapFeatureMatchSeatsInput>(
 			{

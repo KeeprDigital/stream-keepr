@@ -12,7 +12,7 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
  * A Commander Event's Feature Match Slot has four typed Seats, each holding one
- * or two Commanders; Seats 3 and 4 exist on no other Event (ADR-0086).
+ * or two Commanders; Seats 3 and 4 exist on no other Event (ADR-0087).
  */
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string }) =>

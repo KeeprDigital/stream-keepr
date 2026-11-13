@@ -3,7 +3,7 @@ import { commanderDeckIdentity } from '~~/shared/utils/commander';
 import { SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 
 /**
- * A Commander Event's Feature Match Slot Seats (ADR-0086). The Event has no
+ * A Commander Event's Feature Match Slot Seats (ADR-0087). The Event has no
  * Players, so every Seat is typed and holds one or two Commanders, and a Seat
  * of any other Event holds none.
  */

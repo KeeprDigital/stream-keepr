@@ -9,7 +9,7 @@ const props = defineProps<{
 
 const kind = useEventKind();
 
-/** A settings tab, declaring the kinds of Event it is offered to (ADR-0057, ADR-0086). */
+/** A settings tab, declaring the kinds of Event it is offered to (ADR-0057, ADR-0087). */
 interface ConfigTab extends NavigationMenuItem {
 	offeredTo: readonly EventKind[];
 }

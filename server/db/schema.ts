@@ -104,7 +104,7 @@ export const events = sqliteTable('events', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	name: text('name').notNull(),
 	game: text('game', { enum: GAME_VALUES }).notNull(),
-	// A Magic: The Gathering Event's Variant, set at creation and never changed; none on any other Card Game (ADR-0086).
+	// A Magic: The Gathering Event's Variant, set at creation and never changed; none on any other Card Game (ADR-0087).
 	variant: text('variant', { enum: VARIANT_VALUES }),
 	featureMatchOrientation: text('feature_match_orientation', { enum: FEATURE_MATCH_ORIENTATION_VALUES }).notNull(),
 	cardTimeout: integer('card_timeout').notNull().default(0),
@@ -439,7 +439,7 @@ export const featureMatchSlots = sqliteTable('feature_match_slots', {
 	player2Id: integer('player2_id').references(() => players.id, { onDelete: 'set null' }),
 	player1Data: text('player1_data', { mode: 'json' }).$type<PlayerSlotData>(),
 	player2Data: text('player2_data', { mode: 'json' }).$type<PlayerSlotData>(),
-	// Seats 3 and 4, a Commander Event's alone. Its Seats are typed, so neither links a Player (ADR-0086).
+	// Seats 3 and 4, a Commander Event's alone. Its Seats are typed, so neither links a Player (ADR-0087).
 	player3Data: text('player3_data', { mode: 'json' }).$type<PlayerSlotData>(),
 	player4Data: text('player4_data', { mode: 'json' }).$type<PlayerSlotData>(),
 

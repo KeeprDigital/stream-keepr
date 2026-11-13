@@ -680,7 +680,7 @@ describe('featureMatchPanel match state by Card Game', () => {
 	});
 });
 
-// A Commander Slot has four typed Seats, shown where they sit at the table (ADR-0086).
+// A Commander Slot has four typed Seats, shown where they sit at the table (ADR-0087).
 describe('featureMatchPanel setup Seats', () => {
 	const SEATED = {
 		player1Data: { name: 'Ana' },

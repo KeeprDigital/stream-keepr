@@ -1,6 +1,6 @@
 import type { Commander, MtgPlayerGameData } from '../types/game';
 
-/** A Seat holds one or two Commanders (ADR-0086). */
+/** A Seat holds one or two Commanders (ADR-0087). */
 export const MAX_SEAT_COMMANDERS = 2;
 
 const COLOUR_ORDER = 'WUBRG';
@@ -15,7 +15,7 @@ export function orderedColourIdentity(letters: Iterable<string>): string {
 
 /**
  * A Seat's deck as a broadcast names it: its Commanders' names, and their
- * colour identity together (ADR-0086). A Seat with no Commander has neither.
+ * colour identity together (ADR-0087). A Seat with no Commander has neither.
  */
 export function commanderDeckIdentity(commanders: readonly Commander[]): Required<Pick<MtgPlayerGameData, 'deckName' | 'deckColors'>> {
 	if (commanders.length === 0)

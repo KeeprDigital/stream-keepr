@@ -524,7 +524,7 @@ describe('a One Piece Card Game Event', () => {
 	});
 });
 
-// A Commander Event is produced from its Feature Match Slots alone (ADR-0086).
+// A Commander Event is produced from its Feature Match Slots alone (ADR-0087).
 describe('melee Sync on a Commander Event', () => {
 	it('refuses a sync, touching nothing', async () => {
 		const eventId = await createEvent('mtg', 'commander');

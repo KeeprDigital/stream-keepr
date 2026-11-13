@@ -307,7 +307,7 @@ export function featureMatchSlotWriteModule() {
 
 		let settledInput = input;
 		if (kind === 'mtg-commander') {
-			// A Commander Event has no Players: every Seat is typed (ADR-0086).
+			// A Commander Event has no Players: every Seat is typed (ADR-0087).
 			settledInput = withCommanderSeats(input);
 		}
 		else {
@@ -336,7 +336,7 @@ export function featureMatchSlotWriteModule() {
 	}
 
 	/**
-	 * Swap Seats (ADR-0086): two Seats' players change places in the Slot itself,
+	 * Swap Seats (ADR-0087): two Seats' players change places in the Slot itself,
 	 * each with everything its Seat holds. A Commander Slot's alone: on any other
 	 * Event the Session owns which Seat each player sits in (ADR-0058).
 	 */

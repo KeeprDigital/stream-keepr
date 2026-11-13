@@ -1,6 +1,6 @@
 import type { Commander } from '~~/shared/types/game';
 
-/** Commanders as a Seat holds them (ADR-0086): each one printing of a card. */
+/** Commanders as a Seat holds them (ADR-0087): each one printing of a card. */
 
 export const ATRAXA: Commander = {
 	scryfallId: 'd0d33d52-3d28-4635-b985-51e126289259',

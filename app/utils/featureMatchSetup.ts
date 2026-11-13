@@ -92,7 +92,7 @@ function normalizeGameData(gameData: PlayerGameData | null | undefined): PlayerG
 		return null;
 
 	if (gameData.type === 'mtg') {
-		// A Seat holding Commanders sends them alone: its deck name and colours are the server's (ADR-0086).
+		// A Seat holding Commanders sends them alone: its deck name and colours are the server's (ADR-0087).
 		if (gameData.commanders !== undefined) {
 			return gameData.commanders?.length
 				? { type: 'mtg', commanders: gameData.commanders }
@@ -181,7 +181,7 @@ export function buildFeatureMatchSetupUpdate(changes: FeatureMatchSetupChanges):
 		update.player1Data = normalizePlayerSlotData(changes.player1Data);
 	if (hasOwn(changes, 'player2Data'))
 		update.player2Data = normalizePlayerSlotData(changes.player2Data);
-	// Seats 3 and 4 are in the form of a Commander Slot alone (ADR-0086).
+	// Seats 3 and 4 are in the form of a Commander Slot alone (ADR-0087).
 	if (hasOwn(changes, 'player3Data'))
 		update.player3Data = normalizePlayerSlotData(changes.player3Data);
 	if (hasOwn(changes, 'player4Data'))

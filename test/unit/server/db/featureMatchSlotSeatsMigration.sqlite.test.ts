@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
-// A Slot from before Seats 3 and 4 keeps its two Seats and holds neither new one (ADR-0086).
+// A Slot from before Seats 3 and 4 keeps its two Seats and holds neither new one (ADR-0087).
 const harness = await createSqliteD1Harness({ throughMigration: '0001' });
 
 afterAll(async () => {

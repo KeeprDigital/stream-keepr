@@ -3,7 +3,7 @@
  * app-side types should import from here. */
 
 export const GAME_VALUES = ['mtg', 'op'] as const;
-/** How a Magic: The Gathering Event's games are played (ADR-0086). */
+/** How a Magic: The Gathering Event's games are played (ADR-0087). */
 export const VARIANT_VALUES = ['two-player', 'commander'] as const;
 export const POINTS_SYSTEM_VALUES = ['7ph'] as const;
 export const DECK_COMPANION_SOURCE_VALUES = ['manual', 'melee'] as const;
@@ -68,12 +68,12 @@ export const SIDEBOARD_PLACEMENT_VALUES = ['beside', 'below'] as const;
 export const BOARD_SELECTION_VALUES = ['full', 'mainboard', 'sideboard'] as const;
 /**
  * The two Seats every Feature Match Slot has. What a Two-Player or One Piece
- * Card Game contract accepts stays this pair (ADR-0086).
+ * Card Game contract accepts stays this pair (ADR-0087).
  */
 export const PLAYER_SIDE_VALUES = ['player1', 'player2'] as const;
 /**
  * A Feature Match Slot's Seats, in the Slot's own order: the pair every Slot
- * has, then the two only a Commander Event's holds (ADR-0086).
+ * has, then the two only a Commander Event's holds (ADR-0087).
  */
 export const SEAT_VALUES = [...PLAYER_SIDE_VALUES, 'player3', 'player4'] as const;
 export const HORIZONTAL_ALIGN_VALUES = ['left', 'center', 'right'] as const;

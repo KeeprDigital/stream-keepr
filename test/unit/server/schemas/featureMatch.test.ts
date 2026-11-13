@@ -296,7 +296,7 @@ describe('a Player Deck List reference on a Slot side', () => {
 	});
 });
 
-// A Seat holds one or two Commanders, each one printing of a card (ADR-0086).
+// A Seat holds one or two Commanders, each one printing of a card (ADR-0087).
 describe('a Seat\'s Commanders', () => {
 	function commander(overrides: Record<string, unknown> = {}) {
 		return {
@@ -391,7 +391,7 @@ describe('a Seat\'s Commanders', () => {
 	});
 });
 
-// Seats 3 and 4 are written as Seats 1 and 2 are, and only by a setup save (ADR-0086).
+// Seats 3 and 4 are written as Seats 1 and 2 are, and only by a setup save (ADR-0087).
 describe('seats 3 and 4', () => {
 	it('take a setup save\'s Seat data under the rules Seats 1 and 2 do', () => {
 		expect(updateFeatureMatchSchema.parse({

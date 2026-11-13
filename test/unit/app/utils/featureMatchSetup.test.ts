@@ -61,7 +61,7 @@ describe('featureMatchSetup payload helpers', () => {
 		expect(update.player1Data).toBeNull();
 	});
 
-	// A Seat's deck name and colours are the server's, written from its Commanders (ADR-0086).
+	// A Seat's deck name and colours are the server's, written from its Commanders (ADR-0087).
 	it.each([
 		{
 			held: 'its Commanders alone',

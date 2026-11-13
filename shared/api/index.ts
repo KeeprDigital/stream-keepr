@@ -136,7 +136,7 @@ export interface EventListResponse {
 	id: number;
 	name: string;
 	game: Game;
-	/** A Magic: The Gathering Event's Variant; none on any other Card Game (ADR-0086). */
+	/** A Magic: The Gathering Event's Variant; none on any other Card Game (ADR-0087). */
 	variant: Variant | null;
 	featureMatchOrientation: FeatureMatchOrientation;
 	cardTimeout: number;
@@ -211,7 +211,7 @@ export interface MeleeLiveResultsStatusResponse {
 export interface CreateEventInput {
 	name: string;
 	game: Game;
-	/** A Magic: The Gathering Event's Variant, Two-Player when left out; no other Card Game's Event sends one (ADR-0086). */
+	/** A Magic: The Gathering Event's Variant, Two-Player when left out; no other Card Game's Event sends one (ADR-0087). */
 	variant?: Variant;
 	featureMatchOrientation?: FeatureMatchOrientation;
 	cardTimeout?: number;
@@ -485,7 +485,7 @@ export interface FeatureMatchResponse {
 	player1Data: PlayerSlotData | null;
 	player2Data: PlayerSlotData | null;
 	/**
-	 * Seats 3 and 4, which only a Commander Event's Slot holds (ADR-0086). Each
+	 * Seats 3 and 4, which only a Commander Event's Slot holds (ADR-0087). Each
 	 * is present only while it holds a player, so every other Event's Slot reads
 	 * as it always has.
 	 */
@@ -514,13 +514,13 @@ export interface CreateFeatureMatchInput {
 	playerDisplayMode?: PlayerDisplayMode;
 }
 
-/** A setup save. Seats 3 and 4 are a Commander Event's alone, and a Slot is created with neither (ADR-0086). */
+/** A setup save. Seats 3 and 4 are a Commander Event's alone, and a Slot is created with neither (ADR-0087). */
 export type UpdateFeatureMatchInput = Partial<CreateFeatureMatchInput> & {
 	player3Data?: ManualPlayerSlotData | null;
 	player4Data?: ManualPlayerSlotData | null;
 };
 
-/** Swap Seats: the two Seats of a Commander Slot whose players change places (ADR-0086). */
+/** Swap Seats: the two Seats of a Commander Slot whose players change places (ADR-0087). */
 export interface SwapFeatureMatchSeatsInput {
 	seats: [Seat, Seat];
 }

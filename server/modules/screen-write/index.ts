@@ -253,7 +253,7 @@ type EventKindFields = Awaited<ReturnType<typeof readEventKindFields>>;
 
 /**
  * Refuses to put a Screen into a Screen Mode its Event is not offered, such as
- * Standings on a Commander Event (ADR-0086). Asked only of a write that sets a
+ * Standings on a Commander Event (ADR-0087). Asked only of a write that sets a
  * mode the Screen does not already show, so a Screen stored in such a mode
  * keeps saving.
  */

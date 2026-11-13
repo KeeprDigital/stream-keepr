@@ -3,7 +3,7 @@ import { KRAUM, TYMNA } from '../helpers/commanders';
 import { $fetch } from './client';
 import { $fetchRaw } from './helpers';
 
-// One pass through the API boundary: a Commander Slot's Seats are saved, read and swapped (ADR-0086).
+// One pass through the API boundary: a Commander Slot's Seats are saved, read and swapped (ADR-0087).
 describe('a Commander Event\'s Feature Match Slot Seats', () => {
 	let eventId: number;
 	let slotId: number;

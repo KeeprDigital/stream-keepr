@@ -32,7 +32,7 @@ const tokensModalOpen = ref(false);
 const isVerticalArena = computed(() => eventStore.event?.featureMatchOrientation === 'vertical');
 const game = computed(() => (eventStore.event?.game ?? 'mtg'));
 const eventKind = useEventKind();
-/** A Commander Event's Slot has four Seats, each typed and holding Commanders (ADR-0086). */
+/** A Commander Event's Slot has four Seats, each typed and holding Commanders (ADR-0087). */
 const isCommander = computed(() => eventKind.value === 'mtg-commander');
 
 // Computed match state for this match
@@ -105,7 +105,7 @@ function normalizeMatchData({ player3Data, player4Data, ...match }: FeatureMatch
 		...match,
 		player1Data: seatFormData(match.player1Data),
 		player2Data: seatFormData(match.player2Data),
-		// Seats 3 and 4 are in a Commander Slot's form alone: no other save names them (ADR-0086).
+		// Seats 3 and 4 are in a Commander Slot's form alone: no other save names them (ADR-0087).
 		...(isCommander.value
 			? {
 					player3Data: seatFormData(player3Data),
@@ -189,7 +189,7 @@ const player2FormId = computed(() => seatFormId('player2'));
 // ──────────────── Commander Seats ────────────────
 
 /**
- * Where each Seat of a Commander Slot sits at the table (ADR-0086): Seats run
+ * Where each Seat of a Commander Slot sits at the table (ADR-0087): Seats run
  * clockwise, so 1 and 2 are on top and 4 and 3 below. The forms stay in Seat
  * order, which is the order the turn passes in.
  */

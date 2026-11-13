@@ -315,7 +315,7 @@ describe('creating a Screen', () => {
 	});
 });
 
-// A Commander Event has no Rounds or standings, so it is not offered Standings (ADR-0086).
+// A Commander Event has no Rounds or standings, so it is not offered Standings (ADR-0087).
 describe('a write putting a Screen into a Screen Mode its Event is not offered', () => {
 	async function stageCommanderEvent() {
 		const [commander] = await db.insert(schema.events)
