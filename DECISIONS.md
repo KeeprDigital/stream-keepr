@@ -3042,7 +3042,7 @@ Accepted · 2026-11-13 · [#1168](https://github.com/KeeprDigital/stream-keepr/i
 
 **Every subset a package has ships.** A static package's per-weight stylesheet carries all its scripts, and the npm provider does not filter by subset, so a non-Latin name keeps painting in the chosen face.
 
-**One Nuxt Fonts runs, at the version `package.json` pins.** Nuxt UI installs `@nuxt/fonts` as a module dependency at `^0.14.0`; a pnpm override in `pnpm-workspace.yaml` resolves it to the root's version. Nuxt installs a module once by name, so the root's configuration is the one that runs.
+**One Nuxt Fonts runs, at the version `package.json` pins.** Nuxt UI installs `@nuxt/fonts` as a module dependency at `^0.14.0`; a pnpm override in `pnpm-workspace.yaml` resolves it to the root's version. Nuxt installs a module once by name, so one `@nuxt/fonts` runs: the root's `families` set the weights of each family they list, and Nuxt UI's module defaults (weights 400–700) still apply to any family not listed.
 
 ### Why
 
@@ -3056,7 +3056,7 @@ The deferral in #453 (2026-08-20) accepted Nuxt Fonts' remote providers: builds 
 
 - A cold build with font hosts unreachable succeeds. The first one emitted 1,181 `@font-face` rules in the global stylesheet: 1,129 faces, one per subset of each declared weight and style, and 52 metric-adjusted local fallbacks. The stylesheet is 704 KB raw, 126 KB gzipped (before #1168: 285 KB and 147 rules), and the 1,129 WOFF2 files total 15.3 MB under `_nuxt/fonts/`. A browser fetches only the faces and subsets a page paints.
 - A system fallback name has no package and resolves to nothing, silently. Names `fontless` knows as system fonts (`Georgia`, `Segoe UI`, `Menlo`) are never asked; others (`Cascadia Mono` in the Feature Match display) are asked of the npm provider and come back empty. No denylist exists, and none is needed.
-- The provider skips a weight file a package lacks without a warning, so the configuration alone does not prove the faces exist. #1168 has the declared matrix held against the built CSS, by weight and style, by a check in `pnpm verify`.
+- The provider skips a weight file a package lacks without a warning, so the configuration alone does not prove the faces exist. #1168 has the declared matrix held against the built CSS, by weight and style, by `scripts/assert-built-fonts.mjs`, which `pnpm worker:dry-run` runs against `.output/public` (so `pnpm verify`, CI's Worker job and `pnpm run deploy` all reach it).
 - Adding an application font is a registry entry and a pinned package. A font the registry names but `package.json` lacks paints nothing; `applicationFontWiring.test.ts` refuses that.
 - `--font-mono` is JetBrains Mono, which changes the operator app's monospace text too (`DESIGN.md`). `--font-body` is `'IBM Plex Sans', sans-serif`, the registry's stack, without the former Inter fallback.
 - Upgrading Nuxt UI or `@nuxt/fonts` means checking the override still names the version `package.json` pins.
