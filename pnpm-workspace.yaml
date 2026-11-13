@@ -4,17 +4,17 @@
 minimumReleaseAge: 1440
 minimumReleaseAgeExcludePrune: true
 minimumReleaseAgeExclude:
-  - '@typescript-eslint/project-service@8.71.2'
-  - '@typescript-eslint/scope-manager@8.71.2'
-  - '@typescript-eslint/tsconfig-utils@8.71.2'
-  - '@typescript-eslint/types@8.71.2'
-  - '@typescript-eslint/typescript-estree@8.71.2'
-  - '@typescript-eslint/visitor-keys@8.71.2'
-  - '@typescript-eslint/eslint-plugin@8.71.2'
-  - '@typescript-eslint/type-utils@8.71.2'
-  - '@typescript-eslint/utils@8.71.2'
-  - '@iconify-json/simple-icons@1.2.100'
-  - zod@4.6.7
+  - '@better-auth/core@1.7.22'
+  - '@better-auth/drizzle-adapter@1.7.22'
+  - '@better-auth/kysely-adapter@1.7.22'
+  - '@better-auth/memory-adapter@1.7.22'
+  - '@better-auth/mongo-adapter@1.7.22'
+  - '@better-auth/prisma-adapter@1.7.22'
+  - '@better-auth/telemetry@1.7.22'
+  - '@iconify-json/lucide@1.2.154'
+  - better-auth@1.7.22
+  - miniflare@5.20261110.2-beta
+  - wrangler@4.161.0
 # eslint-disable-next-line pnpm/yaml-enforce-settings
 trustPolicy: off
 shamefullyHoist: true
