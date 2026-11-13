@@ -229,7 +229,7 @@ describe('default layout sync navigation', () => {
 			expect(items).not.toContain(label);
 	});
 
-	// A Commander Event has no Players (ADR-0086); which pages it is offered is the offering table's.
+	// A Commander Event has no Players (ADR-0087); which pages it is offered is the offering table's.
 	it('on a Commander Event, omits Players and keeps Cards', async () => {
 		Object.assign(mockEventStore.event, { game: 'mtg', variant: 'commander' });
 

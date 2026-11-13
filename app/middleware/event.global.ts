@@ -40,7 +40,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 		}
 
 		// A page this Event is not offered, such as Matches on a One Piece Card
-		// Game Event (ADR-0057) or Players on a Commander Event (ADR-0086), gives
+		// Game Event (ADR-0057) or Players on a Commander Event (ADR-0087), gives
 		// way to the Event overview.
 		if (to.meta.offeredTo && !isOfferedToEvent(to.meta.offeredTo, eventKind(eventStore.event))) {
 			return navigateTo(`/event/${eventId}`);

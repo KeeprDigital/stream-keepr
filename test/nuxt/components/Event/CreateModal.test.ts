@@ -34,7 +34,7 @@ beforeEach(() => {
 	vi.spyOn(useRouter(), 'push').mockResolvedValue(undefined);
 });
 
-// Only a Magic: The Gathering Event has a Variant, chosen with its Card Game (ADR-0086).
+// Only a Magic: The Gathering Event has a Variant, chosen with its Card Game (ADR-0087).
 describe('creating an Event', () => {
 	it('creates a Magic: The Gathering Event as Two-Player unless a Variant is chosen', async () => {
 		const wrapper = mountModal();

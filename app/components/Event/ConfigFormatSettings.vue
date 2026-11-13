@@ -13,7 +13,7 @@ const props = defineProps<{
 const errors = ref<Record<string, string>>({});
 
 const kind = computed(() => eventKind(props.event));
-// A Commander Event plays single games, so it has no best-of and no extra turns (ADR-0086).
+// A Commander Event plays single games, so it has no best-of and no extra turns (ADR-0087).
 const isCommander = computed(() => kind.value === 'mtg-commander');
 // The points system scores Deck Lists a Two-Player Magic: The Gathering Event syncs.
 const scoresDeckLists = computed(() => isOfferedToEvent(TWO_PLAYER_MAGIC_ONLY, kind.value));

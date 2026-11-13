@@ -24,7 +24,7 @@ function tabLabels(game: Game, variant: Variant | null) {
 }
 
 describe('event config tabs', () => {
-	// Neither an OP Event (ADR-0057) nor a Commander Event (ADR-0086) models Rounds
+	// Neither an OP Event (ADR-0057) nor a Commander Event (ADR-0087) models Rounds
 	// or runs Melee Sync, so Event Structure and Integrations are not offered.
 	it.each([
 		[

@@ -16,7 +16,7 @@ import { fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 
 type EventWithTalents = DbEvent & { talents: DbEventTalent[] };
 
-/** A create as the API schema hands it over: its Variant settled, and none on a Card Game without one (ADR-0086). */
+/** A create as the API schema hands it over: its Variant settled, and none on a Card Game without one (ADR-0087). */
 type CreateEventData = Omit<CreateEventInput, 'variant'> & { variant?: Variant | null };
 
 type SyncMetadataUpdate = Partial<Pick<DbEvent,	| 'initialSetupCompletedAt'

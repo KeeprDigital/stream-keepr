@@ -18,7 +18,7 @@ const formId = 'create-event-form';
 const formData = ref({
 	name: '',
 	game: 'mtg' as Game,
-	// Only a Magic: The Gathering Event has a Variant; it is kept here while another Card Game is picked (ADR-0086).
+	// Only a Magic: The Gathering Event has a Variant; it is kept here while another Card Game is picked (ADR-0087).
 	variant: 'two-player' as Variant,
 	featureMatchOrientation: 'horizontal' as const,
 	...getMatchFormatDefaults('mtg-two-player'),

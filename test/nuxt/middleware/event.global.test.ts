@@ -217,7 +217,7 @@ describe('event.global middleware', () => {
 			expect(mockNavigateTo).toHaveBeenCalledWith('/event/1');
 		});
 
-		// A Commander Event has no Players either (ADR-0086).
+		// A Commander Event has no Players either (ADR-0087).
 		it('sends a Commander Event from its Players page to its overview', async () => {
 			mockEventStore.event = { id: 1, game: 'mtg', variant: 'commander' };
 

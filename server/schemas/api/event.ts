@@ -92,7 +92,7 @@ export const createEventSchema = createInsertSchema(events)
 		},
 	)
 	// A Magic: The Gathering Event is Two-Player unless it says Commander, and no
-	// other Card Game's Event has a Variant, so what is stored is never ambiguous (ADR-0086).
+	// other Card Game's Event has a Variant, so what is stored is never ambiguous (ADR-0087).
 	.transform(input => ({
 		...input,
 		variant: cardGameHasVariant(input.game)
@@ -108,7 +108,7 @@ export const updateEventSchema = createUpdateSchema(events)
 		// Feature Match Sessions under a different ruleset. Create a new Event
 		// for an explicit conversion instead.
 		game: true,
-		// Its Variant decides what the Event holds, as its Card Game does (ADR-0086).
+		// Its Variant decides what the Event holds, as its Card Game does (ADR-0087).
 		variant: true,
 	})
 	.extend({

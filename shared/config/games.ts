@@ -82,7 +82,7 @@ export const GAME_CONFIGS: Record<Game, GameConfig> = {
 /**
  * The kinds of Event something is offered to: an Event's Card Game, with Magic:
  * The Gathering split by its Variant, as a Commander Event holds no Players,
- * Rounds or Matches (ADR-0086). A key for declarations and config only: the
+ * Rounds or Matches (ADR-0087). A key for declarations and config only: the
  * domain's own terms are Card Game and Variant. No kind shares a Card Game's
  * key, so a Card Game cannot be passed where the Variant must be read too.
  */
@@ -96,7 +96,7 @@ const EVENT_KIND_CARD_GAME: Record<EventKind, Game> = {
 	'op': 'op',
 };
 
-/** Whether a Card Game's Events have a Variant: Magic: The Gathering's alone (ADR-0086). */
+/** Whether a Card Game's Events have a Variant: Magic: The Gathering's alone (ADR-0087). */
 export function cardGameHasVariant(game: Game): boolean {
 	return game === 'mtg';
 }
@@ -115,14 +115,14 @@ export const EVERY_EVENT: readonly EventKind[] = EVENT_KIND_VALUES;
 
 /**
  * Events that hold Players: every one but a Commander Event, which is produced
- * from its Feature Match Slots alone (ADR-0086).
+ * from its Feature Match Slots alone (ADR-0087).
  */
 export const EVENTS_WITH_PLAYERS: readonly EventKind[] = ['mtg-two-player', 'op'];
 
 /**
  * Two-Player Magic: The Gathering only: what something for Rounds, Matches,
  * results or Melee Sync declares, as neither a One Piece Card Game Event
- * (ADR-0057) nor a Commander Event (ADR-0086) models any of them.
+ * (ADR-0057) nor a Commander Event (ADR-0087) models any of them.
  */
 export const TWO_PLAYER_MAGIC_ONLY: readonly EventKind[] = ['mtg-two-player'];
 
@@ -131,7 +131,7 @@ export const TWO_PLAYER_MAGIC_ONLY: readonly EventKind[] = ['mtg-two-player'];
  * nav and the settings tabs alike. A One Piece Card Game Event has Players,
  * and a Sync page that runs its TCG+ Import (ADR-0074), but no Rounds, Matches
  * or Melee Sync (ADR-0057). A Commander Event has no Players either, and keeps
- * the Cards page alone (ADR-0086).
+ * the Cards page alone (ADR-0087).
  */
 export const EVENT_PAGE_OFFERED_TO = {
 	players: EVENTS_WITH_PLAYERS,
@@ -150,7 +150,7 @@ export const EVENT_PAGE_OFFERED_TO = {
  * (ADR-0074), so the modes needing results or standings stay Two-Player
  * Magic's. Top Cut Bracket is offered to both, since its Manual Bracket needs
  * neither (ADR-0075). A Commander Event is offered only the modes that need
- * no Players (ADR-0086).
+ * no Players (ADR-0087).
  */
 export const SCREEN_MODE_OFFERED_TO = {
 	'background': EVERY_EVENT,
@@ -188,7 +188,7 @@ export function itemsOfferedToEvent<T extends { offeredTo: readonly EventKind[] 
 		.map(({ offeredTo: _offeredTo, ...item }) => item);
 }
 
-/** Whether an Event may hold Broadcast Deck Lists: a Two-Player Magic: The Gathering Event only (ADR-0086). */
+/** Whether an Event may hold Broadcast Deck Lists: a Two-Player Magic: The Gathering Event only (ADR-0087). */
 export function holdsBroadcastDeckLists(event: { game: Game; variant?: Variant | null }): boolean {
 	return isOfferedToEvent(TWO_PLAYER_MAGIC_ONLY, eventKind(event));
 }
@@ -199,7 +199,7 @@ export function getGameConfig(game: Game): GameConfig {
 
 /**
  * A Commander Event's Match Format defaults: one game at 40 life, untimed, with
- * no extra turns (ADR-0086). Everything else is Magic: The Gathering's.
+ * no extra turns (ADR-0087). Everything else is Magic: The Gathering's.
  */
 const COMMANDER_EVENT_DEFAULTS: FeatureMatchDefaults = {
 	...GAME_CONFIGS.mtg.defaults,

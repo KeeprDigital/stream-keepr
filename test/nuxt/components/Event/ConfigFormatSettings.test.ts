@@ -25,7 +25,7 @@ function fieldsFor(variant: 'two-player' | 'commander') {
 	return wrapper.findAll('[data-field]').map(field => field.attributes('data-field'));
 }
 
-// A Commander game is a single game with no extra turns, and its Event syncs no Deck Lists to score (ADR-0086).
+// A Commander game is a single game with no extra turns, and its Event syncs no Deck Lists to score (ADR-0087).
 describe('an Event\'s Match Format settings', () => {
 	const TWO_PLAYER_ONLY = [
 		'pointsSystem',

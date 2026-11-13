@@ -68,7 +68,7 @@ export function broadcastDeckListWriteModule() {
 	const lists = broadcastDeckListService();
 	const publication = eventDataPublicationModule();
 
-	/** Only a Two-Player Magic: The Gathering Event holds Broadcast Deck Lists (ADR-0086). */
+	/** Only a Two-Player Magic: The Gathering Event holds Broadcast Deck Lists (ADR-0087). */
 	async function requireEventHoldsBroadcastDeckLists(eventId: number) {
 		const event = await lists.findEventKindFields(eventId);
 		if (event === undefined)

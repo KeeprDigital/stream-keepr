@@ -104,7 +104,7 @@ export const events = sqliteTable('events', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	name: text('name').notNull(),
 	game: text('game', { enum: GAME_VALUES }).notNull(),
-	// A Magic: The Gathering Event's Variant, set at creation and never changed; none on any other Card Game (ADR-0086).
+	// A Magic: The Gathering Event's Variant, set at creation and never changed; none on any other Card Game (ADR-0087).
 	variant: text('variant', { enum: VARIANT_VALUES }),
 	featureMatchOrientation: text('feature_match_orientation', { enum: FEATURE_MATCH_ORIENTATION_VALUES }).notNull(),
 	cardTimeout: integer('card_timeout').notNull().default(0),

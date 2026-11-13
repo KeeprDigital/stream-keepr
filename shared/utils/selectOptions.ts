@@ -3,7 +3,7 @@ export const GAME_SELECT_OPTIONS: { label: string; value: Game }[] = [
 	{ label: 'One Piece', value: 'op' },
 ];
 
-/** A Magic: The Gathering Event's Variants, Two-Player first as the one an Event has unless it says otherwise (ADR-0086). */
+/** A Magic: The Gathering Event's Variants, Two-Player first as the one an Event has unless it says otherwise (ADR-0087). */
 export const VARIANT_SELECT_OPTIONS: { label: string; value: Variant }[] = [
 	{ label: 'Two-Player', value: 'two-player' },
 	{ label: 'Commander', value: 'commander' },

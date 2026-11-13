@@ -3,7 +3,7 @@
  * app-side types should import from here. */
 
 export const GAME_VALUES = ['mtg', 'op'] as const;
-/** How a Magic: The Gathering Event's games are played (ADR-0086). */
+/** How a Magic: The Gathering Event's games are played (ADR-0087). */
 export const VARIANT_VALUES = ['two-player', 'commander'] as const;
 export const POINTS_SYSTEM_VALUES = ['7ph'] as const;
 export const DECK_COMPANION_SOURCE_VALUES = ['manual', 'melee'] as const;
