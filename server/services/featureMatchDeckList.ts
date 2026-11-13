@@ -72,7 +72,12 @@ export function featureMatchDeckListService() {
 		mainboardCount: number,
 	): Promise<number> => {
 		const [deckList] = await db.insert(featureMatchDeckLists)
-			.values({ eventId, slotId, sourceText, mainboardCount })
+			.values({
+				eventId,
+				slotId,
+				sourceText,
+				mainboardCount,
+			})
 			.returning({ id: featureMatchDeckLists.id });
 		if (!deckList)
 			throw new Error('Failed to create Feature Match Deck List');
@@ -141,8 +146,12 @@ export function featureMatchDeckListService() {
 			.from(featureMatchDeckListMtgEntries)
 			.innerJoin(featureMatchDeckLists, eq(featureMatchDeckLists.id, featureMatchDeckListMtgEntries.deckListId))
 			.where(and(eq(featureMatchDeckLists.slotId, slotId), inJsonArray(featureMatchDeckLists.id, [...ids])));
-		for (const { deckListId, ...card } of rows)
-			cardsByList.set(deckListId, [...cardsByList.get(deckListId) ?? [], card]);
+		for (const { deckListId, ...card } of rows) {
+			cardsByList.set(deckListId, [
+				...cardsByList.get(deckListId) ?? [],
+				card,
+			]);
+		}
 		return cardsByList;
 	};
 

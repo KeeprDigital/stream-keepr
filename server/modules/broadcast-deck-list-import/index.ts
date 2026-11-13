@@ -141,8 +141,12 @@ export async function importBroadcastDeckList(
 	resolver: BroadcastDeckListCardResolver,
 ): Promise<BroadcastDeckListImportResult> {
 	const physicalLines = sourceLines(source);
-	if (!Array.isArray(physicalLines))
-		return { ok: false, errors: [physicalLines] };
+	if (!Array.isArray(physicalLines)) {
+		return {
+			ok: false,
+			errors: [physicalLines],
+		};
+	}
 	const normalizedLines = physicalLines.filter(line => line.sourceText.length > 0);
 	const sourceText = normalizedLines.map(line => line.sourceText).join('\n');
 	let compartment: BroadcastDeckListCompartment = 'mainboard';
@@ -202,7 +206,9 @@ export async function importBroadcastDeckList(
 			continue;
 		}
 
-		const entry = addToBoard(row.compartment === 'mainboard' ? mainboard : sideboard, card, row.quantity);
+		const entry = addToBoard(row.compartment === 'mainboard'
+			? mainboard
+			: sideboard, card, row.quantity);
 		const mergeKey = `${row.compartment}:${card.scryfallId}`;
 		if (entry.quantity > MAX_ENTRY_QUANTITY && !exceededMergedEntries.has(mergeKey)) {
 			exceededMergedEntries.add(mergeKey);

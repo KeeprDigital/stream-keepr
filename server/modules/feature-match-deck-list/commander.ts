@@ -116,7 +116,11 @@ export function commanderDeckListModule() {
 		const { entries, offeredCommanders, sideboardDropped } = imported.document;
 		return {
 			ok: true,
-			deckList: { entries: entries.map(toEntry), offeredCommanders, sideboardDropped },
+			deckList: {
+				entries: entries.map(toEntry),
+				offeredCommanders,
+				sideboardDropped,
+			},
 		};
 	}
 
@@ -129,13 +133,21 @@ export function commanderDeckListModule() {
 			throw refused(imported.errors);
 
 		const entries = imported.document.entries.map(toEntry);
-		const confirmed = [...new Set(commanders)];
-		if (confirmed.length === 0)
-			throw refused([{ code: 'NO_COMMANDER', message: 'Confirm one or two Commanders before saving' }]);
+		const confirmed = [
+			...new Set(commanders),
+		];
+		if (confirmed.length === 0) {
+			throw refused([
+				{ code: 'NO_COMMANDER', message: 'Confirm one or two Commanders before saving' },
+			]);
+		}
 		const seatCommanders = confirmed.map((scryfallId) => {
 			const entry = entries.find(candidate => candidate.scryfallId === scryfallId);
-			if (!entry)
-				throw refused([{ code: 'COMMANDER_NOT_IN_LIST', message: 'A Commander must be a card of the pasted list' }]);
+			if (!entry) {
+				throw refused([
+					{ code: 'COMMANDER_NOT_IN_LIST', message: 'A Commander must be a card of the pasted list' },
+				]);
+			}
 			return commanderOfDeckListEntry(entry);
 		});
 		const mainboardCount = commanderMainboardCount(entries, seatCommanders);

@@ -78,7 +78,7 @@ export function lineError<TCode extends string = BroadcastDeckListImportLineErro
 export function sourceLines(source: string): SourceLine[] | BroadcastDeckListImportListError {
 	if (new TextEncoder().encode(source).byteLength > MAX_SOURCE_BYTES)
 		return { code: 'SOURCE_TOO_LARGE', message: 'Source text must not exceed 64 KiB' };
-	const physicalLines = source.replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
+	const physicalLines = source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
 	if (physicalLines.length > MAX_PHYSICAL_LINES)
 		return { code: 'TOO_MANY_LINES', message: 'Source text must not exceed 500 physical lines' };
 	return physicalLines.map((sourceText, index) => ({

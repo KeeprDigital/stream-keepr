@@ -273,7 +273,14 @@ export function featureMatchSlotWriteModule() {
 			const data = input[key];
 			const reference = deckListReferenceOf(data);
 			return data?.gameData?.type === 'mtg' && reference
-				? [{ key, data, gameData: data.gameData, reference }]
+				? [
+						{
+							key,
+							data,
+							gameData: data.gameData,
+							reference,
+						},
+					]
 				: [];
 		});
 		const cards = await deckLists.commanderCardsFor(current.id, edited.map(({ reference }) => reference.id));

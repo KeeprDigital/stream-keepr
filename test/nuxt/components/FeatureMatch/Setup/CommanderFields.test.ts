@@ -243,12 +243,27 @@ describe('a Seat\'s Commander picker', () => {
 
 		beforeEach(() => {
 			mockFetch.mockImplementation(async (path: string) => path === LIST
-				? { id: 11, slotId: 3, sourceText: '', entries: [listCard(ashling, 'WUBRG'), listCard(animar, 'URG')] }
-				: { data: [scryfallCardOf(ATRAXA)] });
+				? {
+						id: 11,
+						slotId: 3,
+						sourceText: '',
+						entries: [
+							listCard(ashling, 'WUBRG'),
+							listCard(animar, 'URG'),
+						],
+					}
+				: {
+						data: [
+							scryfallCardOf(ATRAXA),
+						],
+					});
 		});
 
 		const mountHolding = (commanders: Commander[]) =>
-			mountFields(commanders, { slotId: 3, featureMatchDeckList: { id: 11, mainboardCount: 98 } });
+			mountFields(commanders, {
+				slotId: 3,
+				featureMatchDeckList: { id: 11, mainboardCount: 98 },
+			});
 
 		it('offers the list\'s cards in place of the card search, and holds the one picked as the list\'s printing', async () => {
 			const { wrapper, updates } = mountHolding([ASHLING]);
@@ -263,7 +278,13 @@ describe('a Seat\'s Commander picker', () => {
 				type: 'mtg',
 				commanders: [
 					ASHLING,
-					{ scryfallId: animar.id, name: animar.name, colorIdentity: 'URG', setCode: '2x2', collectorNumber: '171' },
+					{
+						scryfallId: animar.id,
+						name: animar.name,
+						colorIdentity: 'URG',
+						setCode: '2x2',
+						collectorNumber: '171',
+					},
 				],
 				featureMatchDeckList: { id: 11, mainboardCount: 98 },
 			});
@@ -277,7 +298,9 @@ describe('a Seat\'s Commander picker', () => {
 
 		it('searches every card again once the list is cleared', async () => {
 			const { wrapper } = mountHolding([]);
-			await wrapper.setProps({ modelValue: { type: 'mtg', commanders: [], featureMatchDeckList: null } });
+			await wrapper.setProps({
+				modelValue: { type: 'mtg', commanders: [], featureMatchDeckList: null },
+			});
 
 			await search(wrapper, 'atraxa');
 

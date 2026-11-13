@@ -76,19 +76,31 @@ describe('featureMatchSetup payload helpers', () => {
 			held: 'its Commanders and its Deck List reference',
 			commanders: [ATRAXA],
 			featureMatchDeckList: { id: 4, mainboardCount: 99 },
-			gameData: { type: 'mtg', commanders: [ATRAXA], featureMatchDeckList: { id: 4, mainboardCount: 99 } },
+			gameData: {
+				type: 'mtg',
+				commanders: [ATRAXA],
+				featureMatchDeckList: { id: 4, mainboardCount: 99 },
+			},
 		},
 		{
 			held: 'its Commanders and no Deck List once the list is cleared',
 			commanders: [ATRAXA],
 			featureMatchDeckList: null,
-			gameData: { type: 'mtg', commanders: [ATRAXA], featureMatchDeckList: null },
+			gameData: {
+				type: 'mtg',
+				commanders: [ATRAXA],
+				featureMatchDeckList: null,
+			},
 		},
 		{
 			held: 'its Deck List while no Commander is picked from it',
 			commanders: [],
 			featureMatchDeckList: { id: 4, mainboardCount: 100 },
-			gameData: { type: 'mtg', commanders: [], featureMatchDeckList: { id: 4, mainboardCount: 100 } },
+			gameData: {
+				type: 'mtg',
+				commanders: [],
+				featureMatchDeckList: { id: 4, mainboardCount: 100 },
+			},
 		},
 	])('saves a Seat holding Commanders as $held', ({ commanders, gameData, ...reference }) => {
 		expect(normalizePlayerSlotData({

@@ -73,5 +73,12 @@ export function useFeatureMatchDeckListRepository() {
 			{ method: 'GET', includeHeaders: false },
 		);
 
-	return { preview, save, read, previewCommander, saveCommander, readCommander };
+	return {
+		preview,
+		save,
+		read,
+		previewCommander,
+		saveCommander,
+		readCommander,
+	};
 }

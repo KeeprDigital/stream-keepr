@@ -24,5 +24,7 @@ export function commanderMainboardCount(
 	commanders: ReadonlyArray<Pick<Commander, 'scryfallId'>>,
 ): number {
 	const held = new Set(commanders.map(commander => commander.scryfallId));
-	return entries.reduce((total, entry) => total + entry.quantity - (held.has(entry.scryfallId) ? 1 : 0), 0);
+	return entries.reduce((total, entry) => total + entry.quantity - (held.has(entry.scryfallId)
+		? 1
+		: 0), 0);
 }

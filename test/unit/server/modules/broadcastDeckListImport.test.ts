@@ -124,9 +124,21 @@ describe('broadcast Deck List import', () => {
 	});
 
 	it.each([
-		{ marker: 'a foil marker', line: '1 Lightning Bolt *F*', request: { name: 'Lightning Bolt', setCode: null, collectorNumber: null } },
-		{ marker: 'an etched marker after a set', line: '1 Lightning Bolt (2XM) *E*', request: { name: 'Lightning Bolt', setCode: '2xm', collectorNumber: null } },
-		{ marker: 'a foil marker after a collector number', line: '1 Lightning Bolt (SLD) 101 *F*', request: { name: 'Lightning Bolt', setCode: 'sld', collectorNumber: '101' } },
+		{
+			marker: 'a foil marker',
+			line: '1 Lightning Bolt *F*',
+			request: { name: 'Lightning Bolt', setCode: null, collectorNumber: null },
+		},
+		{
+			marker: 'an etched marker after a set',
+			line: '1 Lightning Bolt (2XM) *E*',
+			request: { name: 'Lightning Bolt', setCode: '2xm', collectorNumber: null },
+		},
+		{
+			marker: 'a foil marker after a collector number',
+			line: '1 Lightning Bolt (SLD) 101 *F*',
+			request: { name: 'Lightning Bolt', setCode: 'sld', collectorNumber: '101' },
+		},
 	])('drops $marker and reads the rest of the line', async ({ line, request }) => {
 		const resolver = resolvingAllCards();
 

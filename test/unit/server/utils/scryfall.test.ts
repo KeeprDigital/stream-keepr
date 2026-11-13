@@ -130,7 +130,12 @@ describe('batchLookupScryfallPrintings', () => {
 
 	it('answers a printing by its set and collector number whatever their case, and none for one Scryfall does not know', async () => {
 		vi.mocked(fetch).mockImplementation(createScryfallFake([
-			{ id: 'garruks-uprising', name: 'Garruk\'s Uprising', set: 'plst', collector_number: 'M21-186' },
+			{
+				id: 'garruks-uprising',
+				name: 'Garruk\'s Uprising',
+				set: 'plst',
+				collector_number: 'M21-186',
+			},
 		]).fetch);
 
 		const cards = await batchLookupScryfallPrintings([
@@ -149,7 +154,9 @@ describe('batchLookupScryfallPrintings', () => {
 		vi.mocked(fetch).mockResolvedValue(createScryfallErrorResponse(503, 'private upstream detail') as any);
 
 		try {
-			const lookup = batchLookupScryfallPrintings([{ setCode: 'ecl', collectorNumber: '1' }]).catch(error => error);
+			const lookup = batchLookupScryfallPrintings([
+				{ setCode: 'ecl', collectorNumber: '1' },
+			]).catch(error => error);
 			await vi.runAllTimersAsync();
 
 			expect(await lookup).toMatchObject({ name: 'ScryfallRequestError', retryable: true });

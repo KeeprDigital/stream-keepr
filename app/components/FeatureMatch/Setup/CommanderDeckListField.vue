@@ -56,7 +56,10 @@ function toggleCommander(entry: CommanderDeckListEntry) {
 }
 
 function printingLabel(entry: CommanderDeckListEntry) {
-	return [entry.setCode.toUpperCase(), entry.collectorNumber].filter(Boolean).join(' ');
+	return [
+		entry.setCode.toUpperCase(),
+		entry.collectorNumber,
+	].filter(Boolean).join(' ');
 }
 
 function forgetPreview() {

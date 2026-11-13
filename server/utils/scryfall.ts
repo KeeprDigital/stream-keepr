@@ -520,7 +520,9 @@ export async function batchLookupScryfallIds(
 
 			const notFound = response.not_found.flatMap(identifier => identifier.name === undefined
 				? []
-				: [{ name: identifier.name, set: identifier.set }]);
+				: [
+						{ name: identifier.name, set: identifier.set },
+					]);
 			const notFoundKeys = new Set(notFound.map(identifierKey));
 			for (const identifier of batch) {
 				if (!notFoundKeys.has(identifierKey(identifier)))

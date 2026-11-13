@@ -65,8 +65,12 @@ export async function importCommanderDeckList(
 	resolver: BroadcastDeckListCardResolver,
 ): Promise<CommanderDeckListImportResult> {
 	const lines = sourceLines(source);
-	if (!Array.isArray(lines))
-		return { ok: false, errors: [lines] };
+	if (!Array.isArray(lines)) {
+		return {
+			ok: false,
+			errors: [lines],
+		};
+	}
 
 	let section: Section = 'deck';
 	let commanderHeading: SourceLine | null = null;
@@ -121,19 +125,28 @@ export async function importCommanderDeckList(
 	const trailing = kept.filter(row => row.section === 'trailing');
 	const offered = commanderHeading
 		? headedCommanders
-		: trailing.length > 0 ? trailing : kept.slice(0, 1);
+		: trailing.length > 0
+			? trailing
+			: kept.slice(0, 1);
 	if (commanderHeading && headedCommanders.length === 0)
 		errors.push(lineError(commanderHeading, 'NO_COMMANDER', 'A Commander heading needs a card under it'));
 	const extra = offered[MAX_SEAT_COMMANDERS];
 	if (extra)
 		errors.push(lineError(extra, 'TOO_MANY_COMMANDERS', 'A deck has one or two Commanders'));
 
-	const limitErrors = cardRowLimitErrors([...kept, ...dropped]);
+	const limitErrors = cardRowLimitErrors([
+		...kept,
+		...dropped,
+	]);
 	errors.push(...limitErrors);
 	if (errors.length === 0 && kept.length === 0)
 		errors.push({ code: 'EMPTY_DECK_LIST', message: 'At least one card outside the Sideboard is required' });
-	if (limitErrors.length > 0 || kept.length === 0)
-		return { ok: false, errors: orderedErrors(errors) };
+	if (limitErrors.length > 0 || kept.length === 0) {
+		return {
+			ok: false,
+			errors: orderedErrors(errors),
+		};
+	}
 
 	const resolved = await resolveCardLines(kept, resolver);
 	const entries: BroadcastDeckListCanonicalEntry[] = [];
@@ -156,8 +169,12 @@ export async function importCommanderDeckList(
 		if (offered.includes(row))
 			offeredCommanders.add(card.scryfallId);
 	}
-	if (errors.length > 0)
-		return { ok: false, errors: orderedErrors(errors) };
+	if (errors.length > 0) {
+		return {
+			ok: false,
+			errors: orderedErrors(errors),
+		};
+	}
 
 	return {
 		ok: true,

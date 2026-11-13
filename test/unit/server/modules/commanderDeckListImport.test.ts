@@ -40,7 +40,9 @@ describe('commander Deck List import', () => {
 		expect(result).toEqual({
 			ok: true,
 			document: expect.objectContaining({
-				offeredCommanders: [printingId('Ashling, the Limitless', 'ecc', '1')],
+				offeredCommanders: [
+					printingId('Ashling, the Limitless', 'ecc', '1'),
+				],
 				sideboardDropped: 1,
 			}),
 		});
@@ -59,7 +61,9 @@ describe('commander Deck List import', () => {
 		const deckList = await document(ARENA_COPY);
 
 		expect(deckList.entries.map(entry => entry.canonicalName)).toEqual(['Ashling, the Limitless', 'Ashnod\'s Altar']);
-		expect(deckList.offeredCommanders).toEqual([printingId('Ashling, the Limitless')]);
+		expect(deckList.offeredCommanders).toEqual([
+			printingId('Ashling, the Limitless'),
+		]);
 		expect(deckList.sideboardDropped).toBe(1);
 	});
 
@@ -71,7 +75,9 @@ describe('commander Deck List import', () => {
 			'Forest',
 			'Ashling, the Limitless',
 		]);
-		expect(deckList.offeredCommanders).toEqual([printingId('Ashling, the Limitless')]);
+		expect(deckList.offeredCommanders).toEqual([
+			printingId('Ashling, the Limitless'),
+		]);
 		expect(deckList.sideboardDropped).toBe(1);
 	});
 
@@ -146,7 +152,9 @@ describe('commander Deck List import', () => {
 			error: { lineNumber: 3, code: 'UNSUPPORTED_SYNTAX', sourceText: '1 Arbor Elf *S*' },
 		},
 	])('refuses $refusal, naming the line', async ({ source, error }) => {
-		expect(await errors(source)).toEqual([expect.objectContaining(error)]);
+		expect(await errors(source)).toEqual([
+			expect.objectContaining(error),
+		]);
 	});
 
 	it('refuses an unresolved card and a printing that cannot be found, each naming its line', async () => {
@@ -174,10 +182,12 @@ describe('commander Deck List import', () => {
 			[2, 'Tymna the Weaver'],
 			[3, 'Forest'],
 		]);
-		expect(deckList.offeredCommanders).toEqual([printingId('Tymna the Weaver')]);
+		expect(deckList.offeredCommanders).toEqual([
+			printingId('Tymna the Weaver'),
+		]);
 	});
 
 	it('keeps the blank lines of the pasted text, which say where the Sideboard ends', async () => {
-		expect((await document(`﻿\r\n${MTGO_COPY.replaceAll('\n', '\r\n')}\r\n\r\n`)).sourceText).toBe(MTGO_COPY);
+		expect((await document(`\uFEFF\r\n${MTGO_COPY.replaceAll('\n', '\r\n')}\r\n\r\n`)).sourceText).toBe(MTGO_COPY);
 	});
 });

@@ -49,7 +49,10 @@ async function searchDeckList(id: number, text: string): Promise<Commander[]> {
 		return [];
 	if (deckListCards?.id !== id) {
 		const saved = await deckListRepository.readCommander(eventId, props.slotId, id);
-		deckListCards = { id, cards: saved.entries.map(commanderOfDeckListEntry) };
+		deckListCards = {
+			id,
+			cards: saved.entries.map(commanderOfDeckListEntry),
+		};
 	}
 	const wanted = text.toLowerCase();
 	return deckListCards.cards.filter(card =>

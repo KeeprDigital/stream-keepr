@@ -36,7 +36,9 @@ describe('broadcast Deck List Scryfall resolver', () => {
 					})
 				: null)
 		));
-		const lookupPrintings = vi.fn(async () => [scryfallCard()]);
+		const lookupPrintings = vi.fn(async () => [
+			scryfallCard(),
+		]);
 		const resolver = createBroadcastDeckListScryfallResolver({
 			overrides: [
 				{ inputName: 'Bolt', inputSetCode: null, canonicalName: 'Lightning Bolt' },
@@ -51,7 +53,9 @@ describe('broadcast Deck List Scryfall resolver', () => {
 			{ name: 'Wear', setCode: null, collectorNumber: null },
 		]);
 
-		expect(lookupPrintings).toHaveBeenCalledWith([{ setCode: 'sld', collectorNumber: '101' }]);
+		expect(lookupPrintings).toHaveBeenCalledWith([
+			{ setCode: 'sld', collectorNumber: '101' },
+		]);
 		expect(lookupByName).toHaveBeenCalledWith([
 			{ name: 'Wear // Tear', setCode: null },
 			{ name: 'Wear', setCode: null },
@@ -82,7 +86,9 @@ describe('broadcast Deck List Scryfall resolver', () => {
 					scryfallCard({ name: 'Lightning Bolt', setCode: 'neo' }),
 					scryfallCard({ name: 'Shack', setCode: 'm21' }),
 				]),
-				lookupPrintings: vi.fn(async () => [scryfallCard({ name: 'Shock' })]),
+				lookupPrintings: vi.fn(async () => [
+					scryfallCard({ name: 'Shock' }),
+				]),
 			},
 		});
 
@@ -182,7 +188,10 @@ describe('broadcast Deck List Scryfall resolver', () => {
 		const lookupPrintings = vi.fn(async (requests: ReadonlyArray<{ setCode: string; collectorNumber: string }>) =>
 			requests.map(request => scryfallCard({ ...request, id: `printing-${request.collectorNumber}` })));
 		const resolver = createBroadcastDeckListScryfallResolver({
-			scryfall: { lookupByName: vi.fn(async () => []), lookupPrintings },
+			scryfall: {
+				lookupByName: vi.fn(async () => []),
+				lookupPrintings,
+			},
 		});
 
 		const result = await resolver.resolve([1, 2, 3, 2].map(number => ({

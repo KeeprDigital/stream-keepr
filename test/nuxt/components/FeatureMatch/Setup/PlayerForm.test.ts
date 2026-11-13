@@ -198,7 +198,10 @@ describe('linking a One Piece Card Game Player into a side', () => {
 // A Commander Event has no Players: its Seat is typed, and its deck is its Commanders (ADR-0087).
 describe('a Commander Event\'s Seat', () => {
 	function mountSeat(commanderEvent: boolean, held: Partial<PlayerData> = {}) {
-		const player = reactive<PlayerData>({ ...DEFAULT_PLAYER_DATA, ...held });
+		const player = reactive<PlayerData>({
+			...DEFAULT_PLAYER_DATA,
+			...held,
+		});
 		const wrapper = mount(PlayerForm, {
 			props: {
 				'modelValue': player,
@@ -268,11 +271,20 @@ describe('a Commander Event\'s Seat', () => {
 
 	it('offers its Deck List paste, and takes the list off the Seat when it is cleared', async () => {
 		const { wrapper, player } = mountSeat(true, {
-			gameData: { type: 'mtg', commanders: [], featureMatchDeckList: { id: 11, mainboardCount: 99 } },
+			gameData: {
+				type: 'mtg',
+				commanders: [],
+				featureMatchDeckList: { id: 11, mainboardCount: 99 },
+			},
 		});
 
 		const field = wrapper.get('[data-seat-deck-list]');
-		expect(field.attributes()).toMatchObject({ 'data-seat': 'player4', 'data-slot': '3', 'data-held': '11', 'data-locked': 'true' });
+		expect(field.attributes()).toMatchObject({
+			'data-seat': 'player4',
+			'data-slot': '3',
+			'data-held': '11',
+			'data-locked': 'true',
+		});
 		expect(mountSeat(false).wrapper.find('[data-seat-deck-list]').exists()).toBe(false);
 
 		await field.trigger('click');

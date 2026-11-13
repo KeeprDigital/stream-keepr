@@ -37,12 +37,24 @@ function entry(card: { id: string; name: string; set: string; collector_number: 
 const accepted: CommanderDeckListPreviewAnswer = {
 	ok: true,
 	deckList: {
-		entries: [entry(ashling), entry(animar), entry(forest, 3)],
+		entries: [
+			entry(ashling),
+			entry(animar),
+			entry(forest, 3),
+		],
 		offeredCommanders: [ashling.id],
 		sideboardDropped: 1,
 	},
 };
-const saved = { deckList: { id: 11, slotId: 3, sourceText: MOXFIELD_COPY, entries: [] }, featureMatch: { id: 3 } };
+const saved = {
+	deckList: {
+		id: 11,
+		slotId: 3,
+		sourceText: MOXFIELD_COPY,
+		entries: [],
+	},
+	featureMatch: { id: 3 },
+};
 
 function mountField(props: { deckList?: FeatureMatchDeckListReference | null; locked?: boolean } = {}) {
 	return mount(CommanderDeckListField, {
@@ -80,7 +92,9 @@ describe('a Commander Seat\'s Deck List field', () => {
 	});
 
 	it('shows the Seat\'s Deck List by its Mainboard count, and clears it on request', async () => {
-		const holding = mountField({ deckList: { id: 11, mainboardCount: 99 } });
+		const holding = mountField({
+			deckList: { id: 11, mainboardCount: 99 },
+		});
 
 		expect(holding.get('[data-deck-list]').attributes('data-mainboard-count')).toBe('99');
 		await holding.get('button[aria-label="Clear Deck List"]').trigger('click');
@@ -96,7 +110,10 @@ describe('a Commander Seat\'s Deck List field', () => {
 
 		await paste(wrapper);
 
-		expect(wrapper.findAll('[data-deck-list-entry]').map(row => [row.attributes('data-printing'), row.attributes('data-commander')])).toEqual([
+		expect(wrapper.findAll('[data-deck-list-entry]').map(row => [
+			row.attributes('data-printing'),
+			row.attributes('data-commander'),
+		])).toEqual([
 			[ashling.id, 'true'],
 			[animar.id, 'false'],
 			[forest.id, 'false'],
@@ -110,7 +127,11 @@ describe('a Commander Seat\'s Deck List field', () => {
 		expect(saveButton(wrapper).attributes('aria-busy')).toBe('true');
 		expect(mockFetch).toHaveBeenLastCalledWith('/api/events/7/feature-match-slots/3/commander-deck-lists', expect.objectContaining({
 			method: 'POST',
-			body: { seat: 'player4', text: MOXFIELD_COPY, commanders: [ashling.id] },
+			body: {
+				seat: 'player4',
+				text: MOXFIELD_COPY,
+				commanders: [ashling.id],
+			},
 		}));
 
 		saving.resolve(saved);
@@ -120,8 +141,16 @@ describe('a Commander Seat\'s Deck List field', () => {
 	});
 
 	it.each([
-		{ choice: 'a second Commander added from the list', press: ['Animar, Soul of Elements'], commanders: [ashling.id, animar.id] },
-		{ choice: 'the Commander changed', press: ['Ashling, the Limitless', 'Animar, Soul of Elements'], commanders: [animar.id] },
+		{
+			choice: 'a second Commander added from the list',
+			press: ['Animar, Soul of Elements'],
+			commanders: [ashling.id, animar.id],
+		},
+		{
+			choice: 'the Commander changed',
+			press: ['Ashling, the Limitless', 'Animar, Soul of Elements'],
+			commanders: [animar.id],
+		},
 	])('saves $choice', async ({ press, commanders }) => {
 		const wrapper = mountField();
 		await paste(wrapper);
@@ -153,7 +182,12 @@ describe('a Commander Seat\'s Deck List field', () => {
 		mockFetch.mockResolvedValue({
 			ok: false,
 			errors: [
-				{ code: 'INVALID_PRINTING_HINT', message: 'Could not resolve the requested printing of Graveshifter', lineNumber: 5, sourceText: '1 Graveshifter (ECL) 9999' },
+				{
+					code: 'INVALID_PRINTING_HINT',
+					message: 'Could not resolve the requested printing of Graveshifter',
+					lineNumber: 5,
+					sourceText: '1 Graveshifter (ECL) 9999',
+				},
 				{ code: 'EMPTY_DECK_LIST', message: 'At least one card outside the Sideboard is required' },
 			],
 		} satisfies CommanderDeckListPreviewAnswer);
@@ -161,7 +195,10 @@ describe('a Commander Seat\'s Deck List field', () => {
 
 		await paste(wrapper);
 
-		expect(wrapper.findAll('[data-refusal-code]').map(refusal => [refusal.attributes('data-refusal-code'), refusal.attributes('data-line')])).toEqual([
+		expect(wrapper.findAll('[data-refusal-code]').map(refusal => [
+			refusal.attributes('data-refusal-code'),
+			refusal.attributes('data-line'),
+		])).toEqual([
 			['INVALID_PRINTING_HINT', '5'],
 			['EMPTY_DECK_LIST', undefined],
 		]);
@@ -180,7 +217,9 @@ describe('a Commander Seat\'s Deck List field', () => {
 
 	it('starts a re-paste from the saved Deck List\'s text', async () => {
 		mockFetch.mockResolvedValueOnce(saved.deckList);
-		const wrapper = mountField({ deckList: { id: 11, mainboardCount: 8 } });
+		const wrapper = mountField({
+			deckList: { id: 11, mainboardCount: 8 },
+		});
 
 		await wrapper.get('button[aria-label="Paste Deck List"]').trigger('click');
 		await flushPromises();
@@ -190,7 +229,10 @@ describe('a Commander Seat\'s Deck List field', () => {
 	});
 
 	it('waits for the setup form\'s unsaved changes', () => {
-		const wrapper = mountField({ deckList: { id: 11, mainboardCount: 8 }, locked: true });
+		const wrapper = mountField({
+			deckList: { id: 11, mainboardCount: 8 },
+			locked: true,
+		});
 
 		expect(wrapper.get('button[aria-label="Paste Deck List"]').attributes('disabled')).toBeDefined();
 		expect(wrapper.text()).toContain('Save or reset');

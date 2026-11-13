@@ -145,6 +145,9 @@ export function resolvingAllCards(unknown: readonly string[] = []): BroadcastDec
 		resolve: vi.fn(async (requests: readonly BroadcastDeckListCardResolutionRequest[]) => requests.map(request =>
 			unknown.includes(request.name)
 				? { status: 'unresolved' as const }
-				: { status: 'resolved' as const, card: resolvedCard(request) })),
+				: {
+						status: 'resolved' as const,
+						card: resolvedCard(request),
+					})),
 	};
 }

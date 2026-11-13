@@ -65,7 +65,9 @@ async function stageSlot(event: { game: 'mtg' | 'op'; variant: 'commander' | 'tw
 }
 
 async function slotRow(slotId: number) {
-	return (await db.query.featureMatches.findFirst({ where: eq(schema.featureMatches.id, slotId) }))!;
+	return (await db.query.featureMatches.findFirst({
+		where: eq(schema.featureMatches.id, slotId),
+	}))!;
 }
 
 async function storedLists(slotId: number) {
@@ -121,13 +123,55 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 
 		const read = await commanderDeckListModule().read({ eventId, slotId, deckListId: deckList.id });
 		expect(read.sourceText).toBe(MOXFIELD_COPY);
-		expect(read.entries.map(entry => [entry.quantity, entry.name, entry.setCode, entry.collectorNumber, entry.scryfallId])).toEqual([
-			[1, 'Ashling, the Limitless', 'ecc', '1', ashling.id],
-			[1, 'Animar, Soul of Elements', '2x2', '171', animar.id],
-			[1, 'Eirdu, Carrier of Dawn // Isilu, Carrier of Twilight', 'ecl', '13', MOXFIELD_CARDS.eirdu.id],
-			[1, 'Garruk\'s Uprising', 'plst', 'M21-186', MOXFIELD_CARDS.garruksUprising.id],
-			[1, 'Graveshifter', 'ecl', '104', graveshifter.id],
-			[1, 'Hedge Maze', 'pmkm', '262p', MOXFIELD_CARDS.hedgeMaze.id],
+		expect(read.entries.map(entry => [
+			entry.quantity,
+			entry.name,
+			entry.setCode,
+			entry.collectorNumber,
+			entry.scryfallId,
+		])).toEqual([
+			[
+				1,
+				'Ashling, the Limitless',
+				'ecc',
+				'1',
+				ashling.id,
+			],
+			[
+				1,
+				'Animar, Soul of Elements',
+				'2x2',
+				'171',
+				animar.id,
+			],
+			[
+				1,
+				'Eirdu, Carrier of Dawn // Isilu, Carrier of Twilight',
+				'ecl',
+				'13',
+				MOXFIELD_CARDS.eirdu.id,
+			],
+			[
+				1,
+				'Garruk\'s Uprising',
+				'plst',
+				'M21-186',
+				MOXFIELD_CARDS.garruksUprising.id,
+			],
+			[
+				1,
+				'Graveshifter',
+				'ecl',
+				'104',
+				graveshifter.id,
+			],
+			[
+				1,
+				'Hedge Maze',
+				'pmkm',
+				'262p',
+				MOXFIELD_CARDS.hedgeMaze.id,
+			],
 			[3, 'Forest', 'kld', '264', forest.id],
 		]);
 		expect(read.entries[0]).toMatchObject({ colorIdentity: 'WUBRG', cardType: 'Legendary Creature — Elemental Sorcerer' });
@@ -161,7 +205,13 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 	])('saves $choice', async ({ commanders, held, deckName, mainboardCount }) => {
 		const { eventId, slotId } = await stageSlot();
 
-		const { featureMatch } = await commanderDeckListModule().save({ eventId, slotId, seat: 'player2', text: MOXFIELD_COPY, commanders });
+		const { featureMatch } = await commanderDeckListModule().save({
+			eventId,
+			slotId,
+			seat: 'player2',
+			text: MOXFIELD_COPY,
+			commanders,
+		});
 
 		expect(mtg(featureMatch.player2Data)).toMatchObject({
 			commanders: held,
@@ -175,7 +225,9 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 		await featureMatchSlotWriteModule().updateSetup({
 			eventId,
 			slotId,
-			input: { player1Data: typedSeat('Ana', [ATRAXA], { pronouns: 'she/her' }) },
+			input: {
+				player1Data: typedSeat('Ana', [ATRAXA], { pronouns: 'she/her' }),
+			},
 		});
 
 		const { deckList } = await pasteOffered(eventId, slotId, 'player1', MOXFIELD_COPY);
@@ -198,7 +250,9 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 
 		const { deckList } = await pasteOffered(eventId, slotId, 'player1', ARENA_COPY);
 
-		expect(await storedLists(slotId)).toEqual([{ id: deckList.id }]);
+		expect(await storedLists(slotId)).toEqual([
+			{ id: deckList.id },
+		]);
 		expect(mtg((await slotRow(slotId)).player1Data)?.featureMatchDeckList).toEqual({ id: deckList.id, mainboardCount: 1 });
 	});
 
@@ -230,11 +284,22 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 	])('refuses $refusal, and saves nothing', async ({ text, commanders, error }) => {
 		const { eventId, slotId } = await stageSlot();
 
-		const refused = await commanderDeckListModule().save({ eventId, slotId, seat: 'player1', text, commanders }).catch(error => error);
+		const refused = await commanderDeckListModule().save({
+			eventId,
+			slotId,
+			seat: 'player1',
+			text,
+			commanders,
+		}).catch(error => error);
 
 		expect(refused).toMatchObject({
 			statusCode: 422,
-			data: { code: 'COMMANDER_DECK_LIST_INVALID', errors: [expect.objectContaining(error)] },
+			data: {
+				code: 'COMMANDER_DECK_LIST_INVALID',
+				errors: [
+					expect.objectContaining(error),
+				],
+			},
 		});
 		expect(await storedLists(slotId)).toEqual([]);
 		expect((await slotRow(slotId)).player1Data).toBeNull();
@@ -248,7 +313,9 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 
 		expect(refused).toEqual({
 			ok: false,
-			errors: [expect.objectContaining({ code: 'INVALID_PRINTING_HINT', lineNumber: 2 })],
+			errors: [
+				expect.objectContaining({ code: 'INVALID_PRINTING_HINT', lineNumber: 2 }),
+			],
 		});
 		expect(accepted.ok).toBe(true);
 		expect(await storedLists(slotId)).toEqual([]);
@@ -261,7 +328,13 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 
 		try {
 			const save = commanderDeckListModule()
-				.save({ eventId, slotId, seat: 'player1', text: MOXFIELD_COPY, commanders: [ashling.id] })
+				.save({
+					eventId,
+					slotId,
+					seat: 'player1',
+					text: MOXFIELD_COPY,
+					commanders: [ashling.id],
+				})
 				.catch(error => error);
 			await vi.runAllTimersAsync();
 
@@ -280,7 +353,13 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 		const { eventId, slotId } = await stageSlot({ game, variant });
 
 		await expect(commanderDeckListModule().preview({ eventId, text: MOXFIELD_COPY })).rejects.toMatchObject({ statusCode: 400 });
-		await expect(commanderDeckListModule().save({ eventId, slotId, seat: 'player1', text: MOXFIELD_COPY, commanders: [ashling.id] }))
+		await expect(commanderDeckListModule().save({
+			eventId,
+			slotId,
+			seat: 'player1',
+			text: MOXFIELD_COPY,
+			commanders: [ashling.id],
+		}))
 			.rejects
 			.toMatchObject({ statusCode: 400 });
 		expect(await storedLists(slotId)).toEqual([]);
@@ -297,17 +376,27 @@ describe('a Commander Slot\'s setup save, for a Seat holding a Deck List', () =>
 	it.each([
 		{
 			save: 'keeps the list when the save names none',
-			gameData: { type: 'mtg' as const, commanders: [ASHLING] },
+			gameData: {
+				type: 'mtg' as const,
+				commanders: [ASHLING],
+			},
 			reference: { mainboardCount: 8 },
 		},
 		{
 			save: 'counts the Mainboard again when a second Commander is picked from the list',
-			gameData: { type: 'mtg' as const, commanders: [ASHLING, ANIMAR] },
+			gameData: {
+				type: 'mtg' as const,
+				commanders: [ASHLING, ANIMAR],
+			},
 			reference: { mainboardCount: 7 },
 		},
 		{
 			save: 'keeps the list it holds when the save names a Deck List that is not this Slot\'s',
-			gameData: { type: 'mtg' as const, commanders: [ASHLING], featureMatchDeckList: { id: 999_999, mainboardCount: 60 } },
+			gameData: {
+				type: 'mtg' as const,
+				commanders: [ASHLING],
+				featureMatchDeckList: { id: 999_999, mainboardCount: 60 },
+			},
 			reference: { mainboardCount: 8 },
 		},
 	])('$save', async ({ gameData, reference }) => {
@@ -316,17 +405,28 @@ describe('a Commander Slot\'s setup save, for a Seat holding a Deck List', () =>
 		const saved = await featureMatchSlotWriteModule().updateSetup({
 			eventId,
 			slotId,
-			input: { player1Data: { name: 'Ana', gameData } },
+			input: {
+				player1Data: { name: 'Ana', gameData },
+			},
 		});
 
 		expect(mtg(saved.player1Data)?.featureMatchDeckList).toEqual({ id: deckListId, ...reference });
-		expect(await storedLists(slotId)).toEqual([{ id: deckListId }]);
+		expect(await storedLists(slotId)).toEqual([
+			{ id: deckListId },
+		]);
 	});
 
 	it.each([
 		{
 			save: 'cleared from the Seat, which keeps its Commanders',
-			player1Data: { name: 'Ana', gameData: { type: 'mtg' as const, commanders: [ASHLING], featureMatchDeckList: null } },
+			player1Data: {
+				name: 'Ana',
+				gameData: {
+					type: 'mtg' as const,
+					commanders: [ASHLING],
+					featureMatchDeckList: null,
+				},
+			},
 			commanders: [ASHLING],
 		},
 		{
@@ -337,7 +437,11 @@ describe('a Commander Slot\'s setup save, for a Seat holding a Deck List', () =>
 	])('deletes a list $save', async ({ player1Data, commanders }) => {
 		const { eventId, slotId } = await pastedSlot();
 
-		const saved = await featureMatchSlotWriteModule().updateSetup({ eventId, slotId, input: { player1Data } });
+		const saved = await featureMatchSlotWriteModule().updateSetup({
+			eventId,
+			slotId,
+			input: { player1Data },
+		});
 
 		expect(mtg(saved.player1Data)?.commanders).toEqual(commanders);
 		expect(mtg(saved.player1Data)?.featureMatchDeckList ?? null).toBeNull();
@@ -347,11 +451,17 @@ describe('a Commander Slot\'s setup save, for a Seat holding a Deck List', () =>
 	it('moves a list with its player when two Seats are swapped', async () => {
 		const { eventId, slotId, deckListId } = await pastedSlot();
 
-		const swapped = await featureMatchSlotWriteModule().swapSeats({ eventId, slotId, seats: ['player1', 'player4'] });
+		const swapped = await featureMatchSlotWriteModule().swapSeats({
+			eventId,
+			slotId,
+			seats: ['player1', 'player4'],
+		});
 
 		expect(mtg(swapped.player4Data)?.featureMatchDeckList).toEqual({ id: deckListId, mainboardCount: 8 });
 		expect(swapped.player1Data ?? null).toBeNull();
-		expect(await storedLists(slotId)).toEqual([{ id: deckListId }]);
+		expect(await storedLists(slotId)).toEqual([
+			{ id: deckListId },
+		]);
 	});
 
 	it('refuses a Seat\'s Deck List on a Two-Player Event', async () => {
@@ -360,7 +470,15 @@ describe('a Commander Slot\'s setup save, for a Seat holding a Deck List', () =>
 		await expect(featureMatchSlotWriteModule().updateSetup({
 			eventId,
 			slotId,
-			input: { player1Data: { name: 'Ana', gameData: { type: 'mtg', featureMatchDeckList: { id: 1, mainboardCount: 60 } } } },
+			input: {
+				player1Data: {
+					name: 'Ana',
+					gameData: {
+						type: 'mtg',
+						featureMatchDeckList: { id: 1, mainboardCount: 60 },
+					},
+				},
+			},
 		})).rejects.toMatchObject({ statusCode: 400 });
 	});
 
@@ -369,10 +487,21 @@ describe('a Commander Slot\'s setup save, for a Seat holding a Deck List', () =>
 
 		const created = await featureMatchSlotWriteModule().create({
 			eventId,
-			input: { player1Data: { name: 'Ben', gameData: { type: 'mtg', commanders: [ANIMAR], featureMatchDeckList: { id: deckListId, mainboardCount: 8 } } } },
+			input: {
+				player1Data: {
+					name: 'Ben',
+					gameData: {
+						type: 'mtg',
+						commanders: [ANIMAR],
+						featureMatchDeckList: { id: deckListId, mainboardCount: 8 },
+					},
+				},
+			},
 		});
 
-		expect(mtg(created.player1Data)).toMatchObject({ commanders: [ANIMAR] });
+		expect(mtg(created.player1Data)).toMatchObject({
+			commanders: [ANIMAR],
+		});
 		expect(mtg(created.player1Data)?.featureMatchDeckList).toBeUndefined();
 	});
 });
