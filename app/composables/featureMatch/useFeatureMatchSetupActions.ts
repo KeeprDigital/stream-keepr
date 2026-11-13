@@ -2,9 +2,8 @@ import type { Seat } from '~~/shared/types/enums';
 import type { FeatureMatchFormData, Match } from '~/types';
 import { toRaw } from 'vue';
 import { getGameConfig } from '~~/shared/config/games';
+import { COMMANDER_SEAT_DATA_KEYS } from '~~/shared/utils/featureMatchSidePlayer';
 import { DEFAULT_PLAYER_DATA } from '~/types';
-
-const COMMANDER_SEAT_DATA_KEYS = ['player3Data', 'player4Data'] as const;
 
 interface FeatureMatchSetupDeps {
 	formData: Ref<FeatureMatchFormData>;

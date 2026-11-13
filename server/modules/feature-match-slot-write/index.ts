@@ -29,6 +29,21 @@ const SEATING_KEYS = [
 	...Object.values(SIDE_PLAYER_KEY),
 ];
 
+/**
+ * A write to a Commander Event's Slot (ADR-0087): the Event is its Slots alone,
+ * so the Slot links no Player and no Match, and each Seat it names is typed.
+ */
+function commanderSlotWrite(input: UpdateFeatureMatchInput): UpdateFeatureMatchInput {
+	if (input.player1Id != null || input.player2Id != null || input.matchId != null)
+		throw createError({ statusCode: 400, message: 'A Commander Event\'s Slot links no Player and no Match' });
+	return withCommanderSeats(input);
+}
+
+/** Whether a write names a Seat, a Player or a Match: what the kind of Event decides. */
+function namesSeatOrMatch(input: UpdateFeatureMatchInput): boolean {
+	return input.matchId !== undefined || SEATING_KEYS.some(key => Object.hasOwn(input, key));
+}
+
 /** The kind of Event the Slot's Event is; none for an Event that is not there. */
 async function eventKindOf(eventId: number): Promise<EventKind | undefined> {
 	const event = await db.query.events.findFirst({
@@ -104,9 +119,13 @@ export function featureMatchSlotWriteModule() {
 
 	async function create({ eventId, input, originConnectionId }: CreateSlotParams): Promise<FeatureMatchResponse> {
 		await validateFeatureMatchReferences(eventId, input);
-		await catalogueLeaders(input);
+		const isCommanderEvent = namesSeatOrMatch(input) && await eventKindOf(eventId) === 'mtg-commander';
+		if (!isCommanderEvent)
+			await catalogueLeaders(input);
 
-		const slot = await slots.create(eventId, input);
+		const slot = await slots.create(eventId, isCommanderEvent
+			? commanderSlotWrite(input)
+			: input);
 
 		return await publication.featureMatchSlotCreated({
 			eventId,
@@ -295,20 +314,19 @@ export function featureMatchSlotWriteModule() {
 	async function updateSetup({ eventId, slotId, input, originConnectionId }: UpdateSlotSetupParams): Promise<FeatureMatchResponse> {
 		await validateFeatureMatchReferences(eventId, input);
 		// Only a save that edits or seats a Seat writes a Player or moves a Deck List.
-		const seats = SEATING_KEYS.some(key => Object.hasOwn(input, key));
-		const kind = seats
+		const editsSeats = SEATING_KEYS.some(key => Object.hasOwn(input, key));
+		const kind = namesSeatOrMatch(input)
 			? await eventKindOf(eventId)
 			: undefined;
 		if (kind !== 'mtg-commander' && writesCommanderSeats(input))
 			throw createError({ statusCode: 400, message: 'Only a Commander Event\'s Slot has Seats 3 and 4, or Seats holding Commanders' });
-		const current = seats
+		const current = editsSeats
 			? await slots.findById(slotId, eventId)
 			: undefined;
 
 		let settledInput = input;
 		if (kind === 'mtg-commander') {
-			// A Commander Event has no Players: every Seat is typed (ADR-0087).
-			settledInput = withCommanderSeats(input);
+			settledInput = commanderSlotWrite(input);
 		}
 		else {
 			await catalogueLeaders(pickedLeaderSides(input, current));

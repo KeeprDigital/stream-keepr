@@ -7,16 +7,22 @@ import { commanderOfScryfallCard } from '~~/shared/utils/commander';
  * paper Magic: The Gathering card may be a Commander, and each answer is one printing.
  */
 
-const SCRYFALL_SEARCH_URL = 'https://api.scryfall.com/cards/search';
+const SCRYFALL_CARD_URL = 'https://api.scryfall.com/cards';
+const SCRYFALL_SEARCH_URL = `${SCRYFALL_CARD_URL}/search`;
 const SCRYFALL_CLIENT_TIMEOUT_MS = 10_000;
 /** Scryfall asks for at least this much of a name before a search. */
 export const COMMANDER_SEARCH_MIN_LENGTH = 3;
 
-async function search(query: Record<string, string>, signal?: AbortSignal): Promise<Commander[]> {
+/** The fields of a Scryfall card that say which card a printing is of. */
+interface ScryfallCardIdentity {
+	oracle_id?: string | null;
+	card_faces?: { oracle_id?: string | null }[];
+}
+
+async function search(query: Record<string, string>): Promise<Commander[]> {
 	try {
 		const answer = await $fetch<{ data: ScryfallCommanderCard[] }>(SCRYFALL_SEARCH_URL, {
 			query,
-			signal,
 			timeout: SCRYFALL_CLIENT_TIMEOUT_MS,
 		});
 		return answer.data.map(commanderOfScryfallCard);
@@ -30,11 +36,21 @@ async function search(query: Record<string, string>, signal?: AbortSignal): Prom
 }
 
 /** The cards whose name the text is part of, each as its default printing. */
-export function searchCommanderCards(text: string, signal?: AbortSignal): Promise<Commander[]> {
-	return search({ q: `${text} game:paper`, unique: 'cards' }, signal);
+export function searchCommanderCards(text: string): Promise<Commander[]> {
+	return search({ q: `${text} game:paper`, unique: 'cards' });
 }
 
-/** Every paper printing of the card of exactly this name, newest first. */
-export function searchCommanderPrintings(name: string, signal?: AbortSignal): Promise<Commander[]> {
-	return search({ q: `!"${name}" game:paper`, unique: 'prints', order: 'released' }, signal);
+/**
+ * Every paper printing of a held Commander's card, newest first. The card is
+ * found by its oracle id, read from the printing held (a two-faced card may
+ * carry it on its faces): a name can hold quotes no search phrase survives.
+ */
+export async function searchCommanderPrintings(commander: Commander): Promise<Commander[]> {
+	const card = await $fetch<ScryfallCardIdentity>(`${SCRYFALL_CARD_URL}/${commander.scryfallId}`, {
+		timeout: SCRYFALL_CLIENT_TIMEOUT_MS,
+	});
+	const oracleId = card.oracle_id ?? card.card_faces?.[0]?.oracle_id;
+	return oracleId
+		? search({ q: `oracleid:${oracleId} game:paper`, unique: 'prints', order: 'released' })
+		: [];
 }

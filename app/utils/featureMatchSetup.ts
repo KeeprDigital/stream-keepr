@@ -1,6 +1,7 @@
 import type { ManualPlayerSlotData, PlayerSlotData, UpdateFeatureMatchInput } from '~~/shared/api';
 import type { PlayerGameData } from '~~/shared/types/game';
 import type { FeatureMatchFormData, PlayerData } from '~/types';
+import { SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 import { getOpGameData } from '~~/shared/utils/gameData';
 
 type FeatureMatchSetupChanges = Partial<FeatureMatchFormData>;
@@ -177,15 +178,11 @@ export function buildFeatureMatchSetupUpdate(changes: FeatureMatchSetupChanges):
 	}
 	if (hasOwn(changes, 'playerDisplayMode') && changes.playerDisplayMode)
 		update.playerDisplayMode = changes.playerDisplayMode;
-	if (hasOwn(changes, 'player1Data'))
-		update.player1Data = normalizePlayerSlotData(changes.player1Data);
-	if (hasOwn(changes, 'player2Data'))
-		update.player2Data = normalizePlayerSlotData(changes.player2Data);
 	// Seats 3 and 4 are in the form of a Commander Slot alone (ADR-0087).
-	if (hasOwn(changes, 'player3Data'))
-		update.player3Data = normalizePlayerSlotData(changes.player3Data);
-	if (hasOwn(changes, 'player4Data'))
-		update.player4Data = normalizePlayerSlotData(changes.player4Data);
+	for (const key of Object.values(SLOT_SEAT_DATA_KEY)) {
+		if (hasOwn(changes, key))
+			update[key] = normalizePlayerSlotData(changes[key]);
+	}
 
 	return update;
 }

@@ -119,21 +119,39 @@ describe('a Seat\'s Commander picker', () => {
 		expect(updates.at(-1)?.commanders).toEqual([KRAUM]);
 	});
 
-	it('changes a held Commander to another of its printings, in its place', async () => {
-		mockFetch.mockResolvedValue({
-			data: [
-				scryfallCardOf(ATRAXA_2XM),
-				scryfallCardOf(ATRAXA),
-			],
-		});
+	// A card is found by its oracle id, which a two-faced card may carry on its faces: a name can hold quotes no search phrase survives.
+	it.each([
+		{
+			card: 'a card',
+			answered: { oracle_id: 'oracle-atraxa' },
+		},
+		{
+			card: 'a card that carries it on its faces',
+			answered: {
+				card_faces: [
+					{ oracle_id: 'oracle-atraxa' },
+					{ oracle_id: 'oracle-atraxa' },
+				],
+			},
+		},
+	])('changes a held Commander to another printing of $card, in its place', async ({ answered }) => {
+		mockFetch.mockImplementation(async (url: string) => url === SEARCH
+			? {
+					data: [
+						scryfallCardOf(ATRAXA_2XM),
+						scryfallCardOf(ATRAXA),
+					],
+				}
+			: answered);
 		const { wrapper, updates } = mountFields([ATRAXA, TYMNA]);
 
 		await press(wrapper, 'Change printing of Atraxa, Praetors\' Voice');
 
 		expect(mockFetch.mock.calls.map(([url, options]) => [url, options.query])).toEqual([
+			[`https://api.scryfall.com/cards/${ATRAXA.scryfallId}`, undefined],
 			[
 				SEARCH,
-				{ q: '!"Atraxa, Praetors\' Voice" game:paper', unique: 'prints', order: 'released' },
+				{ q: 'oracleid:oracle-atraxa game:paper', unique: 'prints', order: 'released' },
 			],
 		]);
 		expect(labels(wrapper, 'Printings of Atraxa, Praetors\' Voice')).toEqual(['Pick printing 2XM 190', 'Pick printing CM2 10']);
@@ -141,6 +159,22 @@ describe('a Seat\'s Commander picker', () => {
 		await press(wrapper, 'Pick printing 2XM 190');
 
 		expect(updates.at(-1)?.commanders).toEqual([ATRAXA_2XM, TYMNA]);
+		expect(wrapper.find('ul[aria-label="Printings of Atraxa, Praetors\' Voice"]').exists()).toBe(false);
+	});
+
+	it('says so when a held Commander has no other printing to offer', async () => {
+		mockFetch.mockImplementation(async (url: string) => url === SEARCH
+			? {
+					data: [
+						scryfallCardOf(ATRAXA),
+					],
+				}
+			: { oracle_id: 'oracle-atraxa' });
+		const { wrapper } = mountFields([ATRAXA]);
+
+		await press(wrapper, 'Change printing of Atraxa, Praetors\' Voice');
+
+		expect(wrapper.find('[data-no-printings]').exists()).toBe(true);
 		expect(wrapper.find('ul[aria-label="Printings of Atraxa, Praetors\' Voice"]').exists()).toBe(false);
 	});
 

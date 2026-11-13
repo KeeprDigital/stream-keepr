@@ -277,7 +277,7 @@ A Screen Card's optional duration, after which every holder hides it by the shar
 _Avoid_: auto-clear (nothing clears the Card when it runs out)
 
 **Printing**:
-One release of a One Piece card as bandai-keepr lists it — standard, alt-art or reprint — identified by its Printing id (`OP01-001`, `OP01-001_p1`) and imaged at `cards-img.keepr.digital/<PrintingId>.png`. A One Piece Screen Card is one Printing, chosen in Card Spotlight (ADR-0057).
+One release of a One Piece card as bandai-keepr lists it — standard, alt-art or reprint — identified by its Printing id (`OP01-001`, `OP01-001_p1`) and imaged at `cards-img.keepr.digital/<PrintingId>.png`. A One Piece Screen Card is one Printing, chosen in Card Spotlight (ADR-0057). A Magic: The Gathering card has printings too, each one Scryfall card: a **Commander**, and each card of a Commander Event's Feature Match Deck List, is held as the one printing picked or pasted (ADR-0087).
 _Avoid_: variant, parallel, version.
 
 **Screen Output**:

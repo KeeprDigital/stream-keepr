@@ -197,14 +197,14 @@ describe('linking a One Piece Card Game Player into a side', () => {
 
 // A Commander Event has no Players: its Seat is typed, and its deck is its Commanders (ADR-0087).
 describe('a Commander Event\'s Seat', () => {
-	function mountSeat(commanders: boolean) {
+	function mountSeat(commanderEvent: boolean) {
 		const player = reactive<PlayerData>({ ...DEFAULT_PLAYER_DATA });
 		const wrapper = mount(PlayerForm, {
 			props: {
 				'modelValue': player,
 				'displayMode': 'score',
 				'game': 'mtg',
-				commanders,
+				commanderEvent,
 				'pronounsEnabled': true,
 				'standingsEnabled': true,
 				'lgsEnabled': true,
@@ -230,17 +230,17 @@ describe('a Commander Event\'s Seat', () => {
 	}
 
 	it.each([
-		{ seat: 'a Commander Event\'s Seat', commanders: true },
-		{ seat: 'any other Magic: The Gathering Seat', commanders: false },
-	])('offers $seat a Commander picker in place of a Player, a deck name and a record: $commanders', ({ commanders }) => {
-		const { wrapper } = mountSeat(commanders);
+		{ seat: 'a Commander Event\'s Seat', commanderEvent: true },
+		{ seat: 'any other Magic: The Gathering Seat', commanderEvent: false },
+	])('offers $seat a Commander picker in place of a Player, a deck name and a record: $commanderEvent', ({ commanderEvent }) => {
+		const { wrapper } = mountSeat(commanderEvent);
 
-		expect(wrapper.find('[data-commander-picker]').exists()).toBe(commanders);
+		expect(wrapper.find('[data-commander-picker]').exists()).toBe(commanderEvent);
 		expect([
 			wrapper.find('[role="combobox"]').exists(),
 			wrapper.find('[data-deck-name]').exists(),
 			wrapper.find('[data-field="wins"]').exists(),
-		]).toEqual([!commanders, !commanders, !commanders]);
+		]).toEqual([!commanderEvent, !commanderEvent, !commanderEvent]);
 		expect(['name', 'pronouns', 'lgs'].map(field => wrapper.find(`[data-field="${field}"]`).exists()))
 			.toEqual([true, true, true]);
 	});

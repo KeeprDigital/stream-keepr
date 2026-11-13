@@ -1,6 +1,6 @@
 import type { ManualPlayerSlotData, UpdateFeatureMatchInput } from '~~/shared/api';
 import { commanderDeckIdentity } from '~~/shared/utils/commander';
-import { SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
+import { COMMANDER_SEAT_DATA_KEYS, SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 
 /**
  * A Commander Event's Feature Match Slot Seats (ADR-0087). The Event has no
@@ -9,8 +9,6 @@ import { SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
  */
 
 const SEAT_DATA_KEYS = Object.values(SLOT_SEAT_DATA_KEY);
-/** Seats 3 and 4, which only a Commander Event's Slot holds. */
-const COMMANDER_ONLY_SEAT_DATA_KEYS = [SLOT_SEAT_DATA_KEY.player3, SLOT_SEAT_DATA_KEY.player4];
 
 /** What a typed Seat keeps of a save: no record, and no deck but its Commanders'. */
 const TYPED_SEAT_FIELDS = ['name', 'pronouns', 'lgs'] as const;
@@ -54,7 +52,7 @@ export function withCommanderSeats(input: UpdateFeatureMatchInput): UpdateFeatur
 
 /** Whether a setup save writes what only a Commander Slot holds: Seat 3 or 4, or a Seat's Commanders. */
 export function writesCommanderSeats(input: UpdateFeatureMatchInput): boolean {
-	return COMMANDER_ONLY_SEAT_DATA_KEYS.some(key => input[key] !== undefined)
+	return COMMANDER_SEAT_DATA_KEYS.some(key => input[key] !== undefined)
 		|| SEAT_DATA_KEYS.some((key) => {
 			const gameData = input[key]?.gameData;
 			return gameData?.type === 'mtg' && gameData.commanders !== undefined;

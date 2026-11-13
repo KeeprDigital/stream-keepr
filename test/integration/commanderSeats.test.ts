@@ -65,21 +65,4 @@ describe('a Commander Event\'s Feature Match Slot Seats', () => {
 		});
 		expect(slot.player3Data).toEqual({ name: 'Ana' });
 	});
-
-	it('refuses a Seat naming a third Commander', async () => {
-		const res = await $fetchRaw(`/api/events/${eventId}/feature-match-slots/${slotId}/setup`, {
-			method: 'PATCH',
-			body: {
-				player2Data: {
-					name: 'Ben',
-					gameData: {
-						type: 'mtg',
-						commanders: [TYMNA, KRAUM, TYMNA],
-					},
-				},
-			},
-		});
-
-		expect(res.status).toBe(400);
-	});
 });

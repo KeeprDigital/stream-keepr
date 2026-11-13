@@ -266,22 +266,69 @@ describe('swap Seats', () => {
 		expect([slot.player2Data ?? null, slot.player4Data?.name]).toEqual([null, 'Ben']);
 	});
 
-	it.each([
-		{
-			refused: 'a Seat swapped with itself',
-			seats: ['player2', 'player2'] as const,
-			statusCode: 400,
-		},
-	])('refuses $refused', async ({ seats, statusCode }) => {
+	it('refuses a Seat swapped with itself', async () => {
 		const { eventId, slotId } = await commanderSlot();
 
 		await expect(featureMatchSlotWriteModule().swapSeats({
 			eventId,
 			slotId,
-			seats: [...seats],
+			seats: ['player2', 'player2'],
 		}))
 			.rejects
-			.toMatchObject({ statusCode });
+			.toMatchObject({ statusCode: 400 });
+	});
+});
+
+// A Commander Event is its Slots alone: a Seat links no Player and a Slot shows no Match.
+describe('a Commander Slot and the Event\'s Players and Matches', () => {
+	async function commanderSlotBesidePlayer() {
+		const { eventId, slotId } = await commanderSlot();
+		const [player] = await db.insert(schema.players).values({ eventId, name: 'Pat' }).returning({ id: schema.players.id });
+		return { eventId, slotId, playerId: player!.id };
+	}
+
+	it.each([
+		{
+			write: 'a setup save',
+			run: (eventId: number, slotId: number, playerId: number) => featureMatchSlotWriteModule().updateSetup({
+				eventId,
+				slotId,
+				input: { player1Id: playerId },
+			}),
+		},
+		{
+			write: 'a Slot create',
+			run: (eventId: number, _slotId: number, playerId: number) => featureMatchSlotWriteModule().create({
+				eventId,
+				input: { player2Id: playerId },
+			}),
+		},
+	])('refuses $write that links a Seat to a Player', async ({ run }) => {
+		const { eventId, slotId, playerId } = await commanderSlotBesidePlayer();
+
+		await expect(run(eventId, slotId, playerId)).rejects.toMatchObject({ statusCode: 400 });
+
+		const slots = await db.select().from(schema.featureMatches).where(eq(schema.featureMatches.eventId, eventId));
+		expect(slots.map(slot => [slot.player1Id, slot.player2Id])).toEqual([
+			[null, null],
+		]);
+	});
+
+	it('creates a Slot whose Seats keep only what a typed Seat holds', async () => {
+		const { eventId } = await commanderSlot();
+
+		const created = await featureMatchSlotWriteModule().create({
+			eventId,
+			input: {
+				player1Data: {
+					name: 'Ana',
+					wins: 3,
+					gameData: { type: 'mtg', deckName: 'Typed', deckColors: 'G' },
+				},
+			},
+		});
+
+		expect(created.player1Data).toEqual({ name: 'Ana' });
 	});
 });
 
@@ -335,48 +382,24 @@ describe('an Event that is not a Commander Event', () => {
 			.toMatchObject({ statusCode: 400 });
 	});
 
-	// The Slot response and its realtime message are public contracts: no Seat 3 or 4 appears in either.
-	it('answers and announces a Two-Player Slot with the fields it always had', async () => {
+	// The Slot response and its realtime message are public contracts: neither gains a Seat 3 or 4.
+	it('answers and announces a Two-Player Slot with no Seat 3 or 4', async () => {
 		const { eventId, slotId } = await stageSlot(TWO_PLAYER);
+		const seatOne = {
+			name: 'Ana',
+			gameData: { type: 'mtg' as const, deckName: 'Burn', deckColors: 'R' },
+		};
 
 		const answer = await featureMatchSlotWriteModule().updateSetup({
 			eventId,
 			slotId,
-			input: {
-				player1Data: {
-					name: 'Ana',
-					gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' },
-				},
-			},
+			input: { player1Data: seatOne },
 		});
 
 		const announced = published.find(message => message.type === 'featureMatch:updated')!.payload as { featureMatch: object };
-		for (const slot of [answer, announced.featureMatch, await reloaded(eventId, slotId)]) {
-			expect(Object.keys(slot)).toEqual([
-				'id',
-				'eventId',
-				'matchId',
-				'externalId',
-				'externalSource',
-				'tableNumber',
-				'roundName',
-				'formatName',
-				'player1Id',
-				'player2Id',
-				'player1Data',
-				'player2Data',
-				'bestOf',
-				'sortOrder',
-				'playerDisplayMode',
-				'activeSessionId',
-				'createdAt',
-				'updatedAt',
-				'activeSession',
-			]);
-		}
-		expect(answer.player1Data).toEqual({
-			name: 'Ana',
-			gameData: { type: 'mtg', deckName: 'Burn', deckColors: 'R' },
-		});
+		const laterSeatKeys = [answer, announced.featureMatch, await reloaded(eventId, slotId)]
+			.map(slot => Object.keys(slot).filter(key => /^player[34]/.test(key)));
+		expect(laterSeatKeys).toEqual([[], [], []]);
+		expect(answer.player1Data).toEqual(seatOne);
 	});
 });

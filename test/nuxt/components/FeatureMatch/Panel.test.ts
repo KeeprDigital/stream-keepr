@@ -159,7 +159,7 @@ const PlayerFormStub = defineComponent({
 		formId: { type: String, required: true },
 		modelValue: { type: Object, required: false },
 		side: { type: String, required: false },
-		commanders: { type: Boolean, default: false },
+		commanderEvent: { type: Boolean, default: false },
 	},
 	emits: ['submit', 'update:playerId', 'update:modelValue'],
 	template: '<form :id="formId" data-testid="player-form" @submit.prevent="$emit(\'submit\')"></form>',
@@ -700,7 +700,7 @@ describe('featureMatchPanel setup Seats', () => {
 	function seats(wrapper: Wrapper) {
 		return wrapper.findAllComponents(PlayerFormStub).map(form => [
 			(form.props('modelValue') as { name?: string }).name,
-			form.props('commanders'),
+			form.props('commanderEvent'),
 		]);
 	}
 

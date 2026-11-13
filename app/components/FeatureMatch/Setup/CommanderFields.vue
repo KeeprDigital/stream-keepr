@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Commander, MtgPlayerGameData } from '~~/shared/types/game';
-import { MAX_SEAT_COMMANDERS } from '~~/shared/utils/commander';
+import { colourIdentityColours, MAX_SEAT_COMMANDERS } from '~~/shared/utils/commander';
 import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { COMMANDER_SEARCH_MIN_LENGTH, searchCommanderCards, searchCommanderPrintings } from '~/utils/commanderSearch';
 
@@ -19,9 +19,11 @@ const searching = ref(false);
 /** The text of the last search that answered no card, or failed. */
 const unmatched = ref<string | null>(null);
 const searchFailed = ref(false);
-/** The held Commander whose printings are offered, and those printings. */
-const printingsOf = ref<number | null>(null);
+/** The place, among the held Commanders, of the one whose printings are offered, and those printings. */
+const printingsOpenAt = ref<number | null>(null);
 const printings = ref<Commander[]>([]);
+/** Whether the offered Commander's printings have been answered. */
+const printingsAnswered = ref(false);
 let searchGeneration = 0;
 
 const commanders = computed(() => modelValue.value.commanders ?? []);
@@ -75,32 +77,40 @@ function pick(commander: Commander) {
 
 function remove(index: number) {
 	hold(commanders.value.filter((_, held) => held !== index));
-	printingsOf.value = null;
+	printingsOpenAt.value = null;
 }
 
 async function offerPrintings(index: number) {
-	if (printingsOf.value === index) {
-		printingsOf.value = null;
+	if (printingsOpenAt.value === index) {
+		printingsOpenAt.value = null;
 		return;
 	}
-	printingsOf.value = index;
+	printingsOpenAt.value = index;
 	printings.value = [];
+	printingsAnswered.value = false;
 	try {
-		const found = await searchCommanderPrintings(commanders.value[index]!.name);
-		if (printingsOf.value === index)
+		const found = await searchCommanderPrintings(commanders.value[index]!);
+		if (printingsOpenAt.value === index) {
 			printings.value = found;
+			printingsAnswered.value = true;
+		}
 	}
 	catch {
-		if (printingsOf.value === index)
-			printingsOf.value = null;
+		if (printingsOpenAt.value === index)
+			printingsOpenAt.value = null;
 	}
+}
+
+/** Whether the printings offered hold one besides the printing held. */
+function offersAnotherPrinting(commander: Commander) {
+	return printings.value.some(printing => printing.scryfallId !== commander.scryfallId);
 }
 
 function pickPrinting(index: number, printing: Commander) {
 	hold(commanders.value.map((commander, held) => held === index
 		? printing
 		: commander));
-	printingsOf.value = null;
+	printingsOpenAt.value = null;
 }
 </script>
 
@@ -136,7 +146,7 @@ function pickPrinting(index: number, printing: Commander) {
 							</p>
 							<p class="flex items-center gap-2 text-sm text-muted">
 								{{ printingLabel(commander) }}
-								<MtgManaColorDisplay :colors="commander.colorIdentity || 'C'" size="sm" />
+								<MtgManaColorDisplay :colors="colourIdentityColours(commander.colorIdentity)" size="sm" />
 							</p>
 						</div>
 						<UButton
@@ -145,7 +155,7 @@ function pickPrinting(index: number, printing: Commander) {
 							variant="outline"
 							size="xs"
 							:aria-label="`Change printing of ${commander.name}`"
-							:aria-expanded="printingsOf === index"
+							:aria-expanded="printingsOpenAt === index"
 							@click="offerPrintings(index)"
 						/>
 						<UButton
@@ -157,7 +167,7 @@ function pickPrinting(index: number, printing: Commander) {
 						/>
 					</div>
 					<ul
-						v-if="printingsOf === index && printings.length > 0"
+						v-if="printingsOpenAt === index && offersAnotherPrinting(commander)"
 						class="flex max-h-56 flex-wrap gap-1 overflow-y-auto"
 						:aria-label="`Printings of ${commander.name}`"
 					>
@@ -181,6 +191,13 @@ function pickPrinting(index: number, printing: Commander) {
 							</button>
 						</li>
 					</ul>
+					<p
+						v-else-if="printingsOpenAt === index && printingsAnswered"
+						class="text-sm text-muted"
+						data-no-printings
+					>
+						No other printing of this card.
+					</p>
 				</li>
 			</ul>
 
@@ -219,7 +236,7 @@ function pickPrinting(index: number, printing: Commander) {
 								loading="lazy"
 							>
 							<span class="min-w-0 flex-1 truncate">{{ card.name }}</span>
-							<MtgManaColorDisplay :colors="card.colorIdentity || 'C'" size="sm" />
+							<MtgManaColorDisplay :colors="colourIdentityColours(card.colorIdentity)" size="sm" />
 						</button>
 					</li>
 				</ul>

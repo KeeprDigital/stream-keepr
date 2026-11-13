@@ -11,7 +11,7 @@ import {
 	SEAT_VALUES,
 } from '~~/shared/types/enums';
 import { isMergeableFeatureMatchCommand } from '~~/shared/types/featureMatchSession';
-import { playerGameDataSchema, slotSideGameDataSchema } from './player';
+import { playerGameDataSchema, slotSeatGameDataSchema } from './player';
 
 function blankStringToNull(value: unknown) {
 	if (typeof value !== 'string')
@@ -103,7 +103,7 @@ const updateFeatureMatchPlayerDataSchema = z.preprocess(
 			archetypeId: nullablePositiveIntegerSchema,
 			deckList: nullableStringSchema(100000),
 			lgs: nullableStringSchema(200),
-			gameData: slotSideGameDataSchema.nullable().optional(),
+			gameData: slotSeatGameDataSchema.nullable().optional(),
 		})
 		.strict()
 		.transform(data => hasMeaningfulValue(data)

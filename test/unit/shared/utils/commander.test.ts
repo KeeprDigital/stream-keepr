@@ -23,12 +23,20 @@ describe('a Seat\'s deck, from its Commanders', () => {
 			deck: { deckName: 'Atraxa', deckColors: 'WUBG' },
 		},
 		{
-			held: 'a pair sharing a colour',
+			held: 'a pair, in WUBRG order whatever order they are held in',
 			commanders: [
 				commander('Kraum', 'UR'),
 				commander('Tymna', 'WB'),
 			],
 			deck: { deckName: 'Kraum / Tymna', deckColors: 'WUBR' },
+		},
+		{
+			held: 'a pair sharing colours',
+			commanders: [
+				commander('Atraxa', 'WUBG'),
+				commander('Tymna', 'WB'),
+			],
+			deck: { deckName: 'Atraxa / Tymna', deckColors: 'WUBG' },
 		},
 		{
 			held: 'a colourless Commander',

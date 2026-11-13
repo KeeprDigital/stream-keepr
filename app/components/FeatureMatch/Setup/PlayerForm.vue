@@ -19,7 +19,7 @@ const props = defineProps<{
 	 * A Commander Event's Seat (ADR-0087): the Event has no Players, so the Seat
 	 * is typed, and it holds Commanders in place of a deck name and a record.
 	 */
-	commanders?: boolean;
+	commanderEvent?: boolean;
 	/** The Slot and its side this form edits, for the side's Feature Match Deck List. */
 	slotId?: number;
 	side?: PlayerSide;
@@ -38,7 +38,7 @@ const player = defineModel<PlayerData>({
 
 // ──────────────── Player Picker ────────────────
 
-const hasPlayers = computed(() => !props.commanders && (props.players?.length ?? 0) > 0);
+const hasPlayers = computed(() => !props.commanderEvent && (props.players?.length ?? 0) > 0);
 
 // The picker finds a Player by name, Nickname or Bandai member number (ADR-0074).
 const searchTerm = ref('');
@@ -85,7 +85,7 @@ function onPlayerSelected(value: number | null) {
 }
 
 /** A typed Seat has no record: nothing on a Commander Event produces one. */
-const showsRecord = computed(() => props.standingsEnabled && !props.commanders);
+const showsRecord = computed(() => props.standingsEnabled && !props.commanderEvent);
 
 // ──────────────── Game-Specific Data ────────────────
 
@@ -166,7 +166,7 @@ const editingPlayerDeckList = ref(false);
 		<USeparator />
 
 		<!-- Game-Specific Fields -->
-		<FeatureMatchSetupCommanderFields v-if="props.commanders" v-model="mtgGameData" />
+		<FeatureMatchSetupCommanderFields v-if="props.commanderEvent" v-model="mtgGameData" />
 		<FeatureMatchSetupMtgPlayerFields v-else-if="props.game === 'mtg'" v-model="mtgGameData" />
 		<UFormField
 			v-if="linkedPlayer"

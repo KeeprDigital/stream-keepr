@@ -543,7 +543,7 @@ async function save() {
 						:model-value="formData[SLOT_SEAT_DATA_KEY[seat]]!"
 						:display-mode="matchDisplayMode"
 						:game="game"
-						commanders
+						commander-event
 						:pronouns-enabled="pronounsEnabled"
 						:lgs-enabled="lgsEnabled"
 						:form-id="seatFormId(seat)"

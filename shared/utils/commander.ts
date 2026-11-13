@@ -7,6 +7,11 @@ const COLOUR_ORDER = 'WUBRG';
 /** The colours of a deck whose Commanders have no colour identity. */
 const COLOURLESS = 'C';
 
+/** A colour identity as a deck's colours show it: its letters, or `C` for a card with none. */
+export function colourIdentityColours(colorIdentity: string): string {
+	return colorIdentity || COLOURLESS;
+}
+
 /** Colour identity letters, each once, in WUBRG order. */
 export function orderedColourIdentity(letters: Iterable<string>): string {
 	const held = new Set(letters);
@@ -22,7 +27,7 @@ export function commanderDeckIdentity(commanders: readonly Commander[]): Require
 		return { deckName: null, deckColors: null };
 	return {
 		deckName: commanders.map(commander => commander.name).join(' / '),
-		deckColors: orderedColourIdentity(commanders.flatMap(commander => [...commander.colorIdentity])) || COLOURLESS,
+		deckColors: colourIdentityColours(orderedColourIdentity(commanders.flatMap(commander => [...commander.colorIdentity]))),
 	};
 }
 

@@ -54,13 +54,13 @@ const commanderSchema = z.object({
 }).strict();
 
 /**
- * A Slot side's game data, as a setup save writes it: a One Piece side may also
+ * A Slot Seat's game data, as a setup save writes it: a One Piece side may also
  * reference its Feature Match Deck List, which the setup write checks names one
  * of the Slot's (ADR-0057). Nothing else may write a reference. A linked side's
  * Player Deck List reference, which its form holds, is the server's to write
  * (ADR-0074), so it is dropped.
  */
-export const slotSideGameDataSchema = z.discriminatedUnion('type', [
+export const slotSeatGameDataSchema = z.discriminatedUnion('type', [
 	// Only a Commander Event's Seat holds Commanders, which the setup write checks (ADR-0087).
 	mtgGameDataSchema.extend({
 		commanders: z.array(commanderSchema).max(MAX_SEAT_COMMANDERS).nullable().optional(),

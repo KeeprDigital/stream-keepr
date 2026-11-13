@@ -21,6 +21,8 @@ export const SLOT_SEAT_DATA_KEY = {
 	player3: 'player3Data',
 	player4: 'player4Data',
 } as const satisfies Record<Seat, string>;
+/** The Slot fields of Seats 3 and 4, which only a Commander Event's Slot holds (ADR-0087). */
+export const COMMANDER_SEAT_DATA_KEYS = [SLOT_SEAT_DATA_KEY.player3, SLOT_SEAT_DATA_KEY.player4] as const;
 /** The Slot field seating each side's Player, in the Slot's own order. */
 export const SLOT_SIDE_PLAYER_KEY = { player1: 'player1Id', player2: 'player2Id' } as const satisfies Record<PlayerSide, keyof FeatureMatchSlotSides>;
 

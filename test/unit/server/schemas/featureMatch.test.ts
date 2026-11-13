@@ -7,6 +7,7 @@ import {
 } from '~~/server/schemas/api/featureMatch';
 import { createPlayerSchema, updatePlayerSchema } from '~~/server/schemas/api/player';
 import { FEATURE_MATCH_BATCHABLE_COMMAND_TYPES } from '~~/shared/types/featureMatchSession';
+import { ATRAXA } from '~~/test/helpers/commanders';
 import { ZORO } from '~~/test/helpers/opCards';
 
 describe('createFeatureMatchSchema', () => {
@@ -298,16 +299,10 @@ describe('a Player Deck List reference on a Slot side', () => {
 
 // A Seat holds one or two Commanders, each one printing of a card (ADR-0087).
 describe('a Seat\'s Commanders', () => {
-	function commander(overrides: Record<string, unknown> = {}) {
-		return {
-			scryfallId: 'd0d33d52-3d28-4635-b985-51e126289259',
-			name: 'Atraxa, Praetors\' Voice',
-			colorIdentity: 'WUBG',
-			setCode: 'cm2',
-			collectorNumber: '10',
-			...overrides,
-		};
-	}
+	const commander = (overrides: Record<string, unknown> = {}) => ({
+		...ATRAXA,
+		...overrides,
+	});
 	const gameData = (commanders: unknown[]) => ({ type: 'mtg', commanders });
 
 	it.each([
