@@ -1,6 +1,8 @@
+import type { ApplicationFontFaceRequest } from '../modules/graphics/typography';
 import type { BackgroundLayersCapableMode } from '../screenModes';
 import type {
 	GraphicFontSelection,
+	GraphicFontStyle,
 	GraphicGroupChildConfig,
 	GraphicInputDeclaration,
 	GraphicItemConfig,
@@ -127,6 +129,43 @@ function appendGraphicFontReferences(
 		return;
 	for (const [key, style] of Object.entries(item.placeholderStyles ?? {}))
 		append(style.font, `${ownerSlot}.placeholderStyles.${key}.font`);
+}
+
+/**
+ * The application faces a set of Graphic Items paints with: each item's base
+ * typography, and each Graphic Placeholder Style over it. A placeholder inherits
+ * what it leaves unset from the base, so it asks for the face that actually
+ * paints. A library font asks for nothing here; the walk above indexes it, and
+ * its host loads it as a `FontFace`.
+ *
+ * Beside that walk because both graphics hosts wait for the fonts of the same
+ * items, read with their Theme bindings painted, and reach both through one rule.
+ */
+export function graphicItemsApplicationFonts(items: readonly GraphicItemConfig[]): ApplicationFontFaceRequest[] {
+	const requests: ApplicationFontFaceRequest[] = [];
+
+	function append(font: GraphicFontSelection, weight: number, style: GraphicFontStyle) {
+		if (font.kind === 'application')
+			requests.push({ fontId: font.fontId, weight, style });
+	}
+
+	function appendItem(item: GraphicItemConfig | GraphicGroupChildConfig) {
+		if (!('typography' in item))
+			return;
+		const base = item.typography;
+		append(base.font, base.fontWeight, base.fontStyle);
+		if (!('placeholderStyles' in item))
+			return;
+		for (const style of Object.values(item.placeholderStyles ?? {}))
+			append(style.font ?? base.font, style.fontWeight ?? base.fontWeight, style.fontStyle ?? base.fontStyle);
+	}
+
+	for (const item of items) {
+		appendItem(item);
+		if (item.type === 'group')
+			item.children.forEach(appendItem);
+	}
+	return requests;
 }
 
 /**

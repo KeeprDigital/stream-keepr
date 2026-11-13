@@ -18,7 +18,7 @@ import { deferred } from '~~/test/helpers/deferred';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { text } from '~~/test/helpers/graphicsComposition';
-import { stubCapabilitySession, stubFontFaces } from '~~/test/nuxt/helpers/fontFaces';
+import { stubCapabilitySession, stubDocumentFonts, stubFontFaces } from '~~/test/nuxt/helpers/fontFaces';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import Renderer from '~/components/Screen/Renderer.vue';
 
@@ -1365,6 +1365,30 @@ describe('a library font in the Theme', () => {
 			whileLoading: { frame: true, background: true, display: false },
 			settled: { frame: true, background: true, display: true },
 		});
+	});
+});
+
+// An application font ships as CSS `@font-face`, which swaps in late on a cold cache.
+describe('an application font in the Theme', () => {
+	it('holds the rendering off program until the face its heading paints has loaded', async () => {
+		const load = deferred<unknown>();
+		const fonts = stubDocumentFonts(async font => font.includes('Poppins')
+			? load.promise
+			: [{}]);
+
+		await mountMode('background', {
+			heading: {
+				...FOUNDATION_TOKENS.heading.default,
+				font: { kind: 'application', fontId: 'poppins' },
+			},
+		});
+		const frame = () => wrapper!.get('.screen-renderer');
+
+		expect(fonts.load).toHaveBeenCalledWith(`normal ${FOUNDATION_TOKENS.heading.default.weight} 1em "Poppins"`);
+		expect(frame().attributes()).toMatchObject({ 'data-font-ready': 'false', 'data-screen-mode-ready': 'false' });
+
+		load.resolve([{}]);
+		await vi.waitFor(() => expect(frame().attributes()).toMatchObject({ 'data-font-ready': 'true', 'data-screen-mode-ready': 'true' }));
 	});
 });
 
