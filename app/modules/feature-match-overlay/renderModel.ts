@@ -107,6 +107,8 @@ export interface FeatureMatchOverlayRenderModel {
 	output: FeatureMatchOverlayOutput;
 	canvasStyle: CSSProperties;
 	sourceItems: FeatureMatchOverlaySourceItemRenderModel[];
+	/** Every visible Source Item, an empty Seat's too: what an editor's guides outline, so each stays selectable. */
+	sourceGuides: FeatureMatchSourceItemConfig[];
 	sourceCutouts: Array<{ id: string; path: string }>;
 	frame: FeatureMatchOverlayFrameRenderModel;
 	rectStyle: (rect: FeatureMatchOverlayRect) => CSSProperties;
@@ -424,6 +426,7 @@ export function resolveFeatureMatchOverlayRenderModel(
 			background: screenOutputCanvasBackground(output),
 		},
 		sourceItems,
+		sourceGuides: config.layout.sources.filter(item => item.visible),
 		sourceCutouts: sourceItems
 			.filter(source => source.cutoutPath)
 			.map(source => ({ id: source.item.id, path: source.cutoutPath! })),

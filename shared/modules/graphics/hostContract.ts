@@ -153,8 +153,7 @@ const FEATURE_MATCH_OVERLAY_HOST_CONTRACTS = Object.fromEntries(EVENT_KIND_VALUE
  * one: the Clock, Player Life, and Game Wins Definitions require it, and its token
  * catalogue reads both a Feature Match Session and current Event Data. Its
  * catalogue and its Seats are its Event's: a Commander Event is offered four
- * Seats and their tokens (ADR-0087). One contract per kind, so a reader may
- * compare by identity.
+ * Seats and their tokens (ADR-0087).
  */
 export function featureMatchOverlayHostContract(kind: EventKind): GraphicsHostContract {
 	return FEATURE_MATCH_OVERLAY_HOST_CONTRACTS[kind];

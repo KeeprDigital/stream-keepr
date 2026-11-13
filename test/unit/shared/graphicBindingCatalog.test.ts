@@ -251,10 +251,8 @@ describe('graphic Input Binding field catalog', () => {
 			.toBeUndefined();
 	});
 
-	// A Commander Seat's deck is its Commanders, each a card (ADR-0087).
+	// Each Commander a Seat holds is a card: the first, and a pair's second (ADR-0087).
 	it.each([
-		{ fieldId: 'player.deckName', pair: 'Tymna the Weaver / Kraum, Ludevic\'s Opus', single: 'Atraxa, Praetors\' Voice' },
-		{ fieldId: 'player.deckColors', pair: 'WUBR', single: 'WUBG' },
 		{
 			fieldId: 'player.commander1Image',
 			pair: scryfallCardImageUrl(TYMNA.scryfallId),
@@ -353,7 +351,7 @@ describe('the fields one Graphic Input may bind to', () => {
 			.toEqual(['player.leader', 'player.leaderColors', 'player.leaderImage']);
 	});
 
-	// A Two-Player or One Piece Card Game Event's pickers read as they did before Commander (ADR-0087).
+	// A Commander's fields and a third Seat are a Commander Event's alone (ADR-0087).
 	it.each([
 		{
 			name: 'a Two-Player Event',

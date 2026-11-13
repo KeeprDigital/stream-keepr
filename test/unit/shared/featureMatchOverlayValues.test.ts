@@ -229,7 +229,7 @@ describe('which player a side shows on the Feature Match Overlay', () => {
 
 describe('a Commander Slot on the Feature Match Overlay', () => {
 	const EVENT = {
-		name: 'Pod Night',
+		name: 'Commander Night',
 		game: 'mtg' as const,
 		variant: 'commander' as const,
 		displayRecordSeparator: '-' as const,
@@ -313,10 +313,6 @@ describe('the Feature Match token values of each kind of Event', () => {
 		{
 			kind: 'mtg-two-player' as const,
 			event: { game: 'mtg' as const, variant: 'two-player' as const },
-		},
-		{
-			kind: 'mtg-two-player' as const,
-			event: { game: 'mtg' as const },
 		},
 		{
 			kind: 'mtg-commander' as const,

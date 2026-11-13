@@ -71,7 +71,7 @@ const props = defineProps<{
 	game?: Game;
 	/**
 	 * That Event's Variant, which decides whether a Commander's fields and a Slot's
-	 * third and fourth Seats exist (ADR-0087). Absent leaves them in, as no game does.
+	 * third and fourth Seats exist (ADR-0087). Absent reads as Two-Player.
 	 */
 	variant?: Variant | null;
 	/** Whether this session holds the artifact's Graphics Authoring Lease. */

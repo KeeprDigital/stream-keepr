@@ -486,7 +486,7 @@ describe('featureMatchOverlayDisplay', () => {
 		expect(wrapper.get('[data-graphic-item-kind="text"]').text()).toContain('Monkey.D.Luffy');
 	});
 
-	// An empty Seat is not in a Commander game: nothing frames it. A pair's sources render unseated, as before (ADR-0087).
+	// An empty Seat is not in a Commander game: nothing frames it. A pair's sources render unseated (ADR-0087).
 	it.each([
 		{
 			name: 'a Commander Event',
@@ -512,7 +512,7 @@ describe('featureMatchOverlayDisplay', () => {
 			items: [],
 		};
 		mockConfig.value = config;
-		mockEvent.value = { name: 'Pod Night', ...event };
+		mockEvent.value = { name: 'Commander Night', ...event };
 		mockMatch.value = {
 			id: 1,
 			player1Data: { name: 'Ana' },

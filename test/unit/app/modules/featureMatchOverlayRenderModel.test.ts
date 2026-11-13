@@ -136,6 +136,13 @@ describe('feature match overlay host render model', () => {
 
 		expect(model.sourceItems.map(item => item.item.id)).toEqual(['main', 'seat-2', 'unassigned']);
 		expect(model.sourceCutouts.map(cutout => cutout.id)).toEqual(['main', 'seat-2', 'unassigned']);
+		// An editor still outlines it, so its author can select it.
+		expect(model.sourceGuides.map(item => item.id)).toEqual([
+			'main',
+			'seat-2',
+			'seat-3',
+			'unassigned',
+		]);
 	});
 
 	it('cuts a Source Item through the Frame only when it asks to, inside its border', () => {

@@ -24,7 +24,7 @@ export function seatNumber(seat: Seat): number {
 	return SEAT_VALUES.indexOf(seat) + 1;
 }
 
-/** A Seat as a layout's author names it: a Commander Slot's are Seats, a pair's the two Players they have always been. */
+/** A Seat as a layout's author names it: a Commander Slot's are Seats, a pair's its two Players. */
 export function seatLabel(kind: EventKind, seat: Seat): string {
 	return `${kind === 'mtg-commander'
 		? 'Seat'

@@ -15,11 +15,11 @@ import { seatLabel } from './utils/featureMatchSidePlayer';
  *
  * Feature Match Overlay declares no Graphic Inputs. Its Graphic Text Templates
  * name host-supplied tokens instead: the Host Contract carries this catalogue,
- * the editor offers exactly these keys, and the render model resolves their values
+ * the editor offers the keys its Event's kind holds, and the render model resolves their values
  * from the Feature Match Session and current Event Data. An author never declares,
  * renames, or deletes one.
  *
- * ## Why the keys name a side
+ * ## Why the keys name a Seat
  *
  * The legacy model put the side on the item — a `playerSide` beside a `{name}`
  * token — so one token key meant two different values depending on which item

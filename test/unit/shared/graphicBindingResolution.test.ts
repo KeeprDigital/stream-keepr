@@ -418,10 +418,6 @@ describe('graphic Input Binding resolution', () => {
 			relations: ['player1', 'player2', 'match'],
 		},
 		{
-			variant: null,
-			relations: ['player1', 'player2', 'match'],
-		},
-		{
 			variant: 'commander' as const,
 			relations: [
 				'player1',

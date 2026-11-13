@@ -1896,11 +1896,11 @@ interface GraphicItemContentContext {
 /**
  * The Seats a Graphic Item reads: the one a context-gated kind is set to, the
  * ones a Text Graphic Item's host tokens belong to, and for a Graphic Group
- * every Seat its children read.
+ * every Seat its visible children read.
  */
 function seatsRead(item: GraphicItemConfig | GraphicGroupChildConfig, inputs: GraphicItemContentContext): Seat[] {
 	if (item.type === 'group')
-		return item.children.flatMap(child => seatsRead(child, inputs));
+		return item.children.filter(child => child.visible).flatMap(child => seatsRead(child, inputs));
 	if (item.type === 'text') {
 		return graphicTextTemplateInputKeys(item.text).flatMap((key) => {
 			const seat = inputs.textTokenSeats?.[key];

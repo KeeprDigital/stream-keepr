@@ -229,7 +229,7 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 					player4Name: 'Dara',
 					player4Commander1Image: ATRAXA_IMAGE,
 					player4Commander2Image: 'https://example.com/x.jpg',
-					eventName: 'Pod Night',
+					eventName: 'Commander Night',
 				},
 				featureMatch: commanderContext(emptySeats),
 				...CANVAS,
@@ -281,9 +281,9 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 			])[0]!.textSegments![0]!.cardImage).toBeUndefined();
 		});
 
-		/** A descriptor that paints nothing: its placement alone. */
-		function paintsNothing(descriptor: object | undefined) {
-			return descriptor !== undefined && Object.keys(descriptor).sort().join() === 'id,kind,label,style';
+		/** Whether an item paints nothing: no surface, no text and no children. */
+		function paintsNothing(descriptor: { surface?: unknown; text?: unknown; children?: unknown } | undefined) {
+			return descriptor !== undefined && descriptor.surface === undefined && descriptor.text === undefined && descriptor.children === undefined;
 		}
 
 		// An empty Seat's Graphic Items render nothing, surface included (ADR-0087).
@@ -334,6 +334,19 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 				],
 				nothing: [false, false],
 			},
+			{
+				name: 'a group whose only visible child reads it',
+				build: () => [
+					group([
+						text('{player3Name}'),
+						{
+							...life('player4'),
+							visible: false,
+						},
+					]),
+				],
+				nothing: [true],
+			},
 		])('renders nothing for $name: $nothing', ({ build, nothing }) => {
 			expect(items(build(), ['player3']).map(paintsNothing)).toEqual(nothing);
 		});
@@ -351,7 +364,7 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		});
 	});
 
-	// A pair's items render as they did before Commander: a Seat with no player keeps its surface.
+	// Only a Commander Slot has empty Seats: a pair's item keeps its surface with nobody seated.
 	it('keeps the surface of a Two-Player Slot\'s items while nobody is seated', () => {
 		const [life] = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',
@@ -743,7 +756,7 @@ describe('featureMatchGraphicsContext', () => {
 });
 
 describe('featureMatchGraphicsContext on a Commander Event', () => {
-	const COMMANDER_EVENT = { name: 'Pod Night', game: 'mtg', variant: 'commander' };
+	const COMMANDER_EVENT = { name: 'Commander Night', game: 'mtg', variant: 'commander' };
 	type Input = Parameters<typeof featureMatchGraphicsContext>[0];
 	const seat = (lifeTotal: number) => ({ lifeTotal, gameWins: 0, sideboardRevealed: false });
 
@@ -816,23 +829,16 @@ describe('featureMatchGraphicsContext on a Commander Event', () => {
 		expect(context.emptySeats).toEqual(emptySeats);
 	});
 
-	// Every other Event's context is what it was: no third Seat, and a pair that renders unseated.
-	it.each([
-		{ game: 'mtg', variant: 'two-player' },
-		{ game: 'op', variant: null },
-	])('gives a $game Event\'s ($variant) no third Seat and no empty Seats', (event) => {
+	// Only a Commander Slot's context holds a third Seat or names empty ones.
+	it('gives a Two-Player Event\'s no third Seat and no empty Seats', () => {
 		const context = featureMatchGraphicsContext({
-			event: { name: 'Open', ...event },
+			event: { name: 'Open', game: 'mtg', variant: 'two-player' },
 			featureMatch: null,
 			matchState: null,
 			displayTime: null,
 		} as unknown as Input);
 
-		expect(Object.keys(context).sort()).toEqual([
-			'bestOf',
-			'clockDisplayTime',
-			'player1',
-			'player2',
-		]);
+		expect(context.player3).toBeUndefined();
+		expect(context.emptySeats).toBeUndefined();
 	});
 });

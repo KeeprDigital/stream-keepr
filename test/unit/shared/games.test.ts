@@ -3,6 +3,7 @@ import {
 	EVENT_PAGE_OFFERED_TO,
 	eventKind,
 	EVENTS_WITH_PLAYERS,
+	eventSeats,
 	EVERY_EVENT,
 	GAME_CONFIGS,
 	getCounterTypeConfigs,
@@ -148,5 +149,30 @@ describe('what each Card Game\'s Metagame reads', () => {
 		],
 	] as const)('a %s Metagame offers the scopes %j, reading standings: %s', (game, scopes, readsStandings) => {
 		expect(getMetagameRules(game)).toEqual({ scopes, readsStandings });
+	});
+});
+
+describe('the Seats a Feature Match Slot has', () => {
+	// A pair on every Event but a Commander Event, whose Slot seats four (ADR-0087).
+	it.each([
+		[
+			'mtg-two-player',
+			['player1', 'player2'],
+		],
+		[
+			'op',
+			['player1', 'player2'],
+		],
+		[
+			'mtg-commander',
+			[
+				'player1',
+				'player2',
+				'player3',
+				'player4',
+			],
+		],
+	] as const)('on a %s Event are %j', (kind, seats) => {
+		expect(eventSeats(kind)).toEqual(seats);
 	});
 });

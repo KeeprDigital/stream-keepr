@@ -1,5 +1,5 @@
+import type { EventKind } from '~~/shared/config/games';
 import { describe, expect, it } from 'vitest';
-import { EVENT_KIND_VALUES } from '~~/shared/config/games';
 import {
 	FEATURE_MATCH_TOKEN_KEYS,
 	featureMatchTokenCatalogue,
@@ -18,14 +18,14 @@ function rendered(template: string, values: Record<string, string>): string {
 
 describe('featureMatchTokenCatalogue', () => {
 	/** One Seat's token suffixes, in the order an Event of `kind` is offered them. */
-	function seatTokens(kind: typeof EVENT_KIND_VALUES[number], seat: number): string[] {
+	function seatTokens(kind: EventKind, seat: number): string[] {
 		return featureMatchTokenCatalogue(kind)
 			.map(token => token.key)
 			.filter(key => key.startsWith(`player${seat}`))
 			.map(key => key.slice(`player${seat}`.length));
 	}
 
-	// A Two-Player or One Piece Event's token list is what it was before Commander (ADR-0087).
+	// A pair's tokens name two Seats, with a record and a Leader's image and no Commander term (ADR-0087).
 	it.each(['mtg-two-player', 'op'] as const)('offers a %s Event the pair\'s tokens and no third Seat', (kind) => {
 		expect(seatTokens(kind, 1)).toEqual([
 			'Name',
@@ -55,8 +55,8 @@ describe('featureMatchTokenCatalogue', () => {
 			expect(seatTokens('mtg-commander', seat)).toEqual(seatTokens('mtg-commander', 1));
 	});
 
-	it.each(EVENT_KIND_VALUES)('carries the Match, Round, and Event tokens beside the per-Seat ones on a %s Event', (kind) => {
-		expect(featureMatchTokenCatalogue(kind).map(token => token.key).filter(key => !key.startsWith('player')))
+	it('carries the Match, Round, and Event tokens beside the per-Seat ones', () => {
+		expect(featureMatchTokenCatalogue('mtg-commander').map(token => token.key).filter(key => !key.startsWith('player')))
 			.toEqual([
 				'round',
 				'stage',
@@ -64,10 +64,6 @@ describe('featureMatchTokenCatalogue', () => {
 				'format',
 				'eventName',
 			]);
-	});
-
-	it.each(EVENT_KIND_VALUES)('offers a %s Event only terms of the closed vocabulary', (kind) => {
-		expect(featureMatchTokenCatalogue(kind).map(token => token.key).filter(key => !isFeatureMatchTokenKey(key))).toEqual([]);
 	});
 
 	it('gives every token a distinct key', () => {

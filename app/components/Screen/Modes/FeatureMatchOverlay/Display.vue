@@ -656,22 +656,22 @@ onBeforeUnmount(() => {
 		>
 			<template v-if="showPreviewGuides">
 				<div
-					v-for="source in sourceItems"
-					:key="`source-guide-${source.item.id}`"
+					v-for="item in renderModel.sourceGuides"
+					:key="`source-guide-${item.id}`"
 					class="graphic-item-guide graphic-item-guide--source"
 					:class="{
-						'is-selected': isPreviewTargetSelected({ type: 'source', itemId: source.item.id }),
-						'is-locked': isSourceLocked(source.item.id),
+						'is-selected': isPreviewTargetSelected({ type: 'source', itemId: item.id }),
+						'is-locked': isSourceLocked(item.id),
 					}"
-					:style="guideStyle(source.item)"
-					v-bind="isSourceLocked(source.item.id)
+					:style="guideStyle(item)"
+					v-bind="isSourceLocked(item.id)
 						? { 'data-locked': 'true', 'aria-hidden': 'true' }
-						: { 'role': 'button', 'tabindex': 0, 'aria-label': `Select ${source.item.label}` }"
-					@click.stop="selectSourceGuide(source.item.id, $event)"
-					@keydown.enter.stop="selectSourceGuide(source.item.id)"
-					@keydown.space.prevent.stop="selectSourceGuide(source.item.id)"
+						: { 'role': 'button', 'tabindex': 0, 'aria-label': `Select ${item.label}` }"
+					@click.stop="selectSourceGuide(item.id, $event)"
+					@keydown.enter.stop="selectSourceGuide(item.id)"
+					@keydown.space.prevent.stop="selectSourceGuide(item.id)"
 				>
-					<span>{{ source.item.label }}</span>
+					<span>{{ item.label }}</span>
 				</div>
 			</template>
 		</GraphicsCompositorGuideLayer>
