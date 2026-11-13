@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
+import { EVENT_PAGE_OFFERED_TO } from '~~/shared/config/games';
 import { isMeleeManagedRound } from '~~/shared/utils/roundControl';
 import { LazyMatchCreateModal } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
-	cardGames: EVENT_PAGE_CARD_GAMES.matches,
+	offeredTo: EVENT_PAGE_OFFERED_TO.matches,
 	title: 'Matches',
 	layout: false,
 });

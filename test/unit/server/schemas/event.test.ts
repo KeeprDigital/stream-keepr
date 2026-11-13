@@ -55,9 +55,32 @@ describe.each([
 });
 
 describe('createEventSchema', () => {
-	it('allows Broadcast Deck Lists only for MTG Events', () => {
+	// Which Events hold Broadcast Deck Lists is `holdsBroadcastDeckLists`'s; the schema refuses by it.
+	it('allows Broadcast Deck Lists only on an Event that holds them', () => {
 		expect(createEventSchema.safeParse({ ...mtgEvent, broadcastDeckListsEnabled: true }).success).toBe(true);
-		expect(createEventSchema.safeParse({ name: 'One Piece', game: 'op', broadcastDeckListsEnabled: true }).success).toBe(false);
+		expect(createEventSchema.safeParse({ ...mtgEvent, variant: 'commander', broadcastDeckListsEnabled: true }).success).toBe(false);
+	});
+
+	// Only a Magic: The Gathering Event has a Variant, Two-Player unless it says Commander (ADR-0087).
+	it.each([
+		[
+			{ game: 'mtg' },
+			'two-player',
+		],
+		[
+			{ game: 'mtg', variant: 'commander' },
+			'commander',
+		],
+		[
+			{ game: 'op' },
+			null,
+		],
+	] as const)('creates %j with the Variant %s', (fields, variant) => {
+		expect(createEventSchema.parse({ name: 'Event', ...fields }).variant).toBe(variant);
+	});
+
+	it('refuses a Variant on a One Piece Card Game Event', () => {
+		expect(createEventSchema.safeParse({ name: 'One Piece', game: 'op', variant: 'two-player' }).success).toBe(false);
 	});
 
 	it('refuses commentator references, since a new Event has no Event Talent', () => {
@@ -89,5 +112,10 @@ describe('updateEventSchema', () => {
 
 	it('refuses to reinterpret an existing Event\'s game', () => {
 		expect(updateEventSchema.safeParse({ game: 'op', name: 'Still MTG' }).success).toBe(false);
+	});
+
+	// Its Variant decides what an Event holds, as its Card Game does (ADR-0087).
+	it('refuses to change an existing Event\'s Variant', () => {
+		expect(updateEventSchema.safeParse({ variant: 'commander', name: 'Still Two-Player' }).success).toBe(false);
 	});
 });

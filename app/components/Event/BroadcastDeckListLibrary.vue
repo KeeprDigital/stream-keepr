@@ -6,6 +6,7 @@ import type {
 	BroadcastDeckListSummaryResponse,
 } from '~~/shared/types/broadcastDeckList';
 import type { Event } from '~/types';
+import { holdsBroadcastDeckLists } from '~~/shared/config/games';
 
 const props = defineProps<{
 	event: Event;
@@ -374,7 +375,7 @@ async function confirmDelete() {
 </script>
 
 <template>
-	<section v-if="props.event.game === 'mtg'" class="flex flex-col gap-6">
+	<section v-if="holdsBroadcastDeckLists(props.event)" class="flex flex-col gap-6">
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<h2 class="text-xl font-semibold">
 				Broadcast Deck Lists

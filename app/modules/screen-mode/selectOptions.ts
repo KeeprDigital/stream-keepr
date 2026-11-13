@@ -3,8 +3,8 @@ import type { ScreenModeSelectOption } from '~~/shared/screenModeDefinitions';
 import { computed } from 'vue';
 import { getScreenModeSelectOptions } from '~~/shared/screenModeDefinitions';
 
-/** The Screen Modes a mode picker offers the current Event: those declaring its Card Game. */
+/** The Screen Modes a mode picker offers the current Event: those declaring its kind. */
 export function useEventScreenModeSelectOptions(): ComputedRef<ScreenModeSelectOption[]> {
-	const eventStore = useEventStore();
-	return computed(() => getScreenModeSelectOptions(eventStore.event?.game));
+	const kind = useEventKind();
+	return computed(() => getScreenModeSelectOptions(kind.value));
 }

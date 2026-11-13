@@ -1,5 +1,5 @@
 import { eventService } from '~~/server/services/event';
-import { isOfferedToCardGame, MTG_ONLY } from '~~/shared/config/games';
+import { eventKind, isOfferedToEvent, TWO_PLAYER_MAGIC_ONLY } from '~~/shared/config/games';
 
 /**
  * Melee Sync Event data loader.
@@ -19,16 +19,17 @@ export async function requireMeleeSyncEventData(eventId: number) {
 }
 
 /**
- * Refuses to configure or run Melee Sync for an Event of a Card Game it is not
- * offered to: a One Piece Card Game Event never runs it (ADR-0057). Checked
+ * Refuses to configure or run Melee Sync for an Event it is not offered to:
+ * neither a One Piece Card Game Event (ADR-0057) nor a Commander Event
+ * (ADR-0087) ever runs it. Checked
  * before the sync lease, so a refusal records nothing on the Event.
  */
 export async function requireMeleeSyncOffered(eventId: number): Promise<void> {
-	const { game } = await requireMeleeSyncEventData(eventId);
-	if (!isOfferedToCardGame(MTG_ONLY, game)) {
+	const event = await requireMeleeSyncEventData(eventId);
+	if (!isOfferedToEvent(TWO_PLAYER_MAGIC_ONLY, eventKind(event))) {
 		throw createError({
 			statusCode: 422,
-			message: 'Melee Sync is only available on a Magic: The Gathering Event',
+			message: 'Melee Sync is only available on a Two-Player Magic: The Gathering Event',
 			data: { code: 'MELEE_SYNC_CARD_GAME_UNSUPPORTED' },
 		});
 	}

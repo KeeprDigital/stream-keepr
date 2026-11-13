@@ -1,7 +1,7 @@
 import type { VueWrapper } from '@vue/test-utils';
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { isOfferedToCardGame } from '~~/shared/config/games';
+import { eventKind, isOfferedToEvent } from '~~/shared/config/games';
 import { SCREEN_MODES, THEME_PREVIEW_SCREEN_MODES } from '~~/shared/screenModes';
 import { settleUntil } from '~~/test/helpers/settle';
 import { loadDrawnImages } from '~~/test/nuxt/helpers/drawnImages';
@@ -51,7 +51,7 @@ describe('the Theme preview gallery', () => {
 		const tiles = gallery.findAll('[data-preview-mode]');
 
 		expect(tiles.map(tile => tile.attributes('data-preview-mode')))
-			.toEqual(THEME_PREVIEW_SCREEN_MODES.filter(mode => isOfferedToCardGame(SCREEN_MODES[mode].cardGames, game)));
+			.toEqual(THEME_PREVIEW_SCREEN_MODES.filter(mode => isOfferedToEvent(SCREEN_MODES[mode].offeredTo, eventKind({ game }))));
 		expect(new Set(tiles.map(tile => tile.attributes('data-preview-game')))).toEqual(new Set([game]));
 	});
 

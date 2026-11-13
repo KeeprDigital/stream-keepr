@@ -40,7 +40,10 @@ export function restoreDocumentFonts() {
  * every face constructed and loads at once, and a `document.fonts` from
  * `stubDocumentFonts`. `vi.unstubAllGlobals()` undoes the `FontFace`.
  */
-export function stubFontFaces() {
+export function stubFontFaces(
+	/** When a constructed face's own load settles: at once, unless a test holds it. */
+	load: (family: string) => Promise<unknown> = async () => {},
+) {
 	const constructed: Array<{ family: string; source: string }> = [];
 	vi.stubGlobal('FontFace', class {
 		constructor(public family: string, public source: string) {
@@ -48,6 +51,7 @@ export function stubFontFaces() {
 		}
 
 		async load() {
+			await load(this.family);
 			return this;
 		}
 	});

@@ -4,7 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, reactive, ref } from 'vue';
-import { getGameDefaults } from '~~/shared/config/games';
+import { eventKind, getMatchFormatDefaults } from '~~/shared/config/games';
 import { featureMatchModeConfigContract } from '~~/shared/screenModeConfigs/featureMatch';
 import { fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { createInitialOvertimeState } from '~~/shared/types/featureMatchState';
@@ -95,7 +95,7 @@ const EVERY_TOGGLE_ON: Partial<DbEvent> = {
 function mountControls(game: Game, toggles: Partial<DbEvent> = {}) {
 	event.value = createMockEvent({
 		game,
-		...fromFeatureMatchDefaults(getGameDefaults(game)),
+		...fromFeatureMatchDefaults(getMatchFormatDefaults(eventKind({ game }))),
 		...toggles,
 	});
 	return mount(Display, {

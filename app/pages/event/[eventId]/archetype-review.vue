@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
+import { EVENT_PAGE_OFFERED_TO } from '~~/shared/config/games';
 
 definePageMeta({
-	cardGames: EVENT_PAGE_CARD_GAMES.archetypeReview,
+	offeredTo: EVENT_PAGE_OFFERED_TO.archetypeReview,
 	title: 'Archetype Review',
 	layout: false,
 });

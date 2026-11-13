@@ -2,6 +2,7 @@ import type { SQL } from 'drizzle-orm';
 import type { DbEvent, DbEventInsert, DbEventTalent, DbScreen } from '~~/server/db/schema';
 import type { KeptImportedStructure } from '~~/server/services/importedStructure';
 import type { CreateEventInput, MeleeConfigInput, UpdateEventInput } from '~~/shared/api';
+import type { Variant } from '~~/shared/types/enums';
 import { and, asc, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
 import { eventCardNameOverrides, events, eventTalents, matches, players, screens } from '~~/server/db/schema';
@@ -10,10 +11,13 @@ import { buildRemoveImportedStructureQueries } from '~~/server/services/imported
 import { protectMeleeClientSecret } from '~~/server/services/meleeCredentials';
 import { buildClearDeckSourcePlayersQuery, buildReleaseManualBracketPlayersQuery } from '~~/server/services/screen';
 import { BroadcastDeckListsInUseError } from '~~/server/utils/errors';
-import { getGameDefaults } from '~~/shared/config/games';
+import { eventKind, getMatchFormatDefaults } from '~~/shared/config/games';
 import { fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 
 type EventWithTalents = DbEvent & { talents: DbEventTalent[] };
+
+/** A create as the API schema hands it over: its Variant settled, and none on a Card Game without one (ADR-0087). */
+type CreateEventData = Omit<CreateEventInput, 'variant'> & { variant?: Variant | null };
 
 type SyncMetadataUpdate = Partial<Pick<DbEvent,	| 'initialSetupCompletedAt'
 	| 'lastEventSyncedAt'
@@ -123,14 +127,14 @@ export function eventService() {
 			.where(whereClause);
 	};
 
-	const create = async (data: CreateEventInput): Promise<EventWithTalents> => {
+	const create = async (data: CreateEventData): Promise<EventWithTalents> => {
 		// Database defaults describe the legacy MTG policy. Materialise the
-		// selected game's complete policy at this boundary so sparse creates do
-		// not accidentally persist MTG settings for another game. Explicit
-		// caller overrides still win.
+		// complete policy of the Event's Card Game and Variant at this boundary
+		// so sparse creates do not accidentally persist Two-Player MTG settings
+		// for another kind of Event. Explicit caller overrides still win.
 		const insertData: DbEventInsert = {
 			featureMatchOrientation: 'horizontal',
-			...fromFeatureMatchDefaults(getGameDefaults(data.game)),
+			...fromFeatureMatchDefaults(getMatchFormatDefaults(eventKind(data))),
 			...data,
 		};
 		const [newEvent] = await db.insert(events).values(insertData).returning();

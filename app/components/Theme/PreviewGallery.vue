@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
 import type { Game } from '~~/shared/types/enums';
-import { GAME_CONFIGS, isOfferedToCardGame } from '~~/shared/config/games';
+import { eventKind, GAME_CONFIGS, isOfferedToEvent } from '~~/shared/config/games';
 import { SCREEN_MODES, THEME_PREVIEW_SCREEN_MODES } from '~~/shared/screenModes';
 import { GAME_VALUES } from '~~/shared/types/enums';
 
@@ -17,7 +17,7 @@ defineProps<{
 const game = ref<Game>('mtg');
 const games = GAME_VALUES.map(value => ({ label: GAME_CONFIGS[value].label, value }));
 const modes = computed(() => THEME_PREVIEW_SCREEN_MODES.filter(mode =>
-	isOfferedToCardGame(SCREEN_MODES[mode].cardGames, game.value)));
+	isOfferedToEvent(SCREEN_MODES[mode].offeredTo, eventKind({ game: game.value }))));
 </script>
 
 <template>
