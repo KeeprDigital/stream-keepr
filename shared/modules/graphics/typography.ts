@@ -277,10 +277,34 @@ export function getGraphicFontDefinition(value: string | null | undefined) {
 		: undefined;
 }
 
-export const GRAPHIC_FONT_OPTIONS = GRAPHIC_FONTS.map(font => ({
-	label: font.label,
-	value: font.id,
-}));
+export interface GraphicFontOptionGroup {
+	category: GraphicFontCategory;
+	label: string;
+	options: readonly { label: string; value: GraphicApplicationFontId; cssFamily: string }[];
+}
+
+const GRAPHIC_FONT_CATEGORY_LABELS: readonly { category: GraphicFontCategory; label: string }[] = [
+	{ category: 'sans', label: 'Sans' },
+	{ category: 'condensed', label: 'Condensed' },
+	{ category: 'serif', label: 'Serif' },
+	{ category: 'mono', label: 'Monospace' },
+	{ category: 'system', label: 'System' },
+];
+
+/**
+ * The application fonts as the picker offers them: by category, each option carrying
+ * the family it paints its own name in. Derived from the registry so a font added
+ * there appears here, in registry order within its category; an empty category has no group.
+ */
+export const GRAPHIC_FONT_OPTION_GROUPS: readonly GraphicFontOptionGroup[] = GRAPHIC_FONT_CATEGORY_LABELS
+	.map(({ category, label }) => ({
+		category,
+		label,
+		options: GRAPHIC_FONTS
+			.filter(font => font.category === category)
+			.map(font => ({ label: font.label, value: font.id, cssFamily: font.cssFamily })),
+	}))
+	.filter(group => group.options.length > 0);
 
 /**
  * The CSS family name one exact font Graphic Asset Revision is loaded under.
