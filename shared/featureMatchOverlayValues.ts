@@ -1,12 +1,14 @@
 import type { EventResponse, FeatureMatchResponse, MatchResponse, PhaseResponse, RoundResponse } from '~~/shared/api';
-import type { PlayerSide } from '~~/shared/types/enums';
-import { getGameConfig } from '~~/shared/config/games';
+import type { Seat, Variant } from '~~/shared/types/enums';
+import { eventKind, eventSeats, getGameConfig } from '~~/shared/config/games';
+import { featureMatchTokenCatalogue } from '~~/shared/featureMatchTokenCatalogue';
 import { formatOpColors } from '~~/shared/utils/card/op';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { formatOrdinal } from '~~/shared/utils/formatters';
 import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
 import { playerDisplayName } from '~~/shared/utils/playerName';
 import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 
 /**
  * The values a Feature Match Overlay resolves for its Feature Match tokens.
@@ -85,26 +87,19 @@ export function buildFeatureMatchOverlayTemplateMetadataValues({
 }
 
 export interface FeatureMatchTokenValuesInput {
-	event: Pick<EventResponse, 'name' | 'game' | 'displayRecordSeparator' | 'displayHideZeroDraws' | 'displayPositionFormat'> | null | undefined;
+	/** Its Variant decides which Seats and terms it holds values for; absent reads as Two-Player. */
+	event: (Pick<EventResponse, 'name' | 'game' | 'displayRecordSeparator' | 'displayHideZeroDraws' | 'displayPositionFormat'> & { variant?: Variant | null }) | null | undefined;
 	featureMatch: FeatureMatchResponse | null | undefined;
 	sourceMatch: Pick<MatchResponse, 'tableNumber'> | null | undefined;
 	round: Pick<RoundResponse, 'name'> | null | undefined;
 	phase: Pick<PhaseResponse, 'name'> | null | undefined;
 }
 
-/** The per-player token suffixes, in the order the catalogue generates them. */
-const PLAYER_VALUE_KEYS = [
-	'Name',
-	'Record',
-	'Deck',
-	'DeckColors',
-	'Pronouns',
-	'Lgs',
-	'LeaderImage',
-] as const;
+/** Every per-Seat token suffix; an Event's catalogue says which of them it holds. */
+type SeatValueKey = 'Name' | 'Record' | 'Deck' | 'DeckColors' | 'Pronouns' | 'Lgs' | 'LeaderImage' | 'Commander1Image' | 'Commander2Image';
 
-/** The player a side shows, by the Session's side order while one is active (ADR-0058). */
-function playerData(input: FeatureMatchTokenValuesInput, side: PlayerSide) {
+/** The player a Seat shows, by the Session's side order while one is active (ADR-0058). */
+function playerData(input: FeatureMatchTokenValuesInput, side: Seat) {
 	return featureMatchSidePlayer(input.featureMatch, side).data;
 }
 
@@ -115,7 +110,7 @@ function playerData(input: FeatureMatchTokenValuesInput, side: PlayerSide) {
  * between a score and a standing without needing a second authored Text Item. The
  * active Session's mode wins because its source snapshot is the on-air contract.
  */
-function record(input: FeatureMatchTokenValuesInput, side: PlayerSide): string {
+function record(input: FeatureMatchTokenValuesInput, side: Seat): string {
 	const data = playerData(input, side);
 	const displayMode = input.featureMatch?.activeSession?.sourceSnapshot.playerDisplayMode
 		?? input.featureMatch?.playerDisplayMode
@@ -138,13 +133,15 @@ function record(input: FeatureMatchTokenValuesInput, side: PlayerSide): string {
 
 function playerValues(
 	input: FeatureMatchTokenValuesInput,
-	side: PlayerSide,
-): Record<typeof PLAYER_VALUE_KEYS[number], string> {
+	side: Seat,
+): Record<SeatValueKey, string> {
 	const data = playerData(input, side);
+	// A Commander Seat's deck name and colours are its Commanders', as its setup save wrote them (ADR-0087).
 	const mtg = getMtgGameData(data?.gameData);
 	// A One Piece deck is named by its Leader, which also sets its colours, so a
 	// Leader shows where a Magic deck name and its mana colours do.
 	const leader = getOpGameData(data?.gameData).leader;
+	const commanderImage = (index: number) => scryfallCardImageUrl(mtg.commanders?.[index]?.scryfallId) ?? '';
 
 	return {
 		Name: playerDisplayName(data),
@@ -156,12 +153,19 @@ function playerValues(
 		Pronouns: data?.pronouns ?? '',
 		Lgs: data?.lgs ?? '',
 		LeaderImage: leader?.imageUrl ?? '',
+		Commander1Image: commanderImage(0),
+		Commander2Image: commanderImage(1),
 	};
 }
 
 /**
  * The Feature Match token binding catalogue's values, keyed the way the catalogue
  * keys them.
+ *
+ * Exactly the tokens the Event's kind is offered: a Commander Event's four
+ * Seats and their Commanders' images, and no record; any other Event's pair,
+ * with no third Seat and no Commander term (ADR-0087). The public Feature Match
+ * read returns every one (ADR-0056).
  *
  * A missing value is an empty string rather than an absent key, because the shared
  * Graphic Text Template substitutes and nothing else. Legacy rendering trimmed
@@ -171,12 +175,17 @@ function playerValues(
  * tidy itself.
  */
 export function featureMatchTokenValues(input: FeatureMatchTokenValuesInput): Record<string, string> {
+	const kind = input.event
+		? eventKind(input.event)
+		: 'mtg-two-player';
+	const offered = new Set(featureMatchTokenCatalogue(kind).map(token => token.key));
 	const values: Record<string, string> = {};
 
-	for (const side of ['player1', 'player2'] as const) {
-		const resolved = playerValues(input, side);
-		for (const key of PLAYER_VALUE_KEYS)
-			values[`${side}${key}`] = resolved[key];
+	for (const seat of eventSeats(kind)) {
+		for (const [key, value] of Object.entries(playerValues(input, seat))) {
+			if (offered.has(`${seat}${key}`))
+				values[`${seat}${key}`] = value;
+		}
 	}
 
 	return {

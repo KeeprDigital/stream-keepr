@@ -4,6 +4,7 @@ import type { FeatureMatchOverlayOutput, ScreenVideoPlayback } from '~~/shared/t
 import type { ScreenGraphicAssetReference } from '~~/shared/utils/graphicsAssetReferences';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import type { FeatureMatchOverlaySelectionTarget } from '~/types';
+import { eventKind } from '~~/shared/config/games';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
 import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
@@ -164,15 +165,6 @@ const selectedPreviewTarget = ref<FeatureMatchOverlaySelectionTarget>({ type: 'c
  * the other and pushes both back down.
  */
 const selectedCompositorTarget = ref<GraphicsSelectionTarget>({ type: 'canvas' });
-const renderModel = computed(() => resolveFeatureMatchOverlayRenderModel({
-	config: config.value,
-	output: resolvedOutput.value,
-	surfaces: themeValues.value,
-	paintsMedia: Boolean(frameImageUrl.value || frameVideo.value?.url || themeValues.value.frameMedia || frameAnimationEnabled.value),
-	maskId: frameMaskId,
-	frameGlowFilterId,
-}));
-
 /**
  * The Feature Match Layout's shared item tree, composed by the shared compositor.
  *
@@ -198,6 +190,11 @@ const hostState = computed(() => ({
 		: null,
 }));
 
+/** The kind of Event this Screen is of, once its Event is known. */
+const displayedKind = computed(() => event.value
+	? eventKind(event.value)
+	: undefined);
+
 /**
  * The fixed dataset standing in for the live Match, or none.
  *
@@ -205,20 +202,23 @@ const hostState = computed(() => ({
  * Slot's live data too; the display session reads that only on an embedded
  * preview, so a live Screen Output never shows it. Otherwise, a preview with no
  * Slot behind it shows the canonical sample rather than a layout of empty boxes.
- * Either is the Card Game previewed: a Theme preview's own, which is of no Event,
- * or else the Event being authored's.
+ * Either is the kind of Event previewed: a Theme preview's own Card Game, which
+ * is of no Event, or else the Event being authored's, a Commander Event's
+ * seating four (ADR-0087).
  */
 const fixedDataset = computed<FeatureMatchSample | null>(() => {
-	const game = sampleDataset ?? event.value?.game ?? 'mtg';
+	const kind = sampleDataset
+		? eventKind({ game: sampleDataset })
+		: displayedKind.value ?? 'mtg-two-player';
 	if (previewStressDataset?.value) {
 		// An Untimed Match shows its Untimed Label where the clock would be: the
 		// active Session's clock says which it is, or else the Event's Match Format.
 		const clockType = matchState.value?.clock?.type ?? toFeatureMatchDefaults(event.value).clockType;
-		return featureMatchStressDataset(game, { untimed: clockType === 'untimed' });
+		return featureMatchStressDataset(kind, { untimed: clockType === 'untimed' });
 	}
 	if (!usesSampleDataset.value)
 		return null;
-	const sample = featureMatchSampleDataset(game);
+	const sample = featureMatchSampleDataset(kind);
 	return {
 		...sample,
 		context: {
@@ -240,6 +240,17 @@ const fixedDataset = computed<FeatureMatchSample | null>(() => {
  */
 const graphicsContext = computed(() => fixedDataset.value?.context
 	?? featureMatchGraphicsContext(hostState.value, sideboards.value));
+
+const renderModel = computed(() => resolveFeatureMatchOverlayRenderModel({
+	config: config.value,
+	output: resolvedOutput.value,
+	surfaces: themeValues.value,
+	paintsMedia: Boolean(frameImageUrl.value || frameVideo.value?.url || themeValues.value.frameMedia || frameAnimationEnabled.value),
+	maskId: frameMaskId,
+	frameGlowFilterId,
+	// A Commander Slot's empty Seats frame nothing (ADR-0087).
+	emptySeats: graphicsContext.value.emptySeats,
+}));
 
 // The per-item reveal trigger (#492): a sideboardRevealed edge plays the Deck
 // List Graphic Items' authored enter/exit recipes through the compositor's
@@ -265,7 +276,7 @@ const animationPreview = useFeatureMatchOverlayAnimationPreview(
 
 const compositorRenderModel = computed(() => resolveFeatureMatchOverlayCompositorRenderModel({
 	output: resolvedOutput.value,
-	game: fixedDataset.value?.game ?? event.value?.game,
+	kind: fixedDataset.value?.kind ?? displayedKind.value,
 	canvasWidth: canvasWidth.value,
 	canvasHeight: canvasHeight.value,
 	layout: { composition: animationPreview.composition.value },

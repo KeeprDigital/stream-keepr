@@ -36,6 +36,7 @@ import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
 	FORMER_SCREEN_MODE_KEYS,
 	PLAYER_SIDE_VALUES,
+	SEAT_VALUES,
 	SCREEN_COMMAND_VALUES,
 } from '~~/shared/types/enums';
 import {
@@ -952,7 +953,7 @@ const clockGraphicItemShape = {
 const playerLifeGraphicItemShape = {
 	...graphicItemBaseShape,
 	type: z.literal('player-life'),
-	playerSide: z.enum(PLAYER_SIDE_VALUES),
+	playerSide: z.enum(SEAT_VALUES),
 	typography: graphicTypographySchema,
 	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
 	minFontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE),

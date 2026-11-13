@@ -7,19 +7,39 @@ import {
 	featureMatchSampleDatasetIsComplete,
 	OP_FEATURE_MATCH_SAMPLE_SIDES,
 } from '~~/shared/featureMatchSampleDataset';
-import { FEATURE_MATCH_TOKEN_KEYS } from '~~/shared/featureMatchTokenCatalogue';
-import { GAME_VALUES } from '~~/shared/types/enums';
+import { EVENT_KIND_VALUES } from '~~/shared/config/games';
+import { featureMatchTokenCatalogue } from '~~/shared/featureMatchTokenCatalogue';
+import { SEAT_VALUES } from '~~/shared/types/enums';
 import { isOpCardImageUrl } from '~~/shared/utils/card/op';
+import { isScryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 
 // What matters about the canonical preview dataset is not its values but that it
 // covers every token and is awkward in the ways real data is.
 describe('the canonical Feature Match sample dataset', () => {
-	it.each(GAME_VALUES)('covers every entry of the Feature Match token binding catalogue for %s', (game) => {
-		const { tokenValues } = featureMatchSampleDataset(game);
-		const missing = FEATURE_MATCH_TOKEN_KEYS.filter(key => !(key in tokenValues));
+	// Exactly its Event's tokens: a blank preview hides what an author judges, and a value no token names is dead.
+	it.each(EVENT_KIND_VALUES)('holds a value for each token a %s Event is offered, and no other', (kind) => {
+		const { tokenValues } = featureMatchSampleDataset(kind);
 
-		expect(missing).toEqual([]);
+		expect(Object.keys(tokenValues).sort()).toEqual(featureMatchTokenCatalogue(kind).map(token => token.key).sort());
 		expect(featureMatchSampleDatasetIsComplete()).toBe(true);
+	});
+
+	it('samples a Commander game seating four: a pair and single Commanders, a colourless deck, life apart', () => {
+		const { tokenValues, context } = featureMatchSampleDataset('mtg-commander');
+
+		// A long name beside a short one, as the pair's sample has.
+		expect(String(tokenValues.player1Name).length).toBeGreaterThan(20);
+		expect(String(tokenValues.player2Name).length).toBeLessThan(12);
+		// Each Seat's first Commander is a card on air; only a pair has a second.
+		for (const seat of SEAT_VALUES)
+			expect(isScryfallCardImageUrl(String(tokenValues[`${seat}Commander1Image`])), seat).toBe(true);
+		expect(SEAT_VALUES.filter(seat => tokenValues[`${seat}Commander2Image`] !== '')).toEqual(['player1']);
+		expect(String(tokenValues.player1Deck)).toContain(' / ');
+		expect(tokenValues.player4DeckColors).toBe('C');
+		// One game, every Seat in it at a different life.
+		expect(context.emptySeats ?? []).toEqual([]);
+		expect(new Set(SEAT_VALUES.map(seat => context[seat]?.lifeTotal)).size).toBe(4);
+		expect(context.bestOf).toBe(1);
 	});
 
 	it('samples a Magic Match awkward in the ways real ones are', () => {

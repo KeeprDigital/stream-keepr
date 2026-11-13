@@ -1,15 +1,17 @@
 import type { BroadcastGraphicConfig, GraphicItemConfig, GraphicItemKind } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
-import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
+import { featureMatchTokenCatalogue } from '~~/shared/featureMatchTokenCatalogue';
 import {
 	authorsGraphicInputs,
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+	featureMatchOverlayHostContract,
 	getGraphicItemDefinition,
 	GRAPHIC_ITEM_KINDS,
 	graphicFillSummary,
 	graphicGroupChildDefinitionsForHost,
 	graphicItemDefinitionsForHost,
+	graphicItemKindSeats,
 	graphicItemSummary,
 	graphicShapeGeometry,
 	graphicsHostTokenCatalogue,
@@ -309,7 +311,8 @@ describe('graphicItemDefinitions', () => {
 		];
 
 		expect(Object.keys(BROADCAST_GRAPHICS_HOST_CONTRACT).sort()).toEqual(fields);
-		expect(Object.keys(FEATURE_MATCH_OVERLAY_HOST_CONTRACT).sort()).toEqual(fields);
+		// Only a host supplying the Feature Match context has Seats to offer.
+		expect(Object.keys(FEATURE_MATCH_OVERLAY_HOST_CONTRACT).sort()).toEqual(['composition', 'contextKinds', 'hostId', 'seats', 'textValues']);
 	});
 
 	it('offers the Feature Match host the Event and Feature Match contexts', () => {
@@ -328,7 +331,12 @@ describe('graphicItemDefinitions', () => {
 
 		expect(authorsGraphicInputs(FEATURE_MATCH_OVERLAY_HOST_CONTRACT)).toBe(false);
 		expect(graphicsHostTokenCatalogue(FEATURE_MATCH_OVERLAY_HOST_CONTRACT))
-			.toBe(FEATURE_MATCH_TOKEN_CATALOGUE);
+			.toEqual(featureMatchTokenCatalogue('mtg-two-player'));
+	});
+
+	it('binds a Commander Event\'s Feature Match Overlay to its own token catalogue', () => {
+		expect(graphicsHostTokenCatalogue(featureMatchOverlayHostContract('mtg-commander')))
+			.toEqual(featureMatchTokenCatalogue('mtg-commander'));
 	});
 
 	it('creates a Graphic Group arranging no children yet', () => {
@@ -581,6 +589,22 @@ describe('graphicItemDefinitions', () => {
 			expect('playerSide' in item).toBe(owns.playerSide);
 			const sided = patchGraphicPlayerSide(graphic, kind, 'player2');
 			expect(sided !== graphic).toBe(owns.playerSide);
+		});
+
+		// Life is every Seat's; game wins and a Sideboard are a pair's alone (ADR-0087).
+		it.each([
+			{ kind: 'player-life' as const, seat: 'player3' as const, reads: true },
+			{ kind: 'game-wins' as const, seat: 'player3' as const, reads: false },
+			{ kind: 'deck-list' as const, seat: 'player4' as const, reads: false },
+		])('lets a $kind item read $seat: $reads', ({ kind, seat, reads }) => {
+			const graphic = composition(placed(kind));
+
+			expect(graphicItemKindSeats(kind).includes(seat)).toBe(reads);
+			expect(patchGraphicPlayerSide(graphic, kind, seat).items[0]).toMatchObject({
+				playerSide: reads
+					? seat
+					: 'player1',
+			});
 		});
 
 		it('offers a Game Wins Item its win boxes in the Inspector only while it renders them', () => {

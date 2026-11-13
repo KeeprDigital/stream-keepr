@@ -1,4 +1,4 @@
-import type { PlayerSide } from '../../types/enums';
+import type { Seat } from '../../types/enums';
 import type {
 	GameWinsGraphicItemConfig,
 	GraphicFill,
@@ -12,7 +12,9 @@ import type {
 import type { GraphicThemeSlot } from '../../types/graphicThemeBindings';
 import type { GraphicsContextKind, GraphicsHostContract, GraphicsHostId } from './hostContract';
 import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '../../socialProfiles';
+import { PLAYER_SIDE_VALUES, SEAT_VALUES } from '../../types/enums';
 import { applicationGraphicFont } from '../../types/graphics';
+import { seatNumber } from '../../utils/featureMatchSidePlayer';
 import { roundedShapeGeometry, shapeGeometrySummary, squareShapeGeometry } from './shapeGeometry';
 import { DEFAULT_GRAPHIC_FONT_ID } from './typography';
 
@@ -87,8 +89,12 @@ export interface GraphicItemDefinition {
 	surfaceStyles?: Partial<Record<GraphicSurfaceStyleSlot, GraphicDisplayDeclaration>>;
 	/** The one Shape Geometry this kind draws, clips to, or shapes a part with, absent for none. */
 	shapeGeometry?: GraphicShapeGeometryDeclaration;
-	/** Whether this kind reads one player side's live state, which its author chooses. */
-	playerSide?: true;
+	/**
+	 * Whether this kind reads one Seat's live state, which its author chooses, and
+	 * which Seats it can read: `pair` the two every Slot has, `seat` any of a
+	 * Commander Slot's four (ADR-0087).
+	 */
+	playerSide?: 'pair' | 'seat';
 }
 
 /** A Graphic Item whose configuration carries base typography. */
@@ -143,8 +149,8 @@ export type GraphicSurfaceStyleItem<S extends GraphicSurfaceStyleSlot = GraphicS
 /** A Graphic Item that can keep a Shape Geometry. */
 export type GraphicShapeGeometryItem = GraphicItemWithKey<GraphicShapeGeometrySlot>;
 
-/** A Graphic Item that reads one player side. */
-export type GraphicPlayerSideItem = Extract<GraphicItemConfig, { playerSide: PlayerSide }>;
+/** A Graphic Item that reads one Seat. */
+export type GraphicPlayerSideItem = Extract<GraphicItemConfig, { playerSide: Seat }>;
 
 /**
  * When a property group the item owns is on screen. `paints` absent means always;
@@ -200,7 +206,7 @@ type GraphicShapeGeometryDeclarationFor<K extends GraphicItemKind> = [
 		};
 
 type GraphicPlayerSideDeclarationFor<K extends GraphicItemKind> = K extends GraphicPlayerSideItem['type']
-	? { playerSide: true }
+	? { playerSide: Seat extends Extract<GraphicPlayerSideItem, { type: K }>['playerSide'] ? 'seat' : 'pair' }
 	: { playerSide?: undefined };
 
 type GraphicItemDefinitionFor<K extends GraphicItemKind> = Omit<
@@ -293,11 +299,11 @@ function rendersWinBoxes(item: GameWinsGraphicItemConfig): boolean {
 	return item.displayMode === 'boxes';
 }
 
-/** The side a context-gated Definition reads, as an author names it. */
-function playerSideLabel(side: PlayerSide): string {
-	return side === 'player1'
-		? 'Player 1'
-		: 'Player 2';
+/** The Seat a context-gated Definition reads, as an author names it: a pair's are its two Players. */
+function playerSideLabel(side: Seat): string {
+	return PLAYER_SIDE_VALUES.some(pair => pair === side)
+		? `Player ${seatNumber(side)}`
+		: `Seat ${seatNumber(side)}`;
 }
 
 const DEFINITIONS = {
@@ -464,7 +470,7 @@ const DEFINITIONS = {
 		requiredContext: 'feature-match',
 		typography: { textOverflowPolicy: true },
 		surfaceStyles: { surfaceStyle: {} },
-		playerSide: true,
+		playerSide: 'seat',
 		createDefault: options => ({
 			type: 'player-life',
 			id: options.id,
@@ -509,7 +515,7 @@ const DEFINITIONS = {
 			paints: rendersWinBoxes,
 			bounds: { width: 'boxWidth', height: 'boxHeight' },
 		},
-		playerSide: true,
+		playerSide: 'pair',
 		createDefault: options => ({
 			type: 'game-wins',
 			id: options.id,
@@ -554,7 +560,7 @@ const DEFINITIONS = {
 			textOverflowPolicy: false,
 			paintsText: item => item.view === 'list',
 		},
-		playerSide: true,
+		playerSide: 'pair',
 		createDefault: options => ({
 			type: 'deck-list',
 			id: options.id,
@@ -739,9 +745,19 @@ export function paintedShapeGeometry(item: GraphicItemConfig): OwnedShapeGeometr
 		: null;
 }
 
-/** Whether this item reads one player side's live state: where the Inspector offers the Player, and what authoring accepts. */
+/** Whether this item reads one Seat's live state: where the Inspector offers the Player, and what authoring accepts. */
 export function ownsPlayerSide(item: GraphicItemConfig): item is GraphicPlayerSideItem {
-	return getGraphicItemDefinition(item.type).playerSide === true;
+	return getGraphicItemDefinition(item.type).playerSide !== undefined;
+}
+
+/** The Seats an item of this kind can read: none, the pair, or any of four. */
+export function graphicItemKindSeats(kind: GraphicItemKind): readonly Seat[] {
+	const reads = getGraphicItemDefinition(kind).playerSide;
+	if (reads === undefined)
+		return [];
+	return reads === 'seat'
+		? SEAT_VALUES
+		: PLAYER_SIDE_VALUES;
 }
 
 export function graphicItemSummary(item: GraphicItemConfig): string {

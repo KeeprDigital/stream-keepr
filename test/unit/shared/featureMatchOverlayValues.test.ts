@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildFeatureMatchOverlayTemplateMetadataValues, featureMatchTokenValues } from '~~/shared/featureMatchOverlayValues';
+import { featureMatchTokenCatalogue } from '~~/shared/featureMatchTokenCatalogue';
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
+import { ATRAXA, KRAUM, TYMNA } from '~~/test/helpers/commanders';
+import { seatedPlayer } from '~~/test/helpers/featureMatchSnapshots';
 import { LUFFY } from '~~/test/helpers/opCards';
 
 describe('broadcast layout template metadata values', () => {
@@ -220,5 +224,84 @@ describe('which player a side shows on the Feature Match Overlay', () => {
 			values.player2Record,
 		])
 			.toEqual(['Ben', '2-1', 'Ana', '3-0']);
+	});
+});
+
+describe('a Commander Slot on the Feature Match Overlay', () => {
+	const EVENT = {
+		name: 'Pod Night',
+		game: 'mtg' as const,
+		variant: 'commander' as const,
+		displayRecordSeparator: '-' as const,
+		displayHideZeroDraws: true,
+		displayPositionFormat: 'ordinal' as const,
+	};
+
+	function valuesFor(seats: Partial<Record<'player1Data' | 'player2Data' | 'player3Data' | 'player4Data', unknown>>) {
+		return featureMatchTokenValues({
+			event: EVENT,
+			featureMatch: {
+				player1Data: null,
+				player2Data: null,
+				...seats,
+				activeSession: null,
+			} as any,
+			sourceMatch: null,
+			round: null,
+			phase: null,
+		});
+	}
+
+	// A Commander deck is its Commanders: their names, and their colour identity together (ADR-0087).
+	it('names a third and fourth Seat, each deck by its Commanders and its colours by their identity', () => {
+		expect(valuesFor({
+			player3Data: { ...seatedPlayer('Cleo', [TYMNA, KRAUM]), pronouns: 'she/her', lgs: 'Card Shop' },
+			player4Data: seatedPlayer('Dara', [ATRAXA]),
+		})).toMatchObject({
+			player3Name: 'Cleo',
+			player3Deck: 'Tymna the Weaver / Kraum, Ludevic\'s Opus',
+			player3DeckColors: 'WUBR',
+			player3Pronouns: 'she/her',
+			player3Lgs: 'Card Shop',
+			player4Name: 'Dara',
+			player4Deck: 'Atraxa, Praetors\' Voice',
+			player4DeckColors: 'WUBG',
+		});
+	});
+
+	it.each([
+		{ name: 'a pair', commanders: [TYMNA, KRAUM], first: scryfallCardImageUrl(TYMNA.scryfallId), second: scryfallCardImageUrl(KRAUM.scryfallId) },
+		{ name: 'one Commander', commanders: [ATRAXA], first: scryfallCardImageUrl(ATRAXA.scryfallId), second: '' },
+		{ name: 'no Commander yet', commanders: [], first: '', second: '' },
+	])('shows the card of each Commander a Seat holds: $name', ({ commanders, first, second }) => {
+		expect(valuesFor({ player2Data: seatedPlayer('Ben', commanders) })).toMatchObject({
+			player2Commander1Image: first,
+			player2Commander2Image: second,
+		});
+	});
+
+	it('reads an empty Seat as empty values', () => {
+		expect(valuesFor({})).toMatchObject({ player4Name: '', player4Deck: '', player4Commander1Image: '' });
+	});
+});
+
+describe('the Feature Match token values of each kind of Event', () => {
+	// The public Feature Match read returns every value, so a Two-Player or One
+	// Piece Card Game Event's must not gain a Seat or a Commander term (ADR-0056).
+	it.each([
+		{ kind: 'mtg-two-player' as const, event: { game: 'mtg' as const, variant: 'two-player' as const } },
+		{ kind: 'mtg-two-player' as const, event: { game: 'mtg' as const } },
+		{ kind: 'mtg-commander' as const, event: { game: 'mtg' as const, variant: 'commander' as const } },
+		{ kind: 'op' as const, event: { game: 'op' as const, variant: null } },
+	])('are keyed exactly as a $kind Event\'s catalogue ($event.variant)', ({ kind, event }) => {
+		const values = featureMatchTokenValues({
+			event: { name: 'Open', ...event } as any,
+			featureMatch: null,
+			sourceMatch: null,
+			round: null,
+			phase: null,
+		});
+
+		expect(Object.keys(values).sort()).toEqual(featureMatchTokenCatalogue(kind).map(token => token.key).sort());
 	});
 });

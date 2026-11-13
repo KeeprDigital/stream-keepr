@@ -4,6 +4,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, nextTick, ref } from 'vue';
+import { eventKind } from '~~/shared/config/games';
 import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_ID } from '~~/shared/featureMatchLayoutComposition';
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES, featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
 import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
@@ -480,9 +481,37 @@ describe('featureMatchOverlayDisplay', () => {
 
 		const wrapper = await mountComponent();
 
-		expect(wrapper.get('[data-op-card-image]').attributes('src')).toBe(LUFFY.imageUrl);
+		expect(wrapper.get('[data-card-image]').attributes('src')).toBe(LUFFY.imageUrl);
 		expect(wrapper.get('[data-op-colors]').attributes('aria-label')).toBe('Red/Green');
 		expect(wrapper.get('[data-graphic-item-kind="text"]').text()).toContain('Monkey.D.Luffy');
+	});
+
+	// An empty Seat is not in a Commander game: nothing frames it. A pair's sources render unseated, as before (ADR-0087).
+	it.each([
+		{ name: 'a Commander Event', event: { game: 'mtg', variant: 'commander' }, drawn: ['main', 'seat-1'] },
+		{ name: 'a Two-Player Event', event: { game: 'mtg', variant: 'two-player' }, drawn: ['main', 'seat-1', 'seat-2'] },
+	])('draws the Source Items of $name with Seat 2 empty: $drawn', async ({ event, drawn }) => {
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		const [source] = config.layout.sources;
+		config.featureMatchId = 1;
+		config.layout.sources = [
+			{ ...source!, id: 'main', sourceRole: 'main' },
+			{ ...source!, id: 'seat-1', sourceRole: 'player1' },
+			{ ...source!, id: 'seat-2', sourceRole: 'player2' },
+		];
+		config.layout.composition = { ...createFeatureMatchLayoutComposition(), items: [] };
+		mockConfig.value = config;
+		mockEvent.value = { name: 'Pod Night', ...event };
+		mockMatch.value = {
+			id: 1,
+			player1Data: { name: 'Ana' },
+			player2Data: null,
+			activeSession: null,
+		};
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('[data-graphic-item-id]').map(item => item.attributes('data-graphic-item-id'))).toEqual(drawn);
 	});
 
 	// ADR-0051: the overlay composes in the Event Canvas.
@@ -906,25 +935,30 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(wrapper.text()).toContain(FEATURE_MATCH_SAMPLE_TOKEN_VALUES.player1Name);
 		});
 
-		// The sample is the Card Game's the preview is of: an Event's, or a Theme preview's own.
+		// The sample is the kind of Event's the preview is of: an Event's, or a Theme preview's own Card Game.
 		it.each([
 			{
-				game: 'mtg',
+				kind: 'mtg-two-player',
 				event: { game: 'mtg' },
 				sampleDataset: undefined,
 			},
 			{
-				game: 'op',
+				kind: 'mtg-commander',
+				event: { game: 'mtg', variant: 'commander' },
+				sampleDataset: undefined,
+			},
+			{
+				kind: 'op',
 				event: { game: 'op' },
 				sampleDataset: undefined,
 			},
-			{ game: 'op', event: null, sampleDataset: 'op' },
+			{ kind: 'op', event: null, sampleDataset: 'op' },
 			{
-				game: 'mtg',
+				kind: 'mtg-two-player',
 				event: { game: 'op' },
 				sampleDataset: 'mtg',
 			},
-		] as const)('stands in the $game sample for event $event.game and Theme preview $sampleDataset', async ({ game, event, sampleDataset }) => {
+		] as const)('stands in the $kind sample for event $event.game and Theme preview $sampleDataset', async ({ kind, event, sampleDataset }) => {
 			const config = layoutBindingAToken();
 			const nameplate = config.layout.composition.items[0]!;
 			if (nameplate.type === 'text')
@@ -936,7 +970,7 @@ describe('featureMatchOverlayDisplay', () => {
 
 			const wrapper = await mountComponent();
 
-			const { player1Name, player1Deck } = featureMatchSampleDataset(game).tokenValues;
+			const { player1Name, player1Deck } = featureMatchSampleDataset(kind).tokenValues;
 			expect(wrapper.text()).toContain(`${player1Name} ${player1Deck}`);
 		});
 
@@ -1002,15 +1036,25 @@ describe('featureMatchOverlayDisplay', () => {
 				match: LIVE_MATCH,
 				game: 'op',
 			},
-		] as const)('shows the $game values over $over while the toggle is on, and not once it is off', async ({ usesSample, match, game }) => {
+			{
+				over: 'the sample',
+				usesSample: true,
+				match: null,
+				game: 'mtg',
+				variant: 'commander',
+			},
+		] as const)('shows the $game $variant values over $over while the toggle is on, and not once it is off', async ({ usesSample, match, game, ...event }) => {
 			mockConfig.value = layoutShowing('{player1Name} {player1Deck}');
 			mockUsesSampleDataset.value = usesSample;
 			mockMatch.value = match;
-			mockEvent.value = { game };
+			const variant = 'variant' in event
+				? event.variant
+				: undefined;
+			mockEvent.value = { game, variant };
 			mockPreviewStressDataset.value = true;
 
 			const wrapper = await mountComponent();
-			const { player1Name, player1Deck } = featureMatchStressDataset(game, { untimed: false }).tokenValues;
+			const { player1Name, player1Deck } = featureMatchStressDataset(eventKind({ game, variant }), { untimed: false }).tokenValues;
 
 			expect(wrapper.text()).toContain(`${player1Name} ${player1Deck}`);
 			expect(wrapper.get('[data-graphic-item-kind="clock"]').text()).toBe('1:23:45');
@@ -1046,7 +1090,7 @@ describe('featureMatchOverlayDisplay', () => {
 			const wrapper = await mountComponent();
 
 			expect(wrapper.get('[data-graphic-item-kind="clock"]').text())
-				.toBe(featureMatchStressDataset('mtg', { untimed: true }).context.clockDisplayTime);
+				.toBe(featureMatchStressDataset('mtg-two-player', { untimed: true }).context.clockDisplayTime);
 		});
 	});
 

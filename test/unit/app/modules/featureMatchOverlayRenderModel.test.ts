@@ -120,6 +120,24 @@ describe('feature match overlay host render model', () => {
 		expect(model.sourceCutouts).toEqual([]);
 	});
 
+	// An empty Seat is not in the game: nothing frames it and nothing is cut for it (ADR-0087).
+	it('omits the Source Item and cutout of a Seat nobody sits in, and keeps every other', () => {
+		const model = resolveFeatureMatchOverlayRenderModel({
+			config: configWith([
+				source({ id: 'main', sourceRole: 'main' }),
+				source({ id: 'seat-2', sourceRole: 'player2' }),
+				source({ id: 'seat-3', sourceRole: 'player3' }),
+				source({ id: 'unassigned', sourceRole: undefined }),
+			]),
+			output: 'overlay',
+			surfaces: surfaces(),
+			emptySeats: ['player3', 'player4'],
+		});
+
+		expect(model.sourceItems.map(item => item.item.id)).toEqual(['main', 'seat-2', 'unassigned']);
+		expect(model.sourceCutouts.map(cutout => cutout.id)).toEqual(['main', 'seat-2', 'unassigned']);
+	});
+
 	it('cuts a Source Item through the Frame only when it asks to, inside its border', () => {
 		const cutting = sourceModel('overlay', source());
 		const solid = sourceModel('overlay', source({ frameCutout: false }));

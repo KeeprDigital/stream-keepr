@@ -1,8 +1,12 @@
 import type { FeatureMatchTokenValuesInput } from '~~/shared/featureMatchOverlayValues';
+import type { Seat } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
-import type { GraphicsDeckListCard, GraphicsFeatureMatchContext } from '~/modules/graphics/renderModel';
+import type { GraphicsDeckListCard, GraphicsFeatureMatchContext, GraphicsFeatureMatchPlayerState } from '~/modules/graphics/renderModel';
 import type { Event } from '~/types';
+import { eventKind } from '~~/shared/config/games';
+import { SEAT_VALUES } from '~~/shared/types/enums';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 
 export { featureMatchTokenValues } from '~~/shared/featureMatchOverlayValues';
 
@@ -37,6 +41,32 @@ export interface FeatureMatchOverlaySideboards {
 	player2: ReadonlyArray<GraphicsDeckListCard> | null;
 }
 
+/** A Commander Seat's live state: its life, with no game wins or Sideboard to show (ADR-0087). */
+function commanderSeatState(input: FeatureMatchOverlayHostStateInput, seat: Seat): GraphicsFeatureMatchPlayerState {
+	return {
+		lifeTotal: input.matchState?.[seat]?.lifeTotal ?? null,
+		gameWins: 0,
+		sideboard: null,
+		sideboardRevealed: false,
+	};
+}
+
+/**
+ * What a Commander Slot adds to the context: Seats 3 and 4, and the Seats
+ * nobody sits in. A Seat is in the game while it is filled, by the active
+ * Session's snapshot or else the Slot's own Seats, so an unbound Overlay's are
+ * all empty. Every other Event's context holds neither (ADR-0087).
+ */
+function commanderSeats(input: FeatureMatchOverlayHostStateInput): Pick<GraphicsFeatureMatchContext, 'player3' | 'player4' | 'emptySeats'> {
+	if (!input.event || eventKind(input.event) !== 'mtg-commander')
+		return {};
+	return {
+		player3: commanderSeatState(input, 'player3'),
+		player4: commanderSeatState(input, 'player4'),
+		emptySeats: SEAT_VALUES.filter(seat => featureMatchSidePlayer(input.featureMatch, seat).data == null),
+	};
+}
+
 /**
  * The live session state the context-gated Definitions read.
  *
@@ -69,6 +99,7 @@ export function featureMatchGraphicsContext(
 			sideboard: sideboards?.player2 ?? null,
 			sideboardRevealed: input.matchState?.player2?.sideboardRevealed ?? false,
 		},
+		...commanderSeats(input),
 		bestOf: input.featureMatch?.activeSession?.sourceSnapshot?.bestOf
 			?? input.featureMatch?.bestOf
 			?? toFeatureMatchDefaults(input.event).bestOf,

@@ -4,7 +4,7 @@ import type { BroadcastGraphicConfig } from '~~/shared/types/graphics';
 import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { featureMatchLayoutStack } from '~~/shared/featureMatchLayoutComposition';
-import { FEATURE_MATCH_OVERLAY_HOST_CONTRACT } from '~~/shared/modules/graphics';
+import { featureMatchOverlayHostContract } from '~~/shared/modules/graphics';
 
 /**
  * The Feature Match Layout's shared property panel.
@@ -29,6 +29,10 @@ const emit = defineEmits<{ 'update:composition': [composition: BroadcastGraphicC
 
 const stack = computed(() => featureMatchLayoutStack(props.layout));
 
+/** This Event's contract: its token catalogue and Seats are a Commander Event's four where it is one (ADR-0087). */
+const eventKind = useEventKind();
+const contract = computed(() => featureMatchOverlayHostContract(eventKind.value ?? 'mtg-two-player'));
+
 function updateStack(next: BroadcastGraphicConfig[]) {
 	const composition = next.length === 1
 		? next[0]
@@ -42,7 +46,7 @@ function updateStack(next: BroadcastGraphicConfig[]) {
 	<GraphicsCompositorInspector
 		:graphics="stack"
 		:selected-target="selectedTarget"
-		:contract="FEATURE_MATCH_OVERLAY_HOST_CONTRACT"
+		:contract="contract"
 		:canvas-width="canvasWidth"
 		:canvas-height="canvasHeight"
 		:event-id="eventId"

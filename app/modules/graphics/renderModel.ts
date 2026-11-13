@@ -3,6 +3,7 @@ import type { SocialProfilePresentationProjection } from '~~/shared/modules/broa
 import type { GraphicAnimationOwnerValues, GraphicAnimationValues, GraphicThemeTokens, ShapeGeometrySize } from '~~/shared/modules/graphics';
 import type { GraphicsHostTokenPresentation } from '~~/shared/modules/graphics/hostContract';
 import type { OpCardColor } from '~~/shared/types/card/op';
+import type { Seat } from '~~/shared/types/enums';
 import type {
 	BroadcastGraphicConfig,
 	ClockGraphicItemConfig,
@@ -35,7 +36,9 @@ import type { GraphicsSelectionTarget } from './selection';
 import {
 	graphicAnchorTransformOrigin,
 	graphicAnimationStaggerOffset,
+	graphicTextTemplateInputKeys,
 	isRectangularShapeGeometry,
+	ownsPlayerSide,
 	paintGraphicsThemeBindings,
 	renderGraphicTextTemplate,
 	resolveGraphicAnchorPoint,
@@ -50,6 +53,7 @@ import { SUPPORTED_SOCIAL_NETWORK_BY_KEY } from '~~/shared/socialProfiles';
 import { isOpCardImageUrl, parseOpColors } from '~~/shared/utils/card/op';
 import { MTG_CARD_BORDER_RADIUS } from '~~/shared/utils/card/size';
 import { screenOutputCanvasBackground } from '~~/shared/utils/screenOutput';
+import { isScryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { clampOpacity, glowDropShadow, paintColour } from '~/modules/screen/outputPaint';
 import { graphicsSelectionGraphicId, graphicsSelectionKey } from './selection';
 
@@ -281,6 +285,11 @@ export interface GraphicsCompositionRenderModelInput {
 	 */
 	textTokenPresentations?: Readonly<Record<string, GraphicsHostTokenPresentation>>;
 	/**
+	 * The Seat each host token reads, keyed by token: how a Text Graphic Item is
+	 * known to read an empty Seat. Ordinary Graphic Inputs omit it and read none.
+	 */
+	textTokenSeats?: Readonly<Record<string, Seat>>;
+	/**
 	 * The live Feature Match state the context-gated Graphic Items read. Only a host
 	 * declaring the Feature Match context supplies one, and only its Screens can
 	 * carry an item that reads it.
@@ -401,10 +410,12 @@ export interface GraphicTextRenderSegment {
 		colors: OpCardColor[];
 		monochrome: boolean;
 	};
-	/** A One Piece card painted from its Printing image, one line tall, while `text` holds its URL. */
+	/** A card painted from its image, one line tall, while `text` holds its URL: a One Piece Leader or a Commander. */
 	cardImage?: {
 		url: string;
 		monochrome: boolean;
+		/** What the card is, for a reader that cannot see it. */
+		alt: string;
 	};
 }
 
@@ -481,6 +492,15 @@ export interface GraphicsFeatureMatchContext {
 	clockDisplayTime: string | null;
 	player1: GraphicsFeatureMatchPlayerState;
 	player2: GraphicsFeatureMatchPlayerState;
+	/** Seats 3 and 4, which only a Commander Slot holds (ADR-0087). */
+	player3?: GraphicsFeatureMatchPlayerState;
+	player4?: GraphicsFeatureMatchPlayerState;
+	/**
+	 * A Commander Slot's Seats nobody sits in. A Graphic Item reading only these
+	 * renders nothing, surface included. Absent on every other Event, whose pair
+	 * renders whether or not anyone is seated.
+	 */
+	emptySeats?: readonly Seat[];
 	/** The Match length, which decides how many win boxes an indicator draws. */
 	bestOf: number;
 }
@@ -1295,10 +1315,15 @@ function textDescriptor(
 							opColors: { colors: opColors, monochrome: output === 'key' },
 						}
 					: {}),
-				// Only a bandai-keepr Printing image is loaded on air; any other value paints as its text.
+				// Only a bandai-keepr Printing image or a Scryfall card image is loaded on air; any other value paints as its text.
 				...(presentation === 'op-card-image' && isOpCardImageUrl(segment.text)
 					? {
-							cardImage: { url: segment.text, monochrome: output === 'key' },
+							cardImage: { url: segment.text, monochrome: output === 'key', alt: 'Leader' },
+						}
+					: {}),
+				...(presentation === 'mtg-card-image' && isScryfallCardImageUrl(segment.text)
+					? {
+							cardImage: { url: segment.text, monochrome: output === 'key', alt: 'Commander' },
 						}
 					: {}),
 			};
@@ -1853,6 +1878,7 @@ interface GraphicItemContentContext {
 	declarations: readonly GraphicInputDeclaration[];
 	values: Readonly<Record<string, GraphicInputValue>>;
 	textTokenPresentations?: Readonly<Record<string, GraphicsHostTokenPresentation>>;
+	textTokenSeats?: Readonly<Record<string, Seat>>;
 	socialProfileValues?: SocialProfileProjectionValues;
 	socialProfilePresentations?: Readonly<Record<string, SocialProfilePresentationProjection>>;
 	featureMatch?: GraphicsFeatureMatchContext;
@@ -1865,6 +1891,50 @@ interface GraphicItemContentContext {
 	 * same frame.
 	 */
 	itemExitInPlay?: ReadonlySet<string>;
+}
+
+/**
+ * The Seats a Graphic Item reads: the one a context-gated kind is set to, the
+ * ones a Text Graphic Item's host tokens belong to, and for a Graphic Group
+ * every Seat its children read.
+ */
+function seatsRead(item: GraphicItemConfig | GraphicGroupChildConfig, inputs: GraphicItemContentContext): Seat[] {
+	if (item.type === 'group')
+		return item.children.flatMap(child => seatsRead(child, inputs));
+	if (item.type === 'text') {
+		return graphicTextTemplateInputKeys(item.text).flatMap((key) => {
+			const seat = inputs.textTokenSeats?.[key];
+			return seat
+				? [seat]
+				: [];
+		});
+	}
+	return ownsPlayerSide(item)
+		? [item.playerSide]
+		: [];
+}
+
+/**
+ * Whether every Seat an item reads is one nobody sits in, on a Commander Slot.
+ * Such an item renders nothing: an empty Seat is not in the game (ADR-0087). An
+ * item reading no Seat, or a filled one beside an empty one, renders.
+ */
+function readsOnlyEmptySeats(item: GraphicItemConfig | GraphicGroupChildConfig, inputs: GraphicItemContentContext): boolean {
+	const empty = inputs.featureMatch?.emptySeats;
+	if (!empty || empty.length === 0)
+		return false;
+	const seats = seatsRead(item, inputs);
+	return seats.length > 0 && seats.every(seat => empty.includes(seat));
+}
+
+/** An item with nothing to show: its placement, and nothing painted in it. */
+function absentItemDescriptor(item: GraphicItemConfig | GraphicGroupChildConfig, placement: CSSProperties): GraphicItemRenderDescriptor {
+	return {
+		id: item.id,
+		label: item.label,
+		kind: item.type,
+		style: { ...placement },
+	};
 }
 
 /** A Clock Graphic Item with no clock to show: its placement, and nothing painted in it. */
@@ -1897,6 +1967,9 @@ function childDescriptor(
 	placement: CSSProperties,
 ): GraphicItemRenderDescriptor {
 	const scope = elementScope(graphicId, child.id);
+
+	if (readsOnlyEmptySeats(child, inputs))
+		return absentItemDescriptor(child, placement);
 
 	// A Media Graphic Item and a Deck List Item carry no Graphic Surface Style, so
 	// neither inherits its Graphic Group's local style default either: there is
@@ -2212,6 +2285,9 @@ function paintedItemDescriptor(
 	placement: CSSProperties,
 ): GraphicItemRenderDescriptor {
 	const scope = elementScope(graphicId, item.id);
+
+	if (readsOnlyEmptySeats(item, inputs))
+		return absentItemDescriptor(item, placement);
 
 	if (item.type === 'text')
 		return textDescriptor(output, scope, item, placement, item.surfaceStyle, inputs);
@@ -2832,6 +2908,7 @@ export function resolveGraphicsCompositionRenderModel(
 					input.substituteAuthoredDefaults ?? false,
 				),
 				textTokenPresentations: input.textTokenPresentations,
+				textTokenSeats: input.textTokenSeats,
 				socialProfileValues: input.socialProfileValues?.[graphic.id],
 				socialProfilePresentations: input.socialProfilePresentations?.[graphic.id],
 				featureMatch: input.featureMatch,
@@ -2864,6 +2941,7 @@ export function resolveGraphicsCompositionRenderModel(
 					input.substituteAuthoredDefaults ?? false,
 				),
 				textTokenPresentations: input.textTokenPresentations,
+				textTokenSeats: input.textTokenSeats,
 				socialProfileValues: outgoingSocialProfileValues ?? input.socialProfileValues?.[graphic.id],
 				socialProfilePresentations: input.outgoingSocialProfilePresentations?.[graphic.id]
 					?? input.socialProfilePresentations?.[graphic.id],

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { GraphicThemeTokens } from '~~/shared/modules/graphics';
-import type { Game } from '~~/shared/types/enums';
+import type { Game, Variant } from '~~/shared/types/enums';
 import type {
 	BroadcastGraphicConfig,
 	GraphicInputDeclaration,
@@ -69,6 +69,11 @@ const props = defineProps<{
 	 * the lenient no-Event-context case the catalog documents.
 	 */
 	game?: Game;
+	/**
+	 * That Event's Variant, which decides whether a Commander's fields and a Slot's
+	 * third and fourth Seats exist (ADR-0087). Absent leaves them in, as no game does.
+	 */
+	variant?: Variant | null;
 	/** Whether this session holds the artifact's Graphics Authoring Lease. */
 	writable?: boolean;
 	/** The Foundation Tokens the editor previews under (#829). */
@@ -196,7 +201,7 @@ function derivationValue(source: GraphicSourceSelectionDeclaration): string {
 function derivationOptions(source: GraphicSourceSelectionDeclaration) {
 	return [
 		{ label: 'An operator picks it', value: OPERATOR_SELECTED },
-		...graphicSourceDerivationOptions(sources.value, source.key).map(option => ({
+		...graphicSourceDerivationOptions(sources.value, source.key, props.variant).map(option => ({
 			label: `${GRAPHIC_SOURCE_RELATION_LABELS[option.relation]} of ${sourceLabel(option.sourceKey)}`,
 			value: derivationKey(option),
 		})),
@@ -209,12 +214,12 @@ function chooseDerivation(key: string, value: string) {
 		return;
 	}
 
-	const from = graphicSourceDerivationOptions(sources.value, key)
+	const from = graphicSourceDerivationOptions(sources.value, key, props.variant)
 		.find(option => derivationKey(option) === value);
 	if (!from)
 		return;
 
-	editGraphic(setGraphicSourceDerivation, key, from);
+	editGraphic(setGraphicSourceDerivation, key, from, props.variant);
 }
 
 /**
@@ -278,8 +283,8 @@ function chooseBindingSource(input: GraphicInputDeclaration, sourceKey: string) 
 		return;
 
 	editGraphic((graphics, graphicId) =>
-		isGraphicBindingFieldCompatible(source.kind, fieldId, input.type, props.game)
-			? setGraphicInputBinding(graphics, graphicId, { inputKey: input.key, sourceKey, fieldId }, props.game)
+		isGraphicBindingFieldCompatible(source.kind, fieldId, input.type, props.game, props.variant)
+			? setGraphicInputBinding(graphics, graphicId, { inputKey: input.key, sourceKey, fieldId }, props.game, props.variant)
 			: deleteGraphicInputBinding(graphics, graphicId, input.key),
 	);
 }
@@ -289,7 +294,7 @@ function chooseBindingField(input: GraphicInputDeclaration, fieldId: string) {
 	if (sourceKey === OPERATOR_SELECTED)
 		return;
 
-	editGraphic(setGraphicInputBinding, { inputKey: input.key, sourceKey, fieldId }, props.game);
+	editGraphic(setGraphicInputBinding, { inputKey: input.key, sourceKey, fieldId }, props.game, props.variant);
 }
 
 function clearBinding(inputKey: string) {
@@ -303,7 +308,7 @@ function bindingFieldGroups(input: GraphicInputDeclaration) {
 	if (!source || props.game === undefined)
 		return [];
 
-	const { common, gameSpecific } = bindableGraphicBindingFields(source.kind, input.type, props.game);
+	const { common, gameSpecific } = bindableGraphicBindingFields(source.kind, input.type, props.game, props.variant);
 	const gameLabel = getGameConfig(props.game).label;
 
 	return [

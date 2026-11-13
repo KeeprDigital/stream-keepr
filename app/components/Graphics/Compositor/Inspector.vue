@@ -7,7 +7,7 @@ import type {
 	OwnedShapeGeometry,
 } from '~~/shared/modules/graphics';
 import type { SupportedSocialNetwork } from '~~/shared/socialProfiles';
-import type { Game, PlayerSide } from '~~/shared/types/enums';
+import type { Game, Seat, Variant } from '~~/shared/types/enums';
 import type {
 	BroadcastGraphicConfig,
 	DeckListGraphicItemConfig,
@@ -49,6 +49,7 @@ import {
 	graphicItemIcon,
 	graphicItemKindLabel,
 	graphicItemSummary,
+	graphicItemKindSeats,
 	graphicsHostTokenCatalogue,
 	graphicTextTemplateDottedPlaceholderKeys,
 	graphicTextTemplateInputKeys,
@@ -146,6 +147,8 @@ const props = defineProps<{
 	 * from, and the catalog's lenient case covers it.
 	 */
 	game?: Game;
+	/** That Event's Variant, which decides whether a Commander Event's binding fields exist (ADR-0087). */
+	variant?: Variant | null;
 	/**
 	 * The Foundation Tokens the editor previews under, which bound properties show
 	 * and detaching copies in. Absent is the Default Theme.
@@ -379,10 +382,16 @@ const selectedPlayerSideItem = computed<GraphicPlayerSideItem | null>(() => {
 		: null;
 });
 
-const PLAYER_SIDE_OPTIONS = [
-	{ label: 'Player 1', value: 'player1' },
-	{ label: 'Player 2', value: 'player2' },
-] satisfies Array<{ label: string; value: PlayerSide }>;
+/** The Seats the selected item can read, of those its host supplies: a pair's two, or any of a Commander Slot's four (ADR-0087). */
+const playerSideOptions = computed(() => {
+	const item = selectedPlayerSideItem.value;
+	if (!item)
+		return [];
+	const reads = graphicItemKindSeats(item.type);
+	return (props.contract.seats ?? [])
+		.filter(option => reads.includes(option.seat))
+		.map(option => ({ label: option.label, value: option.seat }));
+});
 
 /**
  * The Shape Geometry the geometry controls edit, and the Theme binding slot it
@@ -1194,6 +1203,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 				:graphics="graphics"
 				:selected-target="selectedTarget"
 				:game="game"
+				:variant="variant"
 				:writable="writable"
 				:theme-tokens="themeTokens"
 				@update:graphics="emit('update:graphics', $event)"
@@ -1416,12 +1426,12 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			<UFormField v-if="selectedPlayerSideItem" label="Player" size="sm">
 				<USelect
 					:model-value="selectedPlayerSideItem.playerSide"
-					:items="PLAYER_SIDE_OPTIONS"
+					:items="playerSideOptions"
 					value-key="value"
 					class="w-full"
 					size="sm"
 					data-testid="graphic-item-player-side"
-					@update:model-value="editItem(patchGraphicPlayerSide, $event as PlayerSide)"
+					@update:model-value="editItem(patchGraphicPlayerSide, $event as Seat)"
 				/>
 			</UFormField>
 

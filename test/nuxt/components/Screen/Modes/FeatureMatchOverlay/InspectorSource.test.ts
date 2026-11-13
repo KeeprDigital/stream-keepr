@@ -11,6 +11,7 @@ import { fakeScreenThemeNetwork, overrideWrites, screenSettingsPage, seedThemedS
 import InspectorSource from '~/components/Screen/Modes/FeatureMatchOverlay/InspectorSource.vue';
 import SurfaceStyleTokenInput from '~/components/Theme/SurfaceStyleTokenInput.vue';
 import { THEME_TOKEN_DRAFT_COMMIT_MS } from '~/modules/theme-editor/draft';
+import { useEventStore } from '~/stores/event';
 
 /**
  * A Source Item's Bounds section, with the real geometry fields and editor: what
@@ -58,7 +59,7 @@ const UButtonStub = defineComponent({
 	template: '<button type="button" @click="$emit(\'click\', $event)"><slot /></button>',
 });
 
-async function mountBounds(anchor: FeatureMatchOverlayAnchorValue, themeOverrides: StoredThemeTokens = {}) {
+async function mountBounds(anchor: FeatureMatchOverlayAnchorValue, themeOverrides: StoredThemeTokens = {}, event: { game: string; variant: string | null } = { game: 'mtg', variant: 'two-player' }) {
 	const config: FeatureMatchOverlayModeConfig = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 	// An odd-sized 401×201 item at (100, 50) on a 1920×1080 canvas, so a
 	// centre anchor sits on a half pixel.
@@ -73,6 +74,8 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue, themeOverride
 	config.layout.sources = [item];
 	const updateConfig = vi.fn();
 	const screen = seedThemedScreen('feature-match-overlay', themeOverrides);
+	const eventStore = useEventStore();
+	eventStore.event = { ...eventStore.event, ...event } as never;
 
 	const wrapper = mount(screenSettingsPage(screen, () => h(InspectorSource, {
 		config,
@@ -128,6 +131,19 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue, themeOverride
 
 	return { wrapper, align, enter, link };
 }
+
+// A Source Role names the main source or one Seat's: a pair's two Players, or a Commander Slot's four Seats (ADR-0087).
+describe('feature Match Overlay Source Item: Source Role', () => {
+	it.each([
+		{ kind: 'a Two-Player', event: { game: 'mtg', variant: 'two-player' }, labels: ['Main', 'Player 1', 'Player 2'] },
+		{ kind: 'a Commander', event: { game: 'mtg', variant: 'commander' }, labels: ['Main', 'Seat 1', 'Seat 2', 'Seat 3', 'Seat 4'] },
+	])('offers $kind Event $labels', async ({ event, labels }) => {
+		const { wrapper } = await mountBounds('top-left', {}, event);
+
+		const select = wrapper.findAllComponents(USelectStub).find(candidate => candidate.attributes('aria-label') === 'Source role')!;
+		expect((select.props('items') as Array<{ label: string }>).map(item => item.label)).toEqual(labels);
+	});
+});
 
 describe('feature Match Overlay Source Item bounds: align actions', () => {
 	const actions = [

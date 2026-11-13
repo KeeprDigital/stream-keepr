@@ -1,7 +1,7 @@
-import type { Game, ScreenMode, Variant } from '../types/enums';
+import type { Game, ScreenMode, Seat, Variant } from '../types/enums';
 import type { FeatureMatchDefaults } from '../types/featureMatchDefaults';
 import type { CounterTypeConfig, FeatureMatchStateTracking, GameConfig, MetagameRules } from '../types/game';
-import { METAGAME_SCOPE_VALUES } from '../types/enums';
+import { METAGAME_SCOPE_VALUES, PLAYER_SIDE_VALUES, SEAT_VALUES } from '../types/enums';
 import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '../types/featureMatchDefaults';
 
 export type { CounterTypeConfig, FeatureMatchStateTracking, Game, GameConfig, MetagameRules };
@@ -90,7 +90,7 @@ export const EVENT_KIND_VALUES = ['mtg-two-player', 'mtg-commander', 'op'] as co
 export type EventKind = typeof EVENT_KIND_VALUES[number];
 
 /** The Card Game an Event of each kind is played in. */
-const EVENT_KIND_CARD_GAME: Record<EventKind, Game> = {
+export const EVENT_KIND_CARD_GAME: Record<EventKind, Game> = {
 	'mtg-two-player': 'mtg',
 	'mtg-commander': 'mtg',
 	'op': 'op',
@@ -108,6 +108,13 @@ export function eventKind(event: { game: Game; variant?: Variant | null }): Even
 	return event.variant === 'commander'
 		? 'mtg-commander'
 		: 'mtg-two-player';
+}
+
+/** The Seats a Feature Match Slot has on an Event of each kind: a pair, or a Commander Slot's four (ADR-0087). */
+export function eventSeats(kind: EventKind): readonly Seat[] {
+	return kind === 'mtg-commander'
+		? SEAT_VALUES
+		: PLAYER_SIDE_VALUES;
 }
 
 /** Every Event: what needs neither Players nor results declares. */
