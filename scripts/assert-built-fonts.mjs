@@ -1,6 +1,7 @@
 /**
  * Assert the built CSS carries every application font face the registry
- * declares, and that none of them loads from the network.
+ * declares, that none of them loads from the network or prefers a locally
+ * installed copy, and that no stylesheet imports one from the network.
  *
  * Nuxt Fonts' npm provider skips a weight file a `@fontsource/*` package does
  * not have, without a warning (ADR-0086), so the configuration alone proves
@@ -10,7 +11,8 @@
  * are present when any one face covers them; a `font-weight: 100 900` range
  * covers every declared weight inside it. The metric-adjusted
  * `"<Family> Fallback: …"` faces Nuxt Fonts generates are not the family and
- * are not counted as it.
+ * are not counted as it; they are `local()` by design, so the local-source rule
+ * reaches only a declared family's own faces.
  *
  * Two ways a scan passes while seeing nothing, both closed: it refuses a
  * directory with no `.css` in it, and `selfTest` runs first, parsing a face the
@@ -19,7 +21,7 @@
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { GRAPHIC_FONTS } from '../shared/modules/graphics/typography.ts';
@@ -31,12 +33,13 @@ export const DECLARED_FONT_FACES = GRAPHIC_FONTS
 
 const FONT_FACE_RULE = /@font-face\s*\{([^}]*)\}/g;
 const REMOTE_URL = /^(?:https?:)?\/\//i;
+const IMPORT_RULE = /@import\s+(?:url\(\s*)?["']?([^"')\s;]+)/gi;
 
 function declaration(body, property) {
 	return new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]*)`, 'i').exec(body)?.[1].trim();
 }
 
-/** Every real `@font-face` in `css`: family, weight range, style, and `url()` sources. */
+/** Every real `@font-face` in `css`: family, weight range, style, `url()` sources, and whether it names a `local()` one. */
 export function parseFontFaces(css) {
 	const faces = [];
 	for (const [, body] of css.matchAll(FONT_FACE_RULE)) {
@@ -51,6 +54,7 @@ export function parseFontFaces(css) {
 			urls: [
 				...body.matchAll(/url\(([^)]*)\)/g),
 			].map(match => match[1].trim().replace(/^["']|["']$/g, '')),
+			local: /\blocal\(/i.test(declaration(body, 'src') ?? ''),
 		});
 	}
 	return faces;
@@ -63,6 +67,9 @@ export function findFontDefects(faces, expected) {
 		for (const url of face.urls.filter(candidate => REMOTE_URL.test(candidate)))
 			defects.push(`font-remote-url: ${face.family} ${face.weight.join('-')} ${face.style} loads ${url}`);
 	}
+	const declared = new Set(expected.map(({ family }) => family));
+	for (const face of faces.filter(candidate => candidate.local && declared.has(candidate.family)))
+		defects.push(`font-local-source: ${face.family} ${face.weight.join('-')} ${face.style} prefers a locally installed font`);
 	for (const { family, weights, italic } of expected) {
 		for (const style of italic
 			? ['normal', 'italic']
@@ -88,6 +95,13 @@ function* stylesheets(directory) {
 	}
 }
 
+/** One `font-remote-url` line per `@import` in `css` that reaches the network. */
+function findImportDefects(css, file) {
+	return [
+		...css.matchAll(IMPORT_RULE),
+	].map(match => match[1]).filter(url => REMOTE_URL.test(url)).map(url => `font-remote-url: ${file} imports ${url}`);
+}
+
 /** Defects across every `.css` under `directory`; throws when there is none to read. */
 export function assertBuiltFonts(directory, expected) {
 	const files = [
@@ -95,7 +109,14 @@ export function assertBuiltFonts(directory, expected) {
 	];
 	if (files.length === 0)
 		throw new Error(`font-nothing-scanned: no .css under ${directory}. A scan of nothing is not a pass.`);
-	return findFontDefects(files.flatMap(file => parseFontFaces(readFileSync(file, 'utf8'))), expected);
+	const sheets = files.map(file => ({
+		file: relative(directory, file),
+		css: readFileSync(file, 'utf8'),
+	}));
+	return [
+		...sheets.flatMap(({ file, css }) => findImportDefects(css, file)),
+		...findFontDefects(sheets.flatMap(({ css }) => parseFontFaces(css)), expected),
+	];
 }
 
 /** Proves the parser reads a real face and ignores a fallback, before trusting a clean scan. */
@@ -139,7 +160,7 @@ export function builtFontsScan(directory, expected = DECLARED_FONT_FACES) {
 			}
 		: {
 				ok: true,
-				lines: [`assert-built-fonts: every declared application font face is in the built CSS under ${directory}, none remote`],
+				lines: [`assert-built-fonts: every declared application font face is in the built CSS under ${directory}, none remote, none local`],
 			};
 }
 
