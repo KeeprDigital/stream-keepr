@@ -391,7 +391,10 @@ export function useDeckModeData(context: ScreenContext, { followsSeat = false }:
 			compartment: 'mainboard' as const,
 			cardType: '',
 		}));
-		const lookupCards = createDeckLookupCards([...commanderCards, ...input.cards], input.companion);
+		const lookupCards = createDeckLookupCards([
+			...commanderCards,
+			...input.cards,
+		], input.companion);
 		const { cards: cardDataMap, degraded } = await outputReads.cardData(lookupCards);
 		const arrays = buildDeckListArrays(input.cards, cardDataMap);
 		const commanders = buildDeckListArrays(commanderCards, cardDataMap).mainboard;
@@ -687,10 +690,21 @@ function useSeatDeckRead(
 				: SEAT_READ_PENDING;
 		}
 		const { deckListId: id, ...player } = held;
-		if (id === null)
-			return { type: 'seat', source: shown, ...player, entries: [] };
+		if (id === null) {
+			return {
+				type: 'seat',
+				source: shown,
+				...player,
+				entries: [],
+			};
+		}
 		return deckList.data.value?.id === id
-			? { type: 'seat', source: shown, ...player, entries: deckList.data.value.entries }
+			? {
+					type: 'seat',
+					source: shown,
+					...player,
+					entries: deckList.data.value.entries,
+				}
 			: SEAT_READ_PENDING;
 	});
 
@@ -700,4 +714,3 @@ function useSeatDeckRead(
 		error: computed(() => slotRead.error.value ?? deckList.error.value ?? null),
 	};
 }
-

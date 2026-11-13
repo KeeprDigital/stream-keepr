@@ -3,8 +3,8 @@ import type { DeckModeConfig } from '~~/shared/screenModeConfigs/deck';
 import type { ScreenSettingsContext } from '~~/shared/screenModeConfigs/fields';
 import type { Seat } from '~~/shared/types/enums';
 import type { PlayerDeckResponse } from '~~/shared/types/metagame';
-import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { eventKind } from '~~/shared/config/games';
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
 import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSession';
 

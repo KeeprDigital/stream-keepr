@@ -25,7 +25,10 @@ type Handler = (event: StubEvent) => Promise<unknown>;
 const readDeckList = (await import('~~/server/api/screen-output/events/[id]/screens/[screenId]/feature-match-slots/[slotId]/commander-deck-lists/[deckListId].get')).default as unknown as Handler;
 const { featureMatchDeckListService } = await import('~~/server/services/featureMatchDeckList');
 
-const ENTRIES = [deckListEntryOf(MOXFIELD_CARDS.ashling), deckListEntryOf(MOXFIELD_CARDS.forest, 3)];
+const ENTRIES = [
+	deckListEntryOf(MOXFIELD_CARDS.ashling),
+	deckListEntryOf(MOXFIELD_CARDS.forest, 3),
+];
 let eventId: number;
 let screenId: number;
 let shownSlotId: number;

@@ -6,8 +6,8 @@ import { eventKind } from '../config/games';
 import {
 	BOARD_SELECTION_VALUES,
 	MAINBOARD_VIEW_VALUES,
-	SEAT_VALUES,
 	QUANTITY_POSITION_VALUES,
+	SEAT_VALUES,
 	SIDEBOARD_PLACEMENT_VALUES,
 	SIDEBOARD_VIEW_VALUES,
 } from '../types/enums';

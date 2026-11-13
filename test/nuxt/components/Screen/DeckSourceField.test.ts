@@ -352,4 +352,3 @@ describe('the Deck Source picker on a Commander Event', () => {
 		expect(wrapper.find('[data-testid="empty-side-hint"]').exists()).toBe(hint);
 	});
 });
-

@@ -31,7 +31,9 @@ export function commanderMainboard<TEntry extends Pick<CommanderDeckListEntry, '
 		if (!held.has(entry.scryfallId))
 			return [entry];
 		return entry.quantity > 1
-			? [{ ...entry, quantity: entry.quantity - 1 }]
+			? [
+					{ ...entry, quantity: entry.quantity - 1 },
+				]
 			: [];
 	});
 }

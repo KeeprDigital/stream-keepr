@@ -198,7 +198,9 @@ describe('a new Deck List Screen\'s Deck Source', () => {
 	] as const)('takes $seat of a Slot on the $event Event: $taken', async ({ event, seat, taken }) => {
 		const chosen = { type: 'featureMatchSlot', slotId: events[event].firstSlotId, side: seat };
 
-		const saved = await createScreen(event, 'deck', { deck: { deckSource: chosen } }).catch(error => error);
+		const saved = await createScreen(event, 'deck', {
+			deck: { deckSource: chosen },
+		}).catch(error => error);
 
 		if (taken)
 			expect(saved.modeConfigs?.deck?.deckSource).toEqual(chosen);
