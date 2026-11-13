@@ -1,3 +1,4 @@
+import type { CommanderDeckListPreviewAnswer, SaveCommanderDeckListAnswer, SavedCommanderDeckList } from '~~/shared/types/featureMatchDeckList';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { $fetch } from './client';
 import { $fetchRaw } from './helpers';
@@ -43,7 +44,7 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 	});
 
 	it('previews a paste, saves it with the offered Commander, and reads back each card as the printing named', async () => {
-		const preview = await $fetch(route('/preview'), {
+		const preview = await $fetch<CommanderDeckListPreviewAnswer>(route('/preview'), {
 			method: 'POST',
 			body: { text: PASTE },
 		});
@@ -55,9 +56,13 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 			},
 		});
 
-		const saved = await $fetch(route(), {
+		const saved = await $fetch<SaveCommanderDeckListAnswer<unknown>>(route(), {
 			method: 'POST',
-			body: { seat: 'player4', text: PASTE, commanders: preview.deckList.offeredCommanders },
+			body: {
+				seat: 'player4',
+				text: PASTE,
+				commanders: [COMMANDER],
+			},
 		});
 
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}`);
@@ -78,8 +83,8 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 				featureMatchDeckList: { id: saved.deckList.id, mainboardCount: 3 },
 			},
 		});
-		const read = await $fetch(route(`/${saved.deckList.id}`));
-		expect(read.entries.map((entry: { quantity: number; name: string; setCode: string; collectorNumber: string }) =>
+		const read = await $fetch<SavedCommanderDeckList>(route(`/${saved.deckList.id}`));
+		expect(read.entries.map(entry =>
 			[
 				entry.quantity,
 				entry.name,
