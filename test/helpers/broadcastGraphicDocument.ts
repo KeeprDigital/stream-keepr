@@ -121,7 +121,9 @@ export function maximalBroadcastGraphicDocument(
 	const withClock = addGraphicItem(withSocialIcon, { kind: 'clock', id: 'countdown', ...CANVAS }).graphic;
 	const withLife = addGraphicItem(withClock, { kind: 'player-life', id: 'life', ...CANVAS }).graphic;
 	const withWins = addGraphicItem(withLife, { kind: 'game-wins', id: 'wins', ...CANVAS }).graphic;
-	const document = addGraphicItem(withWins, { kind: 'deck-list', id: 'sideboard', ...CANVAS }).graphic;
+	const withSideboard = addGraphicItem(withWins, { kind: 'deck-list', id: 'sideboard', ...CANVAS }).graphic;
+	const withDamage = addGraphicItem(withSideboard, { kind: 'commander-damage', id: 'commander-damage', ...CANVAS }).graphic;
+	const document = addGraphicItem(withDamage, { kind: 'seat-indicator', id: 'turn', ...CANVAS }).graphic;
 
 	const group = document.items.find(item => item.id === 'cluster');
 	if (group?.type !== 'group')
