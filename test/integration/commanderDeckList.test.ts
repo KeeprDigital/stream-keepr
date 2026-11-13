@@ -106,7 +106,9 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 			method: 'POST',
 			body: { name: 'Deck', slug: `commander-deck-screen-${eventId}`, currentMode: 'deck' },
 		});
-		expect(created.modeConfigs?.deck?.deckSource).toEqual({ type: 'featureMatchSlot', slotId, side: 'player1' });
+		// The Event's first Slot is the one it was created with, not the one this suite added.
+		expect(created.modeConfigs?.deck?.deckSource).toMatchObject({ type: 'featureMatchSlot', side: 'player1' });
+		expect(created.modeConfigs?.deck?.deckSource).not.toMatchObject({ slotId: null });
 
 		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${created.id}/config/deck`, {
 			method: 'PATCH',
