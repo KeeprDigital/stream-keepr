@@ -11,7 +11,11 @@ import {
 	createInitialBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { addGraphicGroupChild, addGraphicItem, DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { applicationGraphicFont } from '~~/shared/types/graphics';
+import { deferred } from '~~/test/helpers/deferred';
+import { graphic, text } from '~~/test/helpers/graphicsComposition';
 import { liveSessionSelectors } from '~~/test/nuxt/helpers/broadcastGraphicsLiveSessionReads';
+import { stubDocumentFonts } from '~~/test/nuxt/helpers/fontFaces';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import Display from '~/components/Screen/Modes/BroadcastGraphics/Display.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE, GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
@@ -1411,6 +1415,72 @@ describe('broadcastGraphicsDisplay', () => {
 				]);
 			});
 		});
+	});
+
+	// An application font ships as CSS `@font-face`, which swaps in late on a cold cache; readiness waits for it.
+	it('reports its fonts unready until the application face its text paints has loaded', async () => {
+		const load = deferred<unknown>();
+		const fonts = stubDocumentFonts(async () => load.promise);
+		mockScreen.value = screenWithStack([
+			graphic('lower-third', [
+				text('name-line', {
+					typography: {
+						...DEFAULT_GRAPHIC_TYPOGRAPHY,
+						font: applicationGraphicFont('poppins'),
+					},
+				}),
+			]),
+		]);
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+		await nextTick();
+
+		expect(fonts.load).toHaveBeenCalledWith(`normal ${DEFAULT_GRAPHIC_TYPOGRAPHY.fontWeight} 1em "Poppins"`);
+		expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('false');
+
+		load.resolve([{}]);
+		await vi.waitFor(() => {
+			expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+		});
+	});
+
+	// Program holds what it shows: a face an edit names later swaps in when it arrives.
+	it('keeps a shown canvas visible while an application face the stack gains is loading', async () => {
+		const load = deferred<unknown>();
+		stubDocumentFonts(async font => font.includes('Poppins')
+			? load.promise
+			: [{}]);
+		mockScreen.value = screenWithStack([
+			graphic('lower-third', [
+				text('name-line'),
+			]),
+		]);
+		const wrapper = await mountComponent();
+		await vi.waitFor(() => {
+			expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+		});
+
+		mockScreen.value = screenWithStack([
+			graphic('lower-third', [
+				text('name-line'),
+			]),
+			graphic('sponsor', [
+				text('sponsor-line', {
+					typography: {
+						...DEFAULT_GRAPHIC_TYPOGRAPHY,
+						font: applicationGraphicFont('poppins'),
+					},
+				}),
+			]),
+		]);
+		await flushPromises();
+		await nextTick();
+
+		const canvas = wrapper.get('.graphics-compositor-canvas');
+		expect(canvas.attributes('data-font-ready')).toBe('false');
+		expect((canvas.element as HTMLElement).style.visibility).toBe('');
+		load.resolve([{}]);
 	});
 
 	it('composes a Graphic Group and its children in one stacking context', async () => {

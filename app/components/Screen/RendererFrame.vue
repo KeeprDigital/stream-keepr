@@ -11,6 +11,7 @@ import {
 	resolveScreenModeHost,
 	SCREEN_MODE_READY_TIMEOUT_MS,
 	screenBackgroundLayers,
+	screenModeThemeApplicationFonts,
 	screenModeThemeFontReferences,
 	screenModeThemeTokenStyle,
 } from '~/modules/screen-mode';
@@ -20,9 +21,9 @@ import { waitForRenderedMedia } from '~/utils/renderedMediaReadiness';
  * One Screen Mode's rendering inside the Screen renderer: its host container,
  * its Background Layer stack and its display. It renders hidden until it is
  * ready — its display has declared its data settled, its Theme fonts have
- * loaded, and every image, video and pending part inside it has loaded or
- * failed — and says so once, so the renderer can keep what is on program
- * until then.
+ * loaded or failed, and every image, video and pending part inside it has
+ * loaded or failed — and says so once, so the renderer can keep what is on
+ * program until then.
  */
 const props = defineProps<{
 	mode: ScreenMode;
@@ -84,13 +85,15 @@ const themeTokenStyle = computed(() => screenModeThemeTokenStyle(
 ));
 
 /**
- * The library fonts the Theme's `heading` and `body`, and the mode's
- * typography Mode Tokens, resolve to, loaded as
- * `FontFace`s through the Screen Output Asset Capability, which admits what
- * the Screen's resolved tokens supply (ADR-0050). The mode's display hides
- * while they load, so text never flashes in a fallback face, and the
- * background behind it stays on air; a font that fails shows its fallback
- * rather than a blank display.
+ * The fonts the Theme's `heading` and `body`, and the mode's typography Mode
+ * Tokens, resolve to: library fonts loaded as `FontFace`s through the Screen
+ * Output Asset Capability, which admits what the Screen's resolved tokens
+ * supply (ADR-0050), and the application faces they name. The rendering is
+ * not ready until both have settled. The mode's display hides while a library
+ * font loads, so text never flashes in a fallback face, and the background
+ * behind it stays on air; a font that fails shows its fallback rather than a
+ * blank display. An application font holds the rendering off program, never
+ * the display: once on program, a late face swaps in.
  */
 const themeFontReferences = computed(() => screenModeThemeFontReferences(
 	props.mode,
@@ -99,13 +102,19 @@ const themeFontReferences = computed(() => screenModeThemeFontReferences(
 ));
 const themeFontAssets = computed(() => themeFontReferences.value.map(({ reference }) => reference));
 const { contentUrl: themeFontUrl, contentUrlsSettled: themeFontUrlsSettled } = useScreenGraphicAssetContentUrls(themeFontAssets);
-const { fontsReady: themeFontsReady, fontsFailed: themeFontsFailed } = useGraphicAssetFontFaces(
-	themeFontReferences,
-	themeFontUrl,
-	themeFontUrlsSettled,
+const themeApplicationFonts = computed(() => screenModeThemeApplicationFonts(
+	props.mode,
+	themeTokens?.value ?? DEFAULT_THEME_TOKENS,
+	screen.value?.themeOverrides ?? {},
+));
+const themeLibraryFonts = useGraphicAssetFontFaces(themeFontReferences, themeFontUrl, themeFontUrlsSettled);
+const { fontsReady: themeFontsReady, fontsFailed: themeFontsFailed } = useCombinedFontFaces(
+	themeLibraryFonts,
+	useApplicationFontFaces(themeApplicationFonts),
 );
 const themeFontsSettled = computed(() => themeFontsReady.value || themeFontsFailed.value);
-const themeFontStyle = computed(() => themeFontsSettled.value
+const themeLibraryFontsSettled = computed(() => themeLibraryFonts.fontsReady.value || themeLibraryFonts.fontsFailed.value);
+const themeFontStyle = computed(() => themeLibraryFontsSettled.value
 	? undefined
 	: { visibility: 'hidden' as const });
 
@@ -142,7 +151,9 @@ watch([declared, themeFontsSettled, container], async ([isDeclared, fontsSettled
 	// starts loading only then.
 	await nextTick();
 	await waitForRenderedMedia(element);
-	if (check === readyCheck && declared.value)
+	// A Theme change during the wait can name a font still loading; its
+	// settling starts the next check.
+	if (check === readyCheck && declared.value && themeFontsSettled.value)
 		becomeReady();
 }, { immediate: true });
 

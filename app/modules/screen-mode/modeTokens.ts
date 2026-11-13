@@ -1,4 +1,5 @@
-import type { FoundationTokenNameOfType, StoredThemeTokens, ThemeAlignment, ThemeBackgroundLayer } from '~~/shared/modules/theme';
+import type { ApplicationFontFaceRequest } from '~~/shared/modules/graphics/typography';
+import type { FoundationTokenNameOfType, StoredThemeTokens, ThemeAlignment, ThemeBackgroundLayer, ThemeTypography } from '~~/shared/modules/theme';
 import type { ScreenModeTokenOfType, ThemedScreenMode } from '~~/shared/screenModes';
 import type { ScreenMode } from '~~/shared/types/enums';
 import type { BackgroundLayer } from '~~/shared/types/screenConfig';
@@ -43,24 +44,48 @@ export function screenModeThemeTokenStyle(mode: ScreenMode, theme: StoredThemeTo
 }
 
 /**
+ * The typography a mode's display paints in, resolved, by token name: the
+ * `heading` and `body` Foundation Tokens, and each typography Mode Token.
+ */
+function screenModeThemeTypography(mode: ScreenMode, theme: StoredThemeTokens, overrides: StoredThemeTokens): Array<readonly [string, ThemeTypography]> {
+	const modeTokens = screenModeTokens(mode);
+	const { values } = resolveScreenThemeTokens(mode, theme, overrides);
+	return [
+		...FOUNDATION_TYPOGRAPHY_TOKENS.map(name => [
+			name,
+			resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme, overrides }, name) as ThemeTypography,
+		] as const),
+		...Object.entries(modeTokens).flatMap(([name, definition]) => definition.type === 'typography'
+			? [
+					[name, values[name] as ThemeTypography] as const,
+				]
+			: []),
+	];
+}
+
+/**
  * The library fonts a mode's display paints: the `heading` and `body`
  * Foundation Tokens, and each typography Mode Token, that resolve to a font
  * Graphic Asset Revision. Its Screen host loads them as `FontFace`s under the
  * family the token's custom property names.
  */
 export function screenModeThemeFontReferences(mode: ScreenMode, theme: StoredThemeTokens, overrides: StoredThemeTokens): ScreenGraphicAssetReference[] {
-	const modeTokens = screenModeTokens(mode);
-	const { values } = resolveScreenThemeTokens(mode, theme, overrides);
-	return [
-		...FOUNDATION_TYPOGRAPHY_TOKENS.flatMap(name => themeTokenValueGraphicAssetReferences(
-			'typography',
-			resolveFoundationToken({ vocabulary: FOUNDATION_TOKENS, theme, overrides }, name),
-			name,
-		)),
-		...Object.entries(modeTokens).flatMap(([name, definition]) => definition.type === 'typography'
-			? themeTokenValueGraphicAssetReferences('typography', values[name]!, name)
-			: []),
-	];
+	return screenModeThemeTypography(mode, theme, overrides)
+		.flatMap(([name, value]) => themeTokenValueGraphicAssetReferences('typography', value, name));
+}
+
+/**
+ * The application faces a Screen's resolved Theme typography paints with:
+ * `heading`, `body`, and the mode's typography Mode Tokens, each at its token's
+ * weight. A typography token sets no style, so each is `'normal'`. Its Screen
+ * host waits for them as it does for the library fonts above.
+ */
+export function screenModeThemeApplicationFonts(mode: ScreenMode, theme: StoredThemeTokens, overrides: StoredThemeTokens): ApplicationFontFaceRequest[] {
+	return screenModeThemeTypography(mode, theme, overrides).flatMap(([, { font, weight }]) => font.kind === 'application'
+		? [
+				{ fontId: font.fontId, weight, style: 'normal' as const },
+			]
+		: []);
 }
 
 /** A colour or dimension Foundation Token, as a CSS value a display reads directly. */
