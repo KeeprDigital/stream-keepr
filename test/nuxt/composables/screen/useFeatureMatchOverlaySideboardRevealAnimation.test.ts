@@ -136,6 +136,45 @@ describe('useFeatureMatchOverlaySideboardRevealAnimation', () => {
 		expect(rafQueue).toEqual([]);
 	});
 
+	// A Seat's turn arriving is an edge of the same kind; the turn it joins on is not (ADR-0087).
+	it('plays a Seat Indicator\'s enter when the turn reaches its Seat, and nothing for the turn it joined on', () => {
+		const featureMatch = ref<GraphicsFeatureMatchContext | undefined>({
+			...context(false),
+			activeSeat: 'player2',
+		});
+		const config = ref(overlayConfig());
+		config.value.layout.composition.items.push({
+			...getGraphicItemDefinition('seat-indicator').createDefault({
+				id: 'turn',
+				label: 'turn',
+				canvasWidth: 1920,
+				canvasHeight: 1080,
+			}),
+			playerSide: 'player1',
+			animation: {
+				enter: {
+					duration: 400,
+					easing: 'linear',
+					delay: 0,
+					fade: { opacity: 0 },
+				},
+			},
+		} as never);
+		const { itemAnimation } = scope.run(() => useFeatureMatchOverlaySideboardRevealAnimation(config, featureMatch))!;
+		expect(itemAnimation.value).toBeUndefined();
+
+		featureMatch.value = {
+			...context(false),
+			activeSeat: 'player1',
+		};
+
+		expect(itemAnimation.value).toEqual({
+			turn: [
+				{ phase: 'enter', elapsed: 0 },
+			],
+		});
+	});
+
 	it('plays nothing for the value it joins on, only for an edge it observed', () => {
 		// A late-joining or recovered output resolves the settled state rather than
 		// replaying the reveal — the composition-lifecycle recovery idiom.

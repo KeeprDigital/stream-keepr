@@ -349,6 +349,9 @@ const SEAT_INDICATOR_STATE_OPTIONS = [
 	{ label: 'Active player', value: 'active' },
 	{ label: 'Eliminated', value: 'eliminated' },
 ] satisfies Array<{ label: string; value: SeatIndicatorState }>;
+/** Only a Commander game eliminates a Seat, so only its host is offered that state (ADR-0087). */
+const seatIndicatorStateOptions = computed(() => SEAT_INDICATOR_STATE_OPTIONS
+	.filter(option => option.value !== 'eliminated' || props.contract.contextKinds.includes('commander-game')));
 const selectedGameWins = computed<GameWinsGraphicItemConfig | null>(() =>
 	selectedItem.value?.type === 'game-wins'
 		? selectedItem.value
@@ -1452,7 +1455,7 @@ function clearPlaceholderFontAsset(inputKey: string) {
 			<UFormField v-if="selectedSeatIndicator" label="Shown while" size="sm">
 				<USelect
 					:model-value="selectedSeatIndicator.state"
-					:items="SEAT_INDICATOR_STATE_OPTIONS"
+					:items="seatIndicatorStateOptions"
 					value-key="value"
 					class="w-full"
 					size="sm"

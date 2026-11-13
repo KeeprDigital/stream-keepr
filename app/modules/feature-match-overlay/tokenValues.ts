@@ -89,16 +89,16 @@ function pairGameState(input: FeatureMatchOverlayHostStateInput, seat: Seat): Pi
 		: {};
 }
 
+function isCommanderEvent(input: FeatureMatchOverlayHostStateInput): boolean {
+	return input.event != null && eventKind(input.event) === 'mtg-commander';
+}
+
 /**
  * What a Commander Slot adds to the context: Seats 3 and 4, and the Seats
  * nobody sits in. A Seat is in the game while it is filled, by the active
  * Session's snapshot or else the Slot's own Seats, so an unbound Overlay's are
  * all empty. Every other Event's context holds neither (ADR-0087).
  */
-function isCommanderEvent(input: FeatureMatchOverlayHostStateInput): boolean {
-	return input.event != null && eventKind(input.event) === 'mtg-commander';
-}
-
 function commanderSeats(input: FeatureMatchOverlayHostStateInput): Pick<GraphicsFeatureMatchContext, 'player3' | 'player4' | 'emptySeats'> {
 	if (!isCommanderEvent(input))
 		return {};

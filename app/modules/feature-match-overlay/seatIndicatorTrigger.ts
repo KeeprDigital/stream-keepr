@@ -5,8 +5,8 @@ import { applyItemPhaseEdge } from './sideboardRevealTrigger';
 
 /**
  * The Seat Indicator's half of the per-item phase trigger (ADR-0015, ADR-0087):
- * which indicators a Seat's state flip reaches. The bookkeeping, how an edge supersedes and when a trigger settles,
- * is the Sideboard reveal trigger's own.
+ * which indicators a Seat's state flip reaches. How an edge supersedes and
+ * when a trigger settles is the Sideboard reveal trigger's own bookkeeping.
  */
 
 /**

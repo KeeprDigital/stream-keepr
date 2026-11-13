@@ -1014,10 +1014,6 @@ const playerLifeGraphicItemConfigSchema = z.object(playerLifeGraphicItemShape).s
 const gameWinsGraphicItemConfigSchema = z.object(gameWinsGraphicItemShape).strict();
 const deckListGraphicItemConfigSchema = z.object(deckListGraphicItemShape).strict();
 
-/**
- * Main-axis sizing belongs to a Graphic Group child, so only a child carries
- * one: a top-level Graphic Item has no group to be sized inside.
- */
 const commanderDamageGraphicItemShape = {
 	...graphicItemBaseShape,
 	type: z.literal('commander-damage'),
@@ -1041,6 +1037,10 @@ const seatIndicatorGraphicItemShape = {
 
 const seatIndicatorGraphicItemConfigSchema = z.object(seatIndicatorGraphicItemShape).strict();
 
+/**
+ * Main-axis sizing belongs to a Graphic Group child, so only a child carries
+ * one: a top-level Graphic Item has no group to be sized inside.
+ */
 const graphicGroupChildSizingSchema = z.object({
 	mode: z.enum(['fixed', 'fill']),
 	size: nonNegativePixelSchema,

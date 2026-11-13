@@ -159,6 +159,8 @@ export const FEATURE_MATCH_SAMPLE_CONTEXT: FeatureMatchSampleContext = {
 		],
 		sideboardRevealed: true,
 	},
+	// The first Seat's turn, so a Seat Indicator previews on one Seat and not the other.
+	activeSeat: 'player1',
 	bestOf: 3,
 };
 

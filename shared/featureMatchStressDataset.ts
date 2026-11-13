@@ -109,6 +109,7 @@ function mtgContext(clockDisplayTime: string): FeatureMatchSampleContext {
 			]),
 			sideboardRevealed: true,
 		},
+		activeSeat: 'player1',
 		bestOf: 5,
 	};
 }
