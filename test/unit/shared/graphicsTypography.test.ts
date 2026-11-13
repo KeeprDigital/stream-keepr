@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	getGraphicFontDefinition,
+	GRAPHIC_FONTS,
 	graphicAssetFontFaceFamily,
 	resolveGraphicFontFamily,
 } from '~~/shared/modules/graphics/typography';
@@ -12,6 +13,16 @@ describe('shared graphics typography', () => {
 			.toBe('var(--font-saira-condensed)');
 		expect(resolveGraphicFontFamily({ kind: 'application', fontId: 'inter' }))
 			.toBe('var(--font-inter)');
+	});
+
+	it.each([
+		['roboto', true],
+		['system-mono', false],
+	])('resolves %s to its custom property, with a package only when packaged', (fontId, packaged) => {
+		const definition = GRAPHIC_FONTS.find(font => font.id === fontId);
+		expect(resolveGraphicFontFamily({ kind: 'application', fontId: fontId as never }))
+			.toBe(`var(--font-${fontId})`);
+		expect(definition?.package !== undefined).toBe(packaged);
 	});
 
 	it('does not resolve unknown application font capabilities to CSS', () => {

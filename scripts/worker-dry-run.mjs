@@ -1,7 +1,7 @@
 /**
  * `pnpm worker:dry-run` — bundle the built Worker exactly as `wrangler deploy`
  * would without promoting it, then assert the bundle compiles no Wasm at
- * runtime.
+ * runtime, and that the built CSS holds every declared application font face.
  *
  * The `--outdir` is absolute, and that is the whole point of this file.
  * Wrangler resolves a *relative* `--outdir` against the directory of its
@@ -25,6 +25,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { assertWorkerConfigurationDoesNotArmLocalAuthBypass } from '../build/localAuthDeployment.ts';
+import { builtFontsScan } from './assert-built-fonts.mjs';
 import { nativeScryptScan } from './assert-native-scrypt.mjs';
 import { runtimeWasmScan } from './assert-no-runtime-wasm.mjs';
 
@@ -38,6 +39,8 @@ const OUT_DIR = '.output/wrangler-dry-run';
  * that resolution (#393).
  */
 const NITRO_OUT_DIR = '.output/server';
+/** The static assets, where Nuxt Fonts' `@font-face` rules land (ADR-0086). */
+const PUBLIC_DIR = '.output/public';
 
 const repositoryRoot = fileURLToPath(new URL('../', import.meta.url));
 const outDir = fileURLToPath(new URL(`../${OUT_DIR}`, import.meta.url));
@@ -83,6 +86,7 @@ if (dryRun.status !== 0)
 const scans = [
 	runtimeWasmScan(outDir),
 	nativeScryptScan(fileURLToPath(new URL(`../${NITRO_OUT_DIR}`, import.meta.url))),
+	builtFontsScan(fileURLToPath(new URL(`../${PUBLIC_DIR}`, import.meta.url))),
 ];
 for (const scan of scans) {
 	for (const line of scan.lines)
