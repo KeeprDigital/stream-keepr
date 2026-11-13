@@ -79,15 +79,36 @@ export function useApplicationFontFaces(
 }
 
 /**
- * A host's font states as one: ready once every one is, and failed once every
- * one has settled with any failed. A failure beside a load still pending is held
- * back, so ready-or-failed keeps meaning settled for the host's visibility and
- * its Rendering Readiness.
+ * A font host's library and application fonts as one, and whether its display
+ * shows.
+ *
+ * Rendering Readiness reads the combination: ready once both are, failed once
+ * both have settled with either failed. A failure beside a load still pending is
+ * held back, so ready-or-failed means both have settled.
+ *
+ * The display hides while a library font loads, as it always has. An
+ * application font hides it only before its first show: once its faces have
+ * settled once, or the rendering is on program (past its timeout included), a
+ * face that arrives late swaps in rather than taking a shown display off air.
  */
-export function combineFontFaceStates(...states: readonly FontFaceState[]): FontFaceState {
-	const settled = computed(() => states.every(state => state.fontsReady.value || state.fontsFailed.value));
+export function useCombinedFontFaces(
+	library: FontFaceState,
+	application: FontFaceState,
+	onProgram: MaybeRefOrGetter<boolean>,
+): FontFaceState & { fontsVisible: Readonly<Ref<boolean>> } {
+	const settled = (state: FontFaceState) => state.fontsReady.value || state.fontsFailed.value;
+	const applicationSettled = computed(() => settled(application));
+	const applicationSettledOnce = ref(false);
+	watch(applicationSettled, (isSettled) => {
+		if (isSettled)
+			applicationSettledOnce.value = true;
+	}, { immediate: true, flush: 'sync' });
+
 	return {
-		fontsReady: computed(() => states.every(state => state.fontsReady.value)),
-		fontsFailed: computed(() => settled.value && states.some(state => state.fontsFailed.value)),
+		fontsReady: computed(() => library.fontsReady.value && application.fontsReady.value),
+		fontsFailed: computed(() => settled(library) && applicationSettled.value
+			&& (library.fontsFailed.value || application.fontsFailed.value)),
+		fontsVisible: computed(() => settled(library)
+			&& (applicationSettledOnce.value || toValue(onProgram))),
 	};
 }

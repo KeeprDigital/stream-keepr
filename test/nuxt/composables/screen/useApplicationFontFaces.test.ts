@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { defineComponent, nextTick, ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { stubDocumentFonts } from '~~/test/nuxt/helpers/fontFaces';
-import { combineFontFaceStates, useApplicationFontFaces } from '~/composables/screen/useApplicationFontFaces';
+import { useApplicationFontFaces, useCombinedFontFaces } from '~/composables/screen/useApplicationFontFaces';
 
 /**
  * Holds a Screen Output not-ready until the application faces it paints have
@@ -116,61 +116,108 @@ describe('useApplicationFontFaces', () => {
 		expect({ fontsReady: fonts.fontsReady.value, fontsFailed: fonts.fontsFailed.value }).toEqual({ fontsReady, fontsFailed });
 	});
 
-	it('discards a load a newer set of requests superseded', async () => {
-		const first = deferred<unknown>();
+	// A superseded load never changes the state its successor settled.
+	it.each([
+		{
+			row: 'stale rejection',
+			first: (load: ReturnType<typeof deferred<unknown>>) => load.reject(new Error('blocked')),
+			next: face,
+			settled: { fontsReady: true, fontsFailed: false },
+		},
+		{
+			row: 'stale resolution',
+			first: (load: ReturnType<typeof deferred<unknown>>) => load.resolve([{}]),
+			next: async () => Promise.reject(new Error('blocked')),
+			settled: { fontsReady: false, fontsFailed: true },
+		},
+	])('$row', async ({ first, next, settled }) => {
+		const load = deferred<unknown>();
 		const { fonts, source } = mountFonts([POPPINS_BOLD], font => font.includes('Poppins')
-			? first.promise
-			: face());
+			? load.promise
+			: next());
 		await nextTick();
 
 		source.value = [INTER_LIGHT_ITALIC];
 		await settle();
-		first.reject(new Error('blocked'));
+		first(load);
 		await settle();
 
-		expect({ fontsReady: fonts.fontsReady.value, fontsFailed: fonts.fontsFailed.value }).toEqual({ fontsReady: true, fontsFailed: false });
+		expect({ fontsReady: fonts.fontsReady.value, fontsFailed: fonts.fontsFailed.value }).toEqual(settled);
 	});
 });
 
-describe('combineFontFaceStates', () => {
+describe('useCombinedFontFaces', () => {
 	const PENDING = { fontsReady: false, fontsFailed: false };
 	const READY = { fontsReady: true, fontsFailed: false };
 	const FAILED = { fontsReady: false, fontsFailed: true };
 
-	// A failure is reported only once every state has settled, so ready-or-failed still means settled.
+	// Readiness reads both kinds settled; an application font hides a display only before its first show.
 	it.each([
 		{
-			row: 'one pending',
+			row: 'first load pending, never shown',
 			library: READY,
 			application: PENDING,
-			combined: PENDING,
+			onProgram: false,
+			combined: { ...PENDING, fontsVisible: false },
 		},
 		{
 			row: 'a failure beside a pending load',
 			library: FAILED,
 			application: PENDING,
-			combined: PENDING,
+			onProgram: false,
+			combined: { ...PENDING, fontsVisible: false },
 		},
 		{
 			row: 'both ready',
 			library: READY,
 			application: READY,
-			combined: READY,
+			onProgram: false,
+			combined: { ...READY, fontsVisible: true },
 		},
 		{
 			row: 'one failed, both settled',
 			library: READY,
 			application: FAILED,
-			combined: FAILED,
+			onProgram: false,
+			combined: { ...FAILED, fontsVisible: true },
 		},
-	])('$row', ({ library, application, combined }) => {
+		{
+			row: 'settled once, then a new face pending',
+			library: READY,
+			applicationBefore: READY,
+			application: PENDING,
+			onProgram: false,
+			combined: { ...PENDING, fontsVisible: true },
+		},
+		{
+			row: 'never settles, rendering on program',
+			library: READY,
+			application: PENDING,
+			onProgram: true,
+			combined: { ...PENDING, fontsVisible: true },
+		},
+		{
+			row: 'library pending, application settled',
+			library: PENDING,
+			application: READY,
+			onProgram: true,
+			combined: { ...PENDING, fontsVisible: false },
+		},
+	])('$row', ({ library, applicationBefore, application, onProgram, combined }) => {
 		const state = (value: typeof PENDING) => ({
 			fontsReady: ref(value.fontsReady),
 			fontsFailed: ref(value.fontsFailed),
 		});
+		const applicationState = state(applicationBefore ?? application);
 
-		const { fontsReady, fontsFailed } = combineFontFaceStates(state(library), state(application));
+		const fonts = useCombinedFontFaces(state(library), applicationState, onProgram);
+		applicationState.fontsReady.value = application.fontsReady;
+		applicationState.fontsFailed.value = application.fontsFailed;
 
-		expect({ fontsReady: fontsReady.value, fontsFailed: fontsFailed.value }).toEqual(combined);
+		expect({
+			fontsReady: fonts.fontsReady.value,
+			fontsFailed: fonts.fontsFailed.value,
+			fontsVisible: fonts.fontsVisible.value,
+		}).toEqual(combined);
 	});
 });

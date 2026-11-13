@@ -1448,6 +1448,44 @@ describe('broadcastGraphicsDisplay', () => {
 		expect((wrapper.get('.graphics-compositor-canvas').element as HTMLElement).style.visibility).toBe('');
 	});
 
+	// Program holds what it shows: a face an edit names later swaps in when it arrives.
+	it('keeps a shown canvas visible while an application face the stack gains is loading', async () => {
+		const load = deferred<unknown>();
+		stubDocumentFonts(async font => font.includes('Poppins')
+			? load.promise
+			: [{}]);
+		mockScreen.value = screenWithStack([
+			graphic('lower-third', [
+				text('name-line'),
+			]),
+		]);
+		const wrapper = await mountComponent();
+		await vi.waitFor(() => {
+			expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+		});
+
+		mockScreen.value = screenWithStack([
+			graphic('lower-third', [
+				text('name-line'),
+			]),
+			graphic('sponsor', [
+				text('sponsor-line', {
+					typography: {
+						...DEFAULT_GRAPHIC_TYPOGRAPHY,
+						font: applicationGraphicFont('poppins'),
+					},
+				}),
+			]),
+		]);
+		await flushPromises();
+		await nextTick();
+
+		const canvas = wrapper.get('.graphics-compositor-canvas');
+		expect(canvas.attributes('data-font-ready')).toBe('false');
+		expect((canvas.element as HTMLElement).style.visibility).toBe('');
+		load.resolve([{}]);
+	});
+
 	it('composes a Graphic Group and its children in one stacking context', async () => {
 		mockIsPreview.value = true;
 		const grouped: BroadcastGraphicConfig = {

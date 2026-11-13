@@ -31,7 +31,7 @@ import {
 	previewSelectMessage,
 } from '~/modules/graphics/previewMessages';
 import { isSelectionToggle } from '~/modules/graphics/selection';
-import { useScreenModeReady } from '~/modules/screen-mode';
+import { useScreenModeOnProgram, useScreenModeReady } from '~/modules/screen-mode';
 import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
@@ -96,21 +96,22 @@ const {
 	graphicAssetReferences,
 );
 
-// Typography naming a library font paints in the family this registers, and an
-// application font in a face its stylesheet fetches on first paint. Keep the
+// Typography naming a library font paints in the family this registers. Keep the
 // output hidden while a load is still in flight so it cannot flash a fallback
 // typeface, but reveal it after a terminal failure: a standalone URL without its
 // asset capability must not make the Frame, Sources, and every unrelated Graphic
-// Item disappear just because the exact font bytes are unavailable.
+// Item disappear just because the exact font bytes are unavailable. An
+// application font holds only the first show; a face named later swaps in.
 const libraryFonts = useGraphicAssetFontFaces(
 	indexedGraphicAssetReferences,
 	graphicAssetContentUrl,
 	contentUrlsSettled,
 );
 const { fontSources } = libraryFonts;
-const { fontsReady, fontsFailed } = combineFontFaceStates(
+const { fontsReady, fontsFailed, fontsVisible } = useCombinedFontFaces(
 	libraryFonts,
 	useApplicationFontFaces(() => graphicItemsApplicationFonts(paintedComposition.value.items)),
+	useScreenModeOnProgram(),
 );
 // Rendering Readiness: the Slot read has settled, its media URLs have resolved,
 // and its fonts have loaded or failed; the media itself is the host's to wait on.
@@ -450,7 +451,7 @@ onBeforeUnmount(() => {
 	<div
 		class="feature-match-overlay"
 		:class="`feature-match-overlay--${resolvedOutput}`"
-		:style="{ ...canvasStyle, visibility: fontsReady || fontsFailed ? undefined : 'hidden' }"
+		:style="{ ...canvasStyle, visibility: fontsVisible ? undefined : 'hidden' }"
 		:data-export-ready="(!loading && !error && fontsReady && !fontsFailed).toString()"
 		:data-font-ready="fontsReady.toString()"
 		:data-font-error="fontsFailed.toString()"

@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defineComponent, effectScope, h, ref } from 'vue';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
-import { provideScreenModeReadiness, useScreenModeReady, useStagedScreenContent } from '~/modules/screen-mode/readiness';
+import { provideScreenModeReadiness, useScreenModeOnProgram, useScreenModeReady, useStagedScreenContent } from '~/modules/screen-mode/readiness';
 
 const images = stubImageLoading();
 
@@ -23,7 +23,7 @@ describe('provideScreenModeReadiness', () => {
 		const shown = ref(declarations.map(() => true));
 		const wrapper = mount(defineComponent({
 			setup() {
-				declared = provideScreenModeReadiness().declared;
+				declared = provideScreenModeReadiness(ref(false)).declared;
 				return () => h('div', declarations.map((_, index) => shown.value[index]
 					? h(Child, { index })
 					: null));
@@ -62,6 +62,44 @@ describe('provideScreenModeReadiness', () => {
 		await flushPromises();
 
 		expect(declared.value).toBe(true);
+	});
+});
+
+// A part inside a rendering learns from its host whether the rendering is on program.
+describe('useScreenModeOnProgram', () => {
+	it.each([
+		{
+			row: 'inside a host',
+			hosted: true,
+			expected: [false, true],
+		},
+		{
+			row: 'outside a host',
+			hosted: false,
+			expected: [false, false],
+		},
+	])('$row', async ({ hosted, expected }) => {
+		const hostOnProgram = ref(false);
+		let onProgram!: ReturnType<typeof useScreenModeOnProgram>;
+		const Part = defineComponent({
+			setup() {
+				onProgram = useScreenModeOnProgram();
+				return () => null;
+			},
+		});
+		mount(defineComponent({
+			setup() {
+				if (hosted)
+					provideScreenModeReadiness(hostOnProgram);
+				return () => h(Part);
+			},
+		}));
+		const seen = [onProgram.value];
+
+		hostOnProgram.value = true;
+		seen.push(onProgram.value);
+
+		expect(seen).toEqual(expected);
 	});
 });
 

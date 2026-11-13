@@ -88,10 +88,11 @@ const themeTokenStyle = computed(() => screenModeThemeTokenStyle(
  * The fonts the Theme's `heading` and `body`, and the mode's typography Mode
  * Tokens, resolve to: library fonts loaded as `FontFace`s through the Screen
  * Output Asset Capability, which admits what the Screen's resolved tokens
- * supply (ADR-0050), and the application faces they name. The mode's display
- * hides while either loads, so text never flashes in a fallback face, and the
- * background behind it stays on air; a font that fails shows its fallback
- * rather than a blank display.
+ * supply (ADR-0050), and the application faces they name. The rendering is
+ * not ready until both have settled. The mode's display hides while a library
+ * font loads, and while an application font loads before its first show, so
+ * text never flashes in a fallback face, and the background behind it stays on
+ * air; a font that fails shows its fallback rather than a blank display.
  */
 const themeFontReferences = computed(() => screenModeThemeFontReferences(
 	props.mode,
@@ -105,20 +106,22 @@ const themeApplicationFonts = computed(() => screenModeThemeApplicationFonts(
 	themeTokens?.value ?? DEFAULT_THEME_TOKENS,
 	screen.value?.themeOverrides ?? {},
 ));
-const { fontsReady: themeFontsReady, fontsFailed: themeFontsFailed } = combineFontFaceStates(
+/** Whether this rendering is ready, or past its timeout: the renderer puts it on program. */
+const ready = ref(false);
+const { fontsReady: themeFontsReady, fontsFailed: themeFontsFailed, fontsVisible: themeFontsVisible } = useCombinedFontFaces(
 	useGraphicAssetFontFaces(themeFontReferences, themeFontUrl, themeFontUrlsSettled),
 	useApplicationFontFaces(themeApplicationFonts),
+	ready,
 );
 const themeFontsSettled = computed(() => themeFontsReady.value || themeFontsFailed.value);
-const themeFontStyle = computed(() => themeFontsSettled.value
+const themeFontStyle = computed(() => themeFontsVisible.value
 	? undefined
 	: { visibility: 'hidden' as const });
 
 // ── Rendering Readiness ──
 
-const { declared } = provideScreenModeReadiness();
+const { declared } = provideScreenModeReadiness(readonly(ready));
 const container = ref<HTMLElement | null>(null);
-const ready = ref(false);
 let disposed = false;
 let readyCheck = 0;
 let readyTimeout: ReturnType<typeof setTimeout> | undefined;

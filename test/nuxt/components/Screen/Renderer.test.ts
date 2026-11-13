@@ -1,8 +1,11 @@
+import type { ApplicationFontFaceRequest } from '~~/shared/modules/graphics/typography';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, nextTick, reactive, ref } from 'vue';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockScreen } from '~~/test/helpers/fixtures';
+import { stubDocumentFonts } from '~~/test/nuxt/helpers/fontFaces';
 import Renderer from '~/components/Screen/Renderer.vue';
 import { SCREEN_MODE_READY_TIMEOUT_MS, useScreenModeReady } from '~/modules/screen-mode/readiness';
 
@@ -16,6 +19,9 @@ const { resolveScreenModeHost } = vi.hoisted(() => ({
 const readiness = reactive<Record<string, boolean>>({});
 /** Whether each mode's display still marks part of itself loading. */
 const pending = reactive<Record<string, boolean>>({});
+
+/** The application faces every rendering's Theme paints; none unless a test sets them. */
+const applicationFonts = ref<ApplicationFontFaceRequest[]>([]);
 
 const displays = new Map<string, ReturnType<typeof defineComponent>>();
 
@@ -48,7 +54,7 @@ vi.mock('~/modules/screen-mode', async () => ({
 	// (test/nuxt/components/Screen/Modes/themeTokenRendering.test.ts).
 	screenModeThemeTokenStyle: () => ({}),
 	screenModeThemeFontReferences: () => [],
-	screenModeThemeApplicationFonts: () => [],
+	screenModeThemeApplicationFonts: () => applicationFonts.value,
 }));
 
 enableAutoUnmount(afterEach);
@@ -134,6 +140,7 @@ describe('screenRenderer', () => {
 		overlayContainer.value = null;
 		screen.value = createMockScreen({ currentMode: 'card' });
 		themeTokens.value = undefined;
+		applicationFonts.value = [];
 		hostReturning(true);
 	});
 
@@ -338,6 +345,27 @@ describe('screenRenderer', () => {
 
 			expect(frame(wrapper, 'card').exists()).toBe(false);
 			expect(onProgram(wrapper, 'standings')).toBe(true);
+		});
+
+		// An application face that never arrives holds the first show only until the timeout.
+		it('shows the display of a mode whose application font never loads once the ready timeout passes', async () => {
+			vi.useFakeTimers();
+			vi.spyOn(console, 'warn').mockImplementation(() => {});
+			stubDocumentFonts(() => deferred<unknown>().promise);
+			applicationFonts.value = [
+				{ fontId: 'poppins', weight: 700, style: 'normal' },
+			];
+			const wrapper = mountRenderer();
+			await vi.advanceTimersByTimeAsync(0);
+			const display = () => wrapper.get('[data-testid="display"]').element as HTMLElement;
+			expect(onProgram(wrapper, 'card')).toBe(false);
+			expect(display().style.visibility).toBe('hidden');
+
+			await vi.advanceTimersByTimeAsync(SCREEN_MODE_READY_TIMEOUT_MS);
+
+			expect(onProgram(wrapper, 'card')).toBe(true);
+			expect(display().style.visibility).toBe('');
+			expect(frame(wrapper, 'card').attributes('data-font-ready')).toBe('false');
 		});
 	});
 });

@@ -200,7 +200,7 @@ export function isControlScreenMode(mode: ScreenMode): boolean {
 export { foundationMotionVars, foundationTokenVar, foundationTypographyStyle, modeMotionVars, modeTokenVar, screenBackgroundLayers, screenLayoutTokens, screenModeThemeApplicationFonts, screenModeThemeFontReferences, screenModeThemeTokenStyle } from './modeTokens';
 export { usePaginatedScreenMode, useProjectedRotationPage, useScreenModePagination } from './pagination';
 export type { ProjectedRotationPageOptions, ScreenModePaginationOptions } from './pagination';
-export { provideScreenModeReadiness, SCREEN_MODE_READY_TIMEOUT_MS, useScreenModeReady, useStagedScreenContent } from './readiness';
+export { provideScreenModeReadiness, SCREEN_MODE_READY_TIMEOUT_MS, useScreenModeOnProgram, useScreenModeReady, useStagedScreenContent } from './readiness';
 export { useEventScreenModeSelectOptions } from './selectOptions';
 export type {
 	ScreenModeConfigurationPolicy,

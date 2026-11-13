@@ -8,7 +8,7 @@ import { broadcastGraphicsGraphicAssetReferences, graphicItemsApplicationFonts }
 import GraphicsCompositorCanvas from '~/components/Graphics/Compositor/Canvas.vue';
 import { useBroadcastGraphicsModeData } from '~/composables/screen/useBroadcastGraphicsModeData';
 import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphics/renderModel';
-import { useScreenModeReady } from '~/modules/screen-mode';
+import { useScreenModeOnProgram, useScreenModeReady } from '~/modules/screen-mode';
 import { createImageRetainer } from '~/utils/preloadImage';
 
 const context = useScreenContext();
@@ -86,20 +86,22 @@ const graphicAssetReferences = computed(() =>
 // an editor preview resolves it as an author. Neither path can browse the library.
 const { contentUrl, contentUrlsSettled } = useScreenGraphicAssetContentUrls(graphicAssetReferences);
 
-// Typography naming a library font paints in the family this registers, and an
-// application font in a face its stylesheet fetches on first paint, so the
-// canvas stays hidden while either is loading rather than flashing a fallback
-// typeface on air. A font that fails shows its fallback, as the Feature Match
-// Overlay does: a blank graphic is worse on air than the wrong face.
+// Typography naming a library font paints in the family this registers, so the
+// canvas stays hidden while one is loading rather than flashing a fallback
+// typeface on air. An application font holds only its first show: once the
+// canvas has shown, an edit naming a new face swaps it in rather than blanking
+// the graphics already on air. A font that fails shows its fallback, as the
+// Feature Match Overlay does: a blank graphic is worse on air than the wrong face.
 const libraryFonts = useGraphicAssetFontFaces(
 	indexedGraphicAssetReferences,
 	contentUrl,
 	contentUrlsSettled,
 );
 const { fontSources } = libraryFonts;
-const { fontsReady, fontsFailed } = combineFontFaceStates(
+const { fontsReady, fontsFailed, fontsVisible } = useCombinedFontFaces(
 	libraryFonts,
 	useApplicationFontFaces(() => graphicItemsApplicationFonts(paintedGraphics.value.flatMap(graphic => graphic.items))),
+	useScreenModeOnProgram(),
 );
 
 // A Take cannot wait on one output, whose animation phases follow the shared
@@ -149,7 +151,7 @@ const renderModel = computed(() => resolveBroadcastGraphicsRenderModel({
 	<GraphicsCompositorCanvas
 		class="broadcast-graphics"
 		:class="`broadcast-graphics--${renderModel.output}`"
-		:style="{ visibility: fontsReady || fontsFailed ? undefined : 'hidden' }"
+		:style="{ visibility: fontsVisible ? undefined : 'hidden' }"
 		:data-font-ready="fontsReady.toString()"
 		:data-font-error="fontsFailed.toString()"
 		:data-export-font-sources="JSON.stringify(fontSources)"
