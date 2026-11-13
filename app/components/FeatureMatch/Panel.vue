@@ -2,7 +2,7 @@
 import type { Seat } from '~~/shared/types/enums';
 import type { FeatureMatchData, FeatureMatchFormData, PlayerData, PlayerDisplayConfig, UpdateFeatureMatchInput } from '~/types';
 import { SEAT_VALUES } from '~~/shared/types/enums';
-import { SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
+import { seatNumber, SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 import { playerDisplayName } from '~~/shared/utils/playerName';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { DEFAULT_PLAYER_DATA, toPlayerData } from '~/types';
@@ -181,7 +181,6 @@ const player2Data = shownSideData('player2');
 const player1Id = shownSidePlayerId('player1');
 const player2Id = shownSidePlayerId('player2');
 
-const seatNumber = (seat: Seat) => SEAT_VALUES.indexOf(seat) + 1;
 const seatFormId = (seat: Seat) => `feature-match-${props.match.id}-player-${seatNumber(seat)}-form`;
 const player1FormId = computed(() => seatFormId('player1'));
 const player2FormId = computed(() => seatFormId('player2'));
@@ -310,6 +309,14 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 	};
 }
 
+/** What each Seat of a Commander Slot's Controls shows; its game's own phase is the table's to read. */
+const commanderDisplayConfig = computed<PlayerDisplayConfig>(() => ({
+	showName: true,
+	showDeckName: true,
+	showPronouns: pronounsEnabled.value,
+	showLgs: lgsEnabled.value,
+}));
+
 // ──────────────── Match Title ────────────────
 
 const matchTitle = computed(() => `Match ${props.matchNumber}`);
@@ -393,8 +400,15 @@ async function save() {
 
 		<!-- ==================== GAME MODE ==================== -->
 		<div v-show="panelView === 'game'">
+			<!-- A Commander Slot's four Seats, where they sit at the table (ADR-0087) -->
+			<FeatureMatchStateCommanderTable
+				v-if="matchState && isCommander"
+				:match-id="match.id"
+				:config="commanderDisplayConfig"
+			/>
+
 			<!-- Player Arena -->
-			<div v-if="matchState" class="control">
+			<div v-else-if="matchState" class="control">
 				<!-- Player 1 -->
 				<FeatureMatchStatePlayerControls
 					class="player-one"
@@ -656,6 +670,7 @@ async function save() {
 			<!-- Game mode: Match actions -->
 			<div v-else-if="matchState" class="match-actions">
 				<UButton
+					v-if="!isCommander"
 					label="Tokens"
 					icon="i-lucide-images"
 					color="neutral"
@@ -704,7 +719,7 @@ async function save() {
 	/>
 
 	<FeatureMatchStateEditStateModal
-		v-if="matchState"
+		v-if="matchState && !isCommander"
 		v-model:open="editStateOpen"
 		:state="matchState"
 		:player1-name="playerDisplayName(player1Data)"

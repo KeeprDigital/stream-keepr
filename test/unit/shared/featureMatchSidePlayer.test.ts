@@ -54,6 +54,44 @@ describe('the player a Feature Match Slot side shows', () => {
 		expect(featureMatchSidePlayer({ ...slot, activeSession }, 'player2')).toEqual(right);
 	});
 
+	// Seats 3 and 4 are a Commander Slot's: typed, linking no Player (ADR-0087).
+	it.each([
+		{
+			with: 'no active Session, from the Slot\'s own Seat',
+			activeSession: null,
+			seated: {
+				playerId: null,
+				data: { name: 'Cyd' },
+			},
+		},
+		{
+			with: 'an active Session, from its snapshot',
+			activeSession: {
+				sourceSnapshot: {
+					player1: ana,
+					player2: ben,
+					player3: {
+						playerId: null,
+						data: { name: 'Dee' },
+					},
+				},
+			},
+			seated: {
+				playerId: null,
+				data: { name: 'Dee' },
+			},
+		},
+	])('reads Seat 3 with $with', ({ activeSession, seated }) => {
+		const commanderSlot = {
+			...slot,
+			player3Data: { name: 'Cyd' },
+			activeSession,
+		};
+
+		expect(featureMatchSidePlayer(commanderSlot, 'player3')).toEqual(seated);
+		expect(featureMatchSidePlayer(commanderSlot, 'player4')).toEqual({ playerId: null, data: null });
+	});
+
 	it('seats nobody without a Slot', () => {
 		expect(featureMatchSidePlayer(null, 'player1')).toEqual({ playerId: null, data: null });
 	});

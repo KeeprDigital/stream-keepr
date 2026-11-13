@@ -68,6 +68,51 @@ describe('feature Match Session client module', () => {
 		}));
 	});
 
+	// A Commander Session's commands (ADR-0087): damage is relative and merges; the others claim the state they saw.
+	it.each([
+		[
+			'Commander Damage',
+			(client: ReturnType<typeof useFeatureMatchSessionClient>) => client.adjustCommanderDamage(1, 2, 'player2', { seat: 'player1', commander: 1 }, 5),
+			{
+				type: 'AdjustCommanderDamage',
+				payload: {
+					player: 'player2',
+					from: 'player1',
+					commander: 1,
+					delta: 5,
+				},
+			},
+			false,
+		],
+		[
+			'an Eliminated Seat',
+			(client: ReturnType<typeof useFeatureMatchSessionClient>) => client.setEliminated(1, 2, 'player3', true),
+			{
+				type: 'SetEliminated',
+				payload: { player: 'player3', eliminated: true },
+			},
+			true,
+		],
+		[
+			'a declared winner',
+			(client: ReturnType<typeof useFeatureMatchSessionClient>) => client.setOutcome(1, 2, { winner: 'player4' }),
+			{
+				type: 'SetOutcome',
+				payload: {
+					outcome: { winner: 'player4' },
+				},
+			},
+			true,
+		],
+	] as const)('sends %s as its command', async (_case, send, command, sequenced) => {
+		await send(useFeatureMatchSessionClient());
+
+		const [, sessionId, sent] = repository.sendCommand.mock.calls[0]!;
+		expect(sessionId).toBe(7);
+		expect(sent).toMatchObject(command);
+		expect(sent.baseSequence).toBe(sequenced ? 4 : undefined);
+	});
+
 	it('constructs state update commands in the client seam', async () => {
 		const client = useFeatureMatchSessionClient();
 		await client.updateState(1, 2, { firstPlayer: 'player1', activePlayer: 'player1', turnNumber: 1 });

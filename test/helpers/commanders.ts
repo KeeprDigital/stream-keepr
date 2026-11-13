@@ -1,3 +1,4 @@
+import type { ManualPlayerSlotData } from '~~/shared/api';
 import type { Commander } from '~~/shared/types/game';
 
 /** Commanders as a Seat holds them (ADR-0087): each one printing of a card. */
@@ -25,6 +26,15 @@ export const KRAUM: Commander = {
 	setCode: 'c16',
 	collectorNumber: '34',
 };
+
+/** A typed Seat as a setup save sends it: a name, its Commanders, and whatever else `extra` holds. */
+export function typedSeat(name: string, commanders: Commander[], extra: Partial<ManualPlayerSlotData> = {}): ManualPlayerSlotData {
+	return {
+		name,
+		...extra,
+		gameData: { type: 'mtg', commanders },
+	};
+}
 
 /** The Scryfall card a Commander is picked from, as its search answers it. */
 export function scryfallCardOf(commander: Commander, overrides: Record<string, unknown> = {}) {

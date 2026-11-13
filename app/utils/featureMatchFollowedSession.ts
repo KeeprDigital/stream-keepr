@@ -6,6 +6,14 @@ interface FollowedSessions {
 	featureMatchSessions?: ReadonlyMap<number, FeatureMatchSessionResponse>;
 }
 
+/** The Session the Live State Follower holds for a Slot, if it follows one. */
+export function followedFeatureMatchSession(slotId: number, store: FollowedSessions): FeatureMatchSessionResponse | undefined {
+	const sessionId = store.sessionIdBySlotId?.get(slotId);
+	return sessionId === undefined
+		? undefined
+		: store.featureMatchSessions?.get(sessionId);
+}
+
 /**
  * A Feature Match Slot carrying the Session the Live State Follower holds for it,
  * rather than the one its last read carried.
@@ -18,10 +26,7 @@ export function withFollowedFeatureMatchSession<T extends { id: number; activeSe
 	slot: T,
 	store: FollowedSessions,
 ): T {
-	const sessionId = store.sessionIdBySlotId?.get(slot.id);
-	const followed = sessionId === undefined
-		? undefined
-		: store.featureMatchSessions?.get(sessionId);
+	const followed = followedFeatureMatchSession(slot.id, store);
 	return followed && followed !== slot.activeSession
 		? { ...slot, activeSession: followed }
 		: slot;

@@ -1,9 +1,11 @@
 import type { MaybeRefOrGetter } from 'vue';
+import type { Seat } from '~~/shared/types/enums';
 import type { CounterState, GameWinOptions } from '~~/shared/types/featureMatchState';
+import { pairSeatOf } from '~~/shared/modules/feature-match-session';
 
 export function usePlayerControls(
 	matchId: MaybeRefOrGetter<number>,
-	player: MaybeRefOrGetter<PlayerSide>,
+	player: MaybeRefOrGetter<Seat>,
 ) {
 	const eventStore = useEventStore();
 	const store = useFeatureMatchStateStore();
@@ -27,14 +29,17 @@ export function usePlayerControls(
 			return store.updatePlayerFeatureMatchState(eid()!, mid(), p(), { counters });
 	}
 
+	// A game win is one of the pair's: a Commander Session has none (ADR-0087).
 	function recordWin(options?: GameWinOptions) {
-		if (eid())
-			return store.recordGameWin(eid()!, mid(), p(), options);
+		const side = pairSeatOf(p());
+		if (eid() && side)
+			return store.recordGameWin(eid()!, mid(), side, options);
 	}
 
 	function undoWin(options?: GameWinOptions) {
-		if (eid())
-			return store.undoGameWin(eid()!, mid(), p(), options);
+		const side = pairSeatOf(p());
+		if (eid() && side)
+			return store.undoGameWin(eid()!, mid(), side, options);
 	}
 
 	function setCardsKept(value: number) {

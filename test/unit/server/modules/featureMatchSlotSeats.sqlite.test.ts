@@ -1,12 +1,10 @@
-import type { ManualPlayerSlotData } from '~~/shared/api';
 import type { Variant } from '~~/shared/types/enums';
-import type { Commander } from '~~/shared/types/game';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
-import { ATRAXA, KRAUM, TYMNA } from '~~/test/helpers/commanders';
+import { ATRAXA, KRAUM, typedSeat as seat, TYMNA } from '~~/test/helpers/commanders';
 import { fakeOpCardBulkLookup, mockOpWriteBoundaries } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
@@ -25,14 +23,6 @@ const { published } = mockOpWriteBoundaries(db, () => fakeOpCardBulkLookup([]));
 
 const { featureMatchSlotWriteModule } = await import('~~/server/modules/feature-match-slot-write');
 const { featureMatchService } = await import('~~/server/services/featureMatch');
-
-function seat(name: string, commanders: Commander[], extra: Partial<ManualPlayerSlotData> = {}): ManualPlayerSlotData {
-	return {
-		name,
-		...extra,
-		gameData: { type: 'mtg', commanders },
-	};
-}
 
 beforeEach(() => {
 	published.length = 0;

@@ -344,6 +344,28 @@ describe('useFeatureMatchGameMode', () => {
 		});
 	});
 
+	// A Commander Session's game is its whole Session, driven from its Seats' own controls (ADR-0087).
+	describe('on a Commander Event', () => {
+		beforeEach(() => {
+			mockEventData.value = createMockEvent({ ...trackingEverything, variant: 'commander' });
+		});
+
+		it('offers a game reset alone, no dialog editing the pair, and no half of a turn', () => {
+			const mode = createSetup();
+
+			expect(mode.resetActionItems.value.flat().map(item => item.label)).toEqual(['Reset Game']);
+			expect(mode.matchActionItems.value).toEqual([]);
+			expect(mode.turnHalf.value).toBeUndefined();
+		});
+
+		it('tracks no overtime and no Sideboard, whatever the Event says', () => {
+			const mode = createSetup();
+
+			expect([mode.overtimeTrackingEnabled.value, mode.sideboardTrackingEnabled.value, mode.extraTurnsEnabled.value]).toEqual([false, false, false]);
+			expect([mode.lifeTrackingEnabled.value, mode.counterTrackingEnabled.value, mode.mulliganTrackingEnabled.value]).toEqual([true, true, true]);
+		});
+	});
+
 	describe('match actions', () => {
 		it('always offers Edit Match State, and Change First Player once one is chosen', () => {
 			const labels = (state: Partial<FeatureMatchState>) => createSetup(state).matchActionItems.value[0]!.map(a => a.label);

@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import type { Seat } from '~~/shared/types/enums';
 import type { CounterState } from '~~/shared/types/featureMatchState';
 import type { CounterTypeConfig } from '~~/shared/types/game';
 import { getCounterTypeConfigs } from '~~/shared/config/games';
 
 const props = withDefaults(defineProps<{
 	matchId: number;
-	player: PlayerSide;
+	player: Seat;
 	counters: CounterState[];
 	/** Scales up buttons and text for touch-screen use */
 	touch?: boolean;

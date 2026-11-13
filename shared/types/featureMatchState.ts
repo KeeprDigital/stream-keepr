@@ -1,4 +1,4 @@
-import type { ClockType, PlayerSide } from './enums';
+import type { ClockType, Seat } from './enums';
 
 // Counter state
 export interface CounterState {
@@ -19,6 +19,34 @@ export interface PlayerFeatureMatchState {
 	 * before the flag existed, which every reader treats as hidden.
 	 */
 	sideboardRevealed?: boolean;
+	/**
+	 * The Commander Damage this Seat has taken, a count per opposing Commander
+	 * (ADR-0087). A Commander Session's alone; a Commander that has dealt none
+	 * has no entry.
+	 */
+	commanderDamage?: CommanderDamageState[];
+	/** Whether this Seat is Eliminated, which only its operator sets (ADR-0087). A Commander Session's alone. */
+	eliminated?: boolean;
+}
+
+/** Which of a Seat's Commanders: its first or, for a pair, its second. */
+export const COMMANDER_NUMBER_VALUES = [1, 2] as const;
+export type CommanderNumber = typeof COMMANDER_NUMBER_VALUES[number];
+
+/** One Commander at the table: the Seat holding it, and which of that Seat's Commanders it is. */
+export interface CommanderSource {
+	seat: Seat;
+	commander: CommanderNumber;
+}
+
+/** The Commander Damage one Seat has taken from one opposing Commander. */
+export interface CommanderDamageState extends CommanderSource {
+	damage: number;
+}
+
+/** How a Commander game ended: its winning Seat, or `null` for a draw (ADR-0087). */
+export interface FeatureMatchOutcome {
+	winner: Seat | null;
 }
 
 // Clock state
@@ -48,13 +76,19 @@ export interface OvertimeState {
 export interface FeatureMatchState {
 	player1: PlayerFeatureMatchState;
 	player2: PlayerFeatureMatchState;
+	/** Seats 3 and 4, which only a Commander Session holds (ADR-0087). */
+	player3?: PlayerFeatureMatchState;
+	player4?: PlayerFeatureMatchState;
 	clock: ClockState;
 	currentGame: number;
 	turnNumber: number;
 	isComplete: boolean;
-	activePlayer?: PlayerSide | null;
-	firstPlayer?: PlayerSide | null;
+	/** One of the pair on every Session but a Commander Session, where any Seat takes the turn. */
+	activePlayer?: Seat | null;
+	firstPlayer?: Seat | null;
 	overtime?: OvertimeState;
+	/** A Commander Session's declared outcome, which completes it; absent while its game is on. */
+	outcome?: FeatureMatchOutcome;
 }
 
 // Default values
@@ -69,6 +103,15 @@ export function createInitialPlayerFeatureMatchState(startingLife: number = DEFA
 		gameWins: 0,
 		counters: [],
 		sideboardRevealed: false,
+	};
+}
+
+/** A Seat's state as a Commander game starts: at starting life, undamaged and in the game (ADR-0087). */
+export function createInitialSeatState(startingLife: number): PlayerFeatureMatchState {
+	return {
+		...createInitialPlayerFeatureMatchState(startingLife),
+		commanderDamage: [],
+		eliminated: false,
 	};
 }
 

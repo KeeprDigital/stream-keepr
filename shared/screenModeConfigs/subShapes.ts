@@ -1,7 +1,7 @@
 import type { BoardSelection, MetagameCardSortBy, MetagameScope } from '../types/enums';
 import type { ScreenSettingsContext } from './fields';
 import { z } from 'zod';
-import { getFeatureMatchStateTracking, getMetagameRules } from '../config/games';
+import { eventKind, getFeatureMatchStateTracking, getMetagameRules } from '../config/games';
 import { EVENT_CANVAS_SIDE_BOUNDS, eventCanvasOf } from '../eventCanvas';
 import { METAGAME_SCOPE_VALUES } from '../types/enums';
 import { CARD_BADGE_SIZE_BOUNDS } from '../utils/cardBadgeSize';
@@ -148,7 +148,7 @@ export const BOARD_SELECTION_LABELS = {
 
 /** Whether the Event's Card Game has Sideboards, so a board choice can apply; assumed until the Event loads. */
 export function hasSideboard({ event }: ScreenSettingsContext): boolean {
-	return !event?.game || getFeatureMatchStateTracking(event.game).sideboard;
+	return !event?.game || getFeatureMatchStateTracking(eventKind({ game: event.game, variant: event.variant })).sideboard;
 }
 
 /**

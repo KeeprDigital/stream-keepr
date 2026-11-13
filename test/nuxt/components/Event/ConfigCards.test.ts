@@ -305,6 +305,17 @@ describe('event presentation settings card', () => {
 		expect(shown(wrapper, 'themeId')).toBe(expected);
 	});
 
+	// A Commander Event has no extra turns to label; an untimed game is its default (ADR-0087).
+	it.each([
+		['commander', false],
+		['two-player', true],
+	] as const)('on a %s Event, offers the Extra Turns Label: %s', (variant, offered) => {
+		const wrapper = mountCard(PresentationSettings, configEvent({ game: 'mtg', variant }));
+
+		expect(wrapper.find('[data-field="extraTurnsLabel"]').exists()).toBe(offered);
+		expect(wrapper.find('[data-field="untimedLabel"]').exists()).toBe(true);
+	});
+
 	it('shows the canvas, formatting and wording the event already carries', () => {
 		const wrapper = mountCard(PresentationSettings, configEvent({
 			canvasWidth: 1080,

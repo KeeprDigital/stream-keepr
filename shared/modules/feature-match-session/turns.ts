@@ -1,4 +1,4 @@
-import type { PlayerSide } from '~~/shared/types/enums';
+import type { PlayerSide, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 
 export function otherFeatureMatchPlayer(player: PlayerSide): PlayerSide {
@@ -7,8 +7,21 @@ export function otherFeatureMatchPlayer(player: PlayerSide): PlayerSide {
 		: 'player1';
 }
 
+/**
+ * A Seat where it is one of the pair every Session but a Commander Session
+ * plays. The turn rules below are that pair's; a Commander game's are in
+ * `commander.ts` (ADR-0087).
+ */
+export function pairSeatOf(seat: Seat | null | undefined): PlayerSide | null {
+	return seat === 'player1' || seat === 'player2'
+		? seat
+		: null;
+}
+
 export function applyFeatureMatchTurnStep(state: FeatureMatchState, delta: number): FeatureMatchState {
-	if (!state.firstPlayer || !state.activePlayer)
+	const firstPlayer = pairSeatOf(state.firstPlayer);
+	const startingPlayer = pairSeatOf(state.activePlayer);
+	if (!firstPlayer || !startingPlayer)
 		return state;
 
 	// Represent normal play as a zero-based half-turn index. Turn zero is a
@@ -18,42 +31,42 @@ export function applyFeatureMatchTurnStep(state: FeatureMatchState, delta: numbe
 	let turnNumber: number;
 	let activePlayer: PlayerSide;
 	if (state.turnNumber <= 0) {
-		const zeroTurnPosition = state.activePlayer === state.firstPlayer
+		const zeroTurnPosition = startingPlayer === firstPlayer
 			? 0
 			: 1;
 		if (requestedDelta <= 0) {
 			turnNumber = 0;
 			activePlayer = requestedDelta < 0 && zeroTurnPosition === 1
-				? state.firstPlayer
-				: state.activePlayer;
+				? firstPlayer
+				: startingPlayer;
 		}
 		else {
 			const nextPosition = zeroTurnPosition + requestedDelta;
 			if (nextPosition < 2) {
 				turnNumber = 0;
 				activePlayer = nextPosition === 0
-					? state.firstPlayer
-					: otherFeatureMatchPlayer(state.firstPlayer);
+					? firstPlayer
+					: otherFeatureMatchPlayer(firstPlayer);
 			}
 			else {
 				const normalIndex = nextPosition - 2;
 				turnNumber = Math.floor(normalIndex / 2) + 1;
 				activePlayer = normalIndex % 2 === 0
-					? state.firstPlayer
-					: otherFeatureMatchPlayer(state.firstPlayer);
+					? firstPlayer
+					: otherFeatureMatchPlayer(firstPlayer);
 			}
 		}
 	}
 	else {
 		const currentIndex = (state.turnNumber - 1) * 2
-			+ (state.activePlayer === state.firstPlayer
+			+ (startingPlayer === firstPlayer
 				? 0
 				: 1);
 		const nextIndex = Math.max(0, currentIndex + requestedDelta);
 		turnNumber = Math.floor(nextIndex / 2) + 1;
 		activePlayer = nextIndex % 2 === 0
-			? state.firstPlayer
-			: otherFeatureMatchPlayer(state.firstPlayer);
+			? firstPlayer
+			: otherFeatureMatchPlayer(firstPlayer);
 	}
 
 	return { ...state, turnNumber, activePlayer };
@@ -76,8 +89,9 @@ export function applyFeatureMatchOvertimeStep(state: FeatureMatchState, delta: n
 	// step even after turnsRemaining had reached its configured ceiling. Keep
 	// replay semantics identical without looping through the payload.
 	const playerToggleSteps = forward ? appliedSteps : requestedSteps;
-	const activePlayer = state.activePlayer && playerToggleSteps % 2 === 1
-		? otherFeatureMatchPlayer(state.activePlayer)
+	const seated = pairSeatOf(state.activePlayer);
+	const activePlayer = seated && playerToggleSteps % 2 === 1
+		? otherFeatureMatchPlayer(seated)
 		: state.activePlayer;
 	const active = forward
 		? turnsRemaining > 0

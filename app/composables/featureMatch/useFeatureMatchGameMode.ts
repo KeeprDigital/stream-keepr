@@ -1,8 +1,11 @@
 import type { MaybeRefOrGetter } from 'vue';
+import type { Seat } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchStateUpdate } from '~/modules/feature-match-session/client';
 import { useIntervalFn } from '@vueuse/core';
-import { getFeatureMatchStateTracking, getStartingHandSize } from '~~/shared/config/games';
+import { eventKind, getFeatureMatchStateTracking, getStartingHandSize } from '~~/shared/config/games';
+import { applyCommanderTurnStep, filledSeats } from '~~/shared/modules/feature-match-session';
+import { PLAYER_SIDE_VALUES } from '~~/shared/types/enums';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { getEffectiveElapsedMs } from '~~/shared/utils/clock';
 import { LazyUIConfirmActionModal } from '#components';
@@ -30,8 +33,21 @@ export function useFeatureMatchGameMode(
 
 	// ── Feature flags from the Card Game and event config ──
 
-	// What the Card Game tracks bounds what the Event's toggles can turn on.
-	const tracks = computed(() => getFeatureMatchStateTracking(game.value));
+	// What the Event tracks, by its Card Game and Variant, bounds what its toggles can turn on.
+	const kind = computed(() => eventKind({ game: game.value, variant: eventStore.displayEvent?.variant }));
+	const tracks = computed(() => getFeatureMatchStateTracking(kind.value));
+	/** A Commander Event's Session plays one game across up to four Seats (ADR-0087). */
+	const isCommander = computed(() => kind.value === 'mtg-commander');
+
+	/** The Seats in the game: the pair, or a Commander Slot's filled Seats. */
+	const seatsInGame = computed<readonly Seat[]>(() => {
+		if (!isCommander.value)
+			return PLAYER_SIDE_VALUES;
+		const session = followedFeatureMatchSession(mid(), featureMatchStateStore);
+		return session
+			? filledSeats(session.sourceSnapshot)
+			: [];
+	});
 
 	const turnTrackingEnabled = computed(() => defaults.value.turnTrackingEnabled);
 	const activePlayerTrackingEnabled = computed(() => defaults.value.activePlayerTrackingEnabled);
@@ -82,13 +98,19 @@ export function useFeatureMatchGameMode(
 	});
 
 	const stepBackDisabled = computed(() => {
-		if (!matchState.value?.firstPlayer || !matchState.value.activePlayer)
+		const state = matchState.value;
+		if (!state?.firstPlayer || !state.activePlayer)
 			return true;
-		return matchState.value.activePlayer === matchState.value.firstPlayer && matchState.value.turnNumber <= 1;
+		// A Commander game's first turn may start past the Seat that went first, once that Seat is out.
+		const snapshot = isCommander.value && followedFeatureMatchSession(mid(), featureMatchStateStore)?.sourceSnapshot;
+		if (snapshot)
+			return applyCommanderTurnStep(state, snapshot, -1) === state;
+		return state.activePlayer === state.firstPlayer && state.turnNumber <= 1;
 	});
 
 	const turnHalf = computed<1 | 2 | undefined>(() => {
-		if (!activePlayerTrackingEnabled.value || !matchState.value?.activePlayer || !matchState.value.firstPlayer)
+		// A Commander game's turn passes round the table, not back and forth.
+		if (isCommander.value || !activePlayerTrackingEnabled.value || !matchState.value?.activePlayer || !matchState.value.firstPlayer)
 			return undefined;
 		return matchState.value.activePlayer === matchState.value.firstPlayer
 			? 1
@@ -143,15 +165,13 @@ export function useFeatureMatchGameMode(
 		if (!eid() || !matchState.value)
 			return;
 		const state = matchState.value;
-		if (state.player1.cardsKept === undefined) {
-			await featureMatchStateStore.setCardsKept(eid()!, mid(), 'player1', startingHandSize.value);
-		}
-		if (state.player2.cardsKept === undefined) {
-			await featureMatchStateStore.setCardsKept(eid()!, mid(), 'player2', startingHandSize.value);
+		for (const seat of seatsInGame.value) {
+			if (state[seat] && state[seat].cardsKept === undefined)
+				await featureMatchStateStore.setCardsKept(eid()!, mid(), seat, startingHandSize.value);
 		}
 	}
 
-	async function handleCardsKeptUpdate(player: PlayerSide, value: number) {
+	async function handleCardsKeptUpdate(player: Seat, value: number) {
 		if (!eid())
 			return;
 		await featureMatchStateStore.setCardsKept(eid()!, mid(), player, value);
@@ -174,7 +194,7 @@ export function useFeatureMatchGameMode(
 		}
 	}
 
-	async function handleSelectFirstPlayer(player: PlayerSide) {
+	async function handleSelectFirstPlayer(player: Seat) {
 		if (!eid())
 			return;
 		if (inMulliganPhase.value) {
@@ -207,7 +227,9 @@ export function useFeatureMatchGameMode(
 
 		const instance = confirmModal.open({
 			title: 'Reset Game',
-			message: 'Reset life totals, counters, and turn tracking for the current game?',
+			message: isCommander.value
+				? 'Start a new game with the same players? Life, Commander Damage, counters, Eliminated Seats, the turn, the outcome and the clock all reset.'
+				: 'Reset life totals, counters, and turn tracking for the current game?',
 			icon: 'i-lucide-refresh-cw',
 			confirmLabel: 'Reset Game',
 			confirmColor: 'warning',
@@ -277,6 +299,10 @@ export function useFeatureMatchGameMode(
 
 	const matchActionItems = computed(() => {
 		const items: import('@nuxt/ui').DropdownMenuItem[][] = [];
+		// Its dialog and its first-player change edit the pair; a Commander
+		// game's state is all on its Seats' own controls.
+		if (isCommander.value)
+			return items;
 		const actions: import('@nuxt/ui').DropdownMenuItem[] = [
 			{
 				label: 'Edit Match State…',
@@ -306,16 +332,24 @@ export function useFeatureMatchGameMode(
 				icon: 'i-lucide-refresh-cw',
 				onSelect: handleResetGame,
 			},
-			{
-				label: 'Reset Match',
-				icon: 'i-lucide-rotate-ccw',
-				color: 'error',
-				onSelect: handleResetMatch,
-			},
+			// One game is the whole of a Commander Session: there is no match to reset apart from it.
+			...(isCommander.value
+				? []
+				: [
+						{
+							label: 'Reset Match',
+							icon: 'i-lucide-rotate-ccw',
+							color: 'error' as const,
+							onSelect: handleResetMatch,
+						},
+					]),
 		],
 	]);
 
 	return {
+		isCommander,
+		needsFirstPlayerSelection,
+
 		// Feature flags
 		turnTrackingEnabled,
 		activePlayerTrackingEnabled,

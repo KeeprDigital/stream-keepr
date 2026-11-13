@@ -26,5 +26,8 @@ export const sessionClient = {
 	stepOvertime: vi.fn(),
 	startOvertime: vi.fn(),
 	swapPlayers: vi.fn(),
+	adjustCommanderDamage: vi.fn(),
+	setEliminated: vi.fn(),
+	setOutcome: vi.fn(),
 	bulkClockAction: vi.fn(),
 };

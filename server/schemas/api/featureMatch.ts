@@ -11,6 +11,7 @@ import {
 	SEAT_VALUES,
 } from '~~/shared/types/enums';
 import { isMergeableFeatureMatchCommand } from '~~/shared/types/featureMatchSession';
+import { COMMANDER_NUMBER_VALUES } from '~~/shared/types/featureMatchState';
 import { playerGameDataSchema, slotSeatGameDataSchema } from './player';
 
 function blankStringToNull(value: unknown) {
@@ -204,6 +205,9 @@ const commandBaseSchema = {
 
 const emptyPayloadSchema = z.object({}).strict();
 const playerSideSchema = z.enum(PLAYER_SIDE_VALUES);
+// Any of a Slot's four Seats. A command naming Seat 3 or 4 is a Commander
+// Session's alone, which the Session it is sent to decides (ADR-0087).
+const seatSchema = z.enum(SEAT_VALUES);
 const counterSchema = z
 	.object({
 		type: z.string().min(1).max(50),
@@ -215,19 +219,19 @@ const counterSchema = z
 // sub-command union, so the two cannot drift.
 const setLifePayloadSchema = z
 	.object({
-		player: playerSideSchema,
+		player: seatSchema,
 		lifeTotal: z.number().int(),
 	})
 	.strict();
 const setCountersPayloadSchema = z
 	.object({
-		player: playerSideSchema,
+		player: seatSchema,
 		counters: z.array(counterSchema),
 	})
 	.strict();
 const setCardsKeptPayloadSchema = z
 	.object({
-		player: playerSideSchema,
+		player: seatSchema,
 		cardsKept: z.number().int().nonnegative(),
 	})
 	.strict();
@@ -242,10 +246,10 @@ const setClockPayloadSchema = z
 		targetMs: z.number().int().nonnegative(),
 	})
 	.strict();
-const firstPlayerPayloadSchema = z.object({ player: playerSideSchema }).strict();
+const firstPlayerPayloadSchema = z.object({ player: seatSchema }).strict();
 const setActivePlayerPayloadSchema = z
 	.object({
-		player: playerSideSchema.nullable(),
+		player: seatSchema.nullable(),
 	})
 	.strict();
 const setTurnNumberPayloadSchema = z
@@ -308,7 +312,8 @@ export const featureMatchBatchSubCommandSchema = z.discriminatedUnion('type', [
 // SnapshotCorrected is deliberately absent from the client command schema:
 // authoritative snapshots carry Melee provenance and are replayed as truth,
 // so only the server may construct them (featureMatchService.update builds
-// them from the database via buildSourceSnapshot).
+// them from the database via buildSourceSnapshot). SwapSeats is absent for the
+// same reason: it carries the snapshot of a Slot whose Seats were exchanged.
 export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 	z
 		.object({
@@ -316,7 +321,7 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 			type: z.literal('AdjustLife'),
 			payload: z
 				.object({
-					player: playerSideSchema,
+					player: seatSchema,
 					delta: z.number().int(),
 				})
 				.strict(),
@@ -504,6 +509,52 @@ export const featureMatchCommandSchema = z.discriminatedUnion('type', [
 			...commandBaseSchema,
 			type: z.literal('SwapPlayers'),
 			payload: emptyPayloadSchema,
+		})
+		.strict(),
+	z
+		.object({
+			...commandBaseSchema,
+			type: z.literal('AdjustCommanderDamage'),
+			payload: z
+				.object({
+					player: seatSchema,
+					from: seatSchema,
+					commander: z.union(COMMANDER_NUMBER_VALUES.map(number => z.literal(number))),
+					delta: z.number().int().refine(value => value !== 0, {
+						message: 'delta must be non-zero',
+					}),
+				})
+				.strict()
+				.refine(payload => payload.player !== payload.from, {
+					message: 'A Seat takes Commander Damage from an opposing Commander',
+					path: ['from'],
+				}),
+		})
+		.strict(),
+	z
+		.object({
+			...commandBaseSchema,
+			type: z.literal('SetEliminated'),
+			payload: z
+				.object({
+					player: seatSchema,
+					eliminated: z.boolean(),
+				})
+				.strict(),
+		})
+		.strict(),
+	z
+		.object({
+			...commandBaseSchema,
+			type: z.literal('SetOutcome'),
+			payload: z
+				.object({
+					// A winning Seat, `{ winner: null }` for a draw, or `null` to take it back.
+					outcome: z.object({
+						winner: seatSchema.nullable(),
+					}).strict().nullable(),
+				})
+				.strict(),
 		})
 		.strict(),
 	z

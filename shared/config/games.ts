@@ -238,9 +238,18 @@ const TRACKS_NOTHING_OPTIONAL: FeatureMatchStateTracking = {
 	sideboard: false,
 };
 
-/** The parts of Feature Match state the Card Game tracks; none of the optional ones for a game with no config. */
-export function getFeatureMatchStateTracking(game: Game): FeatureMatchStateTracking {
-	return GAME_CONFIGS[game]?.tracks ?? TRACKS_NOTHING_OPTIONAL;
+/** What a Commander Event tracks: Magic: The Gathering's, without extra turns or a Sideboard to reveal (ADR-0087). */
+const COMMANDER_EVENT_TRACKS: FeatureMatchStateTracking = {
+	...GAME_CONFIGS.mtg.tracks,
+	overtime: false,
+	sideboard: false,
+};
+
+/** The parts of Feature Match state an Event of `kind` tracks: its Card Game's, or a Commander Event's own; none of the optional ones for a game with no config. */
+export function getFeatureMatchStateTracking(kind: EventKind): FeatureMatchStateTracking {
+	return kind === 'mtg-commander'
+		? COMMANDER_EVENT_TRACKS
+		: GAME_CONFIGS[EVENT_KIND_CARD_GAME[kind]]?.tracks ?? TRACKS_NOTHING_OPTIONAL;
 }
 
 export function getPlayerIdentityLabel(game: Game): string {

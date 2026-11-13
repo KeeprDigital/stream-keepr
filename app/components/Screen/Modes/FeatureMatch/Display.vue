@@ -33,6 +33,7 @@ const modeError = computed(() => {
 });
 
 const {
+	isCommander,
 	activePlayerTrackingEnabled,
 	lifeTrackingEnabled,
 	counterTrackingEnabled,
@@ -64,7 +65,8 @@ const {
 } = useClockDisplay(() => matchState.value?.clock ?? null);
 
 const gameLabel = computed(() => {
-	if (!matchState.value || !match.value)
+	// A Commander Session plays one game: there is no game of a best-of to name.
+	if (!matchState.value || !match.value || isCommander.value)
 		return null;
 	return `Game ${matchState.value.currentGame} of ${match.value.activeSession?.sourceSnapshot.bestOf ?? match.value.bestOf}`;
 });
@@ -94,19 +96,26 @@ function seatLabelFor(side: PlayerSide): string | undefined {
 		: 'Right';
 }
 
-function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
+/** What the Screen shows of a player and lets its viewer change, whichever Seat they sit in. */
+function sharedDisplayConfig(): PlayerDisplayConfig {
 	return {
 		showName: config.value.showNames,
 		showPronouns: config.value.showPronouns,
 		showDeckName: config.value.showDeckNames,
 		showLife: lifeTrackingEnabled.value,
 		showCounters: showCounters.value,
-		showRecord: config.value.showRecords,
-		showMulliganInfo: mulliganTrackingEnabled.value && (config.value.showMulliganInfo ?? true),
 		showLgs: config.value.showLgs ?? true,
 		allowLifeControls: allow('allowLifeControls'),
 		allowGameWinControls: allow('allowGameWinControls'),
 		allowCounterControls: allow('allowCounterControls'),
+	};
+}
+
+function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
+	return {
+		...sharedDisplayConfig(),
+		showRecord: config.value.showRecords,
+		showMulliganInfo: mulliganTrackingEnabled.value && (config.value.showMulliganInfo ?? true),
 		mulliganPhase: inMulliganPhase.value,
 		startingHandSize: startingHandSize.value,
 		activePlayerTrackingEnabled: activePlayerTrackingEnabled.value,
@@ -154,47 +163,60 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 				</div>
 			</header>
 
-			<ScreenModesFeatureMatchPlayerSide
-				class="player-left"
+			<!-- A Commander Slot's four Seats sit where the table has them: no left side, no orientation (ADR-0087) -->
+			<FeatureMatchStateCommanderTable
+				v-if="isCommander"
+				class="commander-seats"
 				:match-id="match.id"
-				:player-side="leftSide"
-				:config="playerDisplayConfig(leftSide)"
-				side="left"
+				:config="sharedDisplayConfig()"
+				:show-turn-controls="showTurnControls"
+				:show-seat-labels="showSeatLabels"
+				touch
 			/>
 
-			<div
-				v-if="(showTurnControls && showTurnCounter) || showOvertime"
-				class="match-middle"
-			>
-				<FeatureMatchStateOvertimeTurnsCounter
-					v-if="showOvertime && matchState?.overtime"
-					:overtime="matchState.overtime"
-					:label="extraTurnsLabel"
-					touch
-					orientation="vertical"
-					@next-turn="handleNextOvertimeTurn"
-					@prev-turn="handlePrevOvertimeTurn"
+			<template v-else>
+				<ScreenModesFeatureMatchPlayerSide
+					class="player-left"
+					:match-id="match.id"
+					:player-side="leftSide"
+					:config="playerDisplayConfig(leftSide)"
+					side="left"
 				/>
-				<FeatureMatchStateTurnCounter
-					v-if="showTurnControls && showTurnCounter"
-					:mode="turnCounterMode"
-					:label="turnCounterLabel"
-					:half="turnHalf"
-					:left-disabled="turnCounterMode === 'counter' && stepBackDisabled"
-					touch
-					orientation="vertical"
-					@change="handleTurnChange"
-					@select="handleSelectFirstPlayer"
-				/>
-			</div>
 
-			<ScreenModesFeatureMatchPlayerSide
-				class="player-right"
-				:match-id="match.id"
-				:player-side="rightSide"
-				:config="playerDisplayConfig(rightSide)"
-				side="right"
-			/>
+				<div
+					v-if="(showTurnControls && showTurnCounter) || showOvertime"
+					class="match-middle"
+				>
+					<FeatureMatchStateOvertimeTurnsCounter
+						v-if="showOvertime && matchState?.overtime"
+						:overtime="matchState.overtime"
+						:label="extraTurnsLabel"
+						touch
+						orientation="vertical"
+						@next-turn="handleNextOvertimeTurn"
+						@prev-turn="handlePrevOvertimeTurn"
+					/>
+					<FeatureMatchStateTurnCounter
+						v-if="showTurnControls && showTurnCounter"
+						:mode="turnCounterMode"
+						:label="turnCounterLabel"
+						:half="turnHalf"
+						:left-disabled="turnCounterMode === 'counter' && stepBackDisabled"
+						touch
+						orientation="vertical"
+						@change="handleTurnChange"
+						@select="handleSelectFirstPlayer"
+					/>
+				</div>
+
+				<ScreenModesFeatureMatchPlayerSide
+					class="player-right"
+					:match-id="match.id"
+					:player-side="rightSide"
+					:config="playerDisplayConfig(rightSide)"
+					side="right"
+				/>
+			</template>
 		</div>
 	</ScreenModeBase>
 </template>
@@ -258,6 +280,12 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 			display: flex;
 			justify-content: flex-end;
 		}
+	}
+
+	.commander-seats {
+		grid-row: 2 / -1;
+		grid-column: 1 / -1;
+		min-height: 0;
 	}
 
 	.player-left {

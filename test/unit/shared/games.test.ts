@@ -6,6 +6,7 @@ import {
 	EVERY_EVENT,
 	GAME_CONFIGS,
 	getCounterTypeConfigs,
+	getFeatureMatchStateTracking,
 	getMatchFormatDefaults,
 	getMetagameRules,
 	getPlayerIdentityLabel,
@@ -43,6 +44,17 @@ describe('game config lookups', () => {
 		expect(getStartingTurnNumber(unknown)).toBe(0);
 		expect(getStartingHandSize(unknown)).toBe(0);
 		expect(getPlayerIdentityLabel(unknown)).toBe('Deck');
+	});
+});
+
+describe('what each kind of Event tracks of Feature Match state', () => {
+	// A Commander game has no extra turns and no Sideboard to reveal (ADR-0087).
+	it('tracks what Magic does on a Commander Event, but for overtime and the Sideboard', () => {
+		expect(getFeatureMatchStateTracking('mtg-commander')).toEqual({
+			...getFeatureMatchStateTracking('mtg-two-player'),
+			overtime: false,
+			sideboard: false,
+		});
 	});
 });
 
