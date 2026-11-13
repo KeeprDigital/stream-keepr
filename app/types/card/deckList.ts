@@ -1,4 +1,5 @@
 import type { DeckListCard, PlayerDeckList } from '~~/shared/types/deckList';
+import type { Seat } from '~~/shared/types/enums';
 import type { OpLeader } from '~~/shared/types/game';
 import type { OpDeckListView } from '~~/shared/types/opDeckList';
 import type { DeckTokenRequirement } from '~~/shared/utils/deckTokens';
@@ -23,6 +24,23 @@ export interface MatchPlayerDeckData {
 	mainboard: DeckListCardWithData[];
 	sideboard: DeckListCardWithData[];
 	companion: DeckListCardWithData | null;
+}
+
+/**
+ * Who one Seat of a Feature Match Slot seats on a Commander Event, and their
+ * deck: its Commanders, apart from the Mainboard of the list the Seat may
+ * hold, each card the printing it was saved as (ADR-0087).
+ */
+export interface CommanderSeatDeckData {
+	seat: Seat;
+	playerName: string;
+	deckName: string | null;
+	deckColors: string | null;
+	commanders: DeckListCardWithData[];
+	/** Empty while the Seat holds no Deck List, or its read failed. */
+	mainboard: DeckListCardWithData[];
+	/** The Seat holds a Deck List that could not be read. */
+	failed: boolean;
 }
 
 /**
