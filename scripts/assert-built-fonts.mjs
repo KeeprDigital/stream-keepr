@@ -1,7 +1,8 @@
 /**
  * Assert the built CSS carries every application font face the registry
- * declares, that none of them loads from the network, and that no forbidden
- * family ships at all.
+ * declares, that none of them loads from the network or prefers a locally
+ * installed copy, that no stylesheet imports one from the network, and that no
+ * forbidden family ships at all.
  *
  * Nuxt Fonts' npm provider skips a weight file a `@fontsource/*` package does
  * not have, without a warning (ADR-0086), so the configuration alone proves
@@ -11,7 +12,8 @@
  * are present when any one face covers them; a `font-weight: 100 900` range
  * covers every declared weight inside it. The metric-adjusted
  * `"<Family> Fallback: …"` faces Nuxt Fonts generates are not the family and
- * are not counted as it.
+ * are not counted as it; they are `local()` by design, so the local-source rule
+ * reaches only a declared family's own faces.
  *
  * A forbidden family fails on a face that declares it or on a built file named
  * for it, since a dependency's stylesheet can bring its files back without the
@@ -39,12 +41,13 @@ export const DECLARED_FONT_FACES = GRAPHIC_FONTS
 
 const FONT_FACE_RULE = /@font-face\s*\{([^}]*)\}/g;
 const REMOTE_URL = /^(?:https?:)?\/\//i;
+const IMPORT_RULE = /@import\s+(?:url\(\s*)?["']?([^"')\s;]+)/gi;
 
 function declaration(body, property) {
 	return new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]*)`, 'i').exec(body)?.[1].trim();
 }
 
-/** Every real `@font-face` in `css`: family, weight range, style, and `url()` sources. */
+/** Every real `@font-face` in `css`: family, weight range, style, `url()` sources, and whether it names a `local()` one. */
 export function parseFontFaces(css) {
 	const faces = [];
 	for (const [, body] of css.matchAll(FONT_FACE_RULE)) {
@@ -59,6 +62,7 @@ export function parseFontFaces(css) {
 			urls: [
 				...body.matchAll(/url\(([^)]*)\)/g),
 			].map(match => match[1].trim().replace(/^["']|["']$/g, '')),
+			local: /\blocal\(/i.test(declaration(body, 'src') ?? ''),
 		});
 	}
 	return faces;
@@ -74,6 +78,9 @@ export function findFontDefects(faces, expected, forbiddenFamilies = []) {
 		if (forbidden.has(face.family.toLowerCase()))
 			defects.push(`font-forbidden-family: ${face.family} ${face.weight.join('-')} ${face.style} is forbidden but in the built CSS`);
 	}
+	const declared = new Set(expected.map(({ family }) => family));
+	for (const face of faces.filter(candidate => candidate.local && declared.has(candidate.family)))
+		defects.push(`font-local-source: ${face.family} ${face.weight.join('-')} ${face.style} prefers a locally installed font`);
 	for (const { family, weights, italic } of expected) {
 		for (const style of italic
 			? ['normal', 'italic']
@@ -99,6 +106,13 @@ function* builtFiles(directory) {
 	}
 }
 
+/** One `font-remote-url` line per `@import` in `css` that reaches the network. */
+function findImportDefects(css, file) {
+	return [
+		...css.matchAll(IMPORT_RULE),
+	].map(match => match[1]).filter(url => REMOTE_URL.test(url)).map(url => `font-remote-url: ${file} imports ${url}`);
+}
+
 /** Defects across every `.css` under `directory`, and every file named for a forbidden family; throws when there is no `.css` to read. */
 export function assertBuiltFonts(directory, expected, forbiddenFamilies = []) {
 	const files = [
@@ -107,7 +121,14 @@ export function assertBuiltFonts(directory, expected, forbiddenFamilies = []) {
 	const stylesheets = files.filter(file => file.endsWith('.css'));
 	if (stylesheets.length === 0)
 		throw new Error(`font-nothing-scanned: no .css under ${directory}. A scan of nothing is not a pass.`);
-	const defects = findFontDefects(stylesheets.flatMap(file => parseFontFaces(readFileSync(file, 'utf8'))), expected, forbiddenFamilies);
+	const sheets = stylesheets.map(file => ({
+		file: relative(directory, file),
+		css: readFileSync(file, 'utf8'),
+	}));
+	const defects = [
+		...sheets.flatMap(({ file, css }) => findImportDefects(css, file)),
+		...findFontDefects(sheets.flatMap(({ css }) => parseFontFaces(css)), expected, forbiddenFamilies),
+	];
 	for (const file of files) {
 		const name = basename(file).toLowerCase();
 		for (const family of forbiddenFamilies.filter(candidate => name.includes(candidate.toLowerCase())))
@@ -157,7 +178,7 @@ export function builtFontsScan(directory, expected = DECLARED_FONT_FACES, forbid
 			}
 		: {
 				ok: true,
-				lines: [`assert-built-fonts: every declared application font face is in the built CSS under ${directory}, none remote, none forbidden`],
+				lines: [`assert-built-fonts: every declared application font face is in the built CSS under ${directory}, none remote, none local, none forbidden`],
 			};
 }
 
