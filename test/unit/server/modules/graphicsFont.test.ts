@@ -218,6 +218,34 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 			.toEqual(expected);
 	});
 
+	// The helpers read a subtable's length and language where formats 0-6 keep them; on any
+	// other format those bytes mean something else, so they refuse rather than misread.
+	it.each([
+		[
+			'withSeparateCmapSubtables',
+			(bytes: Uint8Array) => withSeparateCmapSubtables(bytes),
+		],
+		[
+			'cmapRecords',
+			(bytes: Uint8Array) => cmapRecords(bytes),
+		],
+		[
+			'withCmapLanguages',
+			(bytes: Uint8Array) => withCmapLanguages(bytes, macintoshCmapLanguage),
+		],
+	])('%s refuses a format 12 cmap subtable', async (_, read) => {
+		const bytes = new Uint8Array(await readFile('public/fonts/mana.ttf'));
+		const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+		const entry = Array.from({
+			length: view.getUint16(4),
+		}, (__, index) => 12 + index * 16)
+			.find(candidate => String.fromCharCode(...bytes.subarray(candidate, candidate + 4)) === 'cmap')!;
+		const cmap = view.getUint32(entry + 8);
+		view.setUint16(cmap + view.getUint32(cmap + 8), 12);
+
+		expect(() => read(bytes)).toThrow(/cmap subtable format 12/);
+	});
+
 	// OpenType defines a non-zero Macintosh-platform language; only the Microsoft-platform
 	// one is fatal. Measured in Chromium: a Mac-only language loads, a Microsoft one does not.
 	it('accepts a Macintosh-platform cmap language, which OpenType defines there', async () => {

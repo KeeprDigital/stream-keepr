@@ -98,6 +98,15 @@ describe('findFontDefects', () => {
 			found: [/^font-remote-url/],
 		},
 		{
+			name: 'local source',
+			css: [
+				...without('font-weight:400;font-style:normal'),
+				face('Inter', '400', 'normal', 'local(Inter),url(./fonts/a.woff2)format("woff2")'),
+			],
+			expected: [inter],
+			found: [/^font-local-source: Inter 400-400 normal/],
+		},
+		{
 			name: 'fallback face',
 			css: [...interFaces, '@font-face{font-family:Inter Fallback\\: Arial;src:local(Arial);size-adjust:107%;ascent-override:90%}'],
 			expected: [inter],
@@ -171,6 +180,17 @@ describe('assertBuiltFonts', () => {
 
 		expect(assertBuiltFonts(root, [inter], ['MPlantin'])).toEqual([
 			expect.stringMatching(/^font-forbidden-family: .*mplantin\.B1c2d3\.woff/),
+		]);
+	});
+
+	it('finds a remote @import in any stylesheet', () => {
+		const root = build({
+			'_nuxt/entry.css': interFaces.join(''),
+			'_nuxt/page.css': '@import url("https://fonts.googleapis.com/css2?family=Inter");',
+		});
+
+		expect(assertBuiltFonts(root, [inter])).toEqual([
+			expect.stringMatching(/^font-remote-url: .*page\.css imports https:\/\/fonts\.googleapis\.com/),
 		]);
 	});
 
