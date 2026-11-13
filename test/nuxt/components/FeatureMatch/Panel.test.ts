@@ -180,6 +180,8 @@ const mountOptions = {
 			FeatureMatchPanelHeader: PanelHeaderStub,
 			FeatureMatchSetupPlayerForm: PlayerFormStub,
 			FeatureMatchPanelMeleeModal: { template: '<div />' },
+			// A Commander Slot's game view, which reads its own game mode.
+			FeatureMatchStateCommanderTable: true,
 		},
 	},
 };
@@ -677,6 +679,52 @@ describe('featureMatchPanel match state by Card Game', () => {
 		await flushPromises();
 
 		expect(offeredMatchStateParts(wrapper)).toEqual(expected);
+	});
+});
+
+// A Commander Session's game is driven from its four Seats; every other from the pair (ADR-0087).
+describe('featureMatchPanel game view by Variant', () => {
+	const twoPlayerEvent = { ...mockEventStore.event };
+
+	afterEach(() => {
+		mockEventStore.event = { ...twoPlayerEvent };
+	});
+
+	it.each([
+		[
+			'commander',
+			['commander-table'],
+			0,
+		],
+		['two-player', [], 2],
+	] as const)('on a %s Event, drives the game from %j and %i player sides', async (variant, parts, sides) => {
+		Object.assign(mockEventStore.event, { variant });
+		mockFeatureMatchStateStore.featureMatchStates = new Map([
+			[
+				1,
+				createMockFeatureMatchState(),
+			],
+		]);
+
+		const wrapper = mount(FeatureMatchPanel, {
+			props: mountProps(),
+			global: {
+				stubs: {
+					...mountOptions.global.stubs,
+					FeatureMatchStateCommanderTable: matchStatePart('commander-table'),
+					FeatureMatchStateGameWins: true,
+					FeatureMatchStateCounterList: true,
+					FeatureMatchStateEditStateModal: true,
+					FeatureMatchTokensModal: true,
+					PlayerMatchHistoryButton: true,
+					UINumericCounter: true,
+				},
+			},
+		});
+		await flushPromises();
+
+		expect(offeredMatchStateParts(wrapper)).toEqual(parts);
+		expect(wrapper.findAll('[data-player-side]')).toHaveLength(sides);
 	});
 });
 

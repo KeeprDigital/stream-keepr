@@ -1,10 +1,21 @@
-import type { PlayerSide } from '~~/shared/types/enums';
+import type { PlayerSide, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 
-export function otherFeatureMatchPlayer(player: PlayerSide): PlayerSide {
+/**
+ * The other Seat of the pair every Session but a Commander Session plays. The
+ * turn rules below are that pair's; a Commander game's are in `commander.ts`.
+ */
+export function otherFeatureMatchPlayer(player: Seat): PlayerSide {
 	return player === 'player1'
 		? 'player2'
 		: 'player1';
+}
+
+/** A Seat where it is one of the pair, as every Two-Player surface reads the turn. */
+export function pairSeatOf(seat: Seat | null | undefined): PlayerSide | null {
+	return seat === 'player1' || seat === 'player2'
+		? seat
+		: null;
 }
 
 export function applyFeatureMatchTurnStep(state: FeatureMatchState, delta: number): FeatureMatchState {
@@ -16,7 +27,7 @@ export function applyFeatureMatchTurnStep(state: FeatureMatchState, delta: numbe
 	// its two positions explicitly before entering the turn-one index space.
 	const requestedDelta = Math.trunc(delta);
 	let turnNumber: number;
-	let activePlayer: PlayerSide;
+	let activePlayer: Seat;
 	if (state.turnNumber <= 0) {
 		const zeroTurnPosition = state.activePlayer === state.firstPlayer
 			? 0

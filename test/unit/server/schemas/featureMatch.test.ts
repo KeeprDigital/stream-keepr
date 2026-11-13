@@ -66,6 +66,161 @@ describe('featureMatchCommandSchema', () => {
 		}).success).toBe(false);
 	});
 
+	// It carries the snapshot of a Slot whose Seats were exchanged, which only the server builds (ADR-0087).
+	it('rejects SwapSeats from clients', () => {
+		expect(featureMatchCommandSchema.safeParse({
+			commandId: 'swap-seats-1',
+			type: 'SwapSeats',
+			payload: {
+				seats: ['player1', 'player3'],
+				sourceSnapshot,
+			},
+		}).success).toBe(false);
+	});
+
+	it.each([
+		[
+			'Commander Damage entered',
+			'AdjustCommanderDamage',
+			{
+				player: 'player4',
+				from: 'player1',
+				commander: 2,
+				delta: 5,
+			},
+			true,
+		],
+		[
+			'Commander Damage taken back',
+			'AdjustCommanderDamage',
+			{
+				player: 'player2',
+				from: 'player3',
+				commander: 1,
+				delta: -1,
+			},
+			true,
+		],
+		[
+			'Commander Damage from the Seat\'s own Commander',
+			'AdjustCommanderDamage',
+			{
+				player: 'player1',
+				from: 'player1',
+				commander: 1,
+				delta: 1,
+			},
+			false,
+		],
+		[
+			'Commander Damage from a third Commander',
+			'AdjustCommanderDamage',
+			{
+				player: 'player2',
+				from: 'player1',
+				commander: 3,
+				delta: 1,
+			},
+			false,
+		],
+		[
+			'Commander Damage of nothing',
+			'AdjustCommanderDamage',
+			{
+				player: 'player2',
+				from: 'player1',
+				commander: 1,
+				delta: 0,
+			},
+			false,
+		],
+		[
+			'a Seat Eliminated',
+			'SetEliminated',
+			{ player: 'player3', eliminated: true },
+			true,
+		],
+		[
+			'a Seat Eliminated without saying so',
+			'SetEliminated',
+			{ player: 'player3', eliminated: 'yes' },
+			false,
+		],
+		[
+			'a winning Seat',
+			'SetOutcome',
+			{
+				outcome: { winner: 'player4' },
+			},
+			true,
+		],
+		[
+			'a draw',
+			'SetOutcome',
+			{
+				outcome: { winner: null },
+			},
+			true,
+		],
+		[
+			'an outcome taken back',
+			'SetOutcome',
+			{ outcome: null },
+			true,
+		],
+		[
+			'an outcome naming no Seat',
+			'SetOutcome',
+			{
+				outcome: { winner: 'player5' },
+			},
+			false,
+		],
+		[
+			'life for Seat 3',
+			'SetLife',
+			{ player: 'player3', lifeTotal: 12 },
+			true,
+		],
+		[
+			'a Sideboard revealed for Seat 3',
+			'SetSideboardRevealed',
+			{ player: 'player3', revealed: true },
+			false,
+		],
+		[
+			'a game win for Seat 3',
+			'RecordGameWin',
+			{ player: 'player3' },
+			false,
+		],
+	])('reads %s', (_case, type, payload, accepted) => {
+		expect(featureMatchCommandSchema.safeParse({
+			commandId: 'c-1',
+			type,
+			baseSequence: 1,
+			payload,
+		}).success).toBe(accepted);
+	});
+
+	it('takes Commander Damage unsequenced, as it does a life adjustment', () => {
+		expect(featureMatchCommandSchema.safeParse({
+			commandId: 'c-2',
+			type: 'AdjustCommanderDamage',
+			payload: {
+				player: 'player2',
+				from: 'player1',
+				commander: 1,
+				delta: 1,
+			},
+		}).success).toBe(true);
+		expect(featureMatchCommandSchema.safeParse({
+			commandId: 'c-3',
+			type: 'SetEliminated',
+			payload: { player: 'player2', eliminated: true },
+		}).success).toBe(false);
+	});
+
 	it('bounds constant-time turn deltas', () => {
 		expect(featureMatchCommandSchema.safeParse({
 			commandId: 'turn-ok',

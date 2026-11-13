@@ -1,6 +1,6 @@
-import type { ExternalSource, Game, PlayerDisplayMode, PlayerSide } from './enums';
+import type { ExternalSource, Game, PlayerDisplayMode, PlayerSide, Seat, Variant } from './enums';
 import type { FeatureMatchDefaults } from './featureMatchDefaults';
-import type { FeatureMatchState } from './featureMatchState';
+import type { CommanderNumber, FeatureMatchOutcome, FeatureMatchState } from './featureMatchState';
 import type { PlayerGameData } from './game';
 
 export const FEATURE_MATCH_SESSION_STATUS_VALUES = ['active', 'closed'] as const;
@@ -31,6 +31,10 @@ export const FEATURE_MATCH_SESSION_EVENT_TYPE_VALUES = [
 	'StepTurn',
 	'StepOvertime',
 	'SwapPlayers',
+	'AdjustCommanderDamage',
+	'SetEliminated',
+	'SetOutcome',
+	'SwapSeats',
 	'Batch',
 ] as const;
 
@@ -50,6 +54,10 @@ export type FeatureMatchCommandType = Exclude<FeatureMatchSessionEventType, 'Ses
  * retry reduces onto the state that command produced. It is server-only, minted
  * by the reverse sync from the database rather than accepted from a client, so
  * nothing here widens what an operator may send unsequenced.
+ *
+ * `SwapSeats` is server-only too, and follows a Slot write that has already
+ * exchanged the two Seats: refusing it would leave each player's live state in
+ * the Seat they left, so it re-reduces onto whatever landed first (ADR-0087).
  */
 export const MERGEABLE_FEATURE_MATCH_COMMAND_TYPES = [
 	'SnapshotCorrected',
@@ -57,6 +65,8 @@ export const MERGEABLE_FEATURE_MATCH_COMMAND_TYPES = [
 	'AdjustClock',
 	'StepTurn',
 	'StepOvertime',
+	'AdjustCommanderDamage',
+	'SwapSeats',
 ] as const satisfies readonly FeatureMatchCommandType[];
 
 export type MergeableFeatureMatchCommandType = typeof MERGEABLE_FEATURE_MATCH_COMMAND_TYPES[number];
@@ -101,9 +111,18 @@ export interface FeatureMatchSourceSnapshot {
 	bestOf: number;
 	playerDisplayMode: PlayerDisplayMode;
 	game: Game;
+	/**
+	 * The Event's Variant, held on a Commander Event's snapshot alone: its
+	 * Session plays one game across four Seats, and every other Session reads
+	 * as it did before the Variant existed (ADR-0087).
+	 */
+	variant?: Variant;
 	defaults: FeatureMatchDefaults;
 	player1: FeatureMatchSnapshotPlayer;
 	player2: FeatureMatchSnapshotPlayer;
+	/** Seats 3 and 4 of a Commander Slot, empty or not; absent on every other snapshot. */
+	player3?: FeatureMatchSnapshotPlayer;
+	player4?: FeatureMatchSnapshotPlayer;
 	/**
 	 * When this Session's snapshot was **first taken** — not when it was last rebuilt.
 	 *
@@ -156,10 +175,10 @@ export interface FeatureMatchCommandBase<TType extends FeatureMatchCommandType, 
 
 type FeatureMatchPrimitiveSessionCommand
 	= | FeatureMatchCommandBase<'SnapshotCorrected', { sourceSnapshot: FeatureMatchSourceSnapshot }>
-		| FeatureMatchCommandBase<'AdjustLife', { player: PlayerSide; delta: number }>
-		| FeatureMatchCommandBase<'SetLife', { player: PlayerSide; lifeTotal: number }>
-		| FeatureMatchCommandBase<'SetCounters', { player: PlayerSide; counters: { type: string; value: number }[] }>
-		| FeatureMatchCommandBase<'SetCardsKept', { player: PlayerSide; cardsKept: number }>
+		| FeatureMatchCommandBase<'AdjustLife', { player: Seat; delta: number }>
+		| FeatureMatchCommandBase<'SetLife', { player: Seat; lifeTotal: number }>
+		| FeatureMatchCommandBase<'SetCounters', { player: Seat; counters: { type: string; value: number }[] }>
+		| FeatureMatchCommandBase<'SetCardsKept', { player: Seat; cardsKept: number }>
 		| FeatureMatchCommandBase<'SetSideboardRevealed', { player: PlayerSide; revealed: boolean }>
 		| FeatureMatchCommandBase<'AdjustClock', { deltaMs: number }>
 		| FeatureMatchCommandBase<'SetClock', { targetMs: number }>
@@ -167,9 +186,9 @@ type FeatureMatchPrimitiveSessionCommand
 		| FeatureMatchCommandBase<'PauseClock', Record<string, never>>
 		| FeatureMatchCommandBase<'ResetClock', { durationMs?: number }>
 		| FeatureMatchCommandBase<'RestartClock', Record<string, never>>
-		| FeatureMatchCommandBase<'SelectFirstPlayer', { player: PlayerSide }>
-		| FeatureMatchCommandBase<'SetFirstPlayer', { player: PlayerSide }>
-		| FeatureMatchCommandBase<'SetActivePlayer', { player: PlayerSide | null }>
+		| FeatureMatchCommandBase<'SelectFirstPlayer', { player: Seat }>
+		| FeatureMatchCommandBase<'SetFirstPlayer', { player: Seat }>
+		| FeatureMatchCommandBase<'SetActivePlayer', { player: Seat | null }>
 		| FeatureMatchCommandBase<'SetTurnNumber', { turnNumber: number }>
 		| FeatureMatchCommandBase<'RecordGameWin', { player: PlayerSide; resetLife?: boolean; resetCounters?: boolean; startingLife?: number }>
 		| FeatureMatchCommandBase<'UndoGameWin', { player: PlayerSide; resetLife?: boolean; resetCounters?: boolean; startingLife?: number }>
@@ -177,7 +196,11 @@ type FeatureMatchPrimitiveSessionCommand
 		| FeatureMatchCommandBase<'StartOvertime', { totalTurns: number }>
 		| FeatureMatchCommandBase<'StepTurn', { delta: number }>
 		| FeatureMatchCommandBase<'StepOvertime', { delta: number }>
-		| FeatureMatchCommandBase<'SwapPlayers', Record<string, never>>;
+		| FeatureMatchCommandBase<'SwapPlayers', Record<string, never>>
+		| FeatureMatchCommandBase<'AdjustCommanderDamage', { player: Seat; from: Seat; commander: CommanderNumber; delta: number }>
+		| FeatureMatchCommandBase<'SetEliminated', { player: Seat; eliminated: boolean }>
+		| FeatureMatchCommandBase<'SetOutcome', { outcome: FeatureMatchOutcome | null }>
+		| FeatureMatchCommandBase<'SwapSeats', { seats: [Seat, Seat]; sourceSnapshot: FeatureMatchSourceSnapshot }>;
 
 /**
  * The command types a `Batch` may carry. Absolute setters only: a batch is one

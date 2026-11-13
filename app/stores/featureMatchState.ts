@@ -1,13 +1,21 @@
-import type { BulkClockAction, PlayerSide } from '~~/shared/types/enums';
+import type { BulkClockAction, PlayerSide, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchSessionResponse } from '~~/shared/types/featureMatchSession';
-import type { FeatureMatchState, GameWinOptions, PlayerFeatureMatchStateUpdate } from '~~/shared/types/featureMatchState';
+import type { CommanderNumber, FeatureMatchOutcome, FeatureMatchState, GameWinOptions, PlayerFeatureMatchStateUpdate } from '~~/shared/types/featureMatchState';
 import type {
 	FeatureMatchCommandStateResult,
 	FeatureMatchResetOptions,
 	FeatureMatchStateUpdate,
 } from '~/modules/feature-match-session/client';
 import type { MessageData } from '~/types/realtime';
-import { applyClockAdjustment, applyFeatureMatchOvertimeStep, applyFeatureMatchTurnStep, otherFeatureMatchPlayer } from '~~/shared/modules/feature-match-session';
+import {
+	applyClockAdjustment,
+	applyCommanderDamage,
+	applyCommanderTurnStep,
+	applyFeatureMatchOvertimeStep,
+	applyFeatureMatchTurnStep,
+	isCommanderSession,
+	otherFeatureMatchPlayer,
+} from '~~/shared/modules/feature-match-session';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { useFeatureMatchSessionClient } from '~/modules/feature-match-session/client';
 import { createLiveStateFollower } from '~/modules/live-state/follower';
@@ -44,10 +52,16 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	});
 
 	// Player state batch (life totals, counters)
+	/** Commander Damage from one opposing Commander, accumulated over a batch. */
+	interface CommanderDamageDelta {
+		from: Seat;
+		commander: CommanderNumber;
+		delta: number;
+	}
 	interface PlayerBatchPayload {
 		eventId: number;
 		matchId: number;
-		player: PlayerSide;
+		player: Seat;
 		/** Accumulated relative life adjustment. Kept mergeable server-side. */
 		lifeDelta: number;
 		/** Latest absolute life target. Takes precedence when direct entry/sliders are used. */
@@ -55,9 +69,11 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		latestCounters?: { type: string; value: number }[];
 		hasAbsoluteLifeUpdate: boolean;
 		hasCounterUpdate: boolean;
+		/** A Commander Session's alone: sent after the Seat's life and counters. */
+		commanderDamage?: CommanderDamageDelta[];
 	}
 	const playerBatch = optimistic.batch<PlayerBatchPayload>({
-		flush: async (entry) => {
+		flush: async (entry, controls) => {
 			const apiUpdate: PlayerFeatureMatchStateUpdate = {};
 			if (entry.payload.hasAbsoluteLifeUpdate && entry.payload.intendedLifeTotal !== null) {
 				apiUpdate.lifeTotal = entry.payload.intendedLifeTotal;
@@ -68,12 +84,34 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			if (entry.payload.hasCounterUpdate) {
 				apiUpdate.counters = entry.payload.latestCounters;
 			}
-			return settleCommandResult(await repo.updatePlayerFeatureMatchState(
-				entry.payload.eventId,
-				entry.payload.matchId,
-				entry.payload.player,
-				apiUpdate,
-			));
+			const damage = (entry.payload.commanderDamage ?? []).filter(dealt => dealt.delta !== 0);
+			const updatesSeat = Object.keys(apiUpdate).length > 0;
+			// Commander Damage entered and taken back within one batch sends nothing.
+			if (entry.payload.commanderDamage && damage.length === 0 && !updatesSeat)
+				return featureMatchStates.value.get(entry.id) ?? entry.snapshot;
+			let latest: FeatureMatchState | undefined;
+			if (damage.length === 0 || updatesSeat) {
+				latest = settleCommandResult(await repo.updatePlayerFeatureMatchState(
+					entry.payload.eventId,
+					entry.payload.matchId,
+					entry.payload.player,
+					apiUpdate,
+				));
+			}
+			for (const dealt of damage) {
+				// A refused count keeps what the Session already confirmed.
+				if (latest)
+					controls.commit(latest);
+				latest = settleCommandResult(await repo.adjustCommanderDamage(
+					entry.payload.eventId,
+					entry.payload.matchId,
+					entry.payload.player,
+					dealt.from,
+					dealt.commander,
+					dealt.delta,
+				));
+			}
+			return latest;
 		},
 	});
 
@@ -591,16 +629,17 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	function updatePlayerFeatureMatchState(
 		eventId: number,
 		matchId: number,
-		player: PlayerSide,
+		player: Seat,
 		update: PlayerFeatureMatchStateUpdate,
 	) {
 		const current = featureMatchStates.value.get(matchId);
-		if (!current)
+		// Seats 3 and 4 are a Commander Session's alone.
+		const currentPlayer = current?.[player];
+		if (!current || !currentPlayer)
 			return;
 
 		// Compute the optimistic display value from the latest local state so rapid
 		// button taps stay responsive while the server receives one batched command.
-		const currentPlayer = current[player];
 		const newLifeTotal = update.lifeTotal !== undefined
 			? update.lifeTotal
 			: update.lifeDelta !== undefined
@@ -615,12 +654,13 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 				[player]: {
 					...current[player],
 					lifeTotal: newLifeTotal,
-					counters: update.counters ?? current[player].counters,
+					counters: update.counters ?? current[player]?.counters,
 				},
 			}),
 			(existing) => {
 				const hasAbsoluteLifeUpdate = update.lifeTotal !== undefined || (existing?.hasAbsoluteLifeUpdate ?? false);
 				return {
+					...existing,
 					eventId,
 					matchId,
 					player,
@@ -636,22 +676,111 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		);
 	}
 
-	function adjustLife(eventId: number, matchId: number, player: PlayerSide, delta: number) {
+	function adjustLife(eventId: number, matchId: number, player: Seat, delta: number) {
 		return updatePlayerFeatureMatchState(eventId, matchId, player, { lifeDelta: delta });
 	}
 
-	function setLife(eventId: number, matchId: number, player: PlayerSide, lifeTotal: number) {
+	function setLife(eventId: number, matchId: number, player: Seat, lifeTotal: number) {
 		return updatePlayerFeatureMatchState(eventId, matchId, player, { lifeTotal });
 	}
 
-	function setCardsKept(eventId: number, matchId: number, player: PlayerSide, cardsKept: number) {
+	// ──────────────── A Commander Session (ADR-0087) ────────────────
+
+	/**
+	 * Commander Damage entered against a Seat, or taken back. It shares the
+	 * Seat's batch with its life and counters, as it moves the Seat's life too:
+	 * rapid taps are one command per opposing Commander, predicted by the
+	 * reducer's own rule.
+	 */
+	function adjustCommanderDamage(
+		eventId: number,
+		matchId: number,
+		player: Seat,
+		from: Seat,
+		commander: CommanderNumber,
+		delta: number,
+	) {
+		const snapshot = heldSession(matchId)?.sourceSnapshot;
+		if (!snapshot || !featureMatchStates.value.has(matchId))
+			return;
+
+		playerBatch.enqueue(
+			`${matchId}-${player}`,
+			matchId,
+			current => applyCommanderDamage(current, snapshot, { player, from, commander, delta }),
+			(existing) => {
+				const dealt = existing?.commanderDamage ?? [];
+				const held = dealt.find(entry => entry.from === from && entry.commander === commander);
+				return {
+					eventId,
+					matchId,
+					player,
+					lifeDelta: existing?.lifeDelta ?? 0,
+					intendedLifeTotal: existing?.intendedLifeTotal ?? null,
+					latestCounters: existing?.latestCounters,
+					hasAbsoluteLifeUpdate: existing?.hasAbsoluteLifeUpdate ?? false,
+					hasCounterUpdate: existing?.hasCounterUpdate ?? false,
+					commanderDamage: held
+						? dealt.map(entry => entry === held
+								? { ...entry, delta: entry.delta + delta }
+								: entry)
+						: [
+								...dealt,
+								{ from, commander, delta },
+							],
+				};
+			},
+		);
+	}
+
+	function setEliminated(eventId: number, matchId: number, player: Seat, eliminated: boolean) {
 		return optimistic.run(
-			`cards:${matchId}:${player}`,
+			`eliminated:${matchId}:${player}`,
+			matchId,
+			(current) => {
+				const seatState = current[player];
+				return seatState
+					? {
+							...current,
+							[player]: { ...seatState, eliminated },
+						}
+					: current;
+			},
+			() => repo.setEliminated(eventId, matchId, player, eliminated).then(settleCommandResult),
+		);
+	}
+
+	/** Declares a winning Seat or a draw (`{ winner: null }`), which completes the Session; `null` takes it back. */
+	function setOutcome(eventId: number, matchId: number, outcome: FeatureMatchOutcome | null) {
+		return optimistic.run(
+			`outcome:${matchId}`,
 			matchId,
 			current => ({
 				...current,
-				[player]: { ...current[player], cardsKept },
+				outcome: outcome ?? undefined,
+				isComplete: outcome !== null,
 			}),
+			() => repo.setOutcome(eventId, matchId, outcome).then(settleCommandResult),
+			// The answer leaves `outcome` out once it is taken back, which no diff reads as a change.
+			{
+				serverOwns: ['outcome', 'isComplete'],
+			},
+		);
+	}
+
+	function setCardsKept(eventId: number, matchId: number, player: Seat, cardsKept: number) {
+		return optimistic.run(
+			`cards:${matchId}:${player}`,
+			matchId,
+			(current) => {
+				const seatState = current[player];
+				return seatState
+					? {
+							...current,
+							[player]: { ...seatState, cardsKept },
+						}
+					: current;
+			},
 			() => repo.updatePlayerFeatureMatchState(eventId, matchId, player, { cardsKept }).then(settleCommandResult),
 		);
 	}
@@ -691,7 +820,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		);
 	}
 
-	function selectFirstPlayer(eventId: number, matchId: number, player: PlayerSide) {
+	function selectFirstPlayer(eventId: number, matchId: number, player: Seat) {
 		return optimistic.run(
 			`firstPlayer:${matchId}`,
 			matchId,
@@ -723,9 +852,15 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		);
 	}
 
-	/** Compute a single half-turn step on a FeatureMatchState (used for optimistic updates) */
-	function computeTurnStep(state: FeatureMatchState, delta: 1 | -1): FeatureMatchState {
-		return applyFeatureMatchTurnStep(state, delta);
+	/**
+	 * One turn step, as the Session's reducer takes it (used for optimistic
+	 * updates): a half-turn of the pair, or the next Seat of a Commander game.
+	 */
+	function computeTurnStep(matchId: number, state: FeatureMatchState, delta: 1 | -1): FeatureMatchState {
+		const snapshot = heldSession(matchId)?.sourceSnapshot;
+		return snapshot && isCommanderSession(snapshot)
+			? applyCommanderTurnStep(state, snapshot, delta)
+			: applyFeatureMatchTurnStep(state, delta);
 	}
 
 	function stepTurn(eventId: number, matchId: number, delta: 1 | -1) {
@@ -740,7 +875,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		turnBatch.enqueue(
 			`${matchId}`,
 			matchId,
-			current => computeTurnStep(current, delta),
+			current => computeTurnStep(matchId, current, delta),
 			existing => ({
 				eventId,
 				matchId,
@@ -930,6 +1065,9 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		updatePlayerFeatureMatchState,
 		adjustLife,
 		setLife,
+		adjustCommanderDamage,
+		setEliminated,
+		setOutcome,
 		setCardsKept,
 		setSideboardRevealed,
 		setTurnNumber,

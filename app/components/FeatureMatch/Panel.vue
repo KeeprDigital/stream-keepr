@@ -310,6 +310,14 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 	};
 }
 
+/** What each Seat of a Commander Slot's Controls shows; its game's own phase is the table's to read. */
+const commanderDisplayConfig = computed<PlayerDisplayConfig>(() => ({
+	showName: true,
+	showDeckName: true,
+	showPronouns: pronounsEnabled.value,
+	showLgs: lgsEnabled.value,
+}));
+
 // ──────────────── Match Title ────────────────
 
 const matchTitle = computed(() => `Match ${props.matchNumber}`);
@@ -393,8 +401,15 @@ async function save() {
 
 		<!-- ==================== GAME MODE ==================== -->
 		<div v-show="panelView === 'game'">
+			<!-- A Commander Slot's four Seats, where they sit at the table (ADR-0087) -->
+			<FeatureMatchStateCommanderTable
+				v-if="matchState && isCommander"
+				:match-id="match.id"
+				:config="commanderDisplayConfig"
+			/>
+
 			<!-- Player Arena -->
-			<div v-if="matchState" class="control">
+			<div v-else-if="matchState" class="control">
 				<!-- Player 1 -->
 				<FeatureMatchStatePlayerControls
 					class="player-one"
@@ -656,6 +671,7 @@ async function save() {
 			<!-- Game mode: Match actions -->
 			<div v-else-if="matchState" class="match-actions">
 				<UButton
+					v-if="!isCommander"
 					label="Tokens"
 					icon="i-lucide-images"
 					color="neutral"
@@ -704,7 +720,7 @@ async function save() {
 	/>
 
 	<FeatureMatchStateEditStateModal
-		v-if="matchState"
+		v-if="matchState && !isCommander"
 		v-model:open="editStateOpen"
 		:state="matchState"
 		:player1-name="playerDisplayName(player1Data)"

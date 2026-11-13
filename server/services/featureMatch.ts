@@ -376,8 +376,8 @@ export function featureMatchService() {
 
 	/**
 	 * Swap Seats (ADR-0087): two Seats' players change places in the Slot itself,
-	 * each with everything its Seat holds, and the active Session's snapshot is
-	 * corrected to match. One statement, which reads both Seats as they were
+	 * each with everything its Seat holds, and the active Session moves their
+	 * live state with them. One statement, which reads both Seats as they were
 	 * before it, so no save between a read and a write can be lost.
 	 */
 	const swapSeats = async (id: number, eventId: number, first: Seat, second: Seat): Promise<DbFeatureMatch | undefined> => {
@@ -394,7 +394,18 @@ export function featureMatchService() {
 		if (!swapped)
 			return undefined;
 
-		await correctSessionSnapshot(swapped);
+		// One Session event moves each player's live state with them and takes the
+		// Slot as it now stands, so no reader sees a player beside another's life.
+		const stateSvc = featureMatchStateService();
+		const snapshot = await stateSvc.buildSourceSnapshot(swapped);
+		await stateSvc.applyCommandToActiveSession(swapped.id, eventId, () => ({
+			commandId: randomCommandId('SwapSeats'),
+			type: 'SwapSeats',
+			payload: {
+				seats: [first, second],
+				sourceSnapshot: snapshot,
+			},
+		}));
 		return await findById(swapped.id, eventId);
 	};
 

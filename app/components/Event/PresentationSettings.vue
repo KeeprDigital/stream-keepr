@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ThemeSummary } from '~~/shared/types/theme';
 import type { Event } from '~/types';
+import { eventKind } from '~~/shared/config/games';
 import { EVENT_CANVAS_SIDE_BOUNDS } from '~~/shared/eventCanvas';
 import { fromFeatureMatchDefaults, toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 
@@ -17,6 +18,9 @@ const props = defineProps<{
 const DEFAULT_THEME = 'default';
 
 const errors = ref<Record<string, string>>({});
+
+// A Commander Event plays single games with no extra turns to label (ADR-0087).
+const hasExtraTurns = computed(() => eventKind(props.event) !== 'mtg-commander');
 
 const initialData = computed(() => {
 	const defaults = toFeatureMatchDefaults(props.event);
@@ -187,6 +191,7 @@ const themeItems = computed(() => {
 				<USeparator />
 
 				<UFormField
+					v-if="hasExtraTurns"
 					name="extraTurnsLabel"
 					label="Extra Turns Label"
 					description="Shown for the extra turns indicator (e.g. 'Extra Turns', 'Overtime')."

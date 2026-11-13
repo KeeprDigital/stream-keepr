@@ -1,4 +1,6 @@
 import type { MaybeRefOrGetter } from 'vue';
+import type { Seat } from '~~/shared/types/enums';
+import { SEAT_VALUES } from '~~/shared/types/enums';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { formatOrdinal } from '~~/shared/utils/formatters';
 import { getMtgGameData, getPlayerIdentityValue } from '~~/shared/utils/gameData';
@@ -15,7 +17,7 @@ import { formatPlayerRecord } from '~~/shared/utils/playerRecord';
  */
 export function usePlayerFeatureMatchData(
 	matchId: MaybeRefOrGetter<number>,
-	playerSide: MaybeRefOrGetter<PlayerSide>,
+	playerSide: MaybeRefOrGetter<Seat>,
 ) {
 	const featureMatchStore = useFeatureMatchStore();
 	const featureMatchStateStore = useFeatureMatchStateStore();
@@ -50,10 +52,7 @@ export function usePlayerFeatureMatchData(
 	const playerData = computed(() => seated.value.data);
 
 	const playerName = computed(() => {
-		const fallback = side() === 'player1'
-			? 'Player 1'
-			: 'Player 2';
-		return playerDisplayName(playerData.value) || fallback;
+		return playerDisplayName(playerData.value) || `Player ${SEAT_VALUES.indexOf(side()) + 1}`;
 	});
 
 	const seatedPlayerId = computed(() => seated.value.playerId);

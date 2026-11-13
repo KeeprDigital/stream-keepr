@@ -1,16 +1,28 @@
-import type { PlayerSide } from '~~/shared/types/enums';
+import type { PlayerSide, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchCommandType, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
-import type { CounterState, FeatureMatchState } from '~~/shared/types/featureMatchState';
+import type { CommanderNumber, CounterState, FeatureMatchOutcome, FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { getStartingTurnNumber } from '~~/shared/config/games';
+import { SEAT_VALUES } from '~~/shared/types/enums';
 import {
+	COMMANDER_NUMBER_VALUES,
 	createInitialFeatureMatchState,
 	createInitialOvertimeState,
+	createInitialSeatState,
 	DEFAULT_CLOCK_DURATION_MS,
 	DEFAULT_CLOCK_TYPE,
 	DEFAULT_STARTING_LIFE,
 	resetPlayerFeatureMatchStateForNewGame,
 } from '~~/shared/types/featureMatchState';
 import { applyClockAdjustment } from './clock';
+import {
+	applyCommanderDamage,
+	applyCommanderTurnStep,
+	commanderStartingLife,
+	isCommanderSession,
+	isSeatFilled,
+	withSeatsCorrected,
+	withSeatsSwapped,
+} from './commander';
 import { applyFeatureMatchOvertimeStep, applyFeatureMatchTurnStep, otherFeatureMatchPlayer } from './turns';
 
 export interface FeatureMatchSessionReducerResult {
@@ -25,7 +37,7 @@ export function createInitialFeatureMatchSessionStateFromSnapshot(snapshot: Feat
 		? snapshot.defaults.clockDuration * 60 * 1000
 		: DEFAULT_CLOCK_DURATION_MS;
 
-	return createInitialFeatureMatchState(
+	const initial = createInitialFeatureMatchState(
 		snapshot.defaults.startingLife ?? DEFAULT_STARTING_LIFE,
 		snapshot.defaults.clockType ?? DEFAULT_CLOCK_TYPE,
 		durationMs,
@@ -35,6 +47,23 @@ export function createInitialFeatureMatchSessionStateFromSnapshot(snapshot: Feat
 			? snapshot.defaults.countUpLimit * 60 * 1000
 			: null,
 	);
+	return isCommanderSession(snapshot)
+		? {
+				...initial,
+				...commanderSeatStates(snapshot),
+			}
+		: initial;
+}
+
+/** Every Seat of a Commander game as it starts: at the Event's starting life (ADR-0087). */
+function commanderSeatStates(snapshot: FeatureMatchSourceSnapshot): Required<Pick<FeatureMatchState, Seat>> {
+	const startingLife = commanderStartingLife(snapshot);
+	return {
+		player1: createInitialSeatState(startingLife),
+		player2: createInitialSeatState(startingLife),
+		player3: createInitialSeatState(startingLife),
+		player4: createInitialSeatState(startingLife),
+	};
 }
 
 interface FeatureMatchBatchedEvent {
@@ -82,6 +111,35 @@ function playerSideOf(value: unknown): PlayerSide | null {
 	return value === 'player1' || value === 'player2'
 		? value
 		: null;
+}
+
+/**
+ * The Seat a command names, where the Session has it in its game: one of the
+ * pair on every Session but a Commander Session, whose four Seats are each in
+ * the game only while filled (ADR-0087).
+ */
+function seatOf(value: unknown, sourceSnapshot: FeatureMatchSourceSnapshot): Seat | null {
+	if (!isCommanderSession(sourceSnapshot))
+		return playerSideOf(value);
+	const seat = SEAT_VALUES.find(candidate => candidate === value);
+	return seat && isSeatFilled(sourceSnapshot, seat)
+		? seat
+		: null;
+}
+
+function commanderNumberOf(value: unknown): CommanderNumber | null {
+	return COMMANDER_NUMBER_VALUES.find(candidate => candidate === value) ?? null;
+}
+
+/** A declared outcome: a winning Seat in the game, or `{ winner: null }` for a draw. */
+function outcomeOf(value: unknown, sourceSnapshot: FeatureMatchSourceSnapshot): FeatureMatchOutcome | null {
+	if (typeof value !== 'object' || value === null)
+		return null;
+	const { winner } = value as { winner?: unknown };
+	if (winner === null)
+		return { winner: null };
+	const seat = seatOf(winner, sourceSnapshot);
+	return seat && { winner: seat };
 }
 
 function countersOf(value: unknown): CounterState[] | null {
@@ -190,6 +248,46 @@ const UNTIMED_REFUSED_COMMANDS = new Set<string>([
 	'StartOvertime',
 ]);
 
+/** What a Commander Session's one game has none of: game wins, extra turns, a Sideboard reveal, a Session-only swap (ADR-0087). */
+const COMMANDER_REFUSED_COMMANDS = new Set<string>([
+	'RecordGameWin',
+	'UndoGameWin',
+	'StartOvertime',
+	'StepOvertime',
+	'SetSideboardRevealed',
+	'SwapPlayers',
+]);
+
+/** What only a Commander Session takes. */
+const COMMANDER_ONLY_COMMANDS = new Set<string>([
+	'AdjustCommanderDamage',
+	'SetEliminated',
+	'SetOutcome',
+]);
+
+const COMMANDER_SEATS: readonly unknown[] = SEAT_VALUES.filter(seat => playerSideOf(seat) === null);
+
+/**
+ * Whether an operator's command is one a Session of this Variant never takes
+ * (ADR-0087): a Commander Session plays one game, and only a Commander Session
+ * has Seats 3 and 4, Commander Damage, Eliminated Seats and a declared outcome.
+ * The reducer rejects such a command, and the API refuses it by this.
+ */
+export function isCommandOutsideSessionVariant(
+	sourceSnapshot: FeatureMatchSourceSnapshot,
+	type: FeatureMatchCommandType,
+	payload: FeatureMatchSessionEventPayload,
+): boolean {
+	if (type === 'Batch') {
+		return (batchedEvents(payload) ?? [])
+			.some(command => isCommandOutsideSessionVariant(sourceSnapshot, command.type, command.payload));
+	}
+	if (isCommanderSession(sourceSnapshot))
+		return COMMANDER_REFUSED_COMMANDS.has(type);
+	return COMMANDER_ONLY_COMMANDS.has(type)
+		|| COMMANDER_SEATS.includes(payload.player);
+}
+
 export function applyFeatureMatchSessionEvent(
 	currentState: FeatureMatchState,
 	sourceSnapshot: FeatureMatchSourceSnapshot,
@@ -223,6 +321,13 @@ function reduceFeatureMatchSessionEvent(
 			payload.sourceSnapshot as FeatureMatchSourceSnapshot,
 			sourceSnapshot,
 		);
+		// A Commander game is decided by its declared outcome, never by game wins.
+		if (isCommanderSession(corrected)) {
+			return {
+				currentState: withSeatsCorrected(currentState, sourceSnapshot, corrected),
+				sourceSnapshot: corrected,
+			};
+		}
 		return {
 			currentState: corrected.bestOf === sourceSnapshot.bestOf
 				? currentState
@@ -234,6 +339,10 @@ function reduceFeatureMatchSessionEvent(
 	// An untimed match has no clock to run and so no time to run out: nothing
 	// starts, sets or adjusts its clock, and no extra turns begin.
 	if (currentState.clock.type === 'untimed' && UNTIMED_REFUSED_COMMANDS.has(type))
+		return null;
+
+	const commander = isCommanderSession(sourceSnapshot);
+	if (type !== 'Batch' && isCommandOutsideSessionVariant(sourceSnapshot, type, payload))
 		return null;
 
 	// One event, many field writes: an operator's multi-field save folds through
@@ -255,33 +364,35 @@ function reduceFeatureMatchSessionEvent(
 	}
 
 	if (type === 'AdjustLife') {
-		const player = playerSideOf(payload.player);
+		const player = seatOf(payload.player, sourceSnapshot);
+		const seatState = player && currentState[player];
 		const delta = finiteNumber(payload.delta ?? 0);
-		if (!player || delta === null)
+		if (!player || !seatState || delta === null)
 			return null;
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
 				[player]: {
-					...currentState[player],
-					lifeTotal: currentState[player].lifeTotal + delta,
+					...seatState,
+					lifeTotal: seatState.lifeTotal + delta,
 				},
 			},
 		};
 	}
 
 	if (type === 'SetLife') {
-		const player = playerSideOf(payload.player);
+		const player = seatOf(payload.player, sourceSnapshot);
+		const seatState = player && currentState[player];
 		const lifeTotal = finiteNumber(payload.lifeTotal);
-		if (!player || lifeTotal === null)
+		if (!player || !seatState || lifeTotal === null)
 			return null;
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
 				[player]: {
-					...currentState[player],
+					...seatState,
 					lifeTotal,
 				},
 			},
@@ -289,16 +400,17 @@ function reduceFeatureMatchSessionEvent(
 	}
 
 	if (type === 'SetCounters') {
-		const player = playerSideOf(payload.player);
+		const player = seatOf(payload.player, sourceSnapshot);
+		const seatState = player && currentState[player];
 		const counters = countersOf(payload.counters);
-		if (!player || counters === null)
+		if (!player || !seatState || counters === null)
 			return null;
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
 				[player]: {
-					...currentState[player],
+					...seatState,
 					counters,
 				},
 			},
@@ -306,19 +418,90 @@ function reduceFeatureMatchSessionEvent(
 	}
 
 	if (type === 'SetCardsKept') {
-		const player = playerSideOf(payload.player);
+		const player = seatOf(payload.player, sourceSnapshot);
+		const seatState = player && currentState[player];
 		const cardsKept = finiteNumber(payload.cardsKept);
-		if (!player || cardsKept === null)
+		if (!player || !seatState || cardsKept === null)
 			return null;
 		return {
 			sourceSnapshot,
 			currentState: {
 				...currentState,
 				[player]: {
-					...currentState[player],
+					...seatState,
 					cardsKept,
 				},
 			},
+		};
+	}
+
+	if (type === 'AdjustCommanderDamage') {
+		const player = seatOf(payload.player, sourceSnapshot);
+		const from = seatOf(payload.from, sourceSnapshot);
+		const commanderNumber = commanderNumberOf(payload.commander);
+		const delta = finiteNumber(payload.delta);
+		if (!player || !from || commanderNumber === null || delta === null)
+			return null;
+		const damaged = applyCommanderDamage(currentState, sourceSnapshot, {
+			player,
+			from,
+			commander: commanderNumber,
+			delta,
+		});
+		return damaged && { sourceSnapshot, currentState: damaged };
+	}
+
+	if (type === 'SetEliminated') {
+		const player = seatOf(payload.player, sourceSnapshot);
+		const seatState = player && currentState[player];
+		const eliminated = payload.eliminated;
+		if (!player || !seatState || typeof eliminated !== 'boolean')
+			return null;
+		return {
+			sourceSnapshot,
+			currentState: {
+				...currentState,
+				[player]: { ...seatState, eliminated },
+			},
+		};
+	}
+
+	if (type === 'SetOutcome') {
+		// Taking the outcome back reopens the game.
+		if (payload.outcome === null) {
+			const { outcome: _outcome, ...reopened } = currentState;
+			return {
+				sourceSnapshot,
+				currentState: { ...reopened, isComplete: false },
+			};
+		}
+		const outcome = outcomeOf(payload.outcome, sourceSnapshot);
+		if (!outcome)
+			return null;
+		return {
+			sourceSnapshot,
+			currentState: { ...currentState, outcome, isComplete: true },
+		};
+	}
+
+	if (type === 'SwapSeats') {
+		const seats = Array.isArray(payload.seats)
+			? payload.seats
+			: [];
+		const first = SEAT_VALUES.find(seat => seat === seats[0]);
+		const second = SEAT_VALUES.find(seat => seat === seats[1]);
+		const swapped = payload.sourceSnapshot as FeatureMatchSourceSnapshot | null | undefined;
+		if (!first || !second || first === second || !swapped || !isCommanderSession(swapped))
+			return null;
+		// The Slot has exchanged the two Seats already, so its snapshot is taken as
+		// it is: neither Seat joins or leaves, each player keeps what they held. A
+		// Session opened before a Commander Slot had four Seats gains the missing two.
+		return {
+			currentState: withSeatsSwapped({
+				...commanderSeatStates(swapped),
+				...currentState,
+			}, first, second),
+			sourceSnapshot: correctedSourceSnapshot(swapped, sourceSnapshot),
 		};
 	}
 
@@ -446,7 +629,7 @@ function reduceFeatureMatchSessionEvent(
 	}
 
 	if (type === 'SelectFirstPlayer') {
-		const player = playerSideOf(payload.player);
+		const player = seatOf(payload.player, sourceSnapshot);
 		if (!player)
 			return null;
 		return {
@@ -461,7 +644,7 @@ function reduceFeatureMatchSessionEvent(
 	}
 
 	if (type === 'SetFirstPlayer') {
-		const player = playerSideOf(payload.player);
+		const player = seatOf(payload.player, sourceSnapshot);
 		if (!player)
 			return null;
 		return {
@@ -471,7 +654,7 @@ function reduceFeatureMatchSessionEvent(
 	}
 
 	if (type === 'SetActivePlayer') {
-		const player = playerSideOf(payload.player);
+		const player = seatOf(payload.player, sourceSnapshot);
 		if (!player && payload.player != null)
 			return null;
 		return {
@@ -584,6 +767,18 @@ function reduceFeatureMatchSessionEvent(
 			};
 		}
 
+		// A Commander Session's game is its whole Session: a reset starts a new
+		// one with the same players, and a game reset keeps only the clock.
+		if (commander) {
+			return {
+				sourceSnapshot,
+				currentState: {
+					...createInitialFeatureMatchSessionStateFromSnapshot(sourceSnapshot),
+					clock: currentState.clock,
+				},
+			};
+		}
+
 		return {
 			sourceSnapshot,
 			currentState: {
@@ -616,7 +811,9 @@ function reduceFeatureMatchSessionEvent(
 			return null;
 		return {
 			sourceSnapshot,
-			currentState: applyFeatureMatchTurnStep(currentState, delta),
+			currentState: commander
+				? applyCommanderTurnStep(currentState, sourceSnapshot, delta)
+				: applyFeatureMatchTurnStep(currentState, delta),
 		};
 	}
 

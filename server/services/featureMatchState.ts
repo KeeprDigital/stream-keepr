@@ -2,7 +2,7 @@ import type { SQL } from 'drizzle-orm';
 import type { DbFeatureMatch, DbFeatureMatchSession, DbPlayer } from '~~/server/db/schema';
 import type { SequencedLiveEpochTransition, SequencedLiveStateExecuteOptions } from '~~/server/modules/live-state';
 import type { FeatureMatchSessionEventPayload, FeatureMatchSessionReducerResult } from '~~/shared/modules/feature-match-session';
-import type { Game } from '~~/shared/types/enums';
+import type { Game, Variant } from '~~/shared/types/enums';
 import type { FeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import type {
 	FeatureMatchSessionCommand,
@@ -22,9 +22,12 @@ import { asOneOutputChange } from '~~/server/modules/screen-output-publication';
 import { linkedOpSideGameData, withCatalogueLeaders } from '~~/server/services/featureMatchSlotLeader';
 import { publishMessage } from '~~/server/utils/ably';
 import { chunkJsonRows, inJsonArray, selectForInsert } from '~~/server/utils/db';
+import { eventKind } from '~~/shared/config/games';
 import {
 	applyFeatureMatchSessionEvent,
 	createInitialFeatureMatchSessionStateFromSnapshot,
+	isCommanderSession,
+	isCommandOutsideSessionVariant,
 	normalizeFeatureMatchSessionCommandPayload,
 } from '~~/shared/modules/feature-match-session';
 import { FEATURE_MATCH_DEFAULT_COLUMN_SELECTION, toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
@@ -43,6 +46,7 @@ interface FeatureMatchSessionRef {
 
 type EventDefaults = FeatureMatchDefaults & {
 	game: Game;
+	variant?: Variant | null;
 };
 
 /** The Slots of one Event whose Sessions an epoch transition replaces. */
@@ -72,6 +76,7 @@ export function featureMatchStateService() {
 			where: eq(events.id, eventId),
 			columns: {
 				game: true,
+				variant: true,
 				...FEATURE_MATCH_DEFAULT_COLUMN_SELECTION,
 			},
 		});
@@ -80,6 +85,7 @@ export function featureMatchStateService() {
 		return {
 			...toFeatureMatchDefaults(row),
 			game: row.game,
+			variant: row.variant,
 		};
 	};
 
@@ -191,7 +197,7 @@ export function featureMatchStateService() {
 		preloadedPlayers?: ReadonlyMap<number, DbPlayer>,
 	): Promise<FeatureMatchSourceSnapshot> => {
 		const defaults = preloadedDefaults ?? await loadEventDefaults(slot.eventId);
-		const eventDefaults = defaults ?? {
+		const { variant, ...eventDefaults }: EventDefaults = defaults ?? {
 			...toFeatureMatchDefaults(null),
 			game: 'mtg',
 		};
@@ -218,6 +224,13 @@ export function featureMatchStateService() {
 			defaults: eventDefaults,
 			player1: { playerId: player1.playerId, data: sides!.player1Data },
 			player2: { playerId: player2.playerId, data: sides!.player2Data },
+			// A Commander Slot's Session plays its four Seats, each typed (ADR-0087).
+			// Every other snapshot reads as it did before a Slot had them.
+			...(eventKind({ game: eventDefaults.game, variant }) === 'mtg-commander' && {
+				variant: 'commander' as const,
+				player3: await resolveSnapshotPlayer(slot.eventId, eventDefaults.game, null, slot.player3Data ?? null),
+				player4: await resolveSnapshotPlayer(slot.eventId, eventDefaults.game, null, slot.player4Data ?? null),
+			}),
 			// The build time, which is the right answer only for the builds that open a
 			// Session. A rebuild for a `SnapshotCorrected` has this discarded in favour
 			// of the stamp the Session is already holding — the field means first taken,
@@ -513,6 +526,15 @@ export function featureMatchStateService() {
 				throw createError({
 					statusCode: 400,
 					message: 'Snapshot correction does not belong to this session',
+				});
+			}
+
+			if (isCommandOutsideSessionVariant(session.sourceSnapshot, command.type, command.payload as FeatureMatchSessionEventPayload)) {
+				throw createError({
+					statusCode: 400,
+					message: isCommanderSession(session.sourceSnapshot)
+						? 'A Commander Session plays one game: it has no game wins, extra turns, Sideboard reveal or Swap Players'
+						: 'Only a Commander Session has Seats 3 and 4, Commander Damage, Eliminated Seats and a declared outcome',
 				});
 			}
 

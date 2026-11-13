@@ -8,8 +8,20 @@ export {
 export type { ClockAdjustmentInput } from './clock';
 
 export {
+	applyCommanderDamage,
+	applyCommanderTurnStep,
+	commanderDamageFrom,
+	filledSeats,
+	isCommanderSession,
+	isSeatFilled,
+	seatCommanders,
+	withSeatsSwapped,
+} from './commander';
+
+export {
 	applyFeatureMatchSessionEvent,
 	createInitialFeatureMatchSessionStateFromSnapshot,
+	isCommandOutsideSessionVariant,
 	normalizeFeatureMatchSessionCommandPayload,
 } from './reducer';
 export type {
@@ -21,4 +33,5 @@ export {
 	applyFeatureMatchOvertimeStep,
 	applyFeatureMatchTurnStep,
 	otherFeatureMatchPlayer,
+	pairSeatOf,
 } from './turns';

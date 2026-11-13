@@ -8,8 +8,12 @@ export interface FeatureMatchSlotSides {
 	player2Id: number | null;
 	player1Data: PlayerSlotData | null;
 	player2Data: PlayerSlotData | null;
+	/** Seats 3 and 4, which only a Commander Slot holds (ADR-0087). */
+	player3Data?: PlayerSlotData | null;
+	player4Data?: PlayerSlotData | null;
 	activeSession?: {
-		sourceSnapshot: Record<PlayerSide, FeatureMatchSnapshotPlayer | null | undefined>;
+		sourceSnapshot: Record<PlayerSide, FeatureMatchSnapshotPlayer | null | undefined>
+			& Partial<Record<Exclude<Seat, PlayerSide>, FeatureMatchSnapshotPlayer | null>>;
 	} | null;
 }
 
@@ -32,14 +36,15 @@ export interface FeatureMatchSidePlayer {
 }
 
 /**
- * The player one side of a Feature Match Slot shows.
+ * The player one Seat of a Feature Match Slot shows.
  *
  * The active Feature Match Session owns which side each player sits on, and the
  * Slot keeps its pairing order (ADR-0058): `SwapPlayers` moves players in the
  * Session's source snapshot and never on the Slot. So a side reads the snapshot
- * while a Session is active, and the Slot's own side otherwise.
+ * while a Session is active, and the Slot's own side otherwise. Seats 3 and 4
+ * are a Commander Slot's, typed and linking no Player (ADR-0087).
  */
-export function featureMatchSidePlayer(slot: FeatureMatchSlotSides | null | undefined, side: PlayerSide): FeatureMatchSidePlayer {
+export function featureMatchSidePlayer(slot: FeatureMatchSlotSides | null | undefined, side: Seat): FeatureMatchSidePlayer {
 	if (!slot)
 		return { playerId: null, data: null };
 	const snapshot = slot.activeSession?.sourceSnapshot;
@@ -47,7 +52,9 @@ export function featureMatchSidePlayer(slot: FeatureMatchSlotSides | null | unde
 		const seated = snapshot[side];
 		return { playerId: seated?.playerId ?? null, data: seated?.data ?? null };
 	}
-	return side === 'player1'
-		? { playerId: slot.player1Id, data: slot.player1Data }
-		: { playerId: slot.player2Id, data: slot.player2Data };
+	if (side === 'player1')
+		return { playerId: slot.player1Id, data: slot.player1Data };
+	if (side === 'player2')
+		return { playerId: slot.player2Id, data: slot.player2Data };
+	return { playerId: null, data: slot[SLOT_SEAT_DATA_KEY[side]] ?? null };
 }

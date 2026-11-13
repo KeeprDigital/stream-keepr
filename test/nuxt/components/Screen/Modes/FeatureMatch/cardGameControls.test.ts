@@ -95,7 +95,7 @@ const EVERY_TOGGLE_ON: Partial<DbEvent> = {
 function mountControls(game: Game, toggles: Partial<DbEvent> = {}) {
 	event.value = createMockEvent({
 		game,
-		...fromFeatureMatchDefaults(getMatchFormatDefaults(eventKind({ game }))),
+		...fromFeatureMatchDefaults(getMatchFormatDefaults(eventKind({ game, variant: toggles.variant }))),
 		...toggles,
 	});
 	return mount(Display, {
@@ -107,6 +107,7 @@ function mountControls(game: Game, toggles: Partial<DbEvent> = {}) {
 				FeatureMatchStateCounterList: matchStatePart('counters'),
 				FeatureMatchStateTurnCounter: matchStatePart('turn'),
 				FeatureMatchStateOvertimeTurnsCounter: matchStatePart('overtime'),
+				FeatureMatchStateCommanderTable: matchStatePart('commander-table'),
 				UIcon: defineComponent({
 					props: { name: String },
 					template: '<i :data-icon="name" />',
@@ -136,6 +137,16 @@ describe('feature Match Controls by Card Game', () => {
 		],
 	] as const)('on a %s Event with toggles %j, offers the match state parts %j', (game, toggles, expected) => {
 		expect(offeredMatchStateParts(mountControls(game, toggles))).toEqual(expected);
+	});
+
+	// A Commander Event's four Seats show where they sit, whatever the Screen's left side says (ADR-0087).
+	it('drives a Commander Event\'s game from its four Seats, with no game count', () => {
+		const wrapper = mountControls('mtg', { variant: 'commander' });
+
+		expect(offeredMatchStateParts(wrapper)).toEqual(['commander-table']);
+		expect(wrapper.findAll('[data-player-side]')).toHaveLength(0);
+		expect(wrapper.text()).not.toContain('Game 1');
+		expect(wrapper.text()).toContain('30:00');
 	});
 
 	it('shows a One Piece match its clock, and its active and first player', () => {

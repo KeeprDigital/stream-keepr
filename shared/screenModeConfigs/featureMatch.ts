@@ -1,17 +1,34 @@
 import type { ScreenModeConfigOf } from './contract';
 import type { ScreenSettingsContext } from './fields';
 import { z } from 'zod';
-import { getCounterTypeConfigs, getFeatureMatchStateTracking, getPlayerIdentityLabel } from '../config/games';
+import { eventKind, getCounterTypeConfigs, getFeatureMatchStateTracking, getPlayerIdentityLabel } from '../config/games';
 import { PLAYER_SIDE_VALUES } from '../types/enums';
 import { toFeatureMatchDefaults } from '../types/featureMatchDefaults';
 import { defineScreenModeConfigContract } from './contract';
 import { editorField } from './fields';
 
-/** What the Event's Card Game tracks, which bounds what its own toggles can turn on; all of it until the Event loads. */
-function tracks({ event }: ScreenSettingsContext) {
+/** The kind of Event the Screen's is; none until the Event loads. */
+function kindOf({ event }: ScreenSettingsContext) {
 	return event?.game
-		? getFeatureMatchStateTracking(event.game)
+		? eventKind({ game: event.game, variant: event.variant })
+		: undefined;
+}
+
+/** What the Event tracks, which bounds what its own toggles can turn on; all of it until the Event loads. */
+function tracks(context: ScreenSettingsContext) {
+	const kind = kindOf(context);
+	return kind
+		? getFeatureMatchStateTracking(kind)
 		: null;
+}
+
+/**
+ * Whether the Screen controls two Seats, left and right or top and bottom. A
+ * Commander Event's four show where they sit at the table, hold no record and
+ * play one game (ADR-0087).
+ */
+function seatsTwo(context: ScreenSettingsContext): boolean {
+	return kindOf(context) !== 'mtg-commander';
 }
 
 /** Whether the Event's Card Game has counters. */
@@ -53,7 +70,7 @@ export const featureMatchModeConfigContract = defineScreenModeConfigContract({
 		'player-info',
 		'Show record',
 		'Show the player record or position next to their name.',
-		({ event }) => event?.standingsEnabled ?? true,
+		context => seatsTwo(context) && (context.event?.standingsEnabled ?? true),
 	)),
 	/** Labelled for Magic; each Card Game names its own player identity in place of "deck". */
 	showDeckNames: editorField(z.boolean(), {
@@ -77,9 +94,13 @@ export const featureMatchModeConfigContract = defineScreenModeConfigContract({
 	)),
 	showSeatLabels: editorField(z.boolean().optional(), {
 		...toggle('match-display', 'Show seat labels', 'Show seat labels next to player names.'),
-		description: context => `Show ${isVertical(context)
-			? 'Top/Bottom'
-			: 'Left/Right'} labels next to player names.`,
+		description: (context) => {
+			if (!seatsTwo(context))
+				return 'Show each Seat\'s number next to its player\'s name.';
+			return `Show ${isVertical(context)
+				? 'Top/Bottom'
+				: 'Left/Right'} labels next to player names.`;
+		},
 	}),
 	// Layout: which player data slot renders on the left side of the screen
 	leftSidePlayer: editorField(z.enum(PLAYER_SIDE_VALUES).optional(), {
@@ -87,6 +108,7 @@ export const featureMatchModeConfigContract = defineScreenModeConfigContract({
 		card: 'content',
 		group: 'match-display',
 		description: 'Which player seat appears on the left side of the match screen.',
+		showWhen: seatsTwo,
 		options: context => isVertical(context)
 			? { player1: 'Top player', player2: 'Bottom player' }
 			: { player1: 'Left player', player2: 'Right player' },
@@ -140,6 +162,7 @@ export const featureMatchModeConfigContract = defineScreenModeConfigContract({
 		'control-permissions',
 		'Game win controls',
 		'Allow players to record and undo game wins.',
+		seatsTwo,
 	)),
 	allowCounterControls: editorField(z.boolean().optional(), toggle(
 		'control-permissions',

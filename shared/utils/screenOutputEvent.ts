@@ -10,6 +10,7 @@ export const SCREEN_OUTPUT_EVENT_FIELDS = [
 	'id',
 	'name',
 	'game',
+	'variant',
 	'featureMatchOrientation',
 	'displayRecordSeparator',
 	'displayHideZeroDraws',

@@ -1,4 +1,4 @@
-import type { BulkClockAction, PlayerSide, ResetType } from '~~/shared/types/enums';
+import type { BulkClockAction, PlayerSide, ResetType, Seat } from '~~/shared/types/enums';
 import type {
 	FeatureMatchBatchSubCommand,
 	FeatureMatchSessionCommand,
@@ -6,10 +6,13 @@ import type {
 	FeatureMatchSessionResponse,
 } from '~~/shared/types/featureMatchSession';
 import type {
+	CommanderNumber,
+	FeatureMatchOutcome,
 	FeatureMatchState,
 	GameWinOptions,
 	PlayerFeatureMatchStateUpdate,
 } from '~~/shared/types/featureMatchState';
+import { pairSeatOf } from '~~/shared/modules/feature-match-session';
 import { randomCommandId, randomUuid } from '~~/shared/utils/uuid';
 import { useFeatureMatchStateRepository } from '~/composables/repositories/useFeatureMatchStateRepository';
 
@@ -50,8 +53,9 @@ export interface FeatureMatchStateUpdate {
 	player1?: FeatureMatchPlayerStatePatch;
 	player2?: FeatureMatchPlayerStatePatch;
 	clock?: { targetDisplayMs: number };
-	firstPlayer?: PlayerSide;
-	activePlayer?: PlayerSide | null;
+	/** Any Seat of a Commander Session; one of the pair on every other. */
+	firstPlayer?: Seat;
+	activePlayer?: Seat | null;
 	turnNumber?: number;
 	overtime?: { totalTurns: number };
 }
@@ -350,7 +354,7 @@ export function useFeatureMatchSessionClient() {
 	const updatePlayerFeatureMatchState = async (
 		eventId: number,
 		slotId: number,
-		player: PlayerSide,
+		player: Seat,
 		update: PlayerFeatureMatchStateUpdate,
 	): Promise<FeatureMatchCommandStateResult> => {
 		let result: FeatureMatchCommandStateResult | null = null;
@@ -389,12 +393,14 @@ export function useFeatureMatchSessionClient() {
 				baseSequence: session.sequence,
 			}));
 		}
-		if (update.sideboardRevealed !== undefined) {
+		// A Sideboard reveal is one of the pair's: a Commander Session has none (ADR-0087).
+		const side = pairSeatOf(player);
+		if (update.sideboardRevealed !== undefined && side) {
 			const revealed = update.sideboardRevealed;
 			result = await sendSlotCommand(eventId, slotId, session => ({
 				commandId: randomCommandId('SetSideboardRevealed'),
 				type: 'SetSideboardRevealed',
-				payload: { player, revealed },
+				payload: { player: side, revealed },
 				baseSequence: session.sequence,
 			}));
 		}
@@ -439,6 +445,37 @@ export function useFeatureMatchSessionClient() {
 		baseSequence: session.sequence,
 	}));
 
+	// ── A Commander Session's own commands (ADR-0087) ──
+
+	/** Relative, as a life adjustment is: it merges onto whatever landed first. */
+	const adjustCommanderDamage = (
+		eventId: number,
+		slotId: number,
+		player: Seat,
+		from: Seat,
+		commander: CommanderNumber,
+		delta: number,
+	) => sendSlotCommand(eventId, slotId, () => ({
+		commandId: randomCommandId('AdjustCommanderDamage'),
+		type: 'AdjustCommanderDamage',
+		payload: { player, from, commander, delta },
+	}));
+
+	const setEliminated = (eventId: number, slotId: number, player: Seat, eliminated: boolean) => sendSlotCommand(eventId, slotId, session => ({
+		commandId: randomCommandId('SetEliminated'),
+		type: 'SetEliminated',
+		payload: { player, eliminated },
+		baseSequence: session.sequence,
+	}));
+
+	/** Declares a winning Seat or a draw (`{ winner: null }`); `null` takes the outcome back. */
+	const setOutcome = (eventId: number, slotId: number, outcome: FeatureMatchOutcome | null) => sendSlotCommand(eventId, slotId, session => ({
+		commandId: randomCommandId('SetOutcome'),
+		type: 'SetOutcome',
+		payload: { outcome },
+		baseSequence: session.sequence,
+	}));
+
 	const stepTurn = (eventId: number, slotId: number, delta: number) => sendSlotCommand(eventId, slotId, () => ({
 		commandId: randomCommandId('StepTurn'),
 		type: 'StepTurn',
@@ -469,6 +506,9 @@ export function useFeatureMatchSessionClient() {
 		startOvertime,
 		stepTurn,
 		stepOvertime,
+		adjustCommanderDamage,
+		setEliminated,
+		setOutcome,
 		ensureSession,
 	};
 }
