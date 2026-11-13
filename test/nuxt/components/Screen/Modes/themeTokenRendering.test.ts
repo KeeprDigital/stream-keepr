@@ -14,6 +14,7 @@ import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/s
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { text } from '~~/test/helpers/graphicsComposition';
@@ -897,7 +898,7 @@ async function mountMode(
 		},
 	});
 	// The display is an async component.
-	await vi.waitFor(() => expect(wrapper!.get('.screen-renderer').element.childElementCount).toBeGreaterThan(0));
+	await vi.waitFor(() => expect(wrapper!.get('.screen-renderer__display').element.childElementCount).toBeGreaterThan(0));
 	await flushPromises();
 	// A display holding an image back until it loads shows it.
 	for (const image of wrapper.findAll('img'))
@@ -1323,6 +1324,47 @@ describe('a library font in the Theme', () => {
 		await vi.waitFor(() => expect(wrapper!.get('.screen-renderer').attributes('data-font-ready')).toBe('true'));
 
 		expect(fonts.constructed.map(face => face.family)).toEqual(['stream-keepr-graphic-asset-asset-brand-face-revision-1']);
+	});
+
+	// Text never shows in a fallback face while its face loads; a face that fails shows it rather than a blank display.
+	it.each([
+		{ outcome: 'loads', settledAs: 'data-font-ready' },
+		{ outcome: 'fails', settledAs: 'data-font-error' },
+	])('hides a display on program in place, its background still on air, until the face $outcome', async ({ outcome, settledAs }) => {
+		const face = deferred();
+		fonts = stubFontFaces(() => face.promise);
+		const background = SAMPLES.backgroundLayers;
+		await mountMode('standings', { background });
+		const frame = () => wrapper!.get('.screen-renderer');
+		const visible = (element: Element) => getComputedStyle(element).visibility !== 'hidden';
+		const onAir = () => ({
+			frame: visible(frame().element),
+			background: visible(wrapper!.get('.background-layer-stack').element),
+			display: visible(wrapper!.get(title.selector).element),
+		});
+		await vi.waitFor(() => expect(frame().attributes('data-screen-mode-ready')).toBe('true'));
+
+		themeTokens.value = {
+			background,
+			heading: heading('revision-1'),
+		};
+		await vi.waitFor(() => expect(fonts.constructed).toHaveLength(1));
+		await flushPromises();
+		const whileLoading = onAir();
+
+		if (outcome === 'loads')
+			face.resolve();
+		else
+			face.reject(new Error('unavailable'));
+		await vi.waitFor(() => expect(frame().attributes(settledAs)).toBe('true'));
+
+		expect({
+			whileLoading,
+			settled: onAir(),
+		}).toEqual({
+			whileLoading: { frame: true, background: true, display: false },
+			settled: { frame: true, background: true, display: true },
+		});
 	});
 });
 
