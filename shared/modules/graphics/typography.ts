@@ -19,8 +19,6 @@ export const GRAPHIC_FONT_IDS = [
 	'saira-condensed',
 	'ibm-plex-sans',
 	'inter',
-	'inconsolata',
-	'mplantin',
 	'system-sans',
 	'system-serif',
 	'system-mono',
@@ -64,18 +62,6 @@ const GRAPHIC_FONTS: readonly GraphicFontDefinition[] = [
 		label: 'Inter',
 		cssFamily: 'var(--font-inter)',
 		category: 'body',
-	},
-	{
-		id: 'inconsolata',
-		label: 'Inconsolata',
-		cssFamily: 'var(--font-inconsolata)',
-		category: 'mono',
-	},
-	{
-		id: 'mplantin',
-		label: 'MPlantin',
-		cssFamily: 'var(--font-mplantin)',
-		category: 'serif',
 	},
 	{
 		id: 'system-sans',

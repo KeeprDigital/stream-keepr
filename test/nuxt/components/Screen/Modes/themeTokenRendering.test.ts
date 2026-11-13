@@ -271,7 +271,7 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 	'color': 'rgb(12, 34, 56)',
 	'dimension': 37,
 	'typography': {
-		font: { kind: 'application', fontId: 'mplantin' },
+		font: { kind: 'application', fontId: 'system-serif' },
 		weight: 300,
 		lineHeight: 1.7,
 		tracking: 0.2,
@@ -316,7 +316,7 @@ const SAMPLES: { [T in ThemeTokenType]: ThemeTokenValueTypes[T] } = {
 };
 
 /** The application fonts' faces, as `main.css` declares them, under names a test can read back. */
-const FONT_FACES = { '--font-mplantin': 'SampleSerif', '--font-saira-condensed': 'SampleDisplay' } as const;
+const FONT_FACES = { '--font-system-serif': 'SampleSerif', '--font-saira-condensed': 'SampleDisplay' } as const;
 
 // ── The Screen and its data ──
 

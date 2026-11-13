@@ -22,7 +22,7 @@ const TOKENS = resolveGraphicThemeTokens({
 	'accent': 'rgba(10, 20, 30, 0.5)',
 	'text-primary': 'rgb(1, 2, 3)',
 	'body': {
-		font: { kind: 'application', fontId: 'mplantin' },
+		font: { kind: 'application', fontId: 'system-serif' },
 		weight: 300,
 		lineHeight: 1.7,
 		tracking: 0.25,
@@ -131,7 +131,7 @@ describe('a bound Graphic Item property', () => {
 
 		expect(paintOne(item).typography).toEqual({
 			...item.typography,
-			font: { kind: 'application', fontId: 'mplantin' },
+			font: { kind: 'application', fontId: 'system-serif' },
 			fontWeight: 300,
 			lineHeight: 1.7,
 			// Tracking is in em; letter spacing is pixels at the item's own size.
