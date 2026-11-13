@@ -1,4 +1,4 @@
-import type { Game } from '~~/shared/types/enums';
+import type { Game, Variant } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,7 @@ const {
 	mockResetAllEventStores,
 } = vi.hoisted(() => ({
 	mockEventStore: {
-		event: null as { id: number; game?: Game; meleeEnabled?: boolean } | null,
+		event: null as { id: number; game?: Game; variant?: Variant | null; meleeEnabled?: boolean } | null,
 		loadEvent: vi.fn(),
 		$reset: vi.fn(),
 	},
@@ -186,13 +186,13 @@ describe('event.global middleware', () => {
 	// (ADR-0057): a direct visit to a page it does not use lands on its overview.
 	// Routes resolve through the real router, so each page's own declaration counts.
 	describe('pages the Event\'s Card Game does not use', () => {
-		const MTG_ONLY_PAGES = [
+		const TWO_PLAYER_MAGIC_ONLY_PAGES = [
 			'/event/1/matches',
 			'/event/1/rounds',
 			'/event/1/archetype-review',
 			'/event/1/config/integrations',
 		];
-		const EVERY_CARD_GAME_PAGES = [
+		const PAGES_OP_KEEPS = [
 			'/event/1',
 			'/event/1/players',
 			'/event/1/metagame',
@@ -209,7 +209,7 @@ describe('event.global middleware', () => {
 			return runMiddleware(useRouter().resolve(path) as any);
 		}
 
-		it.each(MTG_ONLY_PAGES)('sends an OP Event from %s to its overview', async (path) => {
+		it.each(TWO_PLAYER_MAGIC_ONLY_PAGES)('sends an OP Event from %s to its overview', async (path) => {
 			mockEventStore.event = { id: 1, game: 'op' };
 
 			await visit(path);
@@ -217,10 +217,19 @@ describe('event.global middleware', () => {
 			expect(mockNavigateTo).toHaveBeenCalledWith('/event/1');
 		});
 
+		// A Commander Event has no Players either (ADR-0086).
+		it('sends a Commander Event from its Players page to its overview', async () => {
+			mockEventStore.event = { id: 1, game: 'mtg', variant: 'commander' };
+
+			await visit('/event/1/players');
+
+			expect(mockNavigateTo).toHaveBeenCalledWith('/event/1');
+		});
+
 		// One Magic page reads the Event's Card Game; each page declares its own, so each OP page is a case.
 		it.each([
-			['mtg', MTG_ONLY_PAGES[0]!] as const,
-			...EVERY_CARD_GAME_PAGES.map(path => ['op', path] as const),
+			['mtg', TWO_PLAYER_MAGIC_ONLY_PAGES[0]!] as const,
+			...PAGES_OP_KEEPS.map(path => ['op', path] as const),
 		])('lets a %s Event stay on %s', async (game, path) => {
 			mockEventStore.event = { id: 1, game };
 

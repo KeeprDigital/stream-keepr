@@ -3,7 +3,7 @@ import type { Game, ScreenMode } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isOfferedToCardGame } from '~~/shared/config/games';
+import { eventKind, isOfferedToEvent } from '~~/shared/config/games';
 import { BACKGROUND_LAYERS_CAPABLE_MODES, SCREEN_MODES, THEME_PREVIEW_SCREEN_MODES } from '~~/shared/screenModes';
 import { settleUntil } from '~~/test/helpers/settle';
 import { loadDrawnImages } from '~~/test/nuxt/helpers/drawnImages';
@@ -81,7 +81,7 @@ const MODES = [
 ];
 
 const CASES = (['mtg', 'op'] as const).flatMap(game => MODES
-	.filter(mode => isOfferedToCardGame(SCREEN_MODES[mode].cardGames, game))
+	.filter(mode => isOfferedToEvent(SCREEN_MODES[mode].offeredTo, eventKind({ game })))
 	.map(mode => ({ game, mode })));
 
 describe('the Screen Mode Sample Dataset', () => {

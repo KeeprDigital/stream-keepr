@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Event, UpdateEventInput } from '~/types';
+import { eventKind, isOfferedToEvent, TWO_PLAYER_MAGIC_ONLY } from '~~/shared/config/games';
 import { fromFeatureMatchDefaults, toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { COUNT_UP_LIMIT_MINUTES_MAX, COUNT_UP_LIMIT_MINUTES_MIN } from '~~/shared/utils/clock';
 import { getPointsSystemLabel } from '~~/shared/utils/highlander';
@@ -10,6 +11,12 @@ const props = defineProps<{
 }>();
 
 const errors = ref<Record<string, string>>({});
+
+const kind = computed(() => eventKind(props.event));
+// A Commander Event plays single games, so it has no best-of and no extra turns (ADR-0086).
+const isCommander = computed(() => kind.value === 'mtg-commander');
+// The points system scores Deck Lists a Two-Player Magic: The Gathering Event syncs.
+const scoresDeckLists = computed(() => isOfferedToEvent(TWO_PLAYER_MAGIC_ONLY, kind.value));
 
 const initialData = computed(() => {
 	const defaults = toFeatureMatchDefaults(props.event);
@@ -64,7 +71,7 @@ const pointsSystemOptions = [
 ];
 
 const showPointsSystemNotice = computed(() =>
-	props.event.game === 'mtg'
+	scoresDeckLists.value
 	&& props.event.pointsSystem === '7ph'
 	&& !props.event.lastDecklistsSyncedAt,
 );
@@ -103,7 +110,7 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 		<UCard variant="subtle">
 			<div class="w-full flex flex-col gap-4">
 				<UFormField
-					v-if="event.game === 'mtg'"
+					v-if="scoresDeckLists"
 					name="pointsSystem"
 					label="Points System"
 					description="Apply a global points system to MTG decklists for this event."
@@ -127,6 +134,7 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 				</div>
 
 				<UFormField
+					v-if="!isCommander"
 					name="bestOf"
 					label="Best Of"
 					description="Number of games per match. New matches will use this default."
@@ -199,9 +207,10 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 						/>
 					</UFormField>
 
-					<USeparator />
+					<USeparator v-if="!isCommander" />
 
 					<UFormField
+						v-if="!isCommander"
 						name="extraTurnsEnabled"
 						label="Extra Turns"
 						description="Enable extra turns tracking when the clock expires."
@@ -211,7 +220,7 @@ function toUpdate(changes: Partial<typeof initialData.value>): UpdateEventInput 
 					</UFormField>
 
 					<UFormField
-						v-if="formData.extraTurnsEnabled"
+						v-if="!isCommander && formData.extraTurnsEnabled"
 						name="extraTurns"
 						label="Number of Extra Turns"
 						description="How many extra turns are allowed after the clock expires."

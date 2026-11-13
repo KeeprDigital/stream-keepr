@@ -1,9 +1,10 @@
+import type { EventKind } from './config/games';
 import type { ResolvedThemeTokens, StoredThemeTokens } from './modules/theme';
 import type { FoundationTokenName } from './modules/theme/vocabulary';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
-import type { DisplayType, Game, ScreenMode } from './types/enums';
+import type { DisplayType, ScreenMode } from './types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from './types/screenConfig';
-import { isOfferedToCardGame } from './config/games';
+import { isOfferedToEvent } from './config/games';
 import { pageRotationEdit } from './modules/page-rotation';
 import { FOUNDATION_TOKENS, resolveThemeTokens } from './modules/theme';
 import { SCREEN_MODES, screenModeSupportsBackgroundLayers, screenModeTokens } from './screenModes';
@@ -177,11 +178,11 @@ export function getDisplayResetForMode<M extends ScreenMode>(
 }
 
 /**
- * The Screen Modes a mode picker offers an Event of `game`: those declaring its
- * Card Game, or every Card Game while it is not yet known (`isOfferedToCardGame`).
+ * The Screen Modes a mode picker offers an Event of `kind`: those declaring it,
+ * or those every Event is offered while it is not yet known (`isOfferedToEvent`).
  */
-export function getScreenModeSelectOptions(game: Game | undefined): ScreenModeSelectOption[] {
-	return Object.entries(SCREEN_MODES).filter(([, definition]) => isOfferedToCardGame(definition.cardGames, game)).map(([mode, definition]) => ({
+export function getScreenModeSelectOptions(kind: EventKind | undefined): ScreenModeSelectOption[] {
+	return Object.entries(SCREEN_MODES).filter(([, definition]) => isOfferedToEvent(definition.offeredTo, kind)).map(([mode, definition]) => ({
 		label: definition.label,
 		value: mode as ScreenMode,
 		icon: definition.icon,

@@ -1,52 +1,52 @@
 <script setup lang="ts">
-import type { Game } from '~~/shared/types/enums';
+import type { EventKind } from '~~/shared/config/games';
 import type { NavigationMenuItem } from '#ui/types';
-import { EVENT_PAGE_CARD_GAMES, EVERY_CARD_GAME, offeredToCardGame } from '~~/shared/config/games';
+import { EVENT_PAGE_OFFERED_TO, EVERY_EVENT, itemsOfferedToEvent } from '~~/shared/config/games';
 
 const props = defineProps<{
 	eventId: number;
 }>();
 
-const eventStore = useEventStore();
+const kind = useEventKind();
 
-/** A settings tab, declaring the Card Games whose Events it is offered to (ADR-0057). */
+/** A settings tab, declaring the kinds of Event it is offered to (ADR-0057, ADR-0086). */
 interface ConfigTab extends NavigationMenuItem {
-	cardGames: readonly Game[];
+	offeredTo: readonly EventKind[];
 }
 
-const tabs = computed<NavigationMenuItem[]>(() => offeredToCardGame<ConfigTab>([
+const tabs = computed<NavigationMenuItem[]>(() => itemsOfferedToEvent<ConfigTab>([
 	{
 		label: 'Event',
 		icon: 'i-lucide-settings',
 		to: `/event/${props.eventId}/config`,
 		exact: true,
-		cardGames: EVERY_CARD_GAME,
+		offeredTo: EVERY_EVENT,
 	},
 	{
 		label: 'Event Structure',
 		icon: 'i-lucide-list-ordered',
 		to: `/event/${props.eventId}/rounds`,
-		cardGames: EVENT_PAGE_CARD_GAMES.eventStructure,
+		offeredTo: EVENT_PAGE_OFFERED_TO.eventStructure,
 	},
 	{
 		label: 'Feature Matches',
 		icon: 'i-lucide-toggle-left',
 		to: `/event/${props.eventId}/config/features`,
-		cardGames: EVERY_CARD_GAME,
+		offeredTo: EVERY_EVENT,
 	},
 	{
 		label: 'Broadcast',
 		icon: 'i-lucide-radio',
 		to: `/event/${props.eventId}/config/broadcast`,
-		cardGames: EVERY_CARD_GAME,
+		offeredTo: EVERY_EVENT,
 	},
 	{
 		label: 'Integrations',
 		icon: 'i-lucide-plug',
 		to: `/event/${props.eventId}/config/integrations`,
-		cardGames: EVENT_PAGE_CARD_GAMES.integrations,
+		offeredTo: EVENT_PAGE_OFFERED_TO.integrations,
 	},
-], eventStore.event?.game));
+], kind.value));
 </script>
 
 <template>

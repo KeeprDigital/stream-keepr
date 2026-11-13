@@ -1,4 +1,4 @@
-import { isOfferedToCardGame } from '~~/shared/config/games';
+import { eventKind, isOfferedToEvent } from '~~/shared/config/games';
 import { isScreenOutputPage } from '~/modules/auth/pageGate';
 import { resetAllEventStores } from '~/utils/eventStores';
 
@@ -39,9 +39,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
 			}
 		}
 
-		// A page this Event's Card Game does not use, such as Players on a One
-		// Piece Card Game Event (ADR-0057), gives way to the Event overview.
-		if (to.meta.cardGames && !isOfferedToCardGame(to.meta.cardGames, eventStore.event.game)) {
+		// A page this Event is not offered, such as Matches on a One Piece Card
+		// Game Event (ADR-0057) or Players on a Commander Event (ADR-0086), gives
+		// way to the Event overview.
+		if (to.meta.offeredTo && !isOfferedToEvent(to.meta.offeredTo, eventKind(eventStore.event))) {
 			return navigateTo(`/event/${eventId}`);
 		}
 	}

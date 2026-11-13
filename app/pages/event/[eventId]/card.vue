@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
+import { EVENT_PAGE_OFFERED_TO } from '~~/shared/config/games';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { LazyMtgCardHistory, LazyOpCardHistory } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { matchupIdOf } from '~/types/card/page';
 
 definePageMeta({
-	cardGames: EVENT_PAGE_CARD_GAMES.cards,
+	offeredTo: EVENT_PAGE_OFFERED_TO.cards,
 	title: 'Cards',
 	layout: false,
 });

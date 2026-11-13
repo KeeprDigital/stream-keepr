@@ -79,6 +79,24 @@ describe('creating an Event', () => {
 		expect(await db.select().from(schema.featureMatches).where(eq(schema.featureMatches.eventId, event!.id))).toHaveLength(2);
 	});
 
+	// A Commander Event keeps its Variant and starts as one untimed game at 40 life (ADR-0086).
+	it('stores a Commander Event with its Variant and a Commander Event\'s Match Format', async () => {
+		const answer = await createEvent(stubH3Event({
+			body: { name: 'Commander Night', game: 'mtg', variant: 'commander' },
+		}));
+
+		const [event] = await eventsNamed('Commander Night');
+		expect(answer).toMatchObject({ id: event!.id, variant: 'commander' });
+		expect(await db.query.events.findFirst({
+			where: eq(schema.events.id, event!.id),
+		})).toMatchObject({
+			variant: 'commander',
+			featureMatchDefaultStartingLife: 40,
+			featureMatchDefaultClockType: 'untimed',
+			featureMatchDefaultBestOf: 1,
+		});
+	});
+
 	it('removes the Event it stored when its Feature Match Slots cannot be created, surfacing that failure', async () => {
 		await refuse('slot_insert_refused');
 

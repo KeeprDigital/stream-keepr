@@ -3,6 +3,8 @@
  * app-side types should import from here. */
 
 export const GAME_VALUES = ['mtg', 'op'] as const;
+/** How a Magic: The Gathering Event's games are played (ADR-0086). */
+export const VARIANT_VALUES = ['two-player', 'commander'] as const;
 export const POINTS_SYSTEM_VALUES = ['7ph'] as const;
 export const DECK_COMPANION_SOURCE_VALUES = ['manual', 'melee'] as const;
 export const FEATURE_MATCH_ORIENTATION_VALUES = ['horizontal', 'vertical'] as const;
@@ -147,6 +149,7 @@ export const ROUND_CONTROL_MODE_VALUES = ['default', 'manual_override'] as const
 export const MELEE_LIVE_RESULTS_STOP_REASON_VALUES = ['idle', 'auth'] as const;
 
 export type Game = typeof GAME_VALUES[number];
+export type Variant = typeof VARIANT_VALUES[number];
 export type PointsSystem = typeof POINTS_SYSTEM_VALUES[number];
 export type DeckCompanionSource = typeof DECK_COMPANION_SOURCE_VALUES[number];
 export type ClockType = typeof CLOCK_TYPE_VALUES[number];

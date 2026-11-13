@@ -1,7 +1,7 @@
-import type { Game, ScreenMode } from '../types/enums';
+import type { Game, ScreenMode, Variant } from '../types/enums';
 import type { FeatureMatchDefaults } from '../types/featureMatchDefaults';
 import type { CounterTypeConfig, FeatureMatchStateTracking, GameConfig, MetagameRules } from '../types/game';
-import { GAME_VALUES, METAGAME_SCOPE_VALUES } from '../types/enums';
+import { METAGAME_SCOPE_VALUES } from '../types/enums';
 import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '../types/featureMatchDefaults';
 
 export type { CounterTypeConfig, FeatureMatchStateTracking, Game, GameConfig, MetagameRules };
@@ -79,83 +79,142 @@ export const GAME_CONFIGS: Record<Game, GameConfig> = {
 	},
 };
 
-/** Every Card Game: what something offered to any Event declares. */
-export const EVERY_CARD_GAME: readonly Game[] = GAME_VALUES;
-
 /**
- * Magic: The Gathering only: what something for Rounds, Matches, results or
- * Melee Sync declares, as a One Piece Card Game Event models none of them
- * (ADR-0057).
+ * The kinds of Event something is offered to: an Event's Card Game, with Magic:
+ * The Gathering split by its Variant, as a Commander Event holds no Players,
+ * Rounds or Matches (ADR-0086). A key for declarations and config only: the
+ * domain's own terms are Card Game and Variant. No kind shares a Card Game's
+ * key, so a Card Game cannot be passed where the Variant must be read too.
  */
-export const MTG_ONLY: readonly Game[] = ['mtg'];
+export const EVENT_KIND_VALUES = ['mtg-two-player', 'mtg-commander', 'op'] as const;
+export type EventKind = typeof EVENT_KIND_VALUES[number];
 
-/**
- * The Card Games each Event page is offered to, read by its page guard, the
- * Event nav and the settings tabs alike. A One Piece Card Game Event has
- * Players, and a Sync page that runs its TCG+ Import (ADR-0074), but no
- * Rounds, Matches or Melee Sync (ADR-0057).
- */
-export const EVENT_PAGE_CARD_GAMES = {
-	players: EVERY_CARD_GAME,
-	matches: MTG_ONLY,
-	eventStructure: MTG_ONLY,
-	sync: EVERY_CARD_GAME,
-	metagame: EVERY_CARD_GAME,
-	archetypeReview: MTG_ONLY,
-	cards: EVERY_CARD_GAME,
-	integrations: MTG_ONLY,
-} as const satisfies Record<string, readonly Game[]>;
+/** The Card Game an Event of each kind is played in. */
+const EVENT_KIND_CARD_GAME: Record<EventKind, Game> = {
+	'mtg-two-player': 'mtg',
+	'mtg-commander': 'mtg',
+	'op': 'op',
+};
 
-/**
- * The Card Games each Screen Mode is offered to, read by its Screen Mode
- * Definition. A One Piece Card Game Event's Metagame reads participation only
- * (ADR-0074), so the modes needing results or standings stay Magic's. Top
- * Cut Bracket is offered to both, since its Manual Bracket needs neither
- * (ADR-0075).
- */
-export const SCREEN_MODE_CARD_GAMES = {
-	'background': EVERY_CARD_GAME,
-	'card': EVERY_CARD_GAME,
-	'deck': EVERY_CARD_GAME,
-	'standings': MTG_ONLY,
-	'top-cut': EVERY_CARD_GAME,
-	'feature-match': EVERY_CARD_GAME,
-	'feature-match-overlay': EVERY_CARD_GAME,
-	'broadcast-graphics': EVERY_CARD_GAME,
-	'metagame': EVERY_CARD_GAME,
-	'top-cards': EVERY_CARD_GAME,
-	'player-history': MTG_ONLY,
-	'pairings': MTG_ONLY,
-	'archetype-spotlight': EVERY_CARD_GAME,
-	'head-to-head': MTG_ONLY,
-	'round-clock': MTG_ONLY,
-	'talent': EVERY_CARD_GAME,
-} as const satisfies Record<ScreenMode, readonly Game[]>;
-
-/**
- * Whether something declaring `cardGames` is offered to an Event of `game`.
- * Before the Event's Card Game is known, only what every Card Game supports is.
- */
-export function isOfferedToCardGame(cardGames: readonly Game[], game: Game | undefined): boolean {
-	return game === undefined
-		? EVERY_CARD_GAME.every(cardGame => cardGames.includes(cardGame))
-		: cardGames.includes(game);
+/** Whether a Card Game's Events have a Variant: Magic: The Gathering's alone (ADR-0086). */
+export function cardGameHasVariant(game: Game): boolean {
+	return game === 'mtg';
 }
 
-/** The items offered to an Event of `game` (`isOfferedToCardGame`), their declarations dropped. */
-export function offeredToCardGame<T extends { cardGames: readonly Game[] }>(items: readonly T[], game: Game | undefined): Omit<T, 'cardGames'>[] {
+/** The kind of Event its Card Game and Variant make it; a Magic: The Gathering Event is Two-Player unless it says Commander. */
+export function eventKind(event: { game: Game; variant?: Variant | null }): EventKind {
+	if (!cardGameHasVariant(event.game))
+		return event.game as Exclude<Game, 'mtg'>;
+	return event.variant === 'commander'
+		? 'mtg-commander'
+		: 'mtg-two-player';
+}
+
+/** Every Event: what needs neither Players nor results declares. */
+export const EVERY_EVENT: readonly EventKind[] = EVENT_KIND_VALUES;
+
+/**
+ * Events that hold Players: every one but a Commander Event, which is produced
+ * from its Feature Match Slots alone (ADR-0086).
+ */
+export const EVENTS_WITH_PLAYERS: readonly EventKind[] = ['mtg-two-player', 'op'];
+
+/**
+ * Two-Player Magic: The Gathering only: what something for Rounds, Matches,
+ * results or Melee Sync declares, as neither a One Piece Card Game Event
+ * (ADR-0057) nor a Commander Event (ADR-0086) models any of them.
+ */
+export const TWO_PLAYER_MAGIC_ONLY: readonly EventKind[] = ['mtg-two-player'];
+
+/**
+ * The Events each Event page is offered to, read by its page guard, the Event
+ * nav and the settings tabs alike. A One Piece Card Game Event has Players,
+ * and a Sync page that runs its TCG+ Import (ADR-0074), but no Rounds, Matches
+ * or Melee Sync (ADR-0057). A Commander Event has no Players either, and keeps
+ * the Cards page alone (ADR-0086).
+ */
+export const EVENT_PAGE_OFFERED_TO = {
+	players: EVENTS_WITH_PLAYERS,
+	matches: TWO_PLAYER_MAGIC_ONLY,
+	eventStructure: TWO_PLAYER_MAGIC_ONLY,
+	sync: EVENTS_WITH_PLAYERS,
+	metagame: EVENTS_WITH_PLAYERS,
+	archetypeReview: TWO_PLAYER_MAGIC_ONLY,
+	cards: EVERY_EVENT,
+	integrations: TWO_PLAYER_MAGIC_ONLY,
+} as const satisfies Record<string, readonly EventKind[]>;
+
+/**
+ * The Events each Screen Mode is offered to, read by its Screen Mode
+ * Definition. A One Piece Card Game Event's Metagame reads participation only
+ * (ADR-0074), so the modes needing results or standings stay Two-Player
+ * Magic's. Top Cut Bracket is offered to both, since its Manual Bracket needs
+ * neither (ADR-0075). A Commander Event is offered only the modes that need
+ * no Players (ADR-0086).
+ */
+export const SCREEN_MODE_OFFERED_TO = {
+	'background': EVERY_EVENT,
+	'card': EVERY_EVENT,
+	'deck': EVERY_EVENT,
+	'standings': TWO_PLAYER_MAGIC_ONLY,
+	'top-cut': EVENTS_WITH_PLAYERS,
+	'feature-match': EVERY_EVENT,
+	'feature-match-overlay': EVERY_EVENT,
+	'broadcast-graphics': EVERY_EVENT,
+	'metagame': EVENTS_WITH_PLAYERS,
+	'top-cards': EVENTS_WITH_PLAYERS,
+	'player-history': TWO_PLAYER_MAGIC_ONLY,
+	'pairings': TWO_PLAYER_MAGIC_ONLY,
+	'archetype-spotlight': EVENTS_WITH_PLAYERS,
+	'head-to-head': TWO_PLAYER_MAGIC_ONLY,
+	'round-clock': TWO_PLAYER_MAGIC_ONLY,
+	'talent': EVERY_EVENT,
+} as const satisfies Record<ScreenMode, readonly EventKind[]>;
+
+/**
+ * Whether something declaring `offeredTo` is offered to an Event of `kind`.
+ * Before the Event is known, only what every Event is offered is.
+ */
+export function isOfferedToEvent(offeredTo: readonly EventKind[], kind: EventKind | undefined): boolean {
+	return kind === undefined
+		? EVERY_EVENT.every(every => offeredTo.includes(every))
+		: offeredTo.includes(kind);
+}
+
+/** The items offered to an Event of `kind` (`isOfferedToEvent`), their declarations dropped. */
+export function itemsOfferedToEvent<T extends { offeredTo: readonly EventKind[] }>(items: readonly T[], kind: EventKind | undefined): Omit<T, 'offeredTo'>[] {
 	return items
-		.filter(item => isOfferedToCardGame(item.cardGames, game))
-		.map(({ cardGames: _cardGames, ...item }) => item);
+		.filter(item => isOfferedToEvent(item.offeredTo, kind))
+		.map(({ offeredTo: _offeredTo, ...item }) => item);
+}
+
+/** Whether an Event may hold Broadcast Deck Lists: a Two-Player Magic: The Gathering Event only (ADR-0086). */
+export function holdsBroadcastDeckLists(event: { game: Game; variant?: Variant | null }): boolean {
+	return isOfferedToEvent(TWO_PLAYER_MAGIC_ONLY, eventKind(event));
 }
 
 export function getGameConfig(game: Game): GameConfig {
 	return GAME_CONFIGS[game];
 }
 
-export function getGameDefaults(game: Game): FeatureMatchDefaults {
+/**
+ * A Commander Event's Match Format defaults: one game at 40 life, untimed, with
+ * no extra turns (ADR-0086). Everything else is Magic: The Gathering's.
+ */
+const COMMANDER_EVENT_DEFAULTS: FeatureMatchDefaults = {
+	...GAME_CONFIGS.mtg.defaults,
+	bestOf: 1,
+	startingLife: 40,
+	clockType: 'untimed',
+	extraTurnsEnabled: false,
+};
+
+/** The Match Format a new Event of `kind` starts with: its Card Game's, or a Commander Event's own. */
+export function getMatchFormatDefaults(kind: EventKind): FeatureMatchDefaults {
 	return {
-		...(GAME_CONFIGS[game]?.defaults ?? DEFAULT_FEATURE_MATCH_DEFAULTS),
+		...(kind === 'mtg-commander'
+			? COMMANDER_EVENT_DEFAULTS
+			: GAME_CONFIGS[EVENT_KIND_CARD_GAME[kind]]?.defaults ?? DEFAULT_FEATURE_MATCH_DEFAULTS),
 	};
 }
 

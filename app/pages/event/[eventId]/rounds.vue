@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { Phase, Round } from '~/types';
-import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
+import { EVENT_PAGE_OFFERED_TO } from '~~/shared/config/games';
 import { LazyRoundEditModal, LazyRoundPhaseEditModal, LazyUIConfirmActionModal } from '#components';
 
 definePageMeta({
-	cardGames: EVENT_PAGE_CARD_GAMES.eventStructure,
+	offeredTo: EVENT_PAGE_OFFERED_TO.eventStructure,
 	title: 'Event Structure',
 	layout: false,
 });

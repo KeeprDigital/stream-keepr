@@ -54,10 +54,11 @@ afterAll(async () => await harness.close());
 const requestEvent = {} as H3Event;
 const mtgEvent = { Name: 'Melee Championship', Game: 'Magic: The Gathering', Phases: [] };
 
-async function createEvent(game: 'mtg' | 'op' = 'mtg') {
+async function createEvent(game: 'mtg' | 'op' = 'mtg', variant: 'two-player' | 'commander' | null = null) {
 	const [event] = await db.insert(schema.events).values({
 		name: 'Melee Championship',
 		game,
+		variant,
 		featureMatchOrientation: 'horizontal',
 		meleeEnabled: true,
 		meleeEventId: 'melee-1',
@@ -520,6 +521,22 @@ describe('a One Piece Card Game Event', () => {
 		expect(melee.fetchEvent).not.toHaveBeenCalled();
 		expect(await readEvent(eventId)).toEqual(before);
 		expect(publishMessage).not.toHaveBeenCalled();
+	});
+});
+
+// A Commander Event is produced from its Feature Match Slots alone (ADR-0086).
+describe('melee Sync on a Commander Event', () => {
+	it('refuses a sync, touching nothing', async () => {
+		const eventId = await createEvent('mtg', 'commander');
+		const before = await readEvent(eventId);
+
+		await expect(meleeSyncModule().syncPlayers(requestEvent, eventId)).rejects.toMatchObject({
+			statusCode: 422,
+			data: { code: 'MELEE_SYNC_CARD_GAME_UNSUPPORTED' },
+		});
+
+		expect(melee.fetchEvent).not.toHaveBeenCalled();
+		expect(await readEvent(eventId)).toEqual(before);
 	});
 });
 

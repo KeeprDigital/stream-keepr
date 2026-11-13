@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { Game } from '~~/shared/types/enums';
+import type { EventKind } from '~~/shared/config/games';
 import type { NavigationMenuItem } from '#ui/types';
-import { EVENT_PAGE_CARD_GAMES, EVERY_CARD_GAME, offeredToCardGame } from '~~/shared/config/games';
+import { EVENT_PAGE_OFFERED_TO, EVERY_EVENT, itemsOfferedToEvent } from '~~/shared/config/games';
 import { isLocalDeveloperUserId } from '~~/shared/utils/localDeveloperAuth';
 import { LOGIN_PATH } from '~/modules/auth/pageGate';
 import { useAuthSession } from '~/modules/auth/session';
@@ -33,6 +33,7 @@ const meleeConfigured = computed(() => eventStore.event?.meleeConfigured ?? fals
 // An MTG Event's Players come from Melee; an OP Event's come from a TCG+ Import (ADR-0074).
 const playersImported = computed(() => eventStore.event?.game === 'op' || meleeEnabled.value);
 const cardGame = computed(() => eventStore.event?.game);
+const kind = useEventKind();
 
 // The Event header and the Screen navigation, on every page this layout frames.
 useConsumedEventData(['event', 'screens']);
@@ -118,18 +119,19 @@ interface NavGroup {
 }
 
 /**
- * An Event page's nav entry, declaring the Card Games whose Events it is
- * offered to: a page for Players, Rounds, Matches, results or the Metagame is
- * Magic: The Gathering only (ADR-0057). Each child declares its own.
+ * An Event page's nav entry, declaring the kinds of Event it is offered to: a
+ * page for Rounds, Matches or results is Two-Player Magic: The Gathering only
+ * (ADR-0057), and a Commander Event has no Players page either (ADR-0086).
+ * Each child declares its own.
  */
 interface EventNavItem extends Omit<NavigationMenuItem, 'children'> {
-	cardGames: readonly Game[];
+	offeredTo: readonly EventKind[];
 	children?: EventNavItem[];
 }
 
-/** The entries, and children, offered to the current Event: those declaring its Card Game. */
+/** The entries, and children, offered to the current Event: those declaring its kind. */
 function offeredToEvent(items: EventNavItem[]): NavigationMenuItem[] {
-	return offeredToCardGame(items, cardGame.value)
+	return itemsOfferedToEvent(items, kind.value)
 		.map(({ children, ...item }) => children
 			? {
 					...item,
@@ -191,19 +193,19 @@ const navGroups = computed<NavGroup[]>(() => {
 					label: 'Controls',
 					icon: 'i-lucide-sliders-horizontal',
 					to: `/event/${id}`,
-					cardGames: EVERY_CARD_GAME,
+					offeredTo: EVERY_EVENT,
 				},
 				{
 					label: 'Players',
 					icon: 'i-lucide-users',
 					to: `/event/${id}/players`,
-					cardGames: EVENT_PAGE_CARD_GAMES.players,
+					offeredTo: EVENT_PAGE_OFFERED_TO.players,
 				},
 				{
 					label: 'Matches',
 					icon: 'i-lucide-swords',
 					to: `/event/${id}/matches`,
-					cardGames: EVENT_PAGE_CARD_GAMES.matches,
+					offeredTo: EVENT_PAGE_OFFERED_TO.matches,
 				},
 				...(playersImported.value
 					? [
@@ -211,7 +213,7 @@ const navGroups = computed<NavGroup[]>(() => {
 								label: 'Metagame',
 								icon: 'i-lucide-pie-chart',
 								to: `/event/${id}/metagame`,
-								cardGames: EVENT_PAGE_CARD_GAMES.metagame,
+								offeredTo: EVENT_PAGE_OFFERED_TO.metagame,
 							},
 						]
 					: []),
@@ -221,7 +223,7 @@ const navGroups = computed<NavGroup[]>(() => {
 								label: 'Archetype Review',
 								icon: 'i-lucide-tags',
 								to: `/event/${id}/archetype-review`,
-								cardGames: EVENT_PAGE_CARD_GAMES.archetypeReview,
+								offeredTo: EVENT_PAGE_OFFERED_TO.archetypeReview,
 							},
 						]
 					: []),
@@ -232,7 +234,7 @@ const navGroups = computed<NavGroup[]>(() => {
 								label: 'Sync',
 								icon: 'i-lucide-refresh-cw',
 								to: `/event/${id}/sync`,
-								cardGames: EVENT_PAGE_CARD_GAMES.sync,
+								offeredTo: EVENT_PAGE_OFFERED_TO.sync,
 							},
 						]
 					: []),
@@ -245,25 +247,25 @@ const navGroups = computed<NavGroup[]>(() => {
 					label: 'Feature Matches',
 					icon: 'i-lucide-trophy',
 					to: `/event/${id}/feature-matches`,
-					cardGames: EVERY_CARD_GAME,
+					offeredTo: EVERY_EVENT,
 				},
 				{
 					label: 'Cards',
 					icon: 'i-lucide-book-image',
 					to: `/event/${id}/card`,
-					cardGames: EVENT_PAGE_CARD_GAMES.cards,
+					offeredTo: EVENT_PAGE_OFFERED_TO.cards,
 				},
 				{
 					label: 'Screens',
 					icon: 'i-lucide-monitor',
 					to: `/event/${id}/screens`,
-					cardGames: EVERY_CARD_GAME,
+					offeredTo: EVERY_EVENT,
 					...(screenStore.screens.length > 0 && {
 						defaultOpen: true,
 						children: screenStore.screens.map(screen => ({
 							label: screen.name,
 							to: `/event/${id}/screens/${screen.id}`,
-							cardGames: EVERY_CARD_GAME,
+							offeredTo: EVERY_EVENT,
 						})),
 					}),
 				},
@@ -276,18 +278,18 @@ const navGroups = computed<NavGroup[]>(() => {
 					label: 'Settings',
 					icon: 'i-lucide-settings',
 					defaultOpen: true,
-					cardGames: EVERY_CARD_GAME,
+					offeredTo: EVERY_EVENT,
 					children: [
 						{
 							label: 'Event',
 							to: `/event/${id}/config`,
 							exact: true,
-							cardGames: EVERY_CARD_GAME,
+							offeredTo: EVERY_EVENT,
 						},
-						{ label: 'Event Structure', to: `/event/${id}/rounds`, cardGames: EVENT_PAGE_CARD_GAMES.eventStructure },
-						{ label: 'Feature Matches', to: `/event/${id}/config/features`, cardGames: EVERY_CARD_GAME },
-						{ label: 'Broadcast', to: `/event/${id}/config/broadcast`, cardGames: EVERY_CARD_GAME },
-						{ label: 'Integrations', to: `/event/${id}/config/integrations`, cardGames: EVENT_PAGE_CARD_GAMES.integrations },
+						{ label: 'Event Structure', to: `/event/${id}/rounds`, offeredTo: EVENT_PAGE_OFFERED_TO.eventStructure },
+						{ label: 'Feature Matches', to: `/event/${id}/config/features`, offeredTo: EVERY_EVENT },
+						{ label: 'Broadcast', to: `/event/${id}/config/broadcast`, offeredTo: EVERY_EVENT },
+						{ label: 'Integrations', to: `/event/${id}/config/integrations`, offeredTo: EVENT_PAGE_OFFERED_TO.integrations },
 					],
 				},
 			]),

@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui';
 import type { Player } from '~/types';
-import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
+import { EVENT_PAGE_OFFERED_TO } from '~~/shared/config/games';
 import { playerLabel } from '~~/shared/utils/playerName';
 import { LazyPlayerCreateModal, LazyPlayerListCreateModal, LazyPlayerListEditModal, LazyPlayerOpDeckListModal, LazyUIConfirmDeleteModal } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
-	cardGames: EVENT_PAGE_CARD_GAMES.players,
+	offeredTo: EVENT_PAGE_OFFERED_TO.players,
 	title: 'Player List',
 	layout: false,
 });

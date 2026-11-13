@@ -1,4 +1,4 @@
-import type { Game } from '~~/shared/types/enums';
+import type { Game, Variant } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -7,13 +7,13 @@ import { nuxtUiStubs, UNavigationMenuStub } from '~~/test/nuxt/helpers/nuxtUiStu
 import ConfigTabs from '~/components/Event/ConfigTabs.vue';
 
 const mockEventStore = reactive({
-	event: { id: 7, game: 'mtg' as Game },
+	event: { id: 7, game: 'mtg' as Game, variant: null as Variant | null },
 });
 
 mockNuxtImport('useEventStore', () => () => mockEventStore);
 
-function tabLabels(game: Game) {
-	mockEventStore.event.game = game;
+function tabLabels(game: Game, variant: Variant | null) {
+	Object.assign(mockEventStore.event, { game, variant });
 	const wrapper = mount(ConfigTabs, {
 		props: { eventId: 7 },
 		global: {
@@ -24,11 +24,12 @@ function tabLabels(game: Game) {
 }
 
 describe('event config tabs', () => {
-	// An OP Event models no Rounds and never runs Melee Sync (ADR-0057), so Event
-	// Structure and Integrations are not offered.
+	// Neither an OP Event (ADR-0057) nor a Commander Event (ADR-0086) models Rounds
+	// or runs Melee Sync, so Event Structure and Integrations are not offered.
 	it.each([
 		[
 			'mtg',
+			'two-player',
 			[
 				'Event',
 				'Event Structure',
@@ -39,13 +40,23 @@ describe('event config tabs', () => {
 		],
 		[
 			'op',
+			null,
 			[
 				'Event',
 				'Feature Matches',
 				'Broadcast',
 			],
 		],
-	] as const)('on a %s Event, offers %j', (game, tabs) => {
-		expect(tabLabels(game)).toEqual(tabs);
+		[
+			'mtg',
+			'commander',
+			[
+				'Event',
+				'Feature Matches',
+				'Broadcast',
+			],
+		],
+	] as const)('on a %s Event of Variant %s, offers %j', (game, variant, tabs) => {
+		expect(tabLabels(game, variant)).toEqual(tabs);
 	});
 });

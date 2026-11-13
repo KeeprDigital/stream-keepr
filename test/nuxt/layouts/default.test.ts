@@ -198,7 +198,7 @@ describe('default layout sync navigation', () => {
 
 	// An OP Event models no Rounds or Matches and never runs Melee Sync
 	// (ADR-0057), so the pages for them are not offered.
-	const MTG_ONLY_ENTRIES = [
+	const TWO_PLAYER_MAGIC_ONLY_ENTRIES = [
 		'Matches',
 		'Archetype Review',
 		'Event Structure',
@@ -206,8 +206,8 @@ describe('default layout sync navigation', () => {
 	];
 
 	it.each([
-		['mtg', MTG_ONLY_ENTRIES, []],
-		['op', [], MTG_ONLY_ENTRIES],
+		['mtg', TWO_PLAYER_MAGIC_ONLY_ENTRIES, []],
+		['op', [], TWO_PLAYER_MAGIC_ONLY_ENTRIES],
 	] as const)('on a %s Event, offers %j and omits %j', async (game, offered, omitted) => {
 		mockEventStore.event.game = game;
 
@@ -227,6 +227,17 @@ describe('default layout sync navigation', () => {
 		]));
 		for (const label of omitted)
 			expect(items).not.toContain(label);
+	});
+
+	// A Commander Event has no Players (ADR-0086); which pages it is offered is the offering table's.
+	it('on a Commander Event, omits Players and keeps Cards', async () => {
+		Object.assign(mockEventStore.event, { game: 'mtg', variant: 'commander' });
+
+		const wrapper = await mountLayout();
+		const items = wrapper.findAll('[data-nav-item]').map(item => item.attributes('data-nav-item'));
+
+		expect(items).toContain('Cards');
+		expect(items).not.toContain('Players');
 	});
 
 	// An MTG Event's Players come from Melee, an OP Event's from a TCG+ Import (ADR-0074).
