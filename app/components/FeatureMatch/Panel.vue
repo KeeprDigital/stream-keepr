@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import type { Seat } from '~~/shared/types/enums';
 import type { FeatureMatchData, FeatureMatchFormData, PlayerData, PlayerDisplayConfig, UpdateFeatureMatchInput } from '~/types';
+import { SEAT_VALUES } from '~~/shared/types/enums';
+import { SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 import { playerDisplayName } from '~~/shared/utils/playerName';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { DEFAULT_PLAYER_DATA, toPlayerData } from '~/types';
@@ -28,6 +31,9 @@ const tokensModalOpen = ref(false);
 
 const isVerticalArena = computed(() => eventStore.event?.featureMatchOrientation === 'vertical');
 const game = computed(() => (eventStore.event?.game ?? 'mtg'));
+const eventKind = useEventKind();
+/** A Commander Event's Slot has four Seats, each typed and holding Commanders (ADR-0086). */
+const isCommander = computed(() => eventKind.value === 'mtg-commander');
 
 // Computed match state for this match
 const matchState = computed(() => {
@@ -88,15 +94,24 @@ onMounted(async () => {
 
 // ──────────────── Form State ────────────────
 
-function normalizeMatchData(match: FeatureMatchData): FeatureMatchFormData {
+function seatFormData(data: FeatureMatchData['player1Data'] | undefined): PlayerData {
+	return data
+		? toPlayerData(data)
+		: { ...DEFAULT_PLAYER_DATA };
+}
+
+function normalizeMatchData({ player3Data, player4Data, ...match }: FeatureMatchData): FeatureMatchFormData {
 	return {
 		...match,
-		player1Data: match.player1Data
-			? toPlayerData(match.player1Data)
-			: { ...DEFAULT_PLAYER_DATA },
-		player2Data: match.player2Data
-			? toPlayerData(match.player2Data)
-			: { ...DEFAULT_PLAYER_DATA },
+		player1Data: seatFormData(match.player1Data),
+		player2Data: seatFormData(match.player2Data),
+		// Seats 3 and 4 are in a Commander Slot's form alone: no other save names them (ADR-0086).
+		...(isCommander.value
+			? {
+					player3Data: seatFormData(player3Data),
+					player4Data: seatFormData(player4Data),
+				}
+			: {}),
 	};
 }
 
@@ -166,8 +181,29 @@ const player2Data = shownSideData('player2');
 const player1Id = shownSidePlayerId('player1');
 const player2Id = shownSidePlayerId('player2');
 
-const player1FormId = computed(() => `feature-match-${props.match.id}-player-1-form`);
-const player2FormId = computed(() => `feature-match-${props.match.id}-player-2-form`);
+const seatNumber = (seat: Seat) => SEAT_VALUES.indexOf(seat) + 1;
+const seatFormId = (seat: Seat) => `feature-match-${props.match.id}-player-${seatNumber(seat)}-form`;
+const player1FormId = computed(() => seatFormId('player1'));
+const player2FormId = computed(() => seatFormId('player2'));
+
+// ──────────────── Commander Seats ────────────────
+
+/**
+ * Where each Seat of a Commander Slot sits at the table (ADR-0086): Seats run
+ * clockwise, so 1 and 2 are on top and 4 and 3 below. The forms stay in Seat
+ * order, which is the order the turn passes in.
+ */
+const SEAT_TABLE_POSITION = {
+	player1: 'top-left',
+	player2: 'top-right',
+	player3: 'bottom-right',
+	player4: 'bottom-left',
+} as const satisfies Record<Seat, string>;
+/** The Seats whose forms the panel shows. */
+const shownSeats = computed<readonly Seat[]>(() => isCommander.value
+	? SEAT_VALUES
+	: ['player1', 'player2']);
+const seatLabel = (seat: Seat) => `Seat ${seatNumber(seat)}`;
 
 // ──────────────── Composables ────────────────
 
@@ -215,12 +251,23 @@ const {
 const {
 	meleeModalOpen,
 	swapPlayers,
+	swapSeats,
 	clearMatch,
 	populateFromMelee,
 } = useFeatureMatchSetupActions({
 	formData,
 	getDeckForCurrentPhase,
 });
+
+/** Swap Seats, offered from each Seat: every other Seat it can change places with. */
+function swapSeatItems(seat: Seat) {
+	return SEAT_VALUES
+		.filter(other => other !== seat)
+		.map(other => ({
+			label: `With ${seatLabel(other)}`,
+			onSelect: () => { void swapSeats(seat, other); },
+		}));
+}
 
 // ──────────────── Sideboard Reveal ────────────────
 
@@ -401,7 +448,8 @@ async function save() {
 		<div v-show="panelView === 'setup'" class="setup-content">
 			<!-- Toolbar: Display Mode + Utility Actions -->
 			<div class="setup-toolbar">
-				<UFieldGroup>
+				<!-- A Commander Seat has no record to show as a score or a position. -->
+				<UFieldGroup v-if="!isCommander">
 					<UButton
 						label="Score"
 						icon="i-lucide-trophy"
@@ -420,6 +468,7 @@ async function save() {
 
 				<div class="setup-toolbar-actions">
 					<UButton
+						v-if="!isCommander"
 						label="Swap Players"
 						icon="i-lucide-arrow-left-right"
 						color="neutral"
@@ -464,8 +513,48 @@ async function save() {
 				</UFormField>
 			</div>
 
+			<!-- Commander Seats, where they sit at the table -->
+			<div v-if="isCommander" class="seat-table">
+				<section
+					v-for="seat in SEAT_VALUES"
+					:key="seat"
+					class="player-form-column"
+					:data-seat="seat"
+					:data-table-position="SEAT_TABLE_POSITION[seat]"
+				>
+					<div class="seat-heading">
+						<h3 class="text-sm font-medium text-muted">
+							{{ seatLabel(seat) }}
+						</h3>
+						<UDropdownMenu :items="swapSeatItems(seat)" :content="{ align: 'end' }">
+							<UButton
+								label="Swap"
+								icon="i-lucide-arrow-left-right"
+								color="neutral"
+								variant="ghost"
+								size="xs"
+								:disabled="isDirty"
+								:title="isDirty ? 'Save or reset your changes first' : undefined"
+								:aria-label="`Swap ${seatLabel(seat)} with another Seat`"
+							/>
+						</UDropdownMenu>
+					</div>
+					<FeatureMatchSetupPlayerForm
+						:model-value="formData[SLOT_SEAT_DATA_KEY[seat]]!"
+						:display-mode="matchDisplayMode"
+						:game="game"
+						commanders
+						:pronouns-enabled="pronounsEnabled"
+						:lgs-enabled="lgsEnabled"
+						:form-id="seatFormId(seat)"
+						@update:model-value="formData[SLOT_SEAT_DATA_KEY[seat]] = $event"
+						@submit="save"
+					/>
+				</section>
+			</div>
+
 			<!-- Player Forms -->
-			<div class="player-forms player-forms--horizontal">
+			<div v-else class="player-forms player-forms--horizontal">
 				<div class="player-form-column">
 					<h3 class="player-form-heading text-sm font-medium text-muted">
 						{{ isVerticalArena ? 'Top' : 'Left' }}
@@ -551,24 +640,16 @@ async function save() {
 					@click="save"
 				/>
 				<button
+					v-for="seat in shownSeats"
+					:key="seat"
 					type="submit"
-					:form="player1FormId"
+					:form="seatFormId(seat)"
 					class="sr-only"
 					tabindex="-1"
 					aria-hidden="true"
 					:disabled="!isDirty || saving"
 				>
-					Save Player 1
-				</button>
-				<button
-					type="submit"
-					:form="player2FormId"
-					class="sr-only"
-					tabindex="-1"
-					aria-hidden="true"
-					:disabled="!isDirty || saving"
-				>
-					Save Player 2
+					Save Player {{ seatNumber(seat) }}
 				</button>
 			</div>
 
@@ -694,6 +775,7 @@ async function save() {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
+	margin-left: auto;
 }
 
 .match-metadata-grid {
@@ -730,6 +812,45 @@ async function save() {
 }
 
 .player-form-heading {
+	margin-bottom: 0.75rem;
+}
+
+/* ── Commander Seats: two by two, as at the table ── */
+.seat-table {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+	.seat-table {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-areas:
+			'top-left top-right'
+			'bottom-left bottom-right';
+	}
+
+	.seat-table > [data-table-position='top-left'] {
+		grid-area: top-left;
+	}
+
+	.seat-table > [data-table-position='top-right'] {
+		grid-area: top-right;
+	}
+
+	.seat-table > [data-table-position='bottom-right'] {
+		grid-area: bottom-right;
+	}
+
+	.seat-table > [data-table-position='bottom-left'] {
+		grid-area: bottom-left;
+	}
+}
+
+.seat-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 	margin-bottom: 0.75rem;
 }
 

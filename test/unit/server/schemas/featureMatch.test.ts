@@ -295,3 +295,120 @@ describe('a Player Deck List reference on a Slot side', () => {
 		expect(parse().success).toBe(false);
 	});
 });
+
+// A Seat holds one or two Commanders, each one printing of a card (ADR-0086).
+describe('a Seat\'s Commanders', () => {
+	function commander(overrides: Record<string, unknown> = {}) {
+		return {
+			scryfallId: 'd0d33d52-3d28-4635-b985-51e126289259',
+			name: 'Atraxa, Praetors\' Voice',
+			colorIdentity: 'WUBG',
+			setCode: 'cm2',
+			collectorNumber: '10',
+			...overrides,
+		};
+	}
+	const gameData = (commanders: unknown[]) => ({ type: 'mtg', commanders });
+
+	it.each([
+		{
+			held: 'two',
+			commanders: [
+				commander(),
+				commander(),
+			],
+			accepted: true,
+		},
+		{
+			held: 'three',
+			commanders: [
+				commander(),
+				commander(),
+				commander(),
+			],
+			accepted: false,
+		},
+		{
+			held: 'a colourless one',
+			commanders: [
+				commander({ colorIdentity: '' }),
+			],
+			accepted: true,
+		},
+		{
+			held: 'one whose colour identity repeats a colour',
+			commanders: [
+				commander({ colorIdentity: 'WW' }),
+			],
+			accepted: false,
+		},
+		{
+			held: 'one whose colour identity names no colour',
+			commanders: [
+				commander({ colorIdentity: 'X' }),
+			],
+			accepted: false,
+		},
+		{
+			held: 'one that names no printing',
+			commanders: [
+				commander({ scryfallId: 'atraxa' }),
+			],
+			accepted: false,
+		},
+	])('a setup save of a Seat holding $held is accepted: $accepted', ({ commanders, accepted }) => {
+		expect(updateFeatureMatchSchema.safeParse({
+			player3Data: {
+				name: 'Cyd',
+				gameData: gameData(commanders),
+			},
+		}).success).toBe(accepted);
+	});
+
+	it.each([
+		[
+			'a Slot create',
+			() => createFeatureMatchSchema.safeParse({
+				player1Data: {
+					name: 'Ana',
+					gameData: gameData([
+						commander(),
+					]),
+				},
+			}),
+		],
+		[
+			'a Player create',
+			() => createPlayerSchema.safeParse({
+				name: 'Ana',
+				gameData: gameData([
+					commander(),
+				]),
+			}),
+		],
+	] as const)('are refused by %s', (_label, parse) => {
+		expect(parse().success).toBe(false);
+	});
+});
+
+// Seats 3 and 4 are written as Seats 1 and 2 are, and only by a setup save (ADR-0086).
+describe('seats 3 and 4', () => {
+	it('take a setup save\'s Seat data under the rules Seats 1 and 2 do', () => {
+		expect(updateFeatureMatchSchema.parse({
+			player3Data: { position: '4' },
+			player4Data: { name: '' },
+		})).toEqual({
+			player3Data: { position: 4 },
+			player4Data: null,
+		});
+		expect(updateFeatureMatchSchema.safeParse({
+			player4Data: { name: 'Dee', externalId: 'forged' },
+		}).success).toBe(false);
+	});
+
+	it('are refused by a Slot create', () => {
+		expect(createFeatureMatchSchema.safeParse({
+			player3Data: { name: 'Cyd' },
+		}).success).toBe(false);
+	});
+});

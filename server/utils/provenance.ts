@@ -118,6 +118,8 @@ export const PROVENANCE_ENTITIES = {
 			'player2Id',
 			'player1Data',
 			'player2Data',
+			'player3Data',
+			'player4Data',
 			'bestOf',
 			'sortOrder',
 			'playerDisplayMode',

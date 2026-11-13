@@ -262,6 +262,8 @@ export function createMockFeatureMatch(overrides?: Partial<DbFeatureMatch>): DbF
 		player2Id: null,
 		player1Data: null,
 		player2Data: null,
+		player3Data: null,
+		player4Data: null,
 		bestOf: 3,
 		sortOrder: 0,
 		playerDisplayMode: 'score',

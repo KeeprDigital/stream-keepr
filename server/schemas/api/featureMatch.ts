@@ -8,6 +8,7 @@ import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import {
 	PLAYER_SIDE_VALUES,
 	RESET_TYPE_VALUES,
+	SEAT_VALUES,
 } from '~~/shared/types/enums';
 import { isMergeableFeatureMatchCommand } from '~~/shared/types/featureMatchSession';
 import { playerGameDataSchema, slotSideGameDataSchema } from './player';
@@ -122,6 +123,9 @@ export const createFeatureMatchSchema = createInsertSchema(featureMatches)
 		activeSessionId: true,
 		externalId: true,
 		externalSource: true,
+		// Seats 3 and 4 are a Commander Event's, written by a setup save (ADR-0086).
+		player3Data: true,
+		player4Data: true,
 	})
 	.extend({
 		// String length limits
@@ -163,8 +167,18 @@ export const updateFeatureMatchSchema = createUpdateSchema(featureMatches)
 		// JSON structural validation (all optional for partial updates)
 		player1Data: updateFeatureMatchPlayerDataSchema,
 		player2Data: updateFeatureMatchPlayerDataSchema,
+		player3Data: updateFeatureMatchPlayerDataSchema,
+		player4Data: updateFeatureMatchPlayerDataSchema,
 	})
 	.strict();
+
+// SWAP SEATS
+export const swapFeatureMatchSeatsSchema = z.object({
+	seats: z.tuple([
+		z.enum(SEAT_VALUES),
+		z.enum(SEAT_VALUES),
+	]),
+}).strict();
 
 // ROUTE PARAMS
 export const featureMatchSlotParamsSchema = z.object({

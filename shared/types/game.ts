@@ -52,6 +52,26 @@ export interface MtgPlayerGameData {
 	type: 'mtg';
 	deckName?: string | null;
 	deckColors?: string | null;
+	/**
+	 * A Commander Event Seat's one or two Commanders (ADR-0086). The server
+	 * writes the Seat's deck name and colours from them.
+	 */
+	commanders?: Commander[] | null;
+}
+
+/**
+ * One of a Seat's Commanders: one printing of a Magic: The Gathering card,
+ * as its operator picked it (ADR-0086).
+ */
+export interface Commander {
+	/** The printing, by its Scryfall id. */
+	scryfallId: string;
+	/** The card's name; its front face's, for a card with two. */
+	name: string;
+	/** Colour identity letters in WUBRG order; empty for a colourless card. */
+	colorIdentity: string;
+	setCode: string;
+	collectorNumber: string;
 }
 
 /**

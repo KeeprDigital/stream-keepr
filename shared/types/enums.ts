@@ -66,7 +66,16 @@ export const QUANTITY_POSITION_VALUES = [
 ] as const;
 export const SIDEBOARD_PLACEMENT_VALUES = ['beside', 'below'] as const;
 export const BOARD_SELECTION_VALUES = ['full', 'mainboard', 'sideboard'] as const;
+/**
+ * The two Seats every Feature Match Slot has. What a Two-Player or One Piece
+ * Card Game contract accepts stays this pair (ADR-0086).
+ */
 export const PLAYER_SIDE_VALUES = ['player1', 'player2'] as const;
+/**
+ * A Feature Match Slot's Seats, in the Slot's own order: the pair every Slot
+ * has, then the two only a Commander Event's holds (ADR-0086).
+ */
+export const SEAT_VALUES = [...PLAYER_SIDE_VALUES, 'player3', 'player4'] as const;
 export const HORIZONTAL_ALIGN_VALUES = ['left', 'center', 'right'] as const;
 export const VERTICAL_ALIGN_VALUES = ['top', 'center', 'bottom'] as const;
 export const RESET_TYPE_VALUES = ['game', 'match'] as const;
@@ -171,6 +180,7 @@ export type QuantityPosition = typeof QUANTITY_POSITION_VALUES[number];
 export type SideboardPlacement = typeof SIDEBOARD_PLACEMENT_VALUES[number];
 export type BoardSelection = typeof BOARD_SELECTION_VALUES[number];
 export type PlayerSide = typeof PLAYER_SIDE_VALUES[number];
+export type Seat = typeof SEAT_VALUES[number];
 export type HorizontalAlign = typeof HORIZONTAL_ALIGN_VALUES[number];
 export type VerticalAlign = typeof VERTICAL_ALIGN_VALUES[number];
 export type ResetType = typeof RESET_TYPE_VALUES[number];

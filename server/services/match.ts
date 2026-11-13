@@ -165,6 +165,8 @@ function buildPromotionPlanFenceQuery(
 		player2Id: sql`null`,
 		player1Data: sql`null`,
 		player2Data: sql`null`,
+		player3Data: sql`null`,
+		player4Data: sql`null`,
 		bestOf: sql`0`,
 		sortOrder: sql`0`,
 		playerDisplayMode: sql`'score'`,

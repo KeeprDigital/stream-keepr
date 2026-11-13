@@ -4,6 +4,7 @@ import { players } from '~~/server/db/schema';
 import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
 import { OP_CARD_COLORS } from '~~/shared/types/card/op';
 import { isOpCardImageUrl } from '~~/shared/utils/card/op';
+import { MAX_SEAT_COMMANDERS } from '~~/shared/utils/commander';
 import { storedOpLeader } from '~~/shared/utils/gameData';
 import { opCardNumberSchema } from './opCard';
 
@@ -39,6 +40,20 @@ const opGameDataSchema = z.object({
 export const playerGameDataSchema = z.discriminatedUnion('type', [mtgGameDataSchema, opGameDataSchema]);
 
 /**
+ * A picked Commander as a save sends it: one printing of a Magic: The Gathering
+ * card, by its Scryfall id (ADR-0086). Nothing checks that the card may be one.
+ */
+const commanderSchema = z.object({
+	scryfallId: z.uuid(),
+	name: z.string().trim().min(1).max(200),
+	colorIdentity: z.string().regex(/^[WUBRG]*$/).refine(letters => new Set(letters).size === letters.length, {
+		message: 'A colour identity names each colour at most once',
+	}),
+	setCode: z.string().trim().min(1).max(10),
+	collectorNumber: z.string().trim().min(1).max(20),
+}).strict();
+
+/**
  * A Slot side's game data, as a setup save writes it: a One Piece side may also
  * reference its Feature Match Deck List, which the setup write checks names one
  * of the Slot's (ADR-0057). Nothing else may write a reference. A linked side's
@@ -46,7 +61,10 @@ export const playerGameDataSchema = z.discriminatedUnion('type', [mtgGameDataSch
  * (ADR-0074), so it is dropped.
  */
 export const slotSideGameDataSchema = z.discriminatedUnion('type', [
-	mtgGameDataSchema,
+	// Only a Commander Event's Seat holds Commanders, which the setup write checks (ADR-0086).
+	mtgGameDataSchema.extend({
+		commanders: z.array(commanderSchema).max(MAX_SEAT_COMMANDERS).nullable().optional(),
+	}).strict(),
 	opGameDataSchema.extend({
 		featureMatchDeckList: z.object({
 			id: z.number().int().positive(),
