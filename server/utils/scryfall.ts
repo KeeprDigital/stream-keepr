@@ -197,6 +197,7 @@ async function fetchScryfallJson(
 }
 
 const COLLECTION_BATCH_SIZE = 75; // Scryfall limit per request
+const COLLECTION_BATCH_PAUSE_MS = 100;
 const NAMED_LOOKUP_CONCURRENCY = 4;
 
 interface CardIdentifier {
@@ -204,9 +205,16 @@ interface CardIdentifier {
 	set?: string;
 }
 
+/** One exact printing, as `/cards/collection` is asked for it. */
+interface PrintingIdentifier {
+	set: string;
+	collector_number: string;
+}
+
 interface ScryfallCollectionResponse {
 	object: 'list';
-	not_found: CardIdentifier[];
+	/** The identifiers Scryfall could not answer, each as it was sent. */
+	not_found: Array<Partial<CardIdentifier & PrintingIdentifier>>;
 	data: ScryfallCard.Any[];
 }
 
@@ -301,29 +309,11 @@ export async function fetchScryfallCardByName(params: {
 	return mapScryfallCardData(card);
 }
 
-export async function fetchScryfallCardBySetAndCollector(
-	setCode: string,
-	collectorNumber: string,
-): Promise<ScryfallCardData> {
-	const errorPrefix = 'Scryfall exact printing lookup failed';
-	const raw = await fetchScryfallJson(
-		`${SCRYFALL_API_URL}/cards/${encodeURIComponent(setCode)}/${encodeURIComponent(collectorNumber)}`,
-		{ headers: SCRYFALL_HEADERS },
-		errorPrefix,
-		SCRYFALL_CARD_BODY_LIMIT_BYTES,
-	);
-	const card = parseScryfallCard(raw, errorPrefix);
-	if (!('collector_number' in card) || typeof card.collector_number !== 'string') {
-		throw new ScryfallRequestError(`${errorPrefix}: invalid response schema`);
-	}
-	return mapScryfallCardData(card);
-}
-
 /**
  * Fetch Scryfall card data for a batch of card identifiers
  * Uses the /cards/collection endpoint which accepts up to 75 cards per request
  */
-async function fetchCardCollection(identifiers: CardIdentifier[]): Promise<ScryfallCollectionResponse> {
+async function fetchCardCollection(identifiers: Array<CardIdentifier | PrintingIdentifier>): Promise<ScryfallCollectionResponse> {
 	const raw = await fetchScryfallJson(`${SCRYFALL_API_URL}/cards/collection`, {
 		method: 'POST',
 		headers: {
@@ -528,22 +518,25 @@ export async function batchLookupScryfallIds(
 				}
 			}
 
-			const notFoundKeys = new Set(response.not_found.map(identifierKey));
+			const notFound = response.not_found.flatMap(identifier => identifier.name === undefined
+				? []
+				: [{ name: identifier.name, set: identifier.set }]);
+			const notFoundKeys = new Set(notFound.map(identifierKey));
 			for (const identifier of batch) {
 				if (!notFoundKeys.has(identifierKey(identifier)))
 					answeredIdentifiers.add(identifierKey(identifier));
 			}
 
 			// Warn about cards Scryfall could not find (bad name, wrong set, etc.)
-			if (response.not_found.length > 0) {
-				const names = response.not_found.map((c: CardIdentifier) => c.name).join(', ');
-				const msg = `Scryfall batch ${batchIndex}/${totalBatches}: ${response.not_found.length} card(s) not found — ${names}`;
+			if (notFound.length > 0) {
+				const names = notFound.map(identifier => identifier.name).join(', ');
+				const msg = `Scryfall batch ${batchIndex}/${totalBatches}: ${notFound.length} card(s) not found — ${names}`;
 				console.warn(JSON.stringify({
 					service: 'scryfall',
 					event: 'cards_not_found',
 					batch: batchIndex,
 					totalBatches,
-					count: response.not_found.length,
+					count: notFound.length,
 				}));
 				if (!options.suppressNotFoundErrors) {
 					errors.push(msg);
@@ -552,7 +545,7 @@ export async function batchLookupScryfallIds(
 
 			// Add a small delay between batches to respect rate limits
 			if (i + COLLECTION_BATCH_SIZE < identifiers.length) {
-				await new Promise(resolve => setTimeout(resolve, 100));
+				await delay(COLLECTION_BATCH_PAUSE_MS);
 			}
 		}
 		catch (error) {
@@ -586,6 +579,49 @@ export async function batchLookupScryfallIds(
 	await lookUpNamesAlone(answeredWithAnotherName, results, errors, options.stopOnError ?? false);
 
 	return { results, errors };
+}
+
+export interface ScryfallPrintingRequest {
+	setCode: string;
+	collectorNumber: string;
+}
+
+function printingKey(setCode: string, collectorNumber: string): string {
+	return `${setCode.toLowerCase()}|${collectorNumber.toLowerCase()}`;
+}
+
+/**
+ * Looks exact printings up by set and collector number, 75 to a request, so a
+ * pasted deck of a hundred printings costs two requests (ADR-0087). Answers
+ * each request's card in the order asked, or `null` for a printing Scryfall
+ * does not know. A failed request throws: an outage is never a missing printing.
+ */
+export async function batchLookupScryfallPrintings(
+	requests: readonly ScryfallPrintingRequest[],
+): Promise<Array<ScryfallCardData | null>> {
+	const identifiers = new Map<string, PrintingIdentifier>();
+	for (const request of requests) {
+		identifiers.set(printingKey(request.setCode, request.collectorNumber), {
+			set: request.setCode.toLowerCase(),
+			collector_number: request.collectorNumber,
+		});
+	}
+	const unique = [
+		...identifiers.values(),
+	];
+	const cards = new Map<string, ScryfallCardData>();
+	for (let index = 0; index < unique.length; index += COLLECTION_BATCH_SIZE) {
+		// The pause a lookup by name takes between batches, to respect rate limits.
+		if (index > 0)
+			await delay(COLLECTION_BATCH_PAUSE_MS);
+		const response = await fetchCardCollection(unique.slice(index, index + COLLECTION_BATCH_SIZE));
+		for (const card of response.data) {
+			const data = mapScryfallCardData(card);
+			if (data.collectorNumber !== null)
+				cards.set(printingKey(data.setCode, data.collectorNumber), data);
+		}
+	}
+	return requests.map(request => cards.get(printingKey(request.setCode, request.collectorNumber)) ?? null);
 }
 
 /**

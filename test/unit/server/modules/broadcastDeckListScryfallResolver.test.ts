@@ -36,12 +36,12 @@ describe('broadcast Deck List Scryfall resolver', () => {
 					})
 				: null)
 		));
-		const lookupBySetAndCollector = vi.fn(async () => scryfallCard());
+		const lookupPrintings = vi.fn(async () => [scryfallCard()]);
 		const resolver = createBroadcastDeckListScryfallResolver({
 			overrides: [
 				{ inputName: 'Bolt', inputSetCode: null, canonicalName: 'Lightning Bolt' },
 			],
-			scryfall: { lookupByName, lookupBySetAndCollector },
+			scryfall: { lookupByName, lookupPrintings },
 		});
 
 		const result = await resolver.resolve([
@@ -51,7 +51,7 @@ describe('broadcast Deck List Scryfall resolver', () => {
 			{ name: 'Wear', setCode: null, collectorNumber: null },
 		]);
 
-		expect(lookupBySetAndCollector).toHaveBeenCalledWith('sld', '101');
+		expect(lookupPrintings).toHaveBeenCalledWith([{ setCode: 'sld', collectorNumber: '101' }]);
 		expect(lookupByName).toHaveBeenCalledWith([
 			{ name: 'Wear // Tear', setCode: null },
 			{ name: 'Wear', setCode: null },
@@ -82,7 +82,7 @@ describe('broadcast Deck List Scryfall resolver', () => {
 					scryfallCard({ name: 'Lightning Bolt', setCode: 'neo' }),
 					scryfallCard({ name: 'Shack', setCode: 'm21' }),
 				]),
-				lookupBySetAndCollector: vi.fn(async () => scryfallCard({ name: 'Shock' })),
+				lookupPrintings: vi.fn(async () => [scryfallCard({ name: 'Shock' })]),
 			},
 		});
 
@@ -103,7 +103,7 @@ describe('broadcast Deck List Scryfall resolver', () => {
 				lookupByName: vi.fn(async () => {
 					throw new ScryfallRequestError('private upstream detail', { status: 503, retryable: true });
 				}),
-				lookupBySetAndCollector: vi.fn(),
+				lookupPrintings: vi.fn(async () => []),
 			},
 		});
 
@@ -178,36 +178,57 @@ describe('broadcast Deck List Scryfall resolver', () => {
 		}
 	});
 
-	it('bounds exact collector lookups to four concurrent requests', async () => {
-		let active = 0;
-		let maximumActive = 0;
-		const lookupBySetAndCollector = vi.fn(async (setCode: string, collectorNumber: string) => {
-			active++;
-			maximumActive = Math.max(maximumActive, active);
-			await Promise.resolve();
-			active--;
-			return scryfallCard({
-				setCode,
-				collectorNumber,
-				id: `printing-${collectorNumber}`,
-			});
-		});
+	it('asks for every exact printing in one lookup, a printing pasted twice asked for once', async () => {
+		const lookupPrintings = vi.fn(async (requests: ReadonlyArray<{ setCode: string; collectorNumber: string }>) =>
+			requests.map(request => scryfallCard({ ...request, id: `printing-${request.collectorNumber}` })));
 		const resolver = createBroadcastDeckListScryfallResolver({
-			scryfall: {
-				lookupByName: vi.fn(async () => []),
-				lookupBySetAndCollector,
-			},
+			scryfall: { lookupByName: vi.fn(async () => []), lookupPrintings },
 		});
 
-		const result = await resolver.resolve(Array.from({ length: 9 }, (_, index) => ({
+		const result = await resolver.resolve([1, 2, 3, 2].map(number => ({
 			name: 'Lightning Bolt',
 			setCode: 'sld',
-			collectorNumber: String(index + 1),
+			collectorNumber: String(number),
 		})));
 
-		expect(result.every(resolution => resolution.status === 'resolved')).toBe(true);
-		expect(lookupBySetAndCollector).toHaveBeenCalledTimes(9);
-		expect(maximumActive).toBe(4);
+		expect(lookupPrintings).toHaveBeenCalledExactlyOnceWith([
+			{ setCode: 'sld', collectorNumber: '1' },
+			{ setCode: 'sld', collectorNumber: '2' },
+			{ setCode: 'sld', collectorNumber: '3' },
+		]);
+		expect(result.map(resolution => resolution.status === 'resolved' && resolution.card.scryfallId)).toEqual([
+			'printing-1',
+			'printing-2',
+			'printing-3',
+			'printing-2',
+		]);
+	});
+
+	// ADR-0087: a Moxfield paste is about a hundred exact printings, fetched in batches and not one at a time.
+	it('resolves a hundred exact printings through the real Scryfall boundary in two requests', async () => {
+		const catalogue = Array.from({ length: 100 }, (_, index) => ({
+			id: `printing-${index}`,
+			name: `Card ${index}`,
+			set: 'ecl',
+			collector_number: String(index + 1),
+		}));
+		const scryfall = createScryfallFake(catalogue);
+		vi.stubGlobal('fetch', scryfall.fetch);
+
+		try {
+			const result = await createBroadcastDeckListScryfallResolver().resolve(catalogue.map(card => ({
+				name: card.name,
+				setCode: 'ECL',
+				collectorNumber: card.collector_number,
+			})));
+
+			expect(scryfall.collectionBatches.map(batch => batch.length)).toEqual([75, 25]);
+			expect(result.map(resolution => resolution.status === 'resolved' && resolution.card.scryfallId))
+				.toEqual(catalogue.map(card => card.id));
+		}
+		finally {
+			vi.unstubAllGlobals();
+		}
 	});
 
 	it('maps collector not-found to unresolved but keeps collector outages retryable', async () => {
@@ -217,15 +238,13 @@ describe('broadcast Deck List Scryfall resolver', () => {
 		const notFoundResolver = createBroadcastDeckListScryfallResolver({
 			scryfall: {
 				lookupByName: vi.fn(async () => []),
-				lookupBySetAndCollector: vi.fn(async () => {
-					throw new ScryfallRequestError('not found', { status: 404, notFound: true });
-				}),
+				lookupPrintings: vi.fn(async () => [null]),
 			},
 		});
 		const outageResolver = createBroadcastDeckListScryfallResolver({
 			scryfall: {
 				lookupByName: vi.fn(async () => []),
-				lookupBySetAndCollector: vi.fn(async () => {
+				lookupPrintings: vi.fn(async () => {
 					throw new ScryfallRequestError('private outage', { status: 503, retryable: true });
 				}),
 			},
