@@ -6,6 +6,7 @@ import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive, ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
+import { ATRAXA, TYMNA } from '~~/test/helpers/commanders';
 import { opSlotSide } from '~~/test/helpers/opCards';
 import { createFollowedFeatureMatchSessions, followNoSession, followSwappedSession } from '~~/test/nuxt/helpers/followedFeatureMatchSession';
 import { clearPlayerDeckCache } from '~/composables/data/usePlayerDeckCache';
@@ -331,6 +332,26 @@ describe('the cards each board of a Deck List Screen lays out', () => {
 
 		expect(counted.value).toEqual(cards);
 		expect(mockFetch).not.toHaveBeenCalled();
+	});
+
+	// A Commander Seat's Commanders lay out where a Sideboard would; its Mainboard is counted by its reference (ADR-0087).
+	it.each([
+		{ name: 'holding a pair and a list', commanders: [ATRAXA, TYMNA], list: { id: 7, mainboardCount: 98 }, cards: { mainboard: 98, sideboard: 2 } },
+		{ name: 'holding a Commander and no list', commanders: [ATRAXA], list: undefined, cards: { mainboard: 0, sideboard: 1 } },
+		{ name: 'nobody sits in', commanders: [], list: undefined, cards: undefined },
+	])('counts a Commander Seat $name', async ({ commanders, list, cards }) => {
+		eventStore.event = { id: 1, game: 'mtg', variant: 'commander' } as never;
+		featureMatchStore.featureMatches = [
+			{
+				...SLOT,
+				player2Id: null,
+				player4Data: { name: 'Dee', gameData: { type: 'mtg', commanders, featureMatchDeckList: list } },
+			} as never,
+		];
+
+		const counted = await follow({ deckSource: { type: 'featureMatchSlot', slotId: 11, side: 'player4' } });
+
+		expect(counted.value).toEqual(cards);
 	});
 
 	// With no Deck List resolved there is nothing to count, so the contract's own bound stands.

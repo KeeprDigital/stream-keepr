@@ -2,6 +2,7 @@ import type { BoardSelection, QuantityPosition, SideboardPlacement } from '../ty
 import type { ScreenModeConfigOf } from './contract';
 import type { ScreenSettingsContext } from './fields';
 import { z } from 'zod';
+import { eventKind } from '../config/games';
 import {
 	BOARD_SELECTION_VALUES,
 	MAINBOARD_VIEW_VALUES,
@@ -175,6 +176,16 @@ function isMagic({ event }: ScreenSettingsContext): boolean {
 	return event?.game !== 'op';
 }
 
+/**
+ * A Magic deck with a Sideboard: any but a Commander Seat's, which shows its
+ * Commanders apart where a Sideboard would sit and has no Board Selection (ADR-0087).
+ */
+function hasSideboard(context: ScreenSettingsContext): boolean {
+	const { event } = context;
+	return isMagic(context)
+		&& !(event?.game && eventKind({ game: event.game, variant: event.variant ?? null }) === 'mtg-commander');
+}
+
 function isBroadcastSource({ config }: ScreenSettingsContext): boolean {
 	return config.deckSource?.type === 'broadcast';
 }
@@ -231,7 +242,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 		label: 'Boards',
 		card: 'content',
 		slot: 'board-toggles',
-		showWhen: isMagic,
+		showWhen: hasSideboard,
 	}),
 	/** Where the sideboard sits relative to the mainboard. Read only at `board: 'full'`. */
 	sideboardPlacement: editorField(z.enum(SIDEBOARD_PLACEMENT_VALUES).optional(), {
@@ -413,7 +424,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 }, {
 	groups: {
 		'mainboard': { title: 'Mainboard', card: 'content' },
-		'sideboard': { title: 'Sideboard', card: 'content', showWhen: isMagic },
+		'sideboard': { title: 'Sideboard', card: 'content', showWhen: hasSideboard },
 		'deck-details': { title: 'Deck details', card: 'content' },
 		// A One Piece Deck List has no card points, but its page keeps their Looks reachable (ADR-0072).
 		'pointed-cards': {
@@ -433,7 +444,7 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 			title: 'Companion badge',
 			card: 'content',
 			layout: 'row',
-			showWhen: context => isMagic(context) && context.config.showCompanion !== false,
+			showWhen: context => hasSideboard(context) && context.config.showCompanion !== false,
 		},
 	},
 });

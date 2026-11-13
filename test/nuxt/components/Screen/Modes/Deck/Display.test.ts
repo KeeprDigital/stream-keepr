@@ -5,14 +5,15 @@ import { computed, defineComponent, h, reactive, ref } from 'vue';
 import Display from '~/components/Screen/Modes/Deck/Display.vue';
 
 // A Deck List Screen lays out its Deck List by its Event's Card Game: a One
-// Piece Player or Slot side in the One Piece layout, a Magic deck in Magic's.
+// Piece Player or Slot Seat in the One Piece layout, a Magic deck in Magic's,
+// a Commander Seat's among them (ADR-0087).
 
-const eventStore = reactive({ displayEvent: null as { game: string } | null });
+const eventStore = reactive({ displayEvent: null as { game: string; variant?: string } | null });
 mockNuxtImport('useEventStore', () => () => eventStore);
 
-function mountDisplay(deckSource: Record<string, unknown>, options: { game?: string; sampleDataset?: 'mtg' | 'op' } = {}) {
+function mountDisplay(deckSource: Record<string, unknown>, options: { game?: string; variant?: string; sampleDataset?: 'mtg' | 'op' } = {}) {
 	eventStore.displayEvent = options.game
-		? { game: options.game }
+		? { game: options.game, variant: options.variant }
 		: null;
 	const Parent = defineComponent({
 		setup() {
@@ -35,7 +36,10 @@ function mountDisplay(deckSource: Record<string, unknown>, options: { game?: str
 		global: {
 			stubs: {
 				ScreenModesDeckOpDisplay: { template: '<div data-layout="op" />' },
-				ScreenModesDeckMtgDisplay: { template: '<div data-layout="mtg" />' },
+				ScreenModesDeckMtgDisplay: {
+					props: ['followsSeat'],
+					template: '<div data-layout="mtg" :data-follows-seat="followsSeat" />',
+				},
 			},
 		},
 	});
@@ -73,9 +77,19 @@ describe('the Deck List Screen Mode', () => {
 			options: { sampleDataset: 'mtg' as const },
 			layout: 'mtg',
 		},
-	])('lays out $name in the $layout layout', ({ source, options, layout }) => {
+		{
+			name: 'a Commander Seat',
+			source: { type: 'featureMatchSlot', slotId: 11, side: 'player4' },
+			options: { game: 'mtg', variant: 'commander' },
+			layout: 'mtg',
+			followsSeat: 'true',
+		},
+	])('lays out $name in the $layout layout', ({ source, options, layout, followsSeat = 'false' }) => {
 		const wrapper = mountDisplay(source, options);
 
-		expect(wrapper.find('[data-layout]').attributes('data-layout')).toBe(layout);
+		const shown = wrapper.find('[data-layout]').attributes();
+		expect(shown['data-layout']).toBe(layout);
+		if (layout === 'mtg')
+			expect(shown['data-follows-seat']).toBe(followsSeat);
 	});
 });

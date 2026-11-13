@@ -42,6 +42,8 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	secondaryHeader: secondaryName,
 	deckColors,
 	companionCard,
+	// A Commander Seat's alone, which `CommanderSeatDisplay.test.ts` covers.
+	commanders: ref([]),
 	highlander,
 	tokenCards,
 	deckStats,

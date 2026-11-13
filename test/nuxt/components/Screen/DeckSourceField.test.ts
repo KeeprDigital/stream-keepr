@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
+import { ATRAXA, typedSeat } from '~~/test/helpers/commanders';
 import { opSlotSide } from '~~/test/helpers/opCards';
 import { UInputMenuStub } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import DeckSourceField from '~/components/Screen/DeckSourceField.vue';
@@ -296,3 +297,59 @@ describe('the Deck Source picker on a One Piece Card Game Event', () => {
 		expect(wrapper.find('[data-testid="empty-side-hint"]').exists()).toBe(hint);
 	});
 });
+
+// A Commander Event has no Players and no Broadcast Deck Lists: its only Deck Source is a Seat (ADR-0087).
+describe('the Deck Source picker on a Commander Event', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockEventStore.event = {
+			id: 1,
+			game: 'mtg',
+			variant: 'commander',
+			broadcastDeckListsEnabled: false,
+		} as never;
+		mockPlayerStore.players = [];
+		mockFeatureMatchStore.featureMatches = [
+			{
+				id: 11,
+				player1Id: null,
+				player2Id: null,
+				player1Data: typedSeat('Ana', [ATRAXA]),
+				player2Data: null,
+				player4Data: typedSeat('Dee', []),
+				activeSession: null,
+			} as never,
+		];
+		mockFeatureMatchStateStore.featureMatchSessions = new Map();
+		mockFeatureMatchStateStore.sessionIdBySlotId = new Map();
+	});
+
+	it('offers a Slot and any of its four Seats, and no other source', async () => {
+		const wrapper = await mountField({ type: 'player', playerId: null });
+
+		expect(wrapper.find('[data-testid="source-tabs"]').exists()).toBe(false);
+		expect(wrapper.find('[data-testid="deck-source-player"]').exists()).toBe(false);
+		expect(wrapper.findAll('[data-testid="deck-source-side"] button').map(option => option.text()))
+			.toEqual(['Seat 1', 'Seat 2', 'Seat 3', 'Seat 4']);
+
+		await wrapper.get('[data-testid="deck-source-slot"] [data-value="11"]').trigger('click');
+		await wrapper.setProps({ modelValue: emitted(wrapper)[0] as DeckSource });
+		await wrapper.get('[data-testid="deck-source-side"] [data-value="player4"]').trigger('click');
+
+		expect(emitted(wrapper)).toEqual([
+			{ type: 'featureMatchSlot', slotId: 11, side: 'player1' },
+			{ type: 'featureMatchSlot', slotId: 11, side: 'player4' },
+		]);
+	});
+
+	it.each([
+		{ name: 'a Seat holding a Commander', side: 'player1', hint: false },
+		{ name: 'a Seat holding a player and no deck', side: 'player4', hint: true },
+		{ name: 'a Seat nobody sits in', side: 'player3', hint: true },
+	] as const)('says the Screen shows nothing only for $name', async ({ side, hint }) => {
+		const wrapper = await mountField({ type: 'featureMatchSlot', slotId: 11, side });
+
+		expect(wrapper.find('[data-testid="empty-side-hint"]').exists()).toBe(hint);
+	});
+});
+

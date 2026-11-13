@@ -1,13 +1,21 @@
 import type { BroadcastDeckListEntryResponse, BroadcastDeckListResponse } from '~~/shared/types/broadcastDeckList';
 import type { DeckCompanion } from '~~/shared/types/deckCompanion';
 import type { DeckListStats } from '~~/shared/types/deckList';
+import type { Seat } from '~~/shared/types/enums';
+import type { CommanderDeckListEntry } from '~~/shared/types/featureMatchDeckList';
+import type { Commander } from '~~/shared/types/game';
 import type { HighlanderDeckSummary } from '~~/shared/types/highlander';
 import type { PlayerDeckResponse } from '~~/shared/types/metagame';
-import type { DeckSource } from '~~/shared/types/screenConfig';
+import type { DeckModeConfig, DeckSource } from '~~/shared/types/screenConfig';
+import type { ScreenOutputCommanderDeckListResponse } from '~~/shared/types/screenOutputReads';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { Player } from '~/types';
 import type { DeckListCardWithData } from '~/types/card/deckList';
+import { commanderMainboard } from '~~/shared/utils/commanderDeckList';
+import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
+import { getMtgGameData } from '~~/shared/utils/gameData';
 import { createDeckLookupCards } from '~~/shared/utils/playerDeck';
+import { playerDisplayName } from '~~/shared/utils/playerName';
 import { selectPlayerDeck } from '~/composables/data/usePlayerDeckCache';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
@@ -29,25 +37,39 @@ interface DeckDisplayState {
 	companion: DeckCompanion | null;
 	/** The companion as a card image, shown apart from the deck information. */
 	companionCard: DeckListCardWithData | null;
+	/** A Commander Seat's Commanders, shown apart from its Mainboard (ADR-0087). */
+	commanders: DeckListCardWithData[];
 	highlander: HighlanderDeckSummary | null;
 	deckStats: Array<{ type: string; count: number }>;
 	mainboard: DeckListCardWithData[];
 	sideboard: DeckListCardWithData[];
 }
 
+/** A Commander Slot's Seat, whose deck is its Commanders and the list it may hold (ADR-0087). */
+interface SeatDeckSource {
+	type: 'seat';
+	slotId: number;
+	seat: Seat;
+}
+
 type LoadedDeckSource
 	= { type: 'player'; playerId: number }
-		| { type: 'broadcast'; broadcastDeckListId: number };
+		| { type: 'broadcast'; broadcastDeckListId: number }
+		| SeatDeckSource;
 
 /**
- * The Deck Source a configuration selects; `null` while it selects no Player,
- * or a Feature Match Slot side, which `useOpDeckModeData` reads.
+ * The Deck Source a configuration selects; `null` while it selects no Player
+ * or no Slot. A Slot's Seat is read only where the display follows one: a One
+ * Piece Card Game Seat is `useOpDeckModeData`'s.
  */
-function selectedDeckSource(source: DeckSource): LoadedDeckSource | null {
+function selectedDeckSource(source: DeckSource, followsSeat: boolean): LoadedDeckSource | null {
 	if (source.type === 'broadcast')
 		return { type: 'broadcast', broadcastDeckListId: source.broadcastDeckListId };
-	if (source.type === 'featureMatchSlot')
-		return null;
+	if (source.type === 'featureMatchSlot') {
+		return followsSeat && source.slotId !== null
+			? { type: 'seat', slotId: source.slotId, seat: source.side }
+			: null;
+	}
 	return source.playerId === null
 		? null
 		: { type: 'player', playerId: source.playerId };
@@ -55,6 +77,8 @@ function selectedDeckSource(source: DeckSource): LoadedDeckSource | null {
 
 /** One Deck Source as one comparable value. */
 function deckSourceKey(source: LoadedDeckSource): string {
+	if (source.type === 'seat')
+		return `seat:${source.slotId}:${source.seat}`;
 	return source.type === 'player'
 		? `player:${source.playerId}`
 		: `broadcast:${source.broadcastDeckListId}`;
@@ -66,10 +90,25 @@ function sameDeckSource(left: LoadedDeckSource | null | undefined, right: Loaded
 
 const DECK_LOAD_FAILED = 'Failed to load deck';
 
+/** Who sits in a Commander Seat now, and the Deck List they hold, once read; no cards while they hold none. */
+interface SeatDeckRead {
+	type: 'seat';
+	source: SeatDeckSource;
+	playerName: string;
+	commanders: Commander[];
+	deckName: string;
+	deckColors: string;
+	entries: CommanderDeckListEntry[];
+}
+
 /** What one read of the selected Deck Source answers. */
 type DeckSourceRead
 	= { type: 'player'; player: Player; deck: PlayerDeckResponse | null }
-		| { type: 'broadcast'; list: BroadcastDeckListResponse };
+		| { type: 'broadcast'; list: BroadcastDeckListResponse }
+		| SeatDeckRead;
+
+/** A Seat whose Deck List is named and not yet read: program keeps what it shows. */
+const SEAT_READ_PENDING = 'pending';
 
 function computeDeckStats(cards: Array<{ quantity: number; compartment: string; cardType: string | null }>): Array<{ type: string; count: number }> {
 	const stats: DeckListStats = {
@@ -158,7 +197,12 @@ async function preloadDeckImages(cards: DeckListCardWithData[]): Promise<boolean
 	return true;
 }
 
-export function useDeckModeData(context: ScreenContext) {
+/**
+ * A Magic: The Gathering Deck List Screen's deck, from its Deck Source: a
+ * Player's, a Broadcast Deck List's, or, where `followsSeat`, a Commander
+ * Seat's, followed live as a One Piece Card Game Seat is (ADR-0087).
+ */
+export function useDeckModeData(context: ScreenContext, { followsSeat = false }: { followsSeat?: boolean } = {}) {
 	const { assetCapability, cardDataHealth } = context;
 	const config = useScreenModeConfig(context, 'deck');
 
@@ -172,7 +216,7 @@ export function useDeckModeData(context: ScreenContext) {
 	const buildFailed = ref(false);
 	let deckVersion = 0;
 
-	const selectedSource = computed(() => selectedDeckSource(config.value.deckSource));
+	const selectedSource = computed(() => selectedDeckSource(config.value.deckSource, followsSeat));
 	const isSelected = (source: LoadedDeckSource) => sameDeckSource(selectedSource.value, source);
 
 	/**
@@ -185,6 +229,9 @@ export function useDeckModeData(context: ScreenContext) {
 		const scope = outputReads.scope.value;
 		if (!source || !scope)
 			return null;
+		// A Seat is followed through the stores, not read here.
+		if (source.type === 'seat')
+			return null;
 		if (source.type === 'player') {
 			const { player, decks } = await outputReads.playerDecks(source.playerId);
 			return { type: 'player', player, deck: selectPlayerDeck(decks) ?? null };
@@ -195,13 +242,28 @@ export function useDeckModeData(context: ScreenContext) {
 
 	const freshness = useScreenModeFreshness<DeckSourceRead | null>({
 		hearing: useScreenModeHearing(context, 'deck', () => config.value),
-		source: () => selectedSource.value && outputReads.scopeKey.value
+		source: () => selectedSource.value && selectedSource.value.type !== 'seat' && outputReads.scopeKey.value
 			? `${outputReads.scopeKey.value}:${deckSourceKey(selectedSource.value)}`
 			: null,
 		read: readDeckSource,
 		initialData: null,
 		errorMessage: DECK_LOAD_FAILED,
 	});
+
+	const seat = followsSeat
+		? useSeatDeckRead(context, config, () => selectedSource.value?.type === 'seat'
+				? selectedSource.value
+				: null)
+		: null;
+
+	/** What the selected Deck Source answers now. */
+	const sourceRead = computed(() => selectedSource.value?.type === 'seat'
+		? seat?.read.value ?? null
+		: freshness.data.value);
+	/** The source's answer is known: false only while its first read is in flight. */
+	const sourceAnswered = computed(() => selectedSource.value?.type === 'seat'
+		? !!seat?.answered.value
+		: freshness.answered.value);
 
 	/** One build of the deck on program, or of the deck being built for it. */
 	interface DeckBuild {
@@ -245,6 +307,7 @@ export function useDeckModeData(context: ScreenContext) {
 	const companion = computed(() => displayedDeck.value?.companion ?? null);
 	const highlander = computed(() => displayedDeck.value?.highlander ?? null);
 	const companionCard = computed(() => displayedDeck.value?.companionCard ?? null);
+	const commanders = computed(() => displayedDeck.value?.commanders ?? []);
 	const deckStats = computed(() => displayedDeck.value?.deckStats ?? []);
 	const mainboard = computed(() => displayedDeck.value?.mainboard ?? []);
 	const sideboard = computed(() => displayedDeck.value?.sideboard ?? []);
@@ -257,10 +320,11 @@ export function useDeckModeData(context: ScreenContext) {
 	const error = computed(() => {
 		if (displayedDeck.value)
 			return null;
-		const read = freshness.data.value;
-		if (read && !displayInput(read))
+		const read = sourceRead.value;
+		// A Seat nobody sits in shows nothing, and says nothing (ADR-0087).
+		if (read && read !== SEAT_READ_PENDING && read.type !== 'seat' && !displayInput(read))
 			return 'Player has no deck list';
-		return freshness.error.value ?? (buildFailed.value ? DECK_LOAD_FAILED : null);
+		return freshness.error.value ?? seat?.error.value ?? (buildFailed.value ? DECK_LOAD_FAILED : null);
 	});
 
 	/**
@@ -270,8 +334,8 @@ export function useDeckModeData(context: ScreenContext) {
 	const ready = computed(() => {
 		if (displayedDeck.value || error.value)
 			return true;
-		const read = freshness.data.value;
-		return freshness.answered.value && !(read && displayInput(read));
+		const read = sourceRead.value;
+		return sourceAnswered.value && read !== SEAT_READ_PENDING && !(read && displayInput(read));
 	});
 
 	onScopeDispose(() => {
@@ -314,12 +378,23 @@ export function useDeckModeData(context: ScreenContext) {
 		}>;
 		companion: DeckCompanion | null;
 		highlander: HighlanderDeckSummary | null;
+		/** A Commander Seat's Commanders, each the printing its Seat holds. */
+		commanders?: Array<{ name: string; scryfallId: string }>;
 	}
 
 	async function buildDeckDisplayState(input: DeckDisplayInput): Promise<{ deck: DeckDisplayState; degraded: boolean }> {
-		const lookupCards = createDeckLookupCards(input.cards, input.companion);
+		// Commanders are drawn as the Mainboard's cards are, from one read of card data.
+		const commanderCards = (input.commanders ?? []).map(commander => ({
+			...commander,
+			setCode: null,
+			quantity: 1,
+			compartment: 'mainboard' as const,
+			cardType: '',
+		}));
+		const lookupCards = createDeckLookupCards([...commanderCards, ...input.cards], input.companion);
 		const { cards: cardDataMap, degraded } = await outputReads.cardData(lookupCards);
 		const arrays = buildDeckListArrays(input.cards, cardDataMap);
+		const commanders = buildDeckListArrays(commanderCards, cardDataMap).mainboard;
 		const companionCard = input.companion
 			? buildDeckListArrays([
 				{
@@ -333,6 +408,7 @@ export function useDeckModeData(context: ScreenContext) {
 			], cardDataMap).sideboard[0] ?? null
 			: null;
 		const artDegraded = await preloadDeckImages([
+			...commanders,
 			...arrays.mainboard,
 			...arrays.sideboard,
 			...(companionCard
@@ -350,6 +426,7 @@ export function useDeckModeData(context: ScreenContext) {
 				deckColors: input.deckColors,
 				companion: input.companion,
 				companionCard,
+				commanders,
 				highlander: input.highlander,
 				deckStats: computeDeckStats(input.cards),
 				mainboard: arrays.mainboard,
@@ -418,8 +495,35 @@ export function useDeckModeData(context: ScreenContext) {
 		};
 	}
 
-	/** What a read shows; `null` for a Player with no deck list. */
+	/** A Seat's deck: its Commanders apart, and every other card of the list it holds as its Mainboard. */
+	function seatDisplayInput(read: SeatDeckRead): DeckDisplayInput {
+		return {
+			source: read.source,
+			primaryHeader: read.playerName,
+			secondaryHeader: read.deckName,
+			deckColors: read.deckColors,
+			cards: commanderMainboard(read.entries, read.commanders).map(entry => ({
+				name: entry.name,
+				setCode: entry.setCode,
+				quantity: entry.quantity,
+				compartment: 'mainboard' as const,
+				cardType: entry.cardType ?? '',
+				scryfallId: entry.scryfallId,
+				highlanderPoints: null,
+			})),
+			companion: null,
+			highlander: null,
+			commanders: read.commanders.map(({ name, scryfallId }) => ({ name, scryfallId })),
+		};
+	}
+
+	/** What a read shows; `null` for a Player with no deck list, or a Seat nobody sits in. */
 	function displayInput(read: DeckSourceRead): DeckDisplayInput | null {
+		if (read.type === 'seat') {
+			return read.commanders.length > 0 || read.entries.length > 0
+				? seatDisplayInput(read)
+				: null;
+		}
 		if (read.type === 'broadcast')
 			return broadcastDisplayInput(read.list);
 		return read.deck && read.deck.cards.length > 0
@@ -477,7 +581,9 @@ export function useDeckModeData(context: ScreenContext) {
 	 * must not cross-fade to itself. Selecting nothing, or a Player whose Deck
 	 * List is gone, blanks program through the same staged swap.
 	 */
-	watch(freshness.data, (read) => {
+	watch(sourceRead, (read) => {
+		if (read === SEAT_READ_PENDING)
+			return;
 		const input = read && displayInput(read);
 		if (!input) {
 			built = null;
@@ -501,6 +607,7 @@ export function useDeckModeData(context: ScreenContext) {
 		companion,
 		highlander,
 		companionCard,
+		commanders,
 		deckStats,
 		mainboard,
 		sideboard,
@@ -514,3 +621,83 @@ export function useDeckModeData(context: ScreenContext) {
 		commitPendingDeck,
 	};
 }
+
+/**
+ * One Seat of a Commander Slot (ADR-0087), followed as a One Piece Card Game
+ * Seat is: the Slot and its Session through the stores, so the Seat shows
+ * whoever sits there now, and that player's Deck List read by the id their
+ * Seat names. A re-paste gives the list a new id and Swap Seats moves it, each
+ * announced with the Slot, so a list is read again only when the id changes.
+ */
+function useSeatDeckRead(
+	context: ScreenContext,
+	config: ComputedRef<DeckModeConfig>,
+	source: () => SeatDeckSource | null,
+) {
+	const outputReads = useScreenOutputReads(context);
+	const slotId = () => source()?.slotId ?? null;
+
+	const slotRead = useScreenFeatureMatchSlot<null>(context, {
+		mode: 'deck',
+		config: () => config.value,
+		slotId,
+		keep: () => null,
+		initialData: null,
+		errorMessage: DECK_LOAD_FAILED,
+	});
+
+	const seated = computed(() => {
+		const shown = source();
+		if (!shown || !slotRead.slot.value)
+			return null;
+		const { data } = featureMatchSidePlayer(slotRead.slot.value, shown.seat);
+		const gameData = getMtgGameData(data?.gameData);
+		return {
+			playerName: playerDisplayName(data),
+			commanders: gameData.commanders ?? [],
+			deckName: gameData.deckName ?? '',
+			deckColors: gameData.deckColors ?? '',
+			deckListId: gameData.featureMatchDeckList?.id ?? null,
+		};
+	});
+	const deckListId = computed(() => seated.value?.deckListId ?? null);
+
+	const deckList = useScreenModeFreshness<ScreenOutputCommanderDeckListResponse | null>({
+		// A list is never edited in place: the Slot announces its replacement's id.
+		hearing: useScreenModeHearing(context, 'deck', () => config.value, { follows: [] }),
+		source: () => {
+			const id = slotId();
+			return id && deckListId.value !== null && outputReads.scopeKey.value
+				? `${outputReads.scopeKey.value}:${id}:${deckListId.value}`
+				: null;
+		},
+		read: () => outputReads.commanderDeckList(slotId()!, deckListId.value!),
+		initialData: null,
+		errorMessage: DECK_LOAD_FAILED,
+	});
+
+	const read = computed<SeatDeckRead | typeof SEAT_READ_PENDING | null>(() => {
+		const shown = source();
+		const held = seated.value;
+		if (!shown)
+			return null;
+		if (!held) {
+			return slotRead.answered.value
+				? null
+				: SEAT_READ_PENDING;
+		}
+		const { deckListId: id, ...player } = held;
+		if (id === null)
+			return { type: 'seat', source: shown, ...player, entries: [] };
+		return deckList.data.value?.id === id
+			? { type: 'seat', source: shown, ...player, entries: deckList.data.value.entries }
+			: SEAT_READ_PENDING;
+	});
+
+	return {
+		read,
+		answered: slotRead.answered,
+		error: computed(() => slotRead.error.value ?? deckList.error.value ?? null),
+	};
+}
+

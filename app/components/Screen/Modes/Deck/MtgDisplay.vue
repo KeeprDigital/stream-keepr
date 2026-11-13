@@ -13,12 +13,21 @@ import { ninePointPlacement } from '~~/shared/utils/ninePoints';
 import { foundationTokenVar, foundationTypographyStyle, modeTokenVar } from '~/modules/screen-mode';
 import { CARD_BADGE_POSITION_CLASSES } from '~/utils/cardBadgePosition';
 
+const props = defineProps<{
+	/**
+	 * The Deck Source is a Commander Slot's Seat (ADR-0087): its Commanders show
+	 * apart, ahead of its Mainboard. It has no Sideboard, so no Board Selection.
+	 */
+	followsSeat?: boolean;
+}>();
+
 const {
 	config,
 	primaryHeader,
 	secondaryHeader,
 	deckColors,
 	companionCard,
+	commanders,
 	highlander,
 	deckStats,
 	mainboard,
@@ -29,7 +38,7 @@ const {
 	displayedDeckVersion,
 	pendingSwapVersion,
 	commitPendingDeck,
-} = useDeckModeData(useScreenContext());
+} = useDeckModeData(useScreenContext(), { followsSeat: props.followsSeat });
 
 const primaryTextStyle = {
 	color: foundationTokenVar('text-primary'),
@@ -100,7 +109,9 @@ async function handleDeckAfterLeave() {
 }
 
 const resolvedBoards = computed(() => resolveDeckBoards(config.value));
-const board = computed(() => resolvedBoards.value.board);
+const board = computed(() => props.followsSeat
+	? 'full'
+	: resolvedBoards.value.board);
 const showMainboard = computed(() => board.value !== 'sideboard' && mainboard.value.length > 0);
 const showSideboard = computed(() => board.value !== 'mainboard' && sideboard.value.length > 0);
 
@@ -119,8 +130,8 @@ type BoardKey = 'mainboard' | 'sideboard';
 interface VisibleBoard {
 	/** The board whose layout it takes, and whose place it stands in. */
 	key: BoardKey;
-	/** What names its section: its board, or the companion standing alone. */
-	name: BoardKey | 'companion';
+	/** What names its section: its board, the companion standing alone, or a Seat's Commanders. */
+	name: BoardKey | 'companion' | 'commanders';
 	label: string;
 	cards: DeckListCardWithData[];
 	layout: ResolvedDeckBoardLayout;
@@ -148,8 +159,25 @@ const sideboardCards = computed(() => {
 /** With no sideboard shown, the companion stands alone where the sideboard would. */
 const companionAlone = computed(() => !!shownCompanion.value && !showSideboard.value);
 
+/** A Seat's Commanders stand apart, where a Sideboard would, and ahead of the Mainboard (ADR-0087). */
+const showCommanders = computed(() => commanders.value.length > 0);
+
 const visibleBoards = computed<VisibleBoard[]>(() => {
 	const boards: VisibleBoard[] = [];
+	if (showCommanders.value) {
+		// Laid out as the sideboard's cards are, in columns of their own.
+		boards.push({
+			key: 'sideboard',
+			name: 'commanders',
+			label: commanders.value.length === 1
+				? 'Commander'
+				: 'Commanders',
+			cards: commanders.value,
+			layout: { ...resolvedBoards.value.sideboard, columns: undefined },
+			view: 'grid',
+			showLabel: true,
+		});
+	}
 	if (showMainboard.value) {
 		boards.push({
 			key: 'mainboard',
@@ -192,7 +220,7 @@ const visibleBoards = computed<VisibleBoard[]>(() => {
 
 /** The boards sit side by side: a sideboard beside its mainboard, or the companion alone in its place. */
 const besideActive = computed(() => sideboardBeside.value
-	|| (companionAlone.value && showMainboard.value && resolvedBoards.value.sideboardPlacement === 'beside'));
+	|| ((companionAlone.value || showCommanders.value) && showMainboard.value && resolvedBoards.value.sideboardPlacement === 'beside'));
 
 // ── The Card Layout: the whole deck at one card size ──
 // A Deck has no pages, so its boards are laid out together from the space
@@ -710,7 +738,7 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 										:card="card"
 										:tag="card === shownCompanion ? 'Companion' : undefined"
 										v-bind="cardBadgeProps[section.key]"
-										:show-quantity="section.name !== 'companion' && showQuantities"
+										:show-quantity="section.name === section.key && showQuantities"
 									/>
 								</ScreenCardGrid>
 
