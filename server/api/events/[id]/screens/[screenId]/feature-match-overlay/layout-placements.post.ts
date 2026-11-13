@@ -3,9 +3,12 @@ import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-l
 import { screenWriteModule } from '~~/server/modules/screen-write';
 import { placeFeatureMatchLayoutTemplateSchema } from '~~/server/schemas/api/featureMatchLayoutTemplate';
 import { screenParamsSchema } from '~~/server/schemas/api/screen';
+import { eventService } from '~~/server/services/event';
 import { screenService } from '~~/server/services/screen';
 import { getOriginConnectionId } from '~~/server/utils/ably';
 import { optionalBrowserSessionId } from '~~/server/utils/auth';
+import { eventKind } from '~~/shared/config/games';
+import { isFeatureMatchLayoutOfferedTo, isFourSeatFeatureMatchLayout } from '~~/shared/featureMatchLayoutSeats';
 
 /**
  * Place a Feature Match Layout Template on this Screen as a fully unlinked copy.
@@ -65,6 +68,19 @@ export default defineEventHandler(async (event) => {
 			statusCode: 404,
 			statusMessage: 'Not Found',
 			message: 'Feature Match Layout Template not found',
+		});
+	}
+
+	// A four-Seat template is a Commander Event's alone, and every other template
+	// every other Event's: its content decides (ADR-0087).
+	const eventData = await eventService().findById(eventId);
+	if (eventData && !isFeatureMatchLayoutOfferedTo(template.document, eventKind(eventData))) {
+		throw createError({
+			statusCode: 409,
+			statusMessage: 'Conflict',
+			message: isFourSeatFeatureMatchLayout(template.document)
+				? `"${template.name}" is a four-Seat template, offered to Commander Events alone`
+				: `"${template.name}" is not a four-Seat template, and a Commander Event is offered those alone`,
 		});
 	}
 

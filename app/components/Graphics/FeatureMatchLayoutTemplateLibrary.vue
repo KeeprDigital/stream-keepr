@@ -76,7 +76,7 @@ const library = useGraphicsTemplateLibrary<FeatureMatchLayoutTemplateSummary>({
 	unavailable: 'The Feature Match Layout Template library is unavailable',
 });
 const {
-	entries: templates,
+	entries,
 	loading,
 	error,
 	signedOut,
@@ -92,6 +92,14 @@ const {
 	remove,
 	packageImport,
 } = library;
+
+/**
+ * The templates this Event is offered: the four-Seat ones on a Commander Event,
+ * and every other one on every other Event (ADR-0087).
+ */
+const eventKind = useEventKind();
+const templates = computed(() => entries.value.filter(template =>
+	(template.fourSeat === true) === (eventKind.value === 'mtg-commander')));
 
 const saving = ref(false);
 /** The template whose placement is awaiting confirmation, if any. */

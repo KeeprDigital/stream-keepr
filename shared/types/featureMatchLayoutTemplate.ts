@@ -64,6 +64,12 @@ export interface FeatureMatchLayoutTemplateSummary {
 	 * built-in states one: a saved or installed layout carries no canvas size.
 	 */
 	aspectRatio?: number;
+	/**
+	 * Present, and true, only on a four-Seat template: one naming a third or fourth
+	 * Seat, or a Commander term. It is offered to Commander Events alone, and every
+	 * other template to every other Event (ADR-0087).
+	 */
+	fourSeat?: true;
 	/** Graphic Items in the saved composition, Graphic Group children included. */
 	itemCount: number;
 	/** Host-owned Source Items the layout frames. */

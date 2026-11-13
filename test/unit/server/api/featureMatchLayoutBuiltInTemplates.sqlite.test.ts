@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import * as authSchema from '~~/server/db/schema/auth';
 import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '~~/shared/builtInFeatureMatchLayoutTemplates';
+import { isFourSeatFeatureMatchLayout } from '~~/shared/featureMatchLayoutSeats';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
@@ -101,6 +102,17 @@ afterAll(async () => {
 	await harness.close();
 });
 
+/** Make the Event the kind this layout is offered to. */
+async function asEventFor(layout: Parameters<typeof isFourSeatFeatureMatchLayout>[0]) {
+	await db.update(schema.events)
+		.set({
+			variant: isFourSeatFeatureMatchLayout(layout)
+				? 'commander'
+				: 'two-player',
+		})
+		.where(eq(schema.events.id, eventId));
+}
+
 async function listed(): Promise<Array<Record<string, unknown>>> {
 	return (await call(listLibrary, {})).templates;
 }
@@ -137,12 +149,34 @@ describe('the built-in Feature Match Layout Templates', () => {
 	});
 
 	it.each(BUILT_INS)('$id replaces the Screen\'s stored layout when placed, as its own copy', async ({ id, layout }) => {
+		await asEventFor(layout);
 		await call(placeTemplate, { id: eventId, screenId }, { templateId: id, stateVersion: 0 });
 
 		const [row] = await db.select().from(schema.screens).where(eq(schema.screens.id, screenId));
 		const stored = row!.modeConfigs?.['feature-match-overlay'] as Record<string, unknown>;
 		expect(stored.layout).toEqual(JSON.parse(JSON.stringify(layout)));
 		expect(stored).not.toHaveProperty('presetId');
+	});
+
+	// A four-Seat template is a Commander Event's alone, and every other template every other Event's (ADR-0087).
+	it.each([
+		{ name: 'the four-Seat built-in on a Two-Player Event', id: 'builtin:commander-table', variant: 'two-player' as const },
+		{ name: 'a two-Seat built-in on a Commander Event', id: 'builtin:full-table', variant: 'commander' as const },
+	])('refuses to place $name, and leaves the Screen\'s layout as it was', async ({ id, variant }) => {
+		await db.update(schema.events).set({ variant }).where(eq(schema.events.id, eventId));
+
+		await expect(call(placeTemplate, { id: eventId, screenId }, { templateId: id, stateVersion: 0 }))
+			.rejects
+			.toMatchObject({
+				statusCode: 409,
+				message: expect.stringContaining('four-Seat'),
+			});
+		const [row] = await db.select().from(schema.screens).where(eq(schema.screens.id, screenId));
+		expect(row!.modeConfigs).toBeNull();
+	});
+
+	it('marks only the four-Seat built-in as four-Seat in the listing', async () => {
+		expect((await listed()).filter(template => template.fourSeat).map(template => template.id)).toEqual(['builtin:commander-table']);
 	});
 
 	it.each([

@@ -10,6 +10,7 @@ import { graphicsAssetLibraryForEvent } from '~~/server/modules/graphics-asset-l
 import { readInstalledFeatureMatchLayoutDocument } from '~~/server/modules/template-package-payload/featureMatchLayout';
 import { featureMatchLayoutTemplateService } from '~~/server/services/featureMatchLayoutTemplate';
 import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '~~/shared/builtInFeatureMatchLayoutTemplates';
+import { isFourSeatFeatureMatchLayout } from '~~/shared/featureMatchLayoutSeats';
 import { flattenGraphicItems } from '~~/shared/modules/graphics';
 
 /**
@@ -210,6 +211,9 @@ export function featureMatchLayoutTemplateLibrarySummary(
 		authored: entry.authored,
 		builtIn: entry.builtIn,
 		aspectRatio: entry.aspectRatio,
+		...(isFourSeatFeatureMatchLayout(entry.document)
+			? { fourSeat: true as const }
+			: {}),
 		itemCount: flattenGraphicItems(entry.document.composition).length,
 		sourceCount: entry.document.sources.length,
 		createdAt: entry.createdAt,

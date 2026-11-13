@@ -1,5 +1,5 @@
 import type { FeatureMatchLayoutEdge } from './featureMatchLayoutItems';
-import type { PlayerSide } from './types/enums';
+import type { PlayerSide, Seat } from './types/enums';
 import type { GraphicGroupChildConfig, GraphicItemConfig, GraphicSurfaceStyle, GraphicTypography } from './types/graphics';
 import type { GraphicThemeSlot } from './types/graphicThemeBindings';
 import type {
@@ -24,9 +24,10 @@ import {
 	textItem,
 	typography,
 } from './featureMatchLayoutItems';
-import { roundedShapeGeometry } from './modules/graphics/shapeGeometry';
+import { roundedShapeGeometry, squareShapeGeometry } from './modules/graphics/shapeGeometry';
 import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, graphicThemeOwnerSupportsSlot } from './modules/graphics/themeBindings';
 import { DEFAULT_FRAME_ANIMATION, DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG } from './screenGraphicsDefaults';
+import { seatNumber } from './utils/featureMatchSidePlayer';
 
 /**
  * The built-in Feature Match Layout Templates, which the Templates library lists
@@ -80,7 +81,10 @@ function builtInBindings(item: GraphicItemConfig | GraphicGroupChildConfig): Par
 			? 'heading'
 			: 'body',
 		'typography.color': 'text-primary',
-		'surfaceStyle': 'panel',
+		// A Seat Indicator's colour is its meaning, a turn or an Eliminated Seat, so it keeps its own.
+		...(item.type === 'seat-indicator'
+			? {}
+			: { surfaceStyle: 'panel' }),
 		...(OWN_PICTURE_ITEMS.has(item.id)
 			? {}
 			: { media: 'logo' }),
@@ -902,6 +906,156 @@ function neonFeatureMatchConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureM
 	};
 }
 
+/* ────────────────────────────────────────────────
+ * Commander Table
+ * ──────────────────────────────────────────────── */
+
+/** A Seat Indicator's enter and exit: a short fade as its Seat's state flips. */
+const SEAT_INDICATOR_FADE = {
+	duration: 300,
+	easing: 'ease-out' as const,
+	delay: 0,
+	fade: { opacity: 0 },
+};
+
+/**
+ * One Seat of the Commander table: its source, and beneath it a plate holding
+ * its Commanders' cards, its name, its deck and its life. Over the source sit
+ * the Commander Damage it has taken, a bar while it has the turn and a dim
+ * once it is Eliminated. An empty Seat shows none of it.
+ */
+function commanderSeat(seat: Seat, cell: { x: number; y: number }): { source: FeatureMatchSourceItemConfig; items: GraphicItemConfig[] } {
+	const number = seatNumber(seat);
+	const { x, y } = cell;
+	const width = 924;
+	const sourceHeight = 412;
+	const plateY = y + sourceHeight + 8;
+	return {
+		source: {
+			id: `${seat}-source`,
+			label: `Seat ${number} Source`,
+			visible: true,
+			sourceRole: seat,
+			frameCutout: true,
+			x,
+			y,
+			width,
+			height: sourceHeight,
+			framingStyle: roundedSourceFraming(),
+		},
+		items: [
+			groupItem({
+				id: `${seat}-plate`,
+				label: `Seat ${number} Plate`,
+				x,
+				y: plateY,
+				width,
+				height: 84,
+				surfaceStyle: surfaceStyle(solidFill('#333333')),
+				children: [
+					textItem({
+						id: `${seat}-name`,
+						label: 'Commanders and Name',
+						x: 16,
+						y: 0,
+						width: 760,
+						height: 84,
+						text: `{${seat}Commander1Image}{${seat}Commander2Image} {${seat}Name}\n{${seat}DeckColors} {${seat}Deck}`,
+						typography: playerBarTypography({ fontSize: 26 }),
+					}),
+					playerLifeItem({
+						id: `${seat}-life`,
+						label: 'Life Total',
+						x: 792,
+						y: 0,
+						width: 132,
+						height: 84,
+						playerSide: seat,
+						typography: typography({ fontSize: 46, fontWeight: 800, textAlign: 'center' }),
+					}),
+				],
+			}),
+			{
+				type: 'commander-damage',
+				id: `${seat}-commander-damage`,
+				label: `Seat ${number} Commander Damage`,
+				visible: true,
+				anchor: 'top-left',
+				x: x + 16,
+				y: y + 16,
+				width: 440,
+				height: 56,
+				playerSide: seat,
+				typography: typography({ fontSize: 34, fontWeight: 800 }),
+				overflowPolicy: 'shrink',
+				minFontSize: 18,
+				surfaceStyle: surfaceStyle(solidFill('#333333')),
+			},
+			{
+				type: 'seat-indicator',
+				id: `${seat}-turn`,
+				label: `Seat ${number} Turn`,
+				visible: true,
+				anchor: 'top-left',
+				x,
+				y: y + sourceHeight,
+				width,
+				height: 8,
+				playerSide: seat,
+				state: 'active',
+				geometry: squareShapeGeometry(),
+				surfaceStyle: surfaceStyle(solidFill('#f5c518')),
+				animation: { enter: SEAT_INDICATOR_FADE, exit: SEAT_INDICATOR_FADE },
+			},
+			{
+				type: 'seat-indicator',
+				id: `${seat}-eliminated`,
+				label: `Seat ${number} Eliminated`,
+				visible: true,
+				anchor: 'top-left',
+				x,
+				y,
+				width,
+				height: sourceHeight,
+				playerSide: seat,
+				state: 'eliminated',
+				geometry: roundedShapeGeometry(8),
+				surfaceStyle: {
+					fill: solidFill('#000000'),
+					fillOpacity: 0.7,
+				},
+				animation: { enter: SEAT_INDICATOR_FADE, exit: SEAT_INDICATOR_FADE },
+			},
+		],
+	};
+}
+
+/** Four Seats, two by two and clockwise from the top left, as Feature Match Controls show them (ADR-0087). */
+function commanderTableConfig(): Omit<FeatureMatchOverlayModeConfig, 'featureMatchId'> {
+	const seats = [
+		commanderSeat('player1', { x: 24, y: 24 }),
+		commanderSeat('player2', { x: 972, y: 24 }),
+		commanderSeat('player3', { x: 972, y: 552 }),
+		commanderSeat('player4', { x: 24, y: 552 }),
+	];
+	return {
+		layout: {
+			frame: {
+				opacity: 1,
+				backgroundImageFit: 'cover',
+				mediaBackground: { ...DEFAULT_SCREEN_MEDIA_BACKGROUND_CONFIG },
+				animation: { ...DEFAULT_FRAME_ANIMATION },
+			},
+			sources: seats.map(seat => seat.source),
+			composition: {
+				id: FEATURE_MATCH_LAYOUT_COMPOSITION_ID,
+				name: FEATURE_MATCH_LAYOUT_COMPOSITION_NAME,
+				items: seats.flatMap(seat => seat.items),
+			},
+		},
+	};
+}
+
 export const BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES: BuiltInFeatureMatchLayoutTemplate[] = [
 	{
 		id: 'full-table',
@@ -923,5 +1077,12 @@ export const BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES: BuiltInFeatureMatchLayoutT
 		description: 'A broadcast frame with player cameras, a full-width scoreboard, edge-ruled name bars, branding panels either side, and looping video background support.',
 		aspectRatio: 16 / 9,
 		config: themeBoundConfig(neonFeatureMatchConfig()),
+	},
+	{
+		id: 'commander-table',
+		label: 'Commander Table',
+		description: 'Four Seats, two by two: each with its source, a plate of its Commanders, name, deck and life, its Commander Damage, and marks for its turn and for an Eliminated Seat.',
+		aspectRatio: 16 / 9,
+		config: themeBoundConfig(commanderTableConfig()),
 	},
 ];

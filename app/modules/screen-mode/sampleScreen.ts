@@ -1,6 +1,6 @@
 import type { Ref } from 'vue';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
-import type { Game, ScreenMode } from '~~/shared/types/enums';
+import type { Game, ScreenMode, Variant } from '~~/shared/types/enums';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { Screen } from '~/types';
 import { computed, ref } from 'vue';
@@ -10,6 +10,8 @@ interface ScreenModeSampleContextOptions {
 	mode: ScreenMode;
 	/** The Card Game whose sample the preview shows. */
 	game: Game;
+	/** Its Variant, where the preview is of a Commander Event. */
+	variant?: Variant;
 	/** The Theme previewed, as stored; undefined previews the Default Theme. */
 	themeTokens: Ref<StoredThemeTokens | undefined>;
 	viewport: Readonly<Ref<{ width: number; height: number }>>;
@@ -31,7 +33,7 @@ export function createScreenModeSampleContext(options: ScreenModeSampleContextOp
 		name: 'Sample',
 		slug: 'sample',
 		currentMode: options.mode,
-		modeConfigs: screenModeSampleConfigs(options.mode, options.game),
+		modeConfigs: screenModeSampleConfigs(options.mode, options.game, options.variant),
 		stateVersion: 0,
 		createdAt: new Date(0),
 		updatedAt: new Date(0),
@@ -45,6 +47,7 @@ export function createScreenModeSampleContext(options: ScreenModeSampleContextOp
 		outputMode: ref('overlay'),
 		themeTokens: options.themeTokens,
 		sampleDataset: options.game,
+		sampleVariant: options.variant,
 		viewport: options.viewport,
 	};
 }
