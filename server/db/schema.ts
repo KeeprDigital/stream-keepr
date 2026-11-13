@@ -36,6 +36,7 @@ import {
 	ROUND_CONTROL_MODE_VALUES,
 	SCREEN_MODE_VALUES,
 	UNRESOLVED_DECK_ENTRY_TYPE_VALUES,
+	VARIANT_VALUES,
 } from '~~/shared/types/enums';
 import { FEATURE_MATCH_SESSION_STATUS_VALUES } from '~~/shared/types/featureMatchSession';
 
@@ -103,6 +104,8 @@ export const events = sqliteTable('events', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	name: text('name').notNull(),
 	game: text('game', { enum: GAME_VALUES }).notNull(),
+	// A Magic: The Gathering Event's Variant, set at creation and never changed; none on any other Card Game (ADR-0087).
+	variant: text('variant', { enum: VARIANT_VALUES }),
 	featureMatchOrientation: text('feature_match_orientation', { enum: FEATURE_MATCH_ORIENTATION_VALUES }).notNull(),
 	cardTimeout: integer('card_timeout').notNull().default(0),
 	numFeatureMatches: integer('num_feature_matches').notNull().default(1),

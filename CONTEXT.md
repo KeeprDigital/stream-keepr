@@ -13,6 +13,10 @@ A competitive gaming tournament managed by Stream Keepr.
 The trading card game an Event is played in: Magic: The Gathering or One Piece Card Game. Chosen when the Event is created and never changed; it decides which cards, Deck Lists, match state and presentation the Event can hold.
 _Avoid_: game, game mode, game system, TCG.
 
+**Variant**:
+How a Magic: The Gathering Event's games are played: Two-Player, or Commander, a free-for-all among up to four players in a single game. Chosen when the Event is created and never changed, as its Card Game is; a One Piece Card Game Event has none. A Commander Event is a Magic: The Gathering Event of the Commander Variant. It is produced from its Feature Match Slots alone: it has no Players, Rounds, Matches, Metagame or Archetypes, Melee Sync never runs on one, and each player and deck is typed in on a Slot's **Seat** (ADR-0087).
+_Avoid_: game mode, mode, format (a format is a card pool, and an Event's Match Format is its best-of and clock settings).
+
 **Phase**:
 A segment of an Event structure, such as Swiss or Top Cut.
 
@@ -52,13 +56,17 @@ _Avoid_: name, display name, when meaning the TCG+ handle.
 Submitted cards for a game: a Player's (one per Phase on Magic: The Gathering; one per Player on One Piece Card Game, imported or entered by hand), or a Feature Match Deck List.
 
 **Leader**:
-The single leader card heading a One Piece Card Game Deck List, held apart from its Mainboard. It sets the Deck List's colours and is how the community names the deck. A Player's Leader is their Deck List's. A Feature Match Slot side linked to a Player shows that Player's; an unlinked side holds one picked by the operator, which its Feature Match Deck List shares (ADR-0057, ADR-0074).
+The single leader card heading a One Piece Card Game Deck List, held apart from its Mainboard. It sets the Deck List's colours and is how the community names the deck. A Player's Leader is their Deck List's. A Feature Match Slot Seat linked to a Player shows that Player's; an unlinked Seat holds one picked by the operator, which its Feature Match Deck List shares (ADR-0057, ADR-0074).
+
+**Commander**:
+One of the one or two cards heading a deck on a Commander Event, held apart from its Mainboard. Together they set the deck's colours, by colour identity, and are how the community names the deck. A Feature Match Slot Seat holds the Commanders its operator picked, which its Feature Match Deck List shares.
+_Avoid_: general, EDH; Commander alone for the Variant where it could be read as the card (say Commander Event).
 
 **Mainboard**:
 The starting portion of a Deck List — the cards a Player begins each game with.
 
 **Sideboard**:
-The reserve portion of a Deck List, exchanged with Mainboard cards between games.
+The reserve portion of a Deck List, exchanged with Mainboard cards between games. A Commander Event's Deck List has none.
 
 **Board Selection**:
 Which boards of a Deck List a rendering surface presents: Full (Mainboard and Sideboard), Mainboard only, or Sideboard only. Shared by every deck-rendering surface, including Metagame card filtering.
@@ -73,10 +81,10 @@ Analysis of Players, Deck Lists, cards, archetypes, and standings within an Even
 Which Players a Metagame read counts: every Player, the top N by placement, those with at least a minimum match-point total, or one Player List's members. A One Piece Card Game Event, having no standings, offers only every Player and a Player List, and reads any other scope as every Player (ADR-0074). The Metagame page and every Screen Mode reading the Metagame carry the same scope, so a scope asks each read the same question; an Archetype's pilots, meta share and Conversion Rate are read within it.
 
 **Archetype**:
-A strategic Deck classification used for Metagame analysis. On a Magic: The Gathering Event an operator assigns one to a Deck List in **Archetype Review**, and a Player's Archetype is that of their primary Deck List. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand. An operator renaming one or pinning its series customises it, and a customised Archetype stays when its last Player leaves (ADR-0074).
+A strategic Deck classification used for Metagame analysis. On a Two-Player Magic: The Gathering Event an operator assigns one to a Deck List in **Archetype Review**, and a Player's Archetype is that of their primary Deck List. On a One Piece Card Game Event an Archetype is a Leader card: a Player's Archetype follows their Leader and is never assigned by hand. A Commander Event has none. An operator renaming one or pinning its series customises it, and a customised Archetype stays when its last Player leaves (ADR-0074).
 
 **Archetype Review**:
-The Magic: The Gathering workflow in which an operator assigns each Player's Deck List an Archetype. A Deck List is reviewed once it holds one and unreviewed until then; reassigning moves one reviewed Deck List to another Archetype, where renaming an Archetype changes it for every Deck List it holds, and merging one into another moves every Deck List it holds to the survivor (ADR-0085). A One Piece Card Game Event has none.
+The Two-Player Magic: The Gathering workflow in which an operator assigns each Player's Deck List an Archetype. A Deck List is reviewed once it holds one and unreviewed until then; reassigning moves one reviewed Deck List to another Archetype, where renaming an Archetype changes it for every Deck List it holds, and merging one into another moves every Deck List it holds to the survivor (ADR-0085). A Commander Event and a One Piece Card Game Event have none.
 
 **Empty Archetype**:
 An Archetype no Deck List in its Event is assigned to, whichever Deck List is a Player's primary and whatever the Metagame Scope, and that no Player holds without one. An Archetype with no **Pilot** in the current scope is not thereby empty. On a Magic: The Gathering Event it stays until an operator removes it, alone or with every other; a One Piece Card Game Event removes its own (ADR-0074, ADR-0085).
@@ -132,13 +140,24 @@ An Event-scoped card list prepared by an operator solely for display on a Deck L
 Optional broadcast-only text and mana colours on a Broadcast Deck List, used as its secondary Deck List Screen identity. It does not reference an Archetype.
 
 **Deck Source**:
-The required data binding of a Deck List Screen: either one Event-scoped Player (or no selected Player), one Event-scoped Broadcast Deck List, or one player side of an Event-scoped Feature Match Slot.
+The required data binding of a Deck List Screen: either one Event-scoped Player (or no selected Player), one Event-scoped Broadcast Deck List, or one Seat of an Event-scoped Feature Match Slot.
 
 ### Feature Match production
 
 **Feature Match Slot**:
 A reusable production control lane for showing one featured Match at a time, using mutable display/control snapshot data. A Match occupies at most one Slot.
 _Avoid_: Feature Match when referring to the reusable lane.
+
+**Seat**:
+One player position of a Feature Match Slot, numbered in the Slot's own order: two on a Two-Player Magic: The Gathering or One Piece Card Game Event, up to four on a Commander Event, where a Seat is a place at the table: Seats run clockwise, an operator surface shows each where it sits, and the turn passes in Seat order. A Seat is linked to a Player or holds data its operator typed; on a Commander Event, which has no Players, every Seat is typed: a name, pronouns and LGS where the Event shows them, its Commanders, and an optional Feature Match Deck List. An empty Seat is not in the game.
+_Avoid_: side, player side (a Match keeps its two sides); pod, for a Commander Slot's Seats together.
+
+**Commander Damage**:
+The damage a Seat has taken from one opposing Commander on a Commander Event, counted per Commander, so a Seat facing a pair holds a count for each. Entering it lowers that Seat's life by the same amount.
+
+**Eliminated**:
+A Seat whose player is out of a Commander game. Only an operator sets or clears it: nothing derives it from life, Commander Damage or counters.
+_Avoid_: dead, knocked out, lost.
 
 **Feature Match Assignment**:
 A Round-scoped selection of a Match for a Feature Match Slot. Moving the same Match to another Slot continues the Assignment; replacing it with a different Match ends it.
@@ -148,11 +167,11 @@ _Avoid_: Feature Match when referring to the saved Round selection.
 A single mutable plain-text production note belonging to a Feature Match Assignment. It moves with the Assignment between Slots and is discarded when the Assignment ends. Feature Match Notes are off for a new Event; switching them off hides them from production surfaces without deleting any.
 
 **Feature Match Deck List**:
-A Deck List held by one player side of a Feature Match Slot rather than by a Player, pasted by the operator. Only a side with no linked Player holds one; a linked side shows its Player's Deck List. It stays until replaced or its side is cleared, moves with its player when the sides are swapped, and never counts in the Metagame (ADR-0074).
+A Deck List held by one Seat of a Feature Match Slot rather than by a Player, pasted by the operator. Only a Seat with no linked Player holds one; a linked Seat shows its Player's Deck List. It stays until replaced or its Seat is cleared, moves with its player when Seats are swapped, and never counts in the Metagame (ADR-0074). On a Commander Event it holds Magic: The Gathering cards, each the exact printing its pasted line names, its Commanders apart from its Mainboard (ADR-0087).
 _Avoid_: slot deck, match deck.
 
 **Feature Match Session**:
-The live state timeline for a Feature Match Slot. It owns which side each player sits on: Swap Players moves them in the Session only, and the Slot keeps its pairing order (ADR-0058).
+The live state timeline for a Feature Match Slot. It owns which Seat each player sits in: Swap Players moves them in the Session only, and the Slot keeps its pairing order (ADR-0058). A Commander Event's Session plays one game, with no best-of and no game wins: it tracks each Seat's life, **Commander Damage**, counters and cards kept, which Seats are **Eliminated**, and the turn, which passes in Seat order over empty and Eliminated Seats, its number going up each time it returns to the Seat that went first. It completes when its operator declares a winning Seat or a draw, and nothing outside the Session records the outcome. A Commander Slot has no pairing order to keep, so swapping two of its Seats moves their players in the Slot itself, with all they hold and their live state (ADR-0087).
 
 **Untimed Match**:
 A Feature Match whose Session clock type is untimed: it has no clock to run and so no extra turns. The type comes from the Event's Match Format when the Session opens. Where its clock would render, it shows the Event's Untimed Label, or nothing while that label is blank.
@@ -416,7 +435,7 @@ What an Event sets once for every Screen it has: its Theme, its Event Canvas, an
 _Avoid_: on-air formatting (when naming the whole group)
 
 **Screen Mode Sample Dataset**:
-One fixed canonical set of Event Data per Card Game, chosen by the Event's Card Game, that a Theme preview renders every Screen Mode against, with the card data its cards are drawn with, a Screen Card, and one built-in Theme-bound Broadcast Graphic on air. That graphic is no Broadcast Graphic Template. The One Piece Card Game set holds a Feature Match Slot whose sides hold Leaders and a Feature Match Deck List, and a Printing as its Screen Card. A Theme serves Events of every Card Game and has no Event of its own, so its preview shows the Card Game the operator picks. Like the Feature Match Sample Dataset, it never appears on a live Screen Output.
+One fixed canonical set of Event Data per Card Game, chosen by the Event's Card Game, that a Theme preview renders every Screen Mode against, with the card data its cards are drawn with, a Screen Card, and one built-in Theme-bound Broadcast Graphic on air. That graphic is no Broadcast Graphic Template. The One Piece Card Game set holds a Feature Match Slot whose Seats hold Leaders and a Feature Match Deck List, and a Printing as its Screen Card. A Commander Event has a set of its own, which the preview offers as a pick beside the Card Games. A Theme serves Events of every Card Game and has no Event of its own, so its preview shows the Card Game the operator picks. Like the Feature Match Sample Dataset, it never appears on a live Screen Output.
 _Avoid_: dummy data, test data
 
 **Graphic Theme Binding**:
@@ -699,16 +718,22 @@ _Avoid_: object fit, scaling mode
 A Graphic Item that renders a bounded Shape Geometry.
 
 **Deck List Graphic Item**:
-A feature-match-context Graphic Item rendering one player side's Sideboard as cards or a text list within its bounds, with no framing, labels, or board choice of its own. An empty Sideboard renders nothing.
+A feature-match-context Graphic Item rendering one Seat's Sideboard as cards or a text list within its bounds, with no framing, labels, or board choice of its own. An empty Sideboard renders nothing.
 
 **Clock Graphic Item**:
 A context-gated Graphic Item that renders the active Feature Match Session clock, the Untimed Label for an Untimed Match, or nothing at all while that label is blank.
 
 **Player Life Graphic Item**:
-A context-gated Graphic Item that renders one Player's life total.
+A context-gated Graphic Item that renders one Seat's life total.
 
 **Game Wins Graphic Item**:
-A context-gated Graphic Item that renders one Player's game-win indicators.
+A context-gated Graphic Item that renders one Seat's game-win indicators.
+
+**Commander Damage Graphic Item**:
+A context-gated Graphic Item that renders the Commander Damage one Seat has taken: one count per opposing Commander, in Seat order, each hidden while zero. Commander Events only.
+
+**Seat Indicator Graphic Item**:
+A context-gated Graphic Item shown only while its Seat is in the state its author picked, the active player's or Eliminated, playing its enter and exit as that state flips. It is how a Feature Match Layout marks whose turn it is and who is out.
 
 **Shape Geometry**:
 A parameterised rectangle with independently square, rounded, or cut corners and bounded left or right edge slant. Rectangle, rule, slanted-edge, and corner-cut presets initialise the same geometry rather than distinct types. One corner editor edits it wherever it appears, and edits a Source Item's corner radii as rounded corners only.
@@ -788,15 +813,15 @@ Former term. The built-in starting layouts are built-in **Feature Match Layout T
 _Avoid_: Preset for a built-in layout; say built-in Feature Match Layout Template.
 
 **Feature Match Layout Template**:
-A reusable Feature Match Layout that can be copied into a Screen's Feature Match Overlay configuration: one an author saved, one a Template Package installed, or a built-in one the application ships. It carries no Feature Match Slot assignment, and placing one replaces the Screen's whole layout as an unlinked copy. A built-in one is marked as such, is placed like any other, and cannot be revised, removed or exported.
+A reusable Feature Match Layout that can be copied into a Screen's Feature Match Overlay configuration: one an author saved, one a Template Package installed, or a built-in one the application ships. It carries no Feature Match Slot assignment, and placing one replaces the Screen's whole layout as an unlinked copy. A built-in one is marked as such, is placed like any other, and cannot be revised, removed or exported. A template naming a third or fourth Seat, or anything only a Commander Event holds, is a four-Seat template, offered to Commander Events alone; every other template is offered to every other Event. Its content decides which, and nothing declares it.
 _Avoid_: Preset
 
 **Feature Match Layout Host Vocabulary**:
-The terms a Feature Match Layout uses whose meaning the installation supplies: Source Roles and Feature Match tokens a Graphic Text Template binds. Each is closed and pinned by the layout format version, so a package naming an unimplemented term is refused. The Frame's Animation Effect was one until it became a Mode Token; its identity is still recognised.
+The terms a Feature Match Layout uses whose meaning the installation supplies: Source Roles, naming the main source or one Seat's, and Feature Match tokens a Graphic Text Template binds. On a Commander Event a Seat's deck token names its Commanders, its colours token their colour identity, and an image token each Commander's card. Each is closed and pinned by the layout format version, so a package naming an unimplemented term is refused. The Frame's Animation Effect was one until it became a Mode Token; its identity is still recognised.
 _Avoid_: Free-form role, camera name
 
 **Feature Match Sample Dataset**:
-One fixed canonical set of Feature Match values per Card Game, chosen by the Event's Card Game, that a preview resolves a Feature Match Layout against when no Feature Match Slot is bound; a Theme preview, which has no Event, uses the Card Game the operator picks. The One Piece Card Game set names each side's Leader. It never appears on a live Screen Output.
+One fixed canonical set of Feature Match values per Card Game, chosen by the Event's Card Game, that a preview resolves a Feature Match Layout against when no Feature Match Slot is bound; a Theme preview, which has no Event, uses the Card Game the operator picks. The One Piece Card Game set names each Seat's Leader, and a Commander Event has a set of its own, seating four. It never appears on a live Screen Output.
 _Avoid_: Dummy data, test data
 
 **Feature Match Stress Dataset**:
@@ -819,20 +844,20 @@ _Avoid_: worst-case data, overflow data
 - A **Feature Match Assignment** connects exactly one **Match** to exactly one **Feature Match Slot** for exactly one **Round**, and may have one **Feature Match Note**
 - Within one **Round**, a **Match** and a **Feature Match Slot** each have at most one **Feature Match Assignment**
 - A **Feature Match Slot Promotion** creates or updates one **Feature Match Assignment**
-- A **Feature Match Slot**'s player side has at most one **Feature Match Deck List**; in a One Piece Card Game Event a side linked to a **Player** shows that Player's **Deck List** and **Leader** instead, and an unlinked side's Feature Match Deck List is its only Deck List, its **Leader** the side's Leader. Replacing either while a **Feature Match Session** is active updates that Session's source snapshot (ADR-0074)
+- A **Feature Match Slot**'s Seat has at most one **Feature Match Deck List**; in a One Piece Card Game Event a Seat linked to a **Player** shows that Player's **Deck List** and **Leader** instead, and an unlinked Seat's Feature Match Deck List is its only Deck List, its **Leader** the Seat's Leader. Replacing either while a **Feature Match Session** is active updates that Session's source snapshot (ADR-0074)
 - Every One Piece Card Game **Player**'s **Deck List** counts in the **Metagame**; a **Feature Match Deck List** never does (ADR-0074)
 - A **Feature Match Session** belongs to exactly one **Feature Match Slot**; while active, the Slot's identity binding fields resolve from the session's source snapshot and its live binding fields from the session's current state
-- While a **Feature Match Session** is active, it decides which player each side of its **Feature Match Slot** shows; the Slot's own sides keep their pairing order
-- Deleting a **Player** leaves each **Feature Match Slot** side seating them with no Player: the side keeps the data it shows but none of that Player's Deck List reference, the Slot's active **Feature Match Session** is corrected to it, and the Slot is announced
+- While a **Feature Match Session** is active, it decides which player each Seat of its **Feature Match Slot** shows; the Slot's own Seats keep their pairing order
+- Deleting a **Player** leaves each **Feature Match Slot** Seat seating them with no Player: the Seat keeps the data it shows but none of that Player's Deck List reference, the Slot's active **Feature Match Session** is corrected to it, and the Slot is announced
 - Deleting a **Match**, alone or as one Melee no longer lists, unlinks each **Feature Match Slot** showing it and deletes its **Feature Match Assignments**; both are announced
 
 ### Screens and outputs
 
 - A **Screen** has exactly one current **Screen Mode**
-- A Deck **Screen Mode** has exactly one **Deck Source**: either no Player or one Player from the Screen's **Event**, one **Broadcast Deck List** from that Event while Broadcast Deck Lists are enabled, or one player side of a **Feature Match Slot** from that Event, followed live
+- A Deck **Screen Mode** has exactly one **Deck Source**: either no Player or one Player from the Screen's **Event**, one **Broadcast Deck List** from that Event while Broadcast Deck Lists are enabled, or one Seat of a **Feature Match Slot** from that Event, followed live
 - A selected **Broadcast Deck List** prevents deleting that list or disabling Broadcast Deck Lists; deleting the whole **Event** is the cascade exception
 - Deleting a selected **Player**, alone or in a Melee data reset, clears every **Deck Source** naming them to no Player in the same write (ADR-0032)
-- Deleting a **Feature Match Slot**, alone or by lowering the Event's Slot count, clears every **Deck Source** showing a side of it to no Slot in the same write (ADR-0057), and sets every other **Event Reference** naming it to none (ADR-0060); each such **Screen** is announced, so its **Screen Output** shows its mode's no-Slot state
+- Deleting a **Feature Match Slot**, alone or by lowering the Event's Slot count, clears every **Deck Source** showing a Seat of it to no Slot in the same write (ADR-0057), and sets every other **Event Reference** naming it to none (ADR-0060); each such **Screen** is announced, so its **Screen Output** shows its mode's no-Slot state
 - A Metagame **Screen**'s cards view and a Most Played Cards **Screen** may each count one **Archetype**'s cards alone, naming it by an **Event Reference**: renaming the Archetype keeps the filter, and deleting it unsets the filter, so the Screen counts every Archetype's cards (ADR-0038, ADR-0060)
 - **Broadcast Graphics Screen** and **Feature Match Overlay** each expose **Overlay Output**, **Fill Output**, and **Key Output** variants with identical canvas dimensions, all derived from one final composed frame
 - A graphics **Screen Output** uses one stable Screen URL with an output selection; an omitted or invalid selection renders the **Overlay Output**
@@ -896,7 +921,7 @@ _Avoid_: worst-case data, overflow data
 - The shared base **Graphic Item** kinds are **Text Graphic Item**, **Media Graphic Item**, **Shape Graphic Item**, and **Graphic Group**
 - A **Graphic Group** may contain any context-available **Graphic Item** except another **Graphic Group**
 - A **Shape Graphic Item** renders one **Shape Geometry**; a **Media Graphic Item** or **Graphic Group** may use one as its clipping boundary
-- A **Text Graphic Item**, **Shape Graphic Item**, **Graphic Group**, **Clock Graphic Item**, **Player Life Graphic Item**, or **Game Wins Graphic Item** may have one **Graphic Surface Style** of its own, which may have one **Graphic Fill**; a **Game Wins Graphic Item** has two more, for an unwon and a won win box. Which surfaces and which **Shape Geometry** a kind has, and whether it reads a player side, are its **Graphic Item Definition**'s to declare
+- A **Text Graphic Item**, **Shape Graphic Item**, **Graphic Group**, **Clock Graphic Item**, **Player Life Graphic Item**, or **Game Wins Graphic Item** may have one **Graphic Surface Style** of its own, which may have one **Graphic Fill**; a **Game Wins Graphic Item** has two more, for an unwon and a won win box. Which surfaces and which **Shape Geometry** a kind has, and whether it reads a Seat, are its **Graphic Item Definition**'s to declare
 - A **Broadcast Graphic** and each **Graphic Group** own the **Graphic Layer Order** of their direct Graphic Items
 - Every top-level **Graphic Item** and canvas-positioned **Graphic Group** child has one **Graphic Anchor Point**, and may have one **Graphic Rotation**
 - A **Text Graphic Item** may render a **Graphic Text Template**, may define one **Graphic Placeholder Style** per referenced **Graphic Input**, and has one **Text Overflow Policy**; a **Clock Graphic Item** and a **Player Life Graphic Item** each have one too
@@ -1021,5 +1046,6 @@ _Avoid_: worst-case data, overflow data
 - A **Feature Match Overlay** renders exactly one **Feature Match Layout** for exactly one **Feature Match Slot**
 - A **Feature Match Layout** has exactly one **Feature Match Overlay Frame** and one or more **Graphic Items**
 - A **Source Item** may cut through the **Feature Match Overlay Frame**
+- An empty **Seat**'s **Source Item** and the **Graphic Items** reading it render nothing
 - A **Feature Match Layout Template** stores a reusable **Feature Match Layout**; a built-in one ships with the application and is stored nowhere
 - A **Feature Match Layout** declares its **Feature Match Layout Host Vocabulary** to a **Template Package** and never carries an Event identity

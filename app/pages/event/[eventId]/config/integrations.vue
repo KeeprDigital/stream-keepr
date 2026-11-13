@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { EVENT_PAGE_CARD_GAMES } from '~~/shared/config/games';
+import { EVENT_PAGE_OFFERED_TO } from '~~/shared/config/games';
 
 definePageMeta({
-	cardGames: EVENT_PAGE_CARD_GAMES.integrations,
+	offeredTo: EVENT_PAGE_OFFERED_TO.integrations,
 });
 
 const eventStore = useEventStore();

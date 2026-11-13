@@ -1,6 +1,7 @@
 import type { UpdateEventInput } from '~~/server/schemas/api/event';
 import type { EventResponse } from '~~/shared/api';
 import { eventDataPublicationModule } from '~~/server/modules/event-data-publication';
+import { BROADCAST_DECK_LISTS_REFUSAL } from '~~/server/schemas/api/event';
 import { cardService } from '~~/server/services/card';
 import { eventService } from '~~/server/services/event';
 import { featureMatchService } from '~~/server/services/featureMatch';
@@ -8,6 +9,7 @@ import { screenService } from '~~/server/services/screen';
 import { themeService } from '~~/server/services/theme';
 import { BroadcastDeckListsInUseError, runCompensation } from '~~/server/utils/errors';
 import { requireTalentInEvent } from '~~/server/utils/routeGuards';
+import { holdsBroadcastDeckLists } from '~~/shared/config/games';
 import { BROADCAST_DECK_LISTS_IN_USE } from '~~/shared/types/broadcastDeckList';
 import { FEATURE_MATCH_DEFAULT_COLUMN_SELECTION } from '~~/shared/types/featureMatchDefaults';
 
@@ -51,10 +53,10 @@ export function eventWriteModule() {
 					message: 'Event not found',
 				});
 			}
-			if (current.game !== 'mtg') {
+			if (!holdsBroadcastDeckLists(current)) {
 				throw createError({
 					statusCode: 400,
-					message: 'Broadcast Deck Lists can only be enabled for MTG Events',
+					message: BROADCAST_DECK_LISTS_REFUSAL,
 				});
 			}
 		}

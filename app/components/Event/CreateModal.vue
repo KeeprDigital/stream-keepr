@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { Game } from '~~/shared/types/enums';
+import type { Game, Variant } from '~~/shared/types/enums';
 import type { FeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { getGameDefaults } from '~~/shared/config/games';
+import { cardGameHasVariant, eventKind, getMatchFormatDefaults } from '~~/shared/config/games';
 import { fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 
 const emit = defineEmits<{
@@ -18,13 +18,18 @@ const formId = 'create-event-form';
 const formData = ref({
 	name: '',
 	game: 'mtg' as Game,
+	// Only a Magic: The Gathering Event has a Variant; it is kept here while another Card Game is picked (ADR-0087).
+	variant: 'two-player' as Variant,
 	featureMatchOrientation: 'horizontal' as const,
-	...getGameDefaults('mtg'),
+	...getMatchFormatDefaults('mtg-two-player'),
 });
 
-// Seed defaults when game changes
-watch(() => formData.value.game, (game) => {
-	Object.assign(formData.value, getGameDefaults(game));
+const hasVariant = computed(() => cardGameHasVariant(formData.value.game));
+const kind = computed(() => eventKind(formData.value));
+
+// Seed the Match Format the Card Game and Variant start with when either changes.
+watch(kind, (next) => {
+	Object.assign(formData.value, getMatchFormatDefaults(next));
 });
 
 async function submit() {
@@ -32,10 +37,13 @@ async function submit() {
 		return;
 	}
 
-	const { name, game, featureMatchOrientation, ...matchDefaults } = formData.value;
+	const { name, game, variant, featureMatchOrientation, ...matchDefaults } = formData.value;
 	const payload = {
 		name,
 		game,
+		...(hasVariant.value
+			? { variant }
+			: {}),
 		featureMatchOrientation,
 		...fromFeatureMatchDefaults(matchDefaults as Partial<FeatureMatchDefaults>),
 	};
@@ -91,6 +99,15 @@ async function submit() {
 						class="flex max-sm:flex-col justify-between items-start gap-4"
 					>
 						<USelect v-model="formData.game" class="w-64" :items="GAME_SELECT_OPTIONS" />
+					</UFormField>
+					<UFormField
+						v-if="hasVariant"
+						name="variant"
+						label="Variant"
+						description="How its games are played. This cannot be changed later."
+						class="flex max-sm:flex-col justify-between items-start gap-4"
+					>
+						<USelect v-model="formData.variant" class="w-64" :items="VARIANT_SELECT_OPTIONS" />
 					</UFormField>
 				</div>
 			</UForm>

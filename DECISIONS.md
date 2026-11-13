@@ -1895,7 +1895,7 @@ One Piece Card Game Events run their pairings in Bandai TCG+, whose only export 
 
 ### Decision
 
-**An OP Event models no Rounds, Matches or Match Results.** Its Players come from a TCG+ Import or the Players page (ADR-0074). Feature Match Slot Promotion and Assignment never run for it; Reverse Sync does, from a Player to every Slot seating them. Melee Sync, Integrations, Archetype Review, the Matches and Event Structure pages, and the Screen Modes that need Rounds or results (Standings, Pairings, Player History, Head-to-Head, Round Clock) declare themselves MTG-only and are not offered (`EVENT_PAGE_CARD_GAMES`, `SCREEN_MODE_CARD_GAMES`); ADR-0074 lists what OP Events are offered. Top Cut Bracket is offered, and shows the Screen's Manual Bracket (ADR-0075).
+**An OP Event models no Rounds, Matches or Match Results.** Its Players come from a TCG+ Import or the Players page (ADR-0074). Feature Match Slot Promotion and Assignment never run for it; Reverse Sync does, from a Player to every Slot seating them. Melee Sync, Integrations, Archetype Review, the Matches and Event Structure pages, and the Screen Modes that need Rounds or results (Standings, Pairings, Player History, Head-to-Head, Round Clock) declare themselves MTG-only and are not offered (`EVENT_PAGE_OFFERED_TO`, `SCREEN_MODE_OFFERED_TO`); ADR-0074 lists what OP Events are offered. Top Cut Bracket is offered, and shows the Screen's Manual Bracket (ADR-0075).
 
 **A Feature Match Slot side seats a Player, or holds manual slot data.** A side linked to a Player shows that Player's Leader and Deck List by reference (ADR-0074), and its setup form edits the Player's Deck List. An unlinked side is manual slot data: the operator types its name, pronouns and LGS, picks its Leader and pastes its Feature Match Deck List.
 
@@ -2201,7 +2201,7 @@ Accepted · 2026-11-04 · [#916](https://github.com/KeeprDigital/stream-keepr/is
 
 **It shows the Current Round unless it picks a Round.** Its `roundId` is an Event Reference of kind `round` (ADR-0038), released when that Round is deleted (ADR-0060). Unset, its Screen Output read (`round-clock`) answers the Current Round (ADR-0052), so a Melee Event's clock follows the Event from Round to Round. Its data re-reads on its Round's `round:updated`, so "Start now" starts every output counting without a reload, and while following the Current Round, on any Round, Phase, Match or Melee pairing change that may move it.
 
-**It is a plain overlay mode, Magic: The Gathering only.** It declares `cardGames: MTG_ONLY` (a One Piece Card Game Event has no Rounds, ADR-0057), a Background Layer stack, and Mode Tokens defaulting to Foundation Tokens: its surface, the Round name's type and colour, and the clock's type and its colour running, before the start and after the end. A Theme preview shows it through the Screen Mode Sample Dataset's Round 8, not yet started, at 50:00.
+**It is a plain overlay mode, Magic: The Gathering only.** It declares `offeredTo: TWO_PLAYER_MAGIC_ONLY` (a One Piece Card Game Event has no Rounds, ADR-0057), a Background Layer stack, and Mode Tokens defaulting to Foundation Tokens: its surface, the Round name's type and colour, and the clock's type and its colour running, before the start and after the end. A Theme preview shows it through the Screen Mode Sample Dataset's Round 8, not yet started, at 50:00.
 
 ### Why
 
@@ -2629,7 +2629,7 @@ A One Piece Card Game Event's top cut runs in Bandai TCG+, which exports no pair
 
 ### Decision
 
-**A Top Cut Bracket Screen reads its bracket from a Phase or from its Manual Bracket.** `bracketSource` (`phase` or `manual`) chooses. The choice not taken is kept, so switching back restores it. A One Piece Card Game Event holds no Phases, so its bracket is always its Manual Bracket, whatever `bracketSource` says (`topCutBracketSource`). The server read and the output's freshness both decide the source by that one rule. Top Cut Bracket is offered to both Card Games (`SCREEN_MODE_CARD_GAMES`).
+**A Top Cut Bracket Screen reads its bracket from a Phase or from its Manual Bracket.** `bracketSource` (`phase` or `manual`) chooses. The choice not taken is kept, so switching back restores it. A One Piece Card Game Event holds no Phases, so its bracket is always its Manual Bracket, whatever `bracketSource` says (`topCutBracketSource`). The server read and the output's freshness both decide the source by that one rule. Top Cut Bracket is offered to both Card Games (`SCREEN_MODE_OFFERED_TO`).
 
 **A Manual Bracket is Screen config.** `manualBracket` holds three things:
 
@@ -3074,3 +3074,60 @@ The deferral in #453 (2026-08-20) accepted Nuxt Fonts' remote providers: builds 
 - **Keep zero configuration and Google at build.** The smallest change, but it keeps the network dependency #405 broke on and the missing 800 and 900 faces.
 - **The `local` provider over WOFF2 files committed under `public/fonts/`.** Offline and dependency-free, but binaries in git, hand-kept licences and manual updates for thirteen families.
 - **`ui.fonts: false`** in place of the override. Nuxt UI would stop installing the module, but its `^0.14.0` package would still be installed beside the root's, two versions where one is wanted.
+
+## ADR-0087: A Commander Event is a Variant of a Magic: The Gathering Event, produced from Feature Match Slots that seat up to four
+
+Accepted · 2026-11-13 · [#1173](https://github.com/KeeprDigital/stream-keepr/issues/1173). Built in slices: the Variant and what a Commander Event is offered are in ([#1174](https://github.com/KeeprDigital/stream-keepr/issues/1174)); Seats, the Session, the overlay, deck paste and the public read are not yet. Follows ADR-0057's shape; extends ADR-0056 and ADR-0080; leaves ADR-0058's Session-only swap to Two-Player Events.
+
+Commander is streamed as one table: up to four players, one game, cameras on each. Nobody keeps tournament data during such a show, and the decks come from deck-building sites.
+
+### Decision
+
+**Commander is a Variant of a Magic: The Gathering Event, not a third Card Game.** An Event's Variant is Two-Player or Commander, chosen with its Card Game when it is created and never changed. Every Event that exists is Two-Player; a One Piece Card Game Event has none. It is stored on the Event (`events.variant`, migration `0001_event_variant`, which makes each existing Magic: The Gathering Event Two-Player), written only by the create, and left out of the update as the Card Game is.
+
+**A Commander Event is produced from its Feature Match Slots alone.** It holds no Players, Rounds, Matches, Match Results, standings, Metagame, Archetypes or Broadcast Deck Lists. Melee Sync, Feature Match Slot Promotion, Assignment and Reverse Sync never run for it. It is offered the Background, Card Spotlight, Deck List, Feature Match Controls, Feature Match Overlay, Broadcast Graphics and Talent Screen Modes, and none of the Players, Matches, Event Structure, Sync, Metagame, Archetype Review or Integrations pages. Its Match Format settings offer no best-of, extra turns or points system. It keeps the Cards page, which picks a Slot and shows each Seat's Commanders and list, a card chosen there previewing on Card Spotlight, as on a One Piece Card Game Event (ADR-0057).
+
+**A Commander Slot has four Seats, each typed.** A Seat holds a name, pronouns and LGS where the Event shows them, one or two Commanders picked by card search, and an optional Feature Match Deck List. Seats are places at the table, numbered clockwise, and operator surfaces show each where it sits. An empty Seat is not in the game: the turn passes over it and nothing renders for it. No number of Seats must be filled; one filled during a Session joins at starting life, and one emptied leaves at once. Swapping two Seats exchanges their players in the Slot itself, with their typed data, Commanders, Deck List and live state, and holds after the Session: a Commander Slot has no pairing order for a Session to keep apart (ADR-0058).
+
+**Seats widen the two-sided scheme; nothing is rewritten to a list of Seats.** `player3` and `player4` join `player1` and `player2` in the Slot's columns, the Session state, `PlayerSide`, the Source Roles and the tokens. Every Two-Player shape stays as it is, and Commander logic branches on the Variant.
+
+**A Commander Session plays one game.** It tracks each Seat's life (40 by default), Commander Damage, counters and cards kept, which Seats are Eliminated, and the turn, which passes in Seat order from whichever Seat goes first, its number going up each time it returns to that Seat, as a Two-Player turn's does. Commander Damage is counted per opposing Commander, a pair separately, and entering it lowers life by the same amount. Only an operator sets Eliminated. The Session completes when its operator declares a winning Seat or a draw, and nothing outside it records the outcome. It has no best-of, game wins, extra turns or Sideboard reveal, and its clock is untimed unless the Event's Match Format sets a countdown. Commander tax, the monarch and the initiative are not tracked.
+
+**A Commander deck is its Commanders, with or without a list.** A Seat's deck and colours are its Commanders' names and colour identity. A pasted list goes through the Magic deck text parser Broadcast Deck Lists use and holds each card as the exact printing its line names: a set and collector number name one printing, a set alone one from that set, and neither the card's default. It is built for Moxfield's own copy, the only one of Moxfield's four that carries printings: its first card is offered as the Commander, and the operator confirms it, changes it or adds a second before the list is saved. Moxfield's Arena, MTGO and plain-text copies read too, without printings: a `Commander` heading names the Commanders where there is one, `About` and `Name` lines are ignored, and a card trailing the Sideboard is offered as the Commander. A Sideboard section is dropped and the preview counts what went; `*F*` and `*E*` foil markers are dropped on every Magic paste. A list naming no Commander or more than two, an unresolved card, or a printing that cannot be found is refused, naming the line at fault. Nothing checks legality, colour identity, singleton or card count. A paste replaces Commanders picked by search, and while a list is held its Commanders are picked from its cards. A Deck List Screen names a Seat as its Deck Source and shows the Commanders apart, ahead of the Mainboard, or the Commanders alone when the Seat holds no list.
+
+**The overlay gains terms, and a template's content decides which Events are offered it.** Source Roles `player3` and `player4`; each Seat's tokens, without a record; `player{N}Commander1Image` and `player{N}Commander2Image`, rendered as a Leader's image is; the same fields in the Broadcast Graphics binding catalogue. The Player Life Graphic Item reads any Seat. A Commander Damage Graphic Item shows what one Seat has taken, and a Seat Indicator Graphic Item, offered on every Variant, is shown while its Seat is the active player's or Eliminated. Counters, the turn number and cards kept stay off air. A Feature Match Layout Template naming Seat 3 or 4, or a Commander term, is a four-Seat template offered to Commander Events alone, and every other template to every other Event; one four-Seat built-in ships (ADR-0080). The Feature Match Sample and Stress Datasets and the Theme preview gain a Commander set, which a Theme preview offers as a pick beside the Card Games. The public read (ADR-0056) adds Seats 3 and 4, their life and each Seat's Eliminated state, and no game-win fields.
+
+### Why
+
+A Commander Event uses Magic's cards, card data and deck text, so a third Card Game would fork every Magic card path and give some sixty Card Game branches a third answer for no difference. What does differ, how many sit down and how a game is won, is what a Variant names.
+
+Slots alone match how such a show is produced, as ADR-0057 found for One Piece: one table on camera and no source of results. Players, a Metagame and Archetypes would be data nobody enters.
+
+The two-sided names are public contracts: the vMix read, the overlay tokens, the binding catalogue, saved layouts and Template Packages, across some 1,400 source and 2,000 test occurrences. Widening them leaves every Two-Player Event, layout and package byte-identical; a Seat list would rewrite all of it for no change an operator sees.
+
+Moxfield's Arena copy has the `Commander` heading but drops every card Arena lacks and carries no printings, so the labelled format is the wrong one to build for; its own copy keeps both and marks the Commander only by putting it first, which is why the operator confirms it.
+
+There is no general way for a layout to show something by live state, and each such behaviour is built into an item kind, as the Sideboard reveal is. Two more kinds follow that; a general condition is a larger decision this one does not need.
+
+### Consequences
+
+- Every player is typed, and their deck pasted, each time they are featured. Nothing carries from one Event to the next.
+- `player3` and `player4` exist in shared types on Events that never use them, and every Two-Player path must ignore them. Code naming a side or `PlayerSide` means a Seat.
+- What was declared Magic: The Gathering only is declared `TWO_PLAYER_MAGIC_ONLY`. Every page and Screen Mode declares the kinds of Event it is `offeredTo`, where it declared `cardGames`: an `EventKind` is an Event's Card Game with Magic: The Gathering split by Variant, a key for declarations and config and not a term of the domain. No kind shares a Card Game's key, so a Card Game cannot be passed where the Variant must be read too.
+- A Screen write that would put a Screen into a mode its Event is not offered is refused (`SCREEN_MODE_NOT_OFFERED`), for every Event: before this only the pickers kept a Standings Screen off a One Piece Card Game Event. It is asked only when the mode changes, so a Screen already stored in such a mode keeps saving.
+- Five players, one-on-one Commander, or a Commander tournament with standings would each reopen this decision.
+- An installation older than this refuses a four-Seat Template Package by the identity of its terms, as it refuses any unimplemented one.
+- A Broadcast Deck List write, and enabling them on the Event, is refused for every Event but a Two-Player Magic: The Gathering one (`holdsBroadcastDeckLists`).
+- `0001_event_variant` backfills, though ADR-0083 has production's database wiped before the next release: local and preview databases hold Events, and README § Database asks a held-back test of any migration that alters a populated table.
+- The Magic deck text parser serves two owners, a Broadcast Deck List and a Seat, with one set of line rules.
+- A Moxfield paste asks for about a hundred exact printings, which the resolver fetches one at a time today. It needs batching.
+- A Commander's place in a pasted list is a convention of the site that exported it. One sample showed a lone Commander first; where a pair sits is unverified, and the operator's confirmation is what makes either safe.
+
+### Rejected alternatives
+
+- **A third Card Game.** Forks every Magic card, search and deck path, and every Card Game branch.
+- **A list of Seats everywhere.** The cleaner model, at the cost of every Two-Player contract and test, for nothing on air.
+- **Players and a Metagame, as One Piece has (ADR-0074).** Nobody would enter them for a single table.
+- **Pods from Melee Sync.** Its mapper refuses more than two competitors, and these shows are not run from Melee.
+- **Deriving Eliminated** from life, Commander Damage or poison. Replacement effects and concessions make the operator the only reliable source.
+- **A general state-driven visibility for layouts.** Wanted eventually, but not needed for two indicators.

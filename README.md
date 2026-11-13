@@ -529,10 +529,12 @@ code queries through `db` from `~~/server/db`. Wrangler records applied
 migrations in `_hub_migrations`; production's history is in that table, so the
 name must not change.
 
-The history is one migration, `0000_baseline_2.sql`: the whole schema, squashed
-a second time before the release after v1.5.0, because production's database is
-wiped before that release ships (ADR-0083, after ADR-0019's first squash). It
-has two parts:
+The history starts at one migration, `0000_baseline_2.sql`: the whole schema,
+squashed a second time before the release after v1.5.0, because production's
+database is wiped before that release ships (ADR-0083, after ADR-0019's first
+squash). Migrations after it are ordinary ones: `0001_event_variant.sql` adds
+an Event's Variant and makes each existing Magic: The Gathering Event
+Two-Player (ADR-0087). The baseline has two parts:
 
 - **Generated**: every table, index (the partial unique ones too) and foreign
   key, written by `pnpm db:generate` from the schema.
@@ -542,7 +544,8 @@ has two parts:
   `test/unit/server/db/baselineMigration.sqlite.test.ts` fails if a re-squash
   drops either.
 
-It carries no backfill: it only ever runs on a database with no tables.
+The baseline carries no backfill: it only ever runs on a database with no
+tables. A migration after it may, and is tested as below.
 
 **A database that already has tables cannot take it.** The name is new on
 purpose. Wrangler skips a migration whose name `_hub_migrations` already lists,

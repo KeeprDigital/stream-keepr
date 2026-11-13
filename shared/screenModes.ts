@@ -1,3 +1,4 @@
+import type { EventKind } from './config/games';
 import type { PageRotationDeclaration } from './modules/page-rotation';
 import type { ThemeTokenType } from './modules/theme/tokens';
 import type { AnyDeclaredModeTokenDefinition } from './modules/theme/vocabulary';
@@ -15,8 +16,8 @@ import type { PageRotationConfig } from './screenModeConfigs/subShapes';
 import type { TalentModeConfig } from './screenModeConfigs/talent';
 import type { TopCutModeConfig } from './screenModeConfigs/topCut';
 import type { OutputFollowNarrowing, ScreenModeOutputFollows } from './screenOutputInterest';
-import type { DisplayType, Game, MetagameScope, ScreenMode } from './types/enums';
-import { SCREEN_MODE_CARD_GAMES } from './config/games';
+import type { DisplayType, MetagameScope, ScreenMode } from './types/enums';
+import { SCREEN_MODE_OFFERED_TO } from './config/games';
 import { archetypeSpotlightModeConfigContract } from './screenModeConfigs/archetypeSpotlight';
 import { backgroundModeConfigContract } from './screenModeConfigs/background';
 import { broadcastGraphicsModeConfigContract } from './screenModeConfigs/broadcastGraphics';
@@ -57,12 +58,12 @@ export interface ScreenModeDefinition {
 	displayType: DisplayType;
 	description: string;
 	/**
-	 * The Card Games whose Events the mode is offered to, from the shared
-	 * table (`SCREEN_MODE_CARD_GAMES`). Every mode declares it, so a new mode
-	 * cannot skip the question; the mode pickers offer an
-	 * Event only the modes declaring its Card Game (`getScreenModeSelectOptions`).
+	 * The kinds of Event the mode is offered to, from the shared table
+	 * (`SCREEN_MODE_OFFERED_TO`). Every mode declares it, so a new mode cannot
+	 * skip the question; the mode pickers offer an Event only the modes
+	 * declaring its kind (`getScreenModeSelectOptions`).
 	 */
-	cardGames: readonly Game[];
+	offeredTo: readonly EventKind[];
 	/**
 	 * The mode is a graphics host: it composes in its Event Canvas and exposes
 	 * Overlay, Fill, and Key Screen Outputs. Its host takes no Theme Token of
@@ -260,7 +261,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-wallpaper',
 		displayType: 'overlay',
 		description: 'Full-screen layered background',
-		cardGames: SCREEN_MODE_CARD_GAMES.background,
+		offeredTo: SCREEN_MODE_OFFERED_TO.background,
 		config: backgroundModeConfigContract,
 		eventReferences: backgroundModeConfigContract.eventReferences,
 		outputFollows: {},
@@ -270,7 +271,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-square',
 		displayType: 'overlay',
 		description: 'Single card display',
-		cardGames: SCREEN_MODE_CARD_GAMES.card,
+		offeredTo: SCREEN_MODE_OFFERED_TO.card,
 		backgroundLayers: true,
 		config: cardModeConfigContract,
 		eventReferences: cardModeConfigContract.eventReferences,
@@ -283,7 +284,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-layers',
 		displayType: 'overlay',
 		description: 'Deck list view',
-		cardGames: SCREEN_MODE_CARD_GAMES.deck,
+		offeredTo: SCREEN_MODE_OFFERED_TO.deck,
 		backgroundLayers: true,
 		config: deckModeConfigContract,
 		eventReferences: deckModeConfigContract.eventReferences,
@@ -307,7 +308,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-trophy',
 		displayType: 'overlay',
 		description: 'Player standings',
-		cardGames: SCREEN_MODE_CARD_GAMES.standings,
+		offeredTo: SCREEN_MODE_OFFERED_TO.standings,
 		backgroundLayers: true,
 		config: standingsModeConfigContract,
 		eventReferences: standingsModeConfigContract.eventReferences,
@@ -339,7 +340,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-git-branch',
 		displayType: 'overlay',
 		description: 'Top cut bracket',
-		cardGames: SCREEN_MODE_CARD_GAMES['top-cut'],
+		offeredTo: SCREEN_MODE_OFFERED_TO['top-cut'],
 		backgroundLayers: true,
 		config: topCutModeConfigContract,
 		eventReferences: topCutModeConfigContract.eventReferences,
@@ -370,7 +371,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-swords',
 		displayType: 'control',
 		description: 'Live feature match controls',
-		cardGames: SCREEN_MODE_CARD_GAMES['feature-match'],
+		offeredTo: SCREEN_MODE_OFFERED_TO['feature-match'],
 		config: featureMatchModeConfigContract,
 		eventReferences: featureMatchModeConfigContract.eventReferences,
 		outputFollows: {
@@ -385,7 +386,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-panels-top-left',
 		displayType: 'overlay',
 		description: 'Pixel-exact feature match overlay with fill/key outputs',
-		cardGames: SCREEN_MODE_CARD_GAMES['feature-match-overlay'],
+		offeredTo: SCREEN_MODE_OFFERED_TO['feature-match-overlay'],
 		graphicsHost: true,
 		config: featureMatchOverlayModeConfigContract,
 		eventReferences: featureMatchOverlayModeConfigContract.eventReferences,
@@ -409,7 +410,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-layout-template',
 		displayType: 'overlay',
 		description: 'Composed broadcast graphics stack with overlay/fill/key outputs',
-		cardGames: SCREEN_MODE_CARD_GAMES['broadcast-graphics'],
+		offeredTo: SCREEN_MODE_OFFERED_TO['broadcast-graphics'],
 		graphicsHost: true,
 		themePreview: true,
 		config: broadcastGraphicsModeConfigContract,
@@ -422,7 +423,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-pie-chart',
 		displayType: 'overlay',
 		description: 'Metagame breakdown',
-		cardGames: SCREEN_MODE_CARD_GAMES.metagame,
+		offeredTo: SCREEN_MODE_OFFERED_TO.metagame,
 		backgroundLayers: true,
 		config: metagameModeConfigContract,
 		eventReferences: metagameModeConfigContract.eventReferences,
@@ -436,7 +437,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-trending-up',
 		displayType: 'overlay',
 		description: 'Most played cards grid',
-		cardGames: SCREEN_MODE_CARD_GAMES['top-cards'],
+		offeredTo: SCREEN_MODE_OFFERED_TO['top-cards'],
 		backgroundLayers: true,
 		config: topCardsModeConfigContract,
 		eventReferences: topCardsModeConfigContract.eventReferences,
@@ -450,7 +451,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-history',
 		displayType: 'overlay',
 		description: 'Player match history',
-		cardGames: SCREEN_MODE_CARD_GAMES['player-history'],
+		offeredTo: SCREEN_MODE_OFFERED_TO['player-history'],
 		backgroundLayers: true,
 		config: playerHistoryModeConfigContract,
 		eventReferences: playerHistoryModeConfigContract.eventReferences,
@@ -473,7 +474,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-list-ordered',
 		displayType: 'overlay',
 		description: 'Round pairings and results',
-		cardGames: SCREEN_MODE_CARD_GAMES.pairings,
+		offeredTo: SCREEN_MODE_OFFERED_TO.pairings,
 		backgroundLayers: true,
 		config: pairingsModeConfigContract,
 		eventReferences: pairingsModeConfigContract.eventReferences,
@@ -495,7 +496,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-crosshair',
 		displayType: 'overlay',
 		description: 'One archetype\'s pilots, numbers and top cards',
-		cardGames: SCREEN_MODE_CARD_GAMES['archetype-spotlight'],
+		offeredTo: SCREEN_MODE_OFFERED_TO['archetype-spotlight'],
 		backgroundLayers: true,
 		config: archetypeSpotlightModeConfigContract,
 		eventReferences: archetypeSpotlightModeConfigContract.eventReferences,
@@ -509,7 +510,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-users',
 		displayType: 'overlay',
 		description: 'Two Players side by side before their Match',
-		cardGames: SCREEN_MODE_CARD_GAMES['head-to-head'],
+		offeredTo: SCREEN_MODE_OFFERED_TO['head-to-head'],
 		backgroundLayers: true,
 		config: headToHeadModeConfigContract,
 		eventReferences: headToHeadModeConfigContract.eventReferences,
@@ -539,7 +540,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-timer',
 		displayType: 'overlay',
 		description: 'Time remaining in a Round',
-		cardGames: SCREEN_MODE_CARD_GAMES['round-clock'],
+		offeredTo: SCREEN_MODE_OFFERED_TO['round-clock'],
 		backgroundLayers: true,
 		config: roundClockModeConfigContract,
 		eventReferences: roundClockModeConfigContract.eventReferences,
@@ -559,7 +560,7 @@ const SCREEN_MODE_DEFINITIONS = {
 		icon: 'i-lucide-mic',
 		displayType: 'overlay',
 		description: 'The broadcast\'s presenters and commentators, with their Social Profiles',
-		cardGames: SCREEN_MODE_CARD_GAMES.talent,
+		offeredTo: SCREEN_MODE_OFFERED_TO.talent,
 		backgroundLayers: true,
 		config: talentModeConfigContract,
 		eventReferences: talentModeConfigContract.eventReferences,
