@@ -262,7 +262,7 @@ const renderModel = computed(() => resolveFeatureMatchOverlayRenderModel({
 // hidden then, and a Session arriving or leaving is no reveal or hide either.
 const { itemAnimation } = useFeatureMatchOverlaySideboardRevealAnimation(
 	config,
-	computed(() => fixedDataset.value || !matchState.value || !event.value
+	computed(() => fixedDataset.value || !matchState.value
 		? undefined
 		: graphicsContext.value),
 );
