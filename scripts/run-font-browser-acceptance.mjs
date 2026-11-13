@@ -40,6 +40,7 @@ import {
 import {
 	macintoshCmapLanguage,
 	withCmapLanguages,
+	withSeparateCmapSubtables,
 } from './graphics-acceptance/font-cmap-variants.mjs';
 import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 import {
@@ -59,7 +60,7 @@ const LIBRARY_FACE = 'public/fonts/mana.woff2';
 const fromRepository = path => new URL(`../${path}`, import.meta.url);
 
 /**
- * `public/fonts/mplantin.ttf` with its cmap subtable languages restated.
+ * `public/fonts/mana.ttf`, subtables split per platform, with languages restated.
  *
  * The restating itself lives in `graphics-acceptance/font-cmap-variants.mjs`,
  * shared with the `static-font-v1` unit tests so both sides build byte-identical
@@ -69,12 +70,14 @@ const fromRepository = path => new URL(`../${path}`, import.meta.url);
  * anything failing (#153).
  *
  * Built here rather than committed for the same reason the OTF face is not
- * vendored: it exists only to be loaded by this run, and a synthetic font in
- * `public/` would be a shipped asset nothing serves.
+ * vendored: only a local run loads it. The refused face,
+ * `public/fonts/mana-cmap-language.ttf`, is the one synthetic font committed to
+ * `public/`, because the committed manifest names it and every run loads it from
+ * there; this face would be a shipped asset only a local run ever requests.
  */
 async function cmapLanguageVariant(languageForPlatform) {
 	return withCmapLanguages(
-		new Uint8Array(await readFile(fromRepository('public/fonts/mplantin.ttf'))),
+		withSeparateCmapSubtables(new Uint8Array(await readFile(fromRepository('public/fonts/mana.ttf')))),
 		languageForPlatform,
 	);
 }
@@ -86,11 +89,12 @@ async function cmapLanguageVariant(languageForPlatform) {
  *
  * The Macintosh-language face is the one that matters. The profile permits a
  * non-zero `language` on that platform, because OpenType defines it there as the
- * Mac language ID plus one — and the bundled face is refused by a rule with or
- * without that exemption, so nothing committed can tell the two apart. This face
- * can: it is exactly the bundled one with its Microsoft subtable's language
- * zeroed, and requiring it to load *and render* is what stops the rule quietly
- * widening back into a false positive (#153).
+ * Mac language ID plus one — and the committed refused face is refused by a
+ * rule with or without that exemption, so it cannot tell the two apart. This
+ * face can: it is `mana.ttf` with its subtables split (Mana's records share one,
+ * so the platforms could not otherwise differ), the Microsoft language zeroed
+ * and the Macintosh one left at 1. Requiring it to load *and render* is what
+ * stops the rule quietly widening back into a false positive (#153).
  */
 async function localManifest() {
 	const committed = JSON.parse(await readFile(fromRepository(`public${MANIFEST_PATH}`), 'utf8'));
@@ -114,10 +118,10 @@ async function serveLocally() {
 			type: 'application/json',
 		}),
 		'/fonts/mana.ttf': () => file('public/fonts/mana.ttf', 'font/ttf'),
-		'/fonts/mplantin.woff': () => file('public/fonts/mplantin.woff', 'font/woff'),
+		'/fonts/mana.woff': () => file('public/fonts/mana.woff', 'font/woff'),
 		// Served to be refused: the profile rejects these bytes, and this run is what
 		// proves the browser does too (#153).
-		'/fonts/mplantin.ttf': () => file('public/fonts/mplantin.ttf', 'font/ttf'),
+		'/fonts/mana-cmap-language.ttf': () => file('public/fonts/mana-cmap-language.ttf', 'font/ttf'),
 		'/fonts/mana.woff2': () => file('public/fonts/mana.woff2', 'font/woff2'),
 		'/_acceptance/fonts/otf-face': () =>
 			file('node_modules/mana-font/docs/fonts/beleren.otf', 'font/otf'),

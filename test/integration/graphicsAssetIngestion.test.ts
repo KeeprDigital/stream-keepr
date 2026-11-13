@@ -580,14 +580,14 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 	});
 
 	it('publishes and privately delivers one exact verified font revision', async () => {
-		const bytes = new Uint8Array(await readFile('public/fonts/mplantin.woff'));
+		const bytes = new Uint8Array(await readFile('public/fonts/mana.woff'));
 		const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 			method: 'POST',
 			headers: authorHeaders,
 			body: graphicsIngestionRequest({
-				idempotencyKey: 'integration-mplantin-font',
-				name: 'Integration MPlantin',
-				sourceFileName: 'mplantin.woff',
+				idempotencyKey: 'integration-mana-font',
+				name: 'Integration Mana',
+				sourceFileName: 'mana.woff',
 				declaredMime: 'font/woff',
 				declaredByteLength: bytes.byteLength,
 			}),
@@ -639,7 +639,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 				facts: {
 					kind: 'font',
 					format: 'woff',
-					family: 'MPlantin',
+					family: 'Mana',
 					browserLoadable: true,
 					representativeGlyphsRendered: true,
 				},
@@ -648,7 +648,7 @@ describe('the bounded still-image ingestion and Library Workspace APIs', () => {
 
 		const discovered = await $fetch<GraphicAsset[]>('/api/graphics-assets', {
 			headers: authorHeaders,
-			query: { search: 'Integration MPlantin' },
+			query: { search: 'Integration Mana' },
 		});
 		expect(discovered).toMatchObject([
 			{

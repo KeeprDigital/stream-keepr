@@ -91,7 +91,7 @@ export {
  * distinct by construction and need no entry.
  *
  * One shared fixture deliberately lives outside this registry:
- * `public/fonts/mplantin.woff` is uploaded byte-identically by
+ * `public/fonts/mana.woff` is uploaded byte-identically by
  * graphicsAssetIngestion (published as a font revision) and
  * graphicsIngestionAuthorisation (staged only, parked at
  * `awaiting-confirmation`). That is safe because staged-but-unconfirmed content

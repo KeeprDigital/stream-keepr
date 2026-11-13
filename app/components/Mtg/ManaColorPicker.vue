@@ -76,7 +76,7 @@ function toggle(color: string) {
 </template>
 
 <style scoped>
-@import 'mana-font/css/mana.css';
+@import '#build/mana-font.css';
 
 .mana-toggle[aria-pressed='false']:hover {
 	opacity: 1;

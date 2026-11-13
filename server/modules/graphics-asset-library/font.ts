@@ -479,7 +479,7 @@ const CMAP_MACINTOSH_PLATFORM = 1;
  *
  * A rule this narrow earns its place because a browser's font sanitiser enforces
  * it as a hard failure of the whole table, and the profile had no other way to see
- * it. Chromium refuses `public/fonts/mplantin.ttf` outright — "cmap: Languages
+ * it. Chromium refuses `public/fonts/mana-cmap-language.ttf` outright — "cmap: Languages
  * should be 0 (1)", then "cmap: Failed to parse table", surfacing to script as
  * `SyntaxError: Invalid font data in ArrayBuffer` — while every check above it
  * passed, because none of them looked inside a subtable and the parser reads the

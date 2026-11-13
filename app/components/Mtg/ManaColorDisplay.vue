@@ -108,7 +108,7 @@ function isNumericManaClass(manaClass: string) {
 </template>
 
 <style scoped>
-@import 'mana-font/css/mana.css';
+@import '#build/mana-font.css';
 
 .mana-symbol {
 	padding: 0 !important;

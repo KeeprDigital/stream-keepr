@@ -186,7 +186,7 @@ function textItem(id: string, font: unknown, overrides: Record<string, unknown> 
  * renders the same in the exact font paired with either fallback, and differently
  * from each fallback alone.
  *
- * ## Why not `mplantin.woff`
+ * ## Why not `mana.woff`
  *
  * Because `graphicsAssetIngestion.test.ts` already ingests those exact bytes, with
  * the default `reuse` duplicate policy, and then finds its asset again by name.
@@ -198,7 +198,7 @@ function textItem(id: string, font: unknown, overrides: Record<string, unknown> 
  * suite's Graphic Asset lifecycle to itself.
  */
 async function ingestFont(eventId: number, name: string, cookie: string): Promise<Reference> {
-	const bytes = new Uint8Array(await readFile('public/fonts/mana.woff'));
+	const bytes = new Uint8Array(await readFile('public/fonts/mana.ttf'));
 	const initiated = await $fetch<GraphicsIngestionOperation>('/api/graphics-assets/ingestion-operations', {
 		method: 'POST',
 		headers: { cookie },
@@ -206,8 +206,8 @@ async function ingestFont(eventId: number, name: string, cookie: string): Promis
 			idempotencyKey: `${name}-${runId}`,
 			name,
 			defaultEventId: eventId,
-			sourceFileName: 'mana.woff',
-			declaredMime: 'font/woff',
+			sourceFileName: 'mana.ttf',
+			declaredMime: 'font/ttf',
 			declaredByteLength: bytes.byteLength,
 		}),
 	});
@@ -215,7 +215,7 @@ async function ingestFont(eventId: number, name: string, cookie: string): Promis
 		`/api/graphics-assets/ingestion-operations/${initiated.id}/content`,
 		{
 			method: 'PUT',
-			headers: { cookie, 'content-type': 'font/woff' },
+			headers: { cookie, 'content-type': 'font/ttf' },
 			body: bytes,
 		},
 	);
@@ -658,7 +658,7 @@ describe('broadcast Graphics Media Graphic Items', () => {
 		);
 
 		expect(content.status).toBe(200);
-		expect(content.headers.get('content-type')).toBe('font/woff');
+		expect(content.headers.get('content-type')).toBe('font/ttf');
 	});
 
 	it('rejects typography naming a revision that is not a font', async () => {

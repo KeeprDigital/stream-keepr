@@ -339,7 +339,7 @@ gate CI cannot run, so a change touching realtime runs
 
 `pnpm verify` reproduces CI on the working tree. Its tail matters most:
 `worker:dry-run` checks the upload bundle statically (and the built CSS for
-every declared application font face); `worker:smoke` runs it
+every declared application font face and no forbidden one); `worker:smoke` runs it
 under local workerd with production-shaped requests. Together they catch
 bundles that pass on Node and break on workerd (#302), so reach for it when
 CI's Worker job fails on a change to dependencies, bundling, `nuxt.config.ts`,
@@ -698,7 +698,8 @@ The production hostname is `https://stream.keepr.digital`, attached as a
    ingestion would fail, #302). It also fails if the bypass name appears in
    generated config, or if `.output/public`'s CSS lacks a declared application
    font face, loads or imports one from a remote URL, or gives one a `local()`
-   source (`scripts/assert-built-fonts.mjs`).
+   source, or if the build ships a forbidden family (MPlantin) as a face or as
+   a file named for it (`scripts/assert-built-fonts.mjs`).
 3. `pnpm worker:smoke` against that production build.
 4. `pnpm deploy:mark-app pending`: moves the `production` marker to this
    checkout as `pending` before anything remote changes
