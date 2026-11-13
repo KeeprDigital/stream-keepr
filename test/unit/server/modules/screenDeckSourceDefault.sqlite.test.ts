@@ -1,4 +1,4 @@
-import type { Game, ScreenMode } from '~~/shared/types/enums';
+import type { Game, ScreenMode, Variant } from '~~/shared/types/enums';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
@@ -7,7 +7,9 @@ import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 /**
  * A Deck List Screen on a One Piece Card Game Event with no Deck Source chosen
  * starts on the Event's first Slot, left side (ADR-0057); a Player chosen stays
- * (ADR-0074). A Magic Deck List Screen keeps its Player source.
+ * (ADR-0074). A Commander Event's, whose only Deck Source is a Seat, starts on
+ * its first Slot's Seat 1 (ADR-0087). Any other Magic Deck List Screen keeps
+ * its Player source.
  */
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string; statusMessage?: string }) =>
@@ -35,12 +37,13 @@ const capability = {
 };
 
 /** Each Event, by what it plays and how many Slots it has; the first Slot by sort order is the second inserted. */
-const events: Record<'mtg' | 'op' | 'opNoSlots', { id: number; firstSlotId: number | null; otherSlotId: number | null }> = {} as never;
+const events: Record<'mtg' | 'commander' | 'op' | 'opNoSlots', { id: number; firstSlotId: number | null; otherSlotId: number | null }> = {} as never;
 
-async function seedEvent(game: Game, slots: boolean) {
+async function seedEvent(game: Game, slots: boolean, variant: Variant | null = null) {
 	const [event] = await db.insert(schema.events).values({
 		name: `${game} Event`,
 		game,
+		variant,
 		featureMatchOrientation: 'horizontal',
 	}).returning({ id: schema.events.id });
 	if (!slots)
@@ -53,7 +56,8 @@ async function seedEvent(game: Game, slots: boolean) {
 }
 
 beforeAll(async () => {
-	events.mtg = await seedEvent('mtg', true);
+	events.mtg = await seedEvent('mtg', true, 'two-player');
+	events.commander = await seedEvent('mtg', true, 'commander');
 	events.op = await seedEvent('op', true);
 	events.opNoSlots = await seedEvent('op', false);
 });
@@ -87,6 +91,11 @@ describe('a new Deck List Screen\'s Deck Source', () => {
 			event: 'opNoSlots',
 			shown: 'no Slot, left side',
 			expected: () => firstSlotLeft('opNoSlots'),
+		},
+		{
+			event: 'commander',
+			shown: 'its first Slot, Seat 1',
+			expected: () => firstSlotLeft('commander'),
 		},
 		{
 			event: 'mtg',
@@ -179,5 +188,21 @@ describe('a new Deck List Screen\'s Deck Source', () => {
 		});
 
 		expect(screen.modeConfigs?.deck).toEqual({ deckSource: chosen, showCostCurve: false });
+	});
+
+	// ADR-0087: a Deck Source's Seat is one of four, and Seats 3 and 4 are a Commander Slot's alone.
+	it.each([
+		{ event: 'commander', seat: 'player4', taken: true },
+		{ event: 'mtg', seat: 'player3', taken: false },
+		{ event: 'op', seat: 'player4', taken: false },
+	] as const)('takes $seat of a Slot on the $event Event: $taken', async ({ event, seat, taken }) => {
+		const chosen = { type: 'featureMatchSlot', slotId: events[event].firstSlotId, side: seat };
+
+		const saved = await createScreen(event, 'deck', { deck: { deckSource: chosen } }).catch(error => error);
+
+		if (taken)
+			expect(saved.modeConfigs?.deck?.deckSource).toEqual(chosen);
+		else
+			expect(saved).toMatchObject({ statusCode: 400 });
 	});
 });

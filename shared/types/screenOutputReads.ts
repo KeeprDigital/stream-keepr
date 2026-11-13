@@ -1,6 +1,6 @@
 import type { FeatureMatchResponse, MatchResponse, PhaseResponse, PlayerResponse, RoundResponse } from '~~/shared/api';
 import type { TopCutBracket } from '~~/shared/modules/top-cut-bracket';
-import type { SavedFeatureMatchDeckList } from '~~/shared/types/featureMatchDeckList';
+import type { SavedCommanderDeckList, SavedFeatureMatchDeckList } from '~~/shared/types/featureMatchDeckList';
 import type { SocialProfileProjectionValue } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { ArchetypeBreakdownResponse, CardBreakdownEntry, CardBreakdownResponse, PlayerDeckCollectionResponse } from '~~/shared/types/metagame';
@@ -184,6 +184,9 @@ export interface ScreenOutputFeatureMatchResponse {
 
 /** A Feature Match Deck List of the Slot a Deck List Screen shows a side of: its cards, not its paste or warnings. */
 export type ScreenOutputFeatureMatchDeckListResponse = Pick<SavedFeatureMatchDeckList, 'id' | 'slotId' | 'entries' | 'leaderNumber' | 'mainboardCount'>;
+
+/** A Commander Seat's Feature Match Deck List of the Slot a Deck List Screen shows a Seat of: its cards, not its paste (ADR-0087). */
+export type ScreenOutputCommanderDeckListResponse = Pick<SavedCommanderDeckList, 'id' | 'slotId' | 'entries'>;
 
 /** A Player the Screen renders, with their decks as the operator's decks read answers them. */
 export interface ScreenOutputPlayerDecksResponse {

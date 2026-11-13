@@ -5,7 +5,7 @@ import { z } from 'zod';
 import {
 	BOARD_SELECTION_VALUES,
 	MAINBOARD_VIEW_VALUES,
-	PLAYER_SIDE_VALUES,
+	SEAT_VALUES,
 	QUANTITY_POSITION_VALUES,
 	SIDEBOARD_PLACEMENT_VALUES,
 	SIDEBOARD_VIEW_VALUES,
@@ -197,7 +197,7 @@ function showsDetailsRow(context: ScreenSettingsContext): boolean {
 /** The Deck List Screen Mode's config contract: its shape, type, and defaults. */
 export const deckModeConfigContract = defineScreenModeConfigContract({
 	// The Deck Source (ADR-0032): no Player or one Player, one Broadcast Deck
-	// List, or one player side of a Feature Match Slot, followed live (ADR-0057).
+	// List, or one Seat of a Feature Match Slot, followed live (ADR-0057, ADR-0087).
 	deckSource: editorField(z.discriminatedUnion('type', [
 		z.object({
 			type: z.literal('player'),
@@ -211,8 +211,12 @@ export const deckModeConfigContract = defineScreenModeConfigContract({
 			type: z.literal('featureMatchSlot'),
 			/** `null` once its Slot is deleted, as a deleted Player leaves no Player. */
 			slotId: z.number().int().positive().nullable(),
-			/** The side shown, in the Session's order: whichever player sits there now (ADR-0058). */
-			side: z.enum(PLAYER_SIDE_VALUES),
+			/**
+			 * The Seat shown, in the Session's order: whichever player sits there now
+			 * (ADR-0058). Seats 3 and 4 are a Commander Slot's, which the Screen
+			 * write checks (ADR-0087).
+			 */
+			side: z.enum(SEAT_VALUES),
 		}).strict(),
 	]), {
 		label: 'Deck Source',

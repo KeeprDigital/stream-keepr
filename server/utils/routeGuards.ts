@@ -14,7 +14,9 @@ import { playerListService } from '~~/server/services/playerList';
 import { roundService } from '~~/server/services/round';
 import { talentService } from '~~/server/services/talent';
 import { ScreenDeckSourceConflictError } from '~~/server/utils/errors';
+import { eventKind } from '~~/shared/config/games';
 import { SCREEN_MODES } from '~~/shared/screenModes';
+import { PLAYER_SIDE_VALUES } from '~~/shared/types/enums';
 
 function throwReferenceNotFound(message: string): never {
 	throw createError({ statusCode: 404, message });
@@ -146,6 +148,17 @@ function referencedId(value: unknown): number | null | undefined {
 		: undefined;
 }
 
+/** The two Seats every Slot has. */
+const PAIR_SEATS: readonly unknown[] = PLAYER_SIDE_VALUES;
+
+async function isCommanderEvent(eventId: number): Promise<boolean> {
+	const event = await db.query.events.findFirst({
+		where: eq(events.id, eventId),
+		columns: { game: true, variant: true },
+	});
+	return !!event && eventKind(event) === 'mtg-commander';
+}
+
 async function requireDeckSourceInEvent(eventId: number, value: unknown): Promise<void> {
 	if (!value || typeof value !== 'object')
 		return;
@@ -166,6 +179,9 @@ async function requireDeckSourceInEvent(eventId: number, value: unknown): Promis
 	}
 	else if (source.type === 'featureMatchSlot') {
 		await requireFeatureMatchSlotInEvent(eventId, referencedId(source.slotId));
+		// Seats 3 and 4 are a Commander Slot's alone (ADR-0087).
+		if (PAIR_SEATS.every(seat => seat !== source.side) && !await isCommanderEvent(eventId))
+			throw createError({ statusCode: 400, message: 'Only a Commander Event\'s Slot has Seats 3 and 4' });
 	}
 }
 

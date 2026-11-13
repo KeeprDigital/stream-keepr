@@ -269,14 +269,14 @@ function requireScreenModeOffered(event: EventKindFields, mode: ScreenMode): voi
 
 /**
  * The `modeConfigs` a Screen entering Deck List mode on a One Piece Card Game
- * Event is written with, its Deck Source on a Feature Match Slot side; or
- * `undefined` where it needs no default.
+ * Event or a Commander Event is written with, its Deck Source on a Feature
+ * Match Slot Seat; or `undefined` where it needs no default.
  *
- * An OP Deck List Screen shows a Slot side or a Player (ADR-0057, ADR-0074).
- * One with neither chosen (no Deck Source, or the Player source's empty
- * default) starts on the Event's first Slot, left side, or on no Slot while
- * the Event has none; a Player chosen stays. A Magic Event's keeps its Player
- * source.
+ * An OP Deck List Screen shows a Slot Seat or a Player (ADR-0057, ADR-0074),
+ * and a Commander Event's only a Seat: it has no Players (ADR-0087). One with
+ * neither chosen (no Deck Source, or the Player source's empty default) starts
+ * on the Event's first Slot, Seat 1, or on no Slot while the Event has none; a
+ * Player chosen stays. Any other Magic Event's keeps its Player source.
  */
 async function withOpDeckSourceDefault(
 	eventId: number,
@@ -286,7 +286,7 @@ async function withOpDeckSourceDefault(
 	const deckSource = modeConfigs?.deck?.deckSource;
 	if (deckSource && !(deckSource.type === 'player' && deckSource.playerId === null))
 		return undefined;
-	if (event?.game !== 'op')
+	if (!event || (event.game !== 'op' && eventKind(event) !== 'mtg-commander'))
 		return undefined;
 	return {
 		...modeConfigs,
