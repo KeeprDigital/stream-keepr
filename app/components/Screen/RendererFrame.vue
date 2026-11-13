@@ -90,9 +90,10 @@ const themeTokenStyle = computed(() => screenModeThemeTokenStyle(
  * Output Asset Capability, which admits what the Screen's resolved tokens
  * supply (ADR-0050), and the application faces they name. The rendering is
  * not ready until both have settled. The mode's display hides while a library
- * font loads, and while an application font loads before its first show, so
- * text never flashes in a fallback face, and the background behind it stays on
- * air; a font that fails shows its fallback rather than a blank display.
+ * font loads, so text never flashes in a fallback face, and the background
+ * behind it stays on air; a font that fails shows its fallback rather than a
+ * blank display. An application font holds the rendering off program, never
+ * the display: once on program, a late face swaps in.
  */
 const themeFontReferences = computed(() => screenModeThemeFontReferences(
 	props.mode,
@@ -106,22 +107,22 @@ const themeApplicationFonts = computed(() => screenModeThemeApplicationFonts(
 	themeTokens?.value ?? DEFAULT_THEME_TOKENS,
 	screen.value?.themeOverrides ?? {},
 ));
-/** Whether this rendering is ready, or past its timeout: the renderer puts it on program. */
-const ready = ref(false);
-const { fontsReady: themeFontsReady, fontsFailed: themeFontsFailed, fontsVisible: themeFontsVisible } = useCombinedFontFaces(
-	useGraphicAssetFontFaces(themeFontReferences, themeFontUrl, themeFontUrlsSettled),
+const themeLibraryFonts = useGraphicAssetFontFaces(themeFontReferences, themeFontUrl, themeFontUrlsSettled);
+const { fontsReady: themeFontsReady, fontsFailed: themeFontsFailed } = useCombinedFontFaces(
+	themeLibraryFonts,
 	useApplicationFontFaces(themeApplicationFonts),
-	ready,
 );
 const themeFontsSettled = computed(() => themeFontsReady.value || themeFontsFailed.value);
-const themeFontStyle = computed(() => themeFontsVisible.value
+const themeLibraryFontsSettled = computed(() => themeLibraryFonts.fontsReady.value || themeLibraryFonts.fontsFailed.value);
+const themeFontStyle = computed(() => themeLibraryFontsSettled.value
 	? undefined
 	: { visibility: 'hidden' as const });
 
 // ── Rendering Readiness ──
 
-const { declared } = provideScreenModeReadiness(readonly(ready));
+const { declared } = provideScreenModeReadiness();
 const container = ref<HTMLElement | null>(null);
+const ready = ref(false);
 let disposed = false;
 let readyCheck = 0;
 let readyTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -150,7 +151,9 @@ watch([declared, themeFontsSettled, container], async ([isDeclared, fontsSettled
 	// starts loading only then.
 	await nextTick();
 	await waitForRenderedMedia(element);
-	if (check === readyCheck && declared.value)
+	// A Theme change during the wait can name a font still loading; its
+	// settling starts the next check.
+	if (check === readyCheck && declared.value && themeFontsSettled.value)
 		becomeReady();
 }, { immediate: true });
 

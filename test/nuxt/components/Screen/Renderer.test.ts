@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, nextTick, reactive, ref } from 'vue';
 import { deferred } from '~~/test/helpers/deferred';
 import { createMockScreen } from '~~/test/helpers/fixtures';
-import { stubDocumentFonts } from '~~/test/nuxt/helpers/fontFaces';
+import { restoreDocumentFonts, stubDocumentFonts } from '~~/test/nuxt/helpers/fontFaces';
 import Renderer from '~/components/Screen/Renderer.vue';
 import { SCREEN_MODE_READY_TIMEOUT_MS, useScreenModeReady } from '~/modules/screen-mode/readiness';
 
@@ -269,6 +269,7 @@ describe('screenRenderer', () => {
 	describe('rendering readiness', () => {
 		afterEach(() => {
 			vi.useRealTimers();
+			restoreDocumentFonts();
 		});
 
 		it('shows nothing on a first load until the mode is ready', async () => {
@@ -347,7 +348,32 @@ describe('screenRenderer', () => {
 			expect(onProgram(wrapper, 'standings')).toBe(true);
 		});
 
-		// An application face that never arrives holds the first show only until the timeout.
+		// The media wait ends on a Theme that may have changed meanwhile; its fonts must have settled too.
+		it('holds a rendering whose Theme names a loading face while its media loaded', async () => {
+			const poppins = deferred<unknown>();
+			stubDocumentFonts(async () => poppins.promise);
+			pending.card = true;
+			const wrapper = mountRenderer();
+			await settle();
+
+			applicationFonts.value = [
+				{ fontId: 'poppins', weight: 700, style: 'normal' },
+			];
+			await settle();
+			pending.card = false;
+			await settle();
+			const heldWhileLoading = onProgram(wrapper, 'card');
+
+			poppins.resolve([{}]);
+			await settle();
+
+			expect([
+				heldWhileLoading,
+				onProgram(wrapper, 'card'),
+			]).toEqual([false, true]);
+		});
+
+		// An application face that never arrives holds the rendering off program only until the timeout.
 		it('shows the display of a mode whose application font never loads once the ready timeout passes', async () => {
 			vi.useFakeTimers();
 			vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -359,7 +385,6 @@ describe('screenRenderer', () => {
 			await vi.advanceTimersByTimeAsync(0);
 			const display = () => wrapper.get('[data-testid="display"]').element as HTMLElement;
 			expect(onProgram(wrapper, 'card')).toBe(false);
-			expect(display().style.visibility).toBe('hidden');
 
 			await vi.advanceTimersByTimeAsync(SCREEN_MODE_READY_TIMEOUT_MS);
 

@@ -1,11 +1,18 @@
 import { vi } from 'vitest';
 
+/** The environment's own `document.fonts` property, kept while a stub replaces it. */
+let environmentFonts: { descriptor: PropertyDescriptor | undefined } | undefined;
+
 /**
  * `document.fonts` alone, accepting every face and answering `load` as `load`
  * does: by default with one face, as for a family the stylesheet declares. It
- * stays defined, `vi.unstubAllGlobals()` or not, until the next call replaces it.
+ * stays defined, `vi.unstubAllGlobals()` or not, until the next call replaces it
+ * or `restoreDocumentFonts()` puts the environment's back.
  */
 export function stubDocumentFonts(load: (font: string) => Promise<unknown> = async () => [{}]) {
+	environmentFonts ??= {
+		descriptor: Object.getOwnPropertyDescriptor(document, 'fonts'),
+	};
 	const fonts = {
 		add: vi.fn(),
 		delete: vi.fn(),
@@ -15,6 +22,17 @@ export function stubDocumentFonts(load: (font: string) => Promise<unknown> = asy
 	};
 	Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
 	return fonts;
+}
+
+/** Undoes every `stubDocumentFonts` since the last restore, so a load left pending leaks into no later test. */
+export function restoreDocumentFonts() {
+	if (!environmentFonts)
+		return;
+	if (environmentFonts.descriptor)
+		Object.defineProperty(document, 'fonts', environmentFonts.descriptor);
+	else
+		Reflect.deleteProperty(document, 'fonts');
+	environmentFonts = undefined;
 }
 
 /**

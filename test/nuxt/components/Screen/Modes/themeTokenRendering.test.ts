@@ -1329,8 +1329,7 @@ describe('a library font in the Theme', () => {
 
 // An application font ships as CSS `@font-face`, which swaps in late on a cold cache.
 describe('an application font in the Theme', () => {
-	// Background's display has an element root, so the frame's own hiding of it shows too.
-	it('holds the rendering off program, its display hidden, until the face its heading paints has loaded', async () => {
+	it('holds the rendering off program until the face its heading paints has loaded', async () => {
 		const load = deferred<unknown>();
 		const fonts = stubDocumentFonts(async font => font.includes('Poppins')
 			? load.promise
@@ -1343,15 +1342,12 @@ describe('an application font in the Theme', () => {
 			},
 		});
 		const frame = () => wrapper!.get('.screen-renderer');
-		const display = () => wrapper!.get('.background-screen').element as HTMLElement;
 
 		expect(fonts.load).toHaveBeenCalledWith(`normal ${FOUNDATION_TOKENS.heading.default.weight} 1em "Poppins"`);
 		expect(frame().attributes()).toMatchObject({ 'data-font-ready': 'false', 'data-screen-mode-ready': 'false' });
-		expect(display().style.visibility).toBe('hidden');
 
 		load.resolve([{}]);
 		await vi.waitFor(() => expect(frame().attributes()).toMatchObject({ 'data-font-ready': 'true', 'data-screen-mode-ready': 'true' }));
-		expect(display().style.visibility).toBe('');
 	});
 });
 

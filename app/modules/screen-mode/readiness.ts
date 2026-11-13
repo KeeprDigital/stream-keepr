@@ -12,7 +12,6 @@ export const SCREEN_MODE_READY_TIMEOUT_MS = 10_000;
 
 interface ScreenModeReadinessRegistry {
 	declare: (ready: () => boolean) => () => void;
-	onProgram: Readonly<Ref<boolean>>;
 }
 
 const SCREEN_MODE_READINESS: InjectionKey<ScreenModeReadinessRegistry> = Symbol('screen-mode-readiness');
@@ -21,17 +20,15 @@ const SCREEN_MODE_READINESS: InjectionKey<ScreenModeReadinessRegistry> = Symbol(
  * Rendering Readiness, as one Screen Mode rendering's host sees it: whether
  * every declaration made inside it holds. Nothing declared is not ready, since
  * a mode's display is an async component that declares only once it has
- * loaded. `onProgram` is the host's answer back: whether it has put the
- * rendering on program, ready or past its timeout.
+ * loaded.
  */
-export function provideScreenModeReadiness(onProgram: Readonly<Ref<boolean>>) {
+export function provideScreenModeReadiness() {
 	const declarations = shallowReactive(new Set<() => boolean>());
 	provide(SCREEN_MODE_READINESS, {
 		declare(ready) {
 			declarations.add(ready);
 			return () => declarations.delete(ready);
 		},
-		onProgram,
 	});
 	return {
 		declared: computed(() => declarations.size > 0 && [...declarations].every(ready => ready())),
@@ -49,16 +46,6 @@ export function useScreenModeReady(ready: MaybeRefOrGetter<boolean>) {
 	if (!registry)
 		return;
 	onScopeDispose(registry.declare(() => toValue(ready)));
-}
-
-/**
- * Whether the rendering this component is inside has been put on program,
- * ready or past its timeout; false outside a rendering host. What is on
- * program stays shown: a part still loading fills in rather than hiding.
- */
-export function useScreenModeOnProgram(): Readonly<Ref<boolean>> {
-	const registry = inject(SCREEN_MODE_READINESS, null);
-	return computed(() => registry?.onProgram.value ?? false);
 }
 
 /**

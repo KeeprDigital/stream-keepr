@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import { defineComponent, h, ref } from 'vue';
+import { defineComponent, h } from 'vue';
 import ModeBase from '~/components/Screen/ModeBase.vue';
 import { provideScreenModeReadiness } from '~/modules/screen-mode/readiness';
 
@@ -38,7 +38,7 @@ describe('screenModeBase', () => {
 		let declared: ReturnType<typeof provideScreenModeReadiness>['declared'] | undefined;
 		mount(defineComponent({
 			setup() {
-				declared = provideScreenModeReadiness(ref(false)).declared;
+				declared = provideScreenModeReadiness().declared;
 				return () => h(ModeBase, { error: null, ready });
 			},
 		}));

@@ -31,7 +31,7 @@ import {
 	previewSelectMessage,
 } from '~/modules/graphics/previewMessages';
 import { isSelectionToggle } from '~/modules/graphics/selection';
-import { useScreenModeOnProgram, useScreenModeReady } from '~/modules/screen-mode';
+import { useScreenModeReady } from '~/modules/screen-mode';
 import { screenMediaSourceUrl } from '~/utils/screenMediaSource';
 import FeatureMatchOverlayFrameAnimation from './FrameAnimation.vue';
 import FeatureMatchOverlayFrameMedia from './FrameMedia.vue';
@@ -101,17 +101,17 @@ const {
 // typeface, but reveal it after a terminal failure: a standalone URL without its
 // asset capability must not make the Frame, Sources, and every unrelated Graphic
 // Item disappear just because the exact font bytes are unavailable. An
-// application font holds only the first show; a face named later swaps in.
+// application font holds Rendering Readiness only, never the output: a face
+// named later swaps in.
 const libraryFonts = useGraphicAssetFontFaces(
 	indexedGraphicAssetReferences,
 	graphicAssetContentUrl,
 	contentUrlsSettled,
 );
-const { fontSources } = libraryFonts;
-const { fontsReady, fontsFailed, fontsVisible } = useCombinedFontFaces(
+const { fontSources, fontsReady: libraryFontsReady, fontsFailed: libraryFontsFailed } = libraryFonts;
+const { fontsReady, fontsFailed } = useCombinedFontFaces(
 	libraryFonts,
 	useApplicationFontFaces(() => graphicItemsApplicationFonts(paintedComposition.value.items)),
-	useScreenModeOnProgram(),
 );
 // Rendering Readiness: the Slot read has settled, its media URLs have resolved,
 // and its fonts have loaded or failed; the media itself is the host's to wait on.
@@ -451,7 +451,7 @@ onBeforeUnmount(() => {
 	<div
 		class="feature-match-overlay"
 		:class="`feature-match-overlay--${resolvedOutput}`"
-		:style="{ ...canvasStyle, visibility: fontsVisible ? undefined : 'hidden' }"
+		:style="{ ...canvasStyle, visibility: libraryFontsReady || libraryFontsFailed ? undefined : 'hidden' }"
 		:data-export-ready="(!loading && !error && fontsReady && !fontsFailed).toString()"
 		:data-font-ready="fontsReady.toString()"
 		:data-font-error="fontsFailed.toString()"

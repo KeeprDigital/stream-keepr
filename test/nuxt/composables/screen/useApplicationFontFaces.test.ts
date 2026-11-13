@@ -144,6 +144,27 @@ describe('useApplicationFontFaces', () => {
 
 		expect({ fontsReady: fonts.fontsReady.value, fontsFailed: fonts.fontsFailed.value }).toEqual(settled);
 	});
+
+	// "Loaded or failed" means every face: an early rejection does not release a face still loading.
+	it('settles as failed only once a face that rejected is joined by every other', async () => {
+		const poppins = deferred<unknown>();
+		const { fonts } = mountFonts([POPPINS_BOLD, INTER_LIGHT_ITALIC], font => font.includes('Poppins')
+			? poppins.promise
+			: Promise.reject(new Error('blocked')));
+		await settle();
+		const pending = { fontsReady: fonts.fontsReady.value, fontsFailed: fonts.fontsFailed.value };
+
+		poppins.resolve([{}]);
+		await settle();
+
+		expect([
+			pending,
+			{ fontsReady: fonts.fontsReady.value, fontsFailed: fonts.fontsFailed.value },
+		]).toEqual([
+			{ fontsReady: false, fontsFailed: false },
+			{ fontsReady: false, fontsFailed: true },
+		]);
+	});
 });
 
 describe('useCombinedFontFaces', () => {
@@ -151,73 +172,46 @@ describe('useCombinedFontFaces', () => {
 	const READY = { fontsReady: true, fontsFailed: false };
 	const FAILED = { fontsReady: false, fontsFailed: true };
 
-	// Readiness reads both kinds settled; an application font hides a display only before its first show.
+	// Readiness reads both kinds settled, and a failure only once both have.
 	it.each([
 		{
-			row: 'first load pending, never shown',
+			row: 'application pending',
 			library: READY,
 			application: PENDING,
-			onProgram: false,
-			combined: { ...PENDING, fontsVisible: false },
+			combined: PENDING,
+		},
+		{
+			row: 'library pending',
+			library: PENDING,
+			application: READY,
+			combined: PENDING,
 		},
 		{
 			row: 'a failure beside a pending load',
 			library: FAILED,
 			application: PENDING,
-			onProgram: false,
-			combined: { ...PENDING, fontsVisible: false },
+			combined: PENDING,
 		},
 		{
 			row: 'both ready',
 			library: READY,
 			application: READY,
-			onProgram: false,
-			combined: { ...READY, fontsVisible: true },
+			combined: READY,
 		},
 		{
 			row: 'one failed, both settled',
 			library: READY,
 			application: FAILED,
-			onProgram: false,
-			combined: { ...FAILED, fontsVisible: true },
+			combined: FAILED,
 		},
-		{
-			row: 'settled once, then a new face pending',
-			library: READY,
-			applicationBefore: READY,
-			application: PENDING,
-			onProgram: false,
-			combined: { ...PENDING, fontsVisible: true },
-		},
-		{
-			row: 'never settles, rendering on program',
-			library: READY,
-			application: PENDING,
-			onProgram: true,
-			combined: { ...PENDING, fontsVisible: true },
-		},
-		{
-			row: 'library pending, application settled',
-			library: PENDING,
-			application: READY,
-			onProgram: true,
-			combined: { ...PENDING, fontsVisible: false },
-		},
-	])('$row', ({ library, applicationBefore, application, onProgram, combined }) => {
+	])('$row', ({ library, application, combined }) => {
 		const state = (value: typeof PENDING) => ({
 			fontsReady: ref(value.fontsReady),
 			fontsFailed: ref(value.fontsFailed),
 		});
-		const applicationState = state(applicationBefore ?? application);
 
-		const fonts = useCombinedFontFaces(state(library), applicationState, onProgram);
-		applicationState.fontsReady.value = application.fontsReady;
-		applicationState.fontsFailed.value = application.fontsFailed;
+		const fonts = useCombinedFontFaces(state(library), state(application));
 
-		expect({
-			fontsReady: fonts.fontsReady.value,
-			fontsFailed: fonts.fontsFailed.value,
-			fontsVisible: fonts.fontsVisible.value,
-		}).toEqual(combined);
+		expect({ fontsReady: fonts.fontsReady.value, fontsFailed: fonts.fontsFailed.value }).toEqual(combined);
 	});
 });

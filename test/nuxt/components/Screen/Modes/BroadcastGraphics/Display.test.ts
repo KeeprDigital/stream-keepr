@@ -1417,8 +1417,8 @@ describe('broadcastGraphicsDisplay', () => {
 		});
 	});
 
-	// An application font ships as CSS `@font-face`, which swaps in late on a cold cache.
-	it('hides the canvas until the application face its text paints has loaded', async () => {
+	// An application font ships as CSS `@font-face`, which swaps in late on a cold cache; readiness waits for it.
+	it('reports its fonts unready until the application face its text paints has loaded', async () => {
 		const load = deferred<unknown>();
 		const fonts = stubDocumentFonts(async () => load.promise);
 		mockScreen.value = screenWithStack([
@@ -1436,16 +1436,13 @@ describe('broadcastGraphicsDisplay', () => {
 		await flushPromises();
 		await nextTick();
 
-		const canvas = wrapper.get('.graphics-compositor-canvas');
 		expect(fonts.load).toHaveBeenCalledWith(`normal ${DEFAULT_GRAPHIC_TYPOGRAPHY.fontWeight} 1em "Poppins"`);
-		expect(canvas.attributes('data-font-ready')).toBe('false');
-		expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
+		expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('false');
 
 		load.resolve([{}]);
 		await vi.waitFor(() => {
 			expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
 		});
-		expect((wrapper.get('.graphics-compositor-canvas').element as HTMLElement).style.visibility).toBe('');
 	});
 
 	// Program holds what it shows: a face an edit names later swaps in when it arrives.

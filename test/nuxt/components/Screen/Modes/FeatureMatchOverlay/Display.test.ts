@@ -1470,8 +1470,8 @@ describe('featureMatchOverlayDisplay', () => {
 		});
 	});
 
-	// An application font ships as CSS `@font-face`, which swaps in late on a cold cache.
-	it('hides the output until the application face its Graphic Items paint has loaded', async () => {
+	// An application font ships as CSS `@font-face`, which swaps in late on a cold cache; readiness waits for it.
+	it('reports its fonts unready until the application face its Graphic Items paint has loaded', async () => {
 		const load = deferred<unknown>();
 		const fonts = stubDocumentFonts(async () => load.promise);
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
@@ -1489,16 +1489,13 @@ describe('featureMatchOverlayDisplay', () => {
 		mockConfig.value = config;
 
 		const wrapper = await mountComponent();
-		const overlay = wrapper.get('.feature-match-overlay');
 		expect(fonts.load).toHaveBeenCalledWith(`normal ${DEFAULT_GRAPHIC_TYPOGRAPHY.fontWeight} 1em "Poppins"`);
-		expect(overlay.attributes('data-font-ready')).toBe('false');
-		expect((overlay.element as HTMLElement).style.visibility).toBe('hidden');
+		expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('false');
 
 		load.resolve([{}]);
 		await vi.waitFor(() => {
 			expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
 		});
-		expect((wrapper.get('.feature-match-overlay').element as HTMLElement).style.visibility).toBe('');
 	});
 
 	// An editor-only run over the working layout; a live output never plays one.
