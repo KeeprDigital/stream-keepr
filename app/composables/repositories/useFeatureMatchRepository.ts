@@ -1,3 +1,5 @@
+import type { SwapFeatureMatchSeatsInput } from '~~/shared/api';
+import type { Seat } from '~~/shared/types/enums';
 import type {
 	CreateFeatureMatchInput,
 	FeatureMatch,
@@ -43,6 +45,22 @@ export function useFeatureMatchRepository() {
 		);
 	};
 
+	/** Swap Seats: two Seats' players change places in a Commander Slot itself (ADR-0087). Answers the Slot. */
+	const swapSeats = async (eventId: number, slotId: number, seats: [Seat, Seat]): Promise<FeatureMatch> => {
+		return await eventData.command<FeatureMatch, SwapFeatureMatchSeatsInput>(
+			{
+				eventId,
+				resourcePath: 'feature-match-slots',
+				resourceId: slotId,
+				suffix: 'swap-seats',
+			},
+			{
+				method: 'POST',
+				body: { seats },
+			},
+		);
+	};
+
 	const promoteMatch = async (
 		eventId: number,
 		slotId: number,
@@ -75,6 +93,7 @@ export function useFeatureMatchRepository() {
 		update,
 		remove: base.remove,
 		reorder,
+		swapSeats,
 		promoteMatch,
 	};
 }

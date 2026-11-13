@@ -94,6 +94,7 @@ import type {
 	RecordSeparator,
 	RoundControlMode,
 	ScreenMode,
+	Seat,
 	UnresolvedDeckEntryType,
 	Variant,
 } from '~~/shared/types/enums';
@@ -483,6 +484,13 @@ export interface FeatureMatchResponse {
 	player2Id: number | null;
 	player1Data: PlayerSlotData | null;
 	player2Data: PlayerSlotData | null;
+	/**
+	 * Seats 3 and 4, which only a Commander Event's Slot holds (ADR-0087). Each
+	 * is present only while it holds a player, so every other Event's Slot reads
+	 * as it always has.
+	 */
+	player3Data?: PlayerSlotData | null;
+	player4Data?: PlayerSlotData | null;
 	bestOf: number;
 	sortOrder: number;
 	playerDisplayMode: PlayerDisplayMode;
@@ -506,7 +514,16 @@ export interface CreateFeatureMatchInput {
 	playerDisplayMode?: PlayerDisplayMode;
 }
 
-export type UpdateFeatureMatchInput = Partial<CreateFeatureMatchInput>;
+/** A setup save. Seats 3 and 4 are a Commander Event's alone, and a Slot is created with neither (ADR-0087). */
+export type UpdateFeatureMatchInput = Partial<CreateFeatureMatchInput> & {
+	player3Data?: ManualPlayerSlotData | null;
+	player4Data?: ManualPlayerSlotData | null;
+};
+
+/** Swap Seats: the two Seats of a Commander Slot whose players change places (ADR-0087). */
+export interface SwapFeatureMatchSeatsInput {
+	seats: [Seat, Seat];
+}
 export type FeatureMatchSlotResponse = FeatureMatchResponse;
 export type CreateFeatureMatchSlotInput = CreateFeatureMatchInput;
 export type UpdateFeatureMatchSlotInput = UpdateFeatureMatchInput;

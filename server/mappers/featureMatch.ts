@@ -27,10 +27,21 @@ export function mapFeatureMatchSessionToStarted(session: DbFeatureMatchSession):
 /** A Slot as read with its active Session. */
 export type DbFeatureMatchWithSession = DbFeatureMatch & { activeSession?: DbFeatureMatchSession | null };
 
+/**
+ * A Slot as every read and realtime message answers it. Seats 3 and 4 are a
+ * Commander Event's alone (ADR-0087): an empty one is left out, so a Slot of
+ * any other Event reads exactly as it did before they existed.
+ */
 export function mapFeatureMatchToResponse(match: DbFeatureMatchWithSession): FeatureMatchResponse {
-	const mapped = mapTimestamps(match);
+	const { player3Data, player4Data, ...mapped } = mapTimestamps(match);
 	return {
 		...mapped,
+		...(player3Data
+			? { player3Data }
+			: {}),
+		...(player4Data
+			? { player4Data }
+			: {}),
 		activeSession: match.activeSession
 			? mapFeatureMatchSessionToResponse(match.activeSession)
 			: null,

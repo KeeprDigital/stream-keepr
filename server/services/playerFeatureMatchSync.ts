@@ -100,6 +100,8 @@ export function playerFeatureMatchSyncService() {
 					player2Id: featureMatches.player2Id,
 					player1Data: featureMatches.player1Data,
 					player2Data: featureMatches.player2Data,
+					player3Data: featureMatches.player3Data,
+					player4Data: featureMatches.player4Data,
 					bestOf: featureMatches.bestOf,
 					sortOrder: featureMatches.sortOrder,
 					playerDisplayMode: featureMatches.playerDisplayMode,

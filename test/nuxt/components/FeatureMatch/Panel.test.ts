@@ -118,9 +118,11 @@ mockNuxtImport('useFeatureMatchGameMode', () => () => ({
 	handleResetGame: vi.fn(),
 	matchActionItems: ref([]),
 }));
+const mockSwapSeats = vi.fn();
 mockNuxtImport('useFeatureMatchSetupActions', () => () => ({
 	meleeModalOpen: ref(false),
 	swapPlayers: vi.fn(),
+	swapSeats: mockSwapSeats,
 	clearMatch: vi.fn(),
 	populateFromMelee: vi.fn(),
 }));
@@ -157,6 +159,7 @@ const PlayerFormStub = defineComponent({
 		formId: { type: String, required: true },
 		modelValue: { type: Object, required: false },
 		side: { type: String, required: false },
+		commanderEvent: { type: Boolean, default: false },
 	},
 	emits: ['submit', 'update:playerId', 'update:modelValue'],
 	template: '<form :id="formId" data-testid="player-form" @submit.prevent="$emit(\'submit\')"></form>',
@@ -674,5 +677,123 @@ describe('featureMatchPanel match state by Card Game', () => {
 		await flushPromises();
 
 		expect(offeredMatchStateParts(wrapper)).toEqual(expected);
+	});
+});
+
+// A Commander Slot has four typed Seats, shown where they sit at the table (ADR-0087).
+describe('featureMatchPanel setup Seats', () => {
+	const SEATED = {
+		player1Data: { name: 'Ana' },
+		player2Data: { name: 'Ben' },
+		player3Data: { name: 'Cyd' },
+		player4Data: { name: 'Dee' },
+	};
+	const twoPlayerEvent = { ...mockEventStore.event };
+
+	async function mountSetup(variant: 'commander' | 'two-player') {
+		Object.assign(mockEventStore.event, { variant });
+		const wrapper = await mountComponent(SEATED);
+		await wrapper.get('[data-testid="edit-mode"]').trigger('click');
+		return wrapper;
+	}
+
+	function seats(wrapper: Wrapper) {
+		return wrapper.findAllComponents(PlayerFormStub).map(form => [
+			(form.props('modelValue') as { name?: string }).name,
+			form.props('commanderEvent'),
+		]);
+	}
+
+	const swapMenu = (wrapper: Wrapper, seat: number) => wrapper.get(`button[aria-label="Swap Seat ${seat} with another Seat"]`);
+
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mockFeatureMatchStore.updateFeatureMatch.mockImplementation(async () => createMockFeatureMatch({ id: 1 }));
+	});
+
+	afterEach(() => {
+		mockEventStore.event = { ...twoPlayerEvent };
+	});
+
+	// Seats run clockwise: 1 and 2 on top, 4 and 3 below, with the forms in Seat order.
+	it.each([
+		{
+			event: 'a Commander Event',
+			variant: 'commander' as const,
+			shown: [
+				['Ana', true],
+				['Ben', true],
+				['Cyd', true],
+				['Dee', true],
+			],
+			table: [
+				['player1', 'top-left'],
+				['player2', 'top-right'],
+				['player3', 'bottom-right'],
+				['player4', 'bottom-left'],
+			],
+		},
+		{
+			event: 'a Two-Player Event',
+			variant: 'two-player' as const,
+			shown: [
+				['Ana', false],
+				['Ben', false],
+			],
+			table: [],
+		},
+	])('shows $event\'s Slot $shown.length Seats, a Commander Slot\'s where they sit at the table', async ({ variant, shown, table }) => {
+		const wrapper = await mountSetup(variant);
+
+		expect(seats(wrapper)).toEqual(shown);
+		expect(wrapper.findAll('[data-seat]').map(seat => [
+			seat.attributes('data-seat'),
+			seat.attributes('data-table-position'),
+		])).toEqual(table);
+		expect(wrapper.findAll('button').some(button => button.text() === 'Swap Players')).toBe(variant === 'two-player');
+	});
+
+	it('saves an edit to Seat 3 as Seat 3\'s', async () => {
+		const wrapper = await mountSetup('commander');
+		const seatThree = wrapper.get('[data-seat="player3"]').getComponent(PlayerFormStub);
+
+		seatThree.vm.$emit('update:modelValue', {
+			...seatThree.props('modelValue'),
+			name: 'Cydney',
+		});
+		await flushPromises();
+		await saveButton(wrapper).trigger('click');
+		await flushPromises();
+
+		expect(mockFeatureMatchStore.updateFeatureMatch).toHaveBeenCalledWith(1, 1, {
+			player3Data: { name: 'Cydney' },
+		});
+	});
+
+	it('swaps a Seat with the Seat picked', async () => {
+		const wrapper = await mountSetup('commander');
+
+		await swapMenu(wrapper, 1).trigger('click');
+		expect(wrapper.findAll('[role="menuitem"]').map(item => item.text())).toEqual(['With Seat 2', 'With Seat 3', 'With Seat 4']);
+		await wrapper.findAll('[role="menuitem"]')[1]!.trigger('click');
+
+		expect(mockSwapSeats.mock.calls).toEqual([
+			['player1', 'player3'],
+		]);
+	});
+
+	// The server swaps what the Slot has stored, so an unsaved edit is saved or reset first.
+	it('offers no swap while the form holds an unsaved edit', async () => {
+		const wrapper = await mountSetup('commander');
+		expect(swapMenu(wrapper, 1).attributes('disabled')).toBeUndefined();
+		const seatOne = wrapper.get('[data-seat="player1"]').getComponent(PlayerFormStub);
+
+		seatOne.vm.$emit('update:modelValue', {
+			...seatOne.props('modelValue'),
+			name: 'Anabel',
+		});
+		await flushPromises();
+
+		expect(swapMenu(wrapper, 1).attributes('disabled')).toBeDefined();
 	});
 });

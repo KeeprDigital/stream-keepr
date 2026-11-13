@@ -15,6 +15,11 @@ const props = defineProps<{
 	players?: Player[];
 	playerId?: number | null;
 	formId: string;
+	/**
+	 * A Commander Event's Seat (ADR-0087): the Event has no Players, so the Seat
+	 * is typed, and it holds Commanders in place of a deck name and a record.
+	 */
+	commanderEvent?: boolean;
 	/** The Slot and its side this form edits, for the side's Feature Match Deck List. */
 	slotId?: number;
 	side?: PlayerSide;
@@ -33,7 +38,7 @@ const player = defineModel<PlayerData>({
 
 // ──────────────── Player Picker ────────────────
 
-const hasPlayers = computed(() => (props.players?.length ?? 0) > 0);
+const hasPlayers = computed(() => !props.commanderEvent && (props.players?.length ?? 0) > 0);
 
 // The picker finds a Player by name, Nickname or Bandai member number (ADR-0074).
 const searchTerm = ref('');
@@ -78,6 +83,9 @@ function onPlayerSelected(value: number | null) {
 		}
 	}
 }
+
+/** A typed Seat has no record: nothing on a Commander Event produces one. */
+const showsRecord = computed(() => props.standingsEnabled && !props.commanderEvent);
 
 // ──────────────── Game-Specific Data ────────────────
 
@@ -158,7 +166,8 @@ const editingPlayerDeckList = ref(false);
 		<USeparator />
 
 		<!-- Game-Specific Fields -->
-		<FeatureMatchSetupMtgPlayerFields v-if="props.game === 'mtg'" v-model="mtgGameData" />
+		<FeatureMatchSetupCommanderFields v-if="props.commanderEvent" v-model="mtgGameData" />
+		<FeatureMatchSetupMtgPlayerFields v-else-if="props.game === 'mtg'" v-model="mtgGameData" />
 		<UFormField
 			v-if="linkedPlayer"
 			label="Leader and Deck List"
@@ -215,10 +224,10 @@ const editingPlayerDeckList = ref(false);
 			@close="editingPlayerDeckList = false"
 		/>
 
-		<USeparator v-if="props.standingsEnabled || props.lgsEnabled" />
+		<USeparator v-if="showsRecord || props.lgsEnabled" />
 
 		<!-- Record -->
-		<template v-if="props.standingsEnabled">
+		<template v-if="showsRecord">
 			<div v-if="props.displayMode === 'score'" class="flex gap-4">
 				<UFormField label="Wins" name="wins" class="w-full">
 					<UInputNumber

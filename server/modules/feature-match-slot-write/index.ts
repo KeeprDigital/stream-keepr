@@ -1,5 +1,7 @@
 import type { DbFeatureMatch } from '~~/server/db/schema';
 import type { CreateFeatureMatchInput, FeatureMatchResponse, ManualPlayerSlotData, PlayerSlotData, UpdateFeatureMatchInput, UpdatePlayerInput } from '~~/shared/api';
+import type { EventKind } from '~~/shared/config/games';
+import type { Seat } from '~~/shared/types/enums';
 import type { FeatureMatchDeckListReference } from '~~/shared/types/featureMatchDeckList';
 import { eq } from 'drizzle-orm';
 import { db } from '~~/server/db';
@@ -9,21 +11,46 @@ import { opCardCatalogueModule } from '~~/server/modules/op-card-catalogue';
 import { playerUpdateModule } from '~~/server/modules/player-update';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { deckListReferenceOf, featureMatchDeckListService } from '~~/server/services/featureMatchDeckList';
+import { withCommanderSeats, writesCommanderSeats } from '~~/server/services/featureMatchSlotCommander';
 import { linkedOpSideGameData, slotLeaderNumbers } from '~~/server/services/featureMatchSlotLeader';
 import { playerService } from '~~/server/services/player';
 import { bandaiKeeprConfig } from '~~/server/utils/bandaiKeepr';
 import { validateFeatureMatchReferences } from '~~/server/utils/routeGuards';
+import { eventKind } from '~~/shared/config/games';
+import { SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 
+/** The two Seats every Slot has, either of which may link a Player. */
 const SIDE_DATA_KEYS = ['player1Data', 'player2Data'] as const;
 type SideDataKey = typeof SIDE_DATA_KEYS[number];
 const SIDE_PLAYER_KEY = { player1Data: 'player1Id', player2Data: 'player2Id' } as const satisfies Record<SideDataKey, string>;
+/** What a setup save names when it edits or seats a Seat. */
+const SEATING_KEYS = [
+	...Object.values(SLOT_SEAT_DATA_KEY),
+	...Object.values(SIDE_PLAYER_KEY),
+];
 
-async function isOpEvent(eventId: number): Promise<boolean> {
+/**
+ * A write to a Commander Event's Slot (ADR-0087): the Event is its Slots alone,
+ * so the Slot links no Player and no Match, and each Seat it names is typed.
+ */
+function commanderSlotWrite(input: UpdateFeatureMatchInput): UpdateFeatureMatchInput {
+	if (input.player1Id != null || input.player2Id != null || input.matchId != null)
+		throw createError({ statusCode: 400, message: 'A Commander Event\'s Slot links no Player and no Match' });
+	return withCommanderSeats(input);
+}
+
+/** Whether a write names a Seat, a Player or a Match: what the kind of Event decides. */
+function namesSeatOrMatch(input: UpdateFeatureMatchInput): boolean {
+	return input.matchId !== undefined || SEATING_KEYS.some(key => Object.hasOwn(input, key));
+}
+
+/** The kind of Event the Slot's Event is; none for an Event that is not there. */
+async function eventKindOf(eventId: number): Promise<EventKind | undefined> {
 	const event = await db.query.events.findFirst({
 		where: eq(events.id, eventId),
-		columns: { game: true },
+		columns: { game: true, variant: true },
 	});
-	return event?.game === 'op';
+	return event && eventKind(event);
 }
 
 interface CreateSlotParams {
@@ -42,6 +69,13 @@ interface UpdateSlotSetupParams {
 	eventId: number;
 	slotId: number;
 	input: UpdateFeatureMatchInput;
+	originConnectionId?: string;
+}
+
+interface SwapSeatsParams {
+	eventId: number;
+	slotId: number;
+	seats: [Seat, Seat];
 	originConnectionId?: string;
 }
 
@@ -85,9 +119,13 @@ export function featureMatchSlotWriteModule() {
 
 	async function create({ eventId, input, originConnectionId }: CreateSlotParams): Promise<FeatureMatchResponse> {
 		await validateFeatureMatchReferences(eventId, input);
-		await catalogueLeaders(input);
+		const isCommanderEvent = namesSeatOrMatch(input) && await eventKindOf(eventId) === 'mtg-commander';
+		if (!isCommanderEvent)
+			await catalogueLeaders(input);
 
-		const slot = await slots.create(eventId, input);
+		const slot = await slots.create(eventId, isCommanderEvent
+			? commanderSlotWrite(input)
+			: input);
 
 		return await publication.featureMatchSlotCreated({
 			eventId,
@@ -226,8 +264,6 @@ export function featureMatchSlotWriteModule() {
 	 * keeps the Leader it shows, and no Player Deck List reference.
 	 */
 	async function settleOpSides(eventId: number, current: DbFeatureMatch | undefined, input: UpdateFeatureMatchInput): Promise<UpdateFeatureMatchInput> {
-		if (!await isOpEvent(eventId))
-			return input;
 		const output = { ...input };
 		for (const key of SIDE_DATA_KEYS) {
 			const requested = input[SIDE_PLAYER_KEY[key]];
@@ -277,18 +313,30 @@ export function featureMatchSlotWriteModule() {
 
 	async function updateSetup({ eventId, slotId, input, originConnectionId }: UpdateSlotSetupParams): Promise<FeatureMatchResponse> {
 		await validateFeatureMatchReferences(eventId, input);
-		// Only a save that edits or seats a side writes a Player or moves a Deck List.
-		const current = [
-			...SIDE_DATA_KEYS,
-			...Object.values(SIDE_PLAYER_KEY),
-		].some(key => Object.hasOwn(input, key))
+		// Only a save that edits or seats a Seat writes a Player or moves a Deck List.
+		const editsSeats = SEATING_KEYS.some(key => Object.hasOwn(input, key));
+		const kind = namesSeatOrMatch(input)
+			? await eventKindOf(eventId)
+			: undefined;
+		if (kind !== 'mtg-commander' && writesCommanderSeats(input))
+			throw createError({ statusCode: 400, message: 'Only a Commander Event\'s Slot has Seats 3 and 4, or Seats holding Commanders' });
+		const current = editsSeats
 			? await slots.findById(slotId, eventId)
 			: undefined;
-		await catalogueLeaders(pickedLeaderSides(input, current));
+
 		let settledInput = input;
-		if (current) {
-			await writeSeatedPlayerEdits(eventId, current, input);
-			settledInput = await settleOpSides(eventId, current, await settleDeckListReferences(current, input));
+		if (kind === 'mtg-commander') {
+			settledInput = commanderSlotWrite(input);
+		}
+		else {
+			await catalogueLeaders(pickedLeaderSides(input, current));
+			if (current) {
+				await writeSeatedPlayerEdits(eventId, current, input);
+				const referenced = await settleDeckListReferences(current, input);
+				settledInput = kind === 'op'
+					? await settleOpSides(eventId, current, referenced)
+					: referenced;
+			}
 		}
 
 		const updatedSlot = await slots.update(slotId, eventId, settledInput);
@@ -301,6 +349,28 @@ export function featureMatchSlotWriteModule() {
 		return await publication.featureMatchSlotUpdated({
 			eventId,
 			entity: updatedSlot,
+			originConnectionId,
+		});
+	}
+
+	/**
+	 * Swap Seats (ADR-0087): two Seats' players change places in the Slot itself,
+	 * each with everything its Seat holds. A Commander Slot's alone: on any other
+	 * Event the Session owns which Seat each player sits in (ADR-0058).
+	 */
+	async function swapSeats({ eventId, slotId, seats: [first, second], originConnectionId }: SwapSeatsParams): Promise<FeatureMatchResponse> {
+		if (first === second)
+			throw createError({ statusCode: 400, message: 'Swap Seats takes two different Seats' });
+		if (await eventKindOf(eventId) !== 'mtg-commander')
+			throw createError({ statusCode: 400, message: 'Only a Commander Event\'s Slot swaps its Seats' });
+
+		const swappedSlot = await slots.swapSeats(slotId, eventId, first, second);
+		if (!swappedSlot)
+			throw createError({ statusCode: 404, message: 'Feature match slot not found' });
+
+		return await publication.featureMatchSlotUpdated({
+			eventId,
+			entity: swappedSlot,
 			originConnectionId,
 		});
 	}
@@ -321,6 +391,7 @@ export function featureMatchSlotWriteModule() {
 		create,
 		remove,
 		updateSetup,
+		swapSeats,
 		reorder,
 	};
 }

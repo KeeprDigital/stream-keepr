@@ -11,12 +11,19 @@ const mockFeatureMatchStateStore = {
 const mockToast = {
 	add: vi.fn(),
 };
+// The Swap Seats route is faked at `$fetch`.
+const { mockFetch, applySavedSlot } = vi.hoisted(() => ({
+	mockFetch: vi.fn(),
+	applySavedSlot: vi.fn(() => true),
+}));
 
+mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('useEventStore', () => () => ({ eventId: 1 }));
+mockNuxtImport('useFeatureMatchStore', () => () => ({ applySavedSlot }));
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
 mockNuxtImport('useToast', () => () => mockToast);
 
-function createSetup() {
+function createSetup(commanderSeats: Record<string, unknown> = {}) {
 	const formData = ref({
 		id: 1,
 		player1Id: 10 as number | null,
@@ -26,6 +33,7 @@ function createSetup() {
 		externalId: 'ext-000' as string | null,
 		externalSource: 'melee' as string | null,
 		tableNumber: null as number | null,
+		...commanderSeats,
 	});
 	const getDeckForCurrentPhase = vi.fn((_: number | null, name: string | null, colors: string | null) => ({ name, colors }));
 	return {
@@ -87,7 +95,80 @@ describe('useFeatureMatchSetupActions', () => {
 		});
 	});
 
+	// Swap Seats is the Slot's own (ADR-0087): the server swaps, and this client holds the Slot it answers.
+	describe('swapping Seats', () => {
+		const swapped = {
+			id: 1,
+			player1Data: { name: 'Cyd' },
+			player3Data: { name: 'Alice' },
+		};
+
+		it.each([
+			{
+				outcome: 'answers',
+				answer: () => Promise.resolve(swapped),
+				held: [
+					[swapped],
+				],
+				toast: { title: 'Seats swapped', color: 'success' },
+			},
+			{
+				outcome: 'refuses',
+				answer: () => Promise.reject(new Error('refused')),
+				held: [],
+				toast: { title: 'Failed to swap Seats', color: 'error' },
+			},
+		])('asks the server to swap the two Seats, and when it $outcome holds $held.length Slot', async ({ answer, held, toast }) => {
+			mockFetch.mockReset().mockImplementation(answer);
+			applySavedSlot.mockClear();
+			const { swapSeats } = createSetup();
+
+			await swapSeats('player1', 'player3');
+
+			expect(mockFetch.mock.calls.map(([path, options]) => [path, options.method, options.body])).toEqual([
+				[
+					'/api/events/1/feature-match-slots/1/swap-seats',
+					'POST',
+					{
+						seats: ['player1', 'player3'],
+					},
+				],
+			]);
+			expect(applySavedSlot.mock.calls).toEqual(held);
+			expect(mockToast.add.mock.calls).toEqual([
+				[
+					expect.objectContaining(toast),
+				],
+			]);
+		});
+	});
+
 	describe('clearing the match', () => {
+		it('empties a Commander Slot\'s Seats 3 and 4 too, and restores them when the reset fails', async () => {
+			const reset = deferred<null>();
+			mockFeatureMatchStateStore.resetMatch.mockReturnValue(reset.promise);
+			const { clearMatch, formData } = createSetup({
+				player3Data: { ...DEFAULT_PLAYER_DATA, name: 'Cyd' },
+				player4Data: { ...DEFAULT_PLAYER_DATA, name: 'Dee' },
+			});
+			const laterSeats = () => [3, 4].map(seat => (formData.value as any)[`player${seat}Data`].name);
+
+			const clearing = clearMatch();
+			expect(laterSeats()).toEqual(['', '']);
+
+			reset.resolve(null);
+			await clearing;
+			expect(laterSeats()).toEqual(['Cyd', 'Dee']);
+		});
+
+		it('gives a Slot with two Seats no third or fourth', async () => {
+			const { clearMatch, formData } = createSetup();
+
+			await clearMatch();
+
+			expect(Object.keys(formData.value).filter(key => /player[34]/.test(key))).toEqual([]);
+		});
+
 		it('empties both seats and resets the Session', async () => {
 			const { clearMatch, formData } = createSetup();
 

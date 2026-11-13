@@ -1,6 +1,8 @@
+import type { Seat } from '~~/shared/types/enums';
 import type { FeatureMatchFormData, Match } from '~/types';
 import { toRaw } from 'vue';
 import { getGameConfig } from '~~/shared/config/games';
+import { COMMANDER_SEAT_DATA_KEYS } from '~~/shared/utils/featureMatchSidePlayer';
 import { DEFAULT_PLAYER_DATA } from '~/types';
 
 interface FeatureMatchSetupDeps {
@@ -13,12 +15,14 @@ interface FeatureMatchSetupDeps {
 }
 
 /**
- * Composable for match setup actions: swap players, clear, populate from Melee.
+ * Composable for match setup actions: swap players, swap Seats, clear, populate from Melee.
  */
 export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 	const eventStore = useEventStore();
 	const roundStore = useRoundStore();
+	const featureMatchStore = useFeatureMatchStore();
 	const featureMatchStateStore = useFeatureMatchStateStore();
+	const featureMatchRepository = useFeatureMatchRepository();
 	const { runRequest } = useRequestFeedback();
 
 	const { formData, getDeckForCurrentPhase } = deps;
@@ -51,11 +55,38 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 		});
 	}
 
+	/**
+	 * Swap Seats (ADR-0087): two Seats' players change places in a Commander Slot
+	 * itself, each with everything its Seat holds. The server swaps what it has
+	 * stored, so the panel offers it only while the form has nothing unsaved, and
+	 * the form follows the Slot the server answers.
+	 */
+	async function swapSeats(first: Seat, second: Seat) {
+		const eventId = eventStore.eventId;
+		if (!eventId)
+			return;
+		await runRequest(
+			() => featureMatchRepository.swapSeats(eventId, formData.value.id, [first, second]),
+			{
+				success: { title: 'Seats swapped', color: 'success' },
+				error: { title: 'Failed to swap Seats', color: 'error' },
+				onSuccess: (slot) => {
+					featureMatchStore.applySavedSlot(slot);
+				},
+			},
+		);
+	}
+
 	async function clearMatch() {
 		const snapshot = structuredClone(toRaw(formData.value));
 
 		formData.value.player1Data = { ...DEFAULT_PLAYER_DATA };
 		formData.value.player2Data = { ...DEFAULT_PLAYER_DATA };
+		// Seats 3 and 4 are in a Commander Slot's form alone (ADR-0087).
+		for (const key of COMMANDER_SEAT_DATA_KEYS) {
+			if (formData.value[key] !== undefined)
+				formData.value[key] = { ...DEFAULT_PLAYER_DATA };
+		}
 		formData.value.player1Id = null;
 		formData.value.player2Id = null;
 		formData.value.externalId = null;
@@ -73,6 +104,10 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 				// Rollback form data on failure
 				formData.value.player1Data = snapshot.player1Data;
 				formData.value.player2Data = snapshot.player2Data;
+				for (const key of COMMANDER_SEAT_DATA_KEYS) {
+					if (snapshot[key] !== undefined)
+						formData.value[key] = snapshot[key];
+				}
 				formData.value.player1Id = snapshot.player1Id;
 				formData.value.player2Id = snapshot.player2Id;
 				formData.value.externalId = snapshot.externalId;
@@ -162,6 +197,7 @@ export function useFeatureMatchSetupActions(deps: FeatureMatchSetupDeps) {
 	return {
 		meleeModalOpen,
 		swapPlayers,
+		swapSeats,
 		clearMatch,
 		populateFromMelee,
 	};

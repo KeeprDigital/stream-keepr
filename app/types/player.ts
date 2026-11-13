@@ -16,9 +16,12 @@ type NullToUndefined<T> = {
 export type PlayerData = NullToUndefined<PlayerSlotData>;
 
 /** FeatureMatchData with player data fields typed as PlayerData for form use. */
-export type FeatureMatchFormData = Omit<FeatureMatchData, 'player1Data' | 'player2Data'> & {
+export type FeatureMatchFormData = Omit<FeatureMatchData, 'player1Data' | 'player2Data' | 'player3Data' | 'player4Data'> & {
 	player1Data: PlayerData | null;
 	player2Data: PlayerData | null;
+	/** Seats 3 and 4, which only a Commander Slot's form holds (ADR-0087). */
+	player3Data?: PlayerData | null;
+	player4Data?: PlayerData | null;
 };
 
 // Default player data for empty match forms

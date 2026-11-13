@@ -1,5 +1,5 @@
 import type { PlayerSlotData } from '~~/shared/api';
-import type { PlayerSide } from '~~/shared/types/enums';
+import type { PlayerSide, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchSnapshotPlayer, FeatureMatchSnapshotPlayerData } from '~~/shared/types/featureMatchSession';
 
 /** The parts of a Feature Match Slot, and its active Session, that seat its players. */
@@ -15,6 +15,14 @@ export interface FeatureMatchSlotSides {
 
 /** The Slot field holding each side's data, in the Slot's own order. */
 export const SLOT_SIDE_DATA_KEY = { player1: 'player1Data', player2: 'player2Data' } as const satisfies Record<PlayerSide, keyof FeatureMatchSlotSides>;
+/** The Slot field holding each Seat's data: the pair every Slot has, then a Commander Slot's Seats 3 and 4 (ADR-0087). */
+export const SLOT_SEAT_DATA_KEY = {
+	...SLOT_SIDE_DATA_KEY,
+	player3: 'player3Data',
+	player4: 'player4Data',
+} as const satisfies Record<Seat, string>;
+/** The Slot fields of Seats 3 and 4, which only a Commander Event's Slot holds (ADR-0087). */
+export const COMMANDER_SEAT_DATA_KEYS = [SLOT_SEAT_DATA_KEY.player3, SLOT_SEAT_DATA_KEY.player4] as const;
 /** The Slot field seating each side's Player, in the Slot's own order. */
 export const SLOT_SIDE_PLAYER_KEY = { player1: 'player1Id', player2: 'player2Id' } as const satisfies Record<PlayerSide, keyof FeatureMatchSlotSides>;
 

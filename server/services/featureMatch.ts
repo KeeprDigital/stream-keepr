@@ -1,7 +1,7 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { DbFeatureMatch, DbFeatureMatchSession, DbScreen } from '~~/server/db/schema';
 import type { CreateFeatureMatchInput, UpdateFeatureMatchInput } from '~~/shared/api';
-import type { ExternalSource } from '~~/shared/types/enums';
+import type { ExternalSource, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import { and, eq, isNotNull, ne, sql } from 'drizzle-orm';
 import { db } from '~~/server/db';
@@ -12,6 +12,7 @@ import { buildClearDeckSourceSlotsQuery, buildReleaseScreenEventReferencesQuery 
 import { inJsonArray, observedValue, selectForInsert } from '~~/server/utils/db';
 import { runCompensation, StateConflictError } from '~~/server/utils/errors';
 import { pickManualWritable } from '~~/server/utils/provenance';
+import { SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 import { randomCommandId } from '~~/shared/utils/uuid';
 
 interface PairingIdentity {
@@ -303,6 +304,18 @@ export function featureMatchService() {
 		return !activeSession || !identitiesEqual(snapshotIdentity(activeSession.sourceSnapshot), nextIdentity);
 	}
 
+	/** Corrects the Slot's active Session to the Slot as it now stands, leaving the Session's state alone. */
+	async function correctSessionSnapshot(slot: DbFeatureMatch) {
+		const stateSvc = featureMatchStateService();
+		const snapshot = await stateSvc.buildSourceSnapshot(slot);
+		await stateSvc.applyCommandToActiveSession(slot.id, slot.eventId, session => ({
+			commandId: randomCommandId('SnapshotCorrected'),
+			type: 'SnapshotCorrected',
+			payload: { sourceSnapshot: snapshot },
+			baseSequence: session.sequence,
+		}));
+	}
+
 	const update = async (
 		id: number,
 		eventId: number,
@@ -353,21 +366,36 @@ export function featureMatchService() {
 			throw new StateConflictError('Feature match slot', id);
 		}
 
-		const stateSvc = featureMatchStateService();
-		if (shouldCreateSession) {
-			await stateSvc.createSessionForSlot(updatedMatch.id, eventId);
-		}
-		else {
-			const snapshot = await stateSvc.buildSourceSnapshot(updatedMatch);
-			await stateSvc.applyCommandToActiveSession(updatedMatch.id, eventId, session => ({
-				commandId: randomCommandId('SnapshotCorrected'),
-				type: 'SnapshotCorrected',
-				payload: { sourceSnapshot: snapshot },
-				baseSequence: session.sequence,
-			}));
-		}
+		if (shouldCreateSession)
+			await featureMatchStateService().createSessionForSlot(updatedMatch.id, eventId);
+		else
+			await correctSessionSnapshot(updatedMatch);
 
 		return await findById(updatedMatch.id, eventId);
+	};
+
+	/**
+	 * Swap Seats (ADR-0087): two Seats' players change places in the Slot itself,
+	 * each with everything its Seat holds, and the active Session's snapshot is
+	 * corrected to match. One statement, which reads both Seats as they were
+	 * before it, so no save between a read and a write can be lost.
+	 */
+	const swapSeats = async (id: number, eventId: number, first: Seat, second: Seat): Promise<DbFeatureMatch | undefined> => {
+		const firstKey = SLOT_SEAT_DATA_KEY[first];
+		const secondKey = SLOT_SEAT_DATA_KEY[second];
+		const [swapped] = await db
+			.update(featureMatches)
+			.set({
+				[firstKey]: sql`${featureMatches[secondKey]}`,
+				[secondKey]: sql`${featureMatches[firstKey]}`,
+			})
+			.where(and(eq(featureMatches.id, id), eq(featureMatches.eventId, eventId)))
+			.returning();
+		if (!swapped)
+			return undefined;
+
+		await correctSessionSnapshot(swapped);
+		return await findById(swapped.id, eventId);
 	};
 
 	/**
@@ -526,6 +554,8 @@ export function featureMatchService() {
 					player2Id: sql`null`,
 					player1Data: sql`null`,
 					player2Data: sql`null`,
+					player3Data: sql`null`,
+					player4Data: sql`null`,
 					bestOf: sql`${bestOf}`,
 					sortOrder: sql`${lastSortOrder} + value + 1`,
 					playerDisplayMode: sql`'score'`,
@@ -654,6 +684,7 @@ export function featureMatchService() {
 		findByEventId,
 		create,
 		update,
+		swapSeats,
 		applyEventBestOf,
 		applyEventDefaults,
 		remove,

@@ -195,6 +195,70 @@ describe('linking a One Piece Card Game Player into a side', () => {
 	});
 });
 
+// A Commander Event has no Players: its Seat is typed, and its deck is its Commanders (ADR-0087).
+describe('a Commander Event\'s Seat', () => {
+	function mountSeat(commanderEvent: boolean) {
+		const player = reactive<PlayerData>({ ...DEFAULT_PLAYER_DATA });
+		const wrapper = mount(PlayerForm, {
+			props: {
+				'modelValue': player,
+				'displayMode': 'score',
+				'game': 'mtg',
+				commanderEvent,
+				'pronounsEnabled': true,
+				'standingsEnabled': true,
+				'lgsEnabled': true,
+				'players': [
+					createMockPlayer({ id: 8, name: 'Ava Reed' }),
+				] as never,
+				'formId': 'seat-form',
+				'onUpdate:modelValue': (value: typeof player) => Object.assign(player, value),
+			},
+			global: {
+				stubs: {
+					...nuxtUiStubs,
+					UInputMenu: UInputMenuStub,
+					FeatureMatchSetupMtgPlayerFields: { template: '<div data-deck-name />' },
+					FeatureMatchSetupCommanderFields: {
+						emits: ['update:modelValue'],
+						template: `<button data-commander-picker @click="$emit('update:modelValue', { type: 'mtg', commanders: [{ name: 'Atraxa' }] })" />`,
+					},
+				},
+			},
+		});
+		return { wrapper, player };
+	}
+
+	it.each([
+		{ seat: 'a Commander Event\'s Seat', commanderEvent: true },
+		{ seat: 'any other Magic: The Gathering Seat', commanderEvent: false },
+	])('offers $seat a Commander picker in place of a Player, a deck name and a record: $commanderEvent', ({ commanderEvent }) => {
+		const { wrapper } = mountSeat(commanderEvent);
+
+		expect(wrapper.find('[data-commander-picker]').exists()).toBe(commanderEvent);
+		expect([
+			wrapper.find('[role="combobox"]').exists(),
+			wrapper.find('[data-deck-name]').exists(),
+			wrapper.find('[data-field="wins"]').exists(),
+		]).toEqual([!commanderEvent, !commanderEvent, !commanderEvent]);
+		expect(['name', 'pronouns', 'lgs'].map(field => wrapper.find(`[data-field="${field}"]`).exists()))
+			.toEqual([true, true, true]);
+	});
+
+	it('holds the Commanders its picker picks', async () => {
+		const { wrapper, player } = mountSeat(true);
+
+		await wrapper.get('[data-commander-picker]').trigger('click');
+
+		expect(player.gameData).toEqual({
+			type: 'mtg',
+			commanders: [
+				{ name: 'Atraxa' },
+			],
+		});
+	});
+});
+
 describe('featureMatchSetupPlayerForm submit', () => {
 	it('emits submit when the player form submits', async () => {
 		const submit = vi.fn();
