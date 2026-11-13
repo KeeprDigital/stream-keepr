@@ -40,6 +40,7 @@ import {
 import {
 	macintoshCmapLanguage,
 	withCmapLanguages,
+	withSeparateCmapSubtables,
 } from './graphics-acceptance/font-cmap-variants.mjs';
 import { runAcceptanceHarness } from './graphics-acceptance/harness.mjs';
 import {
@@ -59,7 +60,7 @@ const LIBRARY_FACE = 'public/fonts/mana.woff2';
 const fromRepository = path => new URL(`../${path}`, import.meta.url);
 
 /**
- * `public/fonts/mana.ttf` with its cmap subtable languages restated.
+ * `public/fonts/mana.ttf`, subtables split per platform, with languages restated.
  *
  * The restating itself lives in `graphics-acceptance/font-cmap-variants.mjs`,
  * shared with the `static-font-v1` unit tests so both sides build byte-identical
@@ -74,7 +75,7 @@ const fromRepository = path => new URL(`../${path}`, import.meta.url);
  */
 async function cmapLanguageVariant(languageForPlatform) {
 	return withCmapLanguages(
-		new Uint8Array(await readFile(fromRepository('public/fonts/mana.ttf'))),
+		withSeparateCmapSubtables(new Uint8Array(await readFile(fromRepository('public/fonts/mana.ttf')))),
 		languageForPlatform,
 	);
 }
@@ -86,11 +87,12 @@ async function cmapLanguageVariant(languageForPlatform) {
  *
  * The Macintosh-language face is the one that matters. The profile permits a
  * non-zero `language` on that platform, because OpenType defines it there as the
- * Mac language ID plus one — and the committed refused face is refused by a rule with or
- * without that exemption, so it cannot tell the two apart. This face
- * can: it is exactly `mana.ttf` with its Microsoft subtable's language
- * zeroed, and requiring it to load *and render* is what stops the rule quietly
- * widening back into a false positive (#153).
+ * Mac language ID plus one — and the committed refused face is refused by a
+ * rule with or without that exemption, so it cannot tell the two apart. This
+ * face can: it is `mana.ttf` with its subtables split (Mana's records share one,
+ * so the platforms could not otherwise differ), the Microsoft language zeroed
+ * and the Macintosh one left at 1. Requiring it to load *and render* is what
+ * stops the rule quietly widening back into a false positive (#153).
  */
 async function localManifest() {
 	const committed = JSON.parse(await readFile(fromRepository(`public${MANIFEST_PATH}`), 'utf8'));

@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { processStaticFont } from '~~/server/modules/graphics-asset-library/font';
 import { digestOf } from '~~/test/helpers/graphicsFixtures';
 import {
+	cmapRecords,
 	macintoshCmapLanguage,
 	refusedCmapLanguage,
 	withCmapLanguages,
+	withSeparateCmapSubtables,
 } from '../../../../scripts/graphics-acceptance/font-cmap-variants.mjs';
 
 describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
@@ -167,6 +169,10 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 		});
 	});
 
+	async function splitMana() {
+		return withSeparateCmapSubtables(new Uint8Array(await readFile('public/fonts/mana.ttf')));
+	}
+
 	async function processTtf(bytes: Uint8Array) {
 		return await processStaticFont(bytes, {
 			sourceFileName: 'mana.ttf',
@@ -185,29 +191,36 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 	});
 
 	// The browser acceptance run serves the committed file as the refused face, so it
-	// has to be exactly what the shared builder derives from mana.ttf.
-	it('commits the refused fixture as mana.ttf with every non-Unicode cmap language restated to 1', async () => {
+	// has to be exactly what the shared builder derives from the split mana.ttf.
+	it('commits the refused fixture as split mana.ttf with every non-Unicode cmap language restated to 1', async () => {
 		const committed = new Uint8Array(await readFile('public/fonts/mana-cmap-language.ttf'));
-		const source = new Uint8Array(await readFile('public/fonts/mana.ttf'));
 
-		expect(committed).toEqual(withCmapLanguages(source, refusedCmapLanguage));
+		expect(committed).toEqual(withCmapLanguages(await splitMana(), refusedCmapLanguage));
+	});
+
+	// Mana's records share one subtable; a variant that fails to split would silently equal
+	// the stock font and stop pinning the platform rules.
+	it.each([
+		['the Macintosh variant', macintoshCmapLanguage, { 0: 0, 1: 1, 3: 0 }],
+		['the refused variant', refusedCmapLanguage, { 0: 0, 1: 1, 3: 1 }],
+	])('%s carries the language each platform is meant to', async (_, languageForPlatform, expected) => {
+		const variant = withCmapLanguages(await splitMana(), languageForPlatform);
+
+		expect(Object.fromEntries(cmapRecords(variant).map(({ platformId, language }) => [platformId, language])))
+			.toEqual(expected);
 	});
 
 	// OpenType defines a non-zero Macintosh-platform language; only the Microsoft-platform
 	// one is fatal. Measured in Chromium: a Mac-only language loads, a Microsoft one does not.
 	it('accepts a Macintosh-platform cmap language, which OpenType defines there', async () => {
-		const source = new Uint8Array(await readFile('public/fonts/mana.ttf'));
-
-		const accepted = await processTtf(withCmapLanguages(source, macintoshCmapLanguage));
+		const accepted = await processTtf(withCmapLanguages(await splitMana(), macintoshCmapLanguage));
 
 		expect(accepted.report).toMatchObject({ outcome: 'accepted', issues: [] });
 	});
 
 	it('rejects a Microsoft-platform cmap language even when every other subtable is zero', async () => {
-		const source = new Uint8Array(await readFile('public/fonts/mana.ttf'));
-
 		await expect(processTtf(
-			withCmapLanguages(source, platform => (platform === 3
+			withCmapLanguages(await splitMana(), platform => (platform === 3
 				? 1
 				: 0)),
 		)).rejects.toMatchObject({
