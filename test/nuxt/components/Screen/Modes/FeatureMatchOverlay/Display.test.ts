@@ -8,10 +8,13 @@ import { createFeatureMatchLayoutComposition, FEATURE_MATCH_LAYOUT_COMPOSITION_I
 import { FEATURE_MATCH_SAMPLE_TOKEN_VALUES, featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
 import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
 import { DEFAULT_GRAPHIC_TYPOGRAPHY, getGraphicItemDefinition } from '~~/shared/modules/graphics';
+import { applicationGraphicFont } from '~~/shared/types/graphics';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
+import { deferred } from '~~/test/helpers/deferred';
 import { withLayersLocked } from '~~/test/helpers/featureMatchLayoutDocument';
 import { clock, shape, text } from '~~/test/helpers/graphicsComposition';
 import { LUFFY } from '~~/test/helpers/opCards';
+import { stubDocumentFonts } from '~~/test/nuxt/helpers/fontFaces';
 import Display from '~/components/Screen/Modes/FeatureMatchOverlay/Display.vue';
 import { GRAPHICS_PREVIEW_ANIMATION_MESSAGE, GRAPHICS_PREVIEW_READY_MESSAGE } from '~/modules/graphics/previewMessages';
 
@@ -1466,6 +1469,35 @@ describe('featureMatchOverlayDisplay', () => {
 			expect(wrapper.get('[data-graphic-item-kind="text"]').text()).toContain('Text');
 		});
 	});
+
+	// An application font ships as CSS `@font-face`, which swaps in late on a cold cache; readiness waits for it.
+	it('reports its fonts unready until the application face its Graphic Items paint has loaded', async () => {
+		const load = deferred<unknown>();
+		const fonts = stubDocumentFonts(async () => load.promise);
+		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
+		config.layout.composition = {
+			...createFeatureMatchLayoutComposition(),
+			items: [
+				text('nameplate', {
+					typography: {
+						...DEFAULT_GRAPHIC_TYPOGRAPHY,
+						font: applicationGraphicFont('poppins'),
+					},
+				}),
+			],
+		};
+		mockConfig.value = config;
+
+		const wrapper = await mountComponent();
+		expect(fonts.load).toHaveBeenCalledWith(`normal ${DEFAULT_GRAPHIC_TYPOGRAPHY.fontWeight} 1em "Poppins"`);
+		expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('false');
+
+		load.resolve([{}]);
+		await vi.waitFor(() => {
+			expect(wrapper.get('.feature-match-overlay').attributes('data-font-ready')).toBe('true');
+		});
+	});
+
 	// An editor-only run over the working layout; a live output never plays one.
 	describe('the graphic animation preview', () => {
 		const fadeIn = {
