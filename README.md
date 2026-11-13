@@ -338,7 +338,8 @@ gate CI cannot run, so a change touching realtime runs
 `pnpm test:integration --run` locally first.
 
 `pnpm verify` reproduces CI on the working tree. Its tail matters most:
-`worker:dry-run` checks the upload bundle statically; `worker:smoke` runs it
+`worker:dry-run` checks the upload bundle statically (and the built CSS for
+every declared application font face); `worker:smoke` runs it
 under local workerd with production-shaped requests. Together they catch
 bundles that pass on Node and break on workerd (#302), so reach for it when
 CI's Worker job fails on a change to dependencies, bundling, `nuxt.config.ts`,
@@ -692,7 +693,9 @@ The production hostname is `https://stream.keepr.digital`, attached as a
    `.output/wrangler-dry-run/` and fails if it contains
    `new WebAssembly.Module(`, which a deployed Worker refuses (every JPEG/WebP
    ingestion would fail, #302). It also fails if the bypass name appears in
-   generated config.
+   generated config, or if `.output/public`'s CSS lacks a declared application
+   font face, loads or imports one from a remote URL, or gives one a `local()`
+   source (`scripts/assert-built-fonts.mjs`).
 3. `pnpm worker:smoke` against that production build.
 4. `pnpm deploy:mark-app pending`: moves the `production` marker to this
    checkout as `pending` before anything remote changes
@@ -1352,6 +1355,15 @@ only through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding (no
 
 ## Graphics notes
 
+- **Adding an application font.** Add its id to `GRAPHIC_FONT_IDS` and its
+  entry to `GRAPHIC_FONTS` in `shared/modules/graphics/typography.ts`, with its
+  `package` (name, CSS family, weights, italic); add `@fontsource/<family>` to
+  `package.json` at an exact version (static, never `@fontsource-variable/*`)
+  and commit the lockfile; add its `--font-<id>` custom property to
+  `app/assets/css/main.css`; add its row to `THIRD_PARTY_FONTS.md`.
+  `pnpm worker:dry-run` (so `pnpm verify` and CI) then holds the build to every
+  declared weight and style, and to no remote or `local()` font source
+  ([ADR-0086](DECISIONS.md#adr-0086-application-fonts-are-packaged-by-nuxt-fonts-from-pinned-static-fontsource-packages-with-no-remote-provider-at-build)).
 - **Feature Match Overlay runs on the Shared Graphics Foundation.** The legacy
   widget / widget-group / z-index model was deleted without a migration.
   `test/unit/shared/builtInFeatureMatchLayoutTemplates.test.ts` pins the invariants of

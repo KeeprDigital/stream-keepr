@@ -22,6 +22,11 @@ shellEmulator: true
 verifyDepsBeforeRun: error
 engineStrict: true
 
+# Nuxt UI installs Nuxt Fonts as a module dependency at ^0.14.0. One version
+# packages the application fonts, and it is the one `package.json` pins.
+overrides:
+  '@nuxt/fonts': 1.2.0
+
 patchedDependencies:
   '@scryfall/api-types@1.0.0-alpha.4': patches/@scryfall__api-types@1.0.0-alpha.4.patch
 
