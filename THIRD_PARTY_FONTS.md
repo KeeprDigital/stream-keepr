@@ -20,3 +20,6 @@ file of the installed package.
 | Barlow Condensed | `@fontsource/barlow-condensed` | 5.3.0   | OFL-1.1 | Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)                           |
 | Source Serif 4   | `@fontsource/source-serif-4`   | 5.3.1   | OFL-1.1 | Google Inc. (the package's `LICENSE` names the holder and carries no year)                          |
 | JetBrains Mono   | `@fontsource/jetbrains-mono`   | 5.3.0   | OFL-1.1 | Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)      |
+
+The `Mana` symbol face ships from `mana-font` 1.18.0 (`fonts/mana.woff2`), whose
+README licenses the font under the SIL Open Font License 1.1 and its CSS under MIT.

@@ -26,8 +26,8 @@ const interFaces = [
 ];
 const without = (omit: string) => interFaces.filter(rule => !rule.includes(omit));
 
-function defects(css: string[], expected: typeof inter[]) {
-	return findFontDefects(parseFontFaces(css.join('')), expected);
+function defects(css: string[], expected: typeof inter[], forbidden: string[] = []) {
+	return findFontDefects(parseFontFaces(css.join('')), expected, forbidden);
 }
 
 describe('findFontDefects', () => {
@@ -109,8 +109,28 @@ describe('findFontDefects', () => {
 			expected: [inter],
 			found: [],
 		},
-	])('$name', ({ css, expected, found }) => {
-		const actual = defects(css, expected);
+		{
+			name: 'forbidden family',
+			css: [
+				...interFaces,
+				face('"MPlantin"', '400'),
+			],
+			expected: [inter],
+			forbidden: ['MPlantin'],
+			found: [/^font-forbidden-family: MPlantin/],
+		},
+		{
+			name: 'forbidden family in another case',
+			css: [
+				...interFaces,
+				face('mplantin', '400'),
+			],
+			expected: [inter],
+			forbidden: ['MPlantin'],
+			found: [/^font-forbidden-family: mplantin/],
+		},
+	])('$name', ({ css, expected, forbidden, found }) => {
+		const actual = defects(css, expected, forbidden);
 		expect(actual).toHaveLength(found.length);
 		found.forEach((pattern, index) => expect(actual[index]).toMatch(pattern));
 	});
@@ -140,6 +160,17 @@ describe('assertBuiltFonts', () => {
 
 		expect(assertBuiltFonts(root, [inter])).toEqual([
 			expect.stringMatching(/^font-face-missing: Inter 800 normal/),
+		]);
+	});
+
+	it('finds a built file named for a forbidden family', () => {
+		const root = build({
+			'_nuxt/entry.css': interFaces.join(''),
+			'_nuxt/mplantin.B1c2d3.woff': '',
+		});
+
+		expect(assertBuiltFonts(root, [inter], ['MPlantin'])).toEqual([
+			expect.stringMatching(/^font-forbidden-family: .*mplantin\.B1c2d3\.woff/),
 		]);
 	});
 

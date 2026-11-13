@@ -1,6 +1,7 @@
 /**
  * Assert the built CSS carries every application font face the registry
- * declares, and that none of them loads from the network.
+ * declares, that none of them loads from the network, and that no forbidden
+ * family ships at all.
  *
  * Nuxt Fonts' npm provider skips a weight file a `@fontsource/*` package does
  * not have, without a warning (ADR-0086), so the configuration alone proves
@@ -12,6 +13,10 @@
  * `"<Family> Fallback: …"` faces Nuxt Fonts generates are not the family and
  * are not counted as it.
  *
+ * A forbidden family fails on a face that declares it or on a built file named
+ * for it, since a dependency's stylesheet can bring its files back without the
+ * registry naming it; family names compare case-insensitively, as CSS does.
+ *
  * Two ways a scan passes while seeing nothing, both closed: it refuses a
  * directory with no `.css` in it, and `selfTest` runs first, parsing a face the
  * checker must read and a fallback it must ignore. `pnpm worker:dry-run` runs
@@ -19,10 +24,13 @@
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { GRAPHIC_FONTS } from '../shared/modules/graphics/typography.ts';
+
+/** Families no build may ship: MPlantin was removed, and `mana-font`'s own stylesheet declares it. */
+export const FORBIDDEN_FONT_FAMILIES = ['MPlantin'];
 
 /** The declared matrix: one entry per packaged application font. */
 export const DECLARED_FONT_FACES = GRAPHIC_FONTS
@@ -57,11 +65,14 @@ export function parseFontFaces(css) {
 }
 
 /** One line per defect, each starting with its code. */
-export function findFontDefects(faces, expected) {
+export function findFontDefects(faces, expected, forbiddenFamilies = []) {
 	const defects = [];
+	const forbidden = new Set(forbiddenFamilies.map(family => family.toLowerCase()));
 	for (const face of faces) {
 		for (const url of face.urls.filter(candidate => REMOTE_URL.test(candidate)))
 			defects.push(`font-remote-url: ${face.family} ${face.weight.join('-')} ${face.style} loads ${url}`);
+		if (forbidden.has(face.family.toLowerCase()))
+			defects.push(`font-forbidden-family: ${face.family} ${face.weight.join('-')} ${face.style} is forbidden but in the built CSS`);
 	}
 	for (const { family, weights, italic } of expected) {
 		for (const style of italic
@@ -78,24 +89,31 @@ export function findFontDefects(faces, expected) {
 	return defects;
 }
 
-function* stylesheets(directory) {
+function* builtFiles(directory) {
 	for (const entry of readdirSync(directory, { withFileTypes: true })) {
 		const entryPath = join(directory, entry.name);
 		if (entry.isDirectory())
-			yield* stylesheets(entryPath);
-		else if (entry.name.endsWith('.css'))
+			yield* builtFiles(entryPath);
+		else
 			yield entryPath;
 	}
 }
 
-/** Defects across every `.css` under `directory`; throws when there is none to read. */
-export function assertBuiltFonts(directory, expected) {
+/** Defects across every `.css` under `directory`, and every file named for a forbidden family; throws when there is no `.css` to read. */
+export function assertBuiltFonts(directory, expected, forbiddenFamilies = []) {
 	const files = [
-		...stylesheets(directory),
+		...builtFiles(directory),
 	];
-	if (files.length === 0)
+	const stylesheets = files.filter(file => file.endsWith('.css'));
+	if (stylesheets.length === 0)
 		throw new Error(`font-nothing-scanned: no .css under ${directory}. A scan of nothing is not a pass.`);
-	return findFontDefects(files.flatMap(file => parseFontFaces(readFileSync(file, 'utf8'))), expected);
+	const defects = findFontDefects(stylesheets.flatMap(file => parseFontFaces(readFileSync(file, 'utf8'))), expected, forbiddenFamilies);
+	for (const file of files) {
+		const name = basename(file).toLowerCase();
+		for (const family of forbiddenFamilies.filter(candidate => name.includes(candidate.toLowerCase())))
+			defects.push(`font-forbidden-family: ${relative(directory, file)} is named for ${family}, which is forbidden`);
+	}
+	return defects;
 }
 
 /** Proves the parser reads a real face and ignores a fallback, before trusting a clean scan. */
@@ -108,7 +126,7 @@ function selfTest() {
 }
 
 /** `{ ok, lines }` like the sibling scans, so `worker:dry-run` can print every verdict. */
-export function builtFontsScan(directory, expected = DECLARED_FONT_FACES) {
+export function builtFontsScan(directory, expected = DECLARED_FONT_FACES, forbiddenFamilies = FORBIDDEN_FONT_FAMILIES) {
 	const broken = selfTest();
 	if (broken.length > 0) {
 		return {
@@ -121,7 +139,7 @@ export function builtFontsScan(directory, expected = DECLARED_FONT_FACES) {
 	}
 	let defects;
 	try {
-		defects = assertBuiltFonts(directory, expected);
+		defects = assertBuiltFonts(directory, expected, forbiddenFamilies);
 	}
 	catch (error) {
 		return {
@@ -133,13 +151,13 @@ export function builtFontsScan(directory, expected = DECLARED_FONT_FACES) {
 		? {
 				ok: false,
 				lines: [
-					'assert-built-fonts: the built CSS does not hold the declared application fonts.',
+					'assert-built-fonts: the build does not hold the declared application fonts, or ships a forbidden one.',
 					...defects.map(line => `  ${line}`),
 				],
 			}
 		: {
 				ok: true,
-				lines: [`assert-built-fonts: every declared application font face is in the built CSS under ${directory}, none remote`],
+				lines: [`assert-built-fonts: every declared application font face is in the built CSS under ${directory}, none remote, none forbidden`],
 			};
 }
 

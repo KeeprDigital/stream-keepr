@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { applicationFontFamilies } from './build/applicationFonts';
 import { CHECKOUT_TSCONFIG } from './build/checkoutTsconfig';
 import { localConfigurationModule } from './build/localConfigurationModule';
+import { manaFontModule } from './build/manaFontModule';
 import { SUPPORTED_SOCIAL_NETWORKS } from './shared/socialProfiles';
 import {
 	GRAPHICS_MULTIPART_PART_BYTES,
@@ -63,6 +64,9 @@ export default defineNuxtConfig({
 		// longer needs to be: it populated the environment later modules read their
 		// runtimeConfig from until #412 deleted the file it read.
 		localConfigurationModule,
+		// Writes the `mana-font` stylesheet the mana symbol components import,
+		// with one woff2 `Mana` face in place of the package's own faces.
+		manaFontModule,
 		'@nuxt/eslint',
 		'@nuxt/fonts',
 		'@nuxt/ui',
