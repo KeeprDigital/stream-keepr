@@ -339,6 +339,11 @@ describe('a Feature Match Deck List reference', () => {
 		type: 'op',
 		featureMatchDeckList: { id: 4, mainboardCount: 50 },
 	};
+	// A Commander Seat's, of Magic: The Gathering cards (ADR-0087).
+	const commanderGameData = {
+		type: 'mtg',
+		featureMatchDeckList: { id: 4, mainboardCount: 99 },
+	};
 
 	it.each([
 		[
@@ -349,9 +354,23 @@ describe('a Feature Match Deck List reference', () => {
 			true,
 		],
 		[
+			'a Slot setup save of a Commander Seat',
+			() => updateFeatureMatchSchema.safeParse({
+				player4Data: { name: 'Dee', gameData: commanderGameData },
+			}),
+			true,
+		],
+		[
 			'a Slot create',
 			() => createFeatureMatchSchema.safeParse({
 				player1Data: { name: 'Ana', gameData },
+			}),
+			false,
+		],
+		[
+			'a Slot create naming a Commander Seat\'s',
+			() => createFeatureMatchSchema.safeParse({
+				player1Data: { name: 'Ana', gameData: commanderGameData },
 			}),
 			false,
 		],

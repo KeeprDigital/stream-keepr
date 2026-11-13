@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Game, PlayerSide } from '~~/shared/types/enums';
+import type { Game, PlayerSide, Seat } from '~~/shared/types/enums';
 import type { MtgPlayerGameData, OpPlayerGameData } from '~~/shared/types/game';
 import type { InputMenuItem } from '#ui/types';
 import type { Player, PlayerData } from '~/types';
@@ -23,6 +23,8 @@ const props = defineProps<{
 	/** The Slot and its side this form edits, for the side's Feature Match Deck List. */
 	slotId?: number;
 	side?: PlayerSide;
+	/** A Commander Slot's Seat this form edits, for the Seat's Feature Match Deck List (ADR-0087). */
+	seat?: Seat;
 	/** While the setup form holds unsaved changes, a Deck List waits for them. */
 	deckListLocked?: boolean;
 }>();
@@ -96,6 +98,15 @@ const mtgGameData = computed({
 	},
 });
 
+/** Takes the Deck List off a Commander Seat, which keeps its Commanders: an edit the setup save writes. */
+function clearCommanderDeckList() {
+	mtgGameData.value = {
+		...mtgGameData.value,
+		commanders: mtgGameData.value.commanders ?? [],
+		featureMatchDeckList: null,
+	};
+}
+
 const opGameData = computed({
 	get: () => getOpGameData(player.value?.gameData),
 	set: (value: OpPlayerGameData) => {
@@ -166,7 +177,17 @@ const editingPlayerDeckList = ref(false);
 		<USeparator />
 
 		<!-- Game-Specific Fields -->
-		<FeatureMatchSetupCommanderFields v-if="props.commanderEvent" v-model="mtgGameData" />
+		<template v-if="props.commanderEvent">
+			<FeatureMatchSetupCommanderFields v-model="mtgGameData" :slot-id="props.slotId" />
+			<FeatureMatchSetupCommanderDeckListField
+				v-if="props.slotId && props.seat"
+				:slot-id="props.slotId"
+				:seat="props.seat"
+				:deck-list="mtgGameData.featureMatchDeckList ?? null"
+				:locked="props.deckListLocked ?? false"
+				@clear="clearCommanderDeckList"
+			/>
+		</template>
 		<FeatureMatchSetupMtgPlayerFields v-else-if="props.game === 'mtg'" v-model="mtgGameData" />
 		<UFormField
 			v-if="linkedPlayer"

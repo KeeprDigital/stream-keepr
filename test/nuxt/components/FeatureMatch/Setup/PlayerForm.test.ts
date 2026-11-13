@@ -197,8 +197,8 @@ describe('linking a One Piece Card Game Player into a side', () => {
 
 // A Commander Event has no Players: its Seat is typed, and its deck is its Commanders (ADR-0087).
 describe('a Commander Event\'s Seat', () => {
-	function mountSeat(commanderEvent: boolean) {
-		const player = reactive<PlayerData>({ ...DEFAULT_PLAYER_DATA });
+	function mountSeat(commanderEvent: boolean, held: Partial<PlayerData> = {}) {
+		const player = reactive<PlayerData>({ ...DEFAULT_PLAYER_DATA, ...held });
 		const wrapper = mount(PlayerForm, {
 			props: {
 				'modelValue': player,
@@ -212,6 +212,9 @@ describe('a Commander Event\'s Seat', () => {
 					createMockPlayer({ id: 8, name: 'Ava Reed' }),
 				] as never,
 				'formId': 'seat-form',
+				'slotId': 3,
+				'seat': 'player4',
+				'deckListLocked': true,
 				'onUpdate:modelValue': (value: typeof player) => Object.assign(player, value),
 			},
 			global: {
@@ -219,6 +222,11 @@ describe('a Commander Event\'s Seat', () => {
 					...nuxtUiStubs,
 					UInputMenu: UInputMenuStub,
 					FeatureMatchSetupMtgPlayerFields: { template: '<div data-deck-name />' },
+					FeatureMatchSetupCommanderDeckListField: {
+						props: ['slotId', 'seat', 'deckList', 'locked'],
+						emits: ['clear'],
+						template: `<button data-seat-deck-list :data-seat="seat" :data-slot="slotId" :data-held="deckList?.id" :data-locked="locked" @click="$emit('clear')" />`,
+					},
 					FeatureMatchSetupCommanderFields: {
 						emits: ['update:modelValue'],
 						template: `<button data-commander-picker @click="$emit('update:modelValue', { type: 'mtg', commanders: [{ name: 'Atraxa' }] })" />`,
@@ -256,6 +264,19 @@ describe('a Commander Event\'s Seat', () => {
 				{ name: 'Atraxa' },
 			],
 		});
+	});
+
+	it('offers its Deck List paste, and takes the list off the Seat when it is cleared', async () => {
+		const { wrapper, player } = mountSeat(true, {
+			gameData: { type: 'mtg', commanders: [], featureMatchDeckList: { id: 11, mainboardCount: 99 } },
+		});
+
+		const field = wrapper.get('[data-seat-deck-list]');
+		expect(field.attributes()).toMatchObject({ 'data-seat': 'player4', 'data-slot': '3', 'data-held': '11', 'data-locked': 'true' });
+		expect(mountSeat(false).wrapper.find('[data-seat-deck-list]').exists()).toBe(false);
+
+		await field.trigger('click');
+		expect(player.gameData).toMatchObject({ commanders: [], featureMatchDeckList: null });
 	});
 });
 

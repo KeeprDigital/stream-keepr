@@ -163,6 +163,20 @@ describe('a Broadcast Deck List write that is accepted', () => {
 		]);
 	});
 
+	// ADR-0087: a foil marker no longer refuses a paste; the line still names its printing.
+	it('saves a source whose line carries a foil marker, as the printing the line names', async () => {
+		const eventId = await stageEvent();
+
+		const created = await write.createBroadcastDeckList({
+			eventId,
+			input: { name: 'Burn', sourceText: '4 Lightning Bolt (LEA) 1 *F*' },
+		});
+
+		expect(await storedCards(created.id)).toEqual([
+			['mainboard', 4, 'Lightning Bolt'],
+		]);
+	});
+
 	// Resolving an Unresolved Deck Card names its card for every Deck List in the Event.
 	it('reads a name the Event has resolved to a card as that card', async () => {
 		const eventId = await stageEvent();

@@ -3,6 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ATRAXA, KRAUM, scryfallCardOf, TYMNA } from '~~/test/helpers/commanders';
+import { MOXFIELD_CARDS } from '~~/test/helpers/magicDeckText';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import CommanderFields from '~/components/FeatureMatch/Setup/CommanderFields.vue';
 
@@ -12,6 +13,7 @@ const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
 mockNuxtImport('$fetch', () => mockFetch);
+mockNuxtImport('useEventStore', () => () => ({ eventId: 7 }));
 
 const SEARCH = 'https://api.scryfall.com/cards/search';
 const ATRAXA_2XM: Commander = {
@@ -21,11 +23,13 @@ const ATRAXA_2XM: Commander = {
 	collectorNumber: '190',
 };
 
-function mountFields(commanders: Commander[] = []) {
+function mountFields(commanders: Commander[] = [], seat: Partial<MtgPlayerGameData> & { slotId?: number } = {}) {
+	const { slotId, ...gameData } = seat;
 	const updates: MtgPlayerGameData[] = [];
 	const wrapper = mount(CommanderFields, {
 		props: {
-			'modelValue': { type: 'mtg', commanders } as MtgPlayerGameData,
+			slotId,
+			'modelValue': { type: 'mtg', commanders, ...gameData } as MtgPlayerGameData,
 			'onUpdate:modelValue': (value: MtgPlayerGameData) => {
 				updates.push(value);
 				void wrapper.setProps({ modelValue: value });
@@ -212,5 +216,72 @@ describe('a Seat\'s Commander picker', () => {
 		await vi.advanceTimersByTimeAsync(300);
 
 		expect(mockFetch).toHaveBeenCalledTimes(searches);
+	});
+
+	// ADR-0087: while a Seat holds a Deck List, its Commanders are that list's cards.
+	describe('while the Seat holds a Deck List', () => {
+		const { ashling, animar } = MOXFIELD_CARDS;
+		const ASHLING: Commander = {
+			scryfallId: ashling.id,
+			name: ashling.name,
+			colorIdentity: 'WUBRG',
+			setCode: 'ecc',
+			collectorNumber: '1',
+		};
+		const LIST = '/api/events/7/feature-match-slots/3/commander-deck-lists/11';
+		const listCard = (card: typeof ashling, colorIdentity: string) => ({
+			quantity: 1,
+			scryfallId: card.id,
+			name: card.name,
+			setCode: card.set,
+			collectorNumber: card.collector_number,
+			cardType: null,
+			colorIdentity,
+			manaCost: null,
+			manaValue: null,
+		});
+
+		beforeEach(() => {
+			mockFetch.mockImplementation(async (path: string) => path === LIST
+				? { id: 11, slotId: 3, sourceText: '', entries: [listCard(ashling, 'WUBRG'), listCard(animar, 'URG')] }
+				: { data: [scryfallCardOf(ATRAXA)] });
+		});
+
+		const mountHolding = (commanders: Commander[]) =>
+			mountFields(commanders, { slotId: 3, featureMatchDeckList: { id: 11, mainboardCount: 98 } });
+
+		it('offers the list\'s cards in place of the card search, and holds the one picked as the list\'s printing', async () => {
+			const { wrapper, updates } = mountHolding([ASHLING]);
+
+			await search(wrapper, 'a');
+
+			expect(labels(wrapper, 'Cards')).toEqual(['Pick Commander Animar, Soul of Elements']);
+			expect(mockFetch).not.toHaveBeenCalledWith(SEARCH, expect.anything());
+
+			await press(wrapper, 'Pick Commander Animar, Soul of Elements');
+			expect(updates.at(-1)).toEqual({
+				type: 'mtg',
+				commanders: [
+					ASHLING,
+					{ scryfallId: animar.id, name: animar.name, colorIdentity: 'URG', setCode: '2x2', collectorNumber: '171' },
+				],
+				featureMatchDeckList: { id: 11, mainboardCount: 98 },
+			});
+		});
+
+		it('offers no other printing of a Commander: the printing is the list\'s', () => {
+			const { wrapper } = mountHolding([ASHLING]);
+
+			expect(wrapper.find(`button[aria-label="Change printing of ${ASHLING.name}"]`).exists()).toBe(false);
+		});
+
+		it('searches every card again once the list is cleared', async () => {
+			const { wrapper } = mountHolding([]);
+			await wrapper.setProps({ modelValue: { type: 'mtg', commanders: [], featureMatchDeckList: null } });
+
+			await search(wrapper, 'atraxa');
+
+			expect(labels(wrapper, 'Cards')).toEqual([`Pick Commander ${ATRAXA.name}`]);
+		});
 	});
 });
