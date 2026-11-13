@@ -70,8 +70,10 @@ const fromRepository = path => new URL(`../${path}`, import.meta.url);
  * anything failing (#153).
  *
  * Built here rather than committed for the same reason the OTF face is not
- * vendored: it exists only to be loaded by this run, and a synthetic font in
- * `public/` would be a shipped asset nothing serves.
+ * vendored: only a local run loads it. The refused face,
+ * `public/fonts/mana-cmap-language.ttf`, is the one synthetic font committed to
+ * `public/`, because the committed manifest names it and every run loads it from
+ * there; this face would be a shipped asset only a local run ever requests.
  */
 async function cmapLanguageVariant(languageForPlatform) {
 	return withCmapLanguages(

@@ -18,6 +18,20 @@
  */
 
 /**
+ * The length of the cmap subtable at `offset`, read where formats 0, 2, 4 and 6
+ * keep it: a 16-bit field after the format, with the 16-bit language after that.
+ * Formats 8, 10, 12 and 13 widen both to 32 bits behind a reserved field, and
+ * format 14 has no language, so any other format throws rather than be misread.
+ * Mana's subtables are format 4.
+ */
+function shortSubtableLength(view, offset) {
+	const format = view.getUint16(offset);
+	if (![0, 2, 4, 6].includes(format))
+		throw new Error(`cmap subtable format ${format} is not read here: only formats 0, 2, 4 and 6 keep a 16-bit length and language`);
+	return view.getUint16(offset + 2);
+}
+
+/**
  * A copy of `source` whose cmap encoding records each own a private subtable.
  *
  * Some fonts (Mana among them) point every record at one shared subtable, so a
@@ -28,6 +42,9 @@
  * padded, and its directory entry (offset, length, checksum) is restated so
  * `static-font-v1` still validates the SFNT. A font whose records are already
  * separate keeps the languages it had.
+ *
+ * Each subtable's length is read as formats 0–6 lay it out; a font with any
+ * other format throws (`shortSubtableLength`).
  *
  * @param {Uint8Array} source Raw SFNT bytes — a TTF or OTF, not a WOFF wrapper.
  * @returns {Uint8Array} A new array; `source` is left untouched.
@@ -45,19 +62,12 @@ export function withSeparateCmapSubtables(source) {
 
 	const cmap = view.getUint32(entry + 8);
 	const count = view.getUint16(cmap + 2);
-	const subtableLength = (offset) => {
-		const format = view.getUint16(offset);
-		return format >= 8
-			? view.getUint32(offset + 4)
-			: view.getUint16(offset + 2);
-	};
-
 	const records = [];
 	let bodyLength = 0;
 	for (let index = 0; index < count; index++) {
 		const record = cmap + 4 + index * 8;
 		const start = cmap + view.getUint32(record + 4);
-		const length = subtableLength(start);
+		const length = shortSubtableLength(view, start);
 		const padded = Math.ceil(length / 4) * 4;
 		records.push({ record, start, length, padded });
 		bodyLength += padded;
@@ -94,6 +104,9 @@ export function withSeparateCmapSubtables(source) {
  * tests that must see what a variant really carries rather than trust how it
  * was built.
  *
+ * Each language is read as formats 0–6 lay it out; a font with any other format
+ * throws (`shortSubtableLength`).
+ *
  * @param {Uint8Array} source Raw SFNT bytes — a TTF or OTF, not a WOFF wrapper.
  * @returns {{ platformId: number, encodingId: number, offset: number, language: number }[]} One entry per record.
  */
@@ -112,6 +125,7 @@ export function cmapRecords(source) {
 	}, (_, index) => {
 		const record = cmap + 4 + index * 8;
 		const offset = view.getUint32(record + 4);
+		shortSubtableLength(view, cmap + offset);
 		return {
 			platformId: view.getUint16(record),
 			encodingId: view.getUint16(record + 2),
@@ -128,6 +142,9 @@ export function cmapRecords(source) {
  * validates the SFNT directory before anything reads a table, so bytes edited
  * without it are refused as `font-checksum-invalid` and prove nothing about the
  * cmap rule they were built to exercise.
+ *
+ * Each language is written where formats 0–6 keep it; a font with any other
+ * format throws (`shortSubtableLength`).
  *
  * @param {Uint8Array} source Raw SFNT bytes — a TTF or OTF, not a WOFF wrapper.
  * @param {(platformId: number) => number} languageForPlatform
@@ -149,7 +166,9 @@ export function withCmapLanguages(source, languageForPlatform) {
 	const length = view.getUint32(entry + 12);
 	for (let index = 0; index < view.getUint16(cmap + 2); index++) {
 		const record = cmap + 4 + index * 8;
-		view.setUint16(cmap + view.getUint32(record + 4) + 4, languageForPlatform(view.getUint16(record)));
+		const subtable = cmap + view.getUint32(record + 4);
+		shortSubtableLength(view, subtable);
+		view.setUint16(subtable + 4, languageForPlatform(view.getUint16(record)));
 	}
 
 	let sum = 0;
