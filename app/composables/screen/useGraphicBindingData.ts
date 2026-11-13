@@ -83,6 +83,9 @@ export function useGraphicBindingData() {
 			bestOf: slot.bestOf,
 			player1Data: slot.player1Data,
 			player2Data: slot.player2Data,
+			// A Commander Slot's third and fourth Seats; every other Slot has neither (ADR-0087).
+			player3Data: slot.player3Data ?? null,
+			player4Data: slot.player4Data ?? null,
 			activeSession: session
 				? {
 						sourceSnapshot: session.sourceSnapshot,

@@ -108,6 +108,8 @@ const selectedGraphic = computed(() =>
  */
 const eventStore = useEventStore();
 const game = computed(() => eventStore.event?.game);
+/** Its Variant, which decides whether a Commander Event's binding fields exist (ADR-0087). */
+const variant = computed(() => eventStore.event?.variant);
 
 /**
  * The Theme the workspace previews under (#829): this Screen's Event's, unless
@@ -505,6 +507,7 @@ function rotate(rotation: number, gesture: number) {
 						:canvas-height="canvasHeight"
 						:event-id="eventId"
 						:game="game"
+						:variant="variant"
 						:writable="canAuthor && !selectedOnAir"
 						:theme-tokens="previewTheme.themeTokens.value"
 						@update:graphics="editor.editFields($event)"

@@ -2,6 +2,7 @@
 import type { FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, FeatureMatchSourceRole } from '~~/shared/types/screenConfig';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { Screen } from '~/types';
+import { featureMatchOverlayHostContract } from '~~/shared/modules/graphics';
 import GraphicsGeometryFields from '~/components/Graphics/GeometryFields.vue';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import { appearanceSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';
@@ -23,11 +24,13 @@ const editor = useFeatureMatchOverlayConfigEditor({
 	updateConfig: props.updateConfig,
 });
 
-const SOURCE_ROLE_OPTIONS = [
+/** The main source, then each Seat this Event's Slots have: a pair's two Players, or a Commander Slot's four Seats (ADR-0087). */
+const eventKind = useEventKind();
+const sourceRoleOptions = computed<Array<{ label: string; value: FeatureMatchSourceRole }>>(() => [
 	{ label: 'Main', value: 'main' },
-	{ label: 'Player 1', value: 'player1' },
-	{ label: 'Player 2', value: 'player2' },
-] satisfies Array<{ label: string; value: FeatureMatchSourceRole }>;
+	...(featureMatchOverlayHostContract(eventKind.value ?? 'mtg-two-player').seats ?? [])
+		.map(option => ({ label: option.label, value: option.seat })),
+]);
 </script>
 
 <template>
@@ -87,7 +90,7 @@ const SOURCE_ROLE_OPTIONS = [
 				<ScreenSettingsField label="Source role" stacked>
 					<USelect
 						:model-value="item.sourceRole"
-						:items="SOURCE_ROLE_OPTIONS"
+						:items="sourceRoleOptions"
 						value-key="value"
 						size="sm"
 						class="w-full"

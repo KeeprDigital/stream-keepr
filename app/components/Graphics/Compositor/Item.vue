@@ -331,15 +331,15 @@ watch(
 				<span
 					v-else-if="segment.cardImage?.monochrome"
 					class="graphics-compositor-item__card-image graphics-compositor-item__card-image--key"
-					data-op-card-image-key
+					data-card-image-key
 					aria-hidden="true"
 				/>
 				<img
 					v-else-if="segment.cardImage"
 					class="graphics-compositor-item__card-image"
 					:src="segment.cardImage.url"
-					alt="Leader"
-					data-op-card-image
+					:alt="segment.cardImage.alt"
+					data-card-image
 				>
 				<template v-else>{{ segment.text }}</template>
 			</span>

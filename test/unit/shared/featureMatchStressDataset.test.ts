@@ -1,30 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import { updateEventSchema } from '~~/server/schemas/api/event';
+import { EVENT_KIND_VALUES } from '~~/shared/config/games';
 import { featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
 import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
-import { FEATURE_MATCH_TOKEN_KEYS } from '~~/shared/featureMatchTokenCatalogue';
-import { GAME_VALUES } from '~~/shared/types/enums';
+import { featureMatchTokenCatalogue } from '~~/shared/featureMatchTokenCatalogue';
+import { SEAT_VALUES } from '~~/shared/types/enums';
 import { isOpCardImageUrl } from '~~/shared/utils/card/op';
 import { formatClockTime } from '~~/shared/utils/clock';
 
 // The Stress Dataset exists to be wider than anything a show holds: wider than
 // the sample everywhere, and at a bound wherever the app has one.
 describe('the Feature Match Stress Dataset', () => {
-	it.each(GAME_VALUES)('covers every token for %s, none narrower than the sample\'s', (game) => {
-		const { tokenValues } = featureMatchStressDataset(game, { untimed: false });
-		const sample = featureMatchSampleDataset(game).tokenValues;
+	it.each(EVENT_KIND_VALUES)('holds each token a %s Event is offered and no other, none narrower than the sample\'s', (kind) => {
+		const { tokenValues } = featureMatchStressDataset(kind, { untimed: false });
+		const sample = featureMatchSampleDataset(kind).tokenValues;
+		const keys = featureMatchTokenCatalogue(kind).map(token => token.key);
 
-		expect(FEATURE_MATCH_TOKEN_KEYS.filter(key => !(key in tokenValues))).toEqual([]);
-		const narrower = FEATURE_MATCH_TOKEN_KEYS.filter(key =>
-			!key.endsWith('LeaderImage') && String(tokenValues[key]).length < String(sample[key]).length);
+		expect(Object.keys(tokenValues).sort()).toEqual([...keys].sort());
+		// A card image is a URL, whose length says nothing of how wide it paints.
+		const narrower = keys.filter(key =>
+			!key.endsWith('Image') && String(tokenValues[key]).length < String(sample[key]).length);
 		expect(narrower).toEqual([]);
 	});
 
-	it.each(GAME_VALUES.flatMap(game => [
-		{ game, untimed: false },
-		{ game, untimed: true },
-	]))('shows $game\'s widest clock, or with untimed $untimed the longest Untimed Label an Event can hold', ({ game, untimed }) => {
-		const { clockDisplayTime } = featureMatchStressDataset(game, { untimed }).context;
+	it.each(EVENT_KIND_VALUES.flatMap(kind => [
+		{ kind, untimed: false },
+		{ kind, untimed: true },
+	]))('shows a $kind Event\'s widest clock, or with untimed $untimed the longest Untimed Label an Event can hold', ({ kind, untimed }) => {
+		const { clockDisplayTime } = featureMatchStressDataset(kind, { untimed }).context;
 
 		if (untimed) {
 			const accepts = (label: string) => updateEventSchema.safeParse({ featureMatchDefaultUntimedLabel: label }).success;
@@ -39,7 +42,7 @@ describe('the Feature Match Stress Dataset', () => {
 	});
 
 	it('stresses a Magic Match\'s live state: three-digit life either way, a best-of-five one game from decided, full revealed sideboards', () => {
-		const { context } = featureMatchStressDataset('mtg', { untimed: false });
+		const { context } = featureMatchStressDataset('mtg-two-player', { untimed: false });
 		const { player1, player2, bestOf } = context;
 
 		expect([player1.lifeTotal, player2.lifeTotal].map(String)).toEqual(['999', '-999']);
@@ -66,5 +69,18 @@ describe('the Feature Match Stress Dataset', () => {
 			player1: { lifeTotal: null, sideboard: null },
 			player2: { lifeTotal: null, sideboard: null },
 		});
+	});
+
+	it('stresses a Commander game: four Seats, each a pair of Commanders, three-digit life either way', () => {
+		const { tokenValues, context } = featureMatchStressDataset('mtg-commander', { untimed: false });
+
+		for (const seat of SEAT_VALUES) {
+			expect(String(tokenValues[`${seat}Deck`]).length, seat).toBeGreaterThan(50);
+			expect(tokenValues[`${seat}Commander2Image`], seat).not.toBe('');
+			expect(String(context[seat]?.lifeTotal), seat).toHaveLength(seat === 'player1' || seat === 'player3'
+				? 3
+				: 4);
+		}
+		expect(String(tokenValues.player1DeckColors)).toHaveLength(4);
 	});
 });

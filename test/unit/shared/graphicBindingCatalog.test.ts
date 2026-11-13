@@ -9,6 +9,9 @@ import {
 	isGraphicBindingFieldCompatible,
 	resolveGraphicBindingField,
 } from '~~/shared/modules/graphics';
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
+import { ATRAXA, KRAUM, TYMNA } from '~~/test/helpers/commanders';
+import { seatedPlayer } from '~~/test/helpers/featureMatchSnapshots';
 import { LUFFY } from '~~/test/helpers/opCards';
 
 // The binding field catalog as an operator meets it: fields per source kind and game,
@@ -248,6 +251,38 @@ describe('graphic Input Binding field catalog', () => {
 			.toBeUndefined();
 	});
 
+	// Each Commander a Seat holds is a card: the first, and a pair's second (ADR-0087).
+	it.each([
+		{
+			fieldId: 'player.commander1Image',
+			pair: scryfallCardImageUrl(TYMNA.scryfallId),
+			single: scryfallCardImageUrl(ATRAXA.scryfallId),
+		},
+		{
+			fieldId: 'player.commander2Image',
+			pair: scryfallCardImageUrl(KRAUM.scryfallId),
+			single: undefined,
+		},
+	])('resolves a Commander Seat through $fieldId', ({ fieldId, pair, single }) => {
+		expect(resolveGraphicBindingField('player', fieldId, seatedPlayer('Cleo', [TYMNA, KRAUM]), dataSet())).toBe(pair);
+		expect(resolveGraphicBindingField('player', fieldId, seatedPlayer('Dara', [ATRAXA]), dataSet())).toBe(single);
+	});
+
+	it.each(['player3', 'player4'] as const)('resolves %s\'s life from a Commander Session', (seat) => {
+		const slot = {
+			activeSession: {
+				currentState: {
+					player1: { lifeTotal: 40 },
+					player2: { lifeTotal: 40 },
+					[seat]: { lifeTotal: 17 },
+				},
+			},
+		} as never;
+
+		expect(resolveGraphicBindingField('feature-match-slot', `featureMatchSlot.${seat}Life`, slot, dataSet())).toBe(17);
+		expect(resolveGraphicBindingField('feature-match-slot', `featureMatchSlot.${seat}Life`, {}, dataSet())).toBeUndefined();
+	});
+
 	// A linked side, and a Player, show the Player's Deck List (ADR-0074); an unlinked side its Feature Match Deck List.
 	it.each([
 		{
@@ -314,6 +349,35 @@ describe('the fields one Graphic Input may bind to', () => {
 		expect(mtg.gameSpecific.map(field => field.id)).toEqual(['player.deckName', 'player.deckColors']);
 		expect(bindableGraphicBindingFields('player', 'text', 'op').gameSpecific.map(field => field.id))
 			.toEqual(['player.leader', 'player.leaderColors', 'player.leaderImage']);
+	});
+
+	// A Commander's fields and a third Seat are a Commander Event's alone (ADR-0087).
+	it.each([
+		{
+			name: 'a Two-Player Event',
+			game: 'mtg' as const,
+			variant: 'two-player' as const,
+			offered: false,
+		},
+		{
+			name: 'a Commander Event',
+			game: 'mtg' as const,
+			variant: 'commander' as const,
+			offered: true,
+		},
+		{
+			name: 'a One Piece Card Game Event',
+			game: 'op' as const,
+			variant: null,
+			offered: false,
+		},
+	])('offers $name a Commander\'s fields and a third Seat\'s life: $offered', ({ game, variant, offered }) => {
+		const player = bindableGraphicBindingFields('player', 'text', game, variant).gameSpecific.map(field => field.id);
+		const slot = graphicBindingFields('feature-match-slot', game, variant).map(field => field.id);
+
+		expect(player.includes('player.commander1Image') && player.includes('player.commander2Image')).toBe(offered);
+		expect(slot.includes('featureMatchSlot.player3Life') && slot.includes('featureMatchSlot.player4Life')).toBe(offered);
+		expect(isGraphicBindingFieldCompatible('player', 'player.commander1Image', 'text', game, variant)).toBe(offered);
 	});
 
 	it('offers nothing at all where the kind has no field of that type', () => {

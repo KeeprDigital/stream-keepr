@@ -7,6 +7,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 import {
 	createEmptyGraphicBindingDataSet,
+	graphicSourceRelations,
 	isOperatorSelectedGraphicSource,
 	resolveGraphicBindingField,
 	resolveGraphicInputBindings,
@@ -361,6 +362,73 @@ describe('graphic Input Binding resolution', () => {
 		// Live scalar from the session's current state, identity from its source
 		// snapshot — including the table number, which the snapshot overrides.
 		expect(bound).toEqual({ life: 17, table: 'Table 9', name: 'Ava R.' });
+	});
+
+	// A Commander Slot's third and fourth Seats: the Session's snapshot while one runs, the Slot's own otherwise (ADR-0087).
+	it.each([
+		{
+			name: 'the active Session\'s snapshot',
+			slot: {
+				player3Data: { name: 'Stale' },
+				activeSession: {
+					sourceSnapshot: {
+						player3: {
+							data: { name: 'Cleo' },
+						},
+					},
+				},
+			},
+		},
+		{
+			name: 'the Slot\'s own Seat with no Session',
+			slot: {
+				player3Data: { name: 'Cleo' },
+			},
+		},
+	])('reaches a Feature Match Slot\'s third Seat through $name', ({ slot }) => {
+		const bound = resolveGraphicInputBindings(
+			{
+				inputs: [NAME_INPUT],
+				sources: [
+					{ key: 'slot', label: 'Slot', kind: 'feature-match-slot' },
+					{
+						key: 'seat',
+						label: 'Seat 3',
+						kind: 'player',
+						from: { sourceKey: 'slot', relation: 'player3' },
+					},
+				],
+				bindings: [
+					bind(NAME_INPUT.key, 'seat', 'player.name'),
+				],
+			},
+			{ slot: 60 },
+			data({
+				featureMatchSlots: { 60: slot },
+			}),
+		);
+
+		expect(bound).toEqual({ [NAME_INPUT.key]: 'Cleo' });
+	});
+
+	// A pair's Slot offers its two Players; only a Commander Event's a third and fourth Seat.
+	it.each([
+		{
+			variant: 'two-player' as const,
+			relations: ['player1', 'player2', 'match'],
+		},
+		{
+			variant: 'commander' as const,
+			relations: [
+				'player1',
+				'player2',
+				'player3',
+				'player4',
+				'match',
+			],
+		},
+	])('offers a Feature Match Slot\'s relationships on a $variant Event', ({ variant, relations }) => {
+		expect(graphicSourceRelations('feature-match-slot', variant)).toEqual(relations);
 	});
 });
 

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'vue';
 import type { ThemeSurfaceStyle } from '~~/shared/modules/theme';
+import type { Seat } from '~~/shared/types/enums';
 import type {
 	FeatureMatchOverlayFrameConfig,
 	FeatureMatchOverlayModeConfig,
@@ -58,6 +59,12 @@ export interface FeatureMatchOverlayRenderModelInput {
 	maskId?: string;
 	/** The document-unique id of the SVG filter that glows the Frame's border. */
 	frameGlowFilterId?: string;
+	/**
+	 * A Commander Slot's Seats nobody sits in: a Source Item whose Source Role is
+	 * one renders nothing, cutout included (ADR-0087). Absent on every other
+	 * Event, whose sources render whether or not anyone is seated.
+	 */
+	emptySeats?: readonly Seat[];
 }
 
 /** The Frame's border glow, as the SVG `feDropShadow` its border group filters through. */
@@ -100,6 +107,8 @@ export interface FeatureMatchOverlayRenderModel {
 	output: FeatureMatchOverlayOutput;
 	canvasStyle: CSSProperties;
 	sourceItems: FeatureMatchOverlaySourceItemRenderModel[];
+	/** Every visible Source Item, an empty Seat's too: what an editor's guides outline, so each stays selectable. */
+	sourceGuides: FeatureMatchSourceItemConfig[];
 	sourceCutouts: Array<{ id: string; path: string }>;
 	frame: FeatureMatchOverlayFrameRenderModel;
 	rectStyle: (rect: FeatureMatchOverlayRect) => CSSProperties;
@@ -392,8 +401,9 @@ export function resolveFeatureMatchOverlayRenderModel(
 	input: FeatureMatchOverlayRenderModelInput,
 ): FeatureMatchOverlayRenderModel {
 	const { output, config, surfaces } = input;
+	const emptySeats: readonly string[] = input.emptySeats ?? [];
 	const sourceItems = config.layout.sources
-		.filter(item => item.visible)
+		.filter(item => item.visible && !(item.sourceRole && emptySeats.includes(item.sourceRole)))
 		.map((item) => {
 			const glow = sourceGlowStyles(output, item, surfaces.sourceSurface);
 			return {
@@ -416,6 +426,7 @@ export function resolveFeatureMatchOverlayRenderModel(
 			background: screenOutputCanvasBackground(output),
 		},
 		sourceItems,
+		sourceGuides: config.layout.sources.filter(item => item.visible),
 		sourceCutouts: sourceItems
 			.filter(source => source.cutoutPath)
 			.map(source => ({ id: source.item.id, path: source.cutoutPath! })),

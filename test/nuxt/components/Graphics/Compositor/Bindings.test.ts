@@ -1,4 +1,4 @@
-import type { Game } from '~~/shared/types/enums';
+import type { Game, Variant } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicInputDeclaration } from '~~/shared/types/graphics';
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
@@ -89,6 +89,7 @@ async function mountComponent(options: {
 	graphics: BroadcastGraphicConfig[];
 	selectedTarget?: GraphicsSelectionTarget;
 	game?: Game;
+	variant?: Variant | null;
 	writable?: boolean;
 }) {
 	return mount(Bindings, {
@@ -100,6 +101,7 @@ async function mountComponent(options: {
 			game: 'game' in options
 				? options.game
 				: 'mtg',
+			variant: options.variant ?? 'two-player',
 			writable: options.writable ?? true,
 		},
 		global: {
@@ -313,6 +315,24 @@ describe('graphicsCompositorBindings', () => {
 				'An operator picks it',
 				'Player 1 of Slot',
 				'Player 2 of Slot',
+			]);
+		});
+
+		// Only a Commander Event's Slot seats a third and fourth (ADR-0087).
+		it('offers a Commander Event a Slot\'s third and fourth Seats', async () => {
+			const wrapper = await mountComponent({
+				graphics: graphic({
+					sources: [SLOT, PLAYER],
+				}),
+				variant: 'commander',
+			});
+
+			expect(optionLabels(wrapper, 'graphic-source-derivation', 1)).toEqual([
+				'An operator picks it',
+				'Player 1 of Slot',
+				'Player 2 of Slot',
+				'Seat 3 of Slot',
+				'Seat 4 of Slot',
 			]);
 		});
 
