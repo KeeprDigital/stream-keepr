@@ -1,6 +1,8 @@
+import type { ScreenResponse } from '~~/shared/api';
 import type { CommanderDeckListPreviewAnswer, SaveCommanderDeckListAnswer, SavedCommanderDeckList } from '~~/shared/types/featureMatchDeckList';
+import type { ScreenOutputCommanderDeckListResponse } from '~~/shared/types/screenOutputReads';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { $fetch } from './client';
+import { $fetch, anonymousFetch } from './client';
 import { $fetchRaw } from './helpers';
 
 // One pass through the API boundary: a Commander Seat's pasted Deck List is previewed,
@@ -19,6 +21,8 @@ const PASTE = [
 describe('a Commander Seat\'s Feature Match Deck List', () => {
 	let eventId: number;
 	let slotId: number;
+	/** The list the first test saves to Seat 4, which the Deck List Screen then shows. */
+	let deckListId: number;
 	const route = (suffix = '') => `/api/events/${eventId}/feature-match-slots/${slotId}/commander-deck-lists${suffix}`;
 
 	beforeAll(async () => {
@@ -65,6 +69,7 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 			},
 		});
 
+		deckListId = saved.deckList.id;
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}`);
 		expect(slot.player4Data).toEqual({
 			gameData: {
@@ -91,6 +96,40 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 				entry.setCode,
 				entry.collectorNumber,
 			])).toEqual([
+			[1, 'Integration Commander', 'it2', '1'],
+			[3, 'Integration Land', 'it2', '2p'],
+		]);
+	});
+
+	it('shows the Seat on a Deck List Screen, which starts on Seat 1 and reads Seat 4\'s list by capability alone', async () => {
+		const created = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
+			method: 'POST',
+			body: { name: 'Deck', slug: `commander-deck-screen-${eventId}`, currentMode: 'deck' },
+		});
+		expect(created.modeConfigs?.deck?.deckSource).toEqual({ type: 'featureMatchSlot', slotId, side: 'player1' });
+
+		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${created.id}/config/deck`, {
+			method: 'PATCH',
+			body: {
+				deckSource: { type: 'featureMatchSlot', slotId, side: 'player4' },
+			},
+		});
+		const { assetCapability } = await $fetch<{ assetCapability: string }>(`/api/events/${eventId}/screens/${screen.id}/asset-capability`);
+		const response = await anonymousFetch(
+			`/api/screen-output/events/${eventId}/screens/${screen.id}/feature-match-slots/${slotId}/commander-deck-lists/${deckListId}`,
+			{
+				headers: { authorization: `Bearer ${assetCapability}` },
+			},
+		);
+
+		expect(response.status).toBe(200);
+		const list = await response.json() as ScreenOutputCommanderDeckListResponse;
+		expect(list.entries.map(entry => [
+			entry.quantity,
+			entry.name,
+			entry.setCode,
+			entry.collectorNumber,
+		])).toEqual([
 			[1, 'Integration Commander', 'it2', '1'],
 			[3, 'Integration Land', 'it2', '2p'],
 		]);
