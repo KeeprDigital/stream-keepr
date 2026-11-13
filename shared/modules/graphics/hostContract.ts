@@ -137,8 +137,14 @@ const FEATURE_MATCH_OVERLAY_HOST_CONTRACTS = Object.fromEntries(EVENT_KIND_VALUE
 		hostId: 'feature-match-overlay',
 		contextKinds: ['event', 'feature-match'],
 		composition: 'single',
-		textValues: { kind: 'host-tokens', catalogue: featureMatchTokenCatalogue(kind) },
-		seats: eventSeats(kind).map(seat => ({ seat, label: seatLabel(kind, seat) })),
+		textValues: {
+			kind: 'host-tokens',
+			catalogue: featureMatchTokenCatalogue(kind),
+		},
+		seats: eventSeats(kind).map(seat => ({
+			seat,
+			label: seatLabel(kind, seat),
+		})),
 	},
 ])) as unknown as Readonly<Record<EventKind, GraphicsHostContract>>;
 

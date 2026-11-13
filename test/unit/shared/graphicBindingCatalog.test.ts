@@ -255,8 +255,16 @@ describe('graphic Input Binding field catalog', () => {
 	it.each([
 		{ fieldId: 'player.deckName', pair: 'Tymna the Weaver / Kraum, Ludevic\'s Opus', single: 'Atraxa, Praetors\' Voice' },
 		{ fieldId: 'player.deckColors', pair: 'WUBR', single: 'WUBG' },
-		{ fieldId: 'player.commander1Image', pair: scryfallCardImageUrl(TYMNA.scryfallId), single: scryfallCardImageUrl(ATRAXA.scryfallId) },
-		{ fieldId: 'player.commander2Image', pair: scryfallCardImageUrl(KRAUM.scryfallId), single: undefined },
+		{
+			fieldId: 'player.commander1Image',
+			pair: scryfallCardImageUrl(TYMNA.scryfallId),
+			single: scryfallCardImageUrl(ATRAXA.scryfallId),
+		},
+		{
+			fieldId: 'player.commander2Image',
+			pair: scryfallCardImageUrl(KRAUM.scryfallId),
+			single: undefined,
+		},
 	])('resolves a Commander Seat through $fieldId', ({ fieldId, pair, single }) => {
 		expect(resolveGraphicBindingField('player', fieldId, seatedPlayer('Cleo', [TYMNA, KRAUM]), dataSet())).toBe(pair);
 		expect(resolveGraphicBindingField('player', fieldId, seatedPlayer('Dara', [ATRAXA]), dataSet())).toBe(single);
@@ -265,7 +273,11 @@ describe('graphic Input Binding field catalog', () => {
 	it.each(['player3', 'player4'] as const)('resolves %s\'s life from a Commander Session', (seat) => {
 		const slot = {
 			activeSession: {
-				currentState: { player1: { lifeTotal: 40 }, player2: { lifeTotal: 40 }, [seat]: { lifeTotal: 17 } },
+				currentState: {
+					player1: { lifeTotal: 40 },
+					player2: { lifeTotal: 40 },
+					[seat]: { lifeTotal: 17 },
+				},
 			},
 		} as never;
 
@@ -343,9 +355,24 @@ describe('the fields one Graphic Input may bind to', () => {
 
 	// A Two-Player or One Piece Card Game Event's pickers read as they did before Commander (ADR-0087).
 	it.each([
-		{ name: 'a Two-Player Event', game: 'mtg' as const, variant: 'two-player' as const, offered: false },
-		{ name: 'a Commander Event', game: 'mtg' as const, variant: 'commander' as const, offered: true },
-		{ name: 'a One Piece Card Game Event', game: 'op' as const, variant: null, offered: false },
+		{
+			name: 'a Two-Player Event',
+			game: 'mtg' as const,
+			variant: 'two-player' as const,
+			offered: false,
+		},
+		{
+			name: 'a Commander Event',
+			game: 'mtg' as const,
+			variant: 'commander' as const,
+			offered: true,
+		},
+		{
+			name: 'a One Piece Card Game Event',
+			game: 'op' as const,
+			variant: null,
+			offered: false,
+		},
 	])('offers $name a Commander\'s fields and a third Seat\'s life: $offered', ({ game, variant, offered }) => {
 		const player = bindableGraphicBindingFields('player', 'text', game, variant).gameSpecific.map(field => field.id);
 		const slot = graphicBindingFields('feature-match-slot', game, variant).map(field => field.id);

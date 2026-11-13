@@ -255,7 +255,11 @@ describe('a Commander Slot on the Feature Match Overlay', () => {
 	// A Commander deck is its Commanders: their names, and their colour identity together (ADR-0087).
 	it('names a third and fourth Seat, each deck by its Commanders and its colours by their identity', () => {
 		expect(valuesFor({
-			player3Data: { ...seatedPlayer('Cleo', [TYMNA, KRAUM]), pronouns: 'she/her', lgs: 'Card Shop' },
+			player3Data: {
+				...seatedPlayer('Cleo', [TYMNA, KRAUM]),
+				pronouns: 'she/her',
+				lgs: 'Card Shop',
+			},
 			player4Data: seatedPlayer('Dara', [ATRAXA]),
 		})).toMatchObject({
 			player3Name: 'Cleo',
@@ -270,11 +274,28 @@ describe('a Commander Slot on the Feature Match Overlay', () => {
 	});
 
 	it.each([
-		{ name: 'a pair', commanders: [TYMNA, KRAUM], first: scryfallCardImageUrl(TYMNA.scryfallId), second: scryfallCardImageUrl(KRAUM.scryfallId) },
-		{ name: 'one Commander', commanders: [ATRAXA], first: scryfallCardImageUrl(ATRAXA.scryfallId), second: '' },
-		{ name: 'no Commander yet', commanders: [], first: '', second: '' },
+		{
+			name: 'a pair',
+			commanders: [TYMNA, KRAUM],
+			first: scryfallCardImageUrl(TYMNA.scryfallId),
+			second: scryfallCardImageUrl(KRAUM.scryfallId),
+		},
+		{
+			name: 'one Commander',
+			commanders: [ATRAXA],
+			first: scryfallCardImageUrl(ATRAXA.scryfallId),
+			second: '',
+		},
+		{
+			name: 'no Commander yet',
+			commanders: [],
+			first: '',
+			second: '',
+		},
 	])('shows the card of each Commander a Seat holds: $name', ({ commanders, first, second }) => {
-		expect(valuesFor({ player2Data: seatedPlayer('Ben', commanders) })).toMatchObject({
+		expect(valuesFor({
+			player2Data: seatedPlayer('Ben', commanders),
+		})).toMatchObject({
 			player2Commander1Image: first,
 			player2Commander2Image: second,
 		});
@@ -289,10 +310,22 @@ describe('the Feature Match token values of each kind of Event', () => {
 	// The public Feature Match read returns every value, so a Two-Player or One
 	// Piece Card Game Event's must not gain a Seat or a Commander term (ADR-0056).
 	it.each([
-		{ kind: 'mtg-two-player' as const, event: { game: 'mtg' as const, variant: 'two-player' as const } },
-		{ kind: 'mtg-two-player' as const, event: { game: 'mtg' as const } },
-		{ kind: 'mtg-commander' as const, event: { game: 'mtg' as const, variant: 'commander' as const } },
-		{ kind: 'op' as const, event: { game: 'op' as const, variant: null } },
+		{
+			kind: 'mtg-two-player' as const,
+			event: { game: 'mtg' as const, variant: 'two-player' as const },
+		},
+		{
+			kind: 'mtg-two-player' as const,
+			event: { game: 'mtg' as const },
+		},
+		{
+			kind: 'mtg-commander' as const,
+			event: { game: 'mtg' as const, variant: 'commander' as const },
+		},
+		{
+			kind: 'op' as const,
+			event: { game: 'op' as const, variant: null },
+		},
 	])('are keyed exactly as a $kind Event\'s catalogue ($event.variant)', ({ kind, event }) => {
 		const values = featureMatchTokenValues({
 			event: { name: 'Open', ...event } as any,

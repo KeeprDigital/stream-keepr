@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { FeatureMatchOverlayModeConfig, FeatureMatchSourceItemConfig, FeatureMatchSourceRole } from '~~/shared/types/screenConfig';
-import { featureMatchOverlayHostContract } from '~~/shared/modules/graphics';
 import type { FeatureMatchOverlayConfigUpdater } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import type { Screen } from '~/types';
+import { featureMatchOverlayHostContract } from '~~/shared/modules/graphics';
 import GraphicsGeometryFields from '~/components/Graphics/GeometryFields.vue';
 import { useFeatureMatchOverlayConfigEditor } from '~/composables/screen/useFeatureMatchOverlayConfigEditor';
 import { appearanceSummary, rectSummary } from '~/modules/feature-match-overlay/layerSummaries';

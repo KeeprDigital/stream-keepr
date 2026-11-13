@@ -1,8 +1,8 @@
+import type { EventKind } from './config/games';
 import type {
 	GraphicsHostToken,
 	GraphicsHostTokenPresentation,
 } from './modules/graphics/hostContract';
-import type { EventKind } from './config/games';
 import type { Seat } from './types/enums';
 import type { GraphicInputDeclaration, TextGraphicInputDeclaration } from './types/graphics';
 import { EVENT_KIND_CARD_GAME, EVENT_KIND_VALUES, eventSeats } from './config/games';

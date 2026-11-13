@@ -312,7 +312,13 @@ describe('graphicItemDefinitions', () => {
 
 		expect(Object.keys(BROADCAST_GRAPHICS_HOST_CONTRACT).sort()).toEqual(fields);
 		// Only a host supplying the Feature Match context has Seats to offer.
-		expect(Object.keys(FEATURE_MATCH_OVERLAY_HOST_CONTRACT).sort()).toEqual(['composition', 'contextKinds', 'hostId', 'seats', 'textValues']);
+		expect(Object.keys(FEATURE_MATCH_OVERLAY_HOST_CONTRACT).sort()).toEqual([
+			'composition',
+			'contextKinds',
+			'hostId',
+			'seats',
+			'textValues',
+		]);
 	});
 
 	it('offers the Feature Match host the Event and Feature Match contexts', () => {

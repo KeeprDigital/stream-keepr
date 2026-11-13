@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { updateEventSchema } from '~~/server/schemas/api/event';
+import { EVENT_KIND_VALUES } from '~~/shared/config/games';
 import { featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
 import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
-import { EVENT_KIND_VALUES } from '~~/shared/config/games';
 import { featureMatchTokenCatalogue } from '~~/shared/featureMatchTokenCatalogue';
 import { SEAT_VALUES } from '~~/shared/types/enums';
 import { isOpCardImageUrl } from '~~/shared/utils/card/op';

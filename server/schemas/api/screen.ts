@@ -36,8 +36,8 @@ import { SUPPORTED_SOCIAL_NETWORK_KEYS } from '~~/shared/socialProfiles';
 import {
 	FORMER_SCREEN_MODE_KEYS,
 	PLAYER_SIDE_VALUES,
-	SEAT_VALUES,
 	SCREEN_COMMAND_VALUES,
+	SEAT_VALUES,
 } from '~~/shared/types/enums';
 import {
 	MEDIA_FIT_VALUES,

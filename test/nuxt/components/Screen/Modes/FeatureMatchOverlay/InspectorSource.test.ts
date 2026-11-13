@@ -75,7 +75,10 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue, themeOverride
 	const updateConfig = vi.fn();
 	const screen = seedThemedScreen('feature-match-overlay', themeOverrides);
 	const eventStore = useEventStore();
-	eventStore.event = { ...eventStore.event, ...event } as never;
+	eventStore.event = {
+		...eventStore.event,
+		...event,
+	} as never;
 
 	const wrapper = mount(screenSettingsPage(screen, () => h(InspectorSource, {
 		config,
@@ -135,8 +138,22 @@ async function mountBounds(anchor: FeatureMatchOverlayAnchorValue, themeOverride
 // A Source Role names the main source or one Seat's: a pair's two Players, or a Commander Slot's four Seats (ADR-0087).
 describe('feature Match Overlay Source Item: Source Role', () => {
 	it.each([
-		{ kind: 'a Two-Player', event: { game: 'mtg', variant: 'two-player' }, labels: ['Main', 'Player 1', 'Player 2'] },
-		{ kind: 'a Commander', event: { game: 'mtg', variant: 'commander' }, labels: ['Main', 'Seat 1', 'Seat 2', 'Seat 3', 'Seat 4'] },
+		{
+			kind: 'a Two-Player',
+			event: { game: 'mtg', variant: 'two-player' },
+			labels: ['Main', 'Player 1', 'Player 2'],
+		},
+		{
+			kind: 'a Commander',
+			event: { game: 'mtg', variant: 'commander' },
+			labels: [
+				'Main',
+				'Seat 1',
+				'Seat 2',
+				'Seat 3',
+				'Seat 4',
+			],
+		},
 	])('offers $kind Event $labels', async ({ event, labels }) => {
 		const { wrapper } = await mountBounds('top-left', {}, event);
 

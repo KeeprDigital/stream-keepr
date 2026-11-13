@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { opDeckListView } from '~~/server/modules/op-deck-list-write/paste';
+import { EVENT_KIND_VALUES } from '~~/shared/config/games';
 import {
 	FEATURE_MATCH_SAMPLE_CONTEXT,
 	FEATURE_MATCH_SAMPLE_TOKEN_VALUES,
@@ -7,7 +8,6 @@ import {
 	featureMatchSampleDatasetIsComplete,
 	OP_FEATURE_MATCH_SAMPLE_SIDES,
 } from '~~/shared/featureMatchSampleDataset';
-import { EVENT_KIND_VALUES } from '~~/shared/config/games';
 import { featureMatchTokenCatalogue } from '~~/shared/featureMatchTokenCatalogue';
 import { SEAT_VALUES } from '~~/shared/types/enums';
 import { isOpCardImageUrl } from '~~/shared/utils/card/op';

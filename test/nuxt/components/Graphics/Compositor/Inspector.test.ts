@@ -2762,12 +2762,29 @@ describe('surfaces, Shape Geometry, and the Player a Graphic Item Definition dec
 
 	// A pair's items read its two Players; a Commander Event's life any of four Seats, its game wins still the pair's (ADR-0087).
 	it.each([
-		{ name: 'a Player Life item on a Two-Player Event', row: PLAYER_LIFE, kind: 'mtg-two-player' as const, labels: ['Player 1', 'Player 2'] },
-		{ name: 'a Player Life item on a Commander Event', row: PLAYER_LIFE, kind: 'mtg-commander' as const, labels: ['Seat 1', 'Seat 2', 'Seat 3', 'Seat 4'] },
-		{ name: 'a Game Wins item on a Commander Event', row: GAME_WINS_BOXES, kind: 'mtg-commander' as const, labels: ['Seat 1', 'Seat 2'] },
+		{
+			name: 'a Player Life item on a Two-Player Event',
+			row: PLAYER_LIFE,
+			kind: 'mtg-two-player' as const,
+			labels: ['Player 1', 'Player 2'],
+		},
+		{
+			name: 'a Player Life item on a Commander Event',
+			row: PLAYER_LIFE,
+			kind: 'mtg-commander' as const,
+			labels: ['Seat 1', 'Seat 2', 'Seat 3', 'Seat 4'],
+		},
+		{
+			name: 'a Game Wins item on a Commander Event',
+			row: GAME_WINS_BOXES,
+			kind: 'mtg-commander' as const,
+			labels: ['Seat 1', 'Seat 2'],
+		},
 	])('offers $name $labels', async ({ row, kind, labels }) => {
 		const wrapper = await mountComponent({
-			graphics: stack([placedRow(row)]),
+			graphics: stack([
+				placedRow(row),
+			]),
 			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'item' },
 			contract: featureMatchOverlayHostContract(kind),
 		});

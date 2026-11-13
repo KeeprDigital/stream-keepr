@@ -301,7 +301,7 @@ function rendersWinBoxes(item: GameWinsGraphicItemConfig): boolean {
 
 /** The Seat a context-gated Definition reads, as an author names it: a pair's are its two Players. */
 function playerSideLabel(side: Seat): string {
-	return PLAYER_SIDE_VALUES.some(pair => pair === side)
+	return (PLAYER_SIDE_VALUES as readonly Seat[]).includes(side)
 		? `Player ${seatNumber(side)}`
 		: `Seat ${seatNumber(side)}`;
 }

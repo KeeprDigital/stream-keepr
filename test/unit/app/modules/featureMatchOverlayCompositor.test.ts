@@ -194,6 +194,11 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 	});
 
 	describe('a Commander Slot', () => {
+		const ATRAXA_IMAGE = 'https://cards.scryfall.io/normal/front/d/0/d0d33d52-3d28-4635-b985-51e126289259.jpg';
+		const SURFACE = {
+			fill: { type: 'solid' as const, color: '#112233' },
+			fillOpacity: 1,
+		};
 		const seatState = (lifeTotal: number | null) => ({
 			lifeTotal,
 			gameWins: 0,
@@ -230,34 +235,50 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 				...CANVAS,
 			}).graphics[0]!.items;
 		}
-		const ATRAXA_IMAGE = 'https://cards.scryfall.io/normal/front/d/0/d0d33d52-3d28-4635-b985-51e126289259.jpg';
 		const life = (seat: 'player1' | 'player2' | 'player3' | 'player4', id = `life-${seat}`) =>
-			({ ...item('player-life', id), playerSide: seat, surfaceStyle: SURFACE }) as GraphicItemConfig;
+			({
+				...item('player-life', id),
+				playerSide: seat,
+				surfaceStyle: SURFACE,
+			}) as GraphicItemConfig;
 		const text = (template: string, id = 'text') =>
-			({ ...item('text', id), text: template, surfaceStyle: SURFACE }) as GraphicItemConfig;
+			({
+				...item('text', id),
+				text: template,
+				surfaceStyle: SURFACE,
+			}) as GraphicItemConfig;
 		const group = (children: GraphicItemConfig[]) =>
-			({ ...getGraphicItemDefinition('group').createDefault({ id: 'plate', label: 'plate', ...CANVAS }), surfaceStyle: SURFACE, children }) as GraphicItemConfig;
-		const SURFACE = { fill: { type: 'solid' as const, color: '#112233' }, fillOpacity: 1 };
+			({
+				...getGraphicItemDefinition('group').createDefault({ id: 'plate', label: 'plate', ...CANVAS }),
+				surfaceStyle: SURFACE,
+				children,
+			}) as GraphicItemConfig;
 
 		it.each([
 			{ seat: 'player3' as const, life: '22' },
 			{ seat: 'player4' as const, life: '13' },
 		])('renders $seat\'s life total in a Player Life Graphic Item reading it', ({ seat, life: total }) => {
-			expect(items([life(seat)])[0]!.text).toBe(total);
+			expect(items([
+				life(seat),
+			])[0]!.text).toBe(total);
 		});
 
 		it.each([
 			{ output: 'overlay' as const, monochrome: false },
 			{ output: 'key' as const, monochrome: true },
 		])('paints a Commander\'s card as an image on the $output Output', ({ output, monochrome }) => {
-			const [segment] = items([text('{player4Commander1Image}')], [], output)[0]!.textSegments!;
+			const [segment] = items([
+				text('{player4Commander1Image}'),
+			], [], output)[0]!.textSegments!;
 
 			expect(segment!.cardImage).toEqual({ url: ATRAXA_IMAGE, monochrome, alt: 'Commander' });
 		});
 
 		// Only a Scryfall card image is loaded on air.
 		it('paints any other URL as its text', () => {
-			expect(items([text('{player4Commander2Image}')])[0]!.textSegments![0]!.cardImage).toBeUndefined();
+			expect(items([
+				text('{player4Commander2Image}'),
+			])[0]!.textSegments![0]!.cardImage).toBeUndefined();
 		});
 
 		/** A descriptor that paints nothing: its placement alone. */
@@ -267,18 +288,63 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 
 		// An empty Seat's Graphic Items render nothing, surface included (ADR-0087).
 		it.each([
-			{ name: 'a Player Life item reading it', build: () => [life('player3')], nothing: [true] },
-			{ name: 'text naming only its tokens', build: () => [text('{player3Name} {player3Commander1Image}')], nothing: [true] },
-			{ name: 'text naming it and a filled Seat', build: () => [text('{player1Name} vs {player3Name}')], nothing: [false] },
-			{ name: 'text naming no Seat', build: () => [text('{eventName}')], nothing: [false] },
-			{ name: 'a group whose children read only it', build: () => [group([life('player3'), text('{player3Name}')])], nothing: [true] },
-			{ name: 'a filled Seat\'s items beside it', build: () => [life('player4'), text('{player4Name}')], nothing: [false, false] },
+			{
+				name: 'a Player Life item reading it',
+				build: () => [
+					life('player3'),
+				],
+				nothing: [true],
+			},
+			{
+				name: 'text naming only its tokens',
+				build: () => [
+					text('{player3Name} {player3Commander1Image}'),
+				],
+				nothing: [true],
+			},
+			{
+				name: 'text naming it and a filled Seat',
+				build: () => [
+					text('{player1Name} vs {player3Name}'),
+				],
+				nothing: [false],
+			},
+			{
+				name: 'text naming no Seat',
+				build: () => [
+					text('{eventName}'),
+				],
+				nothing: [false],
+			},
+			{
+				name: 'a group whose children read only it',
+				build: () => [
+					group([
+						life('player3'),
+						text('{player3Name}'),
+					]),
+				],
+				nothing: [true],
+			},
+			{
+				name: 'a filled Seat\'s items beside it',
+				build: () => [
+					life('player4'),
+					text('{player4Name}'),
+				],
+				nothing: [false, false],
+			},
 		])('renders nothing for $name: $nothing', ({ build, nothing }) => {
 			expect(items(build(), ['player3']).map(paintsNothing)).toEqual(nothing);
 		});
 
 		it('keeps a group holding a filled Seat\'s item, and paints nothing for the empty Seat\'s child', () => {
-			const [plate] = items([group([life('player3', 'empty'), life('player4', 'filled')])], ['player3']);
+			const [plate] = items([
+				group([
+					life('player3', 'empty'),
+					life('player4', 'filled'),
+				]),
+			], ['player3']);
 
 			expect(paintsNothing(plate)).toBe(false);
 			expect(plate!.children!.map(paintsNothing)).toEqual([true, false]);
@@ -290,7 +356,15 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 		const [life] = resolveFeatureMatchOverlayCompositorRenderModel({
 			output: 'overlay',
 			kind: 'mtg-two-player',
-			layout: layout([{ ...item('player-life', 'life'), surfaceStyle: { fill: { type: 'solid', color: '#112233' }, fillOpacity: 1 } } as GraphicItemConfig]),
+			layout: layout([
+				{
+					...item('player-life', 'life'),
+					surfaceStyle: {
+						fill: { type: 'solid', color: '#112233' },
+						fillOpacity: 1,
+					},
+				} as GraphicItemConfig,
+			]),
 			featureMatch: featureMatchGraphicsContext({
 				event: null,
 				featureMatch: null,
@@ -676,12 +750,26 @@ describe('featureMatchGraphicsContext on a Commander Event', () => {
 	it('reads all four Seats\' life from the Session', () => {
 		const context = featureMatchGraphicsContext({
 			event: COMMANDER_EVENT,
-			featureMatch: { activeSession: { sourceSnapshot: commanderSnapshot() } },
-			matchState: { player1: seat(40), player2: seat(31), player3: seat(22), player4: seat(13) },
+			featureMatch: {
+				activeSession: {
+					sourceSnapshot: commanderSnapshot(),
+				},
+			},
+			matchState: {
+				player1: seat(40),
+				player2: seat(31),
+				player3: seat(22),
+				player4: seat(13),
+			},
 			displayTime: null,
 		} as unknown as Input);
 
-		expect([context.player1, context.player2, context.player3, context.player4].map(state => state?.lifeTotal))
+		expect([
+			context.player1,
+			context.player2,
+			context.player3,
+			context.player4,
+		].map(state => state?.lifeTotal))
 			.toEqual([40, 31, 22, 13]);
 		expect(context.bestOf).toBe(1);
 	});
@@ -690,15 +778,33 @@ describe('featureMatchGraphicsContext on a Commander Event', () => {
 	it.each([
 		{
 			name: 'a Seat the Session\'s snapshot leaves empty',
-			featureMatch: { activeSession: { sourceSnapshot: commanderSnapshot({ player3: null }) } },
+			featureMatch: {
+				activeSession: {
+					sourceSnapshot: commanderSnapshot({ player3: null }),
+				},
+			},
 			emptySeats: ['player3'],
 		},
 		{
 			name: 'the Seats the Slot leaves empty, before a Session opens',
-			featureMatch: { player1Data: seatedPlayer('Ana'), player2Data: null, player4Data: seatedPlayer('Dara'), activeSession: null },
+			featureMatch: {
+				player1Data: seatedPlayer('Ana'),
+				player2Data: null,
+				player4Data: seatedPlayer('Dara'),
+				activeSession: null,
+			},
 			emptySeats: ['player2', 'player3'],
 		},
-		{ name: 'every Seat while no Slot is bound', featureMatch: null, emptySeats: ['player1', 'player2', 'player3', 'player4'] },
+		{
+			name: 'every Seat while no Slot is bound',
+			featureMatch: null,
+			emptySeats: [
+				'player1',
+				'player2',
+				'player3',
+				'player4',
+			],
+		},
 	])('names $name as empty', ({ featureMatch, emptySeats }) => {
 		const context = featureMatchGraphicsContext({
 			event: COMMANDER_EVENT,
@@ -722,6 +828,11 @@ describe('featureMatchGraphicsContext on a Commander Event', () => {
 			displayTime: null,
 		} as unknown as Input);
 
-		expect(Object.keys(context).sort()).toEqual(['bestOf', 'clockDisplayTime', 'player1', 'player2']);
+		expect(Object.keys(context).sort()).toEqual([
+			'bestOf',
+			'clockDisplayTime',
+			'player1',
+			'player2',
+		]);
 	});
 });

@@ -488,8 +488,16 @@ describe('featureMatchOverlayDisplay', () => {
 
 	// An empty Seat is not in a Commander game: nothing frames it. A pair's sources render unseated, as before (ADR-0087).
 	it.each([
-		{ name: 'a Commander Event', event: { game: 'mtg', variant: 'commander' }, drawn: ['main', 'seat-1'] },
-		{ name: 'a Two-Player Event', event: { game: 'mtg', variant: 'two-player' }, drawn: ['main', 'seat-1', 'seat-2'] },
+		{
+			name: 'a Commander Event',
+			event: { game: 'mtg', variant: 'commander' },
+			drawn: ['main', 'seat-1'],
+		},
+		{
+			name: 'a Two-Player Event',
+			event: { game: 'mtg', variant: 'two-player' },
+			drawn: ['main', 'seat-1', 'seat-2'],
+		},
 	])('draws the Source Items of $name with Seat 2 empty: $drawn', async ({ event, drawn }) => {
 		const config = structuredClone(DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG);
 		const [source] = config.layout.sources;
@@ -499,7 +507,10 @@ describe('featureMatchOverlayDisplay', () => {
 			{ ...source!, id: 'seat-1', sourceRole: 'player1' },
 			{ ...source!, id: 'seat-2', sourceRole: 'player2' },
 		];
-		config.layout.composition = { ...createFeatureMatchLayoutComposition(), items: [] };
+		config.layout.composition = {
+			...createFeatureMatchLayoutComposition(),
+			items: [],
+		};
 		mockConfig.value = config;
 		mockEvent.value = { name: 'Pod Night', ...event };
 		mockMatch.value = {

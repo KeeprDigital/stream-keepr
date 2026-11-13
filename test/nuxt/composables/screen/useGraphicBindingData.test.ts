@@ -200,15 +200,35 @@ describe('useGraphicBindingData', () => {
 
 	// A Commander Slot's third Seat reaches a binding as its pair does (ADR-0087).
 	it('reaches a Commander Slot\'s third Seat with no Session held', () => {
-		mockFeatureMatchStore.featureMatches = [{ ...SLOT_ROW, activeSessionId: null, activeSession: null, player3Data: { name: 'Cleo' } } as typeof SLOT_ROW];
+		mockFeatureMatchStore.featureMatches = [
+			{
+				...SLOT_ROW,
+				activeSessionId: null,
+				activeSession: null,
+				player3Data: { name: 'Cleo' },
+			} as typeof SLOT_ROW,
+		];
 
 		const { dataSet } = useGraphicBindingData();
 		const bound = resolveGraphicInputBindings(
 			{
-				inputs: [{ ...LIFE_INPUT, type: 'text', key: 'name', default: '', maxLength: 40 } as never],
+				inputs: [
+					{
+						...LIFE_INPUT,
+						type: 'text',
+						key: 'name',
+						default: '',
+						maxLength: 40,
+					} as never,
+				],
 				sources: [
 					SLOT_SOURCE,
-					{ key: 'seat', label: 'Seat 3', kind: 'player', from: { sourceKey: 'slot', relation: 'player3' } },
+					{
+						key: 'seat',
+						label: 'Seat 3',
+						kind: 'player',
+						from: { sourceKey: 'slot', relation: 'player3' },
+					},
 				],
 				bindings: [
 					{ inputKey: 'name', sourceKey: 'seat', fieldId: 'player.name' },

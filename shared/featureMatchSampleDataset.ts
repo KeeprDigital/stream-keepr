@@ -313,7 +313,13 @@ export interface CommanderFeatureMatchSampleSeat {
 
 /** A Commander as a Seat holds one: a real printing, so a preview shows its card. */
 export function sampleCommander(scryfallId: string, name: string, colorIdentity: string, setCode: string, collectorNumber: string): Commander {
-	return { scryfallId, name, colorIdentity, setCode, collectorNumber };
+	return {
+		scryfallId,
+		name,
+		colorIdentity,
+		setCode,
+		collectorNumber,
+	};
 }
 
 /**
@@ -336,21 +342,27 @@ const COMMANDER_SAMPLE_SEATS: readonly CommanderFeatureMatchSampleSeat[] = [
 		name: 'Bo Li',
 		pronouns: 'he/him',
 		lgs: 'The Battered Sleeve',
-		commanders: [sampleCommander('d0d33d52-3d28-4635-b985-51e126289259', 'Atraxa, Praetors\' Voice', 'WUBG', '2xm', '190')],
+		commanders: [
+			sampleCommander('d0d33d52-3d28-4635-b985-51e126289259', 'Atraxa, Praetors\' Voice', 'WUBG', '2xm', '190'),
+		],
 		lifeTotal: 40,
 	},
 	{
 		name: 'Marguerite Okafor',
 		pronouns: 'they/them',
 		lgs: 'Dice & Daggers',
-		commanders: [sampleCommander('824b2d73-2151-4e5e-9f05-8f63e2bdcaa9', 'Krenko, Mob Boss', 'R', 'fdn', '204')],
+		commanders: [
+			sampleCommander('824b2d73-2151-4e5e-9f05-8f63e2bdcaa9', 'Krenko, Mob Boss', 'R', 'fdn', '204'),
+		],
 		lifeTotal: 17,
 	},
 	{
 		name: 'Tomás Reyes',
 		pronouns: 'he/him',
 		lgs: 'Mana Vault Café',
-		commanders: [sampleCommander('c41554e7-2a07-4cc7-b01b-44deed08e588', 'Kozilek, the Great Distortion', '', 'cmm', '2')],
+		commanders: [
+			sampleCommander('c41554e7-2a07-4cc7-b01b-44deed08e588', 'Kozilek, the Great Distortion', '', 'cmm', '2'),
+		],
 		lifeTotal: 6,
 	},
 ];
