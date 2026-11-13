@@ -94,8 +94,8 @@ export function withSeparateCmapSubtables(source) {
  * tests that must see what a variant really carries rather than trust how it
  * was built.
  *
- * @param {Uint8Array} source
- * @returns {{ platformId: number, encodingId: number, offset: number, language: number }[]}
+ * @param {Uint8Array} source Raw SFNT bytes — a TTF or OTF, not a WOFF wrapper.
+ * @returns {{ platformId: number, encodingId: number, offset: number, language: number }[]} One entry per record.
  */
 export function cmapRecords(source) {
 	const view = new DataView(source.buffer, source.byteOffset, source.byteLength);
@@ -107,7 +107,9 @@ export function cmapRecords(source) {
 	}
 	if (cmap === undefined)
 		throw new Error('Expected a cmap table');
-	return Array.from({ length: view.getUint16(cmap + 2) }, (_, index) => {
+	return Array.from({
+		length: view.getUint16(cmap + 2),
+	}, (_, index) => {
 		const record = cmap + 4 + index * 8;
 		const offset = view.getUint32(record + 4);
 		return {

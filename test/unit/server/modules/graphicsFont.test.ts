@@ -201,8 +201,16 @@ describe('the static-font-v1 Graphic Asset Compatibility Profile', () => {
 	// Mana's records share one subtable; a variant that fails to split would silently equal
 	// the stock font and stop pinning the platform rules.
 	it.each([
-		['the Macintosh variant', macintoshCmapLanguage, { 0: 0, 1: 1, 3: 0 }],
-		['the refused variant', refusedCmapLanguage, { 0: 0, 1: 1, 3: 1 }],
+		[
+			'the Macintosh variant',
+			macintoshCmapLanguage,
+			{ 0: 0, 1: 1, 3: 0 },
+		],
+		[
+			'the refused variant',
+			refusedCmapLanguage,
+			{ 0: 0, 1: 1, 3: 1 },
+		],
 	])('%s carries the language each platform is meant to', async (_, languageForPlatform, expected) => {
 		const variant = withCmapLanguages(await splitMana(), languageForPlatform);
 
