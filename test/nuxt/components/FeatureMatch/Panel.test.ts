@@ -180,7 +180,7 @@ const mountOptions = {
 			FeatureMatchPanelHeader: PanelHeaderStub,
 			FeatureMatchSetupPlayerForm: PlayerFormStub,
 			FeatureMatchPanelMeleeModal: { template: '<div />' },
-			// A Commander Slot's game view, which reads its own game mode.
+			// A Commander Slot's game view, which reads the game's phase itself.
 			FeatureMatchStateCommanderTable: true,
 		},
 	},

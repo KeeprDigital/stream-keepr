@@ -106,6 +106,7 @@ function sharedDisplayConfig(): PlayerDisplayConfig {
 		showCounters: showCounters.value,
 		showLgs: config.value.showLgs ?? true,
 		allowLifeControls: allow('allowLifeControls'),
+		allowGameWinControls: allow('allowGameWinControls'),
 		allowCounterControls: allow('allowCounterControls'),
 	};
 }
@@ -115,7 +116,6 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 		...sharedDisplayConfig(),
 		showRecord: config.value.showRecords,
 		showMulliganInfo: mulliganTrackingEnabled.value && (config.value.showMulliganInfo ?? true),
-		allowGameWinControls: allow('allowGameWinControls'),
 		mulliganPhase: inMulliganPhase.value,
 		startingHandSize: startingHandSize.value,
 		activePlayerTrackingEnabled: activePlayerTrackingEnabled.value,

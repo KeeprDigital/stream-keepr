@@ -1,13 +1,12 @@
 import type { ManualPlayerSlotData } from '~~/shared/api';
 import type { Variant } from '~~/shared/types/enums';
 import type { FeatureMatchSessionCommand } from '~~/shared/types/featureMatchSession';
-import type { Commander } from '~~/shared/types/game';
 import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { mapFeatureMatchToResponse } from '~~/server/mappers/featureMatch';
 import { SEAT_VALUES } from '~~/shared/types/enums';
-import { ATRAXA, KRAUM, TYMNA } from '~~/test/helpers/commanders';
+import { ATRAXA, KRAUM, typedSeat as seat, TYMNA } from '~~/test/helpers/commanders';
 import { fakeOpCardBulkLookup, mockOpWriteBoundaries } from '~~/test/helpers/opCards';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
@@ -36,13 +35,6 @@ beforeEach(() => {
 afterAll(async () => {
 	await harness.close();
 });
-
-function seat(name: string, commanders: Commander[]): ManualPlayerSlotData {
-	return {
-		name,
-		gameData: { type: 'mtg', commanders },
-	};
-}
 
 async function stageSlot(event: { variant: Variant; featureMatchDefaultStartingLife?: number }, seats: Record<string, ManualPlayerSlotData> = {}) {
 	const [created] = await db.insert(schema.events)
@@ -154,34 +146,6 @@ describe('a Commander Slot\'s Session', () => {
 		expect(lifeOf(after.currentState)).toEqual([31, 40, 40, 40]);
 	});
 
-	it('drops an emptied Seat from the game at once', async () => {
-		const { eventId, slotId } = await commanderSlot();
-		await send(eventId, slotId, {
-			type: 'SelectFirstPlayer',
-			payload: { player: 'player3' },
-		});
-		await send(eventId, slotId, {
-			type: 'AdjustCommanderDamage',
-			payload: {
-				player: 'player1',
-				from: 'player3',
-				commander: 2,
-				delta: 4,
-			},
-		});
-
-		await featureMatchSlotWriteModule().updateSetup({
-			eventId,
-			slotId,
-			input: { player3Data: null },
-		});
-
-		const { sourceSnapshot, currentState } = await session(eventId, slotId);
-		expect(sourceSnapshot.player3?.data ?? null).toBeNull();
-		expect(currentState.player1).toMatchObject({ lifeTotal: 36, commanderDamage: [] });
-		expect([currentState.activePlayer, currentState.turnNumber]).toEqual(['player1', 1]);
-	});
-
 	it('moves each player\'s live state with them on Swap Seats, as one Session event', async () => {
 		const { eventId, slotId } = await commanderSlot();
 		await send(eventId, slotId, {
@@ -207,18 +171,6 @@ describe('a Commander Slot\'s Session', () => {
 		expect(lifeOf(after.currentState)).toEqual([40, 40, 25, 40]);
 		expect([after.currentState.player1.eliminated, after.currentState.player3?.eliminated]).toEqual([true, false]);
 		expect(answer.activeSession?.currentState).toEqual(after.currentState);
-	});
-
-	// One game: its Session takes no game win (ADR-0087).
-	it('refuses a game win', async () => {
-		const { eventId, slotId } = await commanderSlot();
-
-		await expect(send(eventId, slotId, {
-			type: 'RecordGameWin',
-			payload: { player: 'player1' },
-		}))
-			.rejects
-			.toMatchObject({ statusCode: 400 });
 	});
 });
 
@@ -253,31 +205,15 @@ describe('a Two-Player Slot\'s Session', () => {
 		]);
 	});
 
-	it.each([
-		[
-			'a command naming Seat 3',
-			{
-				type: 'AdjustLife',
-				payload: { player: 'player3', delta: -1 },
-			},
-		],
-		[
-			'Commander Damage',
-			{
-				type: 'AdjustCommanderDamage',
-				payload: {
-					player: 'player2',
-					from: 'player1',
-					commander: 1,
-					delta: 1,
-				},
-			},
-		],
-	] as const)('refuses %s', async (_case, command) => {
+	// The API still answers 400 to a Seat only a Commander Slot has, and the Session stays where it was.
+	it('refuses a command naming Seat 3', async () => {
 		const { eventId, slotId } = await twoPlayerSlot();
 		const before = await session(eventId, slotId);
 
-		await expect(send(eventId, slotId, command)).rejects.toMatchObject({ statusCode: 400 });
+		await expect(send(eventId, slotId, {
+			type: 'AdjustLife',
+			payload: { player: 'player3', delta: -1 },
+		})).rejects.toMatchObject({ statusCode: 400 });
 
 		expect((await session(eventId, slotId)).sequence).toBe(before.sequence);
 	});

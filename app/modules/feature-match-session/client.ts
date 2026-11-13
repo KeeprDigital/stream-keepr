@@ -6,7 +6,7 @@ import type {
 	FeatureMatchSessionResponse,
 } from '~~/shared/types/featureMatchSession';
 import type {
-	CommanderNumber,
+	CommanderSource,
 	FeatureMatchOutcome,
 	FeatureMatchState,
 	GameWinOptions,
@@ -452,13 +452,17 @@ export function useFeatureMatchSessionClient() {
 		eventId: number,
 		slotId: number,
 		player: Seat,
-		from: Seat,
-		commander: CommanderNumber,
+		source: CommanderSource,
 		delta: number,
 	) => sendSlotCommand(eventId, slotId, () => ({
 		commandId: randomCommandId('AdjustCommanderDamage'),
 		type: 'AdjustCommanderDamage',
-		payload: { player, from, commander, delta },
+		payload: {
+			player,
+			from: source.seat,
+			commander: source.commander,
+			delta,
+		},
 	}));
 
 	const setEliminated = (eventId: number, slotId: number, player: Seat, eliminated: boolean) => sendSlotCommand(eventId, slotId, session => ({

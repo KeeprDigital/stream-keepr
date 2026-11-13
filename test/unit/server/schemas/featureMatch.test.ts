@@ -78,6 +78,8 @@ describe('featureMatchCommandSchema', () => {
 		}).success).toBe(false);
 	});
 
+	// The rules the schema adds for a Commander Session's commands (ADR-0087): Commander Damage is
+	// some amount from an opposing Commander, and Seats 3 and 4 are named only where a Seat can be.
 	it.each([
 		[
 			'Commander Damage entered',
@@ -102,28 +104,6 @@ describe('featureMatchCommandSchema', () => {
 			true,
 		],
 		[
-			'Commander Damage from the Seat\'s own Commander',
-			'AdjustCommanderDamage',
-			{
-				player: 'player1',
-				from: 'player1',
-				commander: 1,
-				delta: 1,
-			},
-			false,
-		],
-		[
-			'Commander Damage from a third Commander',
-			'AdjustCommanderDamage',
-			{
-				player: 'player2',
-				from: 'player1',
-				commander: 3,
-				delta: 1,
-			},
-			false,
-		],
-		[
 			'Commander Damage of nothing',
 			'AdjustCommanderDamage',
 			{
@@ -135,44 +115,13 @@ describe('featureMatchCommandSchema', () => {
 			false,
 		],
 		[
-			'a Seat Eliminated',
-			'SetEliminated',
-			{ player: 'player3', eliminated: true },
-			true,
-		],
-		[
-			'a Seat Eliminated without saying so',
-			'SetEliminated',
-			{ player: 'player3', eliminated: 'yes' },
-			false,
-		],
-		[
-			'a winning Seat',
-			'SetOutcome',
+			'Commander Damage from the Seat\'s own Commander',
+			'AdjustCommanderDamage',
 			{
-				outcome: { winner: 'player4' },
-			},
-			true,
-		],
-		[
-			'a draw',
-			'SetOutcome',
-			{
-				outcome: { winner: null },
-			},
-			true,
-		],
-		[
-			'an outcome taken back',
-			'SetOutcome',
-			{ outcome: null },
-			true,
-		],
-		[
-			'an outcome naming no Seat',
-			'SetOutcome',
-			{
-				outcome: { winner: 'player5' },
+				player: 'player1',
+				from: 'player1',
+				commander: 1,
+				delta: 1,
 			},
 			false,
 		],

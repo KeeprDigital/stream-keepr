@@ -72,7 +72,7 @@ describe('feature Match Session client module', () => {
 	it.each([
 		[
 			'Commander Damage',
-			(client: ReturnType<typeof useFeatureMatchSessionClient>) => client.adjustCommanderDamage(1, 2, 'player2', 'player1', 1, 5),
+			(client: ReturnType<typeof useFeatureMatchSessionClient>) => client.adjustCommanderDamage(1, 2, 'player2', { seat: 'player1', commander: 1 }, 5),
 			{
 				type: 'AdjustCommanderDamage',
 				payload: {

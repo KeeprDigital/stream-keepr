@@ -2,7 +2,7 @@
 import type { Seat } from '~~/shared/types/enums';
 import type { FeatureMatchData, FeatureMatchFormData, PlayerData, PlayerDisplayConfig, UpdateFeatureMatchInput } from '~/types';
 import { SEAT_VALUES } from '~~/shared/types/enums';
-import { SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
+import { seatNumber, SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 import { playerDisplayName } from '~~/shared/utils/playerName';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 import { DEFAULT_PLAYER_DATA, toPlayerData } from '~/types';
@@ -181,7 +181,6 @@ const player2Data = shownSideData('player2');
 const player1Id = shownSidePlayerId('player1');
 const player2Id = shownSidePlayerId('player2');
 
-const seatNumber = (seat: Seat) => SEAT_VALUES.indexOf(seat) + 1;
 const seatFormId = (seat: Seat) => `feature-match-${props.match.id}-player-${seatNumber(seat)}-form`;
 const player1FormId = computed(() => seatFormId('player1'));
 const player2FormId = computed(() => seatFormId('player2'));

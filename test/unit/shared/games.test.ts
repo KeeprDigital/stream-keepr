@@ -55,8 +55,6 @@ describe('what each kind of Event tracks of Feature Match state', () => {
 			overtime: false,
 			sideboard: false,
 		});
-		expect(getFeatureMatchStateTracking('mtg-two-player')).toEqual(GAME_CONFIGS.mtg.tracks);
-		expect(getFeatureMatchStateTracking('op')).toEqual(GAME_CONFIGS.op.tracks);
 	});
 });
 

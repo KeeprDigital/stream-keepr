@@ -33,11 +33,14 @@ export interface PlayerFeatureMatchState {
 export const COMMANDER_NUMBER_VALUES = [1, 2] as const;
 export type CommanderNumber = typeof COMMANDER_NUMBER_VALUES[number];
 
-/** The Commander Damage one Seat has taken from one opposing Commander. */
-export interface CommanderDamageState {
-	/** The Seat whose Commander dealt it. */
+/** One Commander at the table: the Seat holding it, and which of that Seat's Commanders it is. */
+export interface CommanderSource {
 	seat: Seat;
 	commander: CommanderNumber;
+}
+
+/** The Commander Damage one Seat has taken from one opposing Commander. */
+export interface CommanderDamageState extends CommanderSource {
 	damage: number;
 }
 

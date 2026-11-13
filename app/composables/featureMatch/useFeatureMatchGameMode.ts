@@ -4,7 +4,7 @@ import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchStateUpdate } from '~/modules/feature-match-session/client';
 import { useIntervalFn } from '@vueuse/core';
 import { eventKind, getFeatureMatchStateTracking, getStartingHandSize } from '~~/shared/config/games';
-import { filledSeats } from '~~/shared/modules/feature-match-session';
+import { applyCommanderTurnStep, filledSeats } from '~~/shared/modules/feature-match-session';
 import { PLAYER_SIDE_VALUES } from '~~/shared/types/enums';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { getEffectiveElapsedMs } from '~~/shared/utils/clock';
@@ -98,9 +98,14 @@ export function useFeatureMatchGameMode(
 	});
 
 	const stepBackDisabled = computed(() => {
-		if (!matchState.value?.firstPlayer || !matchState.value.activePlayer)
+		const state = matchState.value;
+		if (!state?.firstPlayer || !state.activePlayer)
 			return true;
-		return matchState.value.activePlayer === matchState.value.firstPlayer && matchState.value.turnNumber <= 1;
+		// A Commander game's first turn may start past the Seat that went first, once that Seat is out.
+		const snapshot = isCommander.value && followedFeatureMatchSession(mid(), featureMatchStateStore)?.sourceSnapshot;
+		if (snapshot)
+			return applyCommanderTurnStep(state, snapshot, -1) === state;
+		return state.activePlayer === state.firstPlayer && state.turnNumber <= 1;
 	});
 
 	const turnHalf = computed<1 | 2 | undefined>(() => {
@@ -223,7 +228,7 @@ export function useFeatureMatchGameMode(
 		const instance = confirmModal.open({
 			title: 'Reset Game',
 			message: isCommander.value
-				? 'Start a new game with the same players? Life, Commander Damage, counters, Eliminated Seats, the turn and the outcome all reset.'
+				? 'Start a new game with the same players? Life, Commander Damage, counters, Eliminated Seats, the turn, the outcome and the clock all reset.'
 				: 'Reset life totals, counters, and turn tracking for the current game?',
 			icon: 'i-lucide-refresh-cw',
 			confirmLabel: 'Reset Game',
@@ -232,10 +237,7 @@ export function useFeatureMatchGameMode(
 
 		const confirmed = await instance.result;
 		if (confirmed) {
-			// A Commander Session's game is its whole Session, clock included.
-			await featureMatchStateStore.resetMatch(eid()!, mid(), {
-				type: isCommander.value ? 'match' : 'game',
-			});
+			await featureMatchStateStore.resetMatch(eid()!, mid(), { type: 'game' });
 		}
 	}
 
@@ -346,7 +348,6 @@ export function useFeatureMatchGameMode(
 
 	return {
 		isCommander,
-		seatsInGame,
 		needsFirstPlayerSelection,
 
 		// Feature flags

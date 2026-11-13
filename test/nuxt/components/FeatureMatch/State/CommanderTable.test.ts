@@ -9,7 +9,7 @@ import { getMatchFormatDefaults } from '~~/shared/config/games';
 import { createInitialFeatureMatchSessionStateFromSnapshot } from '~~/shared/modules/feature-match-session';
 import { SEAT_VALUES } from '~~/shared/types/enums';
 import { fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { commanderSnapshot } from '~~/test/helpers/commanderSession';
+import { commanderSnapshot } from '~~/test/helpers/featureMatchSnapshots';
 import { createMockEvent, createMockFeatureMatch } from '~~/test/helpers/fixtures';
 import { matchStatePart } from '~~/test/nuxt/helpers/featureMatchControls';
 import { createSession } from '~~/test/nuxt/helpers/featureMatchStateHarness';
@@ -186,7 +186,7 @@ describe('a Commander Slot\'s Controls', () => {
 
 		await steppers[2]!.get('[data-step="up"]').trigger('click');
 
-		expect(stateStore.adjustCommanderDamage).toHaveBeenCalledWith(EVENT_ID, SLOT_ID, 'player2', 'player3', 2, 1);
+		expect(stateStore.adjustCommanderDamage).toHaveBeenCalledWith(EVENT_ID, SLOT_ID, 'player2', { seat: 'player3', commander: 2 }, 1);
 	});
 
 	it('hands each Seat\'s counters to its counter list', () => {
@@ -291,16 +291,37 @@ describe('a Commander Slot\'s Controls', () => {
 		expect(stateStore.stepTurn).toHaveBeenCalledWith(EVENT_ID, SLOT_ID, 1);
 	});
 
-	// A Controls Screen may show the game without letting its viewer change life.
+	// A Controls Screen may show the game without letting its viewer change it.
 	it.each([
-		[undefined, 'false'],
+		[undefined, 'false', false],
 		[
 			{ allowLifeControls: false },
 			'true',
+			true,
 		],
-	])('with config %j, has life and Commander Damage read-only: %s', (config, readonly) => {
+	])('with config %j, has life and Commander Damage read-only: %s, and Eliminated locked: %s', (config, readonly, locked) => {
 		const { wrapper } = mountTable({}, { config });
 
 		expect(new Set(wrapper.findAll('[data-counter]').map(counter => counter.attributes('data-readonly')))).toEqual(new Set([readonly]));
+		expect(seat(wrapper, 'player1').get('[role="switch"]').attributes('disabled') !== undefined).toBe(locked);
+	});
+
+	it('offers no control over the outcome where game win controls are off, and still shows it', () => {
+		const playing = mountTable({}, {
+			config: { allowGameWinControls: false },
+		}).wrapper;
+		expect([
+			button(playing, 'Declare Draw'),
+			button(seat(playing, 'player2'), 'Declare Ben the winner'),
+		]).toEqual([undefined, undefined]);
+
+		const decided = mountTable({
+			isComplete: true,
+			outcome: { winner: null },
+		}, {
+			config: { allowGameWinControls: false },
+		}).wrapper;
+		expect(decided.get('[data-outcome]').text()).toContain('Draw');
+		expect(button(decided, 'Undo')).toBeUndefined();
 	});
 });

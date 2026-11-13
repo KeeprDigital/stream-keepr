@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { Seat } from '~~/shared/types/enums';
-import type { CommanderNumber } from '~~/shared/types/featureMatchState';
+import type { CommanderNumber, CommanderSource } from '~~/shared/types/featureMatchState';
 import type { PlayerDisplayConfig } from '~/types';
 import { getCounterTypeConfigs } from '~~/shared/config/games';
-import { commanderDamageFrom, isSeatFilled, seatCommanders } from '~~/shared/modules/feature-match-session';
+import { commanderDamageFrom, isSeatFilled, seatCommanders, seatPlayerName } from '~~/shared/modules/feature-match-session';
 import { SEAT_VALUES } from '~~/shared/types/enums';
-import { playerDisplayName } from '~~/shared/utils/playerName';
+import { seatNumber } from '~~/shared/utils/featureMatchSidePlayer';
 
 /**
  * One Seat of a Commander Slot's Controls (ADR-0087): its player's life, the
@@ -19,7 +19,7 @@ const props = defineProps<{
 	config?: PlayerDisplayConfig;
 	/** The game waits on a Seat to go first, so each offers to. */
 	choosingFirst?: boolean;
-	/** The game's outcome is declared, so no Seat offers to win it. */
+	/** No Seat offers to win the game: its outcome is declared, or this viewer may not declare one. */
 	complete?: boolean;
 	/** This Seat is the declared winner. */
 	winner?: boolean;
@@ -55,7 +55,6 @@ const {
 
 const snapshot = computed(() => followedFeatureMatchSession(props.matchId, featureMatchStateStore)?.sourceSnapshot ?? null);
 const filled = computed(() => !!snapshot.value && isSeatFilled(snapshot.value, props.seat));
-const seatNumber = (seat: Seat) => SEAT_VALUES.indexOf(seat) + 1;
 
 const isActive = computed(() => activePlayerTrackingEnabled.value && matchState.value?.activePlayer === props.seat);
 const wentFirst = computed(() => activePlayerTrackingEnabled.value && matchState.value?.firstPlayer === props.seat);
@@ -83,9 +82,7 @@ function handleSet(value: number) {
 
 // ── Commander Damage: a count per opposing Commander ──
 
-interface OpposingCommander {
-	from: Seat;
-	commander: CommanderNumber;
+interface OpposingCommander extends CommanderSource {
 	name: string;
 	owner: string;
 	damage: number;
@@ -98,20 +95,19 @@ const opposingCommanders = computed<OpposingCommander[]>(() => {
 	return SEAT_VALUES
 		.filter(other => other !== props.seat)
 		.flatMap(other => seatCommanders(seats, other).map((held, index) => {
-			const commander = (index + 1) as CommanderNumber;
+			const source = { seat: other, commander: (index + 1) as CommanderNumber };
 			return {
-				from: other,
-				commander,
+				...source,
 				name: held.name,
-				owner: playerDisplayName(seats[other]?.data) || `Seat ${seatNumber(other)}`,
-				damage: commanderDamageFrom(player.value ?? undefined, other, commander),
+				owner: seatPlayerName(seats, other),
+				damage: commanderDamageFrom(player.value ?? undefined, source),
 			};
 		}));
 });
 
 function adjustCommanderDamage(dealt: OpposingCommander, delta: number) {
 	if (eventStore.eventId)
-		featureMatchStateStore.adjustCommanderDamage(eventStore.eventId, props.matchId, props.seat, dealt.from, dealt.commander, delta);
+		featureMatchStateStore.adjustCommanderDamage(eventStore.eventId, props.matchId, props.seat, { seat: dealt.seat, commander: dealt.commander }, delta);
 }
 
 function setEliminated(value: boolean) {
@@ -184,9 +180,9 @@ const counterTypes = getCounterTypeConfigs('mtg');
 		>
 			<li
 				v-for="dealt in opposingCommanders"
-				:key="`${dealt.from}:${dealt.commander}`"
+				:key="`${dealt.seat}:${dealt.commander}`"
 				class="damage-row"
-				:data-commander-damage="`${dealt.from}:${dealt.commander}`"
+				:data-commander-damage="`${dealt.seat}:${dealt.commander}`"
 			>
 				<span class="damage-source">
 					<span class="truncate">{{ dealt.name }}</span>
@@ -220,6 +216,7 @@ const counterTypes = getCounterTypeConfigs('mtg');
 		<footer class="seat-actions">
 			<USwitch
 				:model-value="eliminated"
+				:disabled="!allowLifeControls"
 				label="Eliminated"
 				:size="touch ? 'lg' : 'sm'"
 				@update:model-value="setEliminated"
@@ -359,6 +356,48 @@ const counterTypes = getCounterTypeConfigs('mtg');
 	gap: 0.5rem 0.75rem;
 	width: 100%;
 	margin-top: auto;
+}
+
+/* A touch screen gives each Seat a quarter of the window: life beside the Commander Damage, so both stay in reach. */
+.commander-seat.is-touch {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+	grid-template-areas:
+		'header header'
+		'meta meta'
+		'life damage'
+		'counters damage'
+		'actions actions';
+	align-items: center;
+	justify-items: center;
+	column-gap: 1.5rem;
+}
+
+.is-touch .seat-header {
+	grid-area: header;
+}
+
+.is-touch .seat-meta {
+	grid-area: meta;
+}
+
+.is-touch .seat-life {
+	grid-area: life;
+}
+
+.is-touch .seat-damage {
+	grid-area: damage;
+	justify-self: stretch;
+}
+
+.is-touch .seat-counters {
+	grid-area: counters;
+	align-self: start;
+}
+
+.is-touch .seat-actions {
+	grid-area: actions;
 }
 
 .is-touch .seat-name {

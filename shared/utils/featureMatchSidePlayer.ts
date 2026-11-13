@@ -1,6 +1,7 @@
 import type { PlayerSlotData } from '~~/shared/api';
 import type { PlayerSide, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchSnapshotPlayer, FeatureMatchSnapshotPlayerData } from '~~/shared/types/featureMatchSession';
+import { SEAT_VALUES } from '~~/shared/types/enums';
 
 /** The parts of a Feature Match Slot, and its active Session, that seat its players. */
 export interface FeatureMatchSlotSides {
@@ -15,6 +16,11 @@ export interface FeatureMatchSlotSides {
 		sourceSnapshot: Record<PlayerSide, FeatureMatchSnapshotPlayer | null | undefined>
 			& Partial<Record<Exclude<Seat, PlayerSide>, FeatureMatchSnapshotPlayer | null>>;
 	} | null;
+}
+
+/** A Seat's number, as an operator reads it: Seat 1 to Seat 4. */
+export function seatNumber(seat: Seat): number {
+	return SEAT_VALUES.indexOf(seat) + 1;
 }
 
 /** The Slot field holding each side's data, in the Slot's own order. */

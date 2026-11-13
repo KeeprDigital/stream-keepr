@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { Seat } from '~~/shared/types/enums';
 import type { PlayerDisplayConfig } from '~/types';
+import { seatPlayerName } from '~~/shared/modules/feature-match-session';
 import { SEAT_VALUES } from '~~/shared/types/enums';
-import { playerDisplayName } from '~~/shared/utils/playerName';
+import { seatNumber } from '~~/shared/utils/featureMatchSidePlayer';
 
 /**
  * A Commander Slot's Controls (ADR-0087): its four Seats where they sit at the
@@ -50,8 +51,6 @@ const SEAT_TABLE_POSITION = {
 	player4: 'bottom-left',
 } as const satisfies Record<Seat, string>;
 
-const seatNumber = (seat: Seat) => SEAT_VALUES.indexOf(seat) + 1;
-
 function seatConfig(seat: Seat): PlayerDisplayConfig {
 	return {
 		showLife: lifeTrackingEnabled.value,
@@ -71,13 +70,17 @@ const choosingFirst = computed(() => props.showTurnControls && !!needsFirstPlaye
 // ── The outcome: a winning Seat or a draw, declared by the operator ──
 
 const outcome = computed(() => matchState.value?.outcome ?? null);
+/** Declaring the outcome is what a game win is to a Commander game, under the same permission. */
+const mayDeclareOutcome = computed(() => props.config?.allowGameWinControls ?? true);
 
 const outcomeText = computed(() => {
 	const winner = outcome.value?.winner;
 	if (!winner)
 		return 'Draw';
-	const seated = followedFeatureMatchSession(props.matchId, featureMatchStateStore)?.sourceSnapshot[winner];
-	return `${playerDisplayName(seated?.data) || `Seat ${seatNumber(winner)}`} wins`;
+	const snapshot = followedFeatureMatchSession(props.matchId, featureMatchStateStore)?.sourceSnapshot;
+	return snapshot
+		? `${seatPlayerName(snapshot, winner)} wins`
+		: `Seat ${seatNumber(winner)} wins`;
 });
 
 function setOutcome(declared: { winner: Seat | null } | null) {
@@ -99,7 +102,7 @@ function setOutcome(declared: { winner: Seat | null } | null) {
 			:seat="seat"
 			:config="seatConfig(seat)"
 			:choosing-first="choosingFirst"
-			:complete="!!outcome"
+			:complete="!!outcome || !mayDeclareOutcome"
 			:winner="outcome?.winner === seat"
 			:touch="touch"
 			:data-table-position="SEAT_TABLE_POSITION[seat]"
@@ -123,6 +126,7 @@ function setOutcome(declared: { winner: Seat | null } | null) {
 				<UIcon name="i-lucide-trophy" class="text-warning size-4 shrink-0" />
 				<span class="font-semibold">{{ outcomeText }}</span>
 				<UButton
+					v-if="mayDeclareOutcome"
 					label="Undo"
 					color="neutral"
 					variant="ghost"
@@ -131,7 +135,7 @@ function setOutcome(declared: { winner: Seat | null } | null) {
 				/>
 			</div>
 			<UButton
-				v-else
+				v-else-if="mayDeclareOutcome"
 				label="Declare Draw"
 				icon="i-lucide-handshake"
 				color="neutral"

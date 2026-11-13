@@ -1,7 +1,6 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { Seat } from '~~/shared/types/enums';
-import { SEAT_VALUES } from '~~/shared/types/enums';
-import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
+import { featureMatchSidePlayer, seatNumber } from '~~/shared/utils/featureMatchSidePlayer';
 import { formatOrdinal } from '~~/shared/utils/formatters';
 import { getMtgGameData, getPlayerIdentityValue } from '~~/shared/utils/gameData';
 import { playerDisplayName } from '~~/shared/utils/playerName';
@@ -52,7 +51,7 @@ export function usePlayerFeatureMatchData(
 	const playerData = computed(() => seated.value.data);
 
 	const playerName = computed(() => {
-		return playerDisplayName(playerData.value) || `Player ${SEAT_VALUES.indexOf(side()) + 1}`;
+		return playerDisplayName(playerData.value) || `Player ${seatNumber(side())}`;
 	});
 
 	const seatedPlayerId = computed(() => seated.value.playerId);

@@ -15,6 +15,7 @@ export {
 	isCommanderSession,
 	isSeatFilled,
 	seatCommanders,
+	seatPlayerName,
 	withSeatsSwapped,
 } from './commander';
 

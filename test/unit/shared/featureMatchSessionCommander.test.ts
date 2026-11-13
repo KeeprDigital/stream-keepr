@@ -5,11 +5,12 @@ import { describe, expect, it } from 'vitest';
 import {
 	applyFeatureMatchSessionEvent,
 	createInitialFeatureMatchSessionStateFromSnapshot,
+	isCommandOutsideSessionVariant,
 } from '~~/shared/modules/feature-match-session';
 import { SEAT_VALUES } from '~~/shared/types/enums';
-import { createInitialFeatureMatchState } from '~~/shared/types/featureMatchState';
+import { createInitialFeatureMatchState, createInitialOvertimeState } from '~~/shared/types/featureMatchState';
 import { ATRAXA, KRAUM, TYMNA } from '~~/test/helpers/commanders';
-import { commanderSnapshot, seatedPlayer, twoPlayerSnapshot } from '~~/test/helpers/commanderSession';
+import { commanderSnapshot, seatedPlayer, twoPlayerSnapshot } from '~~/test/helpers/featureMatchSnapshots';
 
 /** A Commander Session as it opens, then each command applied in turn. */
 function play(
@@ -337,14 +338,24 @@ describe('a Commander Session', () => {
 		] as const)('refuses %s', (type, payload) => {
 			const snapshot = commanderSnapshot({ clockType: 'countdown' });
 			const opened = createInitialFeatureMatchSessionStateFromSnapshot(snapshot);
+			// A game win to undo and extra turns to step, so each command would change the state were it taken.
+			const state: FeatureMatchState = {
+				...opened,
+				player1: { ...opened.player1, gameWins: 1 },
+				overtime: createInitialOvertimeState(5),
+			};
 
-			expect(applyFeatureMatchSessionEvent(opened, snapshot, type, payload).currentState).toBe(opened);
+			expect(applyFeatureMatchSessionEvent(state, snapshot, type, payload).currentState).toBe(state);
 		});
 
-		it.each(['game', 'match'] as const)('starts a new game with the same players on a %s reset', (type) => {
-			const snapshot = commanderSnapshot();
+		it('starts a new game with the same players on a reset, its clock included', () => {
+			const snapshot = commanderSnapshot({ clockType: 'countdown' });
 			const played = play(
 				snapshot,
+				[
+					'StartClock',
+					{ at: 5_000 },
+				],
 				goesFirst('player2'),
 				step(),
 				damage('player1', 'player2', 1, 6),
@@ -370,22 +381,10 @@ describe('a Commander Session', () => {
 				],
 			);
 
-			const reset = applyFeatureMatchSessionEvent(played.currentState, snapshot, 'ResetState', { type });
+			const reset = applyFeatureMatchSessionEvent(played.currentState, snapshot, 'ResetState', { type: 'game' });
 
 			expect(reset.currentState).toEqual(createInitialFeatureMatchSessionStateFromSnapshot(snapshot));
 			expect(reset.sourceSnapshot).toBe(snapshot);
-		});
-
-		it('keeps the clock through a game reset', () => {
-			const snapshot = commanderSnapshot({ clockType: 'countdown' });
-			const running = play(snapshot, [
-				'StartClock',
-				{ at: 5_000 },
-			]);
-
-			const reset = applyFeatureMatchSessionEvent(running.currentState, snapshot, 'ResetState', { type: 'game' });
-
-			expect(reset.currentState.clock).toEqual(running.currentState.clock);
 		});
 	});
 
@@ -439,6 +438,17 @@ describe('a Commander Session', () => {
 			expect([left.currentState.activePlayer, left.currentState.turnNumber]).toEqual(['player1', 2]);
 			const next = applyFeatureMatchSessionEvent(left.currentState, left.sourceSnapshot, 'StepTurn', { delta: 3 });
 			expect([next.currentState.activePlayer, next.currentState.turnNumber]).toEqual(['player1', 3]);
+		});
+
+		it('waits on a Seat to go first again when the turn it held has nobody to pass to', () => {
+			const snapshot = commanderSnapshot({ player3: null, player4: null });
+			const played = play(snapshot, goesFirst('player1'), eliminate('player2'));
+
+			const left = applyFeatureMatchSessionEvent(played.currentState, snapshot, 'SnapshotCorrected', {
+				sourceSnapshot: commanderSnapshot({ player1: null, player3: null, player4: null }),
+			});
+
+			expect([left.currentState.activePlayer, left.currentState.firstPlayer]).toEqual([null, null]);
 		});
 
 		it('keeps a Seat\'s state through an edit that leaves it filled', () => {
@@ -542,14 +552,6 @@ describe('a Two-Player Session', () => {
 			{ player: 'player3', delta: -1 },
 		],
 		[
-			'SetLife',
-			{ player: 'player4', lifeTotal: 1 },
-		],
-		[
-			'SelectFirstPlayer',
-			{ player: 'player3' },
-		],
-		[
 			'AdjustCommanderDamage',
 			{
 				player: 'player2',
@@ -576,12 +578,23 @@ describe('a Two-Player Session', () => {
 			},
 		],
 	] as const)('refuses %s', (type, payload) => {
-		const snapshot = twoPlayerSnapshot();
+		// Even were its Seats to hold Commanders, and a third Seat a state.
+		const snapshot = twoPlayerSnapshot({
+			player1: {
+				playerId: null,
+				data: seatedPlayer('Alice', [ATRAXA]),
+			},
+			player2: {
+				playerId: null,
+				data: seatedPlayer('Bob', [TYMNA]),
+			},
+		});
 		const opened = createInitialFeatureMatchSessionStateFromSnapshot(snapshot);
+		const state: FeatureMatchState = { ...opened, player3: opened.player1 };
 
-		const result = applyFeatureMatchSessionEvent(opened, snapshot, type, payload);
+		const result = applyFeatureMatchSessionEvent(state, snapshot, type, payload);
 
-		expect(result.currentState).toBe(opened);
+		expect(result.currentState).toBe(state);
 		expect(result.sourceSnapshot).toBe(snapshot);
 	});
 
@@ -590,5 +603,66 @@ describe('a Two-Player Session', () => {
 		const { currentState } = play(snapshot, goesFirst('player2'), step());
 
 		expect([currentState.activePlayer, currentState.turnNumber]).toEqual(['player1', 1]);
+	});
+});
+
+// What the API answers 400 to: a command a Session of this Variant never takes.
+describe('a command outside its Session\'s Variant', () => {
+	it.each([
+		{
+			session: 'a Two-Player Session',
+			snapshot: twoPlayerSnapshot(),
+			type: 'SetEliminated',
+			payload: { player: 'player1', eliminated: true },
+			outside: true,
+		},
+		{
+			session: 'a Two-Player Session',
+			snapshot: twoPlayerSnapshot(),
+			type: 'AdjustLife',
+			payload: { player: 'player4', delta: -1 },
+			outside: true,
+		},
+		{
+			session: 'a Two-Player Session',
+			snapshot: twoPlayerSnapshot(),
+			type: 'AdjustLife',
+			payload: { player: 'player2', delta: -1 },
+			outside: false,
+		},
+		{
+			session: 'a Two-Player Session',
+			snapshot: twoPlayerSnapshot(),
+			type: 'Batch',
+			payload: {
+				commands: [
+					{
+						type: 'SetLife',
+						payload: { player: 'player1', lifeTotal: 3 },
+					},
+					{
+						type: 'SetLife',
+						payload: { player: 'player3', lifeTotal: 3 },
+					},
+				],
+			},
+			outside: true,
+		},
+		{
+			session: 'a Commander Session',
+			snapshot: commanderSnapshot(),
+			type: 'RecordGameWin',
+			payload: { player: 'player1' },
+			outside: true,
+		},
+		{
+			session: 'a Commander Session',
+			snapshot: commanderSnapshot(),
+			type: 'AdjustLife',
+			payload: { player: 'player4', delta: -1 },
+			outside: false,
+		},
+	] as const)('for $session, $type $payload is outside: $outside', ({ snapshot, type, payload, outside }) => {
+		expect(isCommandOutsideSessionVariant(snapshot, type, payload)).toBe(outside);
 	});
 });

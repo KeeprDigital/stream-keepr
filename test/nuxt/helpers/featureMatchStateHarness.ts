@@ -1,6 +1,7 @@
 import type { FeatureMatchSessionResponse, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
+import { twoPlayerSnapshot } from '~~/test/helpers/featureMatchSnapshots';
 import { createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 
 /**
@@ -14,22 +15,16 @@ export const MATCH_ID = 100;
 /** What the suites' `useServerTime` stand-in reads as now. */
 export const SERVER_NOW = 1_000_000;
 
+/** A Two-Player Slot's snapshot seating nobody, as this Event's Slot opens one. */
 export function createSourceSnapshot(slotId = MATCH_ID): FeatureMatchSourceSnapshot {
-	return {
+	return twoPlayerSnapshot({
 		eventId: EVENT_ID,
 		slotId,
-		matchId: null,
-		externalId: null,
-		externalSource: null,
-		tableNumber: null,
-		bestOf: 3,
-		playerDisplayMode: 'score',
-		game: 'mtg',
 		defaults: toFeatureMatchDefaults(null),
 		player1: { playerId: null, data: null },
 		player2: { playerId: null, data: null },
 		createdAt: SERVER_NOW,
-	};
+	});
 }
 
 export function createSession(

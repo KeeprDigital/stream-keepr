@@ -1,6 +1,6 @@
 import type { BulkClockAction, PlayerSide, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchSessionResponse } from '~~/shared/types/featureMatchSession';
-import type { CommanderNumber, FeatureMatchOutcome, FeatureMatchState, GameWinOptions, PlayerFeatureMatchStateUpdate } from '~~/shared/types/featureMatchState';
+import type { CommanderSource, FeatureMatchOutcome, FeatureMatchState, GameWinOptions, PlayerFeatureMatchStateUpdate } from '~~/shared/types/featureMatchState';
 import type {
 	FeatureMatchCommandStateResult,
 	FeatureMatchResetOptions,
@@ -15,6 +15,7 @@ import {
 	applyFeatureMatchTurnStep,
 	isCommanderSession,
 	otherFeatureMatchPlayer,
+	pairSeatOf,
 } from '~~/shared/modules/feature-match-session';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { useFeatureMatchSessionClient } from '~/modules/feature-match-session/client';
@@ -53,9 +54,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 
 	// Player state batch (life totals, counters)
 	/** Commander Damage from one opposing Commander, accumulated over a batch. */
-	interface CommanderDamageDelta {
-		from: Seat;
-		commander: CommanderNumber;
+	interface CommanderDamageDelta extends CommanderSource {
 		delta: number;
 	}
 	interface PlayerBatchPayload {
@@ -69,7 +68,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		latestCounters?: { type: string; value: number }[];
 		hasAbsoluteLifeUpdate: boolean;
 		hasCounterUpdate: boolean;
-		/** A Commander Session's alone: sent after the Seat's life and counters. */
+		/** A Commander Session's alone: sent ahead of the Seat's life and counters. */
 		commanderDamage?: CommanderDamageDelta[];
 	}
 	const playerBatch = optimistic.batch<PlayerBatchPayload>({
@@ -89,26 +88,26 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			// Commander Damage entered and taken back within one batch sends nothing.
 			if (entry.payload.commanderDamage && damage.length === 0 && !updatesSeat)
 				return featureMatchStates.value.get(entry.id) ?? entry.snapshot;
+			// Damage goes first: a life the operator typed in the same window is the
+			// life they saw with the damage already on it, so it lands last and holds.
 			let latest: FeatureMatchState | undefined;
+			for (const dealt of damage) {
+				latest = settleCommandResult(await repo.adjustCommanderDamage(
+					entry.payload.eventId,
+					entry.payload.matchId,
+					entry.payload.player,
+					dealt,
+					dealt.delta,
+				));
+				// A later refusal keeps what the Session already confirmed.
+				controls.commit(latest);
+			}
 			if (damage.length === 0 || updatesSeat) {
 				latest = settleCommandResult(await repo.updatePlayerFeatureMatchState(
 					entry.payload.eventId,
 					entry.payload.matchId,
 					entry.payload.player,
 					apiUpdate,
-				));
-			}
-			for (const dealt of damage) {
-				// A refused count keeps what the Session already confirmed.
-				if (latest)
-					controls.commit(latest);
-				latest = settleCommandResult(await repo.adjustCommanderDamage(
-					entry.payload.eventId,
-					entry.payload.matchId,
-					entry.payload.player,
-					dealt.from,
-					dealt.commander,
-					dealt.delta,
 				));
 			}
 			return latest;
@@ -696,37 +695,40 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		eventId: number,
 		matchId: number,
 		player: Seat,
-		from: Seat,
-		commander: CommanderNumber,
+		source: CommanderSource,
 		delta: number,
 	) {
 		const snapshot = heldSession(matchId)?.sourceSnapshot;
-		if (!snapshot || !featureMatchStates.value.has(matchId))
+		const current = featureMatchStates.value.get(matchId);
+		const damaged = snapshot && current && applyCommanderDamage(current, snapshot, player, source, delta);
+		if (!damaged)
 			return;
 
 		playerBatch.enqueue(
 			`${matchId}-${player}`,
 			matchId,
-			current => applyCommanderDamage(current, snapshot, { player, from, commander, delta }),
+			() => damaged,
 			(existing) => {
 				const dealt = existing?.commanderDamage ?? [];
-				const held = dealt.find(entry => entry.from === from && entry.commander === commander);
+				const held = dealt.find(entry => entry.seat === source.seat && entry.commander === source.commander);
 				return {
 					eventId,
 					matchId,
 					player,
-					lifeDelta: existing?.lifeDelta ?? 0,
-					intendedLifeTotal: existing?.intendedLifeTotal ?? null,
-					latestCounters: existing?.latestCounters,
-					hasAbsoluteLifeUpdate: existing?.hasAbsoluteLifeUpdate ?? false,
-					hasCounterUpdate: existing?.hasCounterUpdate ?? false,
+					lifeDelta: 0,
+					intendedLifeTotal: null,
+					hasAbsoluteLifeUpdate: false,
+					hasCounterUpdate: false,
+					...existing,
+					// A life typed earlier in this window follows the damage down.
+					...(existing?.hasAbsoluteLifeUpdate && { intendedLifeTotal: damaged[player]?.lifeTotal ?? existing.intendedLifeTotal }),
 					commanderDamage: held
 						? dealt.map(entry => entry === held
 								? { ...entry, delta: entry.delta + delta }
 								: entry)
 						: [
 								...dealt,
-								{ from, commander, delta },
+								{ seat: source.seat, commander: source.commander, delta },
 							],
 				};
 			},
@@ -838,11 +840,11 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	}
 
 	function changeFirstPlayer(eventId: number, matchId: number) {
-		const current = featureMatchStates.value.get(matchId);
-		if (!current?.firstPlayer)
+		const firstPlayer = pairSeatOf(featureMatchStates.value.get(matchId)?.firstPlayer);
+		if (!firstPlayer)
 			return null;
 
-		const newFirstPlayer = otherFeatureMatchPlayer(current.firstPlayer);
+		const newFirstPlayer = otherFeatureMatchPlayer(firstPlayer);
 
 		return optimistic.run(
 			`firstPlayer:${matchId}`,
@@ -870,6 +872,10 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 
 		// Boundary check: can't step back at turn 1 with first player active
 		if (delta === -1 && current.activePlayer === current.firstPlayer && current.turnNumber <= 1)
+			return;
+		// A Commander game's turn answers itself where it cannot move: back at its
+		// first turn, or on with no Seat left to take it. The pair's never does.
+		if (computeTurnStep(matchId, current, delta) === current)
 			return;
 
 		turnBatch.enqueue(
@@ -985,11 +991,13 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			`swap:${matchId}`,
 			matchId,
 			(current) => {
-				const swappedActive = current.activePlayer
-					? otherFeatureMatchPlayer(current.activePlayer)
+				const activePlayer = pairSeatOf(current.activePlayer);
+				const firstPlayer = pairSeatOf(current.firstPlayer);
+				const swappedActive = activePlayer
+					? otherFeatureMatchPlayer(activePlayer)
 					: current.activePlayer;
-				const swappedFirst = current.firstPlayer
-					? otherFeatureMatchPlayer(current.firstPlayer)
+				const swappedFirst = firstPlayer
+					? otherFeatureMatchPlayer(firstPlayer)
 					: current.firstPlayer;
 				return {
 					...current,

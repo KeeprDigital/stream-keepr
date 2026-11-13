@@ -24,8 +24,8 @@ function tracks(context: ScreenSettingsContext) {
 
 /**
  * Whether the Screen controls two Seats, left and right or top and bottom. A
- * Commander Event's four show where they sit at the table, hold no record and
- * play one game (ADR-0087).
+ * Commander Event's four show where they sit at the table and hold no record
+ * (ADR-0087).
  */
 function seatsTwo(context: ScreenSettingsContext): boolean {
 	return kindOf(context) !== 'mtg-commander';
@@ -152,18 +152,31 @@ export const featureMatchModeConfigContract = defineScreenModeConfigContract({
 		({ event }) => event?.tableNumberEnabled ?? false,
 	)),
 	// Control permissions: what players can do from the control screen
-	allowLifeControls: editorField(z.boolean().optional(), toggle(
-		'control-permissions',
-		'Life total controls',
-		'Allow players to adjust life totals.',
-		context => tracks(context)?.life ?? true,
-	)),
-	allowGameWinControls: editorField(z.boolean().optional(), toggle(
-		'control-permissions',
-		'Game win controls',
-		'Allow players to record and undo game wins.',
-		seatsTwo,
-	)),
+	allowLifeControls: editorField(z.boolean().optional(), {
+		...toggle(
+			'control-permissions',
+			'Life total controls',
+			'Allow players to adjust life totals.',
+			context => tracks(context)?.life ?? true,
+		),
+		description: context => seatsTwo(context)
+			? 'Allow players to adjust life totals.'
+			: 'Allow players to adjust life totals and Commander Damage, and to mark a Seat Eliminated.',
+	}),
+	/** A Commander game has no game wins: what completes it is its declared winner or draw (ADR-0087). */
+	allowGameWinControls: editorField(z.boolean().optional(), {
+		...toggle(
+			'control-permissions',
+			'Game win controls',
+			'Allow players to record and undo game wins.',
+		),
+		labelFor: context => seatsTwo(context)
+			? 'Game win controls'
+			: 'Winner and draw controls',
+		description: context => seatsTwo(context)
+			? 'Allow players to record and undo game wins.'
+			: 'Allow players to declare a winner or a draw, and to take it back.',
+	}),
 	allowCounterControls: editorField(z.boolean().optional(), toggle(
 		'control-permissions',
 		'Counter controls',

@@ -8,6 +8,7 @@ import { eventKind, getMatchFormatDefaults } from '~~/shared/config/games';
 import { featureMatchModeConfigContract } from '~~/shared/screenModeConfigs/featureMatch';
 import { fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { createInitialOvertimeState } from '~~/shared/types/featureMatchState';
+import { toScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
 import { createMockEvent, createMockFeatureMatch, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 import { matchStatePart, offeredMatchStateParts } from '~~/test/nuxt/helpers/featureMatchControls';
 import Display from '~/components/Screen/Modes/FeatureMatch/Display.vue';
@@ -37,7 +38,8 @@ mockNuxtImport('useScreenContext', () => () => ({}));
 mockNuxtImport('useEventStore', () => () => reactive({
 	eventId: 1,
 	event: computed(() => event.value),
-	displayEvent: computed(() => event.value),
+	// As a Screen Output holds its Event: the allowlisted fields alone.
+	displayEvent: computed(() => toScreenOutputEvent(event.value)),
 }));
 mockNuxtImport('useFeatureMatchModeData', () => () => ({
 	config: computed(() => ({ ...featureMatchModeConfigContract.defaults, featureMatchId: 1 })),

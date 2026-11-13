@@ -468,20 +468,6 @@ describe('when a settings field shows', () => {
 		],
 		[
 			'feature-match',
-			'allowGameWinControls',
-			'on a Two-Player Event',
-			context({}, { game: 'mtg', variant: 'two-player' }),
-			true,
-		],
-		[
-			'feature-match',
-			'allowGameWinControls',
-			'on a Commander Event, which plays one game',
-			context({}, { game: 'mtg', variant: 'commander' }),
-			false,
-		],
-		[
-			'feature-match',
 			'showRecords',
 			'on a Commander Event, whose Seats hold no record',
 			context({}, { game: 'mtg', variant: 'commander', standingsEnabled: true }),

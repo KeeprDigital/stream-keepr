@@ -1,9 +1,10 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { flushPromises } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInitialFeatureMatchSessionStateFromSnapshot } from '~~/shared/modules/feature-match-session';
-import { commanderSnapshot } from '~~/test/helpers/commanderSession';
 import { deferred } from '~~/test/helpers/deferred';
+import { commanderSnapshot } from '~~/test/helpers/featureMatchSnapshots';
 import {
 	commandResult,
 	createSession,
@@ -40,6 +41,9 @@ vi.mock('@vueuse/core', async () => {
 
 type ClientMethod = keyof typeof sessionClient;
 
+/** Ana's one Commander, as the Commander Damage it deals is counted. */
+const ATRAXA_AT_SEAT_1 = { seat: 'player1', commander: 1 } as const;
+
 describe('a Commander Session in the Feature Match State store', () => {
 	let store: ReturnType<typeof useFeatureMatchStateStore>;
 	const snapshot = commanderSnapshot({ player4: null });
@@ -74,7 +78,7 @@ describe('a Commander Session in the Feature Match State store', () => {
 		const opened = hold();
 		const answer = pending('adjustCommanderDamage');
 
-		store.adjustCommanderDamage(EVENT_ID, MATCH_ID, 'player2', 'player1', 1, 5);
+		store.adjustCommanderDamage(EVENT_ID, MATCH_ID, 'player2', ATRAXA_AT_SEAT_1, 5);
 
 		expect(held().player2).toMatchObject({
 			lifeTotal: 35,
@@ -82,7 +86,7 @@ describe('a Commander Session in the Feature Match State store', () => {
 				{ seat: 'player1', commander: 1, damage: 5 },
 			],
 		});
-		expect(sessionClient.adjustCommanderDamage).toHaveBeenCalledWith(EVENT_ID, MATCH_ID, 'player2', 'player1', 1, 5);
+		expect(sessionClient.adjustCommanderDamage).toHaveBeenCalledWith(EVENT_ID, MATCH_ID, 'player2', expect.objectContaining(ATRAXA_AT_SEAT_1), 5);
 
 		answer.resolve(answered({
 			...opened,
@@ -101,7 +105,7 @@ describe('a Commander Session in the Feature Match State store', () => {
 		hold();
 		const answer = pending('adjustCommanderDamage');
 
-		store.adjustCommanderDamage(EVENT_ID, MATCH_ID, 'player2', 'player1', 1, 5);
+		store.adjustCommanderDamage(EVENT_ID, MATCH_ID, 'player2', ATRAXA_AT_SEAT_1, 5);
 		answer.reject(new Error('refused'));
 
 		await vi.waitFor(() => expect(held().player2).toMatchObject({ lifeTotal: 40, commanderDamage: [] }));
@@ -148,5 +152,22 @@ describe('a Commander Session in the Feature Match State store', () => {
 		store.stepTurn(EVENT_ID, MATCH_ID, 1);
 
 		expect([held().activePlayer, held().turnNumber]).toEqual(['player1', 1]);
+	});
+
+	// Nothing to undo: stepping back here and then on would otherwise show a turn the Session never took.
+	it('sends no step back where the turn cannot go back', async () => {
+		const opened = hold();
+		hold({
+			firstPlayer: 'player1',
+			activePlayer: 'player2',
+			turnNumber: 1,
+			player1: { ...opened.player1, eliminated: true },
+		});
+
+		store.stepTurn(EVENT_ID, MATCH_ID, -1);
+		await flushPromises();
+
+		expect(sessionClient.stepTurn).not.toHaveBeenCalled();
+		expect([held().activePlayer, held().turnNumber]).toEqual(['player2', 1]);
 	});
 });
