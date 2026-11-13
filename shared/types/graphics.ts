@@ -1022,7 +1022,9 @@ export type GraphicGroupChildConfig
 		| ClockGraphicItemConfig
 		| PlayerLifeGraphicItemConfig
 		| GameWinsGraphicItemConfig
-		| DeckListGraphicItemConfig;
+		| DeckListGraphicItemConfig
+		| CommanderDamageGraphicItemConfig
+		| SeatIndicatorGraphicItemConfig;
 
 /**
  * A structural Graphic Item that arranges its direct children as a row, column,
@@ -1170,6 +1172,38 @@ export interface DeckListGraphicItemConfig extends GraphicItemConfigBase {
 	typography: GraphicTypography;
 }
 
+/**
+ * A Graphic Item that renders the Commander Damage one Seat has taken: one
+ * count per opposing Commander, in Seat order, each beside that Commander's
+ * card and hidden while zero (ADR-0087). It paints as text does, so its
+ * typography sizes both the counts and the cards.
+ */
+export interface CommanderDamageGraphicItemConfig extends GraphicItemConfigBase {
+	type: 'commander-damage';
+	playerSide: Seat;
+	typography: GraphicTypography;
+	overflowPolicy: TextOverflowPolicy;
+	minFontSize: number;
+	surfaceStyle?: GraphicSurfaceStyle;
+}
+
+/** The states of a Seat a Seat Indicator Graphic Item can mark: its turn, or out of the game. */
+export const SEAT_INDICATOR_STATE_VALUES = ['active', 'eliminated'] as const;
+export type SeatIndicatorState = typeof SEAT_INDICATOR_STATE_VALUES[number];
+
+/**
+ * A Graphic Item shown only while its Seat is in the state its author picked,
+ * playing its enter and exit as that state flips (ADR-0087). It paints one
+ * Shape Geometry surface, as a Shape Graphic Item does.
+ */
+export interface SeatIndicatorGraphicItemConfig extends GraphicItemConfigBase {
+	type: 'seat-indicator';
+	playerSide: Seat;
+	state: SeatIndicatorState;
+	geometry: ShapeGeometry;
+	surfaceStyle?: GraphicSurfaceStyle;
+}
+
 export type GraphicItemConfig
 	= TextGraphicItemConfig
 		| ShapeGraphicItemConfig
@@ -1179,7 +1213,9 @@ export type GraphicItemConfig
 		| ClockGraphicItemConfig
 		| PlayerLifeGraphicItemConfig
 		| GameWinsGraphicItemConfig
-		| DeckListGraphicItemConfig;
+		| DeckListGraphicItemConfig
+		| CommanderDamageGraphicItemConfig
+		| SeatIndicatorGraphicItemConfig;
 
 export type GraphicItemKind = GraphicItemConfig['type'];
 

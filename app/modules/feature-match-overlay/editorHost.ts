@@ -1,10 +1,11 @@
 import type { Ref } from 'vue';
+import type { EventKind } from '~~/shared/config/games';
 import type { FeatureMatchLayoutConfig, FeatureMatchOverlayModeConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditorLayer } from './editorSelection';
 import type { GraphicsEditor } from '~/composables/useGraphicsEditor';
 import type { GraphicsEditorHostContract, GraphicsEditorLayerPatch, GraphicsEditorSessionOptions, GraphicsEditorTree } from '~/modules/graphics/editor/host';
 import { FEATURE_MATCH_SOURCE_ITEM_ICON } from '~~/shared/featureMatchSourceItems';
-import { FEATURE_MATCH_OVERLAY_HOST_CONTRACT, withoutLayerLock } from '~~/shared/modules/graphics';
+import { FEATURE_MATCH_OVERLAY_HOST_CONTRACT, featureMatchOverlayHostContract, withoutLayerLock } from '~~/shared/modules/graphics';
 import { copyGraphicLayers, pasteFeatureMatchLayers } from '~/modules/graphics/clipboard';
 import { compositionItemLayers, graphicsEditorSession } from '~/modules/graphics/editor/host';
 import { editorSelectionKey } from './editorSelection';
@@ -93,6 +94,25 @@ export const FEATURE_MATCH_LAYOUT_EDITOR_TREE: GraphicsEditorTree<Layout, Layer>
 			: outcome;
 	},
 };
+
+const EDITOR_TREES = new Map<EventKind, GraphicsEditorTree<Layout, Layer>>();
+
+/**
+ * The editor tree as an Event of this kind authors it: its palette offers what
+ * that Event's host supplies, a Commander Event's Commander Damage among them
+ * (ADR-0087).
+ */
+export function featureMatchLayoutEditorTree(kind: EventKind): GraphicsEditorTree<Layout, Layer> {
+	let tree = EDITOR_TREES.get(kind);
+	if (!tree) {
+		tree = {
+			...FEATURE_MATCH_LAYOUT_EDITOR_TREE,
+			host: featureMatchOverlayHostContract(kind),
+		};
+		EDITOR_TREES.set(kind, tree);
+	}
+	return tree;
+}
 
 /** `held`: a Feature Match Layout Template placement is in flight, so the editor writes nothing until the placed layout is held. */
 export interface FeatureMatchLayoutEditorHostOptions extends GraphicsEditorSessionOptions {

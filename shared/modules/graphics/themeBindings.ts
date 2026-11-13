@@ -425,6 +425,8 @@ const NEW_GRAPHIC_ITEM_THEME_BINDINGS: Partial<Record<GraphicItemConfig['type'],
 	'player-life': { 'typography': 'body', 'typography.color': 'text-primary' },
 	'game-wins': { 'typography': 'body', 'typography.color': 'text-primary' },
 	'deck-list': { 'typography': 'body', 'typography.color': 'text-primary' },
+	'commander-damage': { 'typography': 'body', 'typography.color': 'text-primary' },
+	'seat-indicator': { surfaceStyle: 'panel', geometry: 'panel-shape' },
 };
 
 /** A newly authored item, bound to its kind's Foundation Tokens and painted from the Default Theme. */

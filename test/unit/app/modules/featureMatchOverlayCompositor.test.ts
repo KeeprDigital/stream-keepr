@@ -7,6 +7,8 @@ import {
 	featureMatchLayoutStack,
 } from '~~/shared/featureMatchLayoutComposition';
 import { getGraphicItemDefinition } from '~~/shared/modules/graphics';
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
+import { ATRAXA, KRAUM, TYMNA } from '~~/test/helpers/commanders';
 import { commanderSnapshot, seatedPlayer } from '~~/test/helpers/featureMatchSnapshots';
 import { resolveFeatureMatchOverlayCompositorRenderModel } from '~/modules/feature-match-overlay/compositorRenderModel';
 import {
@@ -349,6 +351,135 @@ describe('featureMatchOverlayCompositorRenderModel', () => {
 			},
 		])('renders nothing for $name: $nothing', ({ build, nothing }) => {
 			expect(items(build(), ['player3']).map(paintsNothing)).toEqual(nothing);
+		});
+
+		// One count per opposing Commander, in Seat order, each beside its card and hidden while zero (ADR-0087).
+		describe('a Commander Damage item', () => {
+			const damage = (seat: 'player1' | 'player2') =>
+				({
+					...getGraphicItemDefinition('commander-damage').createDefault({ id: 'damage', label: 'damage', ...CANVAS }),
+					playerSide: seat,
+					surfaceStyle: SURFACE,
+				}) as GraphicItemConfig;
+			function rendered(counts: Array<{ damage: number; imageUrl: string | null }>, output: 'overlay' | 'key' = 'overlay') {
+				return resolveFeatureMatchOverlayCompositorRenderModel({
+					output,
+					kind: 'mtg-commander',
+					layout: layout([
+						damage('player2'),
+					]),
+					featureMatch: {
+						...commanderContext(),
+						player2: {
+							...seatState(31),
+							commanderDamage: counts,
+						},
+					},
+					...CANVAS,
+				}).graphics[0]!.items[0]!;
+			}
+
+			it('shows each count taken beside its Commander\'s card, and leaves out one still at zero', () => {
+				const item = rendered([
+					{ damage: 5, imageUrl: ATRAXA_IMAGE },
+					{ damage: 0, imageUrl: ATRAXA_IMAGE },
+					{ damage: 21, imageUrl: null },
+				]);
+
+				expect(item.text).toBe(`${ATRAXA_IMAGE}5 21`);
+				expect(item.textSegments!.map(segment => segment.cardImage?.url ?? segment.text)).toEqual([ATRAXA_IMAGE, '5', ' ', '21']);
+				expect(item.surface).toBeDefined();
+			});
+
+			it('paints its cards as coverage on the Key Output', () => {
+				expect(rendered([
+					{ damage: 5, imageUrl: ATRAXA_IMAGE },
+				], 'key').textSegments![0]!.cardImage).toMatchObject({ monochrome: true });
+			});
+
+			it.each([
+				{
+					name: 'every count is zero',
+					counts: [
+						{ damage: 0, imageUrl: ATRAXA_IMAGE },
+					],
+				},
+				{ name: 'no opposing Seat holds a Commander', counts: [] },
+			])('paints nothing while $name', ({ counts }) => {
+				expect(paintsNothing(rendered(counts))).toBe(true);
+			});
+		});
+
+		// Shown only while its Seat is in the state its author picked (ADR-0087).
+		describe('a Seat Indicator item', () => {
+			const indicator = (seat: 'player1' | 'player2', state: 'active' | 'eliminated') =>
+				({
+					...getGraphicItemDefinition('seat-indicator').createDefault({ id: 'indicator', label: 'indicator', ...CANVAS }),
+					playerSide: seat,
+					state,
+				}) as GraphicItemConfig;
+			function rendered(item: GraphicItemConfig, live: { activeSeat?: 'player1' | 'player2' | null; eliminated?: boolean }, exiting = false) {
+				return resolveFeatureMatchOverlayCompositorRenderModel({
+					output: 'overlay',
+					kind: 'mtg-commander',
+					layout: layout([item]),
+					featureMatch: {
+						...commanderContext(),
+						activeSeat: live.activeSeat ?? null,
+						player2: {
+							...seatState(31),
+							eliminated: live.eliminated ?? false,
+						},
+					},
+					itemAnimation: exiting
+						? {
+								indicator: [
+									{ phase: 'exit', elapsed: 10 },
+								],
+							}
+						: undefined,
+					...CANVAS,
+				}).graphics[0]!.items[0]!;
+			}
+
+			it.each([
+				{
+					name: 'an Active indicator on the active Seat',
+					item: indicator('player2', 'active'),
+					live: { activeSeat: 'player2' as const },
+					shown: true,
+				},
+				{
+					name: 'an Active indicator while another Seat has the turn',
+					item: indicator('player2', 'active'),
+					live: { activeSeat: 'player1' as const },
+					shown: false,
+				},
+				{
+					name: 'an Active indicator while no turn is tracked',
+					item: indicator('player2', 'active'),
+					live: {},
+					shown: false,
+				},
+				{
+					name: 'an Eliminated indicator on an Eliminated Seat',
+					item: indicator('player2', 'eliminated'),
+					live: { eliminated: true },
+					shown: true,
+				},
+				{
+					name: 'an Eliminated indicator on a Seat still in the game',
+					item: indicator('player2', 'eliminated'),
+					live: { activeSeat: 'player2' as const },
+					shown: false,
+				},
+			])('paints $name: $shown', ({ item, live, shown }) => {
+				expect(rendered(item, live).surface !== undefined).toBe(shown);
+			});
+
+			it('keeps painting while its exit plays, after the state has left', () => {
+				expect(rendered(indicator('player2', 'active'), { activeSeat: 'player1' }, true).surface).toBeDefined();
+			});
 		});
 
 		it('keeps a group holding a filled Seat\'s item, and paints nothing for the empty Seat\'s child', () => {
@@ -785,6 +916,74 @@ describe('featureMatchGraphicsContext on a Commander Event', () => {
 		].map(state => state?.lifeTotal))
 			.toEqual([40, 31, 22, 13]);
 		expect(context.bestOf).toBe(1);
+	});
+
+	it('reads whose turn it is, who is Eliminated, and each Seat\'s Commander Damage per opposing Commander in Seat order', () => {
+		const context = featureMatchGraphicsContext({
+			event: COMMANDER_EVENT,
+			// Ana (Atraxa), Ben (Tymna), Cleo (Tymna and Kraum), Dara (Atraxa).
+			featureMatch: {
+				activeSession: {
+					sourceSnapshot: commanderSnapshot(),
+				},
+			},
+			matchState: {
+				activePlayer: 'player3',
+				player1: {
+					...seat(40),
+					commanderDamage: [
+						{ seat: 'player3', commander: 2, damage: 7 },
+						{ seat: 'player2', commander: 1, damage: 3 },
+					],
+				},
+				player2: seat(31),
+				player3: seat(22),
+				player4: {
+					...seat(13),
+					eliminated: true,
+				},
+			},
+			displayTime: null,
+		} as unknown as Input);
+
+		expect(context.activeSeat).toBe('player3');
+		expect([context.player1.eliminated, context.player4?.eliminated]).toEqual([false, true]);
+		// Seat 1 faces Ben's Tymna, Cleo's Tymna and Kraum, then Dara's Atraxa.
+		expect(context.player1.commanderDamage).toEqual([
+			{
+				damage: 3,
+				imageUrl: scryfallCardImageUrl(TYMNA.scryfallId),
+			},
+			{
+				damage: 0,
+				imageUrl: scryfallCardImageUrl(TYMNA.scryfallId),
+			},
+			{
+				damage: 7,
+				imageUrl: scryfallCardImageUrl(KRAUM.scryfallId),
+			},
+			{
+				damage: 0,
+				imageUrl: scryfallCardImageUrl(ATRAXA.scryfallId),
+			},
+		]);
+	});
+
+	it('reads a Two-Player Session\'s active player as its active Seat, and no Commander game', () => {
+		const context = featureMatchGraphicsContext({
+			event: { name: 'Open', game: 'mtg', variant: 'two-player' },
+			featureMatch: null,
+			matchState: {
+				activePlayer: 'player2',
+				player1: seat(20),
+				player2: seat(20),
+			},
+			displayTime: null,
+		} as unknown as Input);
+
+		expect(context.activeSeat).toBe('player2');
+		expect(context.player2.eliminated).toBeUndefined();
+		expect(context.player2.commanderDamage).toBeUndefined();
 	});
 
 	// A Seat is in the game while it is filled: the Session's snapshot says, or the Slot before one opens.

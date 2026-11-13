@@ -1,12 +1,15 @@
 import type { FeatureMatchTokenValuesInput } from '~~/shared/featureMatchOverlayValues';
 import type { Seat } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
-import type { GraphicsDeckListCard, GraphicsFeatureMatchContext, GraphicsFeatureMatchPlayerState } from '~/modules/graphics/renderModel';
+import type { GraphicsCommanderDamageCount, GraphicsDeckListCard, GraphicsFeatureMatchContext, GraphicsFeatureMatchPlayerState } from '~/modules/graphics/renderModel';
 import type { Event } from '~/types';
 import { eventKind } from '~~/shared/config/games';
+import { commanderDamageFrom } from '~~/shared/modules/feature-match-session';
 import { SEAT_VALUES } from '~~/shared/types/enums';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
+import { getMtgGameData } from '~~/shared/utils/gameData';
+import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 
 export { featureMatchTokenValues } from '~~/shared/featureMatchOverlayValues';
 
@@ -41,6 +44,33 @@ export interface FeatureMatchOverlaySideboards {
 	player2: ReadonlyArray<GraphicsDeckListCard> | null;
 }
 
+/**
+ * The Commander Damage a Seat has taken: one count per Commander each other
+ * Seat holds, in Seat order, with that Commander's card (ADR-0087).
+ */
+function commanderDamageCounts(input: FeatureMatchOverlayHostStateInput, seat: Seat): GraphicsCommanderDamageCount[] {
+	return SEAT_VALUES
+		.filter(opposing => opposing !== seat)
+		.flatMap(opposing => (getMtgGameData(featureMatchSidePlayer(input.featureMatch, opposing).data?.gameData).commanders ?? [])
+			.map((commander, index) => ({
+				damage: commanderDamageFrom(input.matchState?.[seat], {
+					seat: opposing,
+					commander: index === 0
+						? 1
+						: 2,
+				}),
+				imageUrl: scryfallCardImageUrl(commander.scryfallId),
+			})));
+}
+
+/** What a Commander game adds to a Seat's live state: whether it is Eliminated, and the Commander Damage it has taken. */
+function commanderGameState(input: FeatureMatchOverlayHostStateInput, seat: Seat): Pick<GraphicsFeatureMatchPlayerState, 'eliminated' | 'commanderDamage'> {
+	return {
+		eliminated: input.matchState?.[seat]?.eliminated ?? false,
+		commanderDamage: commanderDamageCounts(input, seat),
+	};
+}
+
 /** A Commander Seat's live state: its life, with no game wins or Sideboard to show (ADR-0087). */
 function commanderSeatState(input: FeatureMatchOverlayHostStateInput, seat: Seat): GraphicsFeatureMatchPlayerState {
 	return {
@@ -48,7 +78,15 @@ function commanderSeatState(input: FeatureMatchOverlayHostStateInput, seat: Seat
 		gameWins: 0,
 		sideboard: null,
 		sideboardRevealed: false,
+		...commanderGameState(input, seat),
 	};
+}
+
+/** One of the pair's Seats: a Commander game's state on a Commander Event, and nothing more on any other. */
+function pairGameState(input: FeatureMatchOverlayHostStateInput, seat: Seat): Pick<GraphicsFeatureMatchPlayerState, 'eliminated' | 'commanderDamage'> {
+	return isCommanderEvent(input)
+		? commanderGameState(input, seat)
+		: {};
 }
 
 /**
@@ -57,8 +95,12 @@ function commanderSeatState(input: FeatureMatchOverlayHostStateInput, seat: Seat
  * Session's snapshot or else the Slot's own Seats, so an unbound Overlay's are
  * all empty. Every other Event's context holds neither (ADR-0087).
  */
+function isCommanderEvent(input: FeatureMatchOverlayHostStateInput): boolean {
+	return input.event != null && eventKind(input.event) === 'mtg-commander';
+}
+
 function commanderSeats(input: FeatureMatchOverlayHostStateInput): Pick<GraphicsFeatureMatchContext, 'player3' | 'player4' | 'emptySeats'> {
-	if (!input.event || eventKind(input.event) !== 'mtg-commander')
+	if (!isCommanderEvent(input))
 		return {};
 	return {
 		player3: commanderSeatState(input, 'player3'),
@@ -92,14 +134,18 @@ export function featureMatchGraphicsContext(
 			// Hidden by default (#490): absent state, and states persisted before
 			// the flag existed, both read as not yet revealed.
 			sideboardRevealed: input.matchState?.player1?.sideboardRevealed ?? false,
+			...pairGameState(input, 'player1'),
 		},
 		player2: {
 			lifeTotal: input.matchState?.player2?.lifeTotal ?? null,
 			gameWins: input.matchState?.player2?.gameWins ?? 0,
 			sideboard: sideboards?.player2 ?? null,
 			sideboardRevealed: input.matchState?.player2?.sideboardRevealed ?? false,
+			...pairGameState(input, 'player2'),
 		},
 		...commanderSeats(input),
+		// Whose turn it is, on any Event that tracks one.
+		activeSeat: input.matchState?.activePlayer ?? null,
 		bestOf: input.featureMatch?.activeSession?.sourceSnapshot?.bestOf
 			?? input.featureMatch?.bestOf
 			?? toFeatureMatchDefaults(input.event).bestOf,

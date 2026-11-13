@@ -3113,6 +3113,8 @@ Feature Match Controls show a Commander Slot's Seats as a two-by-two table, cloc
 
 An Event's kind decides the tokens it is offered and holds values for: a Commander Event four Seats' with no record or Leader image, every other Event the pair's with no Commander term, so a Two-Player Event's public read is unchanged. A Graphic Item reads the Seat its kind is set to, the Seats its text's tokens belong to, or the Seats its group's children read, and renders nothing while every one of them is empty; a Source Item whose Source Role is an empty Seat renders nothing either. Only a Commander Slot has empty Seats in this sense: a pair's items and sources render unseated, as they did. A Commander's image is loaded on air from Scryfall alone. In the binding catalogue a field or relationship naming the Commander Variant is offered to Commander Events alone.
 
+A Commander Damage Graphic Item paints as text does: each count beside the card of the Commander that dealt it, a count at zero left out, and nothing at all, surface included, while it has none to show. Only a host supplying a Commander game's context is offered it. A Seat Indicator Graphic Item paints one Shape Geometry surface while its Seat has the turn or is Eliminated, whichever its author picked, and plays its enter and exit on the flip through the per-item phase trigger a Sideboard reveal uses (ADR-0015), timed on each output's own clock. It marks the active player on any Event that tracks one.
+
 ### Why
 
 A Commander Event uses Magic's cards, card data and deck text, so a third Card Game would fork every Magic card path and give some sixty Card Game branches a third answer for no difference. What does differ, how many sit down and how a game is won, is what a Variant names.

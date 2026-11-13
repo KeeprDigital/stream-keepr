@@ -584,6 +584,60 @@ const DEFINITIONS = {
 			? `${playerSideLabel(item.playerSide)} sideboard • ${item.view}`
 			: 'Deck List',
 	},
+	'commander-damage': {
+		kind: 'commander-damage',
+		configurationVersion: 1,
+		label: 'Commander Damage',
+		icon: 'i-lucide-swords',
+		// Only a Commander game counts it.
+		requiredContext: 'commander-game',
+		typography: { textOverflowPolicy: true },
+		surfaceStyles: { surfaceStyle: {} },
+		playerSide: 'seat',
+		createDefault: options => ({
+			type: 'commander-damage',
+			id: options.id,
+			label: options.label,
+			visible: true,
+			anchor: 'top-left',
+			...defaultRect(options),
+			playerSide: 'player1',
+			typography: { ...DEFAULT_GRAPHIC_TYPOGRAPHY, fontSize: 40 },
+			// Up to six counts in one line: shrink to keep them all on air.
+			overflowPolicy: 'shrink',
+			minFontSize: 20,
+		}),
+		summary: item => item.type === 'commander-damage'
+			? `${playerSideLabel(item.playerSide)} Commander Damage`
+			: 'Commander Damage',
+	},
+	'seat-indicator': {
+		kind: 'seat-indicator',
+		configurationVersion: 1,
+		label: 'Seat Indicator',
+		icon: 'i-lucide-circle-dot',
+		requiredContext: 'feature-match',
+		surfaceStyles: { surfaceStyle: {} },
+		shapeGeometry: { slot: 'geometry' },
+		playerSide: 'seat',
+		createDefault: options => ({
+			type: 'seat-indicator',
+			id: options.id,
+			label: options.label,
+			visible: true,
+			anchor: 'top-left',
+			...defaultRect(options),
+			playerSide: 'player1',
+			state: 'active',
+			geometry: squareShapeGeometry(),
+			surfaceStyle: createDefaultGraphicSurfaceStyle(),
+		}),
+		summary: item => item.type === 'seat-indicator'
+			? `${playerSideLabel(item.playerSide)} • ${item.state === 'active'
+				? 'active player'
+				: 'Eliminated'}`
+			: 'Seat Indicator',
+	},
 } satisfies { [K in GraphicItemKind]: GraphicItemDefinitionFor<K> };
 
 /** Definition palette order is the shared vocabulary's own order. */
