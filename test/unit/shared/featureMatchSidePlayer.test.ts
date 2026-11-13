@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
+import { featureMatchSidePlayer, seatLabel } from '~~/shared/utils/featureMatchSidePlayer';
 
 const ana = {
 	playerId: 1,
@@ -94,5 +94,16 @@ describe('the player a Feature Match Slot side shows', () => {
 
 	it('seats nobody without a Slot', () => {
 		expect(featureMatchSidePlayer(null, 'player1')).toEqual({ playerId: null, data: null });
+	});
+});
+
+describe('a Seat as a layout\'s author names it', () => {
+	// A Commander Slot's places are Seats; a pair's are its two Players (ADR-0087).
+	it.each([
+		['mtg-two-player', 'player2', 'Player 2'],
+		['mtg-commander', 'player2', 'Seat 2'],
+		['mtg-commander', 'player4', 'Seat 4'],
+	] as const)('on a %s Event names %s "%s"', (kind, seat, label) => {
+		expect(seatLabel(kind, seat)).toBe(label);
 	});
 });

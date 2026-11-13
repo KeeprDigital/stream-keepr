@@ -24,6 +24,7 @@ import { METAGAME_SCOPE_FIELDS } from '../screenModeConfigs/subShapes';
 import { talentModeConfigContract } from '../screenModeConfigs/talent';
 import { topCardsModeConfigContract } from '../screenModeConfigs/topCards';
 import { topCutModeConfigContract } from '../screenModeConfigs/topCut';
+import { SEAT_VALUES } from './enums';
 
 /**
  * A Screen's media background, a Feature Match Overlay Frame's animation, and a
@@ -60,6 +61,8 @@ export type FeatureMatchOverlayAnchorValue = typeof FEATURE_MATCH_OVERLAY_ANCHOR
  * Source Item carries that survives leaving this installation. A Feature Match
  * Layout Template travels with "there is a main source here and a player-one
  * source there"; a receiving installation routes its own inputs into those roles.
+ * A role names the main source or one Seat's; the third and fourth are a
+ * Commander Slot's (ADR-0087).
  * A free-form string would travel as an operator's local shorthand — `cam-3-left`
  * means nothing to the show that receives it, and nothing could tell it from a
  * role the receiver does implement.
@@ -68,7 +71,7 @@ export type FeatureMatchOverlayAnchorValue = typeof FEATURE_MATCH_OVERLAY_ANCHOR
  * a change to what a Feature Match Layout can say, so a package using a new one is
  * refused by an installation that predates it rather than silently framing nothing.
  */
-export const FEATURE_MATCH_SOURCE_ROLE_VALUES = ['main', 'player1', 'player2'] as const;
+export const FEATURE_MATCH_SOURCE_ROLE_VALUES = ['main', ...SEAT_VALUES] as const;
 
 export type FeatureMatchSourceRole = typeof FEATURE_MATCH_SOURCE_ROLE_VALUES[number];
 

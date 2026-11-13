@@ -1,11 +1,15 @@
+import type { EventKind } from './config/games';
 import type { OpCardCategory } from './types/card/op';
-import type { Game } from './types/enums';
+import type { Seat } from './types/enums';
 import type { FeatureMatchDeckListEntry } from './types/featureMatchDeckList';
-import type { OpLeader } from './types/game';
+import type { Commander, OpLeader } from './types/game';
 import type { GraphicInputValue } from './types/graphics';
-import { getGameConfig } from './config/games';
-import { FEATURE_MATCH_TOKEN_KEYS } from './featureMatchTokenCatalogue';
+import { EVENT_KIND_VALUES, getGameConfig } from './config/games';
+import { featureMatchTokenCatalogue } from './featureMatchTokenCatalogue';
+import { SEAT_VALUES } from './types/enums';
 import { formatOpColors, opPrintingImageUrl } from './utils/card/op';
+import { commanderDeckIdentity } from './utils/commander';
+import { scryfallCardImageUrl } from './utils/scryfallCardImage';
 
 /**
  * The canonical Feature Match sample dataset.
@@ -39,16 +43,18 @@ import { formatOpColors, opPrintingImageUrl } from './utils/card/op';
  * existed — putting sample values on air is the one failure this file must not
  * cause, so the choice is made by the preview surface rather than here.
  *
- * ## One per Card Game
+ * ## One per kind of Event
  *
  * A Magic Match and a One Piece Card Game Match fill the same tokens with
  * different things — a deck name and mana colours, or a Leader and its colours
- * and card — so each Card Game has its own sample, and the preview picks the one
- * its Event plays (`featureMatchSampleDataset`).
+ * and card — and a Commander game seats four, each deck named by its Commanders
+ * (ADR-0087). So each kind of Event has its own sample, and the preview picks
+ * the one its Event is (`featureMatchSampleDataset`).
  */
 
 /**
- * The Feature Match token binding catalogue's values, sampled for a Magic Match.
+ * The Feature Match token binding catalogue's values, sampled for a Two-Player
+ * Magic Match.
  *
  * Keyed by the catalogue's own keys, and complete over them: a token with no
  * sample value would preview as blank, which is the problem this dataset exists to
@@ -105,6 +111,11 @@ export interface FeatureMatchSampleContext {
 	clockDisplayTime: string;
 	player1: FeatureMatchSamplePlayerState;
 	player2: FeatureMatchSamplePlayerState;
+	/** Seats 3 and 4, which only a Commander set holds (ADR-0087). */
+	player3?: FeatureMatchSamplePlayerState;
+	player4?: FeatureMatchSamplePlayerState;
+	/** A Commander set's Seats nobody sits in: none, as every set seats all four. */
+	emptySeats?: readonly Seat[];
 	bestOf: number;
 }
 
@@ -291,25 +302,148 @@ const OP_SAMPLE_CONTEXT: FeatureMatchSampleContext = {
 	bestOf: 1,
 };
 
-/** One Card Game's Feature Match sample: its token values and its live session state. */
+/** One sampled Commander Seat: who sits there, their Commanders, and their life. */
+export interface CommanderFeatureMatchSampleSeat {
+	name: string;
+	pronouns: string;
+	lgs: string;
+	commanders: readonly Commander[];
+	lifeTotal: number;
+}
+
+/** A Commander as a Seat holds one: a real printing, so a preview shows its card. */
+export function sampleCommander(scryfallId: string, name: string, colorIdentity: string, setCode: string, collectorNumber: string): Commander {
+	return {
+		scryfallId,
+		name,
+		colorIdentity,
+		setCode,
+		collectorNumber,
+	};
+}
+
+/**
+ * The Commander sample's four Seats, in Seat order: a long name beside a short
+ * one, a pair of Commanders beside single ones, a colourless deck, and every
+ * Seat at a different life in a game well under way.
+ */
+const COMMANDER_SAMPLE_SEATS: readonly CommanderFeatureMatchSampleSeat[] = [
+	{
+		name: 'Oluwaseun Adebayo-Lindqvist',
+		pronouns: 'she/her',
+		lgs: 'Northgate Games',
+		commanders: [
+			sampleCommander('bc7cbe9b-324e-42b8-94e2-36e91cb32163', 'Tymna the Weaver', 'WB', 'c16', '48'),
+			sampleCommander('557fcd17-6cb3-414a-b2b1-ea9ae32e5aec', 'Kraum, Ludevic\'s Opus', 'UR', 'c16', '34'),
+		],
+		lifeTotal: 31,
+	},
+	{
+		name: 'Bo Li',
+		pronouns: 'he/him',
+		lgs: 'The Battered Sleeve',
+		commanders: [
+			sampleCommander('d0d33d52-3d28-4635-b985-51e126289259', 'Atraxa, Praetors\' Voice', 'WUBG', '2xm', '190'),
+		],
+		lifeTotal: 40,
+	},
+	{
+		name: 'Marguerite Okafor',
+		pronouns: 'they/them',
+		lgs: 'Dice & Daggers',
+		commanders: [
+			sampleCommander('824b2d73-2151-4e5e-9f05-8f63e2bdcaa9', 'Krenko, Mob Boss', 'R', 'fdn', '204'),
+		],
+		lifeTotal: 17,
+	},
+	{
+		name: 'Tomás Reyes',
+		pronouns: 'he/him',
+		lgs: 'Mana Vault Café',
+		commanders: [
+			sampleCommander('c41554e7-2a07-4cc7-b01b-44deed08e588', 'Kozilek, the Great Distortion', '', 'cmm', '2'),
+		],
+		lifeTotal: 6,
+	},
+];
+
+/** A Commander Seat's tokens: its deck is its Commanders' names and colour identity, and each Commander a card (ADR-0087). */
+function commanderSeatTokens(seat: CommanderFeatureMatchSampleSeat, prefix: Seat): Record<string, GraphicInputValue> {
+	const deck = commanderDeckIdentity(seat.commanders);
+	return {
+		[`${prefix}Name`]: seat.name,
+		[`${prefix}Deck`]: deck.deckName ?? '',
+		[`${prefix}DeckColors`]: deck.deckColors ?? '',
+		[`${prefix}Pronouns`]: seat.pronouns,
+		[`${prefix}Lgs`]: seat.lgs,
+		[`${prefix}Commander1Image`]: scryfallCardImageUrl(seat.commanders[0]?.scryfallId) ?? '',
+		[`${prefix}Commander2Image`]: scryfallCardImageUrl(seat.commanders[1]?.scryfallId) ?? '',
+	};
+}
+
+/** Four Commander Seats' token values, in Seat order. */
+export function commanderSeatsTokenValues(seats: readonly CommanderFeatureMatchSampleSeat[]): Record<string, GraphicInputValue> {
+	return Object.assign({}, ...SEAT_VALUES.map((seat, index) => commanderSeatTokens(seats[index]!, seat)));
+}
+
+/** A Commander Seat's live state: its life, with no game wins or Sideboard to show (ADR-0087). */
+function commanderSeatState(seat: CommanderFeatureMatchSampleSeat): FeatureMatchSamplePlayerState {
+	return {
+		lifeTotal: seat.lifeTotal,
+		gameWins: 0,
+		sideboard: null,
+		sideboardRevealed: false,
+	};
+}
+
+/** A Commander game's live state: one game across four Seats, each in it. */
+export function commanderSampleContext(seats: readonly CommanderFeatureMatchSampleSeat[], clockDisplayTime: string): FeatureMatchSampleContext {
+	return {
+		clockDisplayTime,
+		player1: commanderSeatState(seats[0]!),
+		player2: commanderSeatState(seats[1]!),
+		player3: commanderSeatState(seats[2]!),
+		player4: commanderSeatState(seats[3]!),
+		emptySeats: [],
+		bestOf: 1,
+	};
+}
+
+const COMMANDER_SAMPLE_TOKEN_VALUES: Readonly<Record<string, GraphicInputValue>> = {
+	...commanderSeatsTokenValues(COMMANDER_SAMPLE_SEATS),
+	// A Commander Event has no Rounds or Phases: its Slot's round is what the operator typed.
+	round: 'Game 2',
+	stage: 'Game 2',
+	table: 'Table 1',
+	format: 'Commander',
+	eventName: 'Sample Commander Night',
+};
+
+/** One kind of Event's Feature Match sample: its token values and its live session state. */
 export interface FeatureMatchSample {
-	game: Game;
+	kind: EventKind;
 	tokenValues: Readonly<Record<string, GraphicInputValue>>;
 	context: FeatureMatchSampleContext;
 }
 
-const SAMPLES: Readonly<Record<Game, FeatureMatchSample>> = {
-	mtg: { game: 'mtg', tokenValues: FEATURE_MATCH_SAMPLE_TOKEN_VALUES, context: FEATURE_MATCH_SAMPLE_CONTEXT },
-	op: { game: 'op', tokenValues: OP_SAMPLE_TOKEN_VALUES, context: OP_SAMPLE_CONTEXT },
+const SAMPLES: Readonly<Record<EventKind, FeatureMatchSample>> = {
+	'mtg-two-player': { kind: 'mtg-two-player', tokenValues: FEATURE_MATCH_SAMPLE_TOKEN_VALUES, context: FEATURE_MATCH_SAMPLE_CONTEXT },
+	'mtg-commander': {
+		kind: 'mtg-commander',
+		tokenValues: COMMANDER_SAMPLE_TOKEN_VALUES,
+		context: commanderSampleContext(COMMANDER_SAMPLE_SEATS, '12:34'),
+	},
+	'op': { kind: 'op', tokenValues: OP_SAMPLE_TOKEN_VALUES, context: OP_SAMPLE_CONTEXT },
 };
 
-/** The Feature Match sample of an Event played in `game`. */
-export function featureMatchSampleDataset(game: Game): FeatureMatchSample {
-	return SAMPLES[game];
+/** The Feature Match sample of an Event of this kind. */
+export function featureMatchSampleDataset(kind: EventKind): FeatureMatchSample {
+	return SAMPLES[kind];
 }
 
 /**
- * Whether every Card Game's sample dataset still covers the whole token catalogue.
+ * Whether every kind of Event's sample dataset still covers the tokens it is
+ * offered.
  *
  * Exported as a function rather than asserted at module load: a preview rendering
  * one blank placeholder is a cosmetic gap, and refusing to load the application
@@ -317,6 +451,6 @@ export function featureMatchSampleDataset(game: Game): FeatureMatchSample {
  * where it is enforced.
  */
 export function featureMatchSampleDatasetIsComplete(): boolean {
-	return Object.values(SAMPLES).every(({ tokenValues }) =>
-		FEATURE_MATCH_TOKEN_KEYS.every(key => key in tokenValues));
+	return EVENT_KIND_VALUES.every(kind =>
+		featureMatchTokenCatalogue(kind).every(token => token.key in SAMPLES[kind].tokenValues));
 }

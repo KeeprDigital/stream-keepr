@@ -1,7 +1,8 @@
+import type { EventKind } from '~~/shared/config/games';
 import { describe, expect, it } from 'vitest';
 import {
-	FEATURE_MATCH_TOKEN_CATALOGUE,
 	FEATURE_MATCH_TOKEN_KEYS,
+	featureMatchTokenCatalogue,
 	featureMatchTokenDeclarations,
 	featureMatchTokenPresentations,
 	isFeatureMatchTokenKey,
@@ -16,12 +17,17 @@ function rendered(template: string, values: Record<string, string>): string {
 }
 
 describe('featureMatchTokenCatalogue', () => {
-	it('offers the identical token set for both players', () => {
-		const forSide = (side: 1 | 2) => FEATURE_MATCH_TOKEN_KEYS
-			.filter(key => key.startsWith(`player${side}`))
-			.map(key => key.slice(`player${side}`.length));
+	/** One Seat's token suffixes, in the order an Event of `kind` is offered them. */
+	function seatTokens(kind: EventKind, seat: number): string[] {
+		return featureMatchTokenCatalogue(kind)
+			.map(token => token.key)
+			.filter(key => key.startsWith(`player${seat}`))
+			.map(key => key.slice(`player${seat}`.length));
+	}
 
-		expect(forSide(1)).toEqual([
+	// A pair's tokens name two Seats, with a record and a Leader's image and no Commander term (ADR-0087).
+	it.each(['mtg-two-player', 'op'] as const)('offers a %s Event the pair\'s tokens and no third Seat', (kind) => {
+		expect(seatTokens(kind, 1)).toEqual([
 			'Name',
 			'Record',
 			'Deck',
@@ -30,11 +36,27 @@ describe('featureMatchTokenCatalogue', () => {
 			'Lgs',
 			'LeaderImage',
 		]);
-		expect(forSide(2)).toEqual(forSide(1));
+		expect(seatTokens(kind, 2)).toEqual(seatTokens(kind, 1));
+		expect(seatTokens(kind, 3)).toEqual([]);
+		expect(seatTokens(kind, 4)).toEqual([]);
 	});
 
-	it('carries the Match, Round, and Event tokens beside the per-player ones', () => {
-		expect(FEATURE_MATCH_TOKEN_KEYS.filter(key => !key.startsWith('player')))
+	it('offers a Commander Event each of four Seats\' tokens, with its Commanders\' images and no record', () => {
+		expect(seatTokens('mtg-commander', 1)).toEqual([
+			'Name',
+			'Deck',
+			'DeckColors',
+			'Pronouns',
+			'Lgs',
+			'Commander1Image',
+			'Commander2Image',
+		]);
+		for (const seat of [2, 3, 4])
+			expect(seatTokens('mtg-commander', seat)).toEqual(seatTokens('mtg-commander', 1));
+	});
+
+	it('carries the Match, Round, and Event tokens beside the per-Seat ones', () => {
+		expect(featureMatchTokenCatalogue('mtg-commander').map(token => token.key).filter(key => !key.startsWith('player')))
 			.toEqual([
 				'round',
 				'stage',
@@ -59,20 +81,23 @@ describe('featureMatchTokenCatalogue', () => {
 			expect(graphicTextTemplateInputKeys(`{${key}}`)).toEqual([key]);
 	});
 
-	it('labels every token for an operator', () => {
-		expect(FEATURE_MATCH_TOKEN_CATALOGUE.every(token => token.label.length > 0)).toBe(true);
-		expect(FEATURE_MATCH_TOKEN_CATALOGUE.find(token => token.key === 'player2Lgs')?.label)
-			.toBe('Player 2 Local Game Store');
+	// A Commander Slot's places are Seats; a pair's stay Players, as they read before.
+	it.each([
+		{ kind: 'mtg-two-player' as const, key: 'player2Lgs', label: 'Player 2 Local Game Store' },
+		{ kind: 'mtg-commander' as const, key: 'player2Lgs', label: 'Seat 2 Local Game Store' },
+		{ kind: 'mtg-commander' as const, key: 'player4Commander2Image', label: 'Seat 4 Second Commander Image' },
+	])('labels $key "$label" on a $kind Event', ({ kind, key, label }) => {
+		expect(featureMatchTokenCatalogue(kind).find(token => token.key === key)?.label).toBe(label);
 	});
 
 	// Deck Colours hold mana letters on a Magic Event and Leader colours on a One Piece one.
 	it.each([
 		{
-			game: 'mtg' as const,
+			kind: 'mtg-two-player' as const,
 			presentations: { player1DeckColors: 'mtg-mana-colors', player2DeckColors: 'mtg-mana-colors' },
 		},
 		{
-			game: 'op' as const,
+			kind: 'op' as const,
 			presentations: {
 				player1DeckColors: 'op-colors',
 				player2DeckColors: 'op-colors',
@@ -80,8 +105,16 @@ describe('featureMatchTokenCatalogue', () => {
 				player2LeaderImage: 'op-card-image',
 			},
 		},
-	])('paints only the $game Event\'s visual tokens as more than text', ({ game, presentations }) => {
-		expect(featureMatchTokenPresentations(game)).toEqual(presentations);
+		{
+			kind: 'mtg-commander' as const,
+			presentations: Object.fromEntries([1, 2, 3, 4].flatMap(seat => [
+				[`player${seat}DeckColors`, 'mtg-mana-colors'],
+				[`player${seat}Commander1Image`, 'mtg-card-image'],
+				[`player${seat}Commander2Image`, 'mtg-card-image'],
+			])),
+		},
+	])('paints only the $kind Event\'s visual tokens as more than text', ({ kind, presentations }) => {
+		expect(featureMatchTokenPresentations(kind)).toEqual(presentations);
 	});
 
 	it('resolves a token through the shared Graphic Text Template mechanism', () => {

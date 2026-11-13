@@ -1,4 +1,4 @@
-import type { Game } from '../../types/enums';
+import type { Game, Seat, Variant } from '../../types/enums';
 import type {
 	GraphicInputBinding,
 	GraphicInputDeclaration,
@@ -15,6 +15,7 @@ import type {
 	GraphicBindingPlayer,
 	GraphicBindingRound,
 } from './bindingCatalog';
+import { SLOT_SEAT_DATA_KEY } from '../../utils/featureMatchSidePlayer';
 import { graphicBindingField, resolveGraphicBindingField } from './bindingCatalog';
 
 /**
@@ -72,12 +73,26 @@ const RELATION_RESULT_KIND: Partial<Record<
 	'player': { archetype: 'archetype' },
 	'round': { phase: 'phase' },
 	'match': { player1: 'player', player2: 'player', round: 'round' },
-	'feature-match-slot': { player1: 'player', player2: 'player', match: 'match' },
+	'feature-match-slot': {
+		player1: 'player',
+		player2: 'player',
+		player3: 'player',
+		player4: 'player',
+		match: 'match',
+	},
 };
 
-/** The relationships a Graphic Source Selection of this kind can be followed by. */
-export function graphicSourceRelations(kind: GraphicSourceSelectionKind): GraphicSourceRelation[] {
-	return Object.keys(RELATION_RESULT_KIND[kind] ?? {}) as GraphicSourceRelation[];
+/** The relationships only a Commander Event's entities have: its Slot's third and fourth Seats (ADR-0087). */
+const COMMANDER_RELATIONS: readonly GraphicSourceRelation[] = ['player3', 'player4'];
+
+/**
+ * The relationships a Graphic Source Selection of this kind can be followed by,
+ * on an Event of this Variant: a Slot's third and fourth Seats are a Commander
+ * Event's alone, and an Event naming no Variant is not one.
+ */
+export function graphicSourceRelations(kind: GraphicSourceSelectionKind, variant?: Variant | null): GraphicSourceRelation[] {
+	return (Object.keys(RELATION_RESULT_KIND[kind] ?? {}) as GraphicSourceRelation[])
+		.filter(relation => variant === 'commander' || !COMMANDER_RELATIONS.includes(relation));
 }
 
 /**
@@ -91,6 +106,8 @@ export function graphicSourceRelations(kind: GraphicSourceSelectionKind): Graphi
 export const GRAPHIC_SOURCE_RELATION_LABELS: Record<GraphicSourceRelation, string> = {
 	player1: 'Player 1',
 	player2: 'Player 2',
+	player3: 'Seat 3',
+	player4: 'Seat 4',
 	match: 'Match',
 	round: 'Round',
 	phase: 'Phase',
@@ -156,6 +173,7 @@ function derivesFrom(
 export function graphicSourceDerivationOptions(
 	sources: readonly GraphicSourceSelectionDeclaration[],
 	key: string,
+	variant?: Variant | null,
 ): GraphicSourceDerivation[] {
 	const declaration = sources.find(source => source.key === key);
 	if (!declaration)
@@ -164,7 +182,7 @@ export function graphicSourceDerivationOptions(
 	return sources.flatMap(parent =>
 		parent.key === key || derivesFrom(sources, parent.key, key)
 			? []
-			: graphicSourceRelations(parent.kind)
+			: graphicSourceRelations(parent.kind, variant)
 					.filter(relation => graphicSourceRelationKind(parent.kind, relation) === declaration.kind)
 					.map(relation => ({ sourceKey: parent.key, relation })),
 	);
@@ -175,8 +193,9 @@ export function canDeriveGraphicSource(
 	sources: readonly GraphicSourceSelectionDeclaration[],
 	key: string,
 	from: GraphicSourceDerivation,
+	variant?: Variant | null,
 ): boolean {
-	return graphicSourceDerivationOptions(sources, key)
+	return graphicSourceDerivationOptions(sources, key, variant)
 		.some(option => option.sourceKey === from.sourceKey && option.relation === from.relation);
 }
 
@@ -200,19 +219,12 @@ function matchSidePlayer(
  */
 function slotSidePlayer(
 	slot: GraphicBindingFeatureMatchSlot,
-	relation: 'player1' | 'player2',
+	relation: Seat,
 ): GraphicBindingPlayer | undefined {
 	const snapshot = slot.activeSession?.sourceSnapshot;
-	if (snapshot) {
-		const side = relation === 'player1'
-			? snapshot.player1
-			: snapshot.player2;
-		return side?.data ?? undefined;
-	}
-	const data = relation === 'player1'
-		? slot.player1Data
-		: slot.player2Data;
-	return data ?? undefined;
+	return (snapshot
+		? snapshot[relation]?.data
+		: slot[SLOT_SEAT_DATA_KEY[relation]]) ?? undefined;
 }
 
 function entityById<TEntity>(
@@ -259,7 +271,7 @@ function followRelation(
 			const slot = parentEntity as GraphicBindingFeatureMatchSlot;
 			if (relation === 'match')
 				return entityById(data.matches, slot.matchId);
-			return slotSidePlayer(slot, relation as 'player1' | 'player2');
+			return slotSidePlayer(slot, relation as Seat);
 		}
 		default:
 			return undefined;

@@ -1,14 +1,14 @@
-import type { FeatureMatchSample, FeatureMatchSampleContext } from './featureMatchSampleDataset';
-import type { Game } from './types/enums';
+import type { EventKind } from './config/games';
+import type { CommanderFeatureMatchSampleSeat, FeatureMatchSample, FeatureMatchSampleContext } from './featureMatchSampleDataset';
 import type { OpLeader } from './types/game';
 import type { GraphicInputValue } from './types/graphics';
 import { getGameConfig } from './config/games';
-import { featureMatchSampleDataset } from './featureMatchSampleDataset';
+import { commanderSampleContext, commanderSeatsTokenValues, featureMatchSampleDataset, sampleCommander } from './featureMatchSampleDataset';
 import { formatOpColors, opPrintingImageUrl } from './utils/card/op';
 
 /**
  * The Feature Match Stress Dataset: one fixed set of the longest
- * plausible Feature Match values per Card Game, beside the Feature Match Sample
+ * plausible Feature Match values per kind of Event, beside the Feature Match Sample
  * Dataset. Only the editor's stress toggle resolves a layout against it, over a
  * bound Feature Match Slot's live data too, and only in the preview; nothing
  * saves the toggle, and no Screen Output ever shows these values.
@@ -24,7 +24,14 @@ const STRESS_UNTIMED_LABEL = 'Untimed - Play continues until a winner is decided
 /** `formatClockTime`'s widest form: hours, minutes and seconds. */
 const STRESS_CLOCK = '1:23:45';
 
-/** The values every Card Game shares. */
+/** The Round, stage and table every kind of Event shares. */
+const SHARED_MATCH_TOKEN_VALUES = {
+	round: 'Round 15',
+	stage: 'Top 8 Quarterfinals',
+	table: 'Feature Match Table 128',
+} satisfies Record<string, GraphicInputValue>;
+
+/** The values every pair shares. */
 const SHARED_TOKEN_VALUES = {
 	player1Name: 'Maximiliano Alessandro Fitzgerald-Okonkwo',
 	player1Pronouns: 'they/them/theirs',
@@ -32,9 +39,7 @@ const SHARED_TOKEN_VALUES = {
 	player2Name: 'Siobhán Nakamura-Vandenberghe',
 	player2Pronouns: 'she/they',
 	player2Lgs: 'Dragon\'s Hoard Tabletop Café',
-	round: 'Round 15',
-	stage: 'Top 8 Quarterfinals',
-	table: 'Feature Match Table 128',
+	...SHARED_MATCH_TOKEN_VALUES,
 } satisfies Record<string, GraphicInputValue>;
 
 /** A sideboard of fifteen singletons, art unset as the sample's is: a preview never fetches remotely. */
@@ -154,27 +159,87 @@ function opContext(clockDisplayTime: string): FeatureMatchSampleContext {
 	};
 }
 
+/**
+ * Four Seats, each a pair of long-named Commanders, the first's in four
+ * colours, at life three digits wide either way: the pair's names and stores
+ * and two more as long.
+ */
+const COMMANDER_STRESS_SEATS: readonly CommanderFeatureMatchSampleSeat[] = [
+	{
+		name: SHARED_TOKEN_VALUES.player1Name,
+		pronouns: SHARED_TOKEN_VALUES.player1Pronouns,
+		lgs: SHARED_TOKEN_VALUES.player1Lgs,
+		commanders: [
+			sampleCommander('4e3fe912-1374-47c7-b73f-89ef55c479c1', 'Silas Renn, Seeker Adept', 'UB', 'c16', '43'),
+			sampleCommander('125b552b-45ea-4e0b-94a9-8131c97a04c0', 'Bruse Tarl, Boorish Herder', 'WR', 'c16', '30'),
+		],
+		lifeTotal: 999,
+	},
+	{
+		name: SHARED_TOKEN_VALUES.player2Name,
+		pronouns: SHARED_TOKEN_VALUES.player2Pronouns,
+		lgs: SHARED_TOKEN_VALUES.player2Lgs,
+		commanders: [
+			sampleCommander('2e89ce6a-6bc9-427f-a8b2-c07a9fc3218f', 'Ishai, Ojutai Dragonspeaker', 'WU', 'cm2', '12'),
+			sampleCommander('8afad106-a49b-4910-959e-228c109ea983', 'Reyhan, Last of the Abzan', 'BG', 'cm2', '13'),
+		],
+		lifeTotal: -999,
+	},
+	{
+		name: 'Bartholomew Oyelaran-Christodoulou',
+		pronouns: 'he/they/xe',
+		lgs: 'The Gilded Gryphon Games, Comics & Coffee',
+		commanders: [
+			sampleCommander('a4fab67f-00c2-4125-9262-d21a29411797', 'Rograkh, Son of Rohgahh', 'R', 'cmr', '197'),
+			sampleCommander('728b802c-969b-4865-b7a0-871c585d097a', 'Ardenn, Intrepid Archaeologist', 'W', 'cmr', '10'),
+		],
+		lifeTotal: 999,
+	},
+	{
+		name: 'Wilhelmina van der Westhuizen-Achterberg',
+		pronouns: 'she/her/hers',
+		lgs: 'Planeswalker\'s Rest Hobby Emporium',
+		commanders: [
+			sampleCommander('8f244716-78ab-46f5-b6e9-fc1e6db28052', 'Tevesh Szat, Doom of Fools', 'B', 'cmr', '153'),
+			sampleCommander('f606ebf1-483d-4331-b16a-9fb6f591a39f', 'Kediss, Emberclaw Familiar', 'R', 'cmr', '188'),
+		],
+		lifeTotal: -999,
+	},
+];
+
+const COMMANDER_TOKEN_VALUES: Readonly<Record<string, GraphicInputValue>> = {
+	...commanderSeatsTokenValues(COMMANDER_STRESS_SEATS),
+	...SHARED_MATCH_TOKEN_VALUES,
+	format: 'Commander: Pre-Constructed Decks Only',
+	eventName: 'Magic: The Gathering Commander Invitational Showcase - Sample City',
+};
+
 export interface FeatureMatchStressOptions {
 	/** Whether the Match previewed is an Untimed Match, whose clock shows the Untimed Label. */
 	untimed: boolean;
 }
 
-const DATASETS: Readonly<Record<Game, (clockDisplayTime: string) => FeatureMatchSample>> = {
-	mtg: clockDisplayTime => ({
-		game: 'mtg',
+const DATASETS: Readonly<Record<EventKind, (clockDisplayTime: string) => FeatureMatchSample>> = {
+	'mtg-two-player': clockDisplayTime => ({
+		kind: 'mtg-two-player',
 		tokenValues: MTG_TOKEN_VALUES,
 		context: mtgContext(clockDisplayTime),
 	}),
-	op: clockDisplayTime => ({
-		game: 'op',
+	'mtg-commander': clockDisplayTime => ({
+		kind: 'mtg-commander',
+		tokenValues: COMMANDER_TOKEN_VALUES,
+		context: commanderSampleContext(COMMANDER_STRESS_SEATS, clockDisplayTime),
+	}),
+	'op': clockDisplayTime => ({
+		kind: 'op',
 		tokenValues: OP_TOKEN_VALUES,
 		context: opContext(clockDisplayTime),
 	}),
 };
 
-/** The Feature Match Stress Dataset of an Event played in `game`. */
-export function featureMatchStressDataset(game: Game, { untimed }: FeatureMatchStressOptions): FeatureMatchSample {
-	return DATASETS[game](untimed
+/** The Feature Match Stress Dataset of an Event of this kind. */
+export function featureMatchStressDataset(kind: EventKind, { untimed }: FeatureMatchStressOptions): FeatureMatchSample {
+	return DATASETS[kind](untimed
 		? STRESS_UNTIMED_LABEL
 		: STRESS_CLOCK);
 }

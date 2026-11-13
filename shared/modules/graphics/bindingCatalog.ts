@@ -1,5 +1,5 @@
 import type { SocialProfiles, SupportedSocialNetwork } from '../../socialProfiles';
-import type { Game, PositionFormat, RecordSeparator } from '../../types/enums';
+import type { Game, PositionFormat, RecordSeparator, Variant } from '../../types/enums';
 import type { FeatureMatchState } from '../../types/featureMatchState';
 import type { PlayerGameData } from '../../types/game';
 import type {
@@ -13,6 +13,7 @@ import { formatOrdinal } from '../../utils/formatters';
 import { getMtgGameData, getOpGameData } from '../../utils/gameData';
 import { formatGameScore, readMatchFromPlayer1Side } from '../../utils/matchFromPlayerSide';
 import { playerDisplayName } from '../../utils/playerName';
+import { scryfallCardImageUrl } from '../../utils/scryfallCardImage';
 
 /**
  * The Graphic Input Binding field catalog.
@@ -32,7 +33,9 @@ import { playerDisplayName } from '../../utils/playerName';
  *   Event; a field naming one is offered only on that game's Events. A Magic deck
  *   name and a One Piece leader are the same idea in different games and are
  *   deliberately *not* merged into one "identity" field, because a lower third
- *   saying "Leader" on a Magic broadcast is worse than one field fewer.
+ *   saying "Leader" on a Magic broadcast is worse than one field fewer. A field
+ *   naming a Variant too is a Commander Event's alone: its Commanders' images
+ *   and its third and fourth Seats (ADR-0087).
  * - **Atomic and broadcast-formatted, both named.** `player.wins` is the stored
  *   number; `player.record` is the composed "4-1" an operator actually wants in a
  *   lower third, using the Event's own separator and zero-draw rule. Formatting
@@ -140,6 +143,9 @@ export interface GraphicBindingFeatureMatchSlot {
 	bestOf?: number;
 	player1Data?: GraphicBindingPlayer | null;
 	player2Data?: GraphicBindingPlayer | null;
+	/** Seats 3 and 4, which only a Commander Slot holds (ADR-0087). */
+	player3Data?: GraphicBindingPlayer | null;
+	player4Data?: GraphicBindingPlayer | null;
 	activeSession?: {
 		sourceSnapshot?: {
 			tableNumber?: number | null;
@@ -148,6 +154,8 @@ export interface GraphicBindingFeatureMatchSlot {
 			bestOf?: number;
 			player1?: { data?: GraphicBindingPlayer | null } | null;
 			player2?: { data?: GraphicBindingPlayer | null } | null;
+			player3?: { data?: GraphicBindingPlayer | null } | null;
+			player4?: { data?: GraphicBindingPlayer | null } | null;
 		} | null;
 		currentState?: FeatureMatchState | null;
 	} | null;
@@ -202,6 +210,8 @@ export interface GraphicBindingField<TEntity = unknown> {
 	shape: GraphicBindingFieldShape;
 	/** Present when only this game's Events have the field. */
 	game?: Game;
+	/** Present when, of that game's Events, only this Variant's have the field. */
+	variant?: Variant;
 	resolve: (entity: TEntity, data: GraphicBindingDataSet) => GraphicInputValue | undefined;
 }
 
@@ -454,6 +464,25 @@ const PLAYER_FIELDS: readonly GraphicBindingField<GraphicBindingPlayer>[] = [
 		game: 'op',
 		resolve: player => textOf(getOpGameData(player.gameData).leader?.imageUrl),
 	},
+	// A Commander Seat's one or two Commanders, each the card of the printing it holds (ADR-0087).
+	{
+		id: 'player.commander1Image',
+		label: 'First Commander image URL',
+		type: 'text',
+		shape: 'atomic',
+		game: 'mtg',
+		variant: 'commander',
+		resolve: player => textOf(scryfallCardImageUrl(getMtgGameData(player.gameData).commanders?.[0]?.scryfallId)),
+	},
+	{
+		id: 'player.commander2Image',
+		label: 'Second Commander image URL',
+		type: 'text',
+		shape: 'atomic',
+		game: 'mtg',
+		variant: 'commander',
+		resolve: player => textOf(scryfallCardImageUrl(getMtgGameData(player.gameData).commanders?.[1]?.scryfallId)),
+	},
 	// The Deck List a side shows, counted without its Leader: 50 in a legal deck. An
 	// unlinked side holds a Feature Match Deck List; a Player, and a side linked to one, theirs.
 	{
@@ -678,6 +707,24 @@ const FEATURE_MATCH_SLOT_FIELDS: readonly GraphicBindingField<GraphicBindingFeat
 		resolve: slot => numberOf(slotLiveState(slot)?.player2.lifeTotal),
 	},
 	{
+		id: 'featureMatchSlot.player3Life',
+		label: 'Seat 3 life total',
+		type: 'number',
+		shape: 'atomic',
+		game: 'mtg',
+		variant: 'commander',
+		resolve: slot => numberOf(slotLiveState(slot)?.player3?.lifeTotal),
+	},
+	{
+		id: 'featureMatchSlot.player4Life',
+		label: 'Seat 4 life total',
+		type: 'number',
+		shape: 'atomic',
+		game: 'mtg',
+		variant: 'commander',
+		resolve: slot => numberOf(slotLiveState(slot)?.player4?.lifeTotal),
+	},
+	{
 		id: 'featureMatchSlot.player1GameWins',
 		label: 'Player 1 game wins',
 		type: 'number',
@@ -769,20 +816,32 @@ export const GRAPHIC_SOURCE_SELECTION_KIND_LABELS: Record<GraphicSourceSelection
 };
 
 /**
- * The fields one Graphic Source Selection kind offers, on this Event's game.
+ * Whether an Event of this game and Variant has a field. No game is no Event
+ * context, which has every field. A game with no Variant named is a Two-Player
+ * Event's, as every Magic: The Gathering Event is unless it says Commander.
+ */
+function isFieldOffered(field: Pick<GraphicBindingField, 'game' | 'variant'>, game?: Game, variant?: Variant | null): boolean {
+	if (game === undefined)
+		return true;
+	return (field.game === undefined || field.game === game)
+		&& (field.variant === undefined || field.variant === variant);
+}
+
+/**
+ * The fields one Graphic Source Selection kind offers, on this Event's game and
+ * Variant.
  *
  * Passing no game offers every field, which is what an authoring surface with no
  * Event context needs; passing one offers exactly the fields that Event can
- * resolve.
+ * resolve. Passing its Variant too leaves out what only another Variant holds:
+ * a Commander's image and a third Seat on anything but a Commander Event.
  */
 export function graphicBindingFields<Kind extends GraphicSourceSelectionKind>(
 	kind: Kind,
 	game?: Game,
+	variant?: Variant | null,
 ): readonly GraphicBindingField<GraphicBindingEntityByKind[Kind]>[] {
-	const fields = GRAPHIC_BINDING_CATALOG[kind];
-	if (game === undefined)
-		return fields;
-	return fields.filter(field => field.game === undefined || field.game === game);
+	return GRAPHIC_BINDING_CATALOG[kind].filter(field => isFieldOffered(field, game, variant));
 }
 
 /** One catalog field by the id a Graphic Input Binding stores. */
@@ -806,13 +865,10 @@ export function isGraphicBindingFieldCompatible(
 	fieldId: string,
 	inputType: GraphicInputDeclaration['type'],
 	game?: Game,
+	variant?: Variant | null,
 ): boolean {
 	const field = graphicBindingField(kind, fieldId);
-	if (!field)
-		return false;
-	if (field.game !== undefined && game !== undefined && field.game !== game)
-		return false;
-	return field.type === inputType;
+	return field !== undefined && isFieldOffered(field, game, variant) && field.type === inputType;
 }
 
 /**
@@ -831,8 +887,9 @@ export function bindableGraphicBindingFields(
 	kind: GraphicSourceSelectionKind,
 	inputType: GraphicInputDeclaration['type'],
 	game?: Game,
+	variant?: Variant | null,
 ): { common: GraphicBindingField<unknown>[]; gameSpecific: GraphicBindingField<unknown>[] } {
-	const fields = (graphicBindingFields(kind, game) as readonly GraphicBindingField<unknown>[])
+	const fields = (graphicBindingFields(kind, game, variant) as readonly GraphicBindingField<unknown>[])
 		.filter(field => field.type === inputType);
 
 	return {

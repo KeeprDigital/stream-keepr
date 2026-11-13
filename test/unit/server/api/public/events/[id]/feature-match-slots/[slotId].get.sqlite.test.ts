@@ -157,6 +157,44 @@ describe('the public Feature Match read', () => {
 		expect(event.headers['access-control-allow-origin']).toBe('*');
 	});
 
+	// A vMix Data Source binds by column: a Two-Player row gains no Seat or Commander term (ADR-0056, ADR-0087).
+	it('answers a Two-Player Slot the columns it always has', async () => {
+		const { eventId, slotId } = await stage(true);
+
+		const [row] = await read(eventId, slotId).response;
+
+		expect(Object.keys(row!).sort()).toEqual([
+			'clock',
+			'eventName',
+			'format',
+			'player1Deck',
+			'player1DeckColors',
+			'player1Game1Win',
+			'player1Game2Win',
+			'player1GameWins',
+			'player1LeaderImage',
+			'player1Lgs',
+			'player1Life',
+			'player1Name',
+			'player1Pronouns',
+			'player1Record',
+			'player2Deck',
+			'player2DeckColors',
+			'player2Game1Win',
+			'player2Game2Win',
+			'player2GameWins',
+			'player2LeaderImage',
+			'player2Lgs',
+			'player2Life',
+			'player2Name',
+			'player2Pronouns',
+			'player2Record',
+			'round',
+			'stage',
+			'table',
+		]);
+	});
+
 	it.each([
 		{ gameWins: 0, game1: '#00000000', game2: '#00000000' },
 		{ gameWins: 1, game1: '#FFFFFFFF', game2: '#00000000' },

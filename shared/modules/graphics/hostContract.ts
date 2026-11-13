@@ -1,5 +1,8 @@
-import type { Game } from '../../types/enums';
-import { FEATURE_MATCH_TOKEN_CATALOGUE } from '../../featureMatchTokenCatalogue';
+import type { EventKind } from '../../config/games';
+import type { Game, Seat } from '../../types/enums';
+import { EVENT_KIND_VALUES, eventSeats } from '../../config/games';
+import { featureMatchTokenCatalogue } from '../../featureMatchTokenCatalogue';
+import { seatLabel } from '../../utils/featureMatchSidePlayer';
 
 /**
  * Host Contract seam.
@@ -68,9 +71,10 @@ export type GraphicsHostComposition = 'stack' | 'single';
 /**
  * A host-owned visual treatment for one otherwise textual placeholder value:
  * MTG mana pips for a colour string such as `WU`, One Piece colour pips for one
- * such as `Red/Green`, or the One Piece card a Printing image URL shows.
+ * such as `Red/Green`, the One Piece card a Printing image URL shows, or the
+ * Magic card a Scryfall image URL shows.
  */
-export type GraphicsHostTokenPresentation = 'mtg-mana-colors' | 'op-colors' | 'op-card-image';
+export type GraphicsHostTokenPresentation = 'mtg-mana-colors' | 'op-colors' | 'op-card-image' | 'mtg-card-image';
 
 /** One host-supplied placeholder a Graphic Text Template may name. */
 export interface GraphicsHostToken {
@@ -106,6 +110,18 @@ export interface GraphicsHostContract {
 	contextKinds: readonly GraphicsContextKind[];
 	composition: GraphicsHostComposition;
 	textValues: GraphicsHostTextValues;
+	/**
+	 * The Seats whose live state this host supplies, each as an author reads it:
+	 * what a Definition reading one Seat is offered. Absent where the host supplies
+	 * no Feature Match context.
+	 */
+	seats?: readonly GraphicsHostSeat[];
+}
+
+/** One Seat a host supplies live state for, as its author names it. */
+export interface GraphicsHostSeat {
+	seat: Seat;
+	label: string;
 }
 
 export const BROADCAST_GRAPHICS_HOST_CONTRACT: GraphicsHostContract = {
@@ -115,17 +131,36 @@ export const BROADCAST_GRAPHICS_HOST_CONTRACT: GraphicsHostContract = {
 	textValues: { kind: 'graphic-inputs' },
 };
 
+const FEATURE_MATCH_OVERLAY_HOST_CONTRACTS = Object.fromEntries(EVENT_KIND_VALUES.map(kind => [
+	kind,
+	{
+		hostId: 'feature-match-overlay',
+		contextKinds: ['event', 'feature-match'],
+		composition: 'single',
+		textValues: {
+			kind: 'host-tokens',
+			catalogue: featureMatchTokenCatalogue(kind),
+		},
+		seats: eventSeats(kind).map(seat => ({
+			seat,
+			label: seatLabel(kind, seat),
+		})),
+	},
+])) as unknown as Readonly<Record<EventKind, GraphicsHostContract>>;
+
 /**
  * A Feature Match Overlay declares the Feature Match context as well as the Event
  * one: the Clock, Player Life, and Game Wins Definitions require it, and its token
- * catalogue reads both a Feature Match Session and current Event Data.
+ * catalogue reads both a Feature Match Session and current Event Data. Its
+ * catalogue and its Seats are its Event's: a Commander Event is offered four
+ * Seats and their tokens (ADR-0087).
  */
-export const FEATURE_MATCH_OVERLAY_HOST_CONTRACT: GraphicsHostContract = {
-	hostId: 'feature-match-overlay',
-	contextKinds: ['event', 'feature-match'],
-	composition: 'single',
-	textValues: { kind: 'host-tokens', catalogue: FEATURE_MATCH_TOKEN_CATALOGUE },
-};
+export function featureMatchOverlayHostContract(kind: EventKind): GraphicsHostContract {
+	return FEATURE_MATCH_OVERLAY_HOST_CONTRACTS[kind];
+}
+
+/** A Two-Player Magic: The Gathering Event's Feature Match Overlay contract. */
+export const FEATURE_MATCH_OVERLAY_HOST_CONTRACT: GraphicsHostContract = featureMatchOverlayHostContract('mtg-two-player');
 
 /** The placeholder keys this host offers, when the host supplies them itself. */
 export function graphicsHostTokenCatalogue(
