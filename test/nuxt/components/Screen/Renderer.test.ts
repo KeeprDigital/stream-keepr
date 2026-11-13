@@ -48,6 +48,7 @@ vi.mock('~/modules/screen-mode', async () => ({
 	// (test/nuxt/components/Screen/Modes/themeTokenRendering.test.ts).
 	screenModeThemeTokenStyle: () => ({}),
 	screenModeThemeFontReferences: () => [],
+	screenModeThemeApplicationFonts: () => [],
 }));
 
 enableAutoUnmount(afterEach);

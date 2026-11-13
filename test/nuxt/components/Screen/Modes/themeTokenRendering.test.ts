@@ -14,10 +14,11 @@ import { SCREEN_MODES, screenModeTokenName, screenModeTokens } from '~~/shared/s
 import { SCREEN_MODE_VALUES } from '~~/shared/types/enums';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { METAGAME_CHART_MAX_ARCHETYPES } from '~~/shared/utils/metagameChart';
+import { deferred } from '~~/test/helpers/deferred';
 import { createMockScreen } from '~~/test/helpers/fixtures';
 import { testGraphicAssetReference } from '~~/test/helpers/graphicsAssetIdentities';
 import { text } from '~~/test/helpers/graphicsComposition';
-import { stubCapabilitySession, stubFontFaces } from '~~/test/nuxt/helpers/fontFaces';
+import { stubCapabilitySession, stubDocumentFonts, stubFontFaces } from '~~/test/nuxt/helpers/fontFaces';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import Renderer from '~/components/Screen/Renderer.vue';
 
@@ -1323,6 +1324,34 @@ describe('a library font in the Theme', () => {
 		await vi.waitFor(() => expect(wrapper!.get('.screen-renderer').attributes('data-font-ready')).toBe('true'));
 
 		expect(fonts.constructed.map(face => face.family)).toEqual(['stream-keepr-graphic-asset-asset-brand-face-revision-1']);
+	});
+});
+
+// An application font ships as CSS `@font-face`, which swaps in late on a cold cache.
+describe('an application font in the Theme', () => {
+	// Background's display has an element root, so the frame's own hiding of it shows too.
+	it('holds the rendering off program, its display hidden, until the face its heading paints has loaded', async () => {
+		const load = deferred<unknown>();
+		const fonts = stubDocumentFonts(async font => font.includes('Poppins')
+			? load.promise
+			: [{}]);
+
+		await mountMode('background', {
+			heading: {
+				...FOUNDATION_TOKENS.heading.default,
+				font: { kind: 'application', fontId: 'poppins' },
+			},
+		});
+		const frame = () => wrapper!.get('.screen-renderer');
+		const display = () => wrapper!.get('.background-screen').element as HTMLElement;
+
+		expect(fonts.load).toHaveBeenCalledWith(`normal ${FOUNDATION_TOKENS.heading.default.weight} 1em "Poppins"`);
+		expect(frame().attributes()).toMatchObject({ 'data-font-ready': 'false', 'data-screen-mode-ready': 'false' });
+		expect(display().style.visibility).toBe('hidden');
+
+		load.resolve([{}]);
+		await vi.waitFor(() => expect(frame().attributes()).toMatchObject({ 'data-font-ready': 'true', 'data-screen-mode-ready': 'true' }));
+		expect(display().style.visibility).toBe('');
 	});
 });
 

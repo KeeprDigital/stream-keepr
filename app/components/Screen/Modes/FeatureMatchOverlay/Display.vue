@@ -9,7 +9,7 @@ import { featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
 import { featureMatchStressDataset } from '~~/shared/featureMatchStressDataset';
 import { paintBroadcastGraphicThemeBindings } from '~~/shared/modules/graphics';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { featureMatchOverlayGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { featureMatchOverlayGraphicAssetReferences, graphicItemsApplicationFonts } from '~~/shared/utils/graphicsAssetReferences';
 import { useFeatureMatchOverlayAnimationPreview } from '~/composables/screen/useFeatureMatchOverlayAnimationPreview';
 import { useFeatureMatchOverlayModeData } from '~/composables/screen/useFeatureMatchOverlayModeData';
 import { useFeatureMatchOverlaySideboardData } from '~/composables/screen/useFeatureMatchOverlaySideboardData';
@@ -67,13 +67,13 @@ const themeValues = computed(() => resolveFeatureMatchOverlayThemeValues(themeSo
  * Frame media. The Screen Output Asset Capability admits what the Screen's
  * resolved tokens supply (ADR-0050).
  */
+const paintedComposition = computed(() => paintBroadcastGraphicThemeBindings(config.value.layout.composition, themeTokens.value));
 const indexedGraphicAssetReferences = computed<ScreenGraphicAssetReference[]>(() => {
-	const layout = config.value.layout;
 	const painted = featureMatchOverlayGraphicAssetReferences({
 		...config.value,
 		layout: {
-			...layout,
-			composition: paintBroadcastGraphicThemeBindings(layout.composition, themeTokens.value),
+			...config.value.layout,
+			composition: paintedComposition.value,
 		},
 	});
 	const media = themeValues.value.frameMedia;
@@ -96,15 +96,21 @@ const {
 	graphicAssetReferences,
 );
 
-// Typography naming a library font paints in the family this registers. Keep the
+// Typography naming a library font paints in the family this registers, and an
+// application font in a face its stylesheet fetches on first paint. Keep the
 // output hidden while a load is still in flight so it cannot flash a fallback
 // typeface, but reveal it after a terminal failure: a standalone URL without its
 // asset capability must not make the Frame, Sources, and every unrelated Graphic
 // Item disappear just because the exact font bytes are unavailable.
-const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
+const libraryFonts = useGraphicAssetFontFaces(
 	indexedGraphicAssetReferences,
 	graphicAssetContentUrl,
 	contentUrlsSettled,
+);
+const { fontSources } = libraryFonts;
+const { fontsReady, fontsFailed } = combineFontFaceStates(
+	libraryFonts,
+	useApplicationFontFaces(() => graphicItemsApplicationFonts(paintedComposition.value.items)),
 );
 // Rendering Readiness: the Slot read has settled, its media URLs have resolved,
 // and its fonts have loaded or failed; the media itself is the host's to wait on.

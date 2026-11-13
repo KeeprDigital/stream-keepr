@@ -1,4 +1,4 @@
-import type { GraphicFontSelection } from '../../types/graphics';
+import type { GraphicFontSelection, GraphicFontStyle } from '../../types/graphics';
 import type { GraphicAssetReference } from '../../types/graphicsAsset';
 
 /**
@@ -66,6 +66,16 @@ export interface GraphicFontDefinition {
 	category: GraphicFontCategory;
 	/** Absent for a system stack. */
 	package?: GraphicFontPackage;
+}
+
+/**
+ * One application face a Screen Output waits for before it shows: a font at the
+ * weight and style of the typography that paints it. A system stack loads nothing.
+ */
+export interface ApplicationFontFaceRequest {
+	fontId: GraphicApplicationFontId;
+	weight: number;
+	style: GraphicFontStyle;
 }
 
 /** Every hundred from `from` to `to`, the weights a static Fontsource package ships. */

@@ -4,7 +4,7 @@ import type { ScreenOutput } from '~~/shared/types/screenConfig';
 import { animationEffectRenderPlan } from '~~/shared/animationEffects';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { paintGraphicsThemeBindings } from '~~/shared/modules/graphics';
-import { broadcastGraphicsGraphicAssetReferences } from '~~/shared/utils/graphicsAssetReferences';
+import { broadcastGraphicsGraphicAssetReferences, graphicItemsApplicationFonts } from '~~/shared/utils/graphicsAssetReferences';
 import GraphicsCompositorCanvas from '~/components/Graphics/Compositor/Canvas.vue';
 import { useBroadcastGraphicsModeData } from '~/composables/screen/useBroadcastGraphicsModeData';
 import { resolveBroadcastGraphicsRenderModel } from '~/modules/broadcast-graphics/renderModel';
@@ -72,9 +72,10 @@ const themeTokens = useScreenGraphicThemeTokens();
 
 // Read with its bindings painted, so a font or logo a bound item takes from the
 // Theme resolves too (#831): the capability admits what the Theme supplies.
+const paintedGraphics = computed(() => paintGraphicsThemeBindings(graphics.value, themeTokens.value));
 const indexedGraphicAssetReferences = computed(() =>
 	broadcastGraphicsGraphicAssetReferences({
-		graphics: paintGraphicsThemeBindings(graphics.value, themeTokens.value),
+		graphics: paintedGraphics.value,
 	}),
 );
 const graphicAssetReferences = computed(() =>
@@ -85,14 +86,20 @@ const graphicAssetReferences = computed(() =>
 // an editor preview resolves it as an author. Neither path can browse the library.
 const { contentUrl, contentUrlsSettled } = useScreenGraphicAssetContentUrls(graphicAssetReferences);
 
-// Typography naming a library font paints in the family this registers, so the
-// canvas stays hidden while one is loading rather than flashing a fallback
+// Typography naming a library font paints in the family this registers, and an
+// application font in a face its stylesheet fetches on first paint, so the
+// canvas stays hidden while either is loading rather than flashing a fallback
 // typeface on air. A font that fails shows its fallback, as the Feature Match
 // Overlay does: a blank graphic is worse on air than the wrong face.
-const { fontsReady, fontsFailed, fontSources } = useGraphicAssetFontFaces(
+const libraryFonts = useGraphicAssetFontFaces(
 	indexedGraphicAssetReferences,
 	contentUrl,
 	contentUrlsSettled,
+);
+const { fontSources } = libraryFonts;
+const { fontsReady, fontsFailed } = combineFontFaceStates(
+	libraryFonts,
+	useApplicationFontFaces(() => graphicItemsApplicationFonts(paintedGraphics.value.flatMap(graphic => graphic.items))),
 );
 
 // A Take cannot wait on one output, whose animation phases follow the shared

@@ -11,7 +11,11 @@ import {
 	createInitialBroadcastGraphicsLiveState,
 } from '~~/shared/modules/broadcast-graphics-live-session';
 import { addGraphicGroupChild, addGraphicItem, DEFAULT_GRAPHIC_TYPOGRAPHY, squareShapeGeometry } from '~~/shared/modules/graphics';
+import { applicationGraphicFont } from '~~/shared/types/graphics';
+import { deferred } from '~~/test/helpers/deferred';
+import { graphic, text } from '~~/test/helpers/graphicsComposition';
 import { liveSessionSelectors } from '~~/test/nuxt/helpers/broadcastGraphicsLiveSessionReads';
+import { stubDocumentFonts } from '~~/test/nuxt/helpers/fontFaces';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
 import Display from '~/components/Screen/Modes/BroadcastGraphics/Display.vue';
 import { GRAPHICS_PREVIEW_READY_MESSAGE, GRAPHICS_PREVIEW_STATE_MESSAGE } from '~/modules/graphics/previewMessages';
@@ -1411,6 +1415,37 @@ describe('broadcastGraphicsDisplay', () => {
 				]);
 			});
 		});
+	});
+
+	// An application font ships as CSS `@font-face`, which swaps in late on a cold cache.
+	it('hides the canvas until the application face its text paints has loaded', async () => {
+		const load = deferred<unknown>();
+		const fonts = stubDocumentFonts(async () => load.promise);
+		mockScreen.value = screenWithStack([
+			graphic('lower-third', [
+				text('name-line', {
+					typography: {
+						...DEFAULT_GRAPHIC_TYPOGRAPHY,
+						font: applicationGraphicFont('poppins'),
+					},
+				}),
+			]),
+		]);
+
+		const wrapper = await mountComponent();
+		await flushPromises();
+		await nextTick();
+
+		const canvas = wrapper.get('.graphics-compositor-canvas');
+		expect(fonts.load).toHaveBeenCalledWith(`normal ${DEFAULT_GRAPHIC_TYPOGRAPHY.fontWeight} 1em "Poppins"`);
+		expect(canvas.attributes('data-font-ready')).toBe('false');
+		expect((canvas.element as HTMLElement).style.visibility).toBe('hidden');
+
+		load.resolve([{}]);
+		await vi.waitFor(() => {
+			expect(wrapper.get('.graphics-compositor-canvas').attributes('data-font-ready')).toBe('true');
+		});
+		expect((wrapper.get('.graphics-compositor-canvas').element as HTMLElement).style.visibility).toBe('');
 	});
 
 	it('composes a Graphic Group and its children in one stacking context', async () => {

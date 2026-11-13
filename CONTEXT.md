@@ -320,7 +320,7 @@ The client-side module owning the invariant "a Screen Output shows its Screen Mo
 _Avoid_: mode refresh hook, per-mode live sync.
 
 **Rendering Readiness**:
-The client-side invariant "program holds what it shows until what replaces it is ready." A Screen Mode rendering is ready once its display has declared its data settled, its Theme fonts have loaded or failed, and every image, video and pending part inside it has loaded or failed. A mode change renders the incoming mode hidden and cuts to it once ready, and a change within a mode that brings new images swaps in once they have loaded; a rendering that never settles is shown after a timeout (ADR-0053).
+The client-side invariant "program holds what it shows until what replaces it is ready." A Screen Mode rendering is ready once its display has declared its data settled, its fonts (library and application) have loaded or failed, and every image, video and pending part inside it has loaded or failed. A mode change renders the incoming mode hidden and cuts to it once ready, and a change within a mode that brings new images swaps in once they have loaded; a rendering that never settles is shown after a timeout (ADR-0053).
 _Avoid_: preload, loading state, when naming the invariant.
 
 **Guarded Sequence**:
