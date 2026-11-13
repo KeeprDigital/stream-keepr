@@ -259,9 +259,10 @@ export function broadcastDeckListService() {
 			: undefined;
 	};
 
-	const findEventGame = async (eventId: number): Promise<'mtg' | 'op' | undefined> => {
-		const [event] = await db.select({ game: events.game }).from(events).where(eq(events.id, eventId)).limit(1);
-		return event?.game;
+	/** What decides whether the Event holds Broadcast Deck Lists: its Card Game and Variant; none when it does not exist. */
+	const findEventKindFields = async (eventId: number) => {
+		const [event] = await db.select({ game: events.game, variant: events.variant }).from(events).where(eq(events.id, eventId)).limit(1);
+		return event;
 	};
 
 	const sourceIsSelectable = async (id: number, eventId: number): Promise<boolean> => {
@@ -441,7 +442,7 @@ export function broadcastDeckListService() {
 	return {
 		findByEventId,
 		findById,
-		findEventGame,
+		findEventKindFields,
 		sourceIsSelectable,
 		create,
 		update,

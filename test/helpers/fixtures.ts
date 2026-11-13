@@ -46,6 +46,10 @@ export function createMockEvent(overrides?: Partial<DbEvent>): DbEvent {
 		id: 1,
 		name: 'Test Event',
 		game: 'mtg',
+		// Only a Magic: The Gathering Event has a Variant (ADR-0087).
+		variant: (overrides?.game ?? 'mtg') === 'mtg'
+			? 'two-player'
+			: null,
 		featureMatchOrientation: 'horizontal',
 		cardTimeout: 0,
 		numFeatureMatches: 1,

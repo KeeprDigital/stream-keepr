@@ -487,8 +487,9 @@ describe('a write to an Event that holds no Broadcast Deck Lists', () => {
 			write: 'a delete',
 			attempt: (eventId: number, listId: number) => write.deleteBroadcastDeckList({ eventId, listId, expectedRevision: 1 }),
 		},
-	])('refuses $write in a One Piece Card Game Event before resolving or storing anything', async ({ attempt }) => {
-		const eventId = await stageEvent({ game: 'op' });
+	// Which Events hold Broadcast Deck Lists is `holdsBroadcastDeckLists`'s; a Commander Event holds none (ADR-0087).
+	])('refuses $write in an Event that holds no Broadcast Deck Lists before resolving or storing anything', async ({ attempt }) => {
+		const eventId = await stageEvent({ game: 'mtg', variant: 'commander' });
 		const [list] = await db.insert(schema.broadcastDeckLists)
 			.values({
 				eventId,
@@ -500,7 +501,7 @@ describe('a write to an Event that holds no Broadcast Deck Lists', () => {
 
 		await expect(attempt(eventId, list!.id)).rejects.toMatchObject({
 			statusCode: 400,
-			message: 'Broadcast Deck Lists are only supported for MTG Events',
+			message: 'Broadcast Deck Lists are only supported for Two-Player Magic: The Gathering Events',
 		});
 
 		expect(scryfall.asked).toBe(0);

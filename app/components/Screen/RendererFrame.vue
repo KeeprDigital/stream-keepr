@@ -184,7 +184,12 @@ watch([
 			class="screen-renderer__background"
 			:layers="modeBackgroundLayers"
 		/>
-		<component :is="displayComponent" :style="themeFontStyle" />
+		<!-- The hide is this wrapper's rather than a style passed to the display, so it
+			reaches whatever a display renders: one built on `ScreenModeBase` has no root
+			element to take a style. -->
+		<div class="screen-renderer__display" :style="themeFontStyle">
+			<component :is="displayComponent" />
+		</div>
 	</div>
 </template>
 
@@ -197,6 +202,12 @@ watch([
 	container-type: size;
 	margin: 0;
 	padding: 0;
+}
+
+/* No box of its own: what the display renders is laid out, sized and aligned
+   as the container's own children. */
+.screen-renderer__display {
+	display: contents;
 }
 
 /* Behind the in-flow mode content; the container isolates, so this stays

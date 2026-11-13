@@ -102,11 +102,12 @@ describe('an Event update', () => {
 		expect(ably.published).toEqual([]);
 	});
 
+	// Which Events hold Broadcast Deck Lists is `holdsBroadcastDeckLists`'s; the write stores or refuses by it.
 	it.each([
-		{ game: 'mtg', enabled: true },
-		{ game: 'op', enabled: false },
-	] as const)('enables Broadcast Deck Lists for a $game Event: $enabled', async ({ game, enabled }) => {
-		const eventId = await stageEvent({ game });
+		{ variant: 'two-player', enabled: true },
+		{ variant: 'commander', enabled: false },
+	] as const)('enables Broadcast Deck Lists for a Magic: The Gathering Event of Variant $variant: $enabled', async ({ variant, enabled }) => {
+		const eventId = await stageEvent({ game: 'mtg', variant });
 
 		const enabling = eventWriteModule().updateEvent({
 			eventId,
@@ -119,7 +120,7 @@ describe('an Event update', () => {
 		else {
 			await expect(enabling).rejects.toMatchObject({
 				statusCode: 400,
-				message: 'Broadcast Deck Lists can only be enabled for MTG Events',
+				message: 'Broadcast Deck Lists can only be enabled for Two-Player Magic: The Gathering Events',
 			});
 		}
 		expect((await stored(eventId))?.broadcastDeckListsEnabled).toBe(enabled);

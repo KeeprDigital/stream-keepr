@@ -2,11 +2,11 @@ declare module '#app' {
 	interface PageMeta {
 		title?: string;
 		/**
-		 * The Card Games whose Events this page is offered to; every Card Game when
-		 * left out. A nested page inherits its parent's. `event.global` sends an
-		 * Event of any other Card Game to its overview (ADR-0057).
+		 * The kinds of Event this page is offered to; every Event when left out.
+		 * A nested page inherits its parent's. `event.global` sends an Event of
+		 * any other kind to its overview (ADR-0057, ADR-0087).
 		 */
-		cardGames?: readonly import('~~/shared/types/enums').Game[];
+		offeredTo?: readonly import('~~/shared/config/games').EventKind[];
 	}
 
 	interface NuxtApp {

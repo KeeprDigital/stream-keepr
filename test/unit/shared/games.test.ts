@@ -1,31 +1,44 @@
 import { describe, expect, it } from 'vitest';
 import {
-	EVENT_PAGE_CARD_GAMES,
-	EVERY_CARD_GAME,
+	EVENT_PAGE_OFFERED_TO,
+	eventKind,
+	EVENTS_WITH_PLAYERS,
+	EVERY_EVENT,
 	GAME_CONFIGS,
 	getCounterTypeConfigs,
-	getGameDefaults,
+	getMatchFormatDefaults,
 	getMetagameRules,
 	getPlayerIdentityLabel,
 	getStartingHandSize,
 	getStartingTurnNumber,
-	isOfferedToCardGame,
-	MTG_ONLY,
+	holdsBroadcastDeckLists,
+	isOfferedToEvent,
+	TWO_PLAYER_MAGIC_ONLY,
 } from '~~/shared/config/games';
 import { DEFAULT_FEATURE_MATCH_DEFAULTS } from '~~/shared/types/featureMatchDefaults';
 
 describe('game config lookups', () => {
 	it('hands out a copy of a game\'s defaults, so editing it leaves the config alone', () => {
-		const defaults = getGameDefaults('mtg');
+		const defaults = getMatchFormatDefaults('mtg-two-player');
 		defaults.startingLife = 1;
 
 		expect(GAME_CONFIGS.mtg.defaults.startingLife).not.toBe(1);
 	});
 
+	// A Commander game is one game at 40 life with no round clock (ADR-0087).
+	it('seeds a Commander Event at 40 life, untimed, as a single game with no extra turns', () => {
+		expect(getMatchFormatDefaults('mtg-commander')).toMatchObject({
+			startingLife: 40,
+			clockType: 'untimed',
+			bestOf: 1,
+			extraTurnsEnabled: false,
+		});
+	});
+
 	it('falls back to neutral values for a game with no config', () => {
 		const unknown = 'retired' as never;
 
-		expect(getGameDefaults(unknown)).toEqual(DEFAULT_FEATURE_MATCH_DEFAULTS);
+		expect(getMatchFormatDefaults(unknown)).toEqual(DEFAULT_FEATURE_MATCH_DEFAULTS);
 		expect(getCounterTypeConfigs(unknown)).toEqual([]);
 		expect(getStartingTurnNumber(unknown)).toBe(0);
 		expect(getStartingHandSize(unknown)).toBe(0);
@@ -33,32 +46,73 @@ describe('game config lookups', () => {
 	});
 });
 
-describe('card Game support', () => {
-	// Before the Event's Card Game is known, only what every Card Game supports is offered.
+describe('the kind of Event', () => {
+	// A Commander Event is a Magic: The Gathering Event of the Commander Variant (ADR-0087).
 	it.each([
-		[MTG_ONLY, 'mtg', true],
-		[MTG_ONLY, 'op', false],
-		[MTG_ONLY, undefined, false],
-		[EVERY_CARD_GAME, 'op', true],
-		[EVERY_CARD_GAME, undefined, true],
-	] as const)('offers what declares %j to a %s Event: %s', (cardGames, game, offered) => {
-		expect(isOfferedToCardGame(cardGames, game)).toBe(offered);
+		['mtg', 'two-player', 'mtg-two-player'],
+		['mtg', 'commander', 'mtg-commander'],
+		['op', null, 'op'],
+	] as const)('a %s Event of Variant %s is of kind %s', (game, variant, kind) => {
+		expect(eventKind({ game, variant })).toBe(kind);
 	});
 });
 
-describe('the Event pages each Card Game is offered', () => {
-	// A One Piece Card Game Event has Players and a TCG+ Import Sync (ADR-0074); what needs Rounds, Matches or Melee stays Magic's.
-	it('keeps exactly the pages needing Rounds, Matches or Melee from a One Piece Event, and none from a Magic one', () => {
-		const pages = Object.keys(EVENT_PAGE_CARD_GAMES) as (keyof typeof EVENT_PAGE_CARD_GAMES)[];
+// Only a Two-Player Magic: The Gathering Event holds Broadcast Deck Lists (ADR-0087).
+describe('the Events that hold Broadcast Deck Lists', () => {
+	it.each([
+		['mtg', 'two-player', true],
+		['mtg', 'commander', false],
+		['op', null, false],
+	] as const)('a %s Event of Variant %s holds them: %s', (game, variant, holds) => {
+		expect(holdsBroadcastDeckLists({ game, variant })).toBe(holds);
+	});
+});
 
-		expect(pages.filter(page => !isOfferedToCardGame(EVENT_PAGE_CARD_GAMES[page], 'op')))
-			.toEqual([
+describe('what an Event is offered', () => {
+	// Before the Event is known, only what every Event is offered is.
+	it.each([
+		[TWO_PLAYER_MAGIC_ONLY, 'mtg-two-player', true],
+		[TWO_PLAYER_MAGIC_ONLY, 'op', false],
+		[TWO_PLAYER_MAGIC_ONLY, undefined, false],
+		[EVENTS_WITH_PLAYERS, 'op', true],
+		[EVENTS_WITH_PLAYERS, 'mtg-commander', false],
+		[EVERY_EVENT, 'mtg-commander', true],
+		[EVERY_EVENT, undefined, true],
+	] as const)('offers what declares %j to a %s Event: %s', (offeredTo, kind, offered) => {
+		expect(isOfferedToEvent(offeredTo, kind)).toBe(offered);
+	});
+});
+
+describe('the Event pages each kind of Event is offered', () => {
+	// A One Piece Card Game Event lacks Rounds, Matches and Melee (ADR-0057, ADR-0074); a
+	// Commander Event lacks Players too, so it keeps only the Cards page (ADR-0087).
+	it.each([
+		['mtg-two-player', []],
+		[
+			'op',
+			[
 				'matches',
 				'eventStructure',
 				'archetypeReview',
 				'integrations',
-			]);
-		expect(pages.filter(page => !isOfferedToCardGame(EVENT_PAGE_CARD_GAMES[page], 'mtg'))).toEqual([]);
+			],
+		],
+		[
+			'mtg-commander',
+			[
+				'players',
+				'matches',
+				'eventStructure',
+				'sync',
+				'metagame',
+				'archetypeReview',
+				'integrations',
+			],
+		],
+	] as const)('withholds from a %s Event the pages %j', (kind, withheld) => {
+		const pages = Object.keys(EVENT_PAGE_OFFERED_TO) as (keyof typeof EVENT_PAGE_OFFERED_TO)[];
+
+		expect(pages.filter(page => !isOfferedToEvent(EVENT_PAGE_OFFERED_TO[page], kind))).toEqual(withheld);
 	});
 });
 

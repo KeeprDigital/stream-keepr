@@ -170,9 +170,13 @@ function onAfterLeave() {
 </template>
 
 <style scoped>
+/* Not `visibility`: a Screen host hiding its display must hide this at once,
+   and `all` would hold the card on air for the duration. */
 .card-container {
 	display: grid;
-	transition: all 0.6s ease-in-out;
+	transition:
+		all 0.6s ease-in-out,
+		visibility 0s;
 	box-sizing: border-box;
 }
 

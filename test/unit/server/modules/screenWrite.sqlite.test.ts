@@ -315,6 +315,67 @@ describe('creating a Screen', () => {
 	});
 });
 
+// A Commander Event has no Rounds or standings, so it is not offered Standings (ADR-0087).
+describe('a write putting a Screen into a Screen Mode its Event is not offered', () => {
+	async function stageCommanderEvent() {
+		const [commander] = await db.insert(schema.events)
+			.values({
+				name: 'Commander',
+				game: 'mtg',
+				variant: 'commander',
+				featureMatchOrientation: 'horizontal',
+			})
+			.returning({ id: schema.events.id });
+		return commander!.id;
+	}
+	const refusal = {
+		statusCode: 422,
+		data: { code: 'SCREEN_MODE_NOT_OFFERED' },
+	};
+
+	it('refuses a create, storing nothing', async () => {
+		const commanderId = await stageCommanderEvent();
+
+		await expect(screenWriteModule().createScreen({
+			eventId: commanderId,
+			input: { name: 'Standings', slug: 'standings', currentMode: 'standings' } as never,
+			screenOutputAssetCapabilities: provideCapabilities as never,
+		})).rejects.toMatchObject(refusal);
+
+		expect(await db.select().from(schema.screens).where(eq(schema.screens.eventId, commanderId))).toEqual([]);
+		expect(capabilitiesPrepared).toBe(0);
+	});
+
+	it('refuses an update that changes the mode, leaving the Screen as it was', async () => {
+		const commanderId = await stageCommanderEvent();
+		const screen = await stageScreen({ eventId: commanderId, currentMode: 'background' });
+
+		await expect(screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
+			eventId: commanderId,
+			screenId: screen.id,
+			input: { currentMode: 'standings', stateVersion: screen.stateVersion } as never,
+		})).rejects.toMatchObject(refusal);
+
+		expect(await stored(screen.id)).toMatchObject({ currentMode: 'background', stateVersion: screen.stateVersion });
+	});
+
+	// A Screen stored in such a mode before the rule keeps saving: only a change of mode is judged.
+	it('stores an update that leaves a Screen in the unoffered mode it already shows', async () => {
+		const commanderId = await stageCommanderEvent();
+		const screen = await stageScreen({ eventId: commanderId, currentMode: 'standings' });
+
+		await screenWriteModule().updateScreen({
+			authoringSessionId: undefined,
+			eventId: commanderId,
+			screenId: screen.id,
+			input: { name: 'Renamed', currentMode: 'standings', stateVersion: screen.stateVersion } as never,
+		});
+
+		expect(await stored(screen.id)).toMatchObject({ name: 'Renamed', currentMode: 'standings' });
+	});
+});
+
 describe('updating a Screen', () => {
 	it('stores the change on the version it read, and announces the Screen under the writer\'s origin', async () => {
 		const screen = await stageScreen();

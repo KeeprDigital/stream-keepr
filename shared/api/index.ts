@@ -95,6 +95,7 @@ import type {
 	RoundControlMode,
 	ScreenMode,
 	UnresolvedDeckEntryType,
+	Variant,
 } from '~~/shared/types/enums';
 import type { FeatureMatchSessionCommand, FeatureMatchSessionResponse } from '~~/shared/types/featureMatchSession';
 import type { PlayerGameData } from '~~/shared/types/game';
@@ -134,6 +135,8 @@ export interface EventListResponse {
 	id: number;
 	name: string;
 	game: Game;
+	/** A Magic: The Gathering Event's Variant; none on any other Card Game (ADR-0087). */
+	variant: Variant | null;
 	featureMatchOrientation: FeatureMatchOrientation;
 	cardTimeout: number;
 	numFeatureMatches: number;
@@ -207,6 +210,8 @@ export interface MeleeLiveResultsStatusResponse {
 export interface CreateEventInput {
 	name: string;
 	game: Game;
+	/** A Magic: The Gathering Event's Variant, Two-Player when left out; no other Card Game's Event sends one (ADR-0087). */
+	variant?: Variant;
 	featureMatchOrientation?: FeatureMatchOrientation;
 	cardTimeout?: number;
 	numFeatureMatches?: number;
@@ -239,7 +244,7 @@ export interface CreateEventInput {
 	canvasHeight?: number;
 }
 
-export type UpdateEventInput = Partial<Omit<CreateEventInput, 'game'>> & {
+export type UpdateEventInput = Partial<Omit<CreateEventInput, 'game' | 'variant'>> & {
 	commentator1TalentId?: number | null;
 	commentator2TalentId?: number | null;
 	/** Event Presentation Settings: no Theme is the Default Theme. */

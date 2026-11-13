@@ -27,6 +27,8 @@ import {
 	validateScreenModeConfigReferences,
 	validateScreenModeConfigsReferences,
 } from '~~/server/utils/routeGuards';
+import { eventKind, isOfferedToEvent } from '~~/shared/config/games';
+import { SCREEN_MODES } from '~~/shared/screenModes';
 import { parseScreenThemeOverrideWrite, SCREEN_THEME_OVERRIDE_REFUSALS } from '~~/shared/screenThemeOverrides';
 import { storedThemeTokenGraphicAssetReferences } from '~~/shared/themeAssetReferences';
 import { mergeScreenModeConfig, resolveScreenModeConfig } from '~~/shared/types/screenConfig';
@@ -240,6 +242,31 @@ export function editedOnAirBroadcastGraphic(
 		|| !sameJson(withoutChannel(after[index]), withoutChannel(graphic)));
 }
 
+/** What a Screen write reads of its Event to decide what the Event is offered. */
+async function readEventKindFields(eventId: number) {
+	return await db.query.events.findFirst({
+		where: eq(events.id, eventId),
+		columns: { game: true, variant: true },
+	});
+}
+type EventKindFields = Awaited<ReturnType<typeof readEventKindFields>>;
+
+/**
+ * Refuses to put a Screen into a Screen Mode its Event is not offered, such as
+ * Standings on a Commander Event (ADR-0087). Asked only of a write that sets a
+ * mode the Screen does not already show, so a Screen stored in such a mode
+ * keeps saving.
+ */
+function requireScreenModeOffered(event: EventKindFields, mode: ScreenMode): void {
+	if (event && !isOfferedToEvent(SCREEN_MODES[mode].offeredTo, eventKind(event))) {
+		throw createError({
+			statusCode: 422,
+			message: `${SCREEN_MODES[mode].label} is not offered to this Event`,
+			data: { code: 'SCREEN_MODE_NOT_OFFERED' },
+		});
+	}
+}
+
 /**
  * The `modeConfigs` a Screen entering Deck List mode on a One Piece Card Game
  * Event is written with, its Deck Source on a Feature Match Slot side; or
@@ -253,15 +280,12 @@ export function editedOnAirBroadcastGraphic(
  */
 async function withOpDeckSourceDefault(
 	eventId: number,
+	event: EventKindFields,
 	modeConfigs: ModeConfigsMap | null | undefined,
 ): Promise<ModeConfigsMap | undefined> {
 	const deckSource = modeConfigs?.deck?.deckSource;
 	if (deckSource && !(deckSource.type === 'player' && deckSource.playerId === null))
 		return undefined;
-	const event = await db.query.events.findFirst({
-		where: eq(events.id, eventId),
-		columns: { game: true },
-	});
 	if (event?.game !== 'op')
 		return undefined;
 	return {
@@ -303,6 +327,12 @@ export function screenWriteModule() {
 	}
 
 	async function createScreen({ eventId, input, originConnectionId, screenOutputAssetCapabilities }: CreateScreenParams): Promise<ScreenResponse> {
+		// Read only by a write that names a mode: what the Event is offered, and an OP Deck List Screen's default.
+		const event = input.currentMode
+			? await readEventKindFields(eventId)
+			: undefined;
+		if (input.currentMode)
+			requireScreenModeOffered(event, input.currentMode);
 		await validateScreenModeConfigsReferences(eventId, input.modeConfigs);
 		rejectUnindexedGraphicAssetReferencesOnCreate(input.modeConfigs);
 
@@ -318,7 +348,7 @@ export function screenWriteModule() {
 		// slug or its Graphic Asset References never reaches for a signing key it
 		// was not going to use.
 		const withDeckSource = input.currentMode === 'deck'
-			? await withOpDeckSourceDefault(eventId, input.modeConfigs)
+			? await withOpDeckSourceDefault(eventId, event, input.modeConfigs)
 			: undefined;
 		const preparedCapability = await screenOutputAssetCapabilities().prepare();
 		const newScreen = await screens.create(
@@ -341,6 +371,12 @@ export function screenWriteModule() {
 		const existingScreen = await screens.findById(screenId, eventId);
 		if (!existingScreen)
 			throw createError({ statusCode: 404, message: 'Screen not found' });
+		// Read only by a write that changes the mode: what the Event is offered, and an OP Deck List Screen's default.
+		const event = data.currentMode && data.currentMode !== existingScreen.currentMode
+			? await readEventKindFields(eventId)
+			: undefined;
+		if (data.currentMode && data.currentMode !== existingScreen.currentMode)
+			requireScreenModeOffered(event, data.currentMode);
 
 		// Decided against the row just read, and the write is versioned on the
 		// client's `stateVersion`: a commit that succeeds is one against this very
@@ -387,6 +423,7 @@ export function screenWriteModule() {
 		const withDeckSource = data.currentMode === 'deck' && existingScreen.currentMode !== 'deck'
 			? await withOpDeckSourceDefault(
 					eventId,
+					event,
 					data.modeConfigs !== undefined
 						? data.modeConfigs
 						: existingScreen.modeConfigs,

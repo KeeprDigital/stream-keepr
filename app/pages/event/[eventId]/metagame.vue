@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { ConversionTarget } from '~~/shared/conversionTarget';
 import type { NavigationMenuItem } from '#ui/types';
-import { EVENT_PAGE_CARD_GAMES, getMetagameRules } from '~~/shared/config/games';
+import { EVENT_PAGE_OFFERED_TO, getMetagameRules } from '~~/shared/config/games';
 import { useConsumedEventData } from '~/modules/event-data/resync';
 
 definePageMeta({
-	cardGames: EVENT_PAGE_CARD_GAMES.metagame,
+	offeredTo: EVENT_PAGE_OFFERED_TO.metagame,
 	title: 'Metagame',
 	layout: false,
 });

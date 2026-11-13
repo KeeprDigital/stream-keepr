@@ -11,6 +11,7 @@ import {
 	broadcastDeckListService,
 } from '~~/server/services/broadcastDeckList';
 import { eventCardNameOverrideService } from '~~/server/services/eventCardNameOverride';
+import { holdsBroadcastDeckLists } from '~~/shared/config/games';
 import { BROADCAST_DECK_LIST_IN_USE, BROADCAST_DECK_LIST_REVISION_CONFLICT } from '~~/shared/types/broadcastDeckList';
 
 interface BaseWriteParams {
@@ -67,14 +68,15 @@ export function broadcastDeckListWriteModule() {
 	const lists = broadcastDeckListService();
 	const publication = eventDataPublicationModule();
 
-	async function requireMtgEvent(eventId: number) {
-		const game = await lists.findEventGame(eventId);
-		if (game === undefined)
+	/** Only a Two-Player Magic: The Gathering Event holds Broadcast Deck Lists (ADR-0087). */
+	async function requireEventHoldsBroadcastDeckLists(eventId: number) {
+		const event = await lists.findEventKindFields(eventId);
+		if (event === undefined)
 			throw createError({ statusCode: 404, message: 'Event not found' });
-		if (game !== 'mtg') {
+		if (!holdsBroadcastDeckLists(event)) {
 			throw createError({
 				statusCode: 400,
-				message: 'Broadcast Deck Lists are only supported for MTG Events',
+				message: 'Broadcast Deck Lists are only supported for Two-Player Magic: The Gathering Events',
 			});
 		}
 	}
@@ -108,7 +110,7 @@ export function broadcastDeckListWriteModule() {
 	}
 
 	async function createBroadcastDeckList({ eventId, input, originConnectionId }: CreateParams) {
-		await requireMtgEvent(eventId);
+		await requireEventHoldsBroadcastDeckLists(eventId);
 		const document = await resolveSource(eventId, input.sourceText);
 		try {
 			const created = await lists.create(eventId, input, document);
@@ -126,7 +128,7 @@ export function broadcastDeckListWriteModule() {
 	}
 
 	async function updateBroadcastDeckList({ eventId, listId, input, originConnectionId }: UpdateParams) {
-		await requireMtgEvent(eventId);
+		await requireEventHoldsBroadcastDeckLists(eventId);
 		const document = input.sourceText === undefined
 			? undefined
 			: await resolveSource(eventId, input.sourceText);
@@ -153,7 +155,7 @@ export function broadcastDeckListWriteModule() {
 	}
 
 	async function deleteBroadcastDeckList({ eventId, listId, expectedRevision, originConnectionId }: DeleteParams) {
-		await requireMtgEvent(eventId);
+		await requireEventHoldsBroadcastDeckLists(eventId);
 		const result = await lists.remove(listId, eventId, expectedRevision);
 		if (result.status === 'missing')
 			throw missingListError();

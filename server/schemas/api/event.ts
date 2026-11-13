@@ -2,9 +2,10 @@ import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { events } from '~~/server/db/schema';
 import { eventIdParamSchema } from '~~/server/schemas/api/eventId';
+import { cardGameHasVariant, holdsBroadcastDeckLists } from '~~/shared/config/games';
 import { conversionTargetShape, isConversionTargetInBounds } from '~~/shared/conversionTarget';
 import { EVENT_CANVAS_SIDE_BOUNDS } from '~~/shared/eventCanvas';
-import { FEATURE_MATCH_ORIENTATION_VALUES, GAME_VALUES } from '~~/shared/types/enums';
+import { FEATURE_MATCH_ORIENTATION_VALUES, GAME_VALUES, VARIANT_VALUES } from '~~/shared/types/enums';
 import { COUNT_UP_LIMIT_MINUTES_MAX, COUNT_UP_LIMIT_MINUTES_MIN } from '~~/shared/utils/clock';
 
 const eventCanvasSideSchema = z.number().int().min(EVENT_CANVAS_SIDE_BOUNDS.min).max(EVENT_CANVAS_SIDE_BOUNDS.max);
@@ -53,6 +54,8 @@ const SERVER_MANAGED_OMIT = {
 	meleeLiveResultsStopReason: true,
 } as const;
 
+export const BROADCAST_DECK_LISTS_REFUSAL = 'Broadcast Deck Lists can only be enabled for Two-Player Magic: The Gathering Events';
+
 // CREATE
 export const createEventSchema = createInsertSchema(events)
 	.omit({
@@ -70,16 +73,32 @@ export const createEventSchema = createInsertSchema(events)
 	.extend({
 		...eventFieldConstraints,
 		game: z.enum(GAME_VALUES),
+		variant: z.enum(VARIANT_VALUES).optional(),
 		featureMatchOrientation: z.enum(FEATURE_MATCH_ORIENTATION_VALUES).optional(),
 	})
 	.strict()
 	.refine(
-		input => input.broadcastDeckListsEnabled !== true || input.game === 'mtg',
+		input => cardGameHasVariant(input.game) || input.variant === undefined,
 		{
-			message: 'Broadcast Deck Lists can only be enabled for MTG Events',
+			message: 'Only a Magic: The Gathering Event has a Variant',
+			path: ['variant'],
+		},
+	)
+	.refine(
+		input => input.broadcastDeckListsEnabled !== true || holdsBroadcastDeckLists(input),
+		{
+			message: BROADCAST_DECK_LISTS_REFUSAL,
 			path: ['broadcastDeckListsEnabled'],
 		},
-	);
+	)
+	// A Magic: The Gathering Event is Two-Player unless it says Commander, and no
+	// other Card Game's Event has a Variant, so what is stored is never ambiguous (ADR-0087).
+	.transform(input => ({
+		...input,
+		variant: cardGameHasVariant(input.game)
+			? input.variant ?? 'two-player'
+			: null,
+	}));
 
 // UPDATE — all fields optional for partial updates
 export const updateEventSchema = createUpdateSchema(events)
@@ -89,6 +108,8 @@ export const updateEventSchema = createUpdateSchema(events)
 		// Feature Match Sessions under a different ruleset. Create a new Event
 		// for an explicit conversion instead.
 		game: true,
+		// Its Variant decides what the Event holds, as its Card Game does (ADR-0087).
+		variant: true,
 	})
 	.extend({
 		...eventFieldConstraints,
