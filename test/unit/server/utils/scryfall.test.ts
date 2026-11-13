@@ -128,7 +128,7 @@ describe('batchLookupScryfallPrintings', () => {
 		expect(cards.map(card => card?.id)).toEqual(catalogue.toReversed().map(card => card.id));
 	});
 
-	it('answers a printing by its set and collector number whatever their case, and none for one Scryfall does not know', async () => {
+	it('answers a printing by its set, in either case, and its collector number, and none for one Scryfall does not know', async () => {
 		vi.mocked(fetch).mockImplementation(createScryfallFake([
 			{
 				id: 'garruks-uprising',
@@ -140,7 +140,7 @@ describe('batchLookupScryfallPrintings', () => {
 
 		const cards = await batchLookupScryfallPrintings([
 			{ setCode: 'ECL', collectorNumber: '9999' },
-			{ setCode: 'PLST', collectorNumber: 'm21-186' },
+			{ setCode: 'PLST', collectorNumber: 'M21-186' },
 		]);
 
 		expect(cards).toEqual([

@@ -19,6 +19,7 @@ import {
 import { featureMatchSlotWriteModule } from '~~/server/modules/feature-match-slot-write';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { featureMatchDeckListService } from '~~/server/services/featureMatchDeckList';
+import { SEAT_DATA_KEYS } from '~~/server/services/featureMatchSlotCommander';
 import { runCompensation } from '~~/server/utils/errors';
 import { eventKind } from '~~/shared/config/games';
 import { COMMANDER_DECK_LIST_INVALID } from '~~/shared/types/featureMatchDeckList';
@@ -138,7 +139,7 @@ export function commanderDeckListModule() {
 		];
 		if (confirmed.length === 0) {
 			throw refused([
-				{ code: 'NO_COMMANDER', message: 'Confirm one or two Commanders before saving' },
+				{ code: 'NO_COMMANDER_CONFIRMED', message: 'Confirm one or two Commanders before saving' },
 			]);
 		}
 		const seatCommanders = confirmed.map((scryfallId) => {
@@ -156,11 +157,11 @@ export function commanderDeckListModule() {
 		// Read after the lookup, so an edit to the Seat made meanwhile is kept.
 		const slot = await slots.findById(slotId, eventId);
 		const key = SLOT_SEAT_DATA_KEY[seat];
+		// Provenance is never written by an operator save; a Commander Slot carries none.
+		const { externalId: _externalId, externalSource: _externalSource, ...current } = slot?.[key] ?? {};
 		// A paste replaces the Commanders picked by search, and keeps the Seat's player.
 		const seatData: ManualPlayerSlotData = {
-			name: slot?.[key]?.name,
-			pronouns: slot?.[key]?.pronouns,
-			lgs: slot?.[key]?.lgs,
+			...current,
 			gameData: {
 				type: 'mtg',
 				commanders: seatCommanders,
@@ -182,7 +183,7 @@ export function commanderDeckListModule() {
 			throw error;
 		}
 		// A save of the same Seat that started first but landed later leaves its Deck List held by nothing.
-		await deckLists.removeUnheldBefore(slotId, deckListId, Object.values(SLOT_SEAT_DATA_KEY).map(seatKey => featureMatch[seatKey]));
+		await deckLists.removeUnheldBefore(slotId, deckListId, SEAT_DATA_KEYS.map(seatKey => featureMatch[seatKey]));
 
 		const saved = await deckLists.findCommanderById(deckListId, slotId, eventId);
 		if (!saved)

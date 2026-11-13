@@ -96,32 +96,24 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 		]);
 	});
 
-	it('refuses a line naming a printing that does not exist, on the preview and the save', async () => {
-		const text = '1 Integration Commander (IT2) 1\n1 Integration Land (IT2) 999';
-
-		const preview = await $fetch(route('/preview'), {
-			method: 'POST',
-			body: { text },
-		});
+	// The refusal's lines reach the client in the error's `data`, which only the running server shapes.
+	it('answers a refused save with the lines at fault', async () => {
 		const save = await $fetchRaw(route(), {
 			method: 'POST',
 			body: {
 				seat: 'player1',
-				text,
+				text: '1 Integration Commander (IT2) 1\n1 Integration Land (IT2) 999',
 				commanders: [COMMANDER],
 			},
 		});
 
-		const refusal = { code: 'INVALID_PRINTING_HINT', lineNumber: 2, sourceText: '1 Integration Land (IT2) 999' };
-		expect(preview).toMatchObject({
-			ok: false,
-			errors: [refusal],
-		});
 		expect(save.status).toBe(422);
 		expect(save._data).toMatchObject({
 			data: {
 				code: 'COMMANDER_DECK_LIST_INVALID',
-				errors: [refusal],
+				errors: [
+					{ code: 'INVALID_PRINTING_HINT', lineNumber: 2, sourceText: '1 Integration Land (IT2) 999' },
+				],
 			},
 		});
 	});

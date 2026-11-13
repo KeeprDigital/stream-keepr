@@ -589,7 +589,7 @@ export interface ScryfallPrintingRequest {
 }
 
 function printingKey(setCode: string, collectorNumber: string): string {
-	return `${setCode.toLowerCase()}|${collectorNumber.toLowerCase()}`;
+	return `${setCode.toLowerCase()}|${collectorNumber}`;
 }
 
 /**

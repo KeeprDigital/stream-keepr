@@ -1,4 +1,5 @@
 import type { DbFeatureMatch } from '~~/server/db/schema';
+import type { CommanderSeatOptions } from '~~/server/services/featureMatchSlotCommander';
 import type { CreateFeatureMatchInput, FeatureMatchResponse, ManualPlayerSlotData, PlayerSlotData, UpdateFeatureMatchInput, UpdatePlayerInput } from '~~/shared/api';
 import type { EventKind } from '~~/shared/config/games';
 import type { Seat } from '~~/shared/types/enums';
@@ -11,7 +12,7 @@ import { opCardCatalogueModule } from '~~/server/modules/op-card-catalogue';
 import { playerUpdateModule } from '~~/server/modules/player-update';
 import { featureMatchService } from '~~/server/services/featureMatch';
 import { deckListReferenceOf, featureMatchDeckListService } from '~~/server/services/featureMatchDeckList';
-import { withCommanderSeats, writesCommanderSeats } from '~~/server/services/featureMatchSlotCommander';
+import { SEAT_DATA_KEYS, withCommanderSeats, writesCommanderSeats } from '~~/server/services/featureMatchSlotCommander';
 import { linkedOpSideGameData, slotLeaderNumbers } from '~~/server/services/featureMatchSlotLeader';
 import { playerService } from '~~/server/services/player';
 import { bandaiKeeprConfig } from '~~/server/utils/bandaiKeepr';
@@ -23,8 +24,6 @@ import { SLOT_SEAT_DATA_KEY } from '~~/shared/utils/featureMatchSidePlayer';
 /** The two Seats every Slot has, either of which may link a Player. */
 const SIDE_DATA_KEYS = ['player1Data', 'player2Data'] as const;
 type SideDataKey = typeof SIDE_DATA_KEYS[number];
-/** Every Seat a Slot may hold: a Commander Slot's four (ADR-0087). */
-const SEAT_DATA_KEYS = Object.values(SLOT_SEAT_DATA_KEY);
 type SeatDataKey = typeof SEAT_DATA_KEYS[number];
 const SIDE_PLAYER_KEY = { player1Data: 'player1Id', player2Data: 'player2Id' } as const satisfies Record<SideDataKey, string>;
 /** What a setup save names when it edits or seats a Seat. */
@@ -37,7 +36,7 @@ const SEATING_KEYS = [
  * A write to a Commander Event's Slot (ADR-0087): the Event is its Slots alone,
  * so the Slot links no Player and no Match, and each Seat it names is typed.
  */
-function commanderSlotWrite(input: UpdateFeatureMatchInput, options: Parameters<typeof withCommanderSeats>[1]): UpdateFeatureMatchInput {
+function commanderSlotWrite(input: UpdateFeatureMatchInput, options: CommanderSeatOptions): UpdateFeatureMatchInput {
 	if (input.player1Id != null || input.player2Id != null || input.matchId != null)
 		throw createError({ statusCode: 400, message: 'A Commander Event\'s Slot links no Player and no Match' });
 	return withCommanderSeats(input, options);
@@ -209,11 +208,14 @@ export function featureMatchSlotWriteModule() {
 	 * Deck Lists between Seats; one naming any other Deck List, as a stale form
 	 * might, keeps what the Seat holds. Its Mainboard count is the Deck List's
 	 * own, and a Deck List two Seats name stays with the Seat that held it.
+	 * `holds` is the game data that holds one on this Event: a One Piece
+	 * Seat's, or a Commander Seat's of Magic: The Gathering cards (ADR-0087).
 	 */
 	async function settleDeckListReferences<TKey extends SeatDataKey>(
 		current: DbFeatureMatch,
 		input: UpdateFeatureMatchInput,
 		keys: readonly TKey[],
+		holds: 'op' | 'mtg',
 	): Promise<UpdateFeatureMatchInput> {
 		const named = keys
 			.map(key => deckListReferenceOf(input[key])?.id)
@@ -228,7 +230,7 @@ export function featureMatchSlotWriteModule() {
 				settled.set(key, held(key));
 				continue;
 			}
-			if (!data?.gameData)
+			if (data?.gameData?.type !== holds)
 				continue;
 			const requested = data.gameData.featureMatchDeckList;
 			settled.set(key, requested === undefined
@@ -253,7 +255,7 @@ export function featureMatchSlotWriteModule() {
 			const data = input[key];
 			const reference = settled.get(key) ?? null;
 			// A Seat that never held a Deck List and names none is left as written.
-			if (data?.gameData && (reference || data.gameData.featureMatchDeckList !== undefined)) {
+			if (data?.gameData?.type === holds && (reference || data.gameData.featureMatchDeckList !== undefined)) {
 				output[key] = {
 					...data,
 					gameData: { ...data.gameData, featureMatchDeckList: reference },
@@ -264,11 +266,13 @@ export function featureMatchSlotWriteModule() {
 	}
 
 	/**
-	 * A Commander Seat's Mainboard is every card of its Deck List but its
-	 * Commanders (ADR-0087), so each Seat the save edits has its count read
-	 * again: the save may have changed which cards those are.
+	 * While a Commander Seat holds a Deck List, its Commanders are one or two
+	 * of the list's cards (ADR-0087), and its Mainboard is every other card. So
+	 * each Seat the save edits is checked against its list, which refuses a
+	 * stale form's searched pick, and has its Mainboard counted again: the save
+	 * may have changed which cards the Commanders are.
 	 */
-	async function countCommanderMainboards(current: DbFeatureMatch, input: UpdateFeatureMatchInput): Promise<UpdateFeatureMatchInput> {
+	async function settleCommanderDeckLists(current: DbFeatureMatch, input: UpdateFeatureMatchInput): Promise<UpdateFeatureMatchInput> {
 		const edited = SEAT_DATA_KEYS.flatMap((key) => {
 			const data = input[key];
 			const reference = deckListReferenceOf(data);
@@ -283,16 +287,24 @@ export function featureMatchSlotWriteModule() {
 					]
 				: [];
 		});
-		const cards = await deckLists.commanderCardsFor(current.id, edited.map(({ reference }) => reference.id));
+		const cardsByList = await deckLists.commanderCardsFor(current.id, edited.map(({ reference }) => reference.id));
 		const output = { ...input };
 		for (const { key, data, gameData, reference } of edited) {
+			const cards = cardsByList.get(reference.id) ?? [];
+			const commanders = gameData.commanders ?? [];
+			if (commanders.length === 0 || commanders.some(commander => !cards.some(card => card.scryfallId === commander.scryfallId))) {
+				throw createError({
+					statusCode: 409,
+					message: 'A Seat holding a Deck List has one or two of its cards as its Commanders: pick them from the list, or clear the list',
+				});
+			}
 			output[key] = {
 				...data,
 				gameData: {
 					...gameData,
 					featureMatchDeckList: {
 						id: reference.id,
-						mainboardCount: commanderMainboardCount(cards.get(reference.id) ?? [], gameData.commanders ?? []),
+						mainboardCount: commanderMainboardCount(cards, commanders),
 					},
 				},
 			} satisfies ManualPlayerSlotData;
@@ -379,14 +391,14 @@ export function featureMatchSlotWriteModule() {
 		let settledInput = input;
 		if (kind === 'mtg-commander') {
 			settledInput = commanderSlotWrite(current
-				? await countCommanderMainboards(current, await settleDeckListReferences(current, input, SEAT_DATA_KEYS))
+				? await settleCommanderDeckLists(current, await settleDeckListReferences(current, input, SEAT_DATA_KEYS, 'mtg'))
 				: input, { keepsDeckList: current !== undefined });
 		}
 		else {
 			await catalogueLeaders(pickedLeaderSides(input, current));
 			if (current) {
 				await writeSeatedPlayerEdits(eventId, current, input);
-				const referenced = await settleDeckListReferences(current, input, SIDE_DATA_KEYS);
+				const referenced = await settleDeckListReferences(current, input, SIDE_DATA_KEYS, 'op');
 				settledInput = kind === 'op'
 					? await settleOpSides(eventId, current, referenced)
 					: referenced;

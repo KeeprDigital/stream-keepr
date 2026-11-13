@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Seat } from '~~/shared/types/enums';
 import type { CommanderDeckListEntry, CommanderDeckListPreview, CommanderDeckListRefusal, FeatureMatchDeckListReference } from '~~/shared/types/featureMatchDeckList';
+import type { Commander } from '~~/shared/types/game';
 import { MAX_SEAT_COMMANDERS } from '~~/shared/utils/commander';
 
 /**
@@ -14,6 +15,8 @@ const props = defineProps<{
 	slotId: number;
 	seat: Seat;
 	deckList: FeatureMatchDeckListReference | null;
+	/** The Commanders the Seat holds, which a paste of a list holding them keeps confirmed. */
+	commanders: Commander[];
 	/** While the setup form holds unsaved changes, which a save here would race. */
 	locked: boolean;
 }>();
@@ -35,7 +38,7 @@ const refusals = ref<CommanderDeckListRefusal[]>([]);
 /** The text `preview` answers; a save sends exactly what was previewed. */
 const previewedText = ref<string | null>(null);
 /** The printings confirmed as the Commanders, in the order picked. */
-const commanders = ref<string[]>([]);
+const confirmed = ref<string[]>([]);
 const previewing = ref(false);
 const saving = ref(false);
 const previewError = ref<string | null>(null);
@@ -43,16 +46,16 @@ const previewError = ref<string | null>(null);
 const cardCount = computed(() => preview.value?.entries.reduce((total, entry) => total + entry.quantity, 0) ?? 0);
 const canSave = computed(() => preview.value !== null
 	&& previewedText.value === text.value
-	&& commanders.value.length > 0);
+	&& confirmed.value.length > 0);
 
 function isCommander(entry: CommanderDeckListEntry) {
-	return commanders.value.includes(entry.scryfallId);
+	return confirmed.value.includes(entry.scryfallId);
 }
 
 function toggleCommander(entry: CommanderDeckListEntry) {
-	commanders.value = isCommander(entry)
-		? commanders.value.filter(id => id !== entry.scryfallId)
-		: [...commanders.value, entry.scryfallId];
+	confirmed.value = isCommander(entry)
+		? confirmed.value.filter(id => id !== entry.scryfallId)
+		: [...confirmed.value, entry.scryfallId];
 }
 
 function printingLabel(entry: CommanderDeckListEntry) {
@@ -66,7 +69,7 @@ function forgetPreview() {
 	preview.value = null;
 	refusals.value = [];
 	previewedText.value = null;
-	commanders.value = [];
+	confirmed.value = [];
 	previewError.value = null;
 }
 
@@ -99,7 +102,12 @@ async function runPreview() {
 	forgetPreview();
 	if (answer.ok) {
 		preview.value = answer.deckList;
-		commanders.value = [...answer.deckList.offeredCommanders];
+		// A re-paste keeps the Seat's Commanders where the list still holds them all; else the list's own offer.
+		const held = props.commanders.map(commander => commander.scryfallId);
+		const keepsHeld = held.length > 0 && held.every(id => answer.deckList.entries.some(entry => entry.scryfallId === id));
+		confirmed.value = keepsHeld
+			? held
+			: [...answer.deckList.offeredCommanders];
 		previewedText.value = submitted;
 	}
 	else {
@@ -113,7 +121,7 @@ async function save() {
 		return;
 	const submitted = text.value;
 	await runRequest(
-		() => repository.saveCommander(eventId, props.slotId, props.seat, submitted, commanders.value),
+		() => repository.saveCommander(eventId, props.slotId, props.seat, submitted, confirmed.value),
 		{
 			loadingRef: saving,
 			success: { title: 'Deck List saved', color: 'success' },
@@ -164,7 +172,7 @@ async function save() {
 				/>
 			</div>
 			<p v-if="locked" class="text-sm text-muted">
-				Save or reset this match's changes to paste a Deck List.
+				Save or reset your changes to paste a Deck List.
 			</p>
 		</div>
 	</UFormField>
@@ -214,7 +222,7 @@ async function save() {
 					<p class="text-sm">
 						Confirm the Commanders: one or two of these cards.
 					</p>
-					<p v-if="commanders.length === 0" class="text-sm text-error" data-no-commander>
+					<p v-if="confirmed.length === 0" class="text-sm text-error" data-no-commander>
 						Pick a Commander to save.
 					</p>
 					<ul class="flex max-h-72 flex-col gap-1 overflow-y-auto" aria-label="Deck List cards">
@@ -236,7 +244,7 @@ async function save() {
 								:variant="isCommander(entry) ? 'solid' : 'outline'"
 								:aria-label="`Commander: ${entry.name}`"
 								:aria-pressed="isCommander(entry)"
-								:disabled="!isCommander(entry) && commanders.length >= MAX_SEAT_COMMANDERS"
+								:disabled="!isCommander(entry) && confirmed.length >= MAX_SEAT_COMMANDERS"
 								@click="toggleCommander(entry)"
 							/>
 						</li>

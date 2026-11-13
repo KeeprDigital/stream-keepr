@@ -43,7 +43,7 @@ const deckList = computed(() => modelValue.value.featureMatchDeckList ?? null);
 /** The held Deck List's cards, each as the Commander it would be, and the list they were read from. */
 let deckListCards: { id: number; cards: Commander[] } | null = null;
 
-async function searchDeckList(id: number, text: string): Promise<Commander[]> {
+async function searchDeckList(id: number, namePart: string): Promise<Commander[]> {
 	const eventId = eventStore.eventId;
 	if (!eventId || !props.slotId)
 		return [];
@@ -54,7 +54,7 @@ async function searchDeckList(id: number, text: string): Promise<Commander[]> {
 			cards: saved.entries.map(commanderOfDeckListEntry),
 		};
 	}
-	const wanted = text.toLowerCase();
+	const wanted = namePart.toLowerCase();
 	return deckListCards.cards.filter(card =>
 		card.name.toLowerCase().includes(wanted)
 		&& !commanders.value.some(commander => commander.scryfallId === card.scryfallId));

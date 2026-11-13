@@ -90,6 +90,13 @@ describe('commander Deck List import', () => {
 		expect(result.ok && result.document.sideboardDropped).toBe(3);
 	});
 
+	// Dropped, not refused: a Sideboard line goes whether or not the line rules can read it.
+	it('drops a Sideboard line the line rules would refuse, counting the copies it leads with', async () => {
+		const deckList = await document('1 Sol Ring\nSIDEBOARD:\n2 Arbor Elf *S*\nEndurance');
+
+		expect(deckList.sideboardDropped).toBe(3);
+	});
+
 	it.each([
 		{
 			rule: 'offers both cards under a Commander heading',
@@ -132,11 +139,6 @@ describe('commander Deck List import', () => {
 			error: { lineNumber: 4, code: 'TOO_MANY_COMMANDERS', sourceText: '1 Thrasios, Triton Hero' },
 		},
 		{
-			refusal: 'a third card trailing the Sideboard',
-			source: '1 Sol Ring\nSIDEBOARD:\n1 Arbor Elf\n\n1 Tymna the Weaver\n1 Kraum, Ludevic\'s Opus\n1 Thrasios, Triton Hero',
-			error: { lineNumber: 7, code: 'TOO_MANY_COMMANDERS', sourceText: '1 Thrasios, Triton Hero' },
-		},
-		{
 			refusal: 'a section it does not read',
 			source: '1 Sol Ring\nMaybeboard\n1 Arbor Elf',
 			error: { lineNumber: 2, code: 'UNSUPPORTED_SECTION', sourceText: 'Maybeboard' },
@@ -145,11 +147,6 @@ describe('commander Deck List import', () => {
 			refusal: 'a Companion section, which a Commander deck holds no place for',
 			source: '1 Sol Ring\nCompanion\n1 Jegantha, the Wellspring',
 			error: { lineNumber: 2, code: 'UNSUPPORTED_SECTION', sourceText: 'Companion' },
-		},
-		{
-			refusal: 'a Sideboard line that breaks the line rules',
-			source: '1 Sol Ring\nSIDEBOARD:\n1 Arbor Elf *S*',
-			error: { lineNumber: 3, code: 'UNSUPPORTED_SYNTAX', sourceText: '1 Arbor Elf *S*' },
 		},
 	])('refuses $refusal, naming the line', async ({ source, error }) => {
 		expect(await errors(source)).toEqual([

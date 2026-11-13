@@ -3,8 +3,11 @@ import type {
 	BroadcastDeckListCardResolver,
 	ResolvedBroadcastDeckListCard,
 } from '~~/server/modules/broadcast-deck-list-import';
+import type { CommanderDeckListEntry } from '~~/shared/types/featureMatchDeckList';
+import type { Commander } from '~~/shared/types/game';
 import type { FakeScryfallCard } from './scryfallFake';
 import { vi } from 'vitest';
+import { orderedColourIdentity } from '~~/shared/utils/commander';
 
 /** Magic deck text, and a card resolver port answering it, for the parser's two owners. */
 
@@ -114,6 +117,37 @@ export const MOXFIELD_CARDS = {
 		type_line: 'Artifact',
 	},
 } satisfies Record<string, FakeScryfallCard>;
+
+/** Ashling and Animar as a Seat holds them once confirmed from the list: each the list's printing. */
+export const ASHLING: Commander = {
+	scryfallId: MOXFIELD_CARDS.ashling.id,
+	name: 'Ashling, the Limitless',
+	colorIdentity: 'WUBRG',
+	setCode: 'ecc',
+	collectorNumber: '1',
+};
+export const ANIMAR: Commander = {
+	scryfallId: MOXFIELD_CARDS.animar.id,
+	name: 'Animar, Soul of Elements',
+	colorIdentity: 'URG',
+	setCode: '2x2',
+	collectorNumber: '171',
+};
+
+/** A card of a Commander Seat's saved Deck List, as its read answers it. */
+export function deckListEntryOf(card: FakeScryfallCard, quantity = 1): CommanderDeckListEntry {
+	return {
+		quantity,
+		scryfallId: card.id,
+		name: card.name,
+		setCode: card.set,
+		collectorNumber: card.collector_number ?? '1',
+		cardType: card.type_line ?? null,
+		colorIdentity: orderedColourIdentity(card.color_identity ?? []),
+		manaCost: null,
+		manaValue: null,
+	};
+}
 
 /** The id a resolved request's printing answers by: its name, set and collector number. */
 export function printingId(name: string, setCode: string | null = null, collectorNumber: string | null = null): string {

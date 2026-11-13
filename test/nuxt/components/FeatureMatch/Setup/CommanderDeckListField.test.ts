@@ -1,9 +1,11 @@
-import type { CommanderDeckListEntry, CommanderDeckListPreviewAnswer, FeatureMatchDeckListReference } from '~~/shared/types/featureMatchDeckList';
+import type { CommanderDeckListPreviewAnswer, FeatureMatchDeckListReference } from '~~/shared/types/featureMatchDeckList';
+import type { Commander } from '~~/shared/types/game';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ATRAXA } from '~~/test/helpers/commanders';
 import { deferred } from '~~/test/helpers/deferred';
-import { MOXFIELD_CARDS, MOXFIELD_COPY } from '~~/test/helpers/magicDeckText';
+import { ANIMAR, deckListEntryOf, MOXFIELD_CARDS, MOXFIELD_COPY } from '~~/test/helpers/magicDeckText';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import CommanderDeckListField from '~/components/FeatureMatch/Setup/CommanderDeckListField.vue';
 
@@ -20,27 +22,13 @@ mockNuxtImport('useFeatureMatchStore', () => () => ({ applySavedSlot }));
 
 const { ashling, animar, forest } = MOXFIELD_CARDS;
 
-function entry(card: { id: string; name: string; set: string; collector_number: string }, quantity = 1): CommanderDeckListEntry {
-	return {
-		quantity,
-		scryfallId: card.id,
-		name: card.name,
-		setCode: card.set,
-		collectorNumber: card.collector_number,
-		cardType: null,
-		colorIdentity: 'G',
-		manaCost: null,
-		manaValue: null,
-	};
-}
-
 const accepted: CommanderDeckListPreviewAnswer = {
 	ok: true,
 	deckList: {
 		entries: [
-			entry(ashling),
-			entry(animar),
-			entry(forest, 3),
+			deckListEntryOf(ashling),
+			deckListEntryOf(animar),
+			deckListEntryOf(forest, 3),
 		],
 		offeredCommanders: [ashling.id],
 		sideboardDropped: 1,
@@ -56,12 +44,13 @@ const saved = {
 	featureMatch: { id: 3 },
 };
 
-function mountField(props: { deckList?: FeatureMatchDeckListReference | null; locked?: boolean } = {}) {
+function mountField(props: { deckList?: FeatureMatchDeckListReference | null; commanders?: Commander[]; locked?: boolean } = {}) {
 	return mount(CommanderDeckListField, {
 		props: {
 			slotId: 3,
 			seat: 'player4',
 			deckList: null,
+			commanders: [],
 			locked: false,
 			...props,
 		},
@@ -163,6 +152,26 @@ describe('a Commander Seat\'s Deck List field', () => {
 		expect(mockFetch).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({
 			body: expect.objectContaining({ commanders }),
 		}));
+	});
+
+	// A re-paste of a deck keeps the choice its operator made before.
+	it.each([
+		{
+			held: 'holds the Seat\'s Commander: that one is confirmed',
+			commanders: [ANIMAR],
+			confirmed: [animar.id],
+		},
+		{
+			held: 'holds none of the Seat\'s Commanders: the offered one is confirmed',
+			commanders: [ANIMAR, ATRAXA],
+			confirmed: [ashling.id],
+		},
+	])('previews a list that $held', async ({ commanders, confirmed }) => {
+		const wrapper = mountField({ commanders });
+
+		await paste(wrapper);
+
+		expect(wrapper.findAll('[data-deck-list-entry][data-commander="true"]').map(row => row.attributes('data-printing'))).toEqual(confirmed);
 	});
 
 	it('holds no more than two Commanders, and saves none', async () => {

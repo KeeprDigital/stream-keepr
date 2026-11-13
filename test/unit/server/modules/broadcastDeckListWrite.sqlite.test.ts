@@ -128,7 +128,8 @@ afterAll(async () => await harness.close());
 describe('a Broadcast Deck List write that is accepted', () => {
 	it('creates the list with the cards its source resolves to, answers it and announces it under the writer\'s origin', async () => {
 		const eventId = await stageEvent();
-		const sourceText = '4 Lightning Bolt\nSideboard\n2 Counterspell';
+		// A line may name its printing and carry a foil marker (ADR-0087).
+		const sourceText = '4 Lightning Bolt (LEA) 1 *F*\nSideboard\n2 Counterspell';
 
 		const created = await write.createBroadcastDeckList({
 			eventId,
@@ -160,20 +161,6 @@ describe('a Broadcast Deck List write that is accepted', () => {
 				'broadcastDeckList:created',
 				{ listId: created.id, revision: 1, originConnectionId: 'origin-1' },
 			],
-		]);
-	});
-
-	// ADR-0087: a foil marker no longer refuses a paste; the line still names its printing.
-	it('saves a source whose line carries a foil marker, as the printing the line names', async () => {
-		const eventId = await stageEvent();
-
-		const created = await write.createBroadcastDeckList({
-			eventId,
-			input: { name: 'Burn', sourceText: '4 Lightning Bolt (LEA) 1 *F*' },
-		});
-
-		expect(await storedCards(created.id)).toEqual([
-			['mainboard', 4, 'Lightning Bolt'],
 		]);
 	});
 

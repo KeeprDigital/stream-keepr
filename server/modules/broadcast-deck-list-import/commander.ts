@@ -9,6 +9,7 @@ import {
 	addToBoard,
 	cardRowLimitErrors,
 	headingKey,
+	isCommentLine,
 	lineError,
 	MAX_ENTRY_QUANTITY,
 	orderedErrors,
@@ -77,7 +78,7 @@ export async function importCommanderDeckList(
 	/** Card lines read since the Sideboard heading: a blank line ends the Sideboard only after one. */
 	let sideboardLines = 0;
 	const kept: KeptRow[] = [];
-	const dropped: ParsedCardLine[] = [];
+	let sideboardDropped = 0;
 	const errors: CommanderDeckListImportError[] = [];
 
 	for (const line of lines) {
@@ -103,18 +104,21 @@ export async function importCommanderDeckList(
 			errors.push(lineError(line, 'UNSUPPORTED_SECTION', 'This section is not supported'));
 			continue;
 		}
-		if (/^(?:#|\/\/|;)/.test(sourceText)) {
+		if (isCommentLine(sourceText)) {
 			errors.push(lineError(line, 'UNSUPPORTED_SYNTAX', 'Comments are not supported'));
 			continue;
 		}
 
 		const parsed = parseCardLine(line);
-		if ('code' in parsed) {
-			errors.push(parsed);
-		}
-		else if (section === 'sideboard') {
+		if (section === 'sideboard') {
+			// Dropped, not refused: a line the rules cannot read still goes, counted by the number it leads with.
 			sideboardLines++;
-			dropped.push(parsed);
+			sideboardDropped += 'code' in parsed
+				? Number.parseInt(sourceText) || 1
+				: parsed.quantity;
+		}
+		else if ('code' in parsed) {
+			errors.push(parsed);
 		}
 		else {
 			kept.push({ ...parsed, section });
@@ -134,10 +138,7 @@ export async function importCommanderDeckList(
 	if (extra)
 		errors.push(lineError(extra, 'TOO_MANY_COMMANDERS', 'A deck has one or two Commanders'));
 
-	const limitErrors = cardRowLimitErrors([
-		...kept,
-		...dropped,
-	]);
+	const limitErrors = cardRowLimitErrors(kept);
 	errors.push(...limitErrors);
 	if (errors.length === 0 && kept.length === 0)
 		errors.push({ code: 'EMPTY_DECK_LIST', message: 'At least one card outside the Sideboard is required' });
@@ -182,7 +183,7 @@ export async function importCommanderDeckList(
 			sourceText: lines.map(line => line.sourceText).join('\n').replace(/^\n+|\n+$/g, ''),
 			entries,
 			offeredCommanders: [...offeredCommanders],
-			sideboardDropped: dropped.reduce((total, row) => total + row.quantity, 0),
+			sideboardDropped,
 		},
 	};
 }

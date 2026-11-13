@@ -1,4 +1,4 @@
-import type { ScryfallCardData } from '~~/server/utils/scryfall';
+import type { ScryfallCardData, ScryfallPrintingRequest } from '~~/server/utils/scryfall';
 import type {
 	BroadcastDeckListCardResolution,
 	BroadcastDeckListCardResolutionRequest,
@@ -24,9 +24,7 @@ export interface BroadcastDeckListScryfallBoundary {
 		requests: ReadonlyArray<{ name: string; setCode: string | null }>,
 	) => Promise<ReadonlyArray<ScryfallCardData | null>>;
 	/** Each exact printing asked for, in order, or `null` for one that does not exist. */
-	lookupPrintings: (
-		requests: ReadonlyArray<{ setCode: string; collectorNumber: string }>,
-	) => Promise<ReadonlyArray<ScryfallCardData | null>>;
+	lookupPrintings: (requests: readonly ScryfallPrintingRequest[]) => Promise<ReadonlyArray<ScryfallCardData | null>>;
 }
 
 export class BroadcastDeckListCardProviderError extends Error {

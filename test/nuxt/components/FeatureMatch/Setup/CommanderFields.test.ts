@@ -3,7 +3,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ATRAXA, KRAUM, scryfallCardOf, TYMNA } from '~~/test/helpers/commanders';
-import { MOXFIELD_CARDS } from '~~/test/helpers/magicDeckText';
+import { ANIMAR, ASHLING, deckListEntryOf, MOXFIELD_CARDS } from '~~/test/helpers/magicDeckText';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import CommanderFields from '~/components/FeatureMatch/Setup/CommanderFields.vue';
 
@@ -221,25 +221,7 @@ describe('a Seat\'s Commander picker', () => {
 	// ADR-0087: while a Seat holds a Deck List, its Commanders are that list's cards.
 	describe('while the Seat holds a Deck List', () => {
 		const { ashling, animar } = MOXFIELD_CARDS;
-		const ASHLING: Commander = {
-			scryfallId: ashling.id,
-			name: ashling.name,
-			colorIdentity: 'WUBRG',
-			setCode: 'ecc',
-			collectorNumber: '1',
-		};
 		const LIST = '/api/events/7/feature-match-slots/3/commander-deck-lists/11';
-		const listCard = (card: typeof ashling, colorIdentity: string) => ({
-			quantity: 1,
-			scryfallId: card.id,
-			name: card.name,
-			setCode: card.set,
-			collectorNumber: card.collector_number,
-			cardType: null,
-			colorIdentity,
-			manaCost: null,
-			manaValue: null,
-		});
 
 		beforeEach(() => {
 			mockFetch.mockImplementation(async (path: string) => path === LIST
@@ -248,8 +230,8 @@ describe('a Seat\'s Commander picker', () => {
 						slotId: 3,
 						sourceText: '',
 						entries: [
-							listCard(ashling, 'WUBRG'),
-							listCard(animar, 'URG'),
+							deckListEntryOf(ashling),
+							deckListEntryOf(animar),
 						],
 					}
 				: {
@@ -278,13 +260,7 @@ describe('a Seat\'s Commander picker', () => {
 				type: 'mtg',
 				commanders: [
 					ASHLING,
-					{
-						scryfallId: animar.id,
-						name: animar.name,
-						colorIdentity: 'URG',
-						setCode: '2x2',
-						collectorNumber: '171',
-					},
+					ANIMAR,
 				],
 				featureMatchDeckList: { id: 11, mainboardCount: 98 },
 			});

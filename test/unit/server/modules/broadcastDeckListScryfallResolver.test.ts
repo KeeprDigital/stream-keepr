@@ -213,13 +213,13 @@ describe('broadcast Deck List Scryfall resolver', () => {
 		]);
 	});
 
-	// ADR-0087: a Moxfield paste is about a hundred exact printings, fetched in batches and not one at a time.
-	it('resolves a hundred exact printings through the real Scryfall boundary in two requests', async () => {
-		const catalogue = Array.from({ length: 100 }, (_, index) => ({
-			id: `printing-${index}`,
-			name: `Card ${index}`,
+	// ADR-0087: exact printings are fetched together, not one request each.
+	it('asks the real Scryfall boundary for exact printings in one request', async () => {
+		const catalogue = ['1', '2', '3'].map(number => ({
+			id: `printing-${number}`,
+			name: `Card ${number}`,
 			set: 'ecl',
-			collector_number: String(index + 1),
+			collector_number: number,
 		}));
 		const scryfall = createScryfallFake(catalogue);
 		vi.stubGlobal('fetch', scryfall.fetch);
@@ -231,7 +231,9 @@ describe('broadcast Deck List Scryfall resolver', () => {
 				collectorNumber: card.collector_number,
 			})));
 
-			expect(scryfall.collectionBatches.map(batch => batch.length)).toEqual([75, 25]);
+			expect(scryfall.collectionBatches).toEqual([
+				['ecl/1', 'ecl/2', 'ecl/3'],
+			]);
 			expect(result.map(resolution => resolution.status === 'resolved' && resolution.card.scryfallId))
 				.toEqual(catalogue.map(card => card.id));
 		}

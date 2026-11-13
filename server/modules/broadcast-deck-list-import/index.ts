@@ -3,6 +3,7 @@ import {
 	addToBoard,
 	cardRowLimitErrors,
 	headingKey,
+	isCommentLine,
 	lineError,
 	MAX_ENTRY_QUANTITY,
 	orderedErrors,
@@ -127,7 +128,7 @@ function parseCardRow(
 	const heading = headingKey(sourceText);
 	if (UNREAD_SECTIONS.has(heading) || COMMANDER_PASTE_SECTIONS.has(heading))
 		return lineError(line, 'UNSUPPORTED_SECTION', 'This section is not supported');
-	if (/^(?:#|\/\/|;)/.test(sourceText) || /^(?:about|name)\s+/i.test(sourceText))
+	if (isCommentLine(sourceText) || /^(?:about|name)\s+/i.test(sourceText))
 		return lineError(line, 'UNSUPPORTED_SYNTAX', 'Comments and deck metadata are not supported');
 
 	const parsed = parseCardLine(line, compartment === 'companion');

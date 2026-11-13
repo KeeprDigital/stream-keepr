@@ -8,13 +8,14 @@ import { COMMANDER_SEAT_DATA_KEYS, SLOT_SEAT_DATA_KEY } from '~~/shared/utils/fe
  * of any other Event holds none.
  */
 
-const SEAT_DATA_KEYS = Object.values(SLOT_SEAT_DATA_KEY);
+/** The Slot field of every Seat a Commander Slot holds. */
+export const SEAT_DATA_KEYS = Object.values(SLOT_SEAT_DATA_KEY);
 
 /** What a typed Seat keeps of a save: no record, and no deck but its Commanders'. */
 const TYPED_SEAT_FIELDS = ['name', 'pronouns', 'lgs'] as const;
 
 /** Whether a write's Deck List references are the Slot's own, settled by the setup write, or to be left out. */
-interface CommanderSeatOptions {
+export interface CommanderSeatOptions {
 	/** A setup save's, once settled; a create's names no Deck List the Slot could hold. */
 	keepsDeckList: boolean;
 }
@@ -36,10 +37,11 @@ export function commanderSeatData(data: ManualPlayerSlotData | null | undefined,
 		? data.gameData
 		: null;
 	const commanders = held?.commanders ?? [];
+	// The setup write lets a Seat hold a list only beside Commanders picked from it.
 	const featureMatchDeckList = keepsDeckList
 		? held?.featureMatchDeckList ?? null
 		: null;
-	if (commanders.length > 0 || featureMatchDeckList) {
+	if (commanders.length > 0) {
 		seat.gameData = {
 			type: 'mtg',
 			commanders,

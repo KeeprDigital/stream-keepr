@@ -204,8 +204,8 @@ export function featureMatchDeckListService() {
 	};
 
 	/** Deletes this Slot's Deck Lists older than `id` that no Seat's data holds. */
-	const removeUnheldBefore = async (slotId: number, id: number, sides: readonly (PlayerSlotData | null | undefined)[]): Promise<void> => {
-		const held = sides.map(deckListReferenceOf).filter(reference => reference !== null).map(reference => reference.id);
+	const removeUnheldBefore = async (slotId: number, id: number, seats: readonly (PlayerSlotData | null | undefined)[]): Promise<void> => {
+		const held = seats.map(deckListReferenceOf).filter(reference => reference !== null).map(reference => reference.id);
 		await db.delete(featureMatchDeckLists).where(and(
 			eq(featureMatchDeckLists.slotId, slotId),
 			lt(featureMatchDeckLists.id, id),

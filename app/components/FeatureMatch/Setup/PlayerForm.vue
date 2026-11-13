@@ -184,6 +184,7 @@ const editingPlayerDeckList = ref(false);
 				:slot-id="props.slotId"
 				:seat="props.seat"
 				:deck-list="mtgGameData.featureMatchDeckList ?? null"
+				:commanders="mtgGameData.commanders ?? []"
 				:locked="props.deckListLocked ?? false"
 				@clear="clearCommanderDeckList"
 			/>

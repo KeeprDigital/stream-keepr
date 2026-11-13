@@ -45,6 +45,11 @@ export const UNREAD_SECTIONS: ReadonlySet<string> = new Set([
 	'sorceries',
 ]);
 
+/** Whether a line is a comment, which neither owner of a paste reads. */
+export function isCommentLine(sourceText: string): boolean {
+	return /^(?:#|\/\/|;)/.test(sourceText);
+}
+
 /** A line's text as a heading is matched: lower case, without the colon some exports end one with. */
 export function headingKey(sourceText: string): string {
 	return sourceText.toLowerCase().replace(/:$/, '');
