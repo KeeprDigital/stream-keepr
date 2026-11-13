@@ -24,6 +24,8 @@ let mutableConfig: Record<string, unknown>;
 const mainboard = ref<DeckListCardWithData[]>([]);
 const sideboard = ref<DeckListCardWithData[]>([]);
 const companionCard = ref<DeckListCardWithData | null>(null);
+/** A Commander Seat's Commanders; none for any other Deck Source. */
+const commanders = ref<DeckListCardWithData[]>([]);
 const deckStats = ref<Array<{ type: string; count: number }>>([]);
 const highlander = ref<HighlanderDeckSummary | null>(null);
 const tokenCards = ref<DeckListCardWithData[]>([]);
@@ -42,8 +44,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	secondaryHeader: secondaryName,
 	deckColors,
 	companionCard,
-	// A Commander Seat's alone, which `CommanderSeatDisplay.test.ts` covers.
-	commanders: ref([]),
+	commanders,
 	highlander,
 	tokenCards,
 	deckStats,
@@ -76,13 +77,14 @@ const ManaColorDisplayStub = defineComponent({
 const DeckCardStub = defineComponent({
 	props: {
 		showHighlanderPoints: { type: Boolean, required: false },
+		showQuantity: { type: Boolean, required: false },
 		highlanderPointsPositionClass: { type: String, required: false },
 		card: { type: Object, required: true },
 		tag: { type: String, required: false },
 		quantityBadgeStyle: { type: Object, required: false },
 		highlanderPointsBadgeStyle: { type: Object, required: false },
 	},
-	template: '<div data-testid="deck-card" :data-tag="tag" :data-name="card.name" :data-quantity-size="quantityBadgeStyle?.fontSize" :data-points-size="highlanderPointsBadgeStyle?.fontSize" :data-show-highlander-points="String(showHighlanderPoints)" :data-point-position="highlanderPointsPositionClass" />',
+	template: '<div data-testid="deck-card" :data-tag="tag" :data-name="card.name" :data-show-quantity="String(showQuantity)" :data-quantity-size="quantityBadgeStyle?.fontSize" :data-points-size="highlanderPointsBadgeStyle?.fontSize" :data-show-highlander-points="String(showHighlanderPoints)" :data-point-position="highlanderPointsPositionClass" />',
 });
 
 function createCard(overrides: Partial<DeckListCardWithData> = {}): DeckListCardWithData {
@@ -170,6 +172,7 @@ describe('screenDeckDisplay', () => {
 		];
 		sideboard.value = [];
 		companionCard.value = null;
+		commanders.value = [];
 		measured.width = 0;
 		measured.height = 0;
 		deckStats.value = [
@@ -499,6 +502,36 @@ describe('screenDeckDisplay', () => {
 		expect(cards.map(card => card.attributes('data-name'))).toEqual(inSideboard
 			? ['Lurrus of the Dream-Den', 'Force of Will']
 			: ['Lurrus of the Dream-Den']);
+	});
+
+	// ADR-0087: a Seat's Commanders stand apart where a Sideboard would, ahead of the Mainboard.
+	it.each([
+		{ placed: 'beside the Mainboard', config: {}, flow: 'flex-row' },
+		{
+			placed: 'above it, where a Sideboard would sit below',
+			config: { sideboardPlacement: 'below' as const },
+			flow: 'flex-col',
+		},
+	])('shows a Seat\'s Commanders first, $placed, without a quantity badge', async ({ config, flow }) => {
+		mutableConfig = {
+			...mutableConfig,
+			...config,
+		};
+		commanders.value = ['Tymna the Weaver', 'Kraum, Ludevic\'s Opus'].map(name => createCard({ name }));
+
+		const wrapper = await mountComponent();
+
+		expect(wrapper.findAll('[data-testid$="-section"]').map(section => section.attributes('data-testid')))
+			.toEqual(['commanders-section', 'mainboard-section']);
+		expect(wrapper.get('.deck-layout').classes()).toContain(flow);
+		const drawn = wrapper.get('[data-testid="commanders-section"]').findAll('[data-testid="deck-card"]');
+		expect(drawn.map(card => [
+			card.attributes('data-name'),
+			card.attributes('data-show-quantity'),
+		])).toEqual([
+			['Tymna the Weaver', 'false'],
+			['Kraum, Ludevic\'s Opus', 'false'],
+		]);
 	});
 
 	it('hides the companion when it is turned off', async () => {

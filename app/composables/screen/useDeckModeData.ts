@@ -584,7 +584,7 @@ export function useDeckModeData(context: ScreenContext, { followsSeat = false }:
 	 * must not cross-fade to itself. Selecting nothing, or a Player whose Deck
 	 * List is gone, blanks program through the same staged swap.
 	 */
-	watch(sourceRead, (read) => {
+	function followSource(read: DeckSourceRead | typeof SEAT_READ_PENDING | null) {
 		if (read === SEAT_READ_PENDING)
 			return;
 		const input = read && displayInput(read);
@@ -600,7 +600,11 @@ export function useDeckModeData(context: ScreenContext, { followsSeat = false }:
 		if (built && !built.failed && built.key === buildKey(input))
 			return;
 		void buildDeck(input);
-	});
+	}
+	watch(sourceRead, followSource);
+	// A Seat of a Slot the stores already hold is answered before any read: it is shown at once.
+	if (seat)
+		followSource(sourceRead.value);
 
 	return {
 		config,

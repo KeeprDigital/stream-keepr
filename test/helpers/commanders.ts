@@ -48,3 +48,22 @@ export function scryfallCardOf(commander: Commander, overrides: Record<string, u
 		...overrides,
 	};
 }
+
+/**
+ * A Seat as a Commander Slot stores it and a read answers it: with the deck
+ * name and colours its save wrote, and the Feature Match Deck List it holds.
+ */
+export function storedSeat(name: string, commanders: Commander[], deckList?: { id: number; mainboardCount: number }): ManualPlayerSlotData {
+	return {
+		name,
+		gameData: {
+			type: 'mtg',
+			commanders,
+			deckName: commanders.map(commander => commander.name).join(' / '),
+			deckColors: 'WUBRG',
+			...(deckList
+				? { featureMatchDeckList: deckList }
+				: {}),
+		},
+	};
+}

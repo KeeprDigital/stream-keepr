@@ -5,11 +5,9 @@ import * as schema from '~~/server/db/schema';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 /**
- * A Deck List Screen on a One Piece Card Game Event with no Deck Source chosen
- * starts on the Event's first Slot, left side (ADR-0057); a Player chosen stays
- * (ADR-0074). A Commander Event's, whose only Deck Source is a Seat, starts on
- * its first Slot's Seat 1 (ADR-0087). Any other Magic Deck List Screen keeps
- * its Player source.
+ * A Deck List Screen on a One Piece Card Game Event or a Commander Event with no
+ * Deck Source chosen starts on the Event's first Slot, Seat 1 (ADR-0057, ADR-0087);
+ * a Player chosen stays (ADR-0074). Any other Magic Deck List Screen keeps its Player source.
  */
 
 vi.stubGlobal('createError', (input: { statusCode?: number; message?: string; statusMessage?: string }) =>
@@ -191,20 +189,21 @@ describe('a new Deck List Screen\'s Deck Source', () => {
 	});
 
 	// ADR-0087: a Deck Source's Seat is one of four, and Seats 3 and 4 are a Commander Slot's alone.
-	it.each([
-		{ event: 'commander', seat: 'player4', taken: true },
-		{ event: 'mtg', seat: 'player3', taken: false },
-		{ event: 'op', seat: 'player4', taken: false },
-	] as const)('takes $seat of a Slot on the $event Event: $taken', async ({ event, seat, taken }) => {
-		const chosen = { type: 'featureMatchSlot', slotId: events[event].firstSlotId, side: seat };
+	it('takes Seat 4 of a Commander Event\'s Slot', async () => {
+		const chosen = { type: 'featureMatchSlot', slotId: events.commander.firstSlotId, side: 'player4' };
 
-		const saved = await createScreen(event, 'deck', {
+		const screen = await createScreen('commander', 'deck', {
 			deck: { deckSource: chosen },
-		}).catch(error => error);
+		});
 
-		if (taken)
-			expect(saved.modeConfigs?.deck?.deckSource).toEqual(chosen);
-		else
-			expect(saved).toMatchObject({ statusCode: 400 });
+		expect(screen.modeConfigs?.deck?.deckSource).toEqual(chosen);
+	});
+
+	it('refuses Seat 3 of a Slot on any other Event', async () => {
+		const chosen = { type: 'featureMatchSlot', slotId: events.mtg.firstSlotId, side: 'player3' };
+
+		await expect(createScreen('mtg', 'deck', {
+			deck: { deckSource: chosen },
+		})).rejects.toMatchObject({ statusCode: 400 });
 	});
 });

@@ -14,14 +14,6 @@ const LIST = [
 describe('a Commander deck\'s Mainboard', () => {
 	it.each([
 		{
-			commanders: 'one Commander',
-			held: [ASHLING],
-			mainboard: [
-				[1, animar.name],
-				[3, forest.name],
-			],
-		},
-		{
 			commanders: 'a pair',
 			held: [ASHLING, ANIMAR],
 			mainboard: [

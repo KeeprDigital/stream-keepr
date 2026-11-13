@@ -278,7 +278,7 @@ function requireScreenModeOffered(event: EventKindFields, mode: ScreenMode): voi
  * on the Event's first Slot, Seat 1, or on no Slot while the Event has none; a
  * Player chosen stays. Any other Magic Event's keeps its Player source.
  */
-async function withOpDeckSourceDefault(
+async function withSeatDeckSourceDefault(
 	eventId: number,
 	event: EventKindFields,
 	modeConfigs: ModeConfigsMap | null | undefined,
@@ -348,7 +348,7 @@ export function screenWriteModule() {
 		// slug or its Graphic Asset References never reaches for a signing key it
 		// was not going to use.
 		const withDeckSource = input.currentMode === 'deck'
-			? await withOpDeckSourceDefault(eventId, event, input.modeConfigs)
+			? await withSeatDeckSourceDefault(eventId, event, input.modeConfigs)
 			: undefined;
 		const preparedCapability = await screenOutputAssetCapabilities().prepare();
 		const newScreen = await screens.create(
@@ -421,7 +421,7 @@ export function screenWriteModule() {
 		// Only a Screen entering Deck List mode takes the default, so no
 		// other save moves a Deck List Screen already on air.
 		const withDeckSource = data.currentMode === 'deck' && existingScreen.currentMode !== 'deck'
-			? await withOpDeckSourceDefault(
+			? await withSeatDeckSourceDefault(
 					eventId,
 					event,
 					data.modeConfigs !== undefined

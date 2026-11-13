@@ -738,7 +738,7 @@ function stackCardStyle(section: VisibleBoard, index: number) {
 										:card="card"
 										:tag="card === shownCompanion ? 'Companion' : undefined"
 										v-bind="cardBadgeProps[section.key]"
-										:show-quantity="section.name === section.key && showQuantities"
+										:show-quantity="section.name !== 'companion' && section.name !== 'commanders' && showQuantities"
 									/>
 								</ScreenCardGrid>
 

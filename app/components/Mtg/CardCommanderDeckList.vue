@@ -17,7 +17,7 @@ const cardStore = useCardStore();
 			v-else-if="!cardStore.deckListHasData"
 			variant="inline"
 			icon="i-lucide-layers"
-			title="Select a Feature Match Slot to view its Seats"
+			:title="cardStore.deckListMatchup ? 'Nobody sits at this Slot yet' : 'Select a Feature Match Slot to view its Seats'"
 		/>
 
 		<!-- A column a Seat, in Seat order: two abreast, as the matchup's two are. -->

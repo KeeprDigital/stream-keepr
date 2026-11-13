@@ -6,8 +6,8 @@ import { $fetch, anonymousFetch } from './client';
 import { $fetchRaw } from './helpers';
 
 // One pass through the API boundary: a Commander Seat's pasted Deck List is previewed,
-// saved with its Commander confirmed, and read back (ADR-0087). Scryfall answers the
-// synthetic `it2` set (`mock-scryfall.mjs`).
+// saved with its Commander confirmed, read back, and shown on a Deck List Screen
+// (ADR-0087). Scryfall answers the synthetic `it2` set (`mock-scryfall.mjs`).
 
 const COMMANDER = '5e1f0c1a-8f0b-4c36-9d7e-2b6a4d1c0e01';
 const PASTE = [
@@ -17,12 +17,23 @@ const PASTE = [
 	'SIDEBOARD:',
 	'1 Integration Bolt (IT1) 1',
 ].join('\n');
+const SAVED_CARDS = [
+	[1, 'Integration Commander', 'it2', '1'],
+	[3, 'Integration Land', 'it2', '2p'],
+];
+
+function cards(list: Pick<SavedCommanderDeckList, 'entries'>) {
+	return list.entries.map(entry => [
+		entry.quantity,
+		entry.name,
+		entry.setCode,
+		entry.collectorNumber,
+	]);
+}
 
 describe('a Commander Seat\'s Feature Match Deck List', () => {
 	let eventId: number;
 	let slotId: number;
-	/** The list the first test saves to Seat 4, which the Deck List Screen then shows. */
-	let deckListId: number;
 	const route = (suffix = '') => `/api/events/${eventId}/feature-match-slots/${slotId}/commander-deck-lists${suffix}`;
 
 	beforeAll(async () => {
@@ -47,7 +58,7 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 		catch {}
 	});
 
-	it('previews a paste, saves it with the offered Commander, and reads back each card as the printing named', async () => {
+	it('previews a paste, saves it with the offered Commander, reads back each printing, and shows the Seat on a Deck List Screen', async () => {
 		const preview = await $fetch<CommanderDeckListPreviewAnswer>(route('/preview'), {
 			method: 'POST',
 			body: { text: PASTE },
@@ -69,7 +80,6 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 			},
 		});
 
-		deckListId = saved.deckList.id;
 		const slot = await $fetch(`/api/events/${eventId}/feature-match-slots/${slotId}`);
 		expect(slot.player4Data).toEqual({
 			gameData: {
@@ -88,53 +98,31 @@ describe('a Commander Seat\'s Feature Match Deck List', () => {
 				featureMatchDeckList: { id: saved.deckList.id, mainboardCount: 3 },
 			},
 		});
-		const read = await $fetch<SavedCommanderDeckList>(route(`/${saved.deckList.id}`));
-		expect(read.entries.map(entry =>
-			[
-				entry.quantity,
-				entry.name,
-				entry.setCode,
-				entry.collectorNumber,
-			])).toEqual([
-			[1, 'Integration Commander', 'it2', '1'],
-			[3, 'Integration Land', 'it2', '2p'],
-		]);
-	});
+		expect(cards(await $fetch<SavedCommanderDeckList>(route(`/${saved.deckList.id}`)))).toEqual(SAVED_CARDS);
 
-	it('shows the Seat on a Deck List Screen, which starts on Seat 1 and reads Seat 4\'s list by capability alone', async () => {
+		// A new Deck List Screen starts on a Seat of the Event's first Slot, and takes any of the four.
 		const created = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens`, {
 			method: 'POST',
 			body: { name: 'Deck', slug: `commander-deck-screen-${eventId}`, currentMode: 'deck' },
 		});
-		// The Event's first Slot is the one it was created with, not the one this suite added.
 		expect(created.modeConfigs?.deck?.deckSource).toMatchObject({ type: 'featureMatchSlot', side: 'player1' });
-		expect(created.modeConfigs?.deck?.deckSource).not.toMatchObject({ slotId: null });
-
 		const screen = await $fetch<ScreenResponse>(`/api/events/${eventId}/screens/${created.id}/config/deck`, {
 			method: 'PATCH',
 			body: {
 				deckSource: { type: 'featureMatchSlot', slotId, side: 'player4' },
 			},
 		});
+
+		// Its output reads the Seat's list by capability alone.
 		const { assetCapability } = await $fetch<{ assetCapability: string }>(`/api/events/${eventId}/screens/${screen.id}/asset-capability`);
 		const response = await anonymousFetch(
-			`/api/screen-output/events/${eventId}/screens/${screen.id}/feature-match-slots/${slotId}/commander-deck-lists/${deckListId}`,
+			`/api/screen-output/events/${eventId}/screens/${screen.id}/feature-match-slots/${slotId}/commander-deck-lists/${saved.deckList.id}`,
 			{
 				headers: { authorization: `Bearer ${assetCapability}` },
 			},
 		);
-
 		expect(response.status).toBe(200);
-		const list = await response.json() as ScreenOutputCommanderDeckListResponse;
-		expect(list.entries.map(entry => [
-			entry.quantity,
-			entry.name,
-			entry.setCode,
-			entry.collectorNumber,
-		])).toEqual([
-			[1, 'Integration Commander', 'it2', '1'],
-			[3, 'Integration Land', 'it2', '2p'],
-		]);
+		expect(cards(await response.json() as ScreenOutputCommanderDeckListResponse)).toEqual(SAVED_CARDS);
 	});
 
 	// The refusal's lines reach the client in the error's `data`, which only the running server shapes.

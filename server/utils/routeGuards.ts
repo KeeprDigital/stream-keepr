@@ -180,7 +180,7 @@ async function requireDeckSourceInEvent(eventId: number, value: unknown): Promis
 	else if (source.type === 'featureMatchSlot') {
 		await requireFeatureMatchSlotInEvent(eventId, referencedId(source.slotId));
 		// Seats 3 and 4 are a Commander Slot's alone (ADR-0087).
-		if (PAIR_SEATS.every(seat => seat !== source.side) && !await isCommanderEvent(eventId))
+		if (!PAIR_SEATS.includes(source.side) && !await isCommanderEvent(eventId))
 			throw createError({ statusCode: 400, message: 'Only a Commander Event\'s Slot has Seats 3 and 4' });
 	}
 }

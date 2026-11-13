@@ -3,6 +3,8 @@ import type { Commander } from '~~/shared/types/game';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { storedSeat } from '~~/test/helpers/commanders';
+import { deferred } from '~~/test/helpers/deferred';
 import { ANIMAR, ASHLING, deckListEntryOf, MOXFIELD_CARDS } from '~~/test/helpers/magicDeckText';
 import { createFollowedFeatureMatchSessions, followNoSession } from '~~/test/nuxt/helpers/followedFeatureMatchSession';
 
@@ -16,24 +18,8 @@ const { mockFetch } = vi.hoisted(() => ({
 	mockFetch: vi.fn(),
 }));
 mockNuxtImport('$fetch', () => mockFetch);
-mockNuxtImport('useScryfallBatch', async () => {
-	const actual = await vi.importActual<typeof import('~/composables/data/useScryfallBatch')>('~/composables/data/useScryfallBatch');
-	return () => ({
-		...actual.useScryfallBatch(),
-		// Each printing asked for answers its own card.
-		fetchScryfallCards: async (cards: Array<{ scryfallId: string | null }>) => ({
-			cards: new Map(cards.flatMap(card => card.scryfallId
-				? [
-						[
-							card.scryfallId,
-							{ id: card.scryfallId },
-						],
-					]
-				: [])),
-			degraded: false,
-		}),
-	});
-});
+// Imported inside the factory, which runs before this file's own imports.
+mockNuxtImport('useScryfallBatch', async () => (await import('~~/test/nuxt/helpers/scryfallBatch')).scryfallBatchAnswering(scryfallId => ({ id: scryfallId })));
 
 mockNuxtImport('useEventStore', () => () => ({
 	eventId: 1,
@@ -59,20 +45,9 @@ mockNuxtImport('useFeatureMatchStateStore', () => () => followed);
 let deckLists: Map<number, CommanderDeckListEntry[]>;
 
 function seat(name: string, commanders: Commander[], deckListId?: number) {
-	return {
-		name,
-		gameData: {
-			type: 'mtg' as const,
-			commanders,
-			deckName: commanders.map(commander => commander.name).join(' / '),
-			deckColors: 'URG',
-			...(deckListId
-				? {
-						featureMatchDeckList: { id: deckListId, mainboardCount: 3 },
-					}
-				: {}),
-		},
-	};
+	return storedSeat(name, commanders, deckListId === undefined
+		? undefined
+		: { id: deckListId, mainboardCount: 3 });
 }
 
 /** Slot 7: Ana in Seat 1 with a list, nobody in Seats 2 and 3, Dee in Seat 4 with a Commander alone. */
@@ -173,6 +148,32 @@ describe('useCardStore Commander Feature Match Deck Lists', () => {
 		];
 		await flushPromises();
 
+		expect(shown()[0]?.mainboard).toEqual([
+			[1, hedgeMaze.id],
+		]);
+	});
+
+	// A paste to one Seat while the Slot is still loading must not leave the page loading for good.
+	it('shows the Slot as it now stands, and stops loading, when a Seat changes mid-load', async () => {
+		const firstRead = deferred<unknown>();
+		mockFetch.mockImplementationOnce(() => firstRead.promise);
+		const loading = store.loadMatchDeckLists(7);
+		await flushPromises();
+		expect(store.loadingDeckList).toBe(true);
+
+		featureMatchStore.featureMatches = [
+			slot7(302),
+		];
+		await flushPromises();
+		firstRead.resolve({
+			id: 301,
+			slotId: 7,
+			sourceText: '',
+			entries: deckLists.get(301),
+		});
+		await loading;
+
+		expect(store.loadingDeckList).toBe(false);
 		expect(shown()[0]?.mainboard).toEqual([
 			[1, hedgeMaze.id],
 		]);

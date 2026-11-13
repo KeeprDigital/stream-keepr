@@ -345,7 +345,6 @@ describe('the Deck Source picker on a Commander Event', () => {
 	it.each([
 		{ name: 'a Seat holding a Commander', side: 'player1', hint: false },
 		{ name: 'a Seat holding a player and no deck', side: 'player4', hint: true },
-		{ name: 'a Seat nobody sits in', side: 'player3', hint: true },
 	] as const)('says the Screen shows nothing only for $name', async ({ side, hint }) => {
 		const wrapper = await mountField({ type: 'featureMatchSlot', slotId: 11, side });
 

@@ -5,7 +5,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { effectScope, reactive, ref } from 'vue';
-import { ATRAXA, TYMNA } from '~~/test/helpers/commanders';
+import { ATRAXA, storedSeat, TYMNA } from '~~/test/helpers/commanders';
 import { deferred } from '~~/test/helpers/deferred';
 import { opSlotSide } from '~~/test/helpers/opCards';
 import { createFollowedFeatureMatchSessions, followNoSession, followSwappedSession } from '~~/test/nuxt/helpers/followedFeatureMatchSession';
@@ -360,10 +360,7 @@ describe('the cards each board of a Deck List Screen lays out', () => {
 			{
 				...SLOT,
 				player2Id: null,
-				player4Data: {
-					name: 'Dee',
-					gameData: { type: 'mtg', commanders, featureMatchDeckList: list },
-				},
+				player4Data: storedSeat('Dee', commanders, list),
 			} as never,
 		];
 

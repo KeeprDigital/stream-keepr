@@ -13,6 +13,7 @@ const cardStore = reactive({
 	loadingDeckList: false,
 	deckListHasData: true,
 	deckListFilter: 'for',
+	deckListMatchup: { kind: 'slot', id: 7 },
 	commanderDeckListSeats: [] as CommanderSeatDeckData[],
 });
 mockNuxtImport('useCardStore', () => () => cardStore);

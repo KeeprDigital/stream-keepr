@@ -141,6 +141,8 @@ export function useCommanderCardDeckSourceRuntime(state: CommanderCardDeckSource
 			return;
 
 		const current = ++flight;
+		// A reload that overtakes a load still in flight takes its spinner over, and ends it.
+		const endsLoading = !options.silent || state.loadingDeckList.value;
 		if (!options.silent)
 			state.loadingDeckList.value = true;
 		try {
@@ -149,7 +151,7 @@ export function useCommanderCardDeckSourceRuntime(state: CommanderCardDeckSource
 				state.seats.value = loaded;
 		}
 		finally {
-			if (!options.silent && current === flight)
+			if (endsLoading && current === flight)
 				state.loadingDeckList.value = false;
 		}
 	}
@@ -172,14 +174,15 @@ export function useCommanderCardDeckSourceRuntime(state: CommanderCardDeckSource
 
 	function clearMatchDeckLists() {
 		shownSlotId.value = null;
+		// Whatever was loading is left behind, and its spinner with it.
 		++flight;
+		state.loadingDeckList.value = false;
 		state.seats.value = [];
 	}
 
 	function resetDeckSources() {
 		clearMatchDeckLists();
 		listReads.clear();
-		state.loadingDeckList.value = false;
 	}
 
 	return {

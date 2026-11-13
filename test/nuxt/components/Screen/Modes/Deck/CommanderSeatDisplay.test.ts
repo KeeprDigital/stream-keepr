@@ -5,9 +5,11 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, reactive, ref } from 'vue';
+import { storedSeat } from '~~/test/helpers/commanders';
 import { ANIMAR, ASHLING, deckListEntryOf, MOXFIELD_CARDS } from '~~/test/helpers/magicDeckText';
 import { createFakeEventChannel } from '~~/test/helpers/realtime-mock';
 import { stubImageLoading } from '~~/test/nuxt/helpers/imageLoading';
+import { scryfallBatchAnswering } from '~~/test/nuxt/helpers/scryfallBatch';
 import MtgDisplay from '~/components/Screen/Modes/Deck/MtgDisplay.vue';
 
 // A Deck List Screen whose Deck Source is a Commander Seat (ADR-0087): the Seat's
@@ -35,30 +37,13 @@ mockNuxtImport('useFeatureMatchStateStore', () => () => featureMatchStateStore);
 mockNuxtImport('tryUseRealtime', () => () => createFakeEventChannel().transport);
 
 const imageOf = (scryfallId: string) => `https://img.test/${scryfallId}.jpg`;
-mockNuxtImport('useScryfallBatch', async () => {
-	const actual = await vi.importActual<typeof import('~/composables/data/useScryfallBatch')>('~/composables/data/useScryfallBatch');
-	return () => ({
-		...actual.useScryfallBatch(),
-		// Each printing asked for answers its own image.
-		fetchScryfallCards: async (cards: Array<{ scryfallId: string | null }>) => ({
-			cards: new Map(cards.flatMap(card => card.scryfallId
-				? [
-						[
-							card.scryfallId,
-							{
-								imageData: {
-									front: {
-										normal: imageOf(card.scryfallId),
-									},
-								},
-							},
-						],
-					]
-				: [])),
-			degraded: false,
-		}),
-	});
-});
+mockNuxtImport('useScryfallBatch', () => scryfallBatchAnswering(scryfallId => ({
+	imageData: {
+		front: {
+			normal: imageOf(scryfallId),
+		},
+	},
+})));
 
 const mockFetch = vi.hoisted(() => vi.fn());
 mockNuxtImport('$fetch', () => mockFetch);
@@ -71,20 +56,9 @@ const served = {
 };
 
 function seat(name: string, commanders: Commander[], deckListId?: number) {
-	return {
-		name,
-		gameData: {
-			type: 'mtg',
-			commanders,
-			deckName: commanders.map(commander => commander.name).join(' / '),
-			deckColors: 'WUBRG',
-			...(deckListId
-				? {
-						featureMatchDeckList: { id: deckListId, mainboardCount: 0 },
-					}
-				: {}),
-		},
-	};
+	return storedSeat(name, commanders, deckListId === undefined
+		? undefined
+		: { id: deckListId, mainboardCount: 0 });
 }
 
 function serveSlot(seats: Record<string, unknown>) {
@@ -234,6 +208,27 @@ describe('a Deck List Screen showing a Commander Seat', () => {
 		await flushPromises();
 
 		expect(shown(wrapper)).toEqual([]);
+	});
+
+	// A Slot the stores already hold answers the Seat at once, whatever becomes of the Slot's own read.
+	it('shows a Seat of a Slot already held, though the Slot\'s read is left behind', async () => {
+		serveSlot({
+			player2Data: seat('Ben', [ASHLING]),
+		});
+		featureMatchStore.featureMatches = [served.slot!];
+		featureMatchStore.holdFeatureMatch.mockReturnValueOnce(false);
+
+		const wrapper = mountSeat('player2');
+		await flushPromises();
+
+		expect(shown(wrapper)).toEqual([
+			{
+				section: 'commanders-section',
+				cards: [
+					drawn(ashling),
+				],
+			},
+		]);
 	});
 
 	// The Seat names its list by id, so a re-paste or Swap Seats reaches the Screen with the Slot.
