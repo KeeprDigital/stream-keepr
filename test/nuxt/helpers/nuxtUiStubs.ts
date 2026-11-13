@@ -147,30 +147,52 @@ interface SelectOption {
 	label: string;
 	value: unknown;
 	disabled: boolean;
+	item: SelectItem;
+	/** The `type: 'label'` item that headed this option, drawn as an `<optgroup>`. */
+	group: string | undefined;
 }
 
 type SelectItem = string | number | boolean | null | Record<string, unknown>;
 
 function selectOptions(items: SelectItem[] | SelectItem[][], valueKey: string | undefined, labelKey: string): SelectOption[] {
-	return (items as SelectItem[]).flat().filter(item => !(item && typeof item === 'object' && (item.type === 'label' || item.type === 'separator'))).map((item, index) => {
-		if (item === null || typeof item !== 'object') {
-			return {
-				key: String(item),
-				label: String(item),
-				value: item,
-				disabled: false,
-			};
+	const options: SelectOption[] = [];
+	let group: string | undefined;
+	const walk = (list: readonly (SelectItem | SelectItem[])[]) => {
+		for (const item of list) {
+			if (Array.isArray(item)) {
+				group = undefined;
+				walk(item);
+			}
+			else if (item === null || typeof item !== 'object') {
+				options.push({
+					key: String(item),
+					label: String(item),
+					value: item,
+					disabled: false,
+					item,
+					group,
+				});
+			}
+			else if (item.type === 'label') {
+				group = String(item[labelKey] ?? '');
+			}
+			else if (item.type !== 'separator') {
+				const value = valueKey ? item[valueKey] : item;
+				options.push({
+					key: value !== null && typeof value === 'object'
+						? String(options.length)
+						: String(value),
+					label: String(item[labelKey] ?? ''),
+					value,
+					disabled: Boolean(item.disabled),
+					item,
+					group,
+				});
+			}
 		}
-		const value = valueKey ? item[valueKey] : item;
-		return {
-			key: value !== null && typeof value === 'object'
-				? String(index)
-				: String(value),
-			label: String(item[labelKey] ?? ''),
-			value,
-			disabled: Boolean(item.disabled),
-		};
-	});
+	};
+	walk(items);
+	return options;
 }
 
 function selectControl(name: 'USelect' | 'USelectMenu', defaultValueKey: string | undefined) {
@@ -201,6 +223,19 @@ function selectControl(name: 'USelect' | 'USelectMenu', defaultValueKey: string 
 			};
 			return {
 				options,
+				groups: computed(() => options.value.reduce<{ label: string | undefined; options: SelectOption[] }[]>((all, option) => {
+					const last = all.at(-1);
+					if (last && last.label === option.group) {
+						last.options.push(option);
+					}
+					else {
+						all.push({
+							label: option.group,
+							options: [option],
+						});
+					}
+					return all;
+				}, [])),
 				isSelected,
 				hasSelection: computed(() => options.value.some(isSelected)),
 				onChange(event: Event) {
@@ -215,7 +250,12 @@ function selectControl(name: 'USelect' | 'USelectMenu', defaultValueKey: string 
 		},
 		template: `<select :multiple="multiple" :disabled="disabled" @change="onChange">
 			<option v-if="!multiple && !hasSelection" value="" disabled selected hidden>{{ placeholder }}</option>
-			<option v-for="option in options" :key="option.key" :value="option.key" :selected="isSelected(option)" :disabled="option.disabled">{{ option.label }}</option>
+			<template v-for="(group, groupIndex) in groups" :key="groupIndex">
+				<optgroup v-if="group.label !== undefined" :label="group.label">
+					<option v-for="option in group.options" :key="option.key" :value="option.key" :selected="isSelected(option)" :disabled="option.disabled"><slot name="item-label" :item="option.item">{{ option.label }}</slot></option>
+				</optgroup>
+				<option v-for="option in group.options" v-else :key="option.key" :value="option.key" :selected="isSelected(option)" :disabled="option.disabled"><slot name="item-label" :item="option.item">{{ option.label }}</slot></option>
+			</template>
 		</select>`,
 	});
 }

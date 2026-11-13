@@ -1364,7 +1364,11 @@ only through the `SILENT_VIDEO_PLAYBACK_VALIDATOR` service binding (no
   `package` (name, CSS family, weights, italic); add `@fontsource/<family>` to
   `package.json` at an exact version (static, never `@fontsource-variable/*`)
   and commit the lockfile; add its `--font-<id>` custom property to
-  `app/assets/css/main.css`; add its row to `THIRD_PARTY_FONTS.md`.
+  `app/assets/css/main.css`; add its row to `THIRD_PARTY_FONTS.md`. Put it
+  beside its category's other fonts, at the same place in both lists: the picker
+  groups fonts by category in registry order, and
+  `test/unit/shared/graphicsTypography.test.ts` holds the grouped order equal to
+  `GRAPHIC_FONT_IDS`, so a font out of its category's run fails it.
   `pnpm worker:dry-run` (so `pnpm verify` and CI) then holds the build to every
   declared weight and style, and to no remote or `local()` font source
   ([ADR-0086](DECISIONS.md#adr-0086-application-fonts-are-packaged-by-nuxt-fonts-from-pinned-static-fontsource-packages-with-no-remote-provider-at-build)).
