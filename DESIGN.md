@@ -20,23 +20,23 @@ colors:
   info: "oklch(68.5% 0.169 237.323)"
 typography:
   title:
-    fontFamily: "IBM Plex Sans, Inter, sans-serif"
+    fontFamily: "IBM Plex Sans, sans-serif"
     fontSize: "1.125rem"
     fontWeight: 600
     lineHeight: 1.556
   body:
-    fontFamily: "IBM Plex Sans, Inter, sans-serif"
+    fontFamily: "IBM Plex Sans, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 400
     lineHeight: 1.429
   label:
-    fontFamily: "IBM Plex Sans, Inter, sans-serif"
+    fontFamily: "IBM Plex Sans, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 600
     lineHeight: 1.333
     letterSpacing: "0.05em"
   mono:
-    fontFamily: "Inconsolata, monospace"
+    fontFamily: "JetBrains Mono, monospace"
     fontSize: "0.875rem"
     fontWeight: 400
 rounded:
@@ -125,17 +125,17 @@ All colours are Nuxt UI semantic roles set in `app.config.ts` (`primary: 'cyan'`
 
 ## Typography
 
-**Body Font:** IBM Plex Sans (with Inter, sans-serif)
-**Mono Font:** Inconsolata (with monospace)
+**Body Font:** IBM Plex Sans (with sans-serif)
+**Mono Font:** JetBrains Mono (with monospace)
 
-**Character:** IBM Plex Sans is a technical, slightly engineered sans that reads like equipment labelling; Inconsolata sets ids, numbers and code-like values.
+**Character:** IBM Plex Sans is a technical, slightly engineered sans that reads like equipment labelling; JetBrains Mono sets ids, numbers and code-like values.
 
 ### Hierarchy
 
 - **Title** (600, 1.125rem): card and section headings, empty-state titles. Larger sizes (`text-xl`/`text-2xl`) are rare and reserved for page-level values.
 - **Body** (400, 0.875rem): the default for content, form controls and tables.
 - **Label** (600, 0.75rem, uppercase, wide tracking): sidebar group labels and small section kickers. Plain `text-xs` in `text-muted` is used for metadata.
-- **Mono** (400, Inconsolata): identifiers, counts and tabular values; use `tabular-nums` where numbers align.
+- **Mono** (400, JetBrains Mono): identifiers, counts and tabular values; use `tabular-nums` where numbers align.
 
 ### Named Rules
 
