@@ -16,9 +16,19 @@ import type { GraphicAssetReference } from '../../types/graphicsAsset';
  */
 
 export const GRAPHIC_FONT_IDS = [
-	'saira-condensed',
-	'ibm-plex-sans',
 	'inter',
+	'ibm-plex-sans',
+	'arimo',
+	'roboto',
+	'poppins',
+	'open-sans',
+	'montserrat',
+	'saira-condensed',
+	'roboto-condensed',
+	'oswald',
+	'barlow-condensed',
+	'source-serif-4',
+	'jetbrains-mono',
 	'system-sans',
 	'system-serif',
 	'system-mono',
@@ -30,55 +40,228 @@ export type GraphicApplicationFontId = typeof GRAPHIC_FONT_IDS[number];
  * The application font a newly authored Graphic Item gets, and the one an author
  * returns to when they unpin a library font.
  *
- * Named rather than positional. `GRAPHIC_FONT_IDS[0]` is Saira Condensed, a
- * display face, and "first in the registry" is not a statement about what a body
- * of text should default to — so the two sites that reached for the index landed
- * an author somewhere the item defaults never would have.
+ * Named rather than positional. "First in the registry" is the picker's order,
+ * not a statement about what a body of text should default to.
  */
 export const DEFAULT_GRAPHIC_FONT_ID: GraphicApplicationFontId = 'inter';
+
+export type GraphicFontCategory = 'sans' | 'condensed' | 'serif' | 'mono' | 'system';
+
+export interface GraphicFontPackage {
+	/** npm name, e.g. '@fontsource/inter'. */
+	name: string;
+	/** The CSS family the package's faces are emitted under, e.g. 'Inter'. */
+	family: string;
+	weights: readonly number[];
+	italic: boolean;
+}
 
 export interface GraphicFontDefinition {
 	id: GraphicApplicationFontId;
 	label: string;
+	/** `var(--font-<id>)`. */
 	cssFamily: string;
-	category: 'display' | 'body' | 'mono' | 'serif' | 'system';
+	/** The value of `--font-<id>`, e.g. `'Inter', sans-serif`. */
+	stack: string;
+	category: GraphicFontCategory;
+	/** Absent for a system stack. */
+	package?: GraphicFontPackage;
 }
 
-const GRAPHIC_FONTS: readonly GraphicFontDefinition[] = [
+/** Every hundred from `from` to `to`, the weights a static Fontsource package ships. */
+function weightsFrom(from: number, to: number) {
+	return Array.from({ length: (to - from) / 100 + 1 }, (_, step) => from + step * 100);
+}
+
+export const GRAPHIC_FONTS: readonly GraphicFontDefinition[] = [
 	{
-		id: 'saira-condensed',
-		label: 'Saira Condensed',
-		cssFamily: 'var(--font-saira-condensed)',
-		category: 'display',
+		id: 'inter',
+		label: 'Inter',
+		cssFamily: 'var(--font-inter)',
+		stack: '\'Inter\', sans-serif',
+		category: 'sans',
+		package: {
+			name: '@fontsource/inter',
+			family: 'Inter',
+			weights: weightsFrom(100, 900),
+			italic: true,
+		},
 	},
 	{
 		id: 'ibm-plex-sans',
 		label: 'IBM Plex Sans',
 		cssFamily: 'var(--font-ibm-plex-sans)',
-		category: 'body',
+		stack: '\'IBM Plex Sans\', sans-serif',
+		category: 'sans',
+		package: {
+			name: '@fontsource/ibm-plex-sans',
+			family: 'IBM Plex Sans',
+			weights: weightsFrom(100, 700),
+			italic: true,
+		},
 	},
 	{
-		id: 'inter',
-		label: 'Inter',
-		cssFamily: 'var(--font-inter)',
-		category: 'body',
+		id: 'arimo',
+		label: 'Arimo',
+		cssFamily: 'var(--font-arimo)',
+		stack: '\'Arimo\', sans-serif',
+		category: 'sans',
+		package: {
+			name: '@fontsource/arimo',
+			family: 'Arimo',
+			weights: weightsFrom(400, 700),
+			italic: true,
+		},
+	},
+	{
+		id: 'roboto',
+		label: 'Roboto',
+		cssFamily: 'var(--font-roboto)',
+		stack: '\'Roboto\', sans-serif',
+		category: 'sans',
+		package: {
+			name: '@fontsource/roboto',
+			family: 'Roboto',
+			weights: weightsFrom(100, 900),
+			italic: true,
+		},
+	},
+	{
+		id: 'poppins',
+		label: 'Poppins',
+		cssFamily: 'var(--font-poppins)',
+		stack: '\'Poppins\', sans-serif',
+		category: 'sans',
+		package: {
+			name: '@fontsource/poppins',
+			family: 'Poppins',
+			weights: weightsFrom(100, 900),
+			italic: true,
+		},
+	},
+	{
+		id: 'open-sans',
+		label: 'Open Sans',
+		cssFamily: 'var(--font-open-sans)',
+		stack: '\'Open Sans\', sans-serif',
+		category: 'sans',
+		package: {
+			name: '@fontsource/open-sans',
+			family: 'Open Sans',
+			weights: weightsFrom(300, 800),
+			italic: true,
+		},
+	},
+	{
+		id: 'montserrat',
+		label: 'Montserrat',
+		cssFamily: 'var(--font-montserrat)',
+		stack: '\'Montserrat\', sans-serif',
+		category: 'sans',
+		package: {
+			name: '@fontsource/montserrat',
+			family: 'Montserrat',
+			weights: weightsFrom(100, 900),
+			italic: true,
+		},
+	},
+	{
+		id: 'saira-condensed',
+		label: 'Saira Condensed',
+		cssFamily: 'var(--font-saira-condensed)',
+		stack: '\'Saira Condensed\', \'IBM Plex Sans\', \'Inter\', sans-serif',
+		category: 'condensed',
+		package: {
+			name: '@fontsource/saira-condensed',
+			family: 'Saira Condensed',
+			weights: weightsFrom(100, 900),
+			italic: false,
+		},
+	},
+	{
+		id: 'roboto-condensed',
+		label: 'Roboto Condensed',
+		cssFamily: 'var(--font-roboto-condensed)',
+		stack: '\'Roboto Condensed\', sans-serif',
+		category: 'condensed',
+		package: {
+			name: '@fontsource/roboto-condensed',
+			family: 'Roboto Condensed',
+			weights: weightsFrom(100, 900),
+			italic: true,
+		},
+	},
+	{
+		id: 'oswald',
+		label: 'Oswald',
+		cssFamily: 'var(--font-oswald)',
+		stack: '\'Oswald\', sans-serif',
+		category: 'condensed',
+		package: {
+			name: '@fontsource/oswald',
+			family: 'Oswald',
+			weights: weightsFrom(200, 700),
+			italic: false,
+		},
+	},
+	{
+		id: 'barlow-condensed',
+		label: 'Barlow Condensed',
+		cssFamily: 'var(--font-barlow-condensed)',
+		stack: '\'Barlow Condensed\', sans-serif',
+		category: 'condensed',
+		package: {
+			name: '@fontsource/barlow-condensed',
+			family: 'Barlow Condensed',
+			weights: weightsFrom(100, 900),
+			italic: true,
+		},
+	},
+	{
+		id: 'source-serif-4',
+		label: 'Source Serif 4',
+		cssFamily: 'var(--font-source-serif-4)',
+		stack: '\'Source Serif 4\', serif',
+		category: 'serif',
+		package: {
+			name: '@fontsource/source-serif-4',
+			family: 'Source Serif 4',
+			weights: weightsFrom(200, 900),
+			italic: true,
+		},
+	},
+	{
+		id: 'jetbrains-mono',
+		label: 'JetBrains Mono',
+		cssFamily: 'var(--font-jetbrains-mono)',
+		stack: '\'JetBrains Mono\', monospace',
+		category: 'mono',
+		package: {
+			name: '@fontsource/jetbrains-mono',
+			family: 'JetBrains Mono',
+			weights: weightsFrom(100, 800),
+			italic: true,
+		},
 	},
 	{
 		id: 'system-sans',
 		label: 'System Sans',
 		cssFamily: 'var(--font-system-sans)',
+		stack: 'system-ui, -apple-system, BlinkMacSystemFont, \'Segoe UI\', sans-serif',
 		category: 'system',
 	},
 	{
 		id: 'system-serif',
 		label: 'System Serif',
 		cssFamily: 'var(--font-system-serif)',
+		stack: 'Georgia, \'Times New Roman\', serif',
 		category: 'system',
 	},
 	{
 		id: 'system-mono',
 		label: 'System Mono',
 		cssFamily: 'var(--font-system-mono)',
+		stack: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \'Liberation Mono\', monospace',
 		category: 'system',
 	},
 ];
