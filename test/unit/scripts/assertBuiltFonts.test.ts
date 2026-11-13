@@ -183,10 +183,13 @@ describe('assertBuiltFonts', () => {
 		]);
 	});
 
-	it('finds a remote @import in any stylesheet', () => {
+	it.each([
+		['written with url()', '@import url("https://fonts.googleapis.com/css2?family=Inter");'],
+		['minified with no space after @import', '@import"https://fonts.googleapis.com/css2?family=Inter";'],
+	])('finds a remote @import %s in any stylesheet', (_form, importRule) => {
 		const root = build({
 			'_nuxt/entry.css': interFaces.join(''),
-			'_nuxt/page.css': '@import url("https://fonts.googleapis.com/css2?family=Inter");',
+			'_nuxt/page.css': importRule,
 		});
 
 		expect(assertBuiltFonts(root, [inter])).toEqual([

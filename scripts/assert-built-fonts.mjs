@@ -41,7 +41,7 @@ export const DECLARED_FONT_FACES = GRAPHIC_FONTS
 
 const FONT_FACE_RULE = /@font-face\s*\{([^}]*)\}/g;
 const REMOTE_URL = /^(?:https?:)?\/\//i;
-const IMPORT_RULE = /@import\s+(?:url\(\s*)?["']?([^"')\s;]+)/gi;
+const IMPORT_RULE = /@import\s*(?:url\(\s*)?["']?([^"')\s;]+)/gi;
 
 function declaration(body, property) {
 	return new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]*)`, 'i').exec(body)?.[1].trim();
