@@ -55,7 +55,7 @@ function mountSeats(seats: CommanderSeatDeckData[]) {
 				// The section draws its cards and previews the one chosen; here it says what it was given.
 				MtgCardDeckListSection: {
 					props: ['title', 'cards', 'filter'],
-					template: '<div data-section :data-title="title" :data-filter="filter">{{ cards.map(card => `${card.quantity} ${card.name}`).join("|") }}</div>',
+					template: '<div data-section :data-title="title" :data-filter="filter">{{ cards.map(card => card.quantity + " " + card.name).join("|") }}</div>',
 				},
 			},
 		},
