@@ -1,8 +1,8 @@
-import type { PlayerSlotData } from '~~/shared/api';
-import type { EventKind } from '~~/shared/config/games';
-import type { PlayerSide, Seat } from '~~/shared/types/enums';
-import type { FeatureMatchSnapshotPlayer, FeatureMatchSnapshotPlayerData } from '~~/shared/types/featureMatchSession';
-import { SEAT_VALUES } from '~~/shared/types/enums';
+import type { PlayerSlotData } from '../api';
+import type { EventKind } from '../config/games';
+import type { PlayerSide, Seat } from '../types/enums';
+import type { FeatureMatchSnapshotPlayer, FeatureMatchSnapshotPlayerData } from '../types/featureMatchSession';
+import { SEAT_VALUES } from '../types/enums';
 
 /** The parts of a Feature Match Slot, and its active Session, that seat its players. */
 export interface FeatureMatchSlotSides {
