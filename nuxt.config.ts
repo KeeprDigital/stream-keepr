@@ -1,6 +1,7 @@
 import type { MutationBodyMethod } from './shared/utils/requestBodyLimits';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { applicationFontFamilies } from './build/applicationFonts';
 import { CHECKOUT_TSCONFIG } from './build/checkoutTsconfig';
 import { localConfigurationModule } from './build/localConfigurationModule';
 import { SUPPORTED_SOCIAL_NETWORKS } from './shared/socialProfiles';
@@ -97,6 +98,15 @@ export default defineNuxtConfig({
 		config: {
 			standalone: false,
 		},
+	},
+
+	// Application fonts come from their pinned Fontsource packages on disk, and
+	// only from there: a global provider removes every other, and `remote: false`
+	// keeps the npm provider off its CDN, so a build never fetches a font.
+	fonts: {
+		provider: 'npm',
+		npm: { remote: false },
+		families: applicationFontFamilies(),
 	},
 
 	icon: {
