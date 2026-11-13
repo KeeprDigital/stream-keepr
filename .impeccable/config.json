@@ -1,17 +1,17 @@
 {
-  "detector": {
-    "ignoreRules": [],
-    "ignoreFiles": [],
-    "ignoreValues": [
-      {
-        "rule": "overused-font",
-        "value": "*",
-        "files": [
-          "test/unit/scripts/assertBuiltFonts.test.ts"
-        ],
-        "createdAt": "2026-11-13T02:50:48.506Z",
-        "reason": "Agent: test fixture CSS for the built-fonts check; Inter is a registry family name under test, not a UI font choice"
-      }
-    ]
-  }
+	"detector": {
+		"ignoreRules": [],
+		"ignoreFiles": [],
+		"ignoreValues": [
+			{
+				"rule": "overused-font",
+				"value": "*",
+				"files": [
+					"test/unit/scripts/assertBuiltFonts.test.ts"
+				],
+				"createdAt": "2026-11-13T02:50:48.506Z",
+				"reason": "Agent: test fixture CSS for the built-fonts check; Inter is a registry family name under test, not a UI font choice"
+			}
+		]
+	}
 }
