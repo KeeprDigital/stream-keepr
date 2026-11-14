@@ -2,13 +2,12 @@ import type { ClockState } from '~~/shared/types/featureMatchState';
 import { describe, expect, it } from 'vitest';
 import {
 	applyClockAdjustment,
-	clockDisplayNextChangeInMs,
-	formatClockDisplay,
 	formatClockTime,
 	formatCountdownTime,
 	getEffectiveElapsedMs,
 	normalizeTimeInput,
 	parseTimeInput,
+	projectFeatureMatchClock,
 } from '~~/shared/utils/clock';
 
 describe('formatClockTime', () => {
@@ -45,7 +44,7 @@ describe('formatCountdownTime', () => {
 	});
 });
 
-describe('formatClockDisplay', () => {
+describe('projectFeatureMatchClock: what it shows', () => {
 	const NOW = 1_000_000;
 	const clock = (overrides: Partial<ClockState>): ClockState => ({
 		type: 'countdown',
@@ -192,7 +191,7 @@ describe('formatClockDisplay', () => {
 			expected: '',
 		},
 	])('shows $name as "$expected"', ({ state, label, expected }) => {
-		expect(formatClockDisplay(state, NOW, label)).toBe(expected);
+		expect(projectFeatureMatchClock(state, NOW, label).display).toBe(expected);
 	});
 });
 
@@ -489,7 +488,7 @@ describe('applyClockAdjustment on a countdown counting up past its end', () => {
 	])('$name', ({ overtimeMs, limitMs, deltaMs, shows, inOvertime }) => {
 		const result = applyClockAdjustment(overtimeClock(overtimeMs, { countUpLimitMs: limitMs }), now, { deltaDisplayMs: deltaMs });
 
-		expect(formatClockDisplay(result, now, '')).toBe(shows);
+		expect(projectFeatureMatchClock(result, now, '').display).toBe(shows);
 		expect(expired(result)).toBe(inOvertime);
 		expect(result.durationMs).toBeGreaterThanOrEqual(0);
 	});
@@ -538,13 +537,13 @@ describe('applyClockAdjustment on a countdown counting up past its end', () => {
 	])('$name', ({ clock, adjustment, shows, countsDown }) => {
 		const result = applyClockAdjustment(clock, now, adjustment);
 
-		expect(formatClockDisplay(result, now, '')).toBe(shows);
+		expect(projectFeatureMatchClock(result, now, '').display).toBe(shows);
 		if (countsDown)
 			expect(expired(result)).toBe(false);
 	});
 });
 
-describe('clockDisplayNextChangeInMs', () => {
+describe('projectFeatureMatchClock: when what it shows next changes', () => {
 	const NOW = 1_000_000;
 	function running(overrides: Partial<ClockState>, elapsedMs: number): ClockState {
 		return {
@@ -617,11 +616,10 @@ describe('clockDisplayNextChangeInMs', () => {
 			running({ countUpAfterCountdown: true, countUpLimitMs: 5_000 }, 64_300),
 		],
 	])('names exactly when the display of %s changes', (_case, clock) => {
-		const next = clockDisplayNextChangeInMs(clock, NOW)!;
-		const shown = formatClockDisplay(clock, NOW, '');
+		const { display, nextChangeInMs } = projectFeatureMatchClock(clock, NOW, '');
 
-		expect(formatClockDisplay(clock, NOW + next - 1, '')).toBe(shown);
-		expect(formatClockDisplay(clock, NOW + next, '')).not.toBe(shown);
+		expect(projectFeatureMatchClock(clock, NOW + nextChangeInMs! - 1, '').display).toBe(display);
+		expect(projectFeatureMatchClock(clock, NOW + nextChangeInMs!, '').display).not.toBe(display);
 	});
 
 	// A countdown changes as each whole second of time remaining is reached, its
@@ -668,7 +666,7 @@ describe('clockDisplayNextChangeInMs', () => {
 			100,
 		],
 	])('names when the display of %s changes', (_case, clock, expected) => {
-		expect(clockDisplayNextChangeInMs(clock, NOW)).toBe(expected);
+		expect(projectFeatureMatchClock(clock, NOW, '').nextChangeInMs).toBe(expected);
 	});
 
 	// Counting up after, 0:00 shows for one second: from the end through the first second of overtime.
@@ -680,7 +678,7 @@ describe('clockDisplayNextChangeInMs', () => {
 	])('a countdown that counts up after shows, %i ms from its end, %s', (fromEnd, expected) => {
 		const clock = running({ countUpAfterCountdown: true }, 60_000 + fromEnd);
 
-		expect(formatClockDisplay(clock, NOW, '')).toBe(expected);
+		expect(projectFeatureMatchClock(clock, NOW, '').display).toBe(expected);
 	});
 
 	it.each([
@@ -713,6 +711,103 @@ describe('clockDisplayNextChangeInMs', () => {
 			running({ countUpAfterCountdown: true, countUpLimitMs: 5_000 }, 70_000),
 		],
 	])('names no change for %s', (_case, clock) => {
-		expect(clockDisplayNextChangeInMs(clock, NOW)).toBeNull();
+		expect(projectFeatureMatchClock(clock, NOW, '').nextChangeInMs).toBeNull();
+	});
+});
+
+describe('projectFeatureMatchClock: its state and its time', () => {
+	const NOW = 1_000_000;
+	const clock = (overrides: Partial<ClockState>): ClockState => ({
+		type: 'countdown',
+		durationMs: 60_000,
+		elapsedMs: 0,
+		isRunning: false,
+		lastStartedAt: null,
+		countUpAfterCountdown: false,
+		...overrides,
+	});
+	const running = (elapsedMs: number, overrides: Partial<ClockState> = {}) =>
+		clock({ isRunning: true, lastStartedAt: NOW - elapsedMs, ...overrides });
+
+	// Where its time stands outranks whether it is counting: a clock that has run
+	// out reads so running or stopped, and only a clock with time left reads paused.
+	it.each([
+		{
+			name: 'no clock',
+			state: null,
+			expected: { state: 'stopped', elapsedMs: 0, remainingMs: null },
+		},
+		{
+			name: 'an untimed clock',
+			state: clock({ type: 'untimed' }),
+			expected: { state: 'untimed', elapsedMs: 0, remainingMs: null },
+		},
+		{
+			name: 'a countdown no time has run on',
+			state: clock({}),
+			expected: { state: 'stopped', elapsedMs: 0, remainingMs: 60_000 },
+		},
+		{
+			name: 'a countdown stopped part-way',
+			state: clock({ elapsedMs: 20_400 }),
+			expected: { state: 'paused', elapsedMs: 20_400, remainingMs: 39_600 },
+		},
+		{
+			name: 'a running countdown, by its stored time and the time since its start',
+			state: running(12_000, { elapsedMs: 8_000 }),
+			expected: { state: 'running', elapsedMs: 20_000, remainingMs: 40_000 },
+		},
+		{
+			name: 'a running countdown with a millisecond left',
+			state: running(59_999),
+			expected: { state: 'running', elapsedMs: 59_999, remainingMs: 1 },
+		},
+		{
+			name: 'a running countdown the instant it runs out',
+			state: running(60_000),
+			expected: { state: 'run-out', elapsedMs: 60_000, remainingMs: 0 },
+		},
+		{
+			name: 'a countdown stopped after it ran out',
+			state: clock({ elapsedMs: 75_000 }),
+			expected: { state: 'run-out', elapsedMs: 75_000, remainingMs: 0 },
+		},
+		{
+			name: 'a countdown that counts up after, the instant it runs out',
+			state: running(60_000, { countUpAfterCountdown: true }),
+			expected: { state: 'counting-up', elapsedMs: 60_000, remainingMs: 0 },
+		},
+		{
+			name: 'overtime a millisecond short of its count-up limit',
+			state: running(64_999, { countUpAfterCountdown: true, countUpLimitMs: 5_000 }),
+			expected: { state: 'counting-up', elapsedMs: 64_999, remainingMs: 0 },
+		},
+		{
+			name: 'overtime the instant it reaches its count-up limit',
+			state: running(65_000, { countUpAfterCountdown: true, countUpLimitMs: 5_000 }),
+			expected: { state: 'holding', elapsedMs: 65_000, remainingMs: 0 },
+		},
+		{
+			name: 'overtime with no count-up limit',
+			state: running(700_000, { countUpAfterCountdown: true, countUpLimitMs: null }),
+			expected: { state: 'counting-up', elapsedMs: 700_000, remainingMs: 0 },
+		},
+		{
+			name: 'a count-up clock stopped past its duration',
+			state: clock({ type: 'countup', elapsedMs: 90_000 }),
+			expected: { state: 'paused', elapsedMs: 90_000, remainingMs: null },
+		},
+		{
+			name: 'a running count-up clock',
+			state: running(90_000, { type: 'countup' }),
+			expected: { state: 'running', elapsedMs: 90_000, remainingMs: null },
+		},
+		{
+			name: 'a clock started after now, its time never below zero',
+			state: running(-5_000),
+			expected: { state: 'running', elapsedMs: 0, remainingMs: 60_000 },
+		},
+	])('reads $name as $expected.state', ({ state, expected }) => {
+		expect(projectFeatureMatchClock(state, NOW, '')).toMatchObject(expected);
 	});
 });
