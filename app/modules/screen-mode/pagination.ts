@@ -3,7 +3,7 @@ import type { PageRotationConfig } from '~~/shared/screenModeConfigs/subShapes';
 import type { PageRotationMode } from '~~/shared/screenModes';
 import type { ModeConfigTypeMap, ScreenModeConfigPatch } from '~~/shared/types/screenConfig';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
-import { computed, ref, watchEffect } from 'vue';
+import { computed } from 'vue';
 import { msUntilNextRotationFlip, projectRotationPage, rotationAnchorForPage, rotationPageCount, rotationPageSize } from '~~/shared/modules/page-rotation';
 import { screenModePageRotation } from '~~/shared/screenModes';
 
@@ -41,47 +41,25 @@ export interface ProjectedRotationPageOptions {
  * rather than projecting on an unknown clock.
  */
 export function useProjectedRotationPage(options: ProjectedRotationPageOptions): ComputedRef<number | null> {
-	const { isSynced, serverTimeOffset, getServerTime } = useServerTime();
-
-	// Bumped at each projected flip boundary so the projection re-evaluates
-	// exactly when the page changes, instead of polling.
-	const rotationTick = ref(0);
-
-	if (import.meta.client) {
-		watchEffect((onCleanup) => {
-			if (!options.autoPageEnabled.value || !isSynced.value)
-				return;
-			void rotationTick.value;
-			void serverTimeOffset.value;
-			const ms = msUntilNextRotationFlip({
-				rotationAnchor: options.rotationAnchor.value,
-				pageDurationMs: options.autoPageIntervalMs.value,
-				totalPages: options.totalPages.value,
-				now: getServerTime(),
-			});
-			if (ms === null)
-				return;
-			const timer = setTimeout(() => {
-				rotationTick.value++;
-			}, ms);
-			onCleanup(() => clearTimeout(timer));
-		});
-	}
-
-	return computed<number | null>(() => {
+	return useClockProjection<number | null>((serverTime) => {
 		if (!options.autoPageEnabled.value)
-			return null;
-		if (!isSynced.value)
-			return 1;
-		// Re-project on each boundary tick and whenever the sync estimate moves.
-		void rotationTick.value;
-		void serverTimeOffset.value;
-		return projectRotationPage({
+			return { value: null, nextChangeInMs: null };
+		const rotation = {
 			rotationAnchor: options.rotationAnchor.value,
 			pageDurationMs: options.autoPageIntervalMs.value,
 			totalPages: options.totalPages.value,
-			now: getServerTime(),
-		});
+			now: serverTime,
+		};
+		return {
+			value: projectRotationPage(rotation),
+			nextChangeInMs: msUntilNextRotationFlip(rotation),
+		};
+	}, {
+		whileServerTimeUnknown: {
+			show: () => options.autoPageEnabled.value
+				? 1
+				: null,
+		},
 	});
 }
 

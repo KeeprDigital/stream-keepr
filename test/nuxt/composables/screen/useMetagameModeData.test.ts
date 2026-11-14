@@ -72,11 +72,10 @@ mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig))
 // Server time is the Page Rotation's clock.
 const mockIsSynced = ref(true);
 let mockServerNow = 1_000_000;
-mockNuxtImport('useServerTime', () => () => ({
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	isSynced: mockIsSynced,
-	serverTimeOffset: ref(0),
 	getServerTime: () => mockServerNow,
-}));
+})));
 
 /** The Metagame Screen Output read's answer: the breakdown its configured view renders. */
 function archetypeRead(breakdown: Record<string, unknown>) {

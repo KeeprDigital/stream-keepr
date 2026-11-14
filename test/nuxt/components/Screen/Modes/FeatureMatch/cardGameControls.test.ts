@@ -2,7 +2,7 @@ import type { DbEvent } from '~~/server/db/schema';
 import type { Game } from '~~/shared/types/enums';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, reactive, ref } from 'vue';
 import { eventKind, getMatchFormatDefaults } from '~~/shared/config/games';
 import { featureMatchModeConfigContract } from '~~/shared/screenModeConfigs/featureMatch';
@@ -11,6 +11,7 @@ import { createInitialOvertimeState } from '~~/shared/types/featureMatchState';
 import { toScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
 import { createMockEvent, createMockFeatureMatch, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 import { matchStatePart, offeredMatchStateParts } from '~~/test/nuxt/helpers/featureMatchControls';
+import { clock } from '~~/test/nuxt/helpers/featureMatchStateHarness';
 import Display from '~/components/Screen/Modes/FeatureMatch/Display.vue';
 
 /*
@@ -31,6 +32,7 @@ const matchState = createMockFeatureMatchState({
 		],
 	},
 });
+const THIRTY_MINUTES = 30 * 60_000;
 const match = createMockFeatureMatch({ id: 1 });
 
 // The mode's data is faked, so nothing reads the Screen context it is handed.
@@ -55,13 +57,7 @@ mockNuxtImport('useFeatureMatchStateStore', () => () => ({
 	]),
 	startOvertime: vi.fn(),
 }));
-mockNuxtImport('useClockDisplay', () => () => ({
-	displayTime: computed(() => '30:00'),
-	showsClock: computed(() => true),
-	timeColorClass: computed(() => ''),
-	isExpired: computed(() => false),
-	isInOvertime: computed(() => false),
-}));
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime());
 mockNuxtImport('usePlayerFeatureMatchData', () => (_matchId: unknown, side: () => 'player1' | 'player2') => ({
 	player: computed(() => matchState[side()]),
 	playerName: computed(() => side()),
@@ -120,6 +116,10 @@ function mountControls(game: Game, toggles: Partial<DbEvent> = {}) {
 }
 
 describe('feature Match Controls by Card Game', () => {
+	beforeEach(() => {
+		matchState.clock = clock({ durationMs: THIRTY_MINUTES });
+	});
+
 	it.each([
 		[
 			'mtg',
@@ -158,5 +158,34 @@ describe('feature Match Controls by Card Game', () => {
 		expect(wrapper.find('[data-player-side="player1"]').attributes('data-active')).toBe('true');
 		expect(wrapper.find('[data-player-side="player2"]').attributes('data-active')).toBe('false');
 		expect(wrapper.find('[data-player-side="player1"] [data-icon="i-lucide-flag"]').exists()).toBe(true);
+	});
+
+	// Its clock takes its state's colour, pulse and count-up mark; which state takes which is clockAppearance's own test.
+	it.each([
+		{
+			name: 'run out and still running',
+			held: {
+				elapsedMs: 31 * 60_000,
+				isRunning: true,
+				lastStartedAt: Date.now(),
+			},
+			classes: ['text-error', 'clock--pulse'],
+		},
+		{
+			name: 'counting up after running out',
+			held: {
+				elapsedMs: 31 * 60_000,
+				isRunning: true,
+				lastStartedAt: Date.now(),
+				countUpAfterCountdown: true,
+			},
+			classes: ['text-error', 'clock--overtime'],
+		},
+	])('draws a clock $name as $classes', ({ held, classes }) => {
+		matchState.clock = clock({ durationMs: THIRTY_MINUTES, ...held });
+
+		const shown = mountControls('mtg').get('[data-clock-state]').classes();
+
+		expect(shown.filter(token => token !== 'clock').sort()).toEqual([...classes].sort());
 	});
 });

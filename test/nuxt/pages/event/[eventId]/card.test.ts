@@ -226,6 +226,12 @@ function shownDecks() {
 	return [cardStore.deckListPlayer1?.playerName, cardStore.deckListPlayer2?.playerName];
 }
 
+// The page writes its link without awaiting it: a write still pending when the
+// file ends lands after the window is gone. A new navigation supersedes it.
+afterEach(async () => {
+	await useRouter().replace({ query: {} });
+});
+
 describe('cards page matchup Deck Lists', () => {
 	let wrapper: ReturnType<typeof mount> | undefined;
 

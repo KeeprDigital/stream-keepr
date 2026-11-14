@@ -1,5 +1,6 @@
 import type { MaybeRefOrGetter } from 'vue';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
+import { minutesToMs } from '~~/shared/utils/clock';
 
 export function useClockControls(matchId: MaybeRefOrGetter<number>) {
 	const eventStore = useEventStore();
@@ -12,7 +13,7 @@ export function useClockControls(matchId: MaybeRefOrGetter<number>) {
 		const { clockDuration } = toFeatureMatchDefaults(eventStore.displayEvent);
 		if (!clockDuration)
 			return undefined;
-		return clockDuration * 60 * 1000;
+		return minutesToMs(clockDuration);
 	});
 
 	function start() {

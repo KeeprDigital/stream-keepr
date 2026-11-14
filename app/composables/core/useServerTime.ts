@@ -1,19 +1,82 @@
 const SYNC_INTERVAL = 60 * 1000; // Re-sync every 60 seconds
-const SAMPLE_COUNT = 3; // Number of samples to average
+const SAMPLE_COUNT = 3; // Samples per sync; the one with the shortest round trip is taken
 const SAMPLE_DELAY_MS = 50;
 const REQUEST_TIMEOUT_MS = 3000;
 /** A round trip bounds its offset's error to half of itself; above this it is too loose to trust. */
 const MAX_SAMPLE_RTT_MS = 1000;
+/** A correction larger than this is applied at once; one up to it is eased in (ADR-0088). */
+const STEP_CORRECTION_THRESHOLD_MS = 500;
+/** The most of elapsed time an eased correction may add or take, so server time always advances. */
+const MAX_EASE_RATE = 0.1;
+/** Below this a device wait's fraction is arithmetic error, not time to round up. */
+const EASE_ROUNDING_MS = 1e-6;
+/** A re-sync asked for by the page coming back is skipped this soon after a sync. */
+const RESYNC_MIN_GAP_MS = 5000;
 const TIME_ENDPOINT = '/api/time';
+
+/** A correction being eased in: from the offset `from`, applied since device time `startedAt`. */
+interface EasedCorrection {
+	from: number;
+	startedAt: number;
+}
 
 let globalSyncActive = false;
 let syncIntervalId: ReturnType<typeof setInterval> | null = null;
+let correctionEndId: ReturnType<typeof setTimeout> | null = null;
+let syncsInFlight = 0;
+let stopReturnListeners: (() => void) | null = null;
 
 export function useServerTime() {
 	const serverTimeOffset = useState<number>('serverTimeOffset', () => 0);
 	const isSynced = useState<boolean>('serverTimeSynced', () => false);
 	const hasWarned = useState<boolean>('serverTimeSyncWarned', () => false);
 	const lastSyncedAt = useState<number | null>('serverTimeLastSyncedAt', () => null);
+	/** Null once `serverTimeOffset` is applied in full. */
+	const correction = useState<EasedCorrection | null>('serverTimeCorrection', () => null);
+
+	/** The offset server time is read at now: `serverTimeOffset`, less what a correction has yet to ease in. */
+	function appliedOffset(): number {
+		const target = serverTimeOffset.value;
+		const easing = correction.value;
+		if (!easing)
+			return target;
+		const eased = Math.max(0, Date.now() - easing.startedAt) * MAX_EASE_RATE;
+		const remaining = target - easing.from;
+		return Math.abs(remaining) <= eased
+			? target
+			: easing.from + Math.sign(remaining) * eased;
+	}
+
+	/**
+	 * Take a sync's offset. The first, and a correction over the threshold, is
+	 * applied at once; a smaller one is eased in from the offset now applied, and
+	 * `correction` clears as it completes so reactive readers of server time read
+	 * it again.
+	 */
+	function applyOffset(offset: number) {
+		const from = appliedOffset();
+		if (correctionEndId !== null) {
+			clearTimeout(correctionEndId);
+			correctionEndId = null;
+		}
+
+		const size = Math.abs(offset - from);
+		const eases = isSynced.value && size > 0 && size <= STEP_CORRECTION_THRESHOLD_MS;
+		correction.value = eases
+			? {
+					from,
+					startedAt: Date.now(),
+				}
+			: null;
+		serverTimeOffset.value = offset;
+
+		if (eases) {
+			correctionEndId = setTimeout(() => {
+				correctionEndId = null;
+				correction.value = null;
+			}, Math.ceil(size / MAX_EASE_RATE));
+		}
+	}
 
 	/**
 	 * Fetch a single time sample with RTT compensation
@@ -39,6 +102,7 @@ export function useServerTime() {
 	 * Perform time synchronization with multiple samples
 	 */
 	async function sync(): Promise<void> {
+		syncsInFlight++;
 		try {
 			const samples: { offset: number; rtt: number }[] = [];
 
@@ -64,7 +128,11 @@ export function useServerTime() {
 				? trusted
 				: samples;
 
-			if (usable.length === 0) {
+			// A round trip bounds its sample's error to half of itself, so the
+			// shortest is the best estimate; averaging would only add the others' error.
+			const [best] = usable.toSorted((a, b) => a.rtt - b.rtt);
+
+			if (!best) {
 				// `isSynced` says an offset is held, not that the last sync answered:
 				// consumers read `false` as an unknown clock, and a missed re-sync
 				// leaves the offset already held as good as it was.
@@ -75,14 +143,7 @@ export function useServerTime() {
 				return;
 			}
 
-			// Sort by RTT and discard the highest (most affected by network latency)
-			usable.sort((a, b) => a.rtt - b.rtt);
-			const validSamples = usable.slice(0, Math.max(1, SAMPLE_COUNT - 1));
-
-			// Average the remaining offsets
-			const averageOffset = validSamples.reduce((sum, s) => sum + s.offset, 0) / validSamples.length;
-
-			serverTimeOffset.value = averageOffset;
+			applyOffset(best.offset);
 			isSynced.value = true;
 			hasWarned.value = false;
 			lastSyncedAt.value = Date.now();
@@ -93,13 +154,56 @@ export function useServerTime() {
 				hasWarned.value = true;
 			}
 		}
+		finally {
+			syncsInFlight--;
+		}
 	}
 
 	/**
 	 * Get the current estimated server time
 	 */
 	function getServerTime(): number {
-		return Date.now() + serverTimeOffset.value;
+		return Date.now() + appliedOffset();
+	}
+
+	/**
+	 * How long on the device's clock until server time, as read, has advanced by
+	 * `serverMs`. While a correction is eased in server time runs faster or
+	 * slower than the device's, so a wait for it is shorter or longer by what the
+	 * correction applies within it (ADR-0088). To the whole millisecond above,
+	 * so a timer set for it never ends before server time is there.
+	 */
+	function deviceDelayFor(serverMs: number): number {
+		const remaining = serverTimeOffset.value - appliedOffset();
+		if (remaining === 0)
+			return serverMs;
+		const rate = 1 + Math.sign(remaining) * MAX_EASE_RATE;
+		const easedServerMs = Math.abs(remaining) / MAX_EASE_RATE * rate;
+		const deviceMs = serverMs <= easedServerMs
+			? serverMs / rate
+			: serverMs - remaining;
+		return Math.ceil(deviceMs - EASE_ROUNDING_MS);
+	}
+
+	/**
+	 * Re-sync because the page is back: a hidden tab's timers were throttled, and
+	 * an offline device's syncs went unanswered. Skipped while a sync is running
+	 * or just after one. A last sync in the device's future means its clock was
+	 * set back, which is itself a reason to sync.
+	 */
+	function resyncOnReturn() {
+		const sinceLastSync = lastSyncedAt.value === null
+			? null
+			: Date.now() - lastSyncedAt.value;
+		const justSynced = sinceLastSync !== null && sinceLastSync >= 0 && sinceLastSync < RESYNC_MIN_GAP_MS;
+		if (syncsInFlight > 0 || justSynced)
+			return;
+		void sync();
+	}
+
+	function resyncWhenVisible() {
+		if (document.visibilityState === 'visible')
+			resyncOnReturn();
 	}
 
 	/**
@@ -116,6 +220,14 @@ export function useServerTime() {
 
 		// Periodic re-sync
 		syncIntervalId = setInterval(sync, SYNC_INTERVAL);
+
+		// Held by the page, not by the scope of whichever consumer started the sync.
+		document.addEventListener('visibilitychange', resyncWhenVisible);
+		window.addEventListener('online', resyncOnReturn);
+		stopReturnListeners = () => {
+			document.removeEventListener('visibilitychange', resyncWhenVisible);
+			window.removeEventListener('online', resyncOnReturn);
+		};
 	}
 
 	/**
@@ -127,6 +239,8 @@ export function useServerTime() {
 			clearInterval(syncIntervalId);
 			syncIntervalId = null;
 		}
+		stopReturnListeners?.();
+		stopReturnListeners = null;
 		globalSyncActive = false;
 	}
 
@@ -143,6 +257,7 @@ export function useServerTime() {
 		isSynced: readonly(isSynced),
 		lastSyncedAt: readonly(lastSyncedAt),
 		getServerTime,
+		deviceDelayFor,
 		sync,
 		startSync,
 		stopSync,

@@ -1,11 +1,14 @@
 export {
 	applyClockAdjustment,
+	clockTransitions,
 	formatClockTime,
 	getEffectiveElapsedMs,
 	normalizeTimeInput,
 	parseTimeInput,
+	readStoredClock,
+	writeStoredClock,
 } from './clock';
-export type { ClockAdjustmentInput } from './clock';
+export type { ClockAdjustmentInput, FeatureMatchClock } from './clock';
 
 export {
 	applyCommanderDamage,
@@ -20,12 +23,15 @@ export {
 } from './commander';
 
 export {
+	applyFeatureMatchClockCommand,
 	applyFeatureMatchSessionEvent,
 	createInitialFeatureMatchSessionStateFromSnapshot,
 	isCommandOutsideSessionVariant,
+	isCoveredByBulkClockAction,
 	normalizeFeatureMatchSessionCommandPayload,
 } from './reducer';
 export type {
+	FeatureMatchClockCommandType,
 	FeatureMatchSessionEventPayload,
 	FeatureMatchSessionReducerResult,
 } from './reducer';

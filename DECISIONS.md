@@ -1883,7 +1883,7 @@ An Event is producing its Feature Match graphics in vMix rather than with a Feat
 
 **A Commander Slot's row holds its four Seats and no game win** (ADR-0087, [#1179](https://github.com/KeeprDigital/stream-keepr/issues/1179)). Its tokens are the four Seats', each with its Commanders' images and no record, and its live state is `player{N}Life` and `player{N}Eliminated` for Seats 1 to 4. Eliminated is a colour, as a game win is: `#FFFFFFFF` while the Seat is Eliminated and `#00000000` otherwise. It has no `player{N}GameWins` or `player{N}Game{N}Win`, because a Commander Session plays one game. The row names the same fields however many Seats are filled, so a vMix title's bindings hold as Seats fill: an empty Seat's tokens and life are empty strings, and it reads as not Eliminated whatever state the Session holds for it. A Two-Player or One Piece Card Game Event's row is field for field what it was.
 
-**It applies the Overlay's display rules by sharing their code.** The token values moved from the app into `shared/featureMatchOverlayValues.ts`, and the clock's rendering into `formatClockDisplay` in `shared/utils/clock.ts`, which `useClockDisplay` now calls. The row itself is `featureMatchPublicRow`'s (`server/utils/featureMatchPublicRow.ts`), which reads who sits in a Seat as the tokens do (`featureMatchSidePlayer`, ADR-0058). The clock is read at request time: a countdown's remaining time, its overtime when it counts up after, an Untimed Match's Untimed Label (empty while blank), and `0:00` with no Session, as the Overlay shows it. A Slot without a Session starts none.
+**It applies the Overlay's display rules by sharing their code.** The token values moved from the app into `shared/featureMatchOverlayValues.ts`, and the clock's rendering into `projectFeatureMatchClock` in `shared/utils/clock.ts`, which `useClockDisplay` now calls. The row itself is `featureMatchPublicRow`'s (`server/utils/featureMatchPublicRow.ts`), which reads who sits in a Seat as the tokens do (`featureMatchSidePlayer`, ADR-0058). The clock is read at request time: a countdown's remaining time, its overtime when it counts up after, an Untimed Match's Untimed Label (empty while blank), and `0:00` with no Session, as the Overlay shows it. A Slot without a Session starts none.
 
 ### Why
 
@@ -2690,7 +2690,7 @@ Productions want to show how far past time a Match or Round has run, but only fo
 
 **Both clocks share one rule: counting up after running out is opt-in, and may hold at a limit in whole minutes (1 to 600), or count up without one.** `countUpOvertimeMs` (`shared/utils/clock.ts`) is the rule, with the bounds `COUNT_UP_LIMIT_MINUTES_MIN` and `COUNT_UP_LIMIT_MINUTES_MAX`. Both clocks stay clock projections: a held clock is a display, and nothing writes when it reaches its limit.
 
-**A Feature Match Session clock takes its limit from its Event.** `events.feature_match_default_count_up_limit` (minutes, `null` for no limit) sits beside the count-up toggle in the Event's Format Settings. As with the toggle, a Session's clock takes it when its state is created (`countUpLimitMs` on `ClockState`), so an edit applies to the next Match or a Match reset, not to a running one. A Match reset rebuilds the state from the Session's source snapshot, so an Event write naming any Feature Match default besides best of corrects every active Session's snapshot to the Event's defaults (`applyEventDefaults`, a `SnapshotCorrected` that leaves the state alone), and the Slots are announced. A state persisted before the limit existed carries none and counts up without limit. `formatClockDisplay` applies it, so the operator clock, both Feature Match Screen Modes and the public Feature Match read all hold at the same value.
+**A Feature Match Session clock takes its limit from its Event.** `events.feature_match_default_count_up_limit` (minutes, `null` for no limit) sits beside the count-up toggle in the Event's Format Settings. As with the toggle, a Session's clock takes it when its state is created (`countUpLimitMs` on `ClockState`), so an edit applies to the next Match or a Match reset, not to a running one. A Match reset rebuilds the state from the Session's source snapshot, so an Event write naming any Feature Match default besides best of corrects every active Session's snapshot to the Event's defaults (`applyEventDefaults`, a `SnapshotCorrected` that leaves the state alone), and the Slots are announced. A state persisted before the limit existed carries none and counts up without limit. `projectFeatureMatchClock` applies it, so the operator clock, both Feature Match Screen Modes and the public Feature Match read all hold at the same value.
 
 **A Round Clock counts up when its Screen says so.** `countUpAfterEnd` (off by default) and `countUpLimitMinutes` (unset for no limit) are Round Clock Screen config, set in the Clock card. `projectRoundClock` takes them, and after the end shows the time since the end, re-evaluating each second until it holds. The state stays `ended`, so its colour is the clock's colour after the end.
 
@@ -2743,7 +2743,7 @@ Every clock showed whole seconds by rounding down. A 50:00 countdown so read `49
 
 ### Decision
 
-**A countdown shows the time remaining rounded up to the whole second; elapsed time and overtime are rounded down, as before.** This holds for a Feature Match Session clock and a Round Clock alike. `formatCountdownTime` (`shared/utils/clock.ts`) is the rule for time remaining, and `formatClockDisplay` and `projectRoundClock` apply it, so the operator's clock, every Screen Output and the public Feature Match read agree. `formatClockTime` still rounds down, for a count-up clock, overtime, the time since a Round's end, and a length of time such as a duration.
+**A countdown shows the time remaining rounded up to the whole second; elapsed time and overtime are rounded down, as before.** This holds for a Feature Match Session clock and a Round Clock alike. `formatCountdownTime` (`shared/utils/clock.ts`) is the rule for time remaining, and `projectFeatureMatchClock` and `projectRoundClock` apply it, so the operator's clock, every Screen Output and the public Feature Match read agree. `formatClockTime` still rounds down, for a count-up clock, overtime, the time since a Round's end, and a length of time such as a duration.
 
 **A countdown's display changes as each whole second remaining is reached, its last at the end itself.** `countdownNextChangeInMs` names that moment for both clocks, so a rendering re-evaluates exactly then.
 
@@ -3162,3 +3162,73 @@ There is no general way for a layout to show something by live state, and each s
 - **Pods from Melee Sync.** Its mapper refuses more than two competitors, and these shows are not run from Melee.
 - **Deriving Eliminated** from life, Commander Damage or poison. Replacement effects and concessions make the operator the only reliable source.
 - **A general state-driven visibility for layouts.** Wanted eventually, but not needed for two indicators.
+
+## ADR-0088: Every clock projection runs on one scheduler
+
+Accepted · 2026-11-14 · [#1194](https://github.com/KeeprDigital/stream-keepr/issues/1194). Follows ADR-0009, ADR-0022, ADR-0066, ADR-0076 and ADR-0078, and changes none of them. The scheduler is in ([#1195](https://github.com/KeeprDigital/stream-keepr/issues/1195)), and so is the eased time correction ([#1199](https://github.com/KeeprDigital/stream-keepr/issues/1199)).
+
+A Feature Match Session clock's display, a Round Clock, Page Rotation, a Talent Screen's Social Profile Rotation and Card Timeout are each a clock projection: a pure function of stored state and server time. The rules were right, but each rendering timed its own re-evaluation, and the five had drifted. Two re-timed when server time re-synced and waited while it was unknown, one re-timed without waiting, and two did neither, so after a re-sync one output of a clock could change a beat off another.
+
+### Decision
+
+**One scheduler re-evaluates every clock projection.** `useClockProjection` (`app/composables/core/useClockProjection.ts`) takes a pure function of server time that answers a value and how long until that value next changes, or that it will not change on its own, and returns the value reactively. It answers anew:
+
+- exactly when the value next changes;
+- when a reactive input the function reads changes;
+- when the server time offset changes, and when server time first becomes known, even at an offset of zero.
+
+A change further off than one timer can hold (2^31 − 1 ms) is waited for in steps. The wait ends with the scope that owns it. It runs on the client only; a server render takes the projection once.
+
+**Each caller declares what its projection answers while server time is unknown.** The option is required, so a new clock projection cannot skip the question:
+
+| Clock projection                           | While server time is unknown |
+| ------------------------------------------ | ---------------------------- |
+| Page Rotation                              | its first page (ADR-0009)    |
+| Social Profile Rotation on a Talent Screen | its first profile            |
+| Feature Match Session clock display        | the device's own time        |
+| Round Clock                                | the device's own time        |
+| Card Timeout                               | the device's own time        |
+
+A projection on the device's own time is taken again the moment the first sync lands.
+
+**No clock projection holds a timer of its own.** The rule of each stays where it was (`shared/modules/page-rotation`, `shared/modules/talent-screen`, `shared/utils/card/timeout.ts`, `shared/utils/roundClock.ts`, `shared/utils/clock.ts`); only what calls it, and when, moved.
+
+**A sync trusts its tightest sample, and eases a small correction in.** `useServerTime` (`app/composables/core/useServerTime.ts`) takes the offset of the sample with the shortest round trip, since a round trip bounds its sample's error to half of itself and an average only adds the looser samples' error. A sample over the round trip ceiling still counts only while no offset is held.
+
+| Correction                                          | Applied                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------ |
+| The first sync, whatever its size                   | at once                                                            |
+| Larger than `STEP_CORRECTION_THRESHOLD_MS` (500 ms) | at once                                                            |
+| Up to the threshold                                 | eased in at no more than `MAX_EASE_RATE` (a tenth) of elapsed time |
+
+An eased correction is measured from the server time being read, so one that interrupts another carries on from where that one had reached. While it runs, server time advances at between nine and eleven tenths of the device's, and so never stops or moves backwards. `serverTimeOffset` is the offset synced to and changes once, when the sync lands; `getServerTime` answers with what has been eased in so far. `getServerTime` is reactive to the correction completing, so the scheduler, which reads it, answers again then as it does when the offset changes. A wait is for server time to reach the change, not the device's: `deviceDelayFor` answers how long that takes on the device under the correction being eased in, and the scheduler times its wait by it.
+
+**A page coming back re-syncs at once.** Beside the fixed interval, a sync runs when the document becomes visible and when the browser reports it is back online, unless one is running or one completed within `RESYNC_MIN_GAP_MS` (5 s). A last sync dated in the device's future does not count as recent: the device's clock was set back.
+
+### Why
+
+"Wake me when this next changes" is one rule, and getting it right needs the same four things every time: the next change, the inputs, the re-sync, and the unknown clock. Written once, a fix to any of them reaches every clock on air, and two outputs of one clock are held to the same behaviour by construction rather than by five sets of tests.
+
+A correction applied as a step moves server time by its whole size between two reads. Back, and a digit already passed is shown a second time; forward, and one is skipped. Most corrections are a few tens of milliseconds of network jitter, well inside a second, so easing them costs nothing visible and removes the flicker. A clock out by more than half a second is wrong on air, and putting it right at once matters more than a smooth digit.
+
+### Consequences
+
+- A Feature Match Session clock display and a held Screen Card now re-time when server time re-syncs, so a Card hides by the shared clock after a re-sync as every other holder does. A Round Clock now also re-evaluates on a first sync that leaves the offset at zero. Nothing else on air changes.
+- Card Timeout is a projection of the held Card: whichever Card is held is timed, and none is timed while none is held. Nothing arms or cancels a timer by hand.
+- A projection is answered again when its wait runs out, so a test that fakes server time must let it run with the timers it fakes. One frozen at an instant never reaches the change it waits for.
+- The Broadcast Graphics playout clock and Graphic Animation timing are not clock projections of this kind and keep their own timing. So do `useFeatureMatchGameMode`'s automatic overtime and the Edit State modal's prefill, which read the device's own time.
+- While a correction is eased in, two outputs of one clock can differ by up to what is left of it, at most the threshold and for at most five seconds. Before, they differed by the whole correction until each next synced.
+- A wait timed while a correction is eased in is as long on the device as server time takes to reach the change (`deviceDelayFor`), rounded up to the millisecond, so a change lands on its server instant during a correction as it does outside one. A fake of `useServerTime` that the scheduler runs on answers `deviceDelayFor` too; `test/nuxt/helpers/serverTime.ts` is the one such fake.
+- "Synced" still means an offset is held. A missed re-sync keeps the offset held, and a correction under way runs to its end.
+- A device whose clock is changed is put right at the next sync: within a minute, or as soon as the page is shown or comes back online. Nothing watches the device's clock between syncs.
+- The thresholds are starting values chosen so an eased correction completes within five seconds; tune them if an artefact shows on air.
+- Tests: `test/nuxt/composables/core/useServerTime.test.ts` holds the sync's rules. `test/nuxt/composables/core/useClockProjection.test.ts` holds the scheduler's rules. Each consumer keeps one case that it passes its projection and shows the answer: `useClockDisplay.test.ts`, `useRoundClockModeData.test.ts`, `screenModePagination.test.ts`, `useTalentModeData.test.ts` and `stores/card.test.ts`.
+
+### Rejected alternatives
+
+- **A free-running interval per rendering.** Two outputs of one clock change digit up to an interval apart, and each keeps waking with nothing to show.
+- **One answer for every projection while server time is unknown.** A rotation on an unknown clock shows the wrong page beside an output that has synced, so it holds its first; a running clock that held would blank or freeze behind a slow time endpoint.
+- **A scheduler per kind of clock.** The five differ in their rule, not in how they are timed.
+- **Averaging the samples of a sync.** The mean of a tight sample and a loose one is worse than the tight one alone.
+- **Easing every correction.** A clock a minute out would take ten minutes to come right.
+- **Stepping only forwards, easing only backwards.** A forward step still skips a digit on one output of a clock and not on another.

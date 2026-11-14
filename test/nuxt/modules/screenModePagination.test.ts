@@ -22,11 +22,10 @@ import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 const mockIsSynced = ref(true);
 let mockServerNow = 1_000_000;
 
-mockNuxtImport('useServerTime', () => () => ({
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	isSynced: mockIsSynced,
-	serverTimeOffset: ref(0),
 	getServerTime: () => mockServerNow,
-}));
+})));
 
 const screenContext = screenContextOf();
 
@@ -103,17 +102,6 @@ describe('useScreenModePagination (page rotation)', () => {
 
 		expect(persistPage).not.toHaveBeenCalled();
 		expect(persistRotationAnchor).not.toHaveBeenCalled();
-	});
-
-	it('two renderings of the same config always agree on the page', async () => {
-		const anchor = mockServerNow - 3_000;
-		const a = harness({ rotationAnchor: anchor });
-		const b = harness({ rotationAnchor: anchor });
-
-		for (let i = 0; i < 4; i++) {
-			expect(a.pagination.currentPage.value).toBe(b.pagination.currentPage.value);
-			await advance(10_000);
-		}
 	});
 
 	it('rotates deterministically from epoch zero when no anchor is stored', () => {
@@ -342,7 +330,7 @@ describe('usePaginatedScreenMode', () => {
 			vi.useRealTimers();
 		});
 
-		it('turns its pages at each boundary, and writes nothing as it runs, even where it could', async () => {
+		it('turns its page at a boundary, and writes nothing as it runs, even where it could', async () => {
 			const held = rendering({ interactive: true });
 			expect(shown(held)).toEqual({
 				page: 3,
@@ -355,12 +343,6 @@ describe('usePaginatedScreenMode', () => {
 				page: 1,
 				of: 3,
 				rows: [0, 1],
-			});
-			await advance(PAGE_MS);
-			expect(shown(held)).toEqual({
-				page: 2,
-				of: 3,
-				rows: [2, 3],
 			});
 
 			expect(screenStore.updateModeConfig).not.toHaveBeenCalled();

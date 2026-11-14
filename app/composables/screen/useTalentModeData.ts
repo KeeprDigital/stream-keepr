@@ -17,31 +17,18 @@ export interface ShownTalent extends ScreenOutputTalent {
  * while not rotating or while server time is unknown, which shows the first profile.
  */
 function useRotationInstant(rotating: () => boolean, dwellMs: () => number) {
-	const { isSynced, serverTimeOffset, getServerTime } = useServerTime();
-	const tick = ref(0);
-
-	if (import.meta.client) {
-		watchEffect((onCleanup) => {
-			if (!rotating() || !isSynced.value)
-				return;
-			void tick.value;
-			void serverTimeOffset.value;
-			const timer = setTimeout(() => {
-				tick.value++;
-			}, msUntilNextTalentScreenProfile({
-				dwellMs: dwellMs(),
-				now: getServerTime(),
-			}));
-			onCleanup(() => clearTimeout(timer));
-		});
-	}
-
-	return computed<number | undefined>(() => {
-		if (!rotating() || !isSynced.value)
-			return undefined;
-		void tick.value;
-		void serverTimeOffset.value;
-		return getServerTime();
+	return useClockProjection<number | undefined>(serverTime => rotating()
+		? {
+				value: serverTime,
+				nextChangeInMs: msUntilNextTalentScreenProfile({
+					dwellMs: dwellMs(),
+					now: serverTime,
+				}),
+			}
+		: { value: undefined, nextChangeInMs: null }, {
+		whileServerTimeUnknown: {
+			show: () => undefined,
+		},
 	});
 }
 

@@ -40,10 +40,9 @@ const serverTime = {
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
-mockNuxtImport('useServerTime', () => () => ({
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	...serverTime,
-	getServerTime: () => Date.now(),
-}));
+})));
 const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Desk' }),
 	eventId: ref<number | null>(1),

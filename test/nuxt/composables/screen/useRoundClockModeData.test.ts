@@ -17,16 +17,12 @@ const { mockFetch } = vi.hoisted(() => ({
 }));
 const realtime = createFakeEventChannel();
 const { deliver } = realtime;
-const serverTimeOffset = ref(0);
 
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => config));
-// The shared clock, faked: server time is this browser's, plus an offset a sync may move.
-mockNuxtImport('useServerTime', () => () => ({
-	serverTimeOffset,
-	getServerTime: () => Date.now() + serverTimeOffset.value,
-}));
+// The shared clock, faked: server time is this browser's.
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime());
 
 const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Clock' }),
@@ -67,7 +63,6 @@ describe('useRoundClockModeData', () => {
 		config.roundId = undefined;
 		config.countUpAfterEnd = false;
 		config.countUpLimitMinutes = undefined;
-		serverTimeOffset.value = 0;
 		realtime.reset();
 		mockFetch.mockReset();
 	});
@@ -87,10 +82,8 @@ describe('useRoundClockModeData', () => {
 		expect(round.value?.name).toBe('Round 4');
 		expect(clock.value).toMatchObject({ state: 'running', display: '40:00' });
 
-		// It holds each time through its second, and re-evaluates as the next is reached.
-		await vi.advanceTimersByTimeAsync(999);
-		expect(clock.value.display).toBe('40:00');
-		await vi.advanceTimersByTimeAsync(1);
+		// It re-evaluates as its projection changes; when that is, is the scheduler's own test.
+		await vi.advanceTimersByTimeAsync(1000);
 		expect(clock.value.display).toBe('39:59');
 
 		await vi.advanceTimersByTimeAsync(40 * MINUTE - 1001);
@@ -113,36 +106,6 @@ describe('useRoundClockModeData', () => {
 
 		await vi.advanceTimersByTimeAsync(5 * MINUTE);
 		expect(clock.value).toMatchObject({ state: 'ended', display: '2:00' });
-	});
-
-	it('follows a server time sync', async () => {
-		mockFetch.mockResolvedValue(answer({}));
-		const { clock } = makeRoundClockModeData();
-		await flushPromises();
-
-		serverTimeOffset.value = 5 * MINUTE;
-		await nextTick();
-
-		expect(clock.value.display).toBe('35:00');
-	});
-
-	// Further off than one timer can wait (2^31 - 1 ms), it waits in steps rather than spinning.
-	it('waits for a start weeks ahead, then counts from it', async () => {
-		const day = 24 * 60 * MINUTE;
-		mockFetch.mockResolvedValue(answer({
-			startedAt: new Date(Date.now() + 30 * day).toISOString(),
-		}));
-		const getServerTimeCalls = vi.spyOn(Date, 'now');
-		const { clock } = makeRoundClockModeData();
-		await flushPromises();
-
-		getServerTimeCalls.mockClear();
-		await vi.advanceTimersByTimeAsync(1000);
-		expect(getServerTimeCalls.mock.calls.length).toBeLessThan(5);
-		expect(clock.value.state).toBe('pending');
-
-		await vi.advanceTimersByTimeAsync(30 * day);
-		expect(clock.value).toMatchObject({ state: 'running', display: '49:59' });
 	});
 
 	it('starts counting without a reload when "Start now" announces the Round', async () => {

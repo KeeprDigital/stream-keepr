@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PlayerDisplayConfig } from '~/types';
 import { featureMatchModeConfigContract } from '~~/shared/screenModeConfigs/featureMatch';
+import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 
 const eventStore = useEventStore();
 
@@ -59,10 +60,13 @@ const {
 const {
 	displayTime,
 	showsClock,
-	timeColorClass,
-	isExpired,
-	isInOvertime,
-} = useClockDisplay(() => matchState.value?.clock ?? null);
+	state: clockState,
+	projection: clockProjection,
+} = useClockDisplay(
+	() => matchState.value?.clock ?? null,
+	() => toFeatureMatchDefaults(eventStore.displayEvent).untimedLabel,
+);
+const appearance = computed(() => clockAppearance(clockProjection.value));
 
 const gameLabel = computed(() => {
 	// A Commander Session plays one game: there is no game of a best-of to name.
@@ -145,10 +149,11 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 					v-if="config.showClock && showsClock"
 					class="clock"
 					:class="[
-						timeColorClass,
-						{ 'clock--pulse': isExpired && !isInOvertime && matchState.clock.isRunning },
-						{ 'clock--overtime': isInOvertime },
+						appearance.colorClass,
+						{ 'clock--pulse': appearance.pulses },
+						{ 'clock--overtime': appearance.showsCountUp },
 					]"
+					:data-clock-state="clockState"
 				>
 					{{ displayTime }}
 				</span>

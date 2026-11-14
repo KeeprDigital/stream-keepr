@@ -56,11 +56,9 @@ mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig))
 
 // Server time is the Page Rotation's clock; synced and controllable here.
 let mockServerNow = 1_000_000;
-mockNuxtImport('useServerTime', () => () => ({
-	isSynced: ref(true),
-	serverTimeOffset: ref(0),
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	getServerTime: () => mockServerNow,
-}));
+})));
 
 /** `count` ranked cards, named by their rank. */
 function rankedCards(count: number) {

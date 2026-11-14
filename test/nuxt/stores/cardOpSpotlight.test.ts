@@ -12,13 +12,14 @@ const { mockFetch, mockSaveScreenCard, SERVER_NOW, serverNow } = vi.hoisted(() =
 		mockFetch: vi.fn(),
 		mockSaveScreenCard: vi.fn(),
 		SERVER_NOW,
-		serverNow: { value: SERVER_NOW },
+		/** Server time as held still; `null` lets it run with the (faked) device clock. */
+		serverNow: { value: SERVER_NOW as number | null },
 	};
 });
 mockNuxtImport('$fetch', () => mockFetch);
-mockNuxtImport('useServerTime', () => () => ({
-	getServerTime: () => serverNow.value,
-}));
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
+	getServerTime: () => serverNow.value ?? Date.now(),
+})));
 
 let revision = 0;
 mockNuxtImport('useCardRepository', () => () => ({
@@ -228,7 +229,7 @@ describe('card store on a One Piece Event', () => {
 
 		it('hides the shown OP card when its Card Timeout runs out', async () => {
 			vi.useFakeTimers();
-			serverNow.value = Date.now();
+			serverNow.value = null;
 			mockEventStoreState.event.cardTimeout = 10;
 			await store.selectOpCard(zoro);
 			await store.showOpPreviewCard();

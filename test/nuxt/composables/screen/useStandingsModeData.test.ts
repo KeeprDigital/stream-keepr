@@ -107,11 +107,10 @@ const screenContext = screenContextOf({
 });
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => mutableConfig));
 // Server time is the Page Rotation's clock.
-mockNuxtImport('useServerTime', () => () => ({
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	isSynced: mockIsSynced,
-	serverTimeOffset: ref(0),
 	getServerTime: () => mockServerNow,
-}));
+})));
 
 /** The Standings Screen Output read's answer; by default, the roster as it stands. */
 function standingsRead(overrides: Record<string, unknown> = {}) {

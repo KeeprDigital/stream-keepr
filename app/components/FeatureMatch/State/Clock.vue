@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ClockState } from '~~/shared/types/featureMatchState';
+import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
 import { formatClockTime, normalizeTimeInput, parseTimeInput } from '~~/shared/utils/clock';
 
 const props = defineProps<{
@@ -7,15 +8,15 @@ const props = defineProps<{
 	clock: ClockState;
 }>();
 
+const eventStore = useEventStore();
 const clockControls = useClockControls(() => props.matchId);
 const toast = useToast();
 
-const {
-	displayTime,
-	timeColorClass,
-	isExpired,
-	isInOvertime,
-} = useClockDisplay(() => props.clock);
+const { projection, displayTime, state, isRunning } = useClockDisplay(
+	() => props.clock,
+	() => toFeatureMatchDefaults(eventStore.displayEvent).untimedLabel,
+);
+const appearance = computed(() => clockAppearance(projection.value));
 
 const customTimeInput = ref('');
 const popoverOpen = ref(false);
@@ -57,15 +58,16 @@ function handleSetTime() {
 		<button
 			type="button"
 			class="px-2 py-1 rounded-lg cursor-pointer transition-shadow duration-300 hover:bg-elevated"
-			:class="{ 'ring-1 ring-error': isInOvertime }"
+			:class="{ 'ring-1 ring-error': appearance.showsCountUp }"
 			aria-label="Clock controls"
 		>
 			<span
 				class="text-5xl font-mono leading-none transition-colors duration-300"
 				:class="[
-					timeColorClass,
-					{ 'animate-pulse': isExpired && !isInOvertime && clock.isRunning },
+					appearance.colorClass,
+					{ 'animate-pulse': appearance.pulses },
 				]"
+				:data-clock-state="state"
 			>
 				{{ displayTime }}
 			</span>
@@ -76,7 +78,7 @@ function handleSetTime() {
 				<!-- Row 1: Transport -->
 				<div class="flex items-center justify-center gap-3">
 					<UButton
-						v-if="!clock.isRunning"
+						v-if="!isRunning"
 						icon="i-lucide-play"
 						color="primary"
 						variant="subtle"

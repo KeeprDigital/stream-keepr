@@ -12,9 +12,9 @@ const { mockFetch, mockGetServerTime } = vi.hoisted(() => ({
 }));
 mockNuxtImport('$fetch', () => mockFetch);
 
-mockNuxtImport('useServerTime', () => () => ({
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	getServerTime: mockGetServerTime,
-}));
+})));
 
 const mockCardRepo = {
 	saveScreenCard: vi.fn(),

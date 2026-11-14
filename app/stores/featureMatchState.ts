@@ -1,3 +1,4 @@
+import type { FeatureMatchClockCommandType } from '~~/shared/modules/feature-match-session';
 import type { BulkClockAction, PlayerSide, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchSessionResponse } from '~~/shared/types/featureMatchSession';
 import type { CommanderSource, FeatureMatchOutcome, FeatureMatchState, GameWinOptions, PlayerFeatureMatchStateUpdate } from '~~/shared/types/featureMatchState';
@@ -8,16 +9,17 @@ import type {
 } from '~/modules/feature-match-session/client';
 import type { MessageData } from '~/types/realtime';
 import {
-	applyClockAdjustment,
 	applyCommanderDamage,
 	applyCommanderTurnStep,
+	applyFeatureMatchClockCommand,
 	applyFeatureMatchOvertimeStep,
 	applyFeatureMatchTurnStep,
 	isCommanderSession,
+	isCoveredByBulkClockAction,
 	otherFeatureMatchPlayer,
 	pairSeatOf,
 } from '~~/shared/modules/feature-match-session';
-import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
+import { storedClockRuns } from '~~/shared/utils/clock';
 import { useFeatureMatchSessionClient } from '~/modules/feature-match-session/client';
 import { createLiveStateFollower } from '~/modules/live-state/follower';
 import { createOptimisticState } from '~/modules/optimistic-state';
@@ -374,11 +376,14 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 								...player2,
 							}
 						: current.player2,
-					// The clock field is the display reading, so the prediction runs
-					// the same adjustment the server's SetClock applies — writing the
-					// value into elapsedMs would show a countdown clock's complement.
+					// The clock field is the display reading, so the prediction is
+					// the reducer's answer to SetClock — writing the value into
+					// elapsedMs would show a countdown clock's complement.
 					clock: clock
-						? applyClockAdjustment(current.clock, getServerTime(), { targetDisplayMs: clock.targetDisplayMs })
+						? applyFeatureMatchClockCommand(current, 'SetClock', {
+							at: getServerTime(),
+							targetMs: clock.targetDisplayMs,
+						}).clock
 						: current.clock,
 					overtime: overtime
 						? { active: true, turnsRemaining: overtime.totalTurns, totalTurns: overtime.totalTurns }
@@ -390,45 +395,31 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	}
 
 	// ──────────────── Clock Actions ────────────────
+	// Each prediction is the Session reducer's own answer to the command sent, at
+	// the estimated server time, so the answer that lands changes nothing shown.
 
 	function startClock(eventId: number, matchId: number) {
 		return optimistic.run(
 			`clock:start:${matchId}`,
 			matchId,
-			current => ({
-				...current,
-				clock: {
-					...current.clock,
-					isRunning: true,
-					lastStartedAt: getServerTime(),
-				},
+			current => applyFeatureMatchClockCommand(current, 'StartClock', {
+				at: getServerTime(),
 			}),
 			() => repo.startClock(eventId, matchId).then(settleCommandResult),
 		);
 	}
 
 	function pauseClock(eventId: number, matchId: number) {
-		if (!featureMatchStates.value.get(matchId)?.clock.isRunning)
+		const held = featureMatchStates.value.get(matchId);
+		if (!held || !storedClockRuns(held.clock))
 			return null;
 
 		return optimistic.run(
 			`clock:pause:${matchId}`,
 			matchId,
-			(current) => {
-				const now = getServerTime();
-				const additionalElapsed = current.clock.lastStartedAt
-					? now - current.clock.lastStartedAt
-					: 0;
-				return {
-					...current,
-					clock: {
-						...current.clock,
-						isRunning: false,
-						elapsedMs: current.clock.elapsedMs + additionalElapsed,
-						lastStartedAt: null,
-					},
-				};
-			},
+			current => applyFeatureMatchClockCommand(current, 'PauseClock', {
+				at: getServerTime(),
+			}),
 			() => repo.pauseClock(eventId, matchId).then(settleCommandResult),
 		);
 	}
@@ -437,16 +428,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		return optimistic.run(
 			`clock:reset:${matchId}`,
 			matchId,
-			current => ({
-				...current,
-				clock: {
-					...current.clock,
-					elapsedMs: 0,
-					isRunning: false,
-					lastStartedAt: null,
-				},
-				overtime: undefined,
-			}),
+			current => applyFeatureMatchClockCommand(current, 'ResetClock', {}),
 			() => repo.resetClock(eventId, matchId).then(settleCommandResult),
 			// `overtime` may already be unset — the server still clears it on reset.
 			{
@@ -459,14 +441,8 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		return optimistic.run(
 			`clock:restart:${matchId}`,
 			matchId,
-			current => ({
-				...current,
-				clock: {
-					...current.clock,
-					elapsedMs: 0,
-					isRunning: true,
-					lastStartedAt: getServerTime(),
-				},
+			current => applyFeatureMatchClockCommand(current, 'RestartClock', {
+				at: getServerTime(),
 			}),
 			() => repo.restartClock(eventId, matchId).then(settleCommandResult),
 		);
@@ -476,9 +452,9 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		clockAdjustBatch.enqueue(
 			`${matchId}`,
 			matchId,
-			current => ({
-				...current,
-				clock: applyClockAdjustment(current.clock, getServerTime(), { deltaDisplayMs: deltaMs }),
+			current => applyFeatureMatchClockCommand(current, 'AdjustClock', {
+				at: getServerTime(),
+				deltaMs,
 			}),
 			existing => ({
 				eventId,
@@ -492,33 +468,53 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		return optimistic.run(
 			`clock:set:${matchId}`,
 			matchId,
-			current => ({
-				...current,
-				clock: applyClockAdjustment(current.clock, getServerTime(), { targetDisplayMs: targetMs }),
+			current => applyFeatureMatchClockCommand(current, 'SetClock', {
+				at: getServerTime(),
+				targetMs,
 			}),
 			() => repo.setClock(eventId, matchId, targetMs).then(settleCommandResult),
 		);
 	}
 
 	// ──────────────── Bulk Clock Actions ────────────────
+	// A bulk action sends each Slot it covers the command a single action would,
+	// with no duration on a reset, so each Slot's prediction is the same reducer
+	// answer. A Slot it leaves out gets no command, and so no prediction.
 
-	function bulkClockAction(eventId: number, action: BulkClockAction, deltaMs?: number) {
-		const now = getServerTime();
+	const BULK_CLOCK_COMMANDS = {
+		start: 'StartClock',
+		pause: 'PauseClock',
+		reset: 'ResetClock',
+		restart: 'RestartClock',
+		adjust: 'AdjustClock',
+	} as const satisfies Record<BulkClockAction, FeatureMatchClockCommandType>;
 
-		// For 'reset', resolve event default duration so clocks reset to the configured default
-		const eventStore = useEventStore();
-		const defaults = toFeatureMatchDefaults(eventStore.event);
-		const defaultDurationMs = action === 'reset' && defaults.clockDuration
-			? defaults.clockDuration * 60 * 1000
-			: undefined;
+	function predictBulkClockCommand(
+		state: FeatureMatchState,
+		action: BulkClockAction,
+		payload: { at: number; deltaMs?: number },
+	): FeatureMatchState {
+		return isCoveredByBulkClockAction(state)
+			? applyFeatureMatchClockCommand(state, BULK_CLOCK_COMMANDS[action], payload)
+			: state;
+	}
+
+	function bulkClockAction(eventId: number, action: Exclude<BulkClockAction, 'adjust'>) {
+		const at = getServerTime();
 
 		return optimistic.run(
 			`bulk:${action}`,
 			[
 				...featureMatchStates.value.keys(),
 			],
-			state => computeBulkClockOptimistic(state, action, now, deltaMs, defaultDurationMs),
-			async () => cacheBulkUpdates((await repo.bulkClockAction(eventId, action, deltaMs))?.updates ?? undefined),
+			(state) => {
+				// A Slot the command leaves as it is takes no part in the action.
+				const predicted = predictBulkClockCommand(state, action, { at });
+				return predicted === state
+					? null
+					: predicted;
+			},
+			async () => cacheBulkUpdates((await repo.bulkClockAction(eventId, action))?.updates ?? undefined),
 			// 'reset' clears overtime server-side even when it is already unset.
 			action === 'reset'
 				? {
@@ -526,71 +522,6 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 					}
 				: undefined,
 		);
-	}
-
-	function computeBulkClockOptimistic(
-		state: FeatureMatchState,
-		action: BulkClockAction,
-		now: number,
-		deltaMs?: number,
-		defaultDurationMs?: number,
-	): FeatureMatchState | null {
-		if (state.clock.type === 'untimed')
-			return null;
-		switch (action) {
-			case 'start':
-				return state.clock.isRunning
-					? null
-					: {
-							...state,
-							clock: { ...state.clock, isRunning: true, lastStartedAt: now },
-						};
-			case 'pause': {
-				if (!state.clock.isRunning)
-					return null;
-				const additionalElapsed = state.clock.lastStartedAt
-					? now - state.clock.lastStartedAt
-					: 0;
-				return {
-					...state,
-					clock: {
-						...state.clock,
-						isRunning: false,
-						elapsedMs: state.clock.elapsedMs + additionalElapsed,
-						lastStartedAt: null,
-					},
-				};
-			}
-			case 'reset':
-				return {
-					...state,
-					clock: {
-						...state.clock,
-						elapsedMs: 0,
-						isRunning: false,
-						lastStartedAt: null,
-						...(defaultDurationMs !== undefined && { durationMs: defaultDurationMs }),
-					},
-					overtime: undefined,
-				};
-			case 'restart':
-				return {
-					...state,
-					clock: {
-						...state.clock,
-						elapsedMs: 0,
-						isRunning: true,
-						lastStartedAt: now,
-					},
-				};
-			case 'adjust':
-				return deltaMs !== undefined
-					? {
-							...state,
-							clock: applyClockAdjustment(state.clock, now, { deltaDisplayMs: deltaMs }),
-						}
-					: null;
-		}
 	}
 
 	function startAllClocks(eventId: number) {
@@ -606,16 +537,13 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		return bulkClockAction(eventId, 'restart');
 	}
 	function adjustAllClocks(eventId: number, deltaMs: number) {
-		const now = getServerTime();
+		const at = getServerTime();
 		bulkAdjustBatch.enqueue(
 			'all',
 			[
 				...featureMatchStates.value.keys(),
 			],
-			state => ({
-				...state,
-				clock: applyClockAdjustment(state.clock, now, { deltaDisplayMs: deltaMs }),
-			}),
+			state => predictBulkClockCommand(state, 'adjust', { at, deltaMs }),
 			existing => ({
 				eventId,
 				totalDeltaMs: (existing?.totalDeltaMs ?? 0) + deltaMs,

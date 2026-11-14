@@ -5,7 +5,7 @@ import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { eventKind, eventSeats } from '~~/shared/config/games';
 import { featureMatchTokenValues } from '~~/shared/featureMatchOverlayValues';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { formatClockDisplay } from '~~/shared/utils/clock';
+import { projectFeatureMatchClock, readStoredClock } from '~~/shared/utils/clock';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 
 /**
@@ -77,7 +77,9 @@ export function featureMatchPublicRow(input: FeatureMatchPublicRowInput, now: nu
 
 	return {
 		...featureMatchTokenValues(input),
-		clock: formatClockDisplay(state?.clock ?? null, now, toFeatureMatchDefaults(input.event).untimedLabel),
+		clock: projectFeatureMatchClock(state
+			? readStoredClock(state.clock)
+			: null, now, toFeatureMatchDefaults(input.event).untimedLabel).display,
 		...(eventKind(input.event) === 'mtg-commander'
 			? commanderLiveValues(input.featureMatch, state)
 			: pairLiveValues(state)),

@@ -39,11 +39,9 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	},
 	resetConfig: vi.fn(),
 }));
-mockNuxtImport('useServerTime', () => () => ({
-	isSynced: ref(true),
-	serverTimeOffset: ref(0),
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	getServerTime: () => 1_000_000,
-}));
+})));
 
 const playerLists = {
 	isLoaded: false,

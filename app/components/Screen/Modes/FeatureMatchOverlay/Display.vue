@@ -156,7 +156,10 @@ const themeFrameVideo = computed<ScreenVideoPlayback | undefined>(() => {
 	};
 });
 const frameAnimationEnabled = computed(() => config.value.layout.frame.animation?.enabled === true);
-const { displayTime, showsClock } = useClockDisplay(() => matchState.value?.clock ?? null);
+const { displayTime, showsClock } = useClockDisplay(
+	() => matchState.value?.clock ?? null,
+	() => toFeatureMatchDefaults(event.value).untimedLabel,
+);
 const selectedPreviewTarget = ref<FeatureMatchOverlaySelectionTarget>({ type: 'canvas' });
 /**
  * The shared item tree's own selection, held separately from the host-owned one

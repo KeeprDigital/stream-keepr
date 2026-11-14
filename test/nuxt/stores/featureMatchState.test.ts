@@ -28,9 +28,6 @@ vi.mock('~/modules/feature-match-session/client', async () => {
 mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => SERVER_NOW,
 }));
-mockNuxtImport('useEventStore', () => () => ({
-	event: { featureMatchDefaultClockDuration: 50 },
-}));
 
 // Batched writes flush at once, so a test sees each write as soon as it is made.
 vi.mock('@vueuse/core', async () => {
