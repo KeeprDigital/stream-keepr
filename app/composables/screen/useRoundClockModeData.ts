@@ -31,7 +31,7 @@ export function useRoundClockModeData(context: ScreenContext) {
 	/** An output yet to sync counts on its own time rather than showing nothing. */
 	const clock = useClockProjection((serverTime) => {
 		const held = round.value;
-		const projected = projectRoundClock({
+		return selfTimed(projectRoundClock({
 			startedAt: held?.startedAt
 				? Date.parse(held.startedAt)
 				: null,
@@ -43,8 +43,7 @@ export function useRoundClockModeData(context: ScreenContext) {
 			limitMs: config.value.countUpLimitMinutes == null
 				? null
 				: minutesToMs(config.value.countUpLimitMinutes),
-		});
-		return { value: projected, nextChangeInMs: projected.nextChangeInMs };
+		}));
 	}, { whileServerTimeUnknown: 'device-time' });
 
 	const isEmpty = computed(() => freshness.answered.value && !round.value);

@@ -12,11 +12,11 @@ const eventStore = useEventStore();
 const clockControls = useClockControls(() => props.matchId);
 const toast = useToast();
 
-const { displayTime, state, isRunning } = useClockDisplay(
+const { projection, displayTime, state, isRunning } = useClockDisplay(
 	() => props.clock,
 	() => toFeatureMatchDefaults(eventStore.displayEvent).untimedLabel,
 );
-const appearance = computed(() => clockAppearance(state.value, isRunning.value));
+const appearance = computed(() => clockAppearance(projection.value));
 
 const customTimeInput = ref('');
 const popoverOpen = ref(false);
@@ -58,7 +58,7 @@ function handleSetTime() {
 		<button
 			type="button"
 			class="px-2 py-1 rounded-lg cursor-pointer transition-shadow duration-300 hover:bg-elevated"
-			:class="{ 'ring-1 ring-error': appearance.showsOvertime }"
+			:class="{ 'ring-1 ring-error': appearance.showsCountUp }"
 			aria-label="Clock controls"
 		>
 			<span

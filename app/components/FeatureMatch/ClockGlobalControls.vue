@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { storedClockRuns } from '~~/shared/utils/clock';
+import { clockRunState, readStoredClock } from '~~/shared/utils/clock';
 
 const eventStore = useEventStore();
 const featureMatchStore = useFeatureMatchStore();
@@ -15,23 +15,17 @@ const untimedCount = computed(() => [
 const matchCount = computed(() => featureMatchStore.featureMatches.length - untimedCount.value);
 const isDisabled = computed(() => !eventStore.eventId || matchCount.value <= 0);
 
-const runningCount = computed(() => {
-	let count = 0;
+/** How many timed clocks are in each run state, wherever their time stands. */
+const runStateCounts = computed(() => {
+	const counts = { running: 0, paused: 0, stopped: 0 };
 	for (const state of featureMatchStateStore.featureMatchStates.values()) {
-		if (state.clock.type !== 'untimed' && storedClockRuns(state.clock))
-			count++;
+		if (state.clock.type !== 'untimed')
+			counts[clockRunState(readStoredClock(state.clock))]++;
 	}
-	return count;
+	return counts;
 });
-
-const pausedCount = computed(() => {
-	let count = 0;
-	for (const state of featureMatchStateStore.featureMatchStates.values()) {
-		if (state.clock.type !== 'untimed' && !storedClockRuns(state.clock) && state.clock.elapsedMs > 0)
-			count++;
-	}
-	return count;
-});
+const runningCount = computed(() => runStateCounts.value.running);
+const pausedCount = computed(() => runStateCounts.value.paused);
 
 const statusText = computed(() => {
 	if (matchCount.value <= 0)

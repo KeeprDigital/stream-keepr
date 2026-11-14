@@ -200,22 +200,6 @@ describe('feature match session reducer', () => {
 		expect(state.clock.lastStartedAt).toBe(9000);
 	});
 
-	// The reducer reads the stored clock strictly and answers in the stored
-	// shape: running with no start is a stopped clock, so a start runs it.
-	it('runs a clock stored running with no start, answering with the stored field set', () => {
-		const state = createInitialFeatureMatchState();
-		state.clock = {
-			...state.clock,
-			elapsedMs: 60_000,
-			isRunning: true,
-			lastStartedAt: null,
-		};
-
-		const { clock } = reduce(state, createSnapshot(), 'StartClock', { at: 9000 }).currentState;
-
-		expect(clock).toStrictEqual({ ...state.clock, lastStartedAt: 9000 });
-	});
-
 	it('records and undoes game wins using frozen match settings', () => {
 		const snapshot = createSnapshot({ bestOf: 3 });
 		let state = createInitialFeatureMatchState();

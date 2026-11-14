@@ -295,6 +295,15 @@ function isRefusedByUntimedMatch(currentState: FeatureMatchState, type: string):
 	return currentState.clock.type === 'untimed' && UNTIMED_REFUSED_COMMANDS.has(type);
 }
 
+/**
+ * Whether a bulk clock action reaches a Session: every one but an Untimed
+ * Match's, which has no clock to act on. What sends the action and what
+ * predicts its answer both ask here, so neither covers a Slot the other leaves out.
+ */
+export function isCoveredByBulkClockAction(currentState: FeatureMatchState): boolean {
+	return currentState.clock.type !== 'untimed';
+}
+
 const CLOCK_COMMAND_TYPES = [
 	'AdjustClock',
 	'SetClock',

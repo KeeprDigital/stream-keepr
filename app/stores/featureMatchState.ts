@@ -15,6 +15,7 @@ import {
 	applyFeatureMatchOvertimeStep,
 	applyFeatureMatchTurnStep,
 	isCommanderSession,
+	isCoveredByBulkClockAction,
 	otherFeatureMatchPlayer,
 	pairSeatOf,
 } from '~~/shared/modules/feature-match-session';
@@ -476,8 +477,9 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	}
 
 	// ──────────────── Bulk Clock Actions ────────────────
-	// A bulk action sends each Slot the command a single action would, with no
-	// duration on a reset, so each Slot's prediction is the same reducer answer.
+	// A bulk action sends each Slot it covers the command a single action would,
+	// with no duration on a reset, so each Slot's prediction is the same reducer
+	// answer. A Slot it leaves out gets no command, and so no prediction.
 
 	const BULK_CLOCK_COMMANDS = {
 		start: 'StartClock',
@@ -486,6 +488,16 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 		restart: 'RestartClock',
 		adjust: 'AdjustClock',
 	} as const satisfies Record<BulkClockAction, FeatureMatchClockCommandType>;
+
+	function predictBulkClockCommand(
+		state: FeatureMatchState,
+		action: BulkClockAction,
+		payload: { at: number; deltaMs?: number },
+	): FeatureMatchState {
+		return isCoveredByBulkClockAction(state)
+			? applyFeatureMatchClockCommand(state, BULK_CLOCK_COMMANDS[action], payload)
+			: state;
+	}
 
 	function bulkClockAction(eventId: number, action: Exclude<BulkClockAction, 'adjust'>) {
 		const at = getServerTime();
@@ -497,7 +509,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			],
 			(state) => {
 				// A Slot the command leaves as it is takes no part in the action.
-				const predicted = applyFeatureMatchClockCommand(state, BULK_CLOCK_COMMANDS[action], { at });
+				const predicted = predictBulkClockCommand(state, action, { at });
 				return predicted === state
 					? null
 					: predicted;
@@ -531,7 +543,7 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 			[
 				...featureMatchStates.value.keys(),
 			],
-			state => applyFeatureMatchClockCommand(state, BULK_CLOCK_COMMANDS.adjust, { at, deltaMs }),
+			state => predictBulkClockCommand(state, 'adjust', { at, deltaMs }),
 			existing => ({
 				eventId,
 				totalDeltaMs: (existing?.totalDeltaMs ?? 0) + deltaMs,

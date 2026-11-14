@@ -12,7 +12,7 @@ import type {
 	GameWinOptions,
 	PlayerFeatureMatchStateUpdate,
 } from '~~/shared/types/featureMatchState';
-import { pairSeatOf } from '~~/shared/modules/feature-match-session';
+import { isCoveredByBulkClockAction, pairSeatOf } from '~~/shared/modules/feature-match-session';
 import { randomCommandId, randomUuid } from '~~/shared/utils/uuid';
 import { useFeatureMatchStateRepository } from '~/composables/repositories/useFeatureMatchStateRepository';
 
@@ -331,7 +331,7 @@ export function useFeatureMatchSessionClient() {
 
 		for (const slot of slots) {
 			const session = slot.activeSession;
-			if (!session || session.currentState.clock.type === 'untimed')
+			if (!session || !isCoveredByBulkClockAction(session.currentState))
 				continue;
 
 			const command = createBulkClockCommand(action, session, `bulk:${bulkId}:${session.id}:${action}`, deltaMs);

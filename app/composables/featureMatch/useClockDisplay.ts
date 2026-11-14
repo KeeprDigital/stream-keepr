@@ -21,8 +21,7 @@ export function useClockDisplay(
 	 */
 	const projection = useClockProjection((serverTime) => {
 		const stored = toValue(clock);
-		const value = projectFeatureMatchClock(stored && readStoredClock(stored), serverTime, toValue(untimedLabel));
-		return { value, nextChangeInMs: value.nextChangeInMs };
+		return selfTimed(projectFeatureMatchClock(stored && readStoredClock(stored), serverTime, toValue(untimedLabel)));
 	}, { whileServerTimeUnknown: 'device-time' });
 
 	const state = computed(() => projection.value.state);
@@ -31,6 +30,7 @@ export function useClockDisplay(
 	const showsClock = computed(() => state.value !== 'untimed' || displayTime.value !== '');
 
 	return {
+		projection,
 		state,
 		isRunning,
 		displayTime,

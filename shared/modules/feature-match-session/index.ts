@@ -27,6 +27,7 @@ export {
 	applyFeatureMatchSessionEvent,
 	createInitialFeatureMatchSessionStateFromSnapshot,
 	isCommandOutsideSessionVariant,
+	isCoveredByBulkClockAction,
 	normalizeFeatureMatchSessionCommandPayload,
 } from './reducer';
 export type {

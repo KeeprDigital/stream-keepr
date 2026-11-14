@@ -1,4 +1,4 @@
-import type { FeatureMatchClockState } from '~~/shared/utils/clock';
+import type { FeatureMatchClockProjection, FeatureMatchClockState } from '~~/shared/utils/clock';
 import { minutesToMs } from '~~/shared/utils/clock';
 
 /** Decrement and increment options for clock adjustment buttons. */
@@ -20,8 +20,7 @@ export const CLOCK_INCREMENT_OPTIONS = [
 	},
 ] as const;
 
-const CLOCK_STATE_COLOR_CLASS: Record<FeatureMatchClockState, string> = {
-	'untimed': 'text-muted',
+const CLOCK_STATE_COLOR_CLASS: Record<Exclude<FeatureMatchClockState, 'untimed'>, string> = {
 	'stopped': 'text-muted',
 	'paused': 'text-warning',
 	'running': 'text-primary',
@@ -31,14 +30,22 @@ const CLOCK_STATE_COLOR_CLASS: Record<FeatureMatchClockState, string> = {
 };
 
 /**
- * How the control surface draws a Feature Match Session clock in each state:
- * its colour, whether it pulses (run out and still running, with no overtime to
- * show), and whether it is marked as showing overtime.
+ * How the control surface draws a Feature Match Session clock: its colour,
+ * whether it pulses (run out and still running, with no count-up time to show),
+ * and whether it is marked as showing count-up time. An Untimed Match's clock
+ * has no state of its own to colour, so it takes the colour of whether it runs
+ * or has run.
  */
-export function clockAppearance(state: FeatureMatchClockState, isRunning: boolean) {
+export function clockAppearance({ state, isRunning, elapsedMs }: Pick<FeatureMatchClockProjection, 'state' | 'isRunning' | 'elapsedMs'>) {
+	let untimedState: 'running' | 'paused' | 'stopped' = 'stopped';
+	if (isRunning)
+		untimedState = 'running';
+	else if (elapsedMs > 0)
+		untimedState = 'paused';
+
 	return {
-		colorClass: CLOCK_STATE_COLOR_CLASS[state],
+		colorClass: CLOCK_STATE_COLOR_CLASS[state === 'untimed' ? untimedState : state],
 		pulses: state === 'run-out' && isRunning,
-		showsOvertime: state === 'counting-up' || state === 'holding',
+		showsCountUp: state === 'counting-up' || state === 'holding',
 	};
 }

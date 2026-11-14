@@ -61,12 +61,12 @@ const {
 	displayTime,
 	showsClock,
 	state: clockState,
-	isRunning: clockIsRunning,
+	projection: clockProjection,
 } = useClockDisplay(
 	() => matchState.value?.clock ?? null,
 	() => toFeatureMatchDefaults(eventStore.displayEvent).untimedLabel,
 );
-const clockLook = computed(() => clockAppearance(clockState.value, clockIsRunning.value));
+const appearance = computed(() => clockAppearance(clockProjection.value));
 
 const gameLabel = computed(() => {
 	// A Commander Session plays one game: there is no game of a best-of to name.
@@ -149,9 +149,9 @@ function playerDisplayConfig(side: PlayerSide): PlayerDisplayConfig {
 					v-if="config.showClock && showsClock"
 					class="clock"
 					:class="[
-						clockLook.colorClass,
-						{ 'clock--pulse': clockLook.pulses },
-						{ 'clock--overtime': clockLook.showsOvertime },
+						appearance.colorClass,
+						{ 'clock--pulse': appearance.pulses },
+						{ 'clock--overtime': appearance.showsCountUp },
 					]"
 					:data-clock-state="clockState"
 				>

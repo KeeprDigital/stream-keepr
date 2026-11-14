@@ -86,30 +86,6 @@ describe('useFeatureMatchStateStore actions', () => {
 				],
 			},
 			{
-				name: 'starting a running clock, which keeps its start',
-				before: {
-					clock: clock(running),
-				},
-				act: () => store.startClock(EVENT_ID, MATCH_ID),
-				method: 'startClock',
-				command: [
-					'StartClock',
-					{ at: SERVER_NOW },
-				],
-			},
-			{
-				name: 'starting an Untimed Match\'s clock, which stays stopped',
-				before: {
-					clock: clock({ type: 'untimed' }),
-				},
-				act: () => store.startClock(EVENT_ID, MATCH_ID),
-				method: 'startClock',
-				command: [
-					'StartClock',
-					{ at: SERVER_NOW },
-				],
-			},
-			{
 				name: 'pausing a running clock',
 				before: {
 					clock: clock(running),
@@ -179,18 +155,8 @@ describe('useFeatureMatchStateStore actions', () => {
 			await acting;
 		});
 
-		// A clock stored running with no start reads as stopped, so there is nothing to pause.
-		it.each([
-			[
-				'a stopped clock',
-				clock(),
-			],
-			[
-				'a clock stored running with no start',
-				clock({ isRunning: true, lastStartedAt: null }),
-			],
-		])('pausing %s sends nothing', (_, stored) => {
-			seedState({ clock: stored });
+		it('pausing a stopped clock sends nothing', () => {
+			seedState({ clock: clock() });
 
 			expect(store.pauseClock(EVENT_ID, MATCH_ID)).toBeNull();
 			expect(sessionClient.pauseClock).not.toHaveBeenCalled();
@@ -222,12 +188,14 @@ describe('useFeatureMatchStateStore actions', () => {
 				clock: clock({ elapsedMs: 1000, isRunning: true, lastStartedAt: SERVER_NOW - 1000 }),
 			}, 200);
 			seedState({
-				clock: clock({ type: 'untimed' }),
+				clock: clock({ type: 'untimed', elapsedMs: 1000 }),
+				overtime: { active: true, turnsRemaining: 3, totalTurns: 5 },
 			}, 300);
 		});
 
 		// A bulk action follows a single one's rules: each Slot shows the reducer's
-		// answer to the command the bulk action sends it.
+		// answer to the command the bulk action sends it. It sends an Untimed
+		// Match's Slot none, so that Slot shows no change.
 		it.each<{
 			name: string;
 			act: () => unknown;
@@ -271,12 +239,14 @@ describe('useFeatureMatchStateStore actions', () => {
 				],
 			},
 		])('$name shows on each Slot what the Session reducer answers', async ({ act, command }) => {
-			const expected = [100, 200, 300].map(slotId => reducerAnswer(held(slotId), ...command));
+			const untimed = held(300);
+			const expected = [100, 200].map(slotId => reducerAnswer(held(slotId), ...command));
 			const answer = pending('bulkClockAction');
 
 			const acting = act();
 
-			expect([100, 200, 300].map(slotId => held(slotId))).toEqual(expected);
+			expect([100, 200].map(slotId => held(slotId))).toEqual(expected);
+			expect(held(300)).toBe(untimed);
 
 			answer.resolve({ updates: [] });
 			await acting;

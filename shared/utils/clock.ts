@@ -231,6 +231,18 @@ export function getEffectiveElapsedMs(clock: FeatureMatchClock, now: number): nu
 }
 
 /**
+ * Whether a clock is counting, wherever its time stands: `running`, `paused`
+ * once any time has run, or `stopped` before any has.
+ */
+export function clockRunState(clock: FeatureMatchClock): 'running' | 'paused' | 'stopped' {
+	if (clock.startedAt !== null)
+		return 'running';
+	return clock.elapsedMs > 0
+		? 'paused'
+		: 'stopped';
+}
+
+/**
  * Where a Feature Match Session clock stands. Where its time stands outranks
  * whether it is counting: a countdown past its end is `run-out`, or, counting up
  * after, `counting-up` until it is `holding` at its count-up limit, running or
@@ -284,11 +296,11 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 	}
 
 	const elapsedMs = getEffectiveElapsedMs(clock, now);
-	const counts = clock.startedAt !== null;
+	const isRunning = clock.startedAt !== null;
 	if (clock.type === 'untimed') {
 		return {
 			state: 'untimed',
-			isRunning: counts,
+			isRunning,
 			display: untimedLabel.trim(),
 			elapsedMs,
 			remainingMs: null,
@@ -296,20 +308,17 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 		};
 	}
 
-	let counting: FeatureMatchClockState = 'stopped';
-	if (counts)
-		counting = 'running';
-	else if (clock.elapsedMs > 0)
-		counting = 'paused';
+	/** Its state while it has time left, or has no end to reach. */
+	const stateBeforeEnd = clockRunState(clock);
 
 	if (clock.type !== 'countdown') {
 		return {
-			state: counting,
-			isRunning: counts,
+			state: stateBeforeEnd,
+			isRunning,
 			display: formatClockTime(elapsedMs),
 			elapsedMs,
 			remainingMs: null,
-			nextChangeInMs: counts
+			nextChangeInMs: isRunning
 				? 1000 - (elapsedMs % 1000)
 				: null,
 		};
@@ -318,12 +327,12 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 	const remainingMs = clock.durationMs - elapsedMs;
 	if (remainingMs > 0) {
 		return {
-			state: counting,
-			isRunning: counts,
+			state: stateBeforeEnd,
+			isRunning,
 			display: formatCountdownTime(remainingMs),
 			elapsedMs,
 			remainingMs,
-			nextChangeInMs: counts
+			nextChangeInMs: isRunning
 				? countdownNextChangeInMs(remainingMs)
 				: null,
 		};
@@ -332,7 +341,7 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 	if (!clock.countUpAfterCountdown) {
 		return {
 			state: 'run-out',
-			isRunning: counts,
+			isRunning,
 			display: formatClockTime(0),
 			elapsedMs,
 			remainingMs: 0,
@@ -344,11 +353,11 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 	const holds = clock.countUpLimitMs != null && overMs >= clock.countUpLimitMs;
 	return {
 		state: holds ? 'holding' : 'counting-up',
-		isRunning: counts,
+		isRunning,
 		display: formatClockTime(countUpOvertimeMs(overMs, clock.countUpLimitMs)),
 		elapsedMs,
 		remainingMs: 0,
-		nextChangeInMs: counts && !holds
+		nextChangeInMs: isRunning && !holds
 			? 1000 - (overMs % 1000)
 			: null,
 	};

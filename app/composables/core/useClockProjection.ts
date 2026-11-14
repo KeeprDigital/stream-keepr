@@ -7,6 +7,11 @@ export interface ClockProjection<T> {
 	nextChangeInMs: number | null;
 }
 
+/** A projection whose answer itself says when it next changes: the answer is the value. */
+export function selfTimed<T extends { nextChangeInMs: number | null }>(answer: T): ClockProjection<T> {
+	return { value: answer, nextChangeInMs: answer.nextChangeInMs };
+}
+
 export interface ClockProjectionOptions<T> {
 	/**
 	 * What the projection answers while server time is unknown: `show` an answer
