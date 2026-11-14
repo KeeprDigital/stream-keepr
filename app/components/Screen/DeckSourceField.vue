@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import type { TabsItem } from '@nuxt/ui';
 import type { DeckSource } from '~~/shared/screenModeConfigs/deck';
-import type { PlayerSide } from '~~/shared/types/enums';
+import type { Seat } from '~~/shared/types/enums';
 import type { Player } from '~/types';
-import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
+import { eventKind } from '~~/shared/config/games';
+import { PLAYER_SIDE_VALUES, SEAT_VALUES } from '~~/shared/types/enums';
+import { featureMatchSidePlayer, seatNumber } from '~~/shared/utils/featureMatchSidePlayer';
 import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
 import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSession';
 
@@ -12,8 +14,9 @@ import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSes
  * naming whose Deck List a Screen shows (ADR-0032). Its Event's Card Game
  * decides the sources it offers, a tab each: a Player holding a deck or, where
  * the Event has them on, a Broadcast Deck List; for a One Piece Card Game
- * Event, one side of a Feature Match Slot (ADR-0057) or a Player (ADR-0074).
- * Each tab's picker loads what it lists. Opening a tab changes no source;
+ * Event, one Seat of a Feature Match Slot (ADR-0057) or a Player (ADR-0074);
+ * for a Commander Event, which has neither Players nor Broadcast Deck Lists,
+ * a Seat alone (ADR-0087). Each tab's picker loads what it lists. Opening a tab changes no source;
  * picking emits the whole Deck Source. A source the Screen would show nothing
  * for says so.
  */
@@ -33,6 +36,7 @@ const featureMatchStateStore = useFeatureMatchStateStore();
 const broadcastDeckListStore = useBroadcastDeckListStore();
 
 const isOpEvent = computed(() => eventStore.event?.game === 'op');
+const isCommanderEvent = computed(() => !!eventStore.event && eventKind(eventStore.event) === 'mtg-commander');
 const broadcastDeckListsEnabled = computed(() =>
 	eventStore.event?.game === 'mtg'
 	&& eventStore.event.broadcastDeckListsEnabled,
@@ -61,6 +65,8 @@ const sourceTabs = computed<TabsItem[]>(() => {
  * to a Slot side.
  */
 function sourceTabOf(deckSource: DeckSource): SourceTab | null {
+	if (isCommanderEvent.value)
+		return 'featureMatchSlot';
 	if (isOpEvent.value && deckSource.type === 'player' && deckSource.playerId === null)
 		return null;
 	return deckSource.type === 'player' || sourceTabs.value.some(tab => tab.value === deckSource.type)
@@ -68,7 +74,7 @@ function sourceTabOf(deckSource: DeckSource): SourceTab | null {
 		: null;
 }
 
-const firstTab = computed<SourceTab>(() => isOpEvent.value
+const firstTab = computed<SourceTab>(() => isOpEvent.value || isCommanderEvent.value
 	? 'featureMatchSlot'
 	: 'player');
 const sourceTab = ref<SourceTab>(sourceTabOf(props.modelValue) ?? firstTab.value);
@@ -111,12 +117,12 @@ function selectBroadcastDeckList(broadcastDeckListId: number | null) {
 
 const broadcastDeckListItems = computed(() => broadcastDeckListStore.summaries.map(list => ({ label: list.name, value: list.id })));
 
-const sideOptions: { label: string; value: PlayerSide }[] = [
-	{ label: 'Player 1', value: 'player1' },
-	{ label: 'Player 2', value: 'player2' },
-];
+/** The Seats a Slot of this Event has: a Commander Slot's four, where they sit at the table. */
+const sideOptions = computed<{ label: string; value: Seat }[]>(() => isCommanderEvent.value
+	? SEAT_VALUES.map(seat => ({ label: `Seat ${seatNumber(seat)}`, value: seat }))
+	: PLAYER_SIDE_VALUES.map(seat => ({ label: `Player ${seatNumber(seat)}`, value: seat })));
 
-function selectSlotSide(patch: { slotId?: number | null; side?: PlayerSide }) {
+function selectSlotSide(patch: { slotId?: number | null; side?: Seat }) {
 	emit('update:modelValue', {
 		type: 'featureMatchSlot',
 		slotId: patch.slotId !== undefined
@@ -143,6 +149,12 @@ const emptySideHint = computed(() => {
 	if (!selected || !slot)
 		return null;
 	const { data } = featureMatchSidePlayer(withFollowedFeatureMatchSession(slot, featureMatchStateStore), selected.side);
+	// A Commander Seat's deck is its Commanders, with or without a list (ADR-0087).
+	if (isCommanderEvent.value) {
+		return getMtgGameData(data?.gameData).commanders?.length
+			? null
+			: 'This Seat holds no Commander, so the Screen shows nothing. Pick one in the Slot\'s setup.';
+	}
 	// A linked side shows its Player's Deck List (ADR-0074).
 	const gameData = getOpGameData(data?.gameData);
 	return gameData.featureMatchDeckList || gameData.deckList
@@ -204,15 +216,17 @@ watch(broadcastDeckListsEnabled, (enabled) => {
 			@update:model-value="selectSlotSide({ slotId: $event })"
 		/>
 		<ScreenSettingsField
-			label="Side"
-			description="Shows whichever player sits on this side now: after Swap Players, the other player's Deck List."
+			:label="isCommanderEvent ? 'Seat' : 'Side'"
+			:description="isCommanderEvent
+				? 'Shows whoever sits in this Seat now: after Swap Seats, the other player\'s deck.'
+				: 'Shows whichever player sits on this side now: after Swap Players, the other player\'s Deck List.'"
 		>
 			<USelect
 				data-testid="deck-source-side"
 				:model-value="slotSide?.side ?? 'player1'"
 				:items="sideOptions"
 				class="w-64"
-				@update:model-value="selectSlotSide({ side: $event as PlayerSide })"
+				@update:model-value="selectSlotSide({ side: $event as Seat })"
 			/>
 		</ScreenSettingsField>
 		<ScreenSettingsHint v-if="emptySideHint" data-testid="empty-side-hint">

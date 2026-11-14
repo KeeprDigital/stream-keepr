@@ -753,6 +753,7 @@ mockNuxtImport('useDeckModeData', () => () => ({
 	secondaryHeader: ref('Mono Blue'),
 	deckColors: '',
 	companionCard: ref(null),
+	commanders: ref([]),
 	highlander: ref({
 		system: '7ph',
 		status: 'legal',

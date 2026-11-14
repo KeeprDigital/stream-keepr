@@ -1,11 +1,13 @@
 import type { ScreenCard } from '~~/shared/types/card/mtg';
 import type { OpCardDetail, OpCardSummary, OpScreenCard } from '~~/shared/types/card/op';
-import type { MatchPlayerDeckData, OpMatchPlayerDeckData } from '~/types/card/deckList';
+import type { CommanderSeatDeckData, MatchPlayerDeckData, OpMatchPlayerDeckData } from '~/types/card/deckList';
 import type { MtgActiveCardAction, MtgCard, MtgFormat } from '~/types/card/mtg';
 import type { CardMatchup, CardPageMode } from '~/types/card/page';
 import { useCountdown, useStorage } from '@vueuse/core';
+import { eventKind } from '~~/shared/config/games';
 import { isOpScreenCard } from '~~/shared/utils/card/op';
 import { useActiveCardScreenRuntime } from '~/modules/card-screen/activeCard';
+import { useCommanderCardDeckSourceRuntime } from '~/modules/card-screen/commanderDeckSources';
 import { useCardDeckSourceRuntime } from '~/modules/card-screen/deckSources';
 import { useOpCardDeckSourceRuntime } from '~/modules/card-screen/opDeckSources';
 import { useOpSpotlightRuntime } from '~/modules/card-screen/opSpotlight';
@@ -42,8 +44,11 @@ export const useCardStore = defineStore('card', () => {
 	/** A One Piece Event's Slot sides, which hold One Piece Deck Lists (ADR-0057). */
 	const opDeckListPlayer1 = ref<OpMatchPlayerDeckData | null>(null);
 	const opDeckListPlayer2 = ref<OpMatchPlayerDeckData | null>(null);
+	/** A Commander Event's Slot Seats somebody sits in, each with its Commanders and list (ADR-0087). */
+	const commanderDeckListSeats = ref<CommanderSeatDeckData[]>([]);
 	const deckListHasData = computed(() => deckListPlayer1.value !== null || deckListPlayer2.value !== null
-		|| opDeckListPlayer1.value !== null || opDeckListPlayer2.value !== null);
+		|| opDeckListPlayer1.value !== null || opDeckListPlayer2.value !== null
+		|| commanderDeckListSeats.value.length > 0);
 	const deckListRoundId = ref<number | null>(null);
 	const deckListMatchup = ref<CardMatchup | null>(null);
 	const deckListFilter = ref('');
@@ -138,11 +143,23 @@ export const useCardStore = defineStore('card', () => {
 		deckListPlayer1: opDeckListPlayer1,
 		deckListPlayer2: opDeckListPlayer2,
 	});
+	const commanderDeckSourceRuntime = useCommanderCardDeckSourceRuntime({
+		eventId: () => eventStore.eventId,
+		featureMatches: () => featureMatchStore.featureMatches,
+		loadingDeckList,
+		seats: commanderDeckListSeats,
+	});
 	/** A One Piece Event's matchups are its Feature Match Slots, read as One Piece Deck Lists. */
 	const isOpEvent = computed(() => eventStore.event?.game === 'op');
-	const canUseDeckListMode = computed(() => isOpEvent.value
-		? opDeckSourceRuntime.canUseDeckListMode.value
-		: deckSourceRuntime.canUseDeckListMode.value);
+	/** A Commander Event's are its Slots too, each Seat read as its Commanders and list (ADR-0087). */
+	const isCommanderEvent = computed(() => !!eventStore.event && eventKind(eventStore.event) === 'mtg-commander');
+	const canUseDeckListMode = computed(() => {
+		if (isOpEvent.value)
+			return opDeckSourceRuntime.canUseDeckListMode.value;
+		return isCommanderEvent.value
+			? commanderDeckSourceRuntime.canUseDeckListMode.value
+			: deckSourceRuntime.canUseDeckListMode.value;
+	});
 	const canUsePlayerDeckMode = deckSourceRuntime.canUsePlayerDeckMode;
 	const cardDataDegraded = deckSourceRuntime.cardDataDegraded;
 
@@ -207,16 +224,21 @@ export const useCardStore = defineStore('card', () => {
 	// ──────────────── Deck List Loading ────────────────
 
 	async function loadMatchDeckLists(slotId: number) {
-		await (isOpEvent.value
-			? opDeckSourceRuntime.loadMatchDeckLists(slotId)
-			: deckSourceRuntime.loadMatchDeckLists(slotId));
+		if (isOpEvent.value)
+			await opDeckSourceRuntime.loadMatchDeckLists(slotId);
+		else if (isCommanderEvent.value)
+			await commanderDeckSourceRuntime.loadMatchDeckLists(slotId);
+		else
+			await deckSourceRuntime.loadMatchDeckLists(slotId);
 	}
 	const loadMatchupDeckLists = deckSourceRuntime.loadMatchupDeckLists;
 	function clearMatchDeckLists() {
 		deckSourceRuntime.clearMatchDeckLists();
 		opDeckSourceRuntime.clearMatchDeckLists();
+		commanderDeckSourceRuntime.clearMatchDeckLists();
 	}
 	const opSlotHoldsDeckLists = opDeckSourceRuntime.slotHoldsDeckLists;
+	const commanderSlotHoldsDecks = commanderDeckSourceRuntime.slotHoldsDecks;
 	const loadPlayerDeck = deckSourceRuntime.loadPlayerDeck;
 	const clearPlayerDeck = deckSourceRuntime.clearPlayerDeck;
 
@@ -241,6 +263,7 @@ export const useCardStore = defineStore('card', () => {
 		activeCardRuntime.endLifetime();
 		deckSourceRuntime.resetDeckSources();
 		opDeckSourceRuntime.resetDeckSources();
+		commanderDeckSourceRuntime.resetDeckSources();
 		opSpotlightRuntime.reset();
 	}
 
@@ -266,6 +289,7 @@ export const useCardStore = defineStore('card', () => {
 		deckListPlayer2,
 		opDeckListPlayer1,
 		opDeckListPlayer2,
+		commanderDeckListSeats,
 		deckListHasData,
 		deckListRoundId,
 		deckListMatchup,
@@ -310,6 +334,7 @@ export const useCardStore = defineStore('card', () => {
 		loadMatchupDeckLists,
 		clearMatchDeckLists,
 		opSlotHoldsDeckLists,
+		commanderSlotHoldsDecks,
 		loadPlayerDeck,
 		clearPlayerDeck,
 		searchOpCards: opSpotlightRuntime.search,

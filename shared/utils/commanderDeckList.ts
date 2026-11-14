@@ -18,13 +18,30 @@ export function commanderOfDeckListEntry(entry: CommanderDeckListEntry): Command
 	};
 }
 
-/** How many cards of a list are its Mainboard: every copy but one of each Commander it holds. */
+/**
+ * A list's Mainboard: every copy but one of each Commander it holds. A
+ * Commander the list does not hold takes nothing from it.
+ */
+export function commanderMainboard<TEntry extends Pick<CommanderDeckListEntry, 'scryfallId' | 'quantity'>>(
+	entries: readonly TEntry[],
+	commanders: ReadonlyArray<Pick<Commander, 'scryfallId'>>,
+): TEntry[] {
+	const held = new Set(commanders.map(commander => commander.scryfallId));
+	return entries.flatMap((entry) => {
+		if (!held.has(entry.scryfallId))
+			return [entry];
+		return entry.quantity > 1
+			? [
+					{ ...entry, quantity: entry.quantity - 1 },
+				]
+			: [];
+	});
+}
+
+/** How many cards a list's Mainboard holds. */
 export function commanderMainboardCount(
 	entries: ReadonlyArray<Pick<CommanderDeckListEntry, 'scryfallId' | 'quantity'>>,
 	commanders: ReadonlyArray<Pick<Commander, 'scryfallId'>>,
 ): number {
-	const held = new Set(commanders.map(commander => commander.scryfallId));
-	return entries.reduce((total, entry) => total + entry.quantity - (held.has(entry.scryfallId)
-		? 1
-		: 0), 0);
+	return commanderMainboard(entries, commanders).reduce((total, entry) => total + entry.quantity, 0);
 }

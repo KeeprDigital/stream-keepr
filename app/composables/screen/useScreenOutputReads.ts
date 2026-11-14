@@ -67,6 +67,9 @@ export function useScreenOutputReads(context: ScreenContext) {
 		/** A Feature Match Deck List of the Slot a Deck List Screen shows a side of. */
 		featureMatchDeckList: (slotId: number, deckListId: number) =>
 			repository.featureMatchDeckList(requireScope(), slotId, deckListId),
+		/** A Commander Seat's Feature Match Deck List of the Slot a Deck List Screen shows a Seat of (ADR-0087). */
+		commanderDeckList: (slotId: number, deckListId: number) =>
+			repository.commanderDeckList(requireScope(), slotId, deckListId),
 		/** The Slot's Feature Match Session, or `null` while it has none — never started by reading. */
 		featureMatchSession: async (slotId: number) =>
 			(await repository.featureMatchSlot(requireScope(), slotId)).slot.activeSession ?? null,

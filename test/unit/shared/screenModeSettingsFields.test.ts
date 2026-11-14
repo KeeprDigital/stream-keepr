@@ -343,6 +343,28 @@ describe('when a settings field shows', () => {
 			context({ board: 'full' }),
 			true,
 		],
+		// A Commander deck has no Sideboard, so no Board Selection (ADR-0087).
+		[
+			'deck',
+			'sideboard',
+			'for a Commander Event',
+			context({ board: 'full' }, { game: 'mtg', variant: 'commander' }),
+			false,
+		],
+		[
+			'deck',
+			'board',
+			'for a Commander Event',
+			context({}, { game: 'mtg', variant: 'commander' }),
+			false,
+		],
+		[
+			'deck',
+			'board',
+			'for a Two-Player Magic Event',
+			context({}, { game: 'mtg', variant: 'two-player' }),
+			true,
+		],
 		[
 			'deck',
 			'sideboard',
