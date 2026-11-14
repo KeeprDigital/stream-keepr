@@ -3179,13 +3179,13 @@ A change further off than one timer can hold (2^31 − 1 ms) is waited for in st
 
 **Each caller declares what its projection answers while server time is unknown.** The option is required, so a new clock projection cannot skip the question:
 
-| Clock projection | While server time is unknown |
-| --- | --- |
-| Page Rotation | its first page (ADR-0009) |
-| Social Profile Rotation on a Talent Screen | its first profile |
-| Feature Match Session clock display | the device's own time |
-| Round Clock | the device's own time |
-| Card Timeout | the device's own time |
+| Clock projection                           | While server time is unknown |
+| ------------------------------------------ | ---------------------------- |
+| Page Rotation                              | its first page (ADR-0009)    |
+| Social Profile Rotation on a Talent Screen | its first profile            |
+| Feature Match Session clock display        | the device's own time        |
+| Round Clock                                | the device's own time        |
+| Card Timeout                               | the device's own time        |
 
 A projection on the device's own time is taken again the moment the first sync lands.
 
