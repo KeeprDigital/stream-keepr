@@ -1,5 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { computed } from 'vue';
 
 const { mockFetch } = vi.hoisted(() => {
 	// Before anything else here runs: the app's boot has already started a sync
@@ -35,6 +36,21 @@ async function syncWith(...answers: Array<() => Promise<unknown>>) {
 	return serverTime;
 }
 
+/**
+ * Holds an offset of 800 ms, then takes a sync whose samples answer at once and
+ * report `offset`. Resolves as that sync lands, before any time has passed since.
+ */
+async function correctTo(offset: number, held = true) {
+	await syncWith(sample(20, 800), sample(20, 800), sample(20, 800));
+	useState('serverTimeSynced').value = held;
+	mockFetch.mockImplementation(sample(0, offset));
+	const serverTime = useServerTime();
+	const synced = serverTime.sync();
+	await vi.advanceTimersByTimeAsync(100);
+	await synced;
+	return serverTime;
+}
+
 describe('useServerTime', () => {
 	// The app's boot starts the shared sync on real timers: three samples now and
 	// a re-sync every minute, any of which would land inside a test and take that
@@ -50,6 +66,8 @@ describe('useServerTime', () => {
 		vi.useFakeTimers({ now: 1_000_000 });
 		// A use while the shared sync is stopped restarts it, on this fake clock;
 		// let that settle on a clean, synced state so each test drives `sync` alone.
+		// From unsynced, so it steps to zero rather than easing there through the test.
+		useState('serverTimeSynced').value = false;
 		mockFetch.mockImplementation(sample(0, 0));
 		await syncWith();
 		mockFetch.mockReset();
@@ -60,12 +78,13 @@ describe('useServerTime', () => {
 		vi.useRealTimers();
 	});
 
-	it('compensates each sample for its round trip and drops the slowest', async () => {
+	// A round trip bounds its sample's error to half of itself, so the tightest is the best.
+	it('compensates each sample for its round trip and takes the one with the shortest', async () => {
 		const serverTime = await syncWith(sample(400, 5_000), sample(20, 1_000), sample(40, 1_200));
 
 		expect(serverTime.isSynced.value).toBe(true);
-		expect(serverTime.serverTimeOffset.value).toBe(1_100);
-		expect(serverTime.getServerTime()).toBe(Date.now() + 1_100);
+		expect(serverTime.serverTimeOffset.value).toBe(1_000);
+		expect(serverTime.getServerTime()).toBe(Date.now() + 1_000);
 	});
 
 	it('syncs from the samples that answered when one fails', async () => {
@@ -110,22 +129,22 @@ describe('useServerTime', () => {
 	// already held; with none held, a loose offset still beats an unknown clock.
 	it.each([
 		{
-			name: 'averages in a sample at the ceiling',
+			name: 'takes a sample at the ceiling over the offset it holds',
 			held: true,
 			answers: [
-				sample(1_000, 2_000),
+				sample(1_000, 5_000),
 				dropped,
-				sample(20, 900),
+				dropped,
 			],
-			offset: 1_450,
+			offset: 5_000,
 		},
 		{
-			name: 'leaves out a sample above the ceiling',
-			held: true,
+			name: 'takes a tighter sample over a shorter one above the ceiling',
+			held: false,
 			answers: [
-				sample(1_002, 2_000),
+				sample(1_002, 5_000),
 				dropped,
-				sample(20, 900),
+				sample(1_000, 900),
 			],
 			offset: 900,
 		},
@@ -158,6 +177,90 @@ describe('useServerTime', () => {
 		expect(serverTime.serverTimeOffset.value).toBe(offset);
 	});
 
+	// A correction applied as a step can show one digit twice, or skip one. Eased
+	// in at no more than a tenth of elapsed time, server time only ever advances.
+	it.each([
+		{ name: 'back', offset: 500 },
+		{ name: 'forward', offset: 1_100 },
+	])('eases a small correction $name without server time stopping or jumping', async ({ offset }) => {
+		const serverTime = await syncWith(sample(20, 800), sample(20, 800), sample(20, 800));
+		mockFetch.mockImplementation(sample(0, offset));
+
+		// The sync lands inside the first step.
+		const synced = serverTime.sync();
+		const advances: number[] = [];
+		for (let step = 0; step < 40; step++) {
+			const before = serverTime.getServerTime();
+			await vi.advanceTimersByTimeAsync(100);
+			advances.push(serverTime.getServerTime() - before);
+		}
+		await synced;
+
+		expect(Math.min(...advances)).toBeGreaterThanOrEqual(89.999);
+		expect(Math.max(...advances)).toBeLessThanOrEqual(110.001);
+		expect(serverTime.getServerTime()).toBe(Date.now() + offset);
+	});
+
+	// A clock that is badly wrong is put right at once, as is one not yet known.
+	it.each([
+		{
+			name: 'eases a correction at the threshold',
+			held: true,
+			offset: 1_300,
+			appliedAtOnce: 0,
+		},
+		{
+			name: 'steps a correction over the threshold',
+			held: true,
+			offset: 1_301,
+			appliedAtOnce: 501,
+		},
+		{
+			name: 'steps a correction back over the threshold',
+			held: true,
+			offset: 299,
+			appliedAtOnce: -501,
+		},
+		{
+			name: 'steps the first sync, however small',
+			held: false,
+			offset: 900,
+			appliedAtOnce: 100,
+		},
+	])('$name', async ({ held, offset, appliedAtOnce }) => {
+		const serverTime = await correctTo(offset, held);
+
+		expect(serverTime.getServerTime() - Date.now()).toBe(800 + appliedAtOnce);
+	});
+
+	// A correction is measured from the server time being read, so one that
+	// interrupts another carries on from where that one had reached.
+	it('eases a second correction on from a first that is still running', async () => {
+		const serverTime = await correctTo(1_200);
+		await vi.advanceTimersByTimeAsync(900);
+		mockFetch.mockImplementation(sample(0, 600));
+
+		const synced = serverTime.sync();
+		await vi.advanceTimersByTimeAsync(100);
+		await synced;
+
+		expect(serverTime.getServerTime() - Date.now()).toBe(900);
+		await vi.advanceTimersByTimeAsync(3_000);
+		expect(serverTime.getServerTime() - Date.now()).toBe(600);
+	});
+
+	// A wait timed while a correction ran is off by what the correction went on
+	// to apply, so whatever read server time reactively reads it again at its end.
+	it('answers a reactive reader of server time again once a correction is eased in', async () => {
+		const serverTime = await correctTo(1_100);
+		const ahead = computed(() => serverTime.getServerTime() - Date.now());
+		expect(ahead.value).toBe(800);
+
+		await vi.advanceTimersByTimeAsync(3_000);
+
+		expect(ahead.value).toBe(1_100);
+	});
+
 	// `beforeunload` also fires for an unload the operator cancels, so the shared
 	// sync runs until the page is actually hidden.
 	it.each([
@@ -175,5 +278,56 @@ describe('useServerTime', () => {
 		await vi.advanceTimersByTimeAsync(61_000);
 
 		expect(serverTime.lastSyncedAt.value! > syncedAt).toBe(keepsSyncing);
+	});
+
+	// A hidden tab's timers are throttled and an offline device's sync goes
+	// unanswered, so a page coming back asks at once rather than at the next minute.
+	it.each([
+		{
+			name: 're-syncs when the page becomes visible',
+			target: () => document,
+			event: 'visibilitychange',
+			visibility: 'visible',
+			sinceLastSync: 6_000,
+			resyncs: true,
+		},
+		{
+			name: 'does not re-sync when the page is hidden',
+			target: () => document,
+			event: 'visibilitychange',
+			visibility: 'hidden',
+			sinceLastSync: 6_000,
+			resyncs: false,
+		},
+		{
+			name: 're-syncs when the browser comes back online',
+			target: () => window,
+			event: 'online',
+			visibility: 'visible',
+			sinceLastSync: 6_000,
+			resyncs: true,
+		},
+		{
+			name: 'does not re-sync so soon after a sync',
+			target: () => window,
+			event: 'online',
+			visibility: 'visible',
+			sinceLastSync: 4_000,
+			resyncs: false,
+		},
+	])('$name', async ({ target, event, visibility, sinceLastSync, resyncs }) => {
+		vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(visibility as DocumentVisibilityState);
+		mockFetch.mockImplementation(sample(0, 0));
+		// Restart the shared sync on this test's clock, as the first consumer starts it.
+		useServerTime().stopSync();
+		const serverTime = useServerTime();
+		await vi.advanceTimersByTimeAsync(1_000);
+		const syncedAt = serverTime.lastSyncedAt.value!;
+		await vi.advanceTimersByTimeAsync(syncedAt + sinceLastSync - Date.now());
+
+		target().dispatchEvent(new Event(event));
+		await vi.advanceTimersByTimeAsync(1_000);
+
+		expect(serverTime.lastSyncedAt.value! > syncedAt).toBe(resyncs);
 	});
 });
