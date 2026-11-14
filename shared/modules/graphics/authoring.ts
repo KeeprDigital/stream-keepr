@@ -33,6 +33,7 @@ import type {
 	GraphicTypography,
 	MediaGraphicItemConfig,
 	PlayerLifeGraphicItemConfig,
+	SeatIndicatorState,
 	ShapeCorner,
 	ShapeCornerKey,
 	ShapeGeometry,
@@ -2116,6 +2117,15 @@ export function patchPlayerLifeGraphicItem(
 	patch: Partial<Omit<PlayerLifeGraphicItemConfig, 'type' | 'id'>>,
 ): BroadcastGraphicConfig {
 	return patchGraphicItemGroup(graphic, itemId, ['player-life'], () => patch);
+}
+
+/** Choose the state a Seat Indicator Graphic Item marks; any other item is returned unchanged. */
+export function patchSeatIndicatorState(
+	graphic: BroadcastGraphicConfig,
+	itemId: string,
+	state: SeatIndicatorState,
+): BroadcastGraphicConfig {
+	return patchGraphicItemGroup(graphic, itemId, ['seat-indicator'], () => ({ state }));
 }
 
 /** Replace top-level properties of a Deck List Graphic Item, with its own type checked. */

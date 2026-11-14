@@ -100,6 +100,7 @@ import {
 	MIN_SOCIAL_PROFILE_TRANSITION_DURATION_MS,
 	ON_AIR_UPDATE_POLICY_VALUES,
 	PLAYER_LIFE_ANIMATION_VALUES,
+	SEAT_INDICATOR_STATE_VALUES,
 	SOCIAL_PROFILE_TRANSITION_VALUES,
 	TEXT_OVERFLOW_POLICY_VALUES,
 } from '~~/shared/types/graphics';
@@ -1013,6 +1014,29 @@ const playerLifeGraphicItemConfigSchema = z.object(playerLifeGraphicItemShape).s
 const gameWinsGraphicItemConfigSchema = z.object(gameWinsGraphicItemShape).strict();
 const deckListGraphicItemConfigSchema = z.object(deckListGraphicItemShape).strict();
 
+const commanderDamageGraphicItemShape = {
+	...graphicItemBaseShape,
+	type: z.literal('commander-damage'),
+	playerSide: z.enum(SEAT_VALUES),
+	typography: graphicTypographySchema,
+	overflowPolicy: z.enum(TEXT_OVERFLOW_POLICY_VALUES),
+	minFontSize: finiteNumberSchema.positive().max(MAX_GRAPHIC_FONT_SIZE),
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+};
+
+const commanderDamageGraphicItemConfigSchema = z.object(commanderDamageGraphicItemShape).strict();
+
+const seatIndicatorGraphicItemShape = {
+	...graphicItemBaseShape,
+	type: z.literal('seat-indicator'),
+	playerSide: z.enum(SEAT_VALUES),
+	state: z.enum(SEAT_INDICATOR_STATE_VALUES),
+	geometry: shapeGeometrySchema,
+	surfaceStyle: graphicSurfaceStyleSchema.optional(),
+};
+
+const seatIndicatorGraphicItemConfigSchema = z.object(seatIndicatorGraphicItemShape).strict();
+
 /**
  * Main-axis sizing belongs to a Graphic Group child, so only a child carries
  * one: a top-level Graphic Item has no group to be sized inside.
@@ -1061,6 +1085,14 @@ const graphicGroupChildConfigSchema = z.discriminatedUnion('type', [
 		...deckListGraphicItemShape,
 		sizing: graphicGroupChildSizingSchema.optional(),
 	}).strict(),
+	z.object({
+		...commanderDamageGraphicItemShape,
+		sizing: graphicGroupChildSizingSchema.optional(),
+	}).strict(),
+	z.object({
+		...seatIndicatorGraphicItemShape,
+		sizing: graphicGroupChildSizingSchema.optional(),
+	}).strict(),
 ]);
 
 const graphicGroupItemConfigSchema = z.object({
@@ -1099,6 +1131,8 @@ const graphicItemConfigSchema = z.discriminatedUnion('type', [
 	playerLifeGraphicItemConfigSchema,
 	gameWinsGraphicItemConfigSchema,
 	deckListGraphicItemConfigSchema,
+	commanderDamageGraphicItemConfigSchema,
+	seatIndicatorGraphicItemConfigSchema,
 ]);
 
 export const MAX_BROADCAST_GRAPHICS_PER_SCREEN = 50;

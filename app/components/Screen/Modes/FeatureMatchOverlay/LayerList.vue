@@ -3,7 +3,7 @@ import type { FeatureMatchLayoutConfig } from '~~/shared/types/screenConfig';
 import type { FeatureMatchLayoutEditor } from '~/modules/feature-match-overlay/editorHost';
 import type { FeatureMatchLayoutEditorLayer } from '~/modules/feature-match-overlay/editorSelection';
 import type { GraphicsLayerListSection } from '~/modules/graphics/editor/host';
-import { FEATURE_MATCH_LAYOUT_EDITOR_TREE } from '~/modules/feature-match-overlay/editorHost';
+import { featureMatchLayoutEditorTree } from '~/modules/feature-match-overlay/editorHost';
 
 /**
  * The Feature Match Layout's one layer list: every Graphic Item, every Source
@@ -22,8 +22,12 @@ const props = defineProps<{
 	canvasHeight: number;
 }>();
 
+/** This Event's tree: its palette offers a Commander Event's kinds where it is one (ADR-0087). */
+const eventKind = useEventKind();
+const tree = computed(() => featureMatchLayoutEditorTree(eventKind.value ?? 'mtg-two-player'));
+
 const sections = computed<GraphicsLayerListSection<FeatureMatchLayoutEditorLayer>[]>(() => {
-	const layers = FEATURE_MATCH_LAYOUT_EDITOR_TREE.order(props.layout);
+	const layers = tree.value.order(props.layout);
 	return [
 		{
 			key: 'items',
@@ -44,7 +48,7 @@ const sections = computed<GraphicsLayerListSection<FeatureMatchLayoutEditorLayer
 <template>
 	<GraphicsLayerList
 		:editor="editor"
-		:tree="FEATURE_MATCH_LAYOUT_EDITOR_TREE"
+		:tree="tree"
 		:document="layout"
 		:sections="sections"
 		:canvas-width="canvasWidth"

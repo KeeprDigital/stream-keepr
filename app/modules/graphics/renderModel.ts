@@ -7,6 +7,7 @@ import type { Seat } from '~~/shared/types/enums';
 import type {
 	BroadcastGraphicConfig,
 	ClockGraphicItemConfig,
+	CommanderDamageGraphicItemConfig,
 	DeckListGraphicItemConfig,
 	GameWinsGraphicItemConfig,
 	GraphicAnchorPoint,
@@ -25,6 +26,8 @@ import type {
 	MediaGraphicItemConfig,
 	PlayerLifeAnimation,
 	PlayerLifeGraphicItemConfig,
+	SeatIndicatorGraphicItemConfig,
+	SeatIndicatorState,
 	ShapeGeometry,
 	SocialNetworkIconGraphicItemConfig,
 	SocialProfileProjectionValues,
@@ -472,6 +475,21 @@ export interface GraphicsFeatureMatchPlayerState {
 	 * the authored `visible` — the flag cannot resurrect an item its author hid.
 	 */
 	sideboardRevealed: boolean;
+	/** Whether the Seat's player is out of a Commander game; absent reads as in it. */
+	eliminated?: boolean;
+	/**
+	 * The Commander Damage the Seat has taken, one count per opposing Commander in
+	 * Seat order, each with that Commander's card. Only a Commander Slot's Seat
+	 * holds one.
+	 */
+	commanderDamage?: ReadonlyArray<GraphicsCommanderDamageCount>;
+}
+
+/** The Commander Damage one opposing Commander has dealt a Seat, and that Commander's card. */
+export interface GraphicsCommanderDamageCount {
+	damage: number;
+	/** `null` paints the count alone. */
+	imageUrl: string | null;
 }
 
 /**
@@ -501,6 +519,8 @@ export interface GraphicsFeatureMatchContext {
 	 * renders whether or not anyone is seated.
 	 */
 	emptySeats?: readonly Seat[];
+	/** The Seat whose turn it is, or none while no turn is tracked. */
+	activeSeat?: Seat | null;
 	/** The Match length, which decides how many win boxes an indicator draws. */
 	bestOf: number;
 }
@@ -1937,6 +1957,100 @@ function absentItemDescriptor(item: GraphicItemConfig | GraphicGroupChildConfig,
 	};
 }
 
+/**
+ * A Commander Damage Graphic Item: each count the Seat has taken, beside the
+ * card of the Commander that dealt it. A count still at zero is left out, and
+ * with none to show the item renders nothing, surface included (ADR-0087).
+ */
+function commanderDamageDescriptor(
+	output: ScreenOutput,
+	scope: string,
+	item: CommanderDamageGraphicItemConfig,
+	placement: CSSProperties,
+	surfaceStyle: GraphicSurfaceStyle | undefined,
+	featureMatch: GraphicsFeatureMatchContext | undefined,
+): GraphicItemRenderDescriptor {
+	const counts = (featureMatch?.[item.playerSide]?.commanderDamage ?? []).filter(count => count.damage > 0);
+	if (counts.length === 0)
+		return absentItemDescriptor(item, placement);
+
+	const textSegments = counts.flatMap((count, index): GraphicTextRenderSegment[] => [
+		...(index > 0
+			? [
+					{ text: ' ' },
+				]
+			: []),
+		...(count.imageUrl && isScryfallCardImageUrl(count.imageUrl)
+			? [
+					{
+						text: count.imageUrl,
+						cardImage: { url: count.imageUrl, monochrome: output === 'key', alt: 'Commander' },
+					},
+				]
+			: []),
+		{
+			text: String(count.damage),
+		},
+	]);
+
+	return {
+		id: item.id,
+		label: item.label,
+		kind: item.type,
+		style: {
+			...placement,
+			...textBoxStyle(),
+			filter: glowFilter(output, surfaceStyle),
+		},
+		surface: surfaceDescriptor(output, scope, item, squareShapeGeometry(), surfaceStyle),
+		textStyle: graphicTextStyle(output, item),
+		text: textSegments.map(segment => segment.text).join(''),
+		textSegments,
+		shrink: item.overflowPolicy === 'shrink'
+			? { minFontSize: item.minFontSize, maxFontSize: item.typography.fontSize }
+			: undefined,
+	};
+}
+
+/** Whether a Seat is in a state a Seat Indicator marks: its turn, or out of the game. */
+export function isSeatInIndicatorState(
+	featureMatch: GraphicsFeatureMatchContext | undefined,
+	seat: Seat,
+	state: SeatIndicatorState,
+): boolean {
+	return state === 'active'
+		? featureMatch?.activeSeat === seat
+		: featureMatch?.[seat]?.eliminated === true;
+}
+
+/**
+ * A Seat Indicator Graphic Item: its Shape Geometry surface while its Seat is in
+ * the state its author picked, and while its exit plays once the state has left
+ * (ADR-0015, ADR-0087). Otherwise nothing.
+ */
+function seatIndicatorDescriptor(
+	output: ScreenOutput,
+	scope: string,
+	item: SeatIndicatorGraphicItemConfig,
+	placement: CSSProperties,
+	surfaceStyle: GraphicSurfaceStyle | undefined,
+	inputs: GraphicItemContentContext,
+): GraphicItemRenderDescriptor {
+	if (!isSeatInIndicatorState(inputs.featureMatch, item.playerSide, item.state) && !(inputs.itemExitInPlay?.has(item.id) ?? false))
+		return absentItemDescriptor(item, placement);
+
+	return {
+		id: item.id,
+		label: item.label,
+		kind: item.type,
+		style: {
+			...placement,
+			filter: glowFilter(output, surfaceStyle),
+		},
+		surface: surfaceDescriptor(output, scope, item, item.geometry, surfaceStyle),
+	};
+}
+
 /** A Clock Graphic Item with no clock to show: its placement, and nothing painted in it. */
 function absentClockDescriptor(item: ClockGraphicItemConfig, placement: CSSProperties): GraphicItemRenderDescriptor {
 	return {
@@ -2002,6 +2116,12 @@ function childDescriptor(
 
 	if (child.type === 'game-wins')
 		return gameWinsDescriptor(output, scope, child, placement, surfaceStyle, inputs.featureMatch);
+
+	if (child.type === 'commander-damage')
+		return commanderDamageDescriptor(output, scope, child, placement, surfaceStyle, inputs.featureMatch);
+
+	if (child.type === 'seat-indicator')
+		return seatIndicatorDescriptor(output, scope, child, placement, surfaceStyle, inputs);
 
 	return {
 		id: child.id,
@@ -2330,6 +2450,12 @@ function paintedItemDescriptor(
 
 	if (item.type === 'deck-list')
 		return deckListDescriptor(output, scope, item, placement, inputs);
+
+	if (item.type === 'commander-damage')
+		return commanderDamageDescriptor(output, scope, item, placement, item.surfaceStyle, inputs.featureMatch);
+
+	if (item.type === 'seat-indicator')
+		return seatIndicatorDescriptor(output, scope, item, placement, item.surfaceStyle, inputs);
 
 	return {
 		id: item.id,

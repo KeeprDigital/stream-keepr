@@ -55,8 +55,12 @@ import { seatLabel } from '../../utils/featureMatchSidePlayer';
 
 export type GraphicsHostId = 'broadcast-graphics' | 'feature-match-overlay';
 
-/** A data context a host can supply to a Graphic Item Definition. */
-export type GraphicsContextKind = 'event' | 'feature-match';
+/**
+ * A data context a host can supply to a Graphic Item Definition. A Commander
+ * Event's Feature Match Overlay also supplies a Commander game's: Commander
+ * Damage, which no other Event holds (ADR-0087).
+ */
+export type GraphicsContextKind = 'event' | 'feature-match' | 'commander-game';
 
 /**
  * How many compositions the host's authoring tree roots.
@@ -135,7 +139,9 @@ const FEATURE_MATCH_OVERLAY_HOST_CONTRACTS = Object.fromEntries(EVENT_KIND_VALUE
 	kind,
 	{
 		hostId: 'feature-match-overlay',
-		contextKinds: ['event', 'feature-match'],
+		contextKinds: kind === 'mtg-commander'
+			? ['event', 'feature-match', 'commander-game']
+			: ['event', 'feature-match'],
 		composition: 'single',
 		textValues: {
 			kind: 'host-tokens',

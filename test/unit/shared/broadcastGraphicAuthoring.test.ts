@@ -947,6 +947,7 @@ describe('broadcastGraphicAuthoring', () => {
 				&& owner.type !== 'media'
 				&& owner.type !== 'social-network-icon'
 				&& owner.type !== 'group'
+				&& owner.type !== 'seat-indicator'
 				&& owner.typography;
 
 			expect(typographyOf(item))

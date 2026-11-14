@@ -1,3 +1,4 @@
+import type { GraphicsHostContract } from '~~/shared/modules/graphics';
 import type { BroadcastGraphicConfig, GraphicItemConfig, GraphicItemKind } from '~~/shared/types/graphics';
 import { describe, expect, it } from 'vitest';
 import { featureMatchTokenCatalogue } from '~~/shared/featureMatchTokenCatalogue';
@@ -90,7 +91,17 @@ describe('graphicItemDefinitions', () => {
 				'player-life',
 				'game-wins',
 				'deck-list',
+				'seat-indicator',
 			]);
+	});
+
+	// Commander Damage is a Commander game's alone; a Seat Indicator is every Variant's (ADR-0087).
+	it('offers a Commander Event\'s Feature Match host the Commander Damage Definition too', () => {
+		const kinds = (contract: GraphicsHostContract) => graphicItemDefinitionsForHost(contract).map(definition => definition.kind);
+
+		expect(kinds(featureMatchOverlayHostContract('mtg-commander')).filter(kind => !kinds(FEATURE_MATCH_OVERLAY_HOST_CONTRACT).includes(kind)))
+			.toEqual(['commander-damage']);
+		expect(kinds(BROADCAST_GRAPHICS_HOST_CONTRACT)).not.toContain('seat-indicator');
 	});
 
 	it('offers the context-gated Definitions inside a Graphic Group too', () => {
@@ -108,6 +119,7 @@ describe('graphicItemDefinitions', () => {
 				'player-life',
 				'game-wins',
 				'deck-list',
+				'seat-indicator',
 			]);
 	});
 
@@ -416,6 +428,8 @@ describe('graphicItemDefinitions', () => {
 			'player-life': { typography: true, textOverflowPolicy: true },
 			'game-wins': { typography: true, textOverflowPolicy: false },
 			'deck-list': { typography: true, textOverflowPolicy: false },
+			'commander-damage': { typography: true, textOverflowPolicy: true },
+			'seat-indicator': { typography: false, textOverflowPolicy: false },
 		};
 
 		function placed(kind: GraphicItemKind): GraphicItemConfig {
@@ -533,6 +547,16 @@ describe('graphicItemDefinitions', () => {
 				playerSide: true,
 			},
 			'deck-list': { surfaces: [], geometry: null, playerSide: true },
+			'commander-damage': {
+				surfaces: ['surfaceStyle'],
+				geometry: null,
+				playerSide: true,
+			},
+			'seat-indicator': {
+				surfaces: ['surfaceStyle'],
+				geometry: 'geometry',
+				playerSide: true,
+			},
 		};
 
 		function placed(kind: GraphicItemKind): GraphicItemConfig {

@@ -29,6 +29,8 @@ import type {
 	OnAirUpdatePolicy,
 	PlayerLifeAnimation,
 	PlayerLifeGraphicItemConfig,
+	SeatIndicatorGraphicItemConfig,
+	SeatIndicatorState,
 	SocialNetworkIconGraphicItemConfig,
 	TEXT_OVERFLOW_POLICY_VALUES,
 	TextGraphicItemConfig,
@@ -74,6 +76,7 @@ import {
 	patchMediaFocalPosition,
 	patchMediaGraphicItem,
 	patchPlayerLifeGraphicItem,
+	patchSeatIndicatorState,
 	patchShapeGeometry,
 	patchTextGraphicItem,
 	selectMediaGraphicItemAsset,
@@ -336,6 +339,19 @@ const selectedPlayerLife = computed<PlayerLifeGraphicItemConfig | null>(() =>
 		? selectedItem.value
 		: null,
 );
+const selectedSeatIndicator = computed<SeatIndicatorGraphicItemConfig | null>(() =>
+	selectedItem.value?.type === 'seat-indicator'
+		? selectedItem.value
+		: null,
+);
+/** The states a Seat Indicator can mark, as its author reads them. */
+const SEAT_INDICATOR_STATE_OPTIONS = [
+	{ label: 'Active player', value: 'active' },
+	{ label: 'Eliminated', value: 'eliminated' },
+] satisfies Array<{ label: string; value: SeatIndicatorState }>;
+/** Only a Commander game eliminates a Seat, so only its host is offered that state (ADR-0087). */
+const seatIndicatorStateOptions = computed(() => SEAT_INDICATOR_STATE_OPTIONS
+	.filter(option => option.value !== 'eliminated' || props.contract.contextKinds.includes('commander-game')));
 const selectedGameWins = computed<GameWinsGraphicItemConfig | null>(() =>
 	selectedItem.value?.type === 'game-wins'
 		? selectedItem.value
@@ -1432,6 +1448,19 @@ function clearPlaceholderFontAsset(inputKey: string) {
 					size="sm"
 					data-testid="graphic-item-player-side"
 					@update:model-value="editItem(patchGraphicPlayerSide, $event as Seat)"
+				/>
+			</UFormField>
+
+			<!-- A Seat Indicator is shown only while its Seat is in this state. -->
+			<UFormField v-if="selectedSeatIndicator" label="Shown while" size="sm">
+				<USelect
+					:model-value="selectedSeatIndicator.state"
+					:items="seatIndicatorStateOptions"
+					value-key="value"
+					class="w-full"
+					size="sm"
+					data-testid="seat-indicator-state"
+					@update:model-value="editItem(patchSeatIndicatorState, $event as SeatIndicatorState)"
 				/>
 			</UFormField>
 

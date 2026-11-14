@@ -1,5 +1,5 @@
 import type { PlayerSide } from '~~/shared/types/enums';
-import type { BroadcastGraphicConfig, DeckListGraphicItemConfig } from '~~/shared/types/graphics';
+import type { BroadcastGraphicConfig, DeckListGraphicItemConfig, GraphicItemConfig } from '~~/shared/types/graphics';
 import type { GraphicsAnimationProjection } from '~/modules/graphics/renderModel';
 import { graphicAnimationRecipeEndMs } from '~~/shared/modules/graphics';
 
@@ -72,8 +72,22 @@ export function applySideboardRevealEdge(
 	revealed: boolean,
 	now: number,
 ): SideboardRevealTrigger[] {
-	const phase = revealed ? 'enter' as const : 'exit' as const;
-	const reached = sideboardDeckListItems(composition, side);
+	return applyItemPhaseEdge(triggers, sideboardDeckListItems(composition, side), revealed, now);
+}
+
+/**
+ * Fold one live-state edge into the running triggers, for the items it reaches:
+ * `shown` plays each one's authored `enter`, and its opposite each one's `exit`.
+ * What a Sideboard reveal does to Deck List items, a Seat's state does to its
+ * Seat Indicators (ADR-0087).
+ */
+export function applyItemPhaseEdge(
+	triggers: readonly SideboardRevealTrigger[],
+	reached: readonly Pick<GraphicItemConfig, 'id' | 'animation'>[],
+	shown: boolean,
+	now: number,
+): SideboardRevealTrigger[] {
+	const phase = shown ? 'enter' as const : 'exit' as const;
 	const reachedIds = new Set(reached.map(item => item.id));
 
 	return [
