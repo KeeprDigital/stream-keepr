@@ -73,7 +73,10 @@ describe('useClockDisplay', () => {
 		],
 		[
 			'running',
-			clock({ isRunning: true, lastStartedAt: Date.now() }),
+			clock({
+				isRunning: true,
+				lastStartedAt: Date.now(),
+			}),
 			{ isExpired: false, isInOvertime: false, color: 'text-primary' },
 		],
 		[
