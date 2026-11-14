@@ -9,80 +9,80 @@ describe('projectRoundClock', () => {
 	it.each([
 		[
 			'no duration',
-			{ startedAt: START, durationMinutes: null },
+			{ startedAt: START, durationMs: null },
 			START,
 			{ state: 'untimed', display: null },
 		],
 		[
 			'a duration, never started',
-			{ startedAt: null, durationMinutes: 50 },
+			{ startedAt: null, durationMs: 50 * MINUTE },
 			START,
 			{ state: 'pending', display: '50:00' },
 		],
 		[
 			'a start still ahead',
-			{ startedAt: START + MINUTE, durationMinutes: 50 },
+			{ startedAt: START + MINUTE, durationMs: 50 * MINUTE },
 			START,
 			{ state: 'pending', display: '50:00' },
 		],
 		[
 			'the instant it starts',
-			{ startedAt: START, durationMinutes: 50 },
+			{ startedAt: START, durationMs: 50 * MINUTE },
 			START,
 			{ state: 'running', display: '50:00' },
 		],
 		// The time remaining rounds up: the full duration through the first second (ADR-0078).
 		[
 			'a millisecond short of its first second',
-			{ startedAt: START, durationMinutes: 50 },
+			{ startedAt: START, durationMs: 50 * MINUTE },
 			START + 999,
 			{ state: 'running', display: '50:00' },
 		],
 		[
 			'one second in',
-			{ startedAt: START, durationMinutes: 50 },
+			{ startedAt: START, durationMs: 50 * MINUTE },
 			START + 1000,
 			{ state: 'running', display: '49:59' },
 		],
 		[
 			'part-way through a second',
-			{ startedAt: START, durationMinutes: 50 },
+			{ startedAt: START, durationMs: 50 * MINUTE },
 			START + 1500,
 			{ state: 'running', display: '49:59' },
 		],
 		[
 			'ten minutes in',
-			{ startedAt: START, durationMinutes: 50 },
+			{ startedAt: START, durationMs: 50 * MINUTE },
 			START + 10 * MINUTE,
 			{ state: 'running', display: '40:00' },
 		],
 		[
 			'over an hour long',
-			{ startedAt: START, durationMinutes: 75 },
+			{ startedAt: START, durationMs: 75 * MINUTE },
 			START + 5 * MINUTE,
 			{ state: 'running', display: '1:10:00' },
 		],
 		[
 			'a second before it ends',
-			{ startedAt: START, durationMinutes: 50 },
+			{ startedAt: START, durationMs: 50 * MINUTE },
 			START + 50 * MINUTE - 1000,
 			{ state: 'running', display: '0:01' },
 		],
 		[
 			'a millisecond before it ends',
-			{ startedAt: START, durationMinutes: 50 },
+			{ startedAt: START, durationMs: 50 * MINUTE },
 			START + 50 * MINUTE - 1,
 			{ state: 'running', display: '0:01' },
 		],
 		[
 			'the instant it ends',
-			{ startedAt: START, durationMinutes: 50 },
+			{ startedAt: START, durationMs: 50 * MINUTE },
 			START + 50 * MINUTE,
 			{ state: 'ended', display: '0:00' },
 		],
 		[
 			'long after it ends',
-			{ startedAt: START, durationMinutes: 50 },
+			{ startedAt: START, durationMs: 50 * MINUTE },
 			START + 90 * MINUTE,
 			{ state: 'ended', display: '0:00' },
 		],
@@ -99,25 +99,25 @@ describe('projectRoundClock', () => {
 		[
 			'in its last second, counting up after',
 			50 * MINUTE - 500,
-			{ enabled: true, limitMinutes: null },
+			{ enabled: true, limitMs: null },
 		],
 		[
 			'the instant it ends, counting up after',
 			50 * MINUTE,
-			{ enabled: true, limitMinutes: null },
+			{ enabled: true, limitMs: null },
 		],
 		[
 			'part-way past the end',
 			50 * MINUTE + 1300,
-			{ enabled: true, limitMinutes: null },
+			{ enabled: true, limitMs: null },
 		],
 		[
 			'in the last second before its limit',
 			51 * MINUTE - 700,
-			{ enabled: true, limitMinutes: 1 },
+			{ enabled: true, limitMs: 1 * MINUTE },
 		],
 	] as const)('next changes exactly when its display does: %s', (_case, sinceStart, countUp) => {
-		const timing = { startedAt: START, durationMinutes: 50 };
+		const timing = { startedAt: START, durationMs: 50 * MINUTE };
 		const now = START + sinceStart;
 		const project = (at: number) => projectRoundClock(timing, at, countUp);
 		const { display, nextChangeInMs } = project(now);
@@ -143,7 +143,7 @@ describe('projectRoundClock', () => {
 			null,
 		],
 	] as const)('names when it next changes: %s', (_case, startedAt, now, nextChangeInMs) => {
-		expect(projectRoundClock({ startedAt, durationMinutes: 50 }, now).nextChangeInMs).toBe(nextChangeInMs);
+		expect(projectRoundClock({ startedAt, durationMs: 50 * MINUTE }, now).nextChangeInMs).toBe(nextChangeInMs);
 	});
 
 	// Counting up after the end, a Round Clock shows the time since the end, holding at its limit.
@@ -171,30 +171,30 @@ describe('projectRoundClock', () => {
 		],
 		[
 			'short of its limit',
-			5,
+			5 * MINUTE,
 			52 * MINUTE,
 			'2:00',
 			1000,
 		],
 		[
 			'at its limit',
-			5,
+			5 * MINUTE,
 			55 * MINUTE,
 			'5:00',
 			null,
 		],
 		[
 			'past its limit',
-			5,
+			5 * MINUTE,
 			90 * MINUTE,
 			'5:00',
 			null,
 		],
-	] as const)('counts up after the end: %s', (_case, limitMinutes, sinceStart, display, nextChangeInMs) => {
+	] as const)('counts up after the end: %s', (_case, limitMs, sinceStart, display, nextChangeInMs) => {
 		expect(projectRoundClock(
-			{ startedAt: START, durationMinutes: 50 },
+			{ startedAt: START, durationMs: 50 * MINUTE },
 			START + sinceStart,
-			{ enabled: true, limitMinutes },
+			{ enabled: true, limitMs },
 		)).toEqual({ state: 'ended', display, nextChangeInMs });
 	});
 });

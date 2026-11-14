@@ -14,7 +14,7 @@ import {
 	DEFAULT_STARTING_LIFE,
 	resetPlayerFeatureMatchStateForNewGame,
 } from '~~/shared/types/featureMatchState';
-import { clockTransitions, readStoredClock, writeStoredClock } from './clock';
+import { clockTransitions, minutesToMs, readStoredClock, writeStoredClock } from './clock';
 import {
 	applyCommanderDamage,
 	applyCommanderTurnStep,
@@ -35,7 +35,7 @@ export type FeatureMatchSessionEventPayload = Record<string, unknown>;
 
 export function createInitialFeatureMatchSessionStateFromSnapshot(snapshot: FeatureMatchSourceSnapshot): FeatureMatchState {
 	const durationMs = snapshot.defaults.clockDuration != null
-		? snapshot.defaults.clockDuration * 60 * 1000
+		? minutesToMs(snapshot.defaults.clockDuration)
 		: DEFAULT_CLOCK_DURATION_MS;
 
 	const initial = createInitialFeatureMatchState(
@@ -45,7 +45,7 @@ export function createInitialFeatureMatchSessionStateFromSnapshot(snapshot: Feat
 		snapshot.defaults.countUpAfterCountdown ?? false,
 		getStartingTurnNumber(snapshot.game),
 		snapshot.defaults.countUpLimit != null
-			? snapshot.defaults.countUpLimit * 60 * 1000
+			? minutesToMs(snapshot.defaults.countUpLimit)
 			: null,
 	);
 	return isCommanderSession(snapshot)

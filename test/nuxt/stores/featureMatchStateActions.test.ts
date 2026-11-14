@@ -27,9 +27,6 @@ vi.mock('~/modules/feature-match-session/client', async () => {
 mockNuxtImport('useServerTime', () => () => ({
 	getServerTime: () => SERVER_NOW,
 }));
-mockNuxtImport('useEventStore', () => () => ({
-	event: { featureMatchDefaultClockDuration: 50 },
-}));
 
 // Batched writes flush at once, so a test sees each write as soon as it is made.
 vi.mock('@vueuse/core', async () => {
@@ -180,6 +177,17 @@ describe('useFeatureMatchStateStore actions', () => {
 
 			answer.resolve(commandResult(expected));
 			await acting;
+		});
+
+		// A clock stored running with no start reads as stopped, so there is nothing to pause.
+		it.each([
+			['a stopped clock', clock()],
+			['a clock stored running with no start', clock({ isRunning: true, lastStartedAt: null })],
+		])('pausing %s sends nothing', (_, stored) => {
+			seedState({ clock: stored });
+
+			expect(store.pauseClock(EVENT_ID, MATCH_ID)).toBeNull();
+			expect(sessionClient.pauseClock).not.toHaveBeenCalled();
 		});
 
 		it('a refused command puts the clock back and reports the server\'s sentence', async () => {

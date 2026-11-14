@@ -4,22 +4,25 @@ import { countdownNextChangeInMs, countUpOvertimeMs, formatClockTime, formatCoun
 export const ROUND_DURATION_MINUTES_MIN = 1;
 export const ROUND_DURATION_MINUTES_MAX = 600;
 
-/** A Round's operator-entered timing (ADR-0066): its start, in server epoch ms, and its duration. */
+/**
+ * A Round's operator-entered timing (ADR-0066): its start, in server epoch ms,
+ * and its duration, in milliseconds as every clock holds time; `null` is untimed.
+ */
 export interface RoundTiming {
 	startedAt: number | null;
-	durationMinutes: number | null;
+	durationMs: number | null;
 }
 
 /**
  * Whether a Round Clock counts up after its Round ends, as its Screen sets it,
- * and the minutes it counts up to before holding (`null`: no limit).
+ * and how far it counts up before holding (`null`: no limit).
  */
 export interface RoundClockCountUp {
 	enabled: boolean;
-	limitMinutes: number | null;
+	limitMs: number | null;
 }
 
-const NO_COUNT_UP: RoundClockCountUp = { enabled: false, limitMinutes: null };
+const NO_COUNT_UP: RoundClockCountUp = { enabled: false, limitMs: null };
 
 /**
  * Where a Round Clock stands: `untimed` with no duration to count, `pending`
@@ -44,10 +47,10 @@ export interface RoundClockProjection {
  * since the end rounds down (ADR-0078).
  */
 export function projectRoundClock(timing: RoundTiming, now: number, countUp: RoundClockCountUp = NO_COUNT_UP): RoundClockProjection {
-	if (timing.durationMinutes == null)
+	const { durationMs } = timing;
+	if (durationMs == null)
 		return { state: 'untimed', display: null, nextChangeInMs: null };
 
-	const durationMs = timing.durationMinutes * 60_000;
 	if (timing.startedAt == null || now < timing.startedAt) {
 		return {
 			state: 'pending',
@@ -61,9 +64,7 @@ export function projectRoundClock(timing: RoundTiming, now: number, countUp: Rou
 	const remainingMs = timing.startedAt + durationMs - now;
 	if (remainingMs <= 0 && countUp.enabled) {
 		const overMs = -remainingMs;
-		const limitMs = countUp.limitMinutes == null
-			? null
-			: countUp.limitMinutes * 60_000;
+		const { limitMs } = countUp;
 		return {
 			state: 'ended',
 			display: formatClockTime(countUpOvertimeMs(overMs, limitMs)),

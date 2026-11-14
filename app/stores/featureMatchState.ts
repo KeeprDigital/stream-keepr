@@ -18,6 +18,7 @@ import {
 	otherFeatureMatchPlayer,
 	pairSeatOf,
 } from '~~/shared/modules/feature-match-session';
+import { storedClockRuns } from '~~/shared/utils/clock';
 import { useFeatureMatchSessionClient } from '~/modules/feature-match-session/client';
 import { createLiveStateFollower } from '~/modules/live-state/follower';
 import { createOptimisticState } from '~/modules/optimistic-state';
@@ -408,7 +409,8 @@ export const useFeatureMatchStateStore = defineStore('featureMatchState', () => 
 	}
 
 	function pauseClock(eventId: number, matchId: number) {
-		if (!featureMatchStates.value.get(matchId)?.clock.isRunning)
+		const held = featureMatchStates.value.get(matchId);
+		if (!held || !storedClockRuns(held.clock))
 			return null;
 
 		return optimistic.run(

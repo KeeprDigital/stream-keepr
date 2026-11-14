@@ -1,5 +1,6 @@
 import type { ScreenOutputRoundClockResponse } from '~~/shared/types/screenOutputReads';
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
+import { minutesToMs } from '~~/shared/utils/clock';
 import { projectRoundClock } from '~~/shared/utils/roundClock';
 import { useScreenModeFreshness } from '~/modules/screen-mode/freshness';
 import { useScreenModeHearing } from '~/modules/screen-mode/hearing';
@@ -34,10 +35,14 @@ export function useRoundClockModeData(context: ScreenContext) {
 			startedAt: held?.startedAt
 				? Date.parse(held.startedAt)
 				: null,
-			durationMinutes: held?.durationMinutes ?? null,
+			durationMs: held?.durationMinutes == null
+				? null
+				: minutesToMs(held.durationMinutes),
 		}, serverTime, {
 			enabled: config.value.countUpAfterEnd,
-			limitMinutes: config.value.countUpLimitMinutes ?? null,
+			limitMs: config.value.countUpLimitMinutes == null
+				? null
+				: minutesToMs(config.value.countUpLimitMinutes),
 		});
 		return { value: projected, nextChangeInMs: projected.nextChangeInMs };
 	}, { whileServerTimeUnknown: 'device-time' });

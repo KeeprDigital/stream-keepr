@@ -4,6 +4,17 @@ import type { ClockState } from '../types/featureMatchState';
 const DIGITS_ONLY_RE = /^\d+$/;
 const NON_DIGIT_RE = /\D/g;
 
+// ──────────────── Units ────────────────
+
+/**
+ * Minutes as milliseconds. Clock code works in milliseconds; minutes stay where
+ * an operator enters them or a row or Screen config stores them, and cross here
+ * once, at that edge.
+ */
+export function minutesToMs(minutes: number): number {
+	return minutes * 60_000;
+}
+
 // ──────────────── Count-up limit ────────────────
 
 /** The bounds of a count-up limit, in minutes, as an operator enters it; none counts up without limit. */
@@ -193,6 +204,11 @@ export function readStoredClock(stored: ClockState): FeatureMatchClock {
 	};
 }
 
+/** Whether a stored clock runs, as `readStoredClock` reads it: one stored running with no start does not. */
+export function storedClockRuns(stored: ClockState): boolean {
+	return readStoredClock(stored).startedAt !== null;
+}
+
 /** A clock in the shape the Session state stores and its reads and messages carry. */
 export function writeStoredClock(clock: FeatureMatchClock): ClockState {
 	return {
@@ -232,6 +248,8 @@ export type FeatureMatchClockState
 
 export interface FeatureMatchClockProjection {
 	state: FeatureMatchClockState;
+	/** Whether the clock runs, wherever its time stands: a clock that has run out may still be running. */
+	isRunning: boolean;
 	/** What the clock shows: a time, or the Untimed Label for an untimed clock. */
 	display: string;
 	/** The time run, by the stored time and, while running, the time since its start. */
@@ -257,6 +275,7 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 	if (!clock) {
 		return {
 			state: 'stopped',
+			isRunning: false,
 			display: formatClockTime(0),
 			elapsedMs: 0,
 			remainingMs: null,
@@ -265,9 +284,11 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 	}
 
 	const elapsedMs = getEffectiveElapsedMs(clock, now);
+	const counts = clock.startedAt !== null;
 	if (clock.type === 'untimed') {
 		return {
 			state: 'untimed',
+			isRunning: counts,
 			display: untimedLabel.trim(),
 			elapsedMs,
 			remainingMs: null,
@@ -275,7 +296,6 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 		};
 	}
 
-	const counts = clock.startedAt !== null;
 	let counting: FeatureMatchClockState = 'stopped';
 	if (counts)
 		counting = 'running';
@@ -285,6 +305,7 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 	if (clock.type !== 'countdown') {
 		return {
 			state: counting,
+			isRunning: counts,
 			display: formatClockTime(elapsedMs),
 			elapsedMs,
 			remainingMs: null,
@@ -298,6 +319,7 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 	if (remainingMs > 0) {
 		return {
 			state: counting,
+			isRunning: counts,
 			display: formatCountdownTime(remainingMs),
 			elapsedMs,
 			remainingMs,
@@ -310,6 +332,7 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 	if (!clock.countUpAfterCountdown) {
 		return {
 			state: 'run-out',
+			isRunning: counts,
 			display: formatClockTime(0),
 			elapsedMs,
 			remainingMs: 0,
@@ -321,6 +344,7 @@ export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: n
 	const holds = clock.countUpLimitMs != null && overMs >= clock.countUpLimitMs;
 	return {
 		state: holds ? 'holding' : 'counting-up',
+		isRunning: counts,
 		display: formatClockTime(countUpOvertimeMs(overMs, clock.countUpLimitMs)),
 		elapsedMs,
 		remainingMs: 0,

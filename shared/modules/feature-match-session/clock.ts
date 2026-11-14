@@ -3,6 +3,7 @@ export {
 	clockTransitions,
 	formatClockTime,
 	getEffectiveElapsedMs,
+	minutesToMs,
 	normalizeTimeInput,
 	parseTimeInput,
 	readStoredClock,

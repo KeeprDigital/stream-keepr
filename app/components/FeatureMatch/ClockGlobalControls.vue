@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { storedClockRuns } from '~~/shared/utils/clock';
+
 const eventStore = useEventStore();
 const featureMatchStore = useFeatureMatchStore();
 const featureMatchStateStore = useFeatureMatchStateStore();
@@ -16,7 +18,7 @@ const isDisabled = computed(() => !eventStore.eventId || matchCount.value <= 0);
 const runningCount = computed(() => {
 	let count = 0;
 	for (const state of featureMatchStateStore.featureMatchStates.values()) {
-		if (state.clock.type !== 'untimed' && state.clock.isRunning)
+		if (state.clock.type !== 'untimed' && storedClockRuns(state.clock))
 			count++;
 	}
 	return count;
@@ -25,7 +27,7 @@ const runningCount = computed(() => {
 const pausedCount = computed(() => {
 	let count = 0;
 	for (const state of featureMatchStateStore.featureMatchStates.values()) {
-		if (state.clock.type !== 'untimed' && !state.clock.isRunning && state.clock.elapsedMs > 0)
+		if (state.clock.type !== 'untimed' && !storedClockRuns(state.clock) && state.clock.elapsedMs > 0)
 			count++;
 	}
 	return count;
