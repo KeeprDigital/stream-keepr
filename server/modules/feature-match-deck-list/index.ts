@@ -19,7 +19,8 @@ import { requireOpEvent } from '~~/server/utils/routeGuards';
  * Feature Match Deck List seam (ADR-0057): previewing a paste, saving it to a
  * Slot side, and reading a saved one. A save is the OP Deck List write's, for
  * a Slot side (ADR-0074); this seam answers unavailable when no bandai-keepr
- * is configured.
+ * is configured. A Commander Seat's, of Magic: The Gathering cards, is
+ * `commanderDeckListModule` (ADR-0087).
  */
 
 /** A paste's cards, through the card catalogue: one bulk lookup for the numbers it lacks (ADR-0074). */
@@ -91,3 +92,5 @@ export function featureMatchDeckListModule() {
 
 	return { preview, save, read };
 }
+
+export { commanderDeckListModule } from './commander';

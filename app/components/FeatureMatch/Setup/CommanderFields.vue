@@ -1,17 +1,28 @@
 <script setup lang="ts">
 import type { Commander, MtgPlayerGameData } from '~~/shared/types/game';
 import { colourIdentityColours, MAX_SEAT_COMMANDERS } from '~~/shared/utils/commander';
+import { commanderOfDeckListEntry } from '~~/shared/utils/commanderDeckList';
 import { scryfallCardImageUrl } from '~~/shared/utils/scryfallCardImage';
 import { COMMANDER_SEARCH_MIN_LENGTH, searchCommanderCards, searchCommanderPrintings } from '~/utils/commanderSearch';
 
 /**
  * A Seat's one or two Commanders, picked from Scryfall's card search and each
  * held as one printing (ADR-0087). Any card may be picked: nothing checks that
- * it can be a Commander or that a pair may share a deck.
+ * it can be a Commander or that a pair may share a deck. While the Seat holds
+ * a Feature Match Deck List they are picked from its cards instead, each as
+ * the list's printing; clearing the list returns to the card search.
  */
+const props = defineProps<{
+	/** The Seat's Slot, whose Deck List the Commanders are picked from while one is held. */
+	slotId?: number;
+}>();
+
 const modelValue = defineModel<MtgPlayerGameData>({
 	required: true,
 });
+
+const eventStore = useEventStore();
+const deckListRepository = useFeatureMatchDeckListRepository();
 
 const text = ref('');
 const offered = ref<Commander[]>([]);
@@ -28,6 +39,26 @@ let searchGeneration = 0;
 
 const commanders = computed(() => modelValue.value.commanders ?? []);
 const canAdd = computed(() => commanders.value.length < MAX_SEAT_COMMANDERS);
+const deckList = computed(() => modelValue.value.featureMatchDeckList ?? null);
+/** The held Deck List's cards, each as the Commander it would be, and the list they were read from. */
+let deckListCards: { id: number; cards: Commander[] } | null = null;
+
+async function searchDeckList(id: number, namePart: string): Promise<Commander[]> {
+	const eventId = eventStore.eventId;
+	if (!eventId || !props.slotId)
+		return [];
+	if (deckListCards?.id !== id) {
+		const saved = await deckListRepository.readCommander(eventId, props.slotId, id);
+		deckListCards = {
+			id,
+			cards: saved.entries.map(commanderOfDeckListEntry),
+		};
+	}
+	const wanted = namePart.toLowerCase();
+	return deckListCards.cards.filter(card =>
+		card.name.toLowerCase().includes(wanted)
+		&& !commanders.value.some(commander => commander.scryfallId === card.scryfallId));
+}
 
 function hold(next: Commander[]) {
 	modelValue.value = { ...modelValue.value, commanders: next };
@@ -42,13 +73,17 @@ async function searchNow() {
 	const submitted = text.value.trim();
 	unmatched.value = null;
 	searchFailed.value = false;
-	if (submitted.length < COMMANDER_SEARCH_MIN_LENGTH) {
+	const held = deckList.value;
+	// A list is searched from the first letter; Scryfall asks for more of a name.
+	if (submitted.length < (held ? 1 : COMMANDER_SEARCH_MIN_LENGTH)) {
 		offered.value = [];
 		return;
 	}
 	searching.value = true;
 	try {
-		const cards = await searchCommanderCards(submitted);
+		const cards = held
+			? await searchDeckList(held.id, submitted)
+			: await searchCommanderCards(submitted);
 		if (generation !== searchGeneration)
 			return;
 		offered.value = cards;
@@ -120,7 +155,10 @@ function pickPrinting(index: number, printing: Commander) {
 		<legend class="text-sm font-medium">
 			Commanders
 		</legend>
-		<p class="text-sm text-muted">
+		<p v-if="deckList" class="text-sm text-muted" data-picked-from-deck-list>
+			One or two of the Deck List's cards. Clear the list to search every card.
+		</p>
+		<p v-else class="text-sm text-muted">
 			One or two, each as the printing you pick.
 		</p>
 		<div class="flex flex-col gap-2">
@@ -150,6 +188,7 @@ function pickPrinting(index: number, printing: Commander) {
 							</p>
 						</div>
 						<UButton
+							v-if="!deckList"
 							label="Printing"
 							color="neutral"
 							variant="outline"
@@ -206,7 +245,7 @@ function pickPrinting(index: number, printing: Commander) {
 					v-model="text"
 					class="w-full"
 					icon="i-lucide-search"
-					:placeholder="commanders.length > 0 ? 'Add a second Commander' : 'Search cards'"
+					:placeholder="deckList ? 'Search the Deck List' : commanders.length > 0 ? 'Add a second Commander' : 'Search cards'"
 					:loading="searching"
 					aria-label="Search Commanders"
 					@update:model-value="searchSoon"

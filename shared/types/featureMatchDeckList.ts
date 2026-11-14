@@ -35,3 +35,60 @@ export type FeatureMatchDeckListPreviewAnswer
 export type SaveFeatureMatchDeckListAnswer<TSlot>
 	= | { available: false }
 		| { available: true; deckList: SavedFeatureMatchDeckList; featureMatch: TSlot };
+
+/**
+ * One card of a Commander Seat's Feature Match Deck List: the exact printing
+ * its pasted line named (ADR-0087).
+ */
+export interface CommanderDeckListEntry {
+	quantity: number;
+	/** The printing, by its Scryfall id. */
+	scryfallId: string;
+	/** The card's full name: both faces' for a card with two. */
+	name: string;
+	setCode: string;
+	collectorNumber: string | null;
+	cardType: string | null;
+	/** Colour identity letters in WUBRG order; empty for a colourless card. */
+	colorIdentity: string;
+	manaCost: string | null;
+	manaValue: number | null;
+}
+
+/** A Commander Seat's saved Deck List: every card kept, the Seat's Commanders among them. */
+export interface SavedCommanderDeckList {
+	id: number;
+	slotId: number;
+	sourceText: string;
+	entries: CommanderDeckListEntry[];
+}
+
+/** A paste as it would be saved, for its operator to confirm the Commanders of. */
+export interface CommanderDeckListPreview {
+	entries: CommanderDeckListEntry[];
+	/** The printings offered as the Commanders, one or two, by Scryfall id. */
+	offeredCommanders: string[];
+	/** How many cards the dropped Sideboard held. */
+	sideboardDropped: number;
+}
+
+/** Why a paste is refused: the line at fault, where one is. */
+export interface CommanderDeckListRefusal {
+	code: string;
+	message: string;
+	lineNumber?: number;
+	sourceText?: string;
+}
+
+export type CommanderDeckListPreviewAnswer
+	= | { ok: true; deckList: CommanderDeckListPreview }
+		| { ok: false; errors: CommanderDeckListRefusal[] };
+
+/** A save's answer, with the Slot it wrote. */
+export interface SaveCommanderDeckListAnswer<TSlot> {
+	deckList: SavedCommanderDeckList;
+	featureMatch: TSlot;
+}
+
+/** The `data.code` of a refused save, which carries the refusals as `data.errors`. */
+export const COMMANDER_DECK_LIST_INVALID = 'COMMANDER_DECK_LIST_INVALID';

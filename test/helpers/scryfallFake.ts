@@ -8,8 +8,15 @@ export interface FakeScryfallCard {
 	id: string;
 	name: string;
 	set: string;
+	/** `1` where a test does not name it. */
+	collector_number?: string;
 	type_line?: string;
+	/** Colour identity letters, alphabetical as Scryfall lists them; none where a test does not name it. */
+	color_identity?: string[];
 }
+
+/** What `/cards/collection` is asked for: a name, in a set or not, or one exact printing. */
+type FakeIdentifier = { name: string; set?: string } | { set: string; collector_number: string };
 
 function sameName(a: string, b: string): boolean {
 	return a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -32,11 +39,11 @@ function toScryfallJson(card: FakeScryfallCard) {
 		id: card.id,
 		name: card.name,
 		set: card.set,
-		collector_number: '1',
+		collector_number: card.collector_number ?? '1',
 		oracle_id: `oracle-${card.id}`,
 		mana_cost: null,
 		cmc: 1,
-		color_identity: [],
+		color_identity: card.color_identity ?? [],
 		type_line: card.type_line ?? 'Sorcery',
 	};
 }
@@ -53,15 +60,22 @@ export function createScryfallFake(catalogue: readonly FakeScryfallCard[]) {
 		?? catalogue.find(card => inSet(card, set) && hasFace(card, name))
 		?? null;
 
-	const collection = (identifiers: Array<{ name: string; set?: string }>) => {
-		collectionBatches.push(identifiers.map(identifier => identifier.name));
+	const findPrinting = (set: string, collectorNumber: string) =>
+		catalogue.find(card => sameName(card.set, set) && sameName(card.collector_number ?? '1', collectorNumber)) ?? null;
+
+	const collection = (identifiers: FakeIdentifier[]) => {
+		collectionBatches.push(identifiers.map(identifier => 'name' in identifier
+			? identifier.name
+			: `${identifier.set}/${identifier.collector_number}`));
 		const data: FakeScryfallCard[] = [];
-		const notFound: Array<{ name: string; set?: string }> = [];
+		const notFound: FakeIdentifier[] = [];
 		for (const identifier of identifiers) {
-			const card = identifier.name.includes(' // ')
-				? null
-				: data.find(earlier => inSet(earlier, identifier.set) && hasFace(earlier, identifier.name))
-					?? findByName(identifier.name, identifier.set);
+			const card = !('name' in identifier)
+				? findPrinting(identifier.set, identifier.collector_number)
+				: identifier.name.includes(' // ')
+					? null
+					: data.find(earlier => inSet(earlier, identifier.set) && hasFace(earlier, identifier.name))
+						?? findByName(identifier.name, identifier.set);
 			if (card)
 				data.push(card);
 			else

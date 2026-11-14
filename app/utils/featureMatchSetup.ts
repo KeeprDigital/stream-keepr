@@ -93,11 +93,20 @@ function normalizeGameData(gameData: PlayerGameData | null | undefined): PlayerG
 		return null;
 
 	if (gameData.type === 'mtg') {
-		// A Seat holding Commanders sends them alone: its deck name and colours are the server's (ADR-0087).
+		// A Seat holding Commanders sends them and its Deck List's reference, which the
+		// server checks: its deck name and colours are the server's (ADR-0087).
 		if (gameData.commanders !== undefined) {
-			return gameData.commanders?.length
-				? { type: 'mtg', commanders: gameData.commanders }
-				: null;
+			const commanders = gameData.commanders ?? [];
+			const { featureMatchDeckList } = gameData;
+			if (commanders.length === 0 && !featureMatchDeckList)
+				return null;
+			return {
+				type: 'mtg',
+				commanders,
+				...(featureMatchDeckList !== undefined
+					? { featureMatchDeckList }
+					: {}),
+			};
 		}
 		const normalized: PlayerGameData = {
 			type: 'mtg',

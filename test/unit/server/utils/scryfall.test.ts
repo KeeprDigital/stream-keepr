@@ -2,9 +2,9 @@ import type { ScryfallCardData } from '~~/server/utils/scryfall';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	batchLookupScryfallIds,
+	batchLookupScryfallPrintings,
 	fetchScryfallCardById,
 	fetchScryfallCardByName,
-	fetchScryfallCardBySetAndCollector,
 	getCardDataFromMap,
 } from '~~/server/utils/scryfall';
 import { createScryfallFake, FACE_NAME_COLLISIONS } from '~~/test/helpers/scryfallFake';
@@ -99,45 +99,71 @@ describe('getCardDataFromMap', () => {
 	});
 });
 
-describe('fetchScryfallCardBySetAndCollector', () => {
-	it('looks up one exact printing and preserves its collector identity', async () => {
-		vi.mocked(fetch).mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({
-				id: 'exact-printing',
-				name: 'Lightning Bolt',
-				set: 'sld',
-				collector_number: '101★',
-				oracle_id: 'oracle-bolt',
-				mana_cost: '{R}',
-				cmc: 1,
-				color_identity: ['R'],
-				type_line: 'Instant',
-			}),
-		} as any);
+// ──────────────── batchLookupScryfallPrintings ────────────────
 
-		await expect(fetchScryfallCardBySetAndCollector('SLD', '101★')).resolves.toMatchObject({
-			id: 'exact-printing',
-			setCode: 'sld',
-			collectorNumber: '101★',
-		});
-		expect(fetch).toHaveBeenCalledWith(
-			'https://api.scryfall.com/cards/SLD/101%E2%98%85',
-			expect.any(Object),
-		);
+describe('batchLookupScryfallPrintings', () => {
+	beforeEach(() => {
+		vi.mocked(fetch).mockReset();
 	});
 
-	it('treats a response without collector identity as an upstream schema failure', async () => {
-		vi.mocked(fetch).mockResolvedValue({
-			ok: true,
-			json: () => Promise.resolve({ id: 'broken-printing', name: 'Lightning Bolt', set: 'sld' }),
-		} as any);
+	// A Moxfield paste names about a hundred printings: two requests, not a hundred.
+	it('asks for exact printings by set and collector number, 75 to a request, and answers each in the order asked', async () => {
+		const catalogue = Array.from({ length: 80 }, (_, index) => ({
+			id: `printing-${index}`,
+			name: `Card ${index}`,
+			set: 'ecl',
+			collector_number: String(index + 1),
+		}));
+		vi.mocked(fetch).mockImplementation(createScryfallFake(catalogue).fetch);
 
-		await expect(fetchScryfallCardBySetAndCollector('sld', '101')).rejects.toMatchObject({
-			name: 'ScryfallRequestError',
-			code: 'SCRYFALL_UPSTREAM_FAILURE',
-			notFound: false,
-		});
+		const cards = await batchLookupScryfallPrintings(catalogue.toReversed().map(card => ({
+			setCode: card.set,
+			collectorNumber: card.collector_number,
+		})));
+
+		expect(fetch).toHaveBeenCalledTimes(2);
+		const firstBatch = JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string);
+		expect(firstBatch.identifiers).toHaveLength(75);
+		expect(firstBatch.identifiers[0]).toEqual({ set: 'ecl', collector_number: '80' });
+		expect(cards.map(card => card?.id)).toEqual(catalogue.toReversed().map(card => card.id));
+	});
+
+	it('answers a printing by its set, in either case, and its collector number, and none for one Scryfall does not know', async () => {
+		vi.mocked(fetch).mockImplementation(createScryfallFake([
+			{
+				id: 'garruks-uprising',
+				name: 'Garruk\'s Uprising',
+				set: 'plst',
+				collector_number: 'M21-186',
+			},
+		]).fetch);
+
+		const cards = await batchLookupScryfallPrintings([
+			{ setCode: 'ECL', collectorNumber: '9999' },
+			{ setCode: 'PLST', collectorNumber: 'M21-186' },
+		]);
+
+		expect(cards).toEqual([
+			null,
+			expect.objectContaining({ id: 'garruks-uprising', setCode: 'plst', collectorNumber: 'M21-186' }),
+		]);
+	});
+
+	it('throws when a request fails, so an outage is never read as a printing that does not exist', async () => {
+		vi.useFakeTimers();
+		vi.mocked(fetch).mockResolvedValue(createScryfallErrorResponse(503, 'private upstream detail') as any);
+
+		try {
+			const lookup = batchLookupScryfallPrintings([
+				{ setCode: 'ecl', collectorNumber: '1' },
+			]).catch(error => error);
+			await vi.runAllTimersAsync();
+
+			expect(await lookup).toMatchObject({ name: 'ScryfallRequestError', retryable: true });
+		}
+		finally {
+			vi.useRealTimers();
+		}
 	});
 });
 

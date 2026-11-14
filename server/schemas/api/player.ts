@@ -53,6 +53,12 @@ const commanderSchema = z.object({
 	collectorNumber: z.string().trim().min(1).max(20),
 }).strict();
 
+/** A Seat's Feature Match Deck List, by reference: the setup write checks it names one of the Slot's. */
+const featureMatchDeckListReferenceSchema = z.object({
+	id: z.number().int().positive(),
+	mainboardCount: z.number().int().nonnegative(),
+}).strict();
+
 /**
  * A Slot Seat's game data, as a setup save writes it: a One Piece side may also
  * reference its Feature Match Deck List, which the setup write checks names one
@@ -61,15 +67,13 @@ const commanderSchema = z.object({
  * (ADR-0074), so it is dropped.
  */
 export const slotSeatGameDataSchema = z.discriminatedUnion('type', [
-	// Only a Commander Event's Seat holds Commanders, which the setup write checks (ADR-0087).
+	// Only a Commander Event's Seat holds Commanders or a Deck List of its own, which the setup write checks (ADR-0087).
 	mtgGameDataSchema.extend({
 		commanders: z.array(commanderSchema).max(MAX_SEAT_COMMANDERS).nullable().optional(),
+		featureMatchDeckList: featureMatchDeckListReferenceSchema.nullable().optional(),
 	}).strict(),
 	opGameDataSchema.extend({
-		featureMatchDeckList: z.object({
-			id: z.number().int().positive(),
-			mainboardCount: z.number().int().nonnegative(),
-		}).strict().nullable().optional(),
+		featureMatchDeckList: featureMatchDeckListReferenceSchema.nullable().optional(),
 		deckList: z.unknown().optional(),
 	}).strict().transform(({ deckList: _deckList, ...gameData }) => gameData),
 ]);

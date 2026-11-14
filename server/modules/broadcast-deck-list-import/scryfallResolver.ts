@@ -1,4 +1,4 @@
-import type { ScryfallCardData } from '~~/server/utils/scryfall';
+import type { ScryfallCardData, ScryfallPrintingRequest } from '~~/server/utils/scryfall';
 import type {
 	BroadcastDeckListCardResolution,
 	BroadcastDeckListCardResolutionRequest,
@@ -8,9 +8,8 @@ import type {
 import { normalizeImportedCardName, normalizeImportedSetCode } from '~~/server/utils/cardNameNormalization';
 import {
 	batchLookupScryfallIds,
+	batchLookupScryfallPrintings,
 	createCardKey,
-	fetchScryfallCardBySetAndCollector,
-	isScryfallNotFoundError,
 	ScryfallRequestError,
 } from '~~/server/utils/scryfall';
 
@@ -24,7 +23,8 @@ export interface BroadcastDeckListScryfallBoundary {
 	lookupByName: (
 		requests: ReadonlyArray<{ name: string; setCode: string | null }>,
 	) => Promise<ReadonlyArray<ScryfallCardData | null>>;
-	lookupBySetAndCollector: (setCode: string, collectorNumber: string) => Promise<ScryfallCardData>;
+	/** Each exact printing asked for, in order, or `null` for one that does not exist. */
+	lookupPrintings: (requests: readonly ScryfallPrintingRequest[]) => Promise<ReadonlyArray<ScryfallCardData | null>>;
 }
 
 export class BroadcastDeckListCardProviderError extends Error {
@@ -53,7 +53,7 @@ async function lookupScryfallCardsByName(
 
 const DEFAULT_SCRYFALL_BOUNDARY: BroadcastDeckListScryfallBoundary = {
 	lookupByName: lookupScryfallCardsByName,
-	lookupBySetAndCollector: fetchScryfallCardBySetAndCollector,
+	lookupPrintings: batchLookupScryfallPrintings,
 };
 
 function normalizeSlashSpelling(name: string): string {
@@ -107,30 +107,6 @@ function canonicalCard(card: ScryfallCardData): ResolvedBroadcastDeckListCard {
 	};
 }
 
-async function lookupCollectorCards(
-	requests: readonly BroadcastDeckListCardResolutionRequest[],
-	scryfall: BroadcastDeckListScryfallBoundary,
-): Promise<Map<string, ScryfallCardData | null>> {
-	const cards = new Map<string, ScryfallCardData | null>();
-	const concurrency = 4;
-	for (let index = 0; index < requests.length; index += concurrency) {
-		const chunk = requests.slice(index, index + concurrency);
-		const settled = await Promise.all(chunk.map(async (request) => {
-			try {
-				return await scryfall.lookupBySetAndCollector(request.setCode!, request.collectorNumber!);
-			}
-			catch (error) {
-				if (isScryfallNotFoundError(error))
-					return null;
-				throw error;
-			}
-		}));
-		for (const [chunkIndex, card] of settled.entries())
-			cards.set(resolutionKey(chunk[chunkIndex]!), card);
-	}
-	return cards;
-}
-
 export function createBroadcastDeckListScryfallResolver(options: {
 	overrides?: readonly BroadcastDeckListNameOverride[];
 	scryfall?: BroadcastDeckListScryfallBoundary;
@@ -174,8 +150,12 @@ export function createBroadcastDeckListScryfallResolver(options: {
 				const cards = new Map<string, ScryfallCardData | null>();
 				for (const [index, request] of named.entries())
 					cards.set(resolutionKey(request), namedCards[index] ?? null);
-				for (const [key, card] of await lookupCollectorCards(collectors, scryfall))
-					cards.set(key, card);
+				const printings = await scryfall.lookupPrintings(collectors.map(request => ({
+					setCode: request.setCode!,
+					collectorNumber: request.collectorNumber!,
+				})));
+				for (const [index, request] of collectors.entries())
+					cards.set(resolutionKey(request), printings[index] ?? null);
 
 				return prepared.map((request) => {
 					const card = cards.get(resolutionKey(request)) ?? null;

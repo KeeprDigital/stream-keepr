@@ -56,9 +56,12 @@ export const scryfallCardSchema = z.object({
 
 export const scryfallCollectionResponseSchema = z.object({
 	object: z.literal('list'),
+	// An identifier Scryfall could not answer, as it was sent: a name, or a set and collector number.
 	not_found: z.array(
 		z.object({
-			name: z.string().max(500),
+			name: z.string().max(500).optional(),
+			set: z.string().max(20).optional(),
+			collector_number: z.string().max(50).optional(),
 		}).passthrough(),
 	).max(75),
 	data: z.array(scryfallCardSchema).max(75),

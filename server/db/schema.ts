@@ -509,9 +509,10 @@ export const featureMatchSessions = sqliteTable('feature_match_sessions', {
 ]);
 
 /**
- * A Feature Match Deck List: the One Piece Deck List one player side of a Slot
- * holds (ADR-0057). The side's slot data references it by id, so it moves with
- * the side's player; deleting the Slot deletes it.
+ * A Feature Match Deck List: the Deck List one Seat of a Slot holds, a One
+ * Piece Seat's (ADR-0057) or a Commander Seat's (ADR-0087). The Seat's slot
+ * data references it by id, so it moves with the Seat's player; deleting the
+ * Slot deletes it.
  */
 export const featureMatchDeckLists = sqliteTable('feature_match_deck_lists', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
@@ -523,7 +524,7 @@ export const featureMatchDeckLists = sqliteTable('feature_match_deck_lists', {
 		.notNull(),
 	/** The text the operator pasted, so a re-paste can start from it. */
 	sourceText: text('source_text').notNull(),
-	/** Cards in the Mainboard: every entry but the Leaders. A side's slot data copies it. */
+	/** Cards in the Mainboard as it was saved: every card but the Leaders, or the Commanders. A Seat's slot data holds the count read. */
 	mainboardCount: integer('mainboard_count').notNull(),
 	...timestamps,
 }, table => [
@@ -546,6 +547,32 @@ export const featureMatchDeckListEntries = sqliteTable('feature_match_deck_list_
 	...timestamps,
 }, table => [
 	uniqueIndex('feature_match_deck_list_entries_order_idx').on(table.deckListId, table.sortOrder),
+]);
+
+/**
+ * One card of a Commander Seat's Feature Match Deck List (ADR-0087): the exact
+ * printing its pasted line named, held as Scryfall answered it, as a
+ * Broadcast Deck List's entry is. The Seat names which are its Commanders.
+ */
+export const featureMatchDeckListMtgEntries = sqliteTable('feature_match_deck_list_mtg_entries', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	deckListId: integer('deck_list_id')
+		.references(() => featureMatchDeckLists.id, { onDelete: 'cascade' })
+		.notNull(),
+	sortOrder: integer('sort_order').notNull(),
+	quantity: integer('quantity').notNull(),
+	canonicalName: text('canonical_name').notNull(),
+	scryfallId: text('scryfall_id').notNull(),
+	setCode: text('set_code').notNull(),
+	collectorNumber: text('collector_number'),
+	cardType: text('card_type'),
+	/** Colour identity letters. */
+	colors: text('colors'),
+	manaCost: text('mana_cost'),
+	manaValue: real('mana_value'),
+	...timestamps,
+}, table => [
+	uniqueIndex('feature_match_deck_list_mtg_entries_order_idx').on(table.deckListId, table.sortOrder),
 ]);
 
 /**
@@ -1325,6 +1352,7 @@ export type DbFeatureMatchSessionInsert = typeof featureMatchSessions.$inferInse
 export type DbFeatureMatchDeckList = typeof featureMatchDeckLists.$inferSelect;
 export type DbFeatureMatchDeckListEntry = typeof featureMatchDeckListEntries.$inferSelect;
 export type DbFeatureMatchDeckListEntryInsert = typeof featureMatchDeckListEntries.$inferInsert;
+export type DbFeatureMatchDeckListMtgEntryInsert = typeof featureMatchDeckListMtgEntries.$inferInsert;
 export type DbBroadcastGraphicsLiveSession = typeof broadcastGraphicsLiveSessions.$inferSelect;
 export type DbBroadcastGraphicsLiveSessionInsert = typeof broadcastGraphicsLiveSessions.$inferInsert;
 export type DbBroadcastGraphicTemplate = typeof broadcastGraphicTemplates.$inferSelect;
