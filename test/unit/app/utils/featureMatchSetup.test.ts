@@ -72,7 +72,37 @@ describe('featureMatchSetup payload helpers', () => {
 			},
 		},
 		{ held: 'no game data once its last Commander is removed', commanders: [], gameData: null },
-	])('saves a Seat holding Commanders as $held', ({ commanders, gameData }) => {
+		{
+			held: 'its Commanders and its Deck List reference',
+			commanders: [ATRAXA],
+			featureMatchDeckList: { id: 4, mainboardCount: 99 },
+			gameData: {
+				type: 'mtg',
+				commanders: [ATRAXA],
+				featureMatchDeckList: { id: 4, mainboardCount: 99 },
+			},
+		},
+		{
+			held: 'its Commanders and no Deck List once the list is cleared',
+			commanders: [ATRAXA],
+			featureMatchDeckList: null,
+			gameData: {
+				type: 'mtg',
+				commanders: [ATRAXA],
+				featureMatchDeckList: null,
+			},
+		},
+		{
+			held: 'its Deck List while no Commander is picked from it',
+			commanders: [],
+			featureMatchDeckList: { id: 4, mainboardCount: 100 },
+			gameData: {
+				type: 'mtg',
+				commanders: [],
+				featureMatchDeckList: { id: 4, mainboardCount: 100 },
+			},
+		},
+	])('saves a Seat holding Commanders as $held', ({ commanders, gameData, ...reference }) => {
 		expect(normalizePlayerSlotData({
 			...DEFAULT_PLAYER_DATA,
 			name: 'Cyd',
@@ -81,6 +111,7 @@ describe('featureMatchSetup payload helpers', () => {
 				commanders,
 				deckName: 'Atraxa / Tymna',
 				deckColors: 'WUBG',
+				...reference,
 			},
 		})?.gameData).toEqual(gameData);
 	});

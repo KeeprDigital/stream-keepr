@@ -57,6 +57,12 @@ export interface MtgPlayerGameData {
 	 * writes the Seat's deck name and colours from them.
 	 */
 	commanders?: Commander[] | null;
+	/**
+	 * A Commander Seat's pasted Deck List, by reference (ADR-0087): it travels
+	 * with the Seat's data, as a One Piece Seat's does. The server owns its
+	 * Mainboard count, which is every card but the Seat's Commanders.
+	 */
+	featureMatchDeckList?: FeatureMatchDeckListReference | null;
 }
 
 /**

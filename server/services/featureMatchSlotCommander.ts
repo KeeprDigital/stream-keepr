@@ -8,16 +8,24 @@ import { COMMANDER_SEAT_DATA_KEYS, SLOT_SEAT_DATA_KEY } from '~~/shared/utils/fe
  * of any other Event holds none.
  */
 
-const SEAT_DATA_KEYS = Object.values(SLOT_SEAT_DATA_KEY);
+/** The Slot field of every Seat a Commander Slot holds. */
+export const SEAT_DATA_KEYS = Object.values(SLOT_SEAT_DATA_KEY);
 
 /** What a typed Seat keeps of a save: no record, and no deck but its Commanders'. */
 const TYPED_SEAT_FIELDS = ['name', 'pronouns', 'lgs'] as const;
 
+/** Whether a write's Deck List references are the Slot's own, settled by the setup write, or to be left out. */
+export interface CommanderSeatOptions {
+	/** A setup save's, once settled; a create's names no Deck List the Slot could hold. */
+	keepsDeckList: boolean;
+}
+
 /**
- * A Seat as a Commander Slot stores it: its name, pronouns and LGS, and its
- * Commanders, which name and colour its deck. A Seat holding none of them is empty.
+ * A Seat as a Commander Slot stores it: its name, pronouns and LGS, its
+ * Commanders, which name and colour its deck, and its Feature Match Deck List
+ * by reference. A Seat holding none of them is empty.
  */
-export function commanderSeatData(data: ManualPlayerSlotData | null | undefined): ManualPlayerSlotData | null {
+export function commanderSeatData(data: ManualPlayerSlotData | null | undefined, { keepsDeckList }: CommanderSeatOptions): ManualPlayerSlotData | null {
 	if (!data)
 		return null;
 	const seat: ManualPlayerSlotData = {};
@@ -25,14 +33,22 @@ export function commanderSeatData(data: ManualPlayerSlotData | null | undefined)
 		if (data[field])
 			seat[field] = data[field];
 	}
-	const commanders = data.gameData?.type === 'mtg'
-		? data.gameData.commanders ?? []
-		: [];
+	const held = data.gameData?.type === 'mtg'
+		? data.gameData
+		: null;
+	const commanders = held?.commanders ?? [];
+	// The setup write lets a Seat hold a list only beside Commanders picked from it.
+	const featureMatchDeckList = keepsDeckList
+		? held?.featureMatchDeckList ?? null
+		: null;
 	if (commanders.length > 0) {
 		seat.gameData = {
 			type: 'mtg',
 			commanders,
 			...commanderDeckIdentity(commanders),
+			...(featureMatchDeckList
+				? { featureMatchDeckList }
+				: {}),
 		};
 	}
 	return Object.keys(seat).length > 0
@@ -40,21 +56,25 @@ export function commanderSeatData(data: ManualPlayerSlotData | null | undefined)
 		: null;
 }
 
-/** A setup save with each Seat it edits as a Commander Slot stores it. */
-export function withCommanderSeats(input: UpdateFeatureMatchInput): UpdateFeatureMatchInput {
+/** A write with each Seat it names as a Commander Slot stores it. */
+export function withCommanderSeats(input: UpdateFeatureMatchInput, options: CommanderSeatOptions): UpdateFeatureMatchInput {
 	const output = { ...input };
 	for (const key of SEAT_DATA_KEYS) {
 		if (input[key] !== undefined)
-			output[key] = commanderSeatData(input[key]);
+			output[key] = commanderSeatData(input[key], options);
 	}
 	return output;
 }
 
-/** Whether a setup save writes what only a Commander Slot holds: Seat 3 or 4, or a Seat's Commanders. */
+/**
+ * Whether a setup save writes what only a Commander Slot holds: Seat 3 or 4,
+ * or a Seat's Commanders or its Deck List of Magic: The Gathering cards.
+ */
 export function writesCommanderSeats(input: UpdateFeatureMatchInput): boolean {
 	return COMMANDER_SEAT_DATA_KEYS.some(key => input[key] !== undefined)
 		|| SEAT_DATA_KEYS.some((key) => {
 			const gameData = input[key]?.gameData;
-			return gameData?.type === 'mtg' && gameData.commanders !== undefined;
+			return gameData?.type === 'mtg'
+				&& (gameData.commanders !== undefined || gameData.featureMatchDeckList !== undefined);
 		});
 }

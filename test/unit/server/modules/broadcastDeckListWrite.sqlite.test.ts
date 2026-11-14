@@ -128,7 +128,8 @@ afterAll(async () => await harness.close());
 describe('a Broadcast Deck List write that is accepted', () => {
 	it('creates the list with the cards its source resolves to, answers it and announces it under the writer\'s origin', async () => {
 		const eventId = await stageEvent();
-		const sourceText = '4 Lightning Bolt\nSideboard\n2 Counterspell';
+		// A line may name its printing and carry a foil marker (ADR-0087).
+		const sourceText = '4 Lightning Bolt (LEA) 1 *F*\nSideboard\n2 Counterspell';
 
 		const created = await write.createBroadcastDeckList({
 			eventId,

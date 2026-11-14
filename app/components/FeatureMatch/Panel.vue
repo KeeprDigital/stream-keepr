@@ -561,6 +561,9 @@ async function save() {
 						:pronouns-enabled="pronounsEnabled"
 						:lgs-enabled="lgsEnabled"
 						:form-id="seatFormId(seat)"
+						:slot-id="match.id"
+						:seat="seat"
+						:deck-list-locked="isDirty"
 						@update:model-value="formData[SLOT_SEAT_DATA_KEY[seat]] = $event"
 						@submit="save"
 					/>
