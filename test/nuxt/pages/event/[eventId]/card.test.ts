@@ -2,6 +2,7 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, reactive, ref } from 'vue';
+import { ATRAXA, TYMNA, typedSeat } from '~~/test/helpers/commanders';
 import { NAMI, opDeckListEntry, opSlotSide, ZORO } from '~~/test/helpers/opCards';
 import { createFollowedFeatureMatchSessions } from '~~/test/nuxt/helpers/followedFeatureMatchSession';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
@@ -36,7 +37,12 @@ function deckPlayer(id: number, name: string) {
 
 const eventStore = reactive({
 	eventId: 1,
-	event: { id: 1, game: 'mtg', cardTimeout: 0 },
+	event: {
+		id: 1,
+		game: 'mtg',
+		variant: 'two-player',
+		cardTimeout: 0,
+	},
 });
 const playerStore = reactive({
 	isLoaded: true,
@@ -187,6 +193,7 @@ async function openCardsPage(query: Record<string, string> = {}) {
 				MtgCardPlayerDeckHeader: true,
 				MtgCardList: true,
 				MtgCardDeckList: true,
+				MtgCardCommanderDeckList: true,
 				OpCardDeckList: true,
 				MtgCardPlayerDeck: true,
 				MtgCardControls: true,
@@ -284,6 +291,7 @@ describe('cards page by Card Game', () => {
 
 	afterEach(() => {
 		eventStore.event.game = 'mtg';
+		eventStore.event.variant = 'two-player';
 		featureMatchStore.featureMatches = mtgSlots;
 		roundStore.rounds = mtgRounds;
 	});
@@ -348,6 +356,39 @@ describe('cards page by Card Game', () => {
 			mode: 'match-decklist',
 			slotId: String(SHARED_ID),
 		}));
+		wrapper.unmount();
+	});
+
+	// A Commander Event has no Rounds or Players: it picks a Slot, each Seat read as its Commanders (ADR-0087).
+	it('opens a Commander Event on the Seats of its Card Spotlight Screen\'s Slot, with no Player Deck List mode', async () => {
+		eventStore.event.variant = 'commander';
+		roundStore.rounds = [];
+		featureMatchStore.featureMatches = [
+			{
+				id: SHARED_ID,
+				player1Id: null,
+				player2Id: null,
+				player1Data: typedSeat('Ana', [ATRAXA]),
+				player2Data: null,
+				player3Data: typedSeat('Cyd', [TYMNA]),
+				activeSession: null,
+			},
+		] as never;
+
+		const wrapper = await openCardsPage();
+
+		const cardStore = useCardStore();
+		await vi.waitFor(() => {
+			expect(cardStore.cardPageMode).toBe('match-decklist');
+			expect(cardStore.commanderDeckListSeats.map(seat => [seat.seat, seat.playerName])).toEqual([
+				['player1', 'Ana'],
+				['player3', 'Cyd'],
+			]);
+		});
+		expect(wrapper.findComponent({ name: 'MtgCardDeckListHeader' }).props('matchOptions')).toBeUndefined();
+		expect(wrapper.findComponent({ name: 'MtgCardModeToggle' }).props('offersPlayerDecklist')).toBe(false);
+		expect(wrapper.findComponent({ name: 'MtgCardCommanderDeckList' }).exists()).toBe(true);
+		expect(wrapper.findComponent({ name: 'MtgCardDeckList' }).exists()).toBe(false);
 		wrapper.unmount();
 	});
 });

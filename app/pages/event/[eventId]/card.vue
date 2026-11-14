@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { EVENT_PAGE_OFFERED_TO } from '~~/shared/config/games';
+import { EVENT_PAGE_OFFERED_TO, eventKind } from '~~/shared/config/games';
 import { getMtgGameData } from '~~/shared/utils/gameData';
 import { LazyMtgCardHistory, LazyOpCardHistory } from '#components';
 import { useConsumedEventData } from '~/modules/event-data/resync';
@@ -27,6 +27,21 @@ const screenStore = useScreenStore();
  * Player Deck List mode.
  */
 const isOpEvent = computed(() => eventStore.event?.game === 'op');
+/**
+ * A Commander Event has no Rounds, Matches or Players either: its Feature
+ * Match Deck List mode picks a Slot and shows each Seat's Commanders and list,
+ * and it has no Player Deck List mode. Its Card Spotlight is Magic's (ADR-0087).
+ */
+const isCommanderEvent = computed(() => !!eventStore.event && eventKind(eventStore.event) === 'mtg-commander');
+/** The Event's only matchup is a Feature Match Slot. */
+const picksSlot = computed(() => isOpEvent.value || isCommanderEvent.value);
+
+/** Whether the Slot holds anything the Feature Match Deck List mode shows. */
+function slotHoldsDecks(slotId: number): boolean {
+	return isCommanderEvent.value
+		? cardStore.commanderSlotHoldsDecks(slotId)
+		: cardStore.opSlotHoldsDeckLists(slotId);
+}
 
 const historyModal = useOverlay().create(LazyMtgCardHistory);
 const opHistoryModal = useOverlay().create(LazyOpCardHistory);
@@ -165,8 +180,8 @@ watch(selectedScreenId, async (screenId, previousScreenId) => {
 	if (screenId && !keepsLinkedView) {
 		// Check if the screen is tied to a Feature Match Slot with decklists
 		const slotId = selectedScreenSlotId.value;
-		if (slotId && isOpEvent.value) {
-			if (cardStore.opSlotHoldsDeckLists(slotId)) {
+		if (slotId && picksSlot.value) {
+			if (slotHoldsDecks(slotId)) {
 				activeMode.value = 'match-decklist';
 				deckListMatchup.value = { kind: 'slot', id: slotId };
 			}
@@ -264,18 +279,18 @@ async function saveSelectedAssignmentNote(note: string) {
 	await assignmentStore.updateAssignment(eventStore.eventId, selectedDeckListAssignment.value.id, { note: note.trim() || null });
 }
 
-/** The Slot a One Piece Event's Deck Lists open on: the first holding a Deck List, else the first. */
-function firstOpSlotId(): number | undefined {
+/** The Slot the Deck Lists of an Event that picks one open on: the first holding any, else the first. */
+function firstSlotId(): number | undefined {
 	const slots = featureMatchStore.featureMatches;
-	return (slots.find(slot => cardStore.opSlotHoldsDeckLists(slot.id)) ?? slots[0])?.id;
+	return (slots.find(slot => slotHoldsDecks(slot.id)) ?? slots[0])?.id;
 }
 
 // Auto-select the first matchup when entering match-decklist mode.
 watch(activeMode, (mode) => {
 	if (mode !== 'match-decklist' || deckListMatchup.value)
 		return;
-	if (isOpEvent.value) {
-		const slotId = firstOpSlotId();
+	if (picksSlot.value) {
+		const slotId = firstSlotId();
 		if (slotId !== undefined)
 			deckListMatchup.value = { kind: 'slot', id: slotId };
 	}
@@ -284,9 +299,9 @@ watch(activeMode, (mode) => {
 	}
 });
 
-// A One Piece Event has no Player Deck List mode, so a link naming it opens on search.
-watch([isOpEvent, activeMode], ([op, mode]) => {
-	if (op && mode === 'player-decklist')
+// An Event that picks a Slot has no Player Deck List mode, so a link naming it opens on search.
+watch([picksSlot, activeMode], ([slotOnly, mode]) => {
+	if (slotOnly && mode === 'player-decklist')
 		activeMode.value = 'search';
 }, { immediate: true });
 
@@ -393,11 +408,11 @@ const timeoutProgress = computed(() => {
 					<!-- Mode Toggle -->
 					<MtgCardModeToggle
 						v-model="activeMode"
-						:match-decklist-disabled="isOpEvent
+						:match-decklist-disabled="picksSlot
 							? !cardStore.canUseDeckListMode
 							: !cardStore.canUseDeckListMode && matchOptions.length === 0"
 						:player-decklist-disabled="!cardStore.canUsePlayerDeckMode"
-						:offers-player-decklist="!isOpEvent"
+						:offers-player-decklist="!picksSlot"
 					/>
 
 					<!-- Mode-specific header controls -->
@@ -407,19 +422,19 @@ const timeoutProgress = computed(() => {
 							<MtgCardSearch v-else />
 						</div>
 						<div v-show="activeMode === 'match-decklist'">
-							<!-- One Piece has no Rounds: the picker lists the Feature Match Slots. -->
+							<!-- One Piece and Commander Events have no Rounds: the picker lists the Feature Match Slots. -->
 							<MtgCardDeckListHeader
 								v-model:deck-list-matchup="deckListMatchup"
 								v-model:deck-list-round-id="deckListRoundId"
-								:round-options="isOpEvent ? undefined : roundOptions"
-								:match-options="isOpEvent ? undefined : matchOptions"
+								:round-options="picksSlot ? undefined : roundOptions"
+								:match-options="picksSlot ? undefined : matchOptions"
 								:selected-match="selectedDeckListMatch"
 								:selected-assignment="selectedDeckListAssignment"
 								:save-assignment-note="eventStore.event?.featureMatchNotesEnabled ? saveSelectedAssignmentNote : undefined"
 								:assignment-note-remote-changed="selectedDeckListAssignment ? assignmentStore.isRemoteChanged(selectedDeckListAssignment.id) : false"
 							/>
 						</div>
-						<div v-if="!isOpEvent" v-show="activeMode === 'player-decklist'">
+						<div v-if="!picksSlot" v-show="activeMode === 'player-decklist'">
 							<MtgCardPlayerDeckHeader
 								v-model:player-id="playerDeckPlayerId"
 							/>
@@ -470,13 +485,14 @@ const timeoutProgress = computed(() => {
 					/>
 				</div>
 
-				<!-- Feature Match Deck List Content -->
+				<!-- Feature Match Deck List Content: a Commander Slot's Seats, or a matchup's two decks -->
 				<div v-show="activeMode === 'match-decklist'" class="flex-1 overflow-y-auto p-4">
-					<MtgCardDeckList />
+					<MtgCardCommanderDeckList v-if="isCommanderEvent" />
+					<MtgCardDeckList v-else />
 				</div>
 
 				<!-- Player Deck List Content -->
-				<div v-show="activeMode === 'player-decklist'" class="flex-1 overflow-y-auto p-4">
+				<div v-if="!isCommanderEvent" v-show="activeMode === 'player-decklist'" class="flex-1 overflow-y-auto p-4">
 					<MtgCardPlayerDeck />
 				</div>
 			</template>

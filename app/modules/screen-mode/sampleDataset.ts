@@ -1070,6 +1070,7 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		featureMatchSlot: none('Feature Match Slot'),
 		// A Magic Deck List Screen's sample is a Player's deck.
 		featureMatchDeckList: none('Feature Match Deck List'),
+		commanderDeckList: none('Feature Match Deck List'),
 		playerHistory: answer(ANSWERS.playerHistory),
 		standings: answer(ANSWERS.standings),
 		pairings: answer(ANSWERS.pairings),
@@ -1091,6 +1092,7 @@ const SAMPLE_READ_REPOSITORIES: Record<Game, SampleReadRepository> = {
 		liveSession: answer(OP_ANSWERS.liveSession),
 		featureMatchSlot: answer(OP_ANSWERS.featureMatchSlot),
 		featureMatchDeckList: answer(OP_ANSWERS.featureMatchDeckList),
+		commanderDeckList: none('Feature Match Deck List'),
 		playerHistory: none('Player History'),
 		standings: none('Standings'),
 		pairings: none('Pairings'),

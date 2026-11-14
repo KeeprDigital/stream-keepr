@@ -1,10 +1,11 @@
 import type { ComputedRef, MaybeRefOrGetter } from 'vue';
 import type { DeckModeConfig } from '~~/shared/screenModeConfigs/deck';
 import type { ScreenSettingsContext } from '~~/shared/screenModeConfigs/fields';
-import type { PlayerSide } from '~~/shared/types/enums';
+import type { Seat } from '~~/shared/types/enums';
 import type { PlayerDeckResponse } from '~~/shared/types/metagame';
+import { eventKind } from '~~/shared/config/games';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
-import { getOpGameData } from '~~/shared/utils/gameData';
+import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
 import { withFollowedFeatureMatchSession } from '~/utils/featureMatchFollowedSession';
 
 /** How many cards each board of a Deck List lays out. */
@@ -136,12 +137,23 @@ export function useDeckBoardCards(
 		};
 	}
 
-	/** The side shows whoever sits there now (ADR-0058): their own Feature Match Deck List, or a linked Player's Deck List (ADR-0074). */
-	function slotSideBoardCards(slotId: number | null, side: PlayerSide): DeckBoardCards | undefined {
+	/**
+	 * The Seat shows whoever sits there now (ADR-0058): their own Feature Match
+	 * Deck List, or a linked Player's Deck List (ADR-0074). A Commander Seat's
+	 * Commanders lay out where a Sideboard would, beside its list's Mainboard
+	 * (ADR-0087).
+	 */
+	function slotSideBoardCards(slotId: number | null, side: Seat): DeckBoardCards | undefined {
 		const slot = featureMatchStore.featureMatches.find(candidate => candidate.id === slotId);
 		if (!slot)
 			return undefined;
 		const { playerId, data } = featureMatchSidePlayer(withFollowedFeatureMatchSession(slot, featureMatchStateStore), side);
+		if (eventStore.event && eventKind(eventStore.event) === 'mtg-commander') {
+			const { commanders, featureMatchDeckList } = getMtgGameData(data?.gameData);
+			return commanders?.length || featureMatchDeckList
+				? { mainboard: featureMatchDeckList?.mainboardCount ?? 0, sideboard: commanders?.length ?? 0 }
+				: undefined;
+		}
 		const gameData = getOpGameData(data?.gameData);
 		return onePieceBoardCards(gameData.featureMatchDeckList
 			?? (playerId !== null

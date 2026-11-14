@@ -3,6 +3,7 @@ import type { ScreenCardState } from '~~/shared/types/card/mtg';
 import type { CardBreakdownResponse } from '~~/shared/types/metagame';
 import type {
 	ScreenOutputArchetypeSpotlightResponse,
+	ScreenOutputCommanderDeckListResponse,
 	ScreenOutputFeatureMatchDeckListResponse,
 	ScreenOutputFeatureMatchResponse,
 	ScreenOutputHeadToHeadResponse,
@@ -68,6 +69,8 @@ export function useScreenOutputReadRepository() {
 			read<ScreenOutputFeatureMatchResponse>(scope, `feature-match-slots/${slotId}`),
 		featureMatchDeckList: (scope: ScreenOutputReadScope, slotId: number, deckListId: number) =>
 			read<ScreenOutputFeatureMatchDeckListResponse>(scope, `feature-match-slots/${slotId}/deck-lists/${deckListId}`),
+		commanderDeckList: (scope: ScreenOutputReadScope, slotId: number, deckListId: number) =>
+			read<ScreenOutputCommanderDeckListResponse>(scope, `feature-match-slots/${slotId}/commander-deck-lists/${deckListId}`),
 		opPlayerDeckList: (scope: ScreenOutputReadScope, playerId: number) =>
 			read<ScreenOutputOpPlayerDeckListResponse>(scope, `players/${playerId}/deck-list`),
 		playerDecks: (scope: ScreenOutputReadScope, playerId: number, selection: { deckId?: number } = {}) =>
