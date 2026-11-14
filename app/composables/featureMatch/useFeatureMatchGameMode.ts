@@ -2,12 +2,11 @@ import type { MaybeRefOrGetter } from 'vue';
 import type { Seat } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchStateUpdate } from '~/modules/feature-match-session/client';
-import { useIntervalFn } from '@vueuse/core';
 import { eventKind, getFeatureMatchStateTracking, getStartingHandSize } from '~~/shared/config/games';
 import { applyCommanderTurnStep, filledSeats } from '~~/shared/modules/feature-match-session';
 import { PLAYER_SIDE_VALUES } from '~~/shared/types/enums';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { getEffectiveElapsedMs, readStoredClock, storedClockRuns } from '~~/shared/utils/clock';
+import { projectFeatureMatchClock, readStoredClock } from '~~/shared/utils/clock';
 import { LazyUIConfirmActionModal } from '#components';
 
 /**
@@ -122,32 +121,22 @@ export function useFeatureMatchGameMode(
 
 	// ── Clock expiration ──
 
-	const clockTick = ref(0);
-	const { pause: pauseClockTick, resume: resumeClockTick } = useIntervalFn(
-		() => { clockTick.value++; },
-		1000,
-		{ immediate: false },
-	);
-
-	watch(
-		() => !!matchState.value && storedClockRuns(matchState.value.clock),
-		(isRunning) => {
-			if (isRunning)
-				resumeClockTick();
-			else
-				pauseClockTick();
-		},
-		{ immediate: true },
-	);
-
-	const isClockExpired = computed(() => {
-		if (!matchState.value || matchState.value.clock.type !== 'countdown')
-			return false;
-		if (storedClockRuns(matchState.value.clock))
-			void clockTick.value;
-		const elapsed = getEffectiveElapsedMs(readStoredClock(matchState.value.clock), Date.now());
-		return elapsed >= matchState.value.clock.durationMs;
-	});
+	/**
+	 * Whether a countdown has run out, by its projection on server time
+	 * (ADR-0088): answered anew as a running one reaches its end.
+	 */
+	const isClockExpired = useClockProjection((serverTime) => {
+		const stored = matchState.value?.clock ?? null;
+		// A countdown's time remaining alone is read, so no Untimed Label is passed.
+		const { remainingMs, isRunning } = projectFeatureMatchClock(stored && readStoredClock(stored), serverTime, '');
+		const runsOut = isRunning && remainingMs != null && remainingMs > 0;
+		return {
+			value: remainingMs === 0,
+			nextChangeInMs: runsOut
+				? remainingMs
+				: null,
+		};
+	}, { whileServerTimeUnknown: 'device-time' });
 
 	// ── Auto-start overtime ──
 

@@ -3165,7 +3165,7 @@ There is no general way for a layout to show something by live state, and each s
 
 ## ADR-0088: Every clock projection runs on one scheduler
 
-Accepted · 2026-11-14 · [#1194](https://github.com/KeeprDigital/stream-keepr/issues/1194). Follows ADR-0009, ADR-0022, ADR-0066, ADR-0076 and ADR-0078, and changes none of them. The scheduler is in ([#1195](https://github.com/KeeprDigital/stream-keepr/issues/1195)), and so is the eased time correction ([#1199](https://github.com/KeeprDigital/stream-keepr/issues/1199)).
+Accepted · 2026-11-14 · [#1194](https://github.com/KeeprDigital/stream-keepr/issues/1194). Follows ADR-0009, ADR-0022, ADR-0066, ADR-0076 and ADR-0078, and changes none of them. The scheduler is in ([#1195](https://github.com/KeeprDigital/stream-keepr/issues/1195)), and so is the eased time correction ([#1199](https://github.com/KeeprDigital/stream-keepr/issues/1199)); the last two readers timed on the device's clock moved onto it in [#1204](https://github.com/KeeprDigital/stream-keepr/issues/1204).
 
 A Feature Match Session clock's display, a Round Clock, Page Rotation, a Talent Screen's Social Profile Rotation and Card Timeout are each a clock projection: a pure function of stored state and server time. The rules were right, but each rendering timed its own re-evaluation, and the five had drifted. Two re-timed when server time re-synced and waited while it was unknown, one re-timed without waiting, and two did neither, so after a re-sync one output of a clock could change a beat off another.
 
@@ -3181,13 +3181,15 @@ A change further off than one timer can hold (2^31 − 1 ms) is waited for in st
 
 **Each caller declares what its projection answers while server time is unknown.** The option is required, so a new clock projection cannot skip the question:
 
-| Clock projection                           | While server time is unknown |
-| ------------------------------------------ | ---------------------------- |
-| Page Rotation                              | its first page (ADR-0009)    |
-| Social Profile Rotation on a Talent Screen | its first profile            |
-| Feature Match Session clock display        | the device's own time        |
-| Round Clock                                | the device's own time        |
-| Card Timeout                               | the device's own time        |
+| Clock projection                                          | While server time is unknown |
+| --------------------------------------------------------- | ---------------------------- |
+| Page Rotation                                             | its first page (ADR-0009)    |
+| Social Profile Rotation on a Talent Screen                | its first profile            |
+| Feature Match Session clock display                       | the device's own time        |
+| Feature Match Session clock running out (starts overtime) | the device's own time        |
+| Edit Match State clock field                              | the device's own time        |
+| Round Clock                                               | the device's own time        |
+| Card Timeout                                              | the device's own time        |
 
 A projection on the device's own time is taken again the moment the first sync lands.
 
@@ -3216,7 +3218,8 @@ A correction applied as a step moves server time by its whole size between two r
 - A Feature Match Session clock display and a held Screen Card now re-time when server time re-syncs, so a Card hides by the shared clock after a re-sync as every other holder does. A Round Clock now also re-evaluates on a first sync that leaves the offset at zero. Nothing else on air changes.
 - Card Timeout is a projection of the held Card: whichever Card is held is timed, and none is timed while none is held. Nothing arms or cancels a timer by hand.
 - A projection is answered again when its wait runs out, so a test that fakes server time must let it run with the timers it fakes. One frozen at an instant never reaches the change it waits for.
-- The Broadcast Graphics playout clock and Graphic Animation timing are not clock projections of this kind and keep their own timing. So do `useFeatureMatchGameMode`'s automatic overtime and the Edit State modal's prefill, which read the device's own time.
+- The Broadcast Graphics playout clock and Graphic Animation timing are not clock projections of this kind and keep their own timing.
+- A Feature Match Session clock running out, which starts overtime, and the Edit Match State clock field read the clock's projection on server time, so neither disagrees with the clock display beside it on a device whose clock is off.
 - While a correction is eased in, two outputs of one clock can differ by up to what is left of it, at most the threshold and for at most five seconds. Before, they differed by the whole correction until each next synced.
 - A wait timed while a correction is eased in is as long on the device as server time takes to reach the change (`deviceDelayFor`), rounded up to the millisecond, so a change lands on its server instant during a correction as it does outside one. A fake of `useServerTime` that the scheduler runs on answers `deviceDelayFor` too; `test/nuxt/helpers/serverTime.ts` is the one such fake.
 - "Synced" still means an offset is held. A missed re-sync keeps the offset held, and a correction under way runs to its end.

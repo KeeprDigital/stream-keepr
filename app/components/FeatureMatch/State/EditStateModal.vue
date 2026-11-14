@@ -3,7 +3,7 @@ import type { PlayerSide } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchPlayerStatePatch, FeatureMatchStateUpdate } from '~/modules/feature-match-session/client';
 import { pairSeatOf } from '~~/shared/modules/feature-match-session';
-import { formatClockTime, formatCountdownTime, getEffectiveElapsedMs, parseTimeInput, readStoredClock } from '~~/shared/utils/clock';
+import { formatClockTime, formatCountdownTime, parseTimeInput } from '~~/shared/utils/clock';
 
 const props = defineProps<{
 	open: boolean;
@@ -35,7 +35,6 @@ const snapshot = {
 	turnNumber: '',
 	firstPlayer: NONE as PlayerChoice,
 	activePlayer: NONE as PlayerChoice,
-	clockDisplayMs: 0,
 	clock: '',
 };
 
@@ -46,12 +45,10 @@ const firstPlayerChoice = ref<PlayerChoice>(NONE);
 const activePlayerChoice = ref<PlayerChoice>(NONE);
 const clockInput = ref('');
 
-function currentDisplayMs(): number {
-	const elapsed = getEffectiveElapsedMs(readStoredClock(props.state.clock), Date.now());
-	return props.state.clock.type === 'countdown'
-		? Math.max(0, props.state.clock.durationMs - elapsed)
-		: elapsed;
-}
+// The clock as its display reads it, on server time (ADR-0088). The field
+// opens on its time remaining on a countdown, its elapsed time on any other;
+// it shows no Untimed Label.
+const { projection: clockProjection } = useClockDisplay(() => props.state.clock, '');
 
 function takeSnapshot() {
 	for (const player of ['player1', 'player2'] as const) {
@@ -65,11 +62,11 @@ function takeSnapshot() {
 	snapshot.turnNumber = String(props.state.turnNumber);
 	snapshot.firstPlayer = pairSeatOf(props.state.firstPlayer) ?? NONE;
 	snapshot.activePlayer = pairSeatOf(props.state.activePlayer) ?? NONE;
-	snapshot.clockDisplayMs = currentDisplayMs();
+	const { remainingMs, elapsedMs } = clockProjection.value;
 	// As the clock itself reads: time remaining rounds up, elapsed time down.
-	snapshot.clock = props.state.clock.type === 'countdown'
-		? formatCountdownTime(snapshot.clockDisplayMs)
-		: formatClockTime(snapshot.clockDisplayMs);
+	snapshot.clock = remainingMs === null
+		? formatClockTime(elapsedMs)
+		: formatCountdownTime(remainingMs);
 	turnNumberInput.value = snapshot.turnNumber;
 	firstPlayerChoice.value = snapshot.firstPlayer;
 	activePlayerChoice.value = snapshot.activePlayer;
@@ -174,7 +171,8 @@ function buildUpdate(): FeatureMatchStateUpdate {
 	}
 
 	const clockMs = clockParsedMs.value;
-	if (clockMs !== null && clockMs !== snapshot.clockDisplayMs)
+	// Against what the field opened on, so a clock read to the second is not an edit.
+	if (clockMs !== null && clockMs !== parseTimeInput(snapshot.clock))
 		update.clock = { targetDisplayMs: clockMs };
 
 	return update;

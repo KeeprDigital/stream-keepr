@@ -1,10 +1,10 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockEvent, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 
-// The real useIntervalFn, captured before the Nuxt auto-import proxy is mocked.
-const { useIntervalFn: realUseIntervalFn } = await vi.importActual<typeof import('@vueuse/core')>('@vueuse/core');
+/** Server time runs this far ahead of the device's clock. */
+const SERVER_AHEAD_MS = 5000;
 
 const mockFeatureMatchStateStore = {
 	updateState: vi.fn(),
@@ -45,11 +45,13 @@ mockNuxtImport('useEventStore', () => () => ({
 mockNuxtImport('useFeatureMatchStateStore', () => () => mockFeatureMatchStateStore);
 mockNuxtImport('useOverlay', () => () => mockOverlay);
 mockNuxtImport('useToast', () => () => mockToast);
-mockNuxtImport('useIntervalFn', () => (fn: any, interval: any, options?: any) => realUseIntervalFn(fn, interval, options));
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
+	getServerTime: () => Date.now() + SERVER_AHEAD_MS,
+})));
 
-function countdown(elapsedMs: number, type: 'countdown' | 'countup' = 'countdown') {
+function countdown(elapsedMs: number) {
 	return {
-		type,
+		type: 'countdown' as const,
 		durationMs: 60000,
 		elapsedMs,
 		isRunning: false,
@@ -244,24 +246,26 @@ describe('useFeatureMatchGameMode', () => {
 	});
 
 	describe('the clock', () => {
-		it.each([
-			[
-				'a count-up clock',
-				countdown(5000, 'countup'),
-				false,
-			],
-			[
-				'a countdown with time left',
-				countdown(30000),
-				false,
-			],
-			[
-				'a countdown that ran out',
-				countdown(60000),
-				true,
-			],
-		])('expires for %s only when a countdown runs out', (_, clock, expected) => {
-			expect(createSetup({ clock }).isClockExpired.value).toBe(expected);
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		// When a countdown runs out is its projection's rule; this reads it on server time, as it changes.
+		it('expires as a running countdown reaches its end by server time, not the device\'s', async () => {
+			vi.useFakeTimers({ now: 1_000_000 });
+			const mode = createSetup({
+				clock: {
+					...countdown(0),
+					isRunning: true,
+					lastStartedAt: 1_000_000,
+				},
+			});
+
+			await vi.advanceTimersByTimeAsync(60_000 - SERVER_AHEAD_MS - 1);
+			expect(mode.isClockExpired.value).toBe(false);
+
+			await vi.advanceTimersByTimeAsync(1);
+			expect(mode.isClockExpired.value).toBe(true);
 		});
 
 		it('starts overtime with the Event\'s extra turns when the countdown runs out', async () => {
