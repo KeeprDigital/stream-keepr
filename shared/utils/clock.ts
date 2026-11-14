@@ -1,4 +1,4 @@
-import type { ClockState } from '../types/featureMatchState';
+import type { ClockState, ClockType } from '../types/featureMatchState';
 
 const DIGITS_ONLY_RE = /^\d+$/;
 const NON_DIGIT_RE = /\D/g;
@@ -154,14 +154,63 @@ export function parseTimeInput(input: string): number | null {
 
 // ──────────────── Clock State Calculations ────────────────
 
-export function getEffectiveElapsedMs(clock: ClockState, now: number): number {
-	let elapsedMs = clock.elapsedMs;
+/**
+ * A Feature Match Session clock as the app holds it: running from a server
+ * instant, or stopped with the time it has run. Whether it runs is whether it
+ * holds a start, so a clock running with no start, or stopped with one, cannot
+ * be built. The stored Session state keeps its own shape (`ClockState`);
+ * `readStoredClock` and `writeStoredClock` are where the two meet.
+ */
+export interface FeatureMatchClock {
+	type: ClockType;
+	durationMs: number;
+	/** The time run before `startedAt`, or in all on a stopped clock. */
+	elapsedMs: number;
+	/** The server instant a running clock runs from; `null` on a stopped clock. */
+	startedAt: number | null;
+	/** Whether a countdown counts up after it runs out, showing its overtime. */
+	countUpAfterCountdown: boolean;
+	/** How far that overtime counts before holding; `null` counts up without limit. */
+	countUpLimitMs: number | null;
+}
 
-	if (clock.isRunning && clock.lastStartedAt) {
-		elapsedMs += now - clock.lastStartedAt;
-	}
+/**
+ * A stored clock as the app holds it. One stored running with no start reads as
+ * stopped at its stored elapsed time, a start stored on a stopped clock is
+ * ignored, and one stored before the count-up limit existed has no limit.
+ */
+export function readStoredClock(stored: ClockState): FeatureMatchClock {
+	return {
+		type: stored.type,
+		durationMs: stored.durationMs,
+		elapsedMs: stored.elapsedMs,
+		startedAt: stored.isRunning
+			? stored.lastStartedAt ?? null
+			: null,
+		countUpAfterCountdown: stored.countUpAfterCountdown,
+		countUpLimitMs: stored.countUpLimitMs ?? null,
+	};
+}
 
-	return Math.max(0, elapsedMs);
+/** A clock in the shape the Session state stores and its reads and messages carry. */
+export function writeStoredClock(clock: FeatureMatchClock): ClockState {
+	return {
+		type: clock.type,
+		durationMs: clock.durationMs,
+		elapsedMs: clock.elapsedMs,
+		isRunning: clock.startedAt !== null,
+		lastStartedAt: clock.startedAt,
+		countUpAfterCountdown: clock.countUpAfterCountdown,
+		countUpLimitMs: clock.countUpLimitMs,
+	};
+}
+
+/** The time a clock has run by `now`, never below zero: the one elapsed-time sum. */
+export function getEffectiveElapsedMs(clock: FeatureMatchClock, now: number): number {
+	const runningMs = clock.startedAt === null
+		? 0
+		: now - clock.startedAt;
+	return Math.max(0, clock.elapsedMs + runningMs);
 }
 
 /**
@@ -203,7 +252,7 @@ export interface FeatureMatchClockProjection {
  * is reached, its last at the end; elapsed time and overtime round down and
  * change on the whole second (ADR-0078). Only a running clock changes.
  */
-export function projectFeatureMatchClock(clock: ClockState | null, now: number, untimedLabel: string): FeatureMatchClockProjection {
+export function projectFeatureMatchClock(clock: FeatureMatchClock | null, now: number, untimedLabel: string): FeatureMatchClockProjection {
 	if (!clock) {
 		return {
 			state: 'stopped',
@@ -225,9 +274,9 @@ export function projectFeatureMatchClock(clock: ClockState | null, now: number, 
 		};
 	}
 
-	const counts = clock.isRunning && !!clock.lastStartedAt;
+	const counts = clock.startedAt !== null;
 	let counting: FeatureMatchClockState = 'stopped';
-	if (clock.isRunning)
+	if (counts)
 		counting = 'running';
 	else if (clock.elapsedMs > 0)
 		counting = 'paused';
@@ -296,10 +345,10 @@ export interface ClockAdjustmentInput {
  * time of that length, which on a countdown is time remaining.
  */
 export function applyClockAdjustment(
-	clock: ClockState,
+	clock: FeatureMatchClock,
 	now: number,
 	adjustment: ClockAdjustmentInput,
-): ClockState {
+): FeatureMatchClock {
 	const effectiveElapsedMs = getEffectiveElapsedMs(clock, now);
 	const inOvertime = clock.type === 'countdown'
 		&& clock.countUpAfterCountdown
@@ -323,14 +372,18 @@ export function applyClockAdjustment(
 			...clock,
 			durationMs,
 			elapsedMs: durationMs - targetDisplayMs,
-			lastStartedAt: clock.isRunning ? now : null,
+			startedAt: clock.startedAt === null
+				? null
+				: now,
 		};
 	}
 
 	return {
 		...clock,
 		elapsedMs: targetDisplayMs,
-		lastStartedAt: clock.isRunning ? now : null,
+		startedAt: clock.startedAt === null
+			? null
+			: now,
 	};
 }
 
@@ -345,52 +398,49 @@ export function applyClockAdjustment(
  */
 export const clockTransitions = {
 	/** Run a stopped clock from `at`. A running clock keeps the start it has. */
-	start(clock: ClockState, at: number): ClockState {
-		return clock.isRunning
-			? clock
-			: { ...clock, isRunning: true, lastStartedAt: at };
-	},
-
-	/** Stop a running clock, keeping the time it has run by `at`. */
-	pause(clock: ClockState, at: number): ClockState {
-		return clock.isRunning
-			? {
-					...clock,
-					isRunning: false,
-					elapsedMs: getEffectiveElapsedMs(clock, at),
-					lastStartedAt: null,
-				}
+	start(clock: FeatureMatchClock, at: number): FeatureMatchClock {
+		return clock.startedAt === null
+			? { ...clock, startedAt: at }
 			: clock;
 	},
 
+	/** Stop a running clock, keeping the time it has run by `at`. */
+	pause(clock: FeatureMatchClock, at: number): FeatureMatchClock {
+		return clock.startedAt === null
+			? clock
+			: {
+					...clock,
+					elapsedMs: getEffectiveElapsedMs(clock, at),
+					startedAt: null,
+				};
+	},
+
 	/** Stop the clock with no time run, at a new duration if one is given. */
-	reset(clock: ClockState, durationMs?: number): ClockState {
+	reset(clock: FeatureMatchClock, durationMs?: number): FeatureMatchClock {
 		return {
 			...clock,
 			elapsedMs: 0,
-			isRunning: false,
-			lastStartedAt: null,
+			startedAt: null,
 			...(durationMs !== undefined && { durationMs }),
 		};
 	},
 
 	/** Run the clock from `at` with no time run, whether or not it was running. */
-	restart(clock: ClockState, at: number): ClockState {
+	restart(clock: FeatureMatchClock, at: number): FeatureMatchClock {
 		return {
 			...clock,
 			elapsedMs: 0,
-			isRunning: true,
-			lastStartedAt: at,
+			startedAt: at,
 		};
 	},
 
 	/** Move what the clock shows by `deltaMs`, as `applyClockAdjustment` does. */
-	adjust(clock: ClockState, at: number, deltaMs: number): ClockState {
+	adjust(clock: FeatureMatchClock, at: number, deltaMs: number): FeatureMatchClock {
 		return applyClockAdjustment(clock, at, { deltaDisplayMs: deltaMs });
 	},
 
 	/** Set what the clock shows to `targetMs`, as `applyClockAdjustment` does. */
-	set(clock: ClockState, at: number, targetMs: number): ClockState {
+	set(clock: FeatureMatchClock, at: number, targetMs: number): FeatureMatchClock {
 		return applyClockAdjustment(clock, at, { targetDisplayMs: targetMs });
 	},
 };

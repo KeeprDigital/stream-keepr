@@ -3,7 +3,7 @@ import type { PlayerSide } from '~~/shared/types/enums';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import type { FeatureMatchPlayerStatePatch, FeatureMatchStateUpdate } from '~/modules/feature-match-session/client';
 import { pairSeatOf } from '~~/shared/modules/feature-match-session';
-import { formatClockTime, formatCountdownTime, getEffectiveElapsedMs, parseTimeInput } from '~~/shared/utils/clock';
+import { formatClockTime, formatCountdownTime, getEffectiveElapsedMs, parseTimeInput, readStoredClock } from '~~/shared/utils/clock';
 
 const props = defineProps<{
 	open: boolean;
@@ -47,7 +47,7 @@ const activePlayerChoice = ref<PlayerChoice>(NONE);
 const clockInput = ref('');
 
 function currentDisplayMs(): number {
-	const elapsed = getEffectiveElapsedMs(props.state.clock, Date.now());
+	const elapsed = getEffectiveElapsedMs(readStoredClock(props.state.clock), Date.now());
 	return props.state.clock.type === 'countdown'
 		? Math.max(0, props.state.clock.durationMs - elapsed)
 		: elapsed;

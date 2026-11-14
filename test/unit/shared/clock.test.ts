@@ -1,4 +1,5 @@
 import type { ClockState } from '~~/shared/types/featureMatchState';
+import type { FeatureMatchClock } from '~~/shared/utils/clock';
 import { describe, expect, it } from 'vitest';
 import {
 	applyClockAdjustment,
@@ -9,6 +10,8 @@ import {
 	normalizeTimeInput,
 	parseTimeInput,
 	projectFeatureMatchClock,
+	readStoredClock,
+	writeStoredClock,
 } from '~~/shared/utils/clock';
 
 describe('formatClockTime', () => {
@@ -47,13 +50,13 @@ describe('formatCountdownTime', () => {
 
 describe('projectFeatureMatchClock: what it shows', () => {
 	const NOW = 1_000_000;
-	const clock = (overrides: Partial<ClockState>): ClockState => ({
+	const clock = (overrides: Partial<FeatureMatchClock>): FeatureMatchClock => ({
 		type: 'countdown',
 		durationMs: 600_000,
 		elapsedMs: 0,
-		isRunning: false,
-		lastStartedAt: null,
+		startedAt: null,
 		countUpAfterCountdown: false,
+		countUpLimitMs: null,
 		...overrides,
 	});
 
@@ -72,7 +75,7 @@ describe('projectFeatureMatchClock: what it shows', () => {
 		},
 		{
 			name: 'a running countdown, by now',
-			state: clock({ isRunning: true, lastStartedAt: NOW - 90_000 }),
+			state: clock({ startedAt: NOW - 90_000 }),
 			label: '',
 			expected: '8:30',
 		},
@@ -115,19 +118,19 @@ describe('projectFeatureMatchClock: what it shows', () => {
 		// Time remaining rounds up; elapsed time and overtime round down (ADR-0078).
 		{
 			name: 'a running countdown the instant it starts',
-			state: clock({ isRunning: true, lastStartedAt: NOW }),
+			state: clock({ startedAt: NOW }),
 			label: '',
 			expected: '10:00',
 		},
 		{
 			name: 'a running countdown a millisecond short of its first second',
-			state: clock({ isRunning: true, lastStartedAt: NOW - 999 }),
+			state: clock({ startedAt: NOW - 999 }),
 			label: '',
 			expected: '10:00',
 		},
 		{
 			name: 'a running countdown one second in',
-			state: clock({ isRunning: true, lastStartedAt: NOW - 1000 }),
+			state: clock({ startedAt: NOW - 1000 }),
 			label: '',
 			expected: '9:59',
 		},
@@ -298,38 +301,38 @@ describe('parseTimeInput', () => {
 
 describe('getEffectiveElapsedMs', () => {
 	it('returns elapsedMs when clock is stopped', () => {
-		const clock: ClockState = {
+		const clock: FeatureMatchClock = {
 			type: 'countdown',
 			durationMs: 300_000,
 			elapsedMs: 60_000,
-			isRunning: false,
-			lastStartedAt: null,
+			startedAt: null,
 			countUpAfterCountdown: false,
+			countUpLimitMs: null,
 		};
 		expect(getEffectiveElapsedMs(clock, Date.now())).toBe(60_000);
 	});
 
 	it('adds running time when clock is running', () => {
 		const now = 1_000_000;
-		const clock: ClockState = {
+		const clock: FeatureMatchClock = {
 			type: 'countdown',
 			durationMs: 300_000,
 			elapsedMs: 60_000,
-			isRunning: true,
-			lastStartedAt: now - 10_000,
+			startedAt: now - 10_000,
 			countUpAfterCountdown: false,
+			countUpLimitMs: null,
 		};
 		expect(getEffectiveElapsedMs(clock, now)).toBe(70_000);
 	});
 
 	it('returns 0 minimum (never negative)', () => {
-		const clock: ClockState = {
+		const clock: FeatureMatchClock = {
 			type: 'countdown',
 			durationMs: 300_000,
 			elapsedMs: -100,
-			isRunning: false,
-			lastStartedAt: null,
+			startedAt: null,
 			countUpAfterCountdown: false,
+			countUpLimitMs: null,
 		};
 		expect(getEffectiveElapsedMs(clock, Date.now())).toBe(0);
 	});
@@ -339,13 +342,13 @@ describe('applyClockAdjustment', () => {
 	const now = 1_000_000;
 
 	it('adjusts countdown clock by delta', () => {
-		const clock: ClockState = {
+		const clock: FeatureMatchClock = {
 			type: 'countdown',
 			durationMs: 300_000,
 			elapsedMs: 60_000,
-			isRunning: false,
-			lastStartedAt: null,
+			startedAt: null,
 			countUpAfterCountdown: false,
+			countUpLimitMs: null,
 		};
 
 		const result = applyClockAdjustment(clock, now, { deltaDisplayMs: 30_000 });
@@ -357,13 +360,13 @@ describe('applyClockAdjustment', () => {
 	});
 
 	it('adjusts countup clock by delta', () => {
-		const clock: ClockState = {
+		const clock: FeatureMatchClock = {
 			type: 'countup',
 			durationMs: 0,
 			elapsedMs: 60_000,
-			isRunning: false,
-			lastStartedAt: null,
+			startedAt: null,
 			countUpAfterCountdown: false,
+			countUpLimitMs: null,
 		};
 
 		const result = applyClockAdjustment(clock, now, { deltaDisplayMs: 10_000 });
@@ -371,13 +374,13 @@ describe('applyClockAdjustment', () => {
 	});
 
 	it('sets countdown clock to absolute target', () => {
-		const clock: ClockState = {
+		const clock: FeatureMatchClock = {
 			type: 'countdown',
 			durationMs: 300_000,
 			elapsedMs: 60_000,
-			isRunning: false,
-			lastStartedAt: null,
+			startedAt: null,
 			countUpAfterCountdown: false,
+			countUpLimitMs: null,
 		};
 
 		const result = applyClockAdjustment(clock, now, { targetDisplayMs: 200_000 });
@@ -385,32 +388,31 @@ describe('applyClockAdjustment', () => {
 	});
 
 	it('clamps display to zero minimum', () => {
-		const clock: ClockState = {
+		const clock: FeatureMatchClock = {
 			type: 'countdown',
 			durationMs: 300_000,
 			elapsedMs: 60_000,
-			isRunning: false,
-			lastStartedAt: null,
+			startedAt: null,
 			countUpAfterCountdown: false,
+			countUpLimitMs: null,
 		};
 
 		const result = applyClockAdjustment(clock, now, { targetDisplayMs: -100 });
 		expect(result.durationMs).toBe(60_000); // elapsedMs + 0
 	});
 
-	it('updates lastStartedAt when clock is running', () => {
-		const clock: ClockState = {
+	it('runs a running clock from the instant of the adjustment', () => {
+		const clock: FeatureMatchClock = {
 			type: 'countdown',
 			durationMs: 300_000,
 			elapsedMs: 60_000,
-			isRunning: true,
-			lastStartedAt: now - 5_000,
+			startedAt: now - 5_000,
 			countUpAfterCountdown: false,
+			countUpLimitMs: null,
 		};
 
 		const result = applyClockAdjustment(clock, now, { deltaDisplayMs: 10_000 });
-		expect(result.lastStartedAt).toBe(now);
-		expect(result.isRunning).toBe(true);
+		expect(result.startedAt).toBe(now);
 	});
 });
 
@@ -419,18 +421,18 @@ describe('applyClockAdjustment', () => {
 describe('applyClockAdjustment on a countdown counting up past its end', () => {
 	const now = 1_000_000;
 	const MINUTE = 60_000;
-	function overtimeClock(overtimeMs: number, overrides: Partial<ClockState> = {}): ClockState {
+	function overtimeClock(overtimeMs: number, overrides: Partial<FeatureMatchClock> = {}): FeatureMatchClock {
 		return {
 			type: 'countdown',
 			durationMs: 10 * MINUTE,
 			elapsedMs: 10 * MINUTE + overtimeMs,
-			isRunning: false,
-			lastStartedAt: null,
+			startedAt: null,
 			countUpAfterCountdown: true,
+			countUpLimitMs: null,
 			...overrides,
 		};
 	}
-	function expired(clock: ClockState) {
+	function expired(clock: FeatureMatchClock) {
 		return getEffectiveElapsedMs(clock, now) >= clock.durationMs;
 	}
 
@@ -497,7 +499,7 @@ describe('applyClockAdjustment on a countdown counting up past its end', () => {
 	it.each([
 		{
 			name: 'a running clock keeps running from the adjusted overtime',
-			clock: overtimeClock(2 * MINUTE, { isRunning: true, lastStartedAt: now - MINUTE }),
+			clock: overtimeClock(2 * MINUTE, { startedAt: now - MINUTE }),
 			adjustment: { deltaDisplayMs: -MINUTE },
 			shows: '4:00',
 		},
@@ -524,7 +526,7 @@ describe('applyClockAdjustment on a countdown counting up past its end', () => {
 		},
 		{
 			name: 'a set-to on a running clock shows that time through its first second',
-			clock: overtimeClock(-90_400, { isRunning: true, lastStartedAt: now - 999 }),
+			clock: overtimeClock(-90_400, { startedAt: now - 999 }),
 			adjustment: { targetDisplayMs: 2 * MINUTE },
 			shows: '2:00',
 			countsDown: true,
@@ -546,14 +548,14 @@ describe('applyClockAdjustment on a countdown counting up past its end', () => {
 
 describe('projectFeatureMatchClock: when what it shows next changes', () => {
 	const NOW = 1_000_000;
-	function running(overrides: Partial<ClockState>, elapsedMs: number): ClockState {
+	function running(overrides: Partial<FeatureMatchClock>, elapsedMs: number): FeatureMatchClock {
 		return {
 			type: 'countdown',
 			durationMs: 60_000,
 			elapsedMs: 0,
-			isRunning: true,
-			lastStartedAt: NOW - elapsedMs,
+			startedAt: NOW - elapsedMs,
 			countUpAfterCountdown: false,
+			countUpLimitMs: null,
 			...overrides,
 		};
 	}
@@ -692,7 +694,7 @@ describe('projectFeatureMatchClock: when what it shows next changes', () => {
 			'a stopped clock',
 			{
 				...running({}, 5_000),
-				isRunning: false,
+				startedAt: null,
 			},
 		],
 		[
@@ -718,17 +720,17 @@ describe('projectFeatureMatchClock: when what it shows next changes', () => {
 
 describe('projectFeatureMatchClock: its state and its time', () => {
 	const NOW = 1_000_000;
-	const clock = (overrides: Partial<ClockState>): ClockState => ({
+	const clock = (overrides: Partial<FeatureMatchClock>): FeatureMatchClock => ({
 		type: 'countdown',
 		durationMs: 60_000,
 		elapsedMs: 0,
-		isRunning: false,
-		lastStartedAt: null,
+		startedAt: null,
 		countUpAfterCountdown: false,
+		countUpLimitMs: null,
 		...overrides,
 	});
-	const running = (elapsedMs: number, overrides: Partial<ClockState> = {}) =>
-		clock({ isRunning: true, lastStartedAt: NOW - elapsedMs, ...overrides });
+	const running = (elapsedMs: number, overrides: Partial<FeatureMatchClock> = {}) =>
+		clock({ startedAt: NOW - elapsedMs, ...overrides });
 
 	// Where its time stands outranks whether it is counting: a clock that has run
 	// out reads so running or stopped, and only a clock with time left reads paused.
@@ -817,35 +819,35 @@ describe('projectFeatureMatchClock: its state and its time', () => {
 // update both apply, each a pure function of a clock and a server instant.
 describe('clockTransitions', () => {
 	const NOW = 1_000_000;
-	const base: ClockState = {
+	const base: FeatureMatchClock = {
 		type: 'countdown',
 		durationMs: 3_000_000,
 		elapsedMs: 60_000,
-		isRunning: false,
-		lastStartedAt: null,
+		startedAt: null,
 		countUpAfterCountdown: false,
+		countUpLimitMs: null,
 	};
 	const stopped = base;
-	const running: ClockState = { ...base, isRunning: true, lastStartedAt: NOW - 5_000 };
+	const running: FeatureMatchClock = { ...base, startedAt: NOW - 5_000 };
 
-	it.each<{ name: string; clock: ClockState; transition: (clock: ClockState) => ClockState; changes: Partial<ClockState> }>([
+	it.each<{ name: string; clock: FeatureMatchClock; transition: (clock: FeatureMatchClock) => FeatureMatchClock; changes: Partial<FeatureMatchClock> }>([
 		{
 			name: 'start runs a stopped clock from the instant',
 			clock: stopped,
 			transition: clock => clockTransitions.start(clock, NOW),
-			changes: { isRunning: true, lastStartedAt: NOW },
+			changes: { startedAt: NOW },
 		},
 		{
 			name: 'pause banks the time a running clock has run',
 			clock: running,
 			transition: clock => clockTransitions.pause(clock, NOW),
-			changes: { isRunning: false, lastStartedAt: null, elapsedMs: 65_000 },
+			changes: { startedAt: null, elapsedMs: 65_000 },
 		},
 		{
 			name: 'reset stops a running clock with no time run, keeping its duration',
 			clock: running,
 			transition: clock => clockTransitions.reset(clock),
-			changes: { isRunning: false, lastStartedAt: null, elapsedMs: 0 },
+			changes: { startedAt: null, elapsedMs: 0 },
 		},
 		{
 			name: 'reset to a duration takes it',
@@ -857,19 +859,19 @@ describe('clockTransitions', () => {
 			name: 'restart runs a stopped clock from no time run',
 			clock: stopped,
 			transition: clock => clockTransitions.restart(clock, NOW),
-			changes: { isRunning: true, lastStartedAt: NOW, elapsedMs: 0 },
+			changes: { startedAt: NOW, elapsedMs: 0 },
 		},
 		{
 			name: 'restart starts a running clock over from the instant',
 			clock: running,
 			transition: clock => clockTransitions.restart(clock, NOW),
-			changes: { lastStartedAt: NOW, elapsedMs: 0 },
+			changes: { startedAt: NOW, elapsedMs: 0 },
 		},
 		{
 			name: 'adjust moves a running countdown\'s end, banking the time run',
 			clock: running,
 			transition: clock => clockTransitions.adjust(clock, NOW, 30_000),
-			changes: { lastStartedAt: NOW, elapsedMs: 65_000, durationMs: 3_030_000 },
+			changes: { startedAt: NOW, elapsedMs: 65_000, durationMs: 3_030_000 },
 		},
 		{
 			name: 'set gives a countdown that much time remaining',
@@ -891,7 +893,7 @@ describe('clockTransitions', () => {
 	});
 
 	// A double press is harmless: the clock is handed back as it was.
-	it.each<{ name: string; clock: ClockState; transition: (clock: ClockState) => ClockState }>([
+	it.each<{ name: string; clock: FeatureMatchClock; transition: (clock: FeatureMatchClock) => FeatureMatchClock }>([
 		{
 			name: 'starting a running clock',
 			clock: running,
@@ -904,5 +906,87 @@ describe('clockTransitions', () => {
 		},
 	])('$name changes nothing', ({ clock, transition }) => {
 		expect(transition(clock)).toBe(clock);
+	});
+});
+
+// Inside the app a clock is running from a server instant or stopped with an
+// elapsed time. The stored Session state keeps its field set; this pair is the
+// one place the two shapes meet.
+describe('readStoredClock and writeStoredClock', () => {
+	const stored: ClockState = {
+		type: 'countdown',
+		durationMs: 3_000_000,
+		elapsedMs: 60_000,
+		isRunning: false,
+		lastStartedAt: null,
+		countUpAfterCountdown: true,
+		countUpLimitMs: 300_000,
+	};
+	const { countUpLimitMs: _limit, ...storedBeforeTheLimit } = stored;
+
+	it.each<{ name: string; stored: ClockState; expected: Partial<FeatureMatchClock> }>([
+		{
+			name: 'a stopped clock as stopped at its elapsed time',
+			stored,
+			expected: {},
+		},
+		{
+			name: 'a running clock as running from its start',
+			stored: { ...stored, isRunning: true, lastStartedAt: 1_000_000 },
+			expected: { startedAt: 1_000_000 },
+		},
+		{
+			name: 'a clock running with no start as stopped at its stored elapsed time',
+			stored: { ...stored, isRunning: true, lastStartedAt: null },
+			expected: {},
+		},
+		{
+			name: 'a stopped clock holding a start as stopped, the start ignored',
+			stored: { ...stored, isRunning: false, lastStartedAt: 1_000_000 },
+			expected: {},
+		},
+		{
+			name: 'a clock stored before the count-up limit as counting up without limit',
+			stored: storedBeforeTheLimit,
+			expected: { countUpLimitMs: null },
+		},
+	])('reads $name', ({ stored, expected }) => {
+		expect(readStoredClock(stored)).toStrictEqual({
+			type: 'countdown',
+			durationMs: 3_000_000,
+			elapsedMs: 60_000,
+			startedAt: null,
+			countUpAfterCountdown: true,
+			countUpLimitMs: 300_000,
+			...expected,
+		});
+	});
+
+	it.each<{ name: string; stored: ClockState; written: Partial<ClockState> }>([
+		{
+			name: 'a stopped clock with the fields it was stored with',
+			stored,
+			written: {},
+		},
+		{
+			name: 'a running clock with the fields it was stored with',
+			stored: { ...stored, isRunning: true, lastStartedAt: 1_000_000 },
+			written: {},
+		},
+		{
+			name: 'a clock running with no start as the stopped clock it read',
+			stored: { ...stored, isRunning: true, lastStartedAt: null },
+			written: { isRunning: false },
+		},
+		{
+			name: 'a stopped clock holding a start with no start',
+			stored: { ...stored, lastStartedAt: 1_000_000 },
+			written: { lastStartedAt: null },
+		},
+	])('writes back $name', ({ stored, written }) => {
+		expect(writeStoredClock(readStoredClock(stored))).toStrictEqual({
+			...stored,
+			...written,
+		});
 	});
 });

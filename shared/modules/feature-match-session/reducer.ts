@@ -1,6 +1,7 @@
 import type { PlayerSide, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchCommandType, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
-import type { ClockState, CommanderNumber, CounterState, FeatureMatchOutcome, FeatureMatchState } from '~~/shared/types/featureMatchState';
+import type { CommanderNumber, CounterState, FeatureMatchOutcome, FeatureMatchState } from '~~/shared/types/featureMatchState';
+import type { FeatureMatchClock } from './clock';
 import { getStartingTurnNumber } from '~~/shared/config/games';
 import { SEAT_VALUES } from '~~/shared/types/enums';
 import {
@@ -13,7 +14,7 @@ import {
 	DEFAULT_STARTING_LIFE,
 	resetPlayerFeatureMatchStateForNewGame,
 } from '~~/shared/types/featureMatchState';
-import { clockTransitions } from './clock';
+import { clockTransitions, readStoredClock, writeStoredClock } from './clock';
 import {
 	applyCommanderDamage,
 	applyCommanderTurnStep,
@@ -312,13 +313,15 @@ function isClockCommand(type: string): type is FeatureMatchClockCommandType {
 /**
  * A clock command's reduction, which needs only the Session's state: the
  * instant and amounts its payload must carry, then the shared clock
- * transition. A reset also clears extra turns. `null` rejects the command.
+ * transition, on the stored clock as the app holds it and stored again in the
+ * stored shape. A reset also clears extra turns. `null` rejects the command.
  */
 function reduceClockCommand(
 	currentState: FeatureMatchState,
 	type: FeatureMatchClockCommandType,
 	payload: FeatureMatchSessionEventPayload,
 ): FeatureMatchState | null {
+	const current = readStoredClock(currentState.clock);
 	if (type === 'ResetClock') {
 		const durationMs = payload.durationMs == null
 			? undefined
@@ -327,7 +330,7 @@ function reduceClockCommand(
 			return null;
 		return {
 			...currentState,
-			clock: clockTransitions.reset(currentState.clock, durationMs),
+			clock: writeStoredClock(clockTransitions.reset(current, durationMs)),
 			overtime: undefined,
 		};
 	}
@@ -336,33 +339,36 @@ function reduceClockCommand(
 	if (at === null)
 		return null;
 
-	let clock: ClockState;
+	let clock: FeatureMatchClock;
 	if (type === 'AdjustClock') {
 		const deltaMs = finiteNumber(payload.deltaMs ?? 0);
 		if (deltaMs === null)
 			return null;
-		clock = clockTransitions.adjust(currentState.clock, at, deltaMs);
+		clock = clockTransitions.adjust(current, at, deltaMs);
 	}
 	else if (type === 'SetClock') {
 		const targetMs = finiteNumber(payload.targetMs ?? 0);
 		if (targetMs === null)
 			return null;
-		clock = clockTransitions.set(currentState.clock, at, targetMs);
+		clock = clockTransitions.set(current, at, targetMs);
 	}
 	else if (type === 'StartClock') {
-		clock = clockTransitions.start(currentState.clock, at);
+		clock = clockTransitions.start(current, at);
 	}
 	else if (type === 'PauseClock') {
-		clock = clockTransitions.pause(currentState.clock, at);
+		clock = clockTransitions.pause(current, at);
 	}
 	else {
-		clock = clockTransitions.restart(currentState.clock, at);
+		clock = clockTransitions.restart(current, at);
 	}
 
 	// A transition that changes nothing leaves the Session's state as it was.
-	return clock === currentState.clock
+	return clock === current
 		? currentState
-		: { ...currentState, clock };
+		: {
+				...currentState,
+				clock: writeStoredClock(clock),
+			};
 }
 
 /**

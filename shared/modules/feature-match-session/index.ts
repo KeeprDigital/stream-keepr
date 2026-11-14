@@ -5,8 +5,10 @@ export {
 	getEffectiveElapsedMs,
 	normalizeTimeInput,
 	parseTimeInput,
+	readStoredClock,
+	writeStoredClock,
 } from './clock';
-export type { ClockAdjustmentInput } from './clock';
+export type { ClockAdjustmentInput, FeatureMatchClock } from './clock';
 
 export {
 	applyCommanderDamage,

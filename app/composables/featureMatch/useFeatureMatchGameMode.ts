@@ -7,7 +7,7 @@ import { eventKind, getFeatureMatchStateTracking, getStartingHandSize } from '~~
 import { applyCommanderTurnStep, filledSeats } from '~~/shared/modules/feature-match-session';
 import { PLAYER_SIDE_VALUES } from '~~/shared/types/enums';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { getEffectiveElapsedMs } from '~~/shared/utils/clock';
+import { getEffectiveElapsedMs, readStoredClock } from '~~/shared/utils/clock';
 import { LazyUIConfirmActionModal } from '#components';
 
 /**
@@ -145,7 +145,7 @@ export function useFeatureMatchGameMode(
 			return false;
 		if (matchState.value.clock.isRunning)
 			void clockTick.value;
-		const elapsed = getEffectiveElapsedMs(matchState.value.clock, Date.now());
+		const elapsed = getEffectiveElapsedMs(readStoredClock(matchState.value.clock), Date.now());
 		return elapsed >= matchState.value.clock.durationMs;
 	});
 

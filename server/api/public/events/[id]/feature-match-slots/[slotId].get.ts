@@ -7,7 +7,7 @@ import { phaseService } from '~~/server/services/phase';
 import { roundService } from '~~/server/services/round';
 import { featureMatchTokenValues } from '~~/shared/featureMatchOverlayValues';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { projectFeatureMatchClock } from '~~/shared/utils/clock';
+import { projectFeatureMatchClock, readStoredClock } from '~~/shared/utils/clock';
 
 /**
  * A Feature Match Slot as its Feature Match Overlay would show it, for outside
@@ -64,7 +64,9 @@ export default defineEventHandler(async (event) => {
 				round,
 				phase,
 			}),
-			clock: projectFeatureMatchClock(state?.clock ?? null, Date.now(), toFeatureMatchDefaults(eventData).untimedLabel).display,
+			clock: projectFeatureMatchClock(state
+				? readStoredClock(state.clock)
+				: null, Date.now(), toFeatureMatchDefaults(eventData).untimedLabel).display,
 			player1Life: lifeOf(state?.player1.lifeTotal),
 			player1GameWins: String(state?.player1.gameWins ?? 0),
 			player2Life: lifeOf(state?.player2.lifeTotal),

@@ -1,7 +1,7 @@
 import type { MaybeRefOrGetter } from 'vue';
 import type { ClockState } from '~~/shared/types/featureMatchState';
 import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { projectFeatureMatchClock } from '~~/shared/utils/clock';
+import { projectFeatureMatchClock, readStoredClock } from '~~/shared/utils/clock';
 
 /**
  * A Feature Match Session clock as a rendering shows it: its projection, kept
@@ -24,7 +24,8 @@ export function useClockDisplay(clock: MaybeRefOrGetter<ClockState | null>) {
 	 * showing nothing.
 	 */
 	const projection = useClockProjection((serverTime) => {
-		const value = projectFeatureMatchClock(toValue(clock), serverTime, untimedLabel.value);
+		const stored = toValue(clock);
+		const value = projectFeatureMatchClock(stored && readStoredClock(stored), serverTime, untimedLabel.value);
 		return { value, nextChangeInMs: value.nextChangeInMs };
 	}, { whileServerTimeUnknown: 'device-time' });
 
