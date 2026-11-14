@@ -1716,7 +1716,7 @@ A minute cron meets the cadence: the shortest interval is a minute, and backoff 
 
 ## ADR-0053: Program holds what it shows until what replaces it is ready
 
-Accepted · 2026-10-28 · Amended 2026-11-13 ([#1168](https://github.com/KeeprDigital/stream-keepr/issues/1168)): application fonts settle before ready, and hold readiness only, never a display
+Accepted · 2026-10-28 · Amended 2026-11-13 ([#1168](https://github.com/KeeprDigital/stream-keepr/issues/1168)): application fonts settle before ready, and hold readiness only, never a display · Amended 2026-11-14 ([#1201](https://github.com/KeeprDigital/stream-keepr/issues/1201)): a Deck List waits only for the art its shown boards draw
 
 ### Decision
 
@@ -1730,7 +1730,7 @@ Accepted · 2026-10-28 · Amended 2026-11-13 ([#1168](https://github.com/KeeprDi
 
 **What the wait covers is the token's face, in the Latin subset.** It waits for the face each Theme typography token and each Graphic Item typography or Graphic Placeholder Style names: its family, its weight and its style. `document.fonts.load` with its default text selects the faces whose `unicode-range` covers a space, which is the Latin subset only. It does not wait for a weight or style a display's own stylesheet asks for beyond the token's (Player History's `.opponent { font-weight: bolder }`, the Pairings winner, the Deck display's `font-medium`, `font-semibold` and `font-bold`), nor for any other subset, Latin Extended included, so a name with ł, ő, ž or ğ paints those letters from a face that is not loaded yet. Those faces swap in when first painted.
 
-**Inside a mode, a change that brings new images is staged.** `useStagedScreenContent` holds what a rendering shows until the images of what replaces it have preloaded and decoded (`preloadImages`), a newer change superseding one still loading, a failed image counting as loaded so its fallback shows. Most Played Cards stages each page with its page indicator, Archetype Spotlight its whole read. The Deck List keeps its own staged swap, now on the shared preload, and the Card Spotlight keeps its card on program until the replacement's images have loaded, then plays its exit and entry.
+**Inside a mode, a change that brings new images is staged.** `useStagedScreenContent` holds what a rendering shows until the images of what replaces it have preloaded and decoded (`preloadImages`), a newer change superseding one still loading, a failed image counting as loaded so its fallback shows. Most Played Cards stages each page with its page indicator, Archetype Spotlight its whole read. The Deck List keeps its own staged swap, now on the shared preload, and waits only for the art its shown boards draw: a board shown as a list, or hidden by its board selection, has its art warmed once that has loaded, so a later switch to its grid finds it loaded (#1201, `deckBoardsShowingArt`). The Card Spotlight keeps its card on program until the replacement's images have loaded, then plays its exit and entry.
 
 ### Why
 

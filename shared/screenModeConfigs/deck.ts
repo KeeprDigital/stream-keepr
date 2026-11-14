@@ -462,6 +462,26 @@ export interface ResolvedDeckBoards {
 }
 
 /**
+ * Which boards draw card art: a board shown as a list draws none, and one its
+ * board selection hides draws nothing. A Deck List waits for this art alone
+ * before it shows a deck (ADR-0053).
+ */
+export function deckBoardsShowingArt(
+	config: Partial<DeckModeConfig>,
+	{ followsSeat = false }: { followsSeat?: boolean } = {},
+): { mainboard: boolean; sideboard: boolean } {
+	const { board, mainboard, sideboard } = resolveDeckBoards(config);
+	// A Seat's Deck List shows every board (ADR-0087).
+	const shown = followsSeat
+		? 'full'
+		: board;
+	return {
+		mainboard: shown !== 'sideboard' && mainboard.view !== 'list',
+		sideboard: shown !== 'mainboard' && sideboard.view !== 'list',
+	};
+}
+
+/**
  * Completes a Deck configuration's board selection and board blocks from their
  * defaults. Stored blocks are partial fragments — a PATCH may have written a
  * lone `{ columns: 6 }` — so every rendering and settings surface resolves
