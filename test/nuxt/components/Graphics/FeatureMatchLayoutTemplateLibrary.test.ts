@@ -214,6 +214,31 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		expect(mockList).toHaveBeenCalledTimes(2);
 	});
 
+	// A layout saved on an Event it is not offered to lands in the library but not in this list (ADR-0087).
+	it.each([
+		{ kind: 'mtg-two-player', fourSeat: true, notice: 'only a Commander Event' },
+		{ kind: 'mtg-commander', fourSeat: false, notice: 'not a Commander Event' },
+		{ kind: 'mtg-commander', fourSeat: true, notice: null },
+	])('on a $kind Event, says where a saved layout naming four Seats ($fourSeat) is offered', async ({ kind, fourSeat, notice }) => {
+		mockEventKind.value = kind;
+		mockSave.mockResolvedValue(summary({
+			id: 'saved',
+			...(fourSeat
+				? { fourSeat: true as const }
+				: {}),
+		}));
+		const wrapper = await mountLibrary();
+
+		await wrapper.get('[data-testid="layout-template-save"]').trigger('click');
+		await flushPromises();
+
+		const shown = wrapper.find('[data-testid="layout-template-saved-not-offered"]');
+		if (notice)
+			expect(shown.text()).toContain(notice);
+		else
+			expect(shown.exists()).toBe(false);
+	});
+
 	// Placing replaces the Screen's whole layout and cannot be undone, so it asks first — and the
 	// prompt says what is replaced and what survives, which is the thing an author most needs…
 	it('asks before replacing the Screen\'s layout, and says what survives', async () => {

@@ -6,6 +6,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import * as authSchema from '~~/server/db/schema/auth';
+import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '~~/shared/builtInFeatureMatchLayoutTemplates';
 import { DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG } from '~~/shared/types/screenConfig';
 import { stubH3Event } from '~~/test/helpers/h3Event';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
@@ -190,6 +191,19 @@ describe('saving a Screen\'s layout as a Feature Match Layout Template', () => {
 
 		expect(JSON.stringify(document)).not.toContain('featureMatchId');
 		expect(document).toEqual(AUTHORED);
+	});
+
+	// The author is told when a layout saved here is not offered to their Event (ADR-0087).
+	it('answers whether the saved layout is four-Seat', async () => {
+		const commanderTable = BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.find(template => template.id === 'commander-table')!;
+		const fourSeatSource = await seedScreen(structuredClone(commanderTable.config.layout));
+
+		const fourSeat = await call(saveTemplate, {}, {
+			source: { eventId: fourSeatSource.eventId, screenId: fourSeatSource.screenId },
+		});
+
+		expect(fourSeat.fourSeat).toBe(true);
+		expect(saved).not.toHaveProperty('fourSeat');
 	});
 });
 

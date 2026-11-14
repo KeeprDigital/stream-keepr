@@ -32,6 +32,7 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 	const { debounceMs = 300, defaults = getDefaultConfigForMode(mode) } = options;
 
 	const screenStore = useScreenStore();
+	const eventKind = useEventKind();
 	const { getServerTime } = useServerTime();
 
 	const { config, saving, saveState, saveError, updateConfig, retry, discard, flush } = useConfigUpdate<ConfigType, ScreenModeConfigPatch<M>>({
@@ -50,10 +51,11 @@ export function useModeConfigUpdate<M extends ScreenMode>(
 	/**
 	 * Reset all display settings to defaults (preserves what the Screen points
 	 * at, such as its Event References). A paginated mode's Page Rotation
-	 * restarts from page 1.
+	 * restarts from page 1, and a Feature Match Overlay lands on a layout its
+	 * Event is offered.
 	 */
 	function resetConfig() {
-		updateConfig(getDisplayResetForMode(mode, config.value, getServerTime()) as ScreenModeConfigPatch<M>);
+		updateConfig(getDisplayResetForMode(mode, config.value, getServerTime(), eventKind.value) as ScreenModeConfigPatch<M>);
 	}
 
 	return {

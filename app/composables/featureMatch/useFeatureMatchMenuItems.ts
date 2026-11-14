@@ -1,4 +1,6 @@
+import type { EventKind } from '~~/shared/config/games';
 import type { OpLeader } from '~~/shared/types/game';
+import { eventSeats } from '~~/shared/config/games';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getMtgGameData, getOpGameData } from '~~/shared/utils/gameData';
 import { playerDisplayName } from '~~/shared/utils/playerName';
@@ -39,20 +41,30 @@ function getPlayerLabel(
 	};
 }
 
-function formatMatchLabel(p1Name: string | null, p2Name: string | null, index: number): string {
+/**
+ * A Slot's label, "Match N — A vs B". A pair's empty side reads TBD; a
+ * Commander Slot names every Seat somebody sits in and passes over an empty
+ * one, which is not in the game (ADR-0087).
+ */
+function formatMatchLabel(names: Array<string | null>, kind: EventKind | undefined, index: number): string {
 	const prefix = `Match ${index + 1}`;
-	if (!p1Name && !p2Name)
+	if (names.every(name => !name))
 		return prefix;
-	return `${prefix} — ${[p1Name ?? 'TBD', p2Name ?? 'TBD'].join(' vs ')}`;
+	const shown = kind === 'mtg-commander'
+		? names.filter((name): name is string => !!name)
+		: names.map(name => name ?? 'TBD');
+	return `${prefix} — ${shown.join(' vs ')}`;
 }
 
 /**
  * Each Feature Match Slot as a picker offers it, "A vs B", its players in the
- * order its followed Session seats them (ADR-0058).
+ * order its followed Session seats them (ADR-0058), and a Commander Slot's
+ * filled Seats in Seat order.
  */
 export function useFeatureMatchMenuItems() {
 	const featureMatchStore = useFeatureMatchStore();
 	const featureMatchStateStore = useFeatureMatchStateStore();
+	const eventKind = useEventKind();
 
 	const items = computed<FeatureMatchMenuItem[]>(() => {
 		return featureMatchStore.featureMatches.map((match, index) => {
@@ -60,8 +72,11 @@ export function useFeatureMatchMenuItems() {
 			const p1 = getPlayerLabel(featureMatchSidePlayer(slot, 'player1').data);
 			const p2 = getPlayerLabel(featureMatchSidePlayer(slot, 'player2').data);
 
+			const names = eventSeats(eventKind.value ?? 'mtg-two-player')
+				.map(seat => playerDisplayName(featureMatchSidePlayer(slot, seat).data) || null);
+
 			return {
-				label: formatMatchLabel(p1.name, p2.name, index),
+				label: formatMatchLabel(names, eventKind.value, index),
 				value: match.id,
 				player1Name: p1.name,
 				player1DeckName: p1.deckName,

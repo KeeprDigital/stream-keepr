@@ -1,5 +1,5 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LAW, ZORO } from '~~/test/helpers/opCards';
 import { createFollowedFeatureMatchSessions, followNoSession, followSwappedSession } from '~~/test/nuxt/helpers/followedFeatureMatchSession';
 
@@ -41,7 +41,29 @@ const mockMatches = [
 		player2Id: null,
 		player2Data: ben,
 	},
+	// A Commander Slot seats four, typed; Seat 2 sits empty here (ADR-0087).
+	{
+		id: 4,
+		player1Id: null,
+		player1Data: { name: 'Dana', gameData: null },
+		player2Id: null,
+		player2Data: null,
+		player3Data: { name: 'Eve', gameData: null },
+		player4Data: { name: 'Finn', gameData: null },
+	},
+	{
+		id: 5,
+		player1Id: null,
+		player1Data: null,
+		player2Id: null,
+		player2Data: null,
+	},
 ];
+
+const { mockEventKind } = vi.hoisted(() => ({
+	mockEventKind: { value: 'mtg-two-player' as string },
+}));
+mockNuxtImport('useEventKind', () => () => mockEventKind);
 
 const followed = createFollowedFeatureMatchSessions();
 
@@ -51,6 +73,7 @@ mockNuxtImport('useFeatureMatchStateStore', () => () => followed);
 describe('useFeatureMatchMenuItems', () => {
 	beforeEach(() => {
 		followNoSession(followed);
+		mockEventKind.value = 'mtg-two-player';
 	});
 
 	it('offers each Feature Match Slot with its Players and their decks', () => {
@@ -114,5 +137,15 @@ describe('useFeatureMatchMenuItems', () => {
 			player2Name: null,
 			player2DeckName: null,
 		});
+	});
+
+	// A Commander Slot is labelled by every Seat somebody sits in, and an empty Seat is not in the game.
+	it.each([
+		{ slot: 4, label: 'Match 4 — Dana vs Eve vs Finn' },
+		{ slot: 5, label: 'Match 5' },
+	])('labels a Commander Slot $label', ({ slot, label }) => {
+		mockEventKind.value = 'mtg-commander';
+
+		expect(useFeatureMatchMenuItems().value.find(item => item.value === slot)!.label).toBe(label);
 	});
 });

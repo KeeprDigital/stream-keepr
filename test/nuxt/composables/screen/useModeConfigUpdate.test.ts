@@ -1,5 +1,6 @@
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { isFourSeatFeatureMatchLayout } from '~~/shared/featureMatchLayoutSeats';
 
 const mockUpdateModeConfig = vi.fn();
 const mockToast = {
@@ -27,6 +28,10 @@ const mockScreenStore = {
 
 mockNuxtImport('useScreenStore', () => () => mockScreenStore);
 mockNuxtImport('useToast', () => () => mockToast);
+const mockEventStore = {
+	event: { game: 'mtg', variant: 'commander' },
+};
+mockNuxtImport('useEventStore', () => () => mockEventStore);
 
 describe('useModeConfigUpdate', () => {
 	beforeEach(() => {
@@ -58,5 +63,13 @@ describe('useModeConfigUpdate', () => {
 		// Auto-page is off after a reset, so no Rotation Anchor is written.
 		expect(written).toMatchObject({ autoPageEnabled: false, rowsPerPage: 8, currentPage: 1 });
 		expect(written).not.toHaveProperty('rotationAnchor');
+	});
+
+	it('a display reset of a Feature Match Overlay lands on a layout its Event is offered', async () => {
+		const { resetConfig } = useModeConfigUpdate(1, 1, 'feature-match-overlay', { debounceMs: 100 });
+		resetConfig();
+
+		await vi.advanceTimersByTimeAsync(200);
+		expect(isFourSeatFeatureMatchLayout(mockUpdateModeConfig.mock.calls[0]![3].layout)).toBe(true);
 	});
 });
