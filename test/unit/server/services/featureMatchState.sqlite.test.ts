@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '~~/server/db/schema';
 import { DEFAULT_FEATURE_MATCH_DEFAULTS, fromFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { projectFeatureMatchClock } from '~~/shared/utils/clock';
+import { projectFeatureMatchClock, readStoredClock } from '~~/shared/utils/clock';
 import { createSqliteD1Harness } from '~~/test/helpers/sqlite-d1';
 
 // The Feature Match Session service over real SQL: source snapshots, command
@@ -231,7 +231,7 @@ describe('opening a Session from its Event', () => {
 			.where(eq(schema.events.id, slot.eventId));
 
 		const session = (await featureMatchStateService().createSessionForSlot(slot.id, slot.eventId))!;
-		const clock = { ...session.currentState.clock, elapsedMs: 55 * 60_000 };
+		const clock = readStoredClock({ ...session.currentState.clock, elapsedMs: 55 * 60_000 });
 
 		expect(projectFeatureMatchClock(clock, 0, '').display).toBe(shown);
 	});
