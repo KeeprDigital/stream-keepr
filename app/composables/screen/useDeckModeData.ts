@@ -11,6 +11,7 @@ import type { ScreenOutputCommanderDeckListResponse } from '~~/shared/types/scre
 import type { ScreenContext } from '~/composables/screen/useScreenContext';
 import type { Player } from '~/types';
 import type { DeckListCardWithData } from '~/types/card/deckList';
+import { deckBoardsShowingArt } from '~~/shared/types/screenConfig';
 import { commanderMainboard } from '~~/shared/utils/commanderDeckList';
 import { featureMatchSidePlayer } from '~~/shared/utils/featureMatchSidePlayer';
 import { getMtgGameData } from '~~/shared/utils/gameData';
@@ -175,6 +176,13 @@ function computeDeckStats(cards: Array<{ quantity: number; compartment: string; 
 	return result;
 }
 
+const deckImageUrl = (card: DeckListCardWithData) => card.mtgCard?.imageData?.front?.normal;
+
+/** Starts loading art no board draws yet, waiting for none of it and judging none of it. */
+function warmDeckImages(cards: DeckListCardWithData[]) {
+	void preloadImages(cards.map(deckImageUrl).filter((url): url is string => !!url));
+}
+
 async function preloadDeckImages(cards: DeckListCardWithData[]): Promise<boolean> {
 	if (!import.meta.client) {
 		return false;
@@ -182,14 +190,14 @@ async function preloadDeckImages(cards: DeckListCardWithData[]): Promise<boolean
 
 	const failedUrls = await preloadImages(
 		cards
-			.map(card => card.mtgCard?.imageData?.front?.normal)
+			.map(deckImageUrl)
 			.filter((url): url is string => !!url),
 	);
 	if (failedUrls.size === 0)
 		return false;
 
 	for (const card of cards) {
-		const url = card.mtgCard?.imageData?.front?.normal;
+		const url = deckImageUrl(card);
 		if (url && failedUrls.has(url))
 			card.mtgCard = null;
 	}
@@ -410,13 +418,29 @@ export function useDeckModeData(context: ScreenContext, { followsSeat = false }:
 				},
 			], cardDataMap).sideboard[0] ?? null
 			: null;
+		// First show waits for the art its boards draw (#1201). A listed or hidden
+		// board's art is warmed once that has loaded, never sharing its bandwidth,
+		// so a later switch to the board's grid finds it loaded.
+		const art = deckBoardsShowingArt(config.value, { followsSeat });
 		const artDegraded = await preloadDeckImages([
 			...commanders,
-			...arrays.mainboard,
-			...arrays.sideboard,
+			...(art.mainboard
+				? arrays.mainboard
+				: []),
+			...(art.sideboard
+				? arrays.sideboard
+				: []),
 			...(companionCard
 				? [companionCard]
 				: []),
+		]);
+		warmDeckImages([
+			...(art.mainboard
+				? []
+				: arrays.mainboard),
+			...(art.sideboard
+				? []
+				: arrays.sideboard),
 		]);
 
 		return {

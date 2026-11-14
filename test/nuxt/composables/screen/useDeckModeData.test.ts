@@ -72,7 +72,10 @@ const screenContext = screenContextOf({
 	assetCapability: mockAssetCapability,
 	cardDataHealth: mockCardDataHealth,
 });
+/** The Deck List's board settings, beside its Deck Source. */
+const mockBoards = ref<Record<string, unknown>>({});
 mockNuxtImport('useScreenModeConfig', () => (_mode: string) => computed(() => ({
+	...mockBoards.value,
 	deckSource: mockBroadcastDeckListId.value === null
 		? { type: 'player' as const, playerId: mockPlayerId.value }
 		: { type: 'broadcast' as const, broadcastDeckListId: mockBroadcastDeckListId.value },
@@ -253,6 +256,7 @@ describe('useDeckModeData', () => {
 		mockAssetCapability.value = 'output-capability';
 		mockRealtime.connectionState = 'connected';
 		mockCardDataHealth.value = 'complete';
+		mockBoards.value = {};
 		servePlayers({
 			5: { name: 'Alice' },
 		});
@@ -291,6 +295,57 @@ describe('useDeckModeData', () => {
 		expect(hasDisplayedDeck.value).toBe(true);
 		expect(displayedDeckVersion.value).toBe(1);
 		expect(images.requested).toContain('https://img.test/Counterspell.jpg');
+	});
+
+	// First show waits for the art a shown board draws, and only warms the art of a listed one.
+	it.each([
+		{ view: 'grid', shownWhileArtLoads: false },
+		{ view: 'list', shownWhileArtLoads: true },
+	])('a $view Mainboard goes on program while its art still loads: $shownWhileArtLoads', async ({ view, shownWhileArtLoads }) => {
+		const art = 'https://img.test/Counterspell.jpg';
+		mockBoards.value = {
+			mainboard: { view },
+		};
+		mockPlayerId.value = 5;
+		images.hold(art);
+		const { hasDisplayedDeck } = mountDeckModeData();
+		await flushPromises();
+
+		expect(images.requested).toContain(art);
+		expect(hasDisplayedDeck.value).toBe(shownWhileArtLoads);
+		images.release(art);
+		await flushPromises();
+		expect(hasDisplayedDeck.value).toBe(true);
+	});
+
+	it('warms a listed board\'s art only once the art on show has loaded', async () => {
+		const shown = 'https://img.test/Duress.jpg';
+		const listed = 'https://img.test/Counterspell.jpg';
+		mockBoards.value = {
+			mainboard: { view: 'list' },
+			sideboard: { view: 'grid' },
+		};
+		// The deck's own cards; a Player has no Commanders.
+		mockBuildDeckListArrays.mockImplementation((cards: unknown[]) => cards.length > 0
+			? {
+					mainboard: [
+						createEnrichedCard('Counterspell'),
+					],
+					sideboard: [
+						createEnrichedCard('Duress'),
+					],
+				}
+			: { mainboard: [], sideboard: [] });
+		mockPlayerId.value = 5;
+		images.hold(shown);
+		const { hasDisplayedDeck } = mountDeckModeData();
+		await flushPromises();
+
+		expect(images.requested).not.toContain(listed);
+		images.release(shown);
+		await flushPromises();
+		expect(hasDisplayedDeck.value).toBe(true);
+		expect(images.requested).toContain(listed);
 	});
 
 	describe('a Broadcast Deck List', () => {

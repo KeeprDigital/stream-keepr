@@ -1,6 +1,7 @@
 import type { DeckModeConfig } from '~~/shared/types/screenConfig';
 import { describe, expect, it } from 'vitest';
 import {
+	deckBoardsShowingArt,
 	DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG,
 	getDefaultConfigForMode,
 	getDisplayDefaultsForMode,
@@ -212,6 +213,54 @@ describe('resolveDeckBoards', () => {
  * `null` that deletes it, because JSON omits `undefined` and the server reads an
  * omitted field as unchanged. A field it does not name stays omitted.
  */
+describe('deckBoardsShowingArt', () => {
+	// A board shows card art unless it renders as a list or its board selection hides it.
+	it.each([
+		{
+			name: 'the defaults: a grid mainboard and a stacked sideboard',
+			config: {},
+			followsSeat: false,
+			art: { mainboard: true, sideboard: true },
+		},
+		{
+			name: 'a mainboard listed',
+			config: {
+				mainboard: { view: 'list' },
+			},
+			followsSeat: false,
+			art: { mainboard: false, sideboard: true },
+		},
+		{
+			name: 'a sideboard listed',
+			config: {
+				sideboard: { view: 'list' },
+			},
+			followsSeat: false,
+			art: { mainboard: true, sideboard: false },
+		},
+		{
+			name: 'the mainboard alone selected',
+			config: { board: 'mainboard' },
+			followsSeat: false,
+			art: { mainboard: true, sideboard: false },
+		},
+		{
+			name: 'the sideboard alone selected',
+			config: { board: 'sideboard' },
+			followsSeat: false,
+			art: { mainboard: false, sideboard: true },
+		},
+		{
+			name: 'a Seat, which shows every board whatever the selection',
+			config: { board: 'sideboard' },
+			followsSeat: true,
+			art: { mainboard: true, sideboard: true },
+		},
+	] as const)('$name', ({ config, followsSeat, art }) => {
+		expect(deckBoardsShowingArt(config as Partial<DeckModeConfig>, { followsSeat })).toEqual(art);
+	});
+});
+
 describe('toModeConfigPatch', () => {
 	it('sends a cleared field as a deletion and leaves every field it does not name out', () => {
 		expect(toModeConfigPatch('metagame', { archetypeId: undefined, headerText: null, topN: 16 }))
