@@ -5,9 +5,7 @@ import { featureMatchService } from '~~/server/services/featureMatch';
 import { matchService } from '~~/server/services/match';
 import { phaseService } from '~~/server/services/phase';
 import { roundService } from '~~/server/services/round';
-import { featureMatchTokenValues } from '~~/shared/featureMatchOverlayValues';
-import { toFeatureMatchDefaults } from '~~/shared/types/featureMatchDefaults';
-import { formatClockDisplay } from '~~/shared/utils/clock';
+import { featureMatchPublicRow } from '~~/server/utils/featureMatchPublicRow';
 
 /**
  * A Feature Match Slot as its Feature Match Overlay would show it, for outside
@@ -18,9 +16,8 @@ import { formatClockDisplay } from '~~/shared/utils/clock';
  * the Overlay's own rules, the clock read at request time; an output must not
  * change live state by reading it, so a Slot with no Session starts none.
  *
- * A stopgap for vMix alone: each Player's first and second game win as a colour,
- * white once won and transparent before, so a shape can bind to it. Eight hex
- * digits read the same as ARGB or RGBA.
+ * What the row holds is `featureMatchPublicRow`'s to say: a Commander Slot's
+ * four Seats, or any other Slot's pair.
  */
 export default defineEventHandler(async (event) => {
 	const { id, slotId } = await getValidatedRouterParams(event, featureMatchSlotParamsSchema.parse);
@@ -43,36 +40,16 @@ export default defineEventHandler(async (event) => {
 		? await phaseService().findById(round.phaseId, id)
 		: undefined;
 
-	const featureMatch = mapFeatureMatchToResponse(slot);
-	const state = featureMatch.activeSession?.currentState ?? null;
-	const lifeOf = (lifeTotal: number | null | undefined) => lifeTotal == null
-		? ''
-		: String(lifeTotal);
-	const winColour = (gameWins: number | undefined, game: number) => (gameWins ?? 0) >= game
-		? '#FFFFFFFF'
-		: '#00000000';
-
 	setResponseHeader(event, 'access-control-allow-origin', '*');
 	setResponseHeader(event, 'cache-control', 'no-store');
 
 	return [
-		{
-			...featureMatchTokenValues({
-				event: eventData,
-				featureMatch,
-				sourceMatch,
-				round,
-				phase,
-			}),
-			clock: formatClockDisplay(state?.clock ?? null, Date.now(), toFeatureMatchDefaults(eventData).untimedLabel),
-			player1Life: lifeOf(state?.player1.lifeTotal),
-			player1GameWins: String(state?.player1.gameWins ?? 0),
-			player2Life: lifeOf(state?.player2.lifeTotal),
-			player2GameWins: String(state?.player2.gameWins ?? 0),
-			player1Game1Win: winColour(state?.player1.gameWins, 1),
-			player1Game2Win: winColour(state?.player1.gameWins, 2),
-			player2Game1Win: winColour(state?.player2.gameWins, 1),
-			player2Game2Win: winColour(state?.player2.gameWins, 2),
-		},
+		featureMatchPublicRow({
+			event: eventData,
+			featureMatch: mapFeatureMatchToResponse(slot),
+			sourceMatch,
+			round,
+			phase,
+		}, Date.now()),
 	];
 });
