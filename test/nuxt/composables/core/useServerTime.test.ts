@@ -51,6 +51,41 @@ async function correctTo(offset: number, held = true) {
 	return serverTime;
 }
 
+/** Restarts the shared sync on this test's clock, as the first consumer starts it, and lets it land. */
+async function restartSync() {
+	useServerTime().stopSync();
+	const serverTime = useServerTime();
+	await vi.advanceTimersByTimeAsync(1_000);
+	return serverTime;
+}
+
+/**
+ * A server that answers at once with its own clock, and a device clock that can
+ * be changed under it, dropping the next `unanswered` requests after a change.
+ */
+function deviceClock() {
+	let deviceAhead = 0;
+	let unanswered = 0;
+	const serverNow = () => Date.now() - deviceAhead;
+	mockFetch.mockImplementation(async () => {
+		if (unanswered > 0) {
+			unanswered--;
+			throw new Error('dropped');
+		}
+		return {
+			serverTime: serverNow(),
+		};
+	});
+	return {
+		serverNow,
+		changeDeviceClock(change: number, drop = 0) {
+			deviceAhead += change;
+			unanswered = drop;
+			vi.setSystemTime(Date.now() + change);
+		},
+	};
+}
+
 describe('useServerTime', () => {
 	// The app's boot starts the shared sync on real timers: three samples now and
 	// a re-sync every minute, any of which would land inside a test and take that
@@ -312,10 +347,7 @@ describe('useServerTime', () => {
 		{ event: 'pagehide', keepsSyncing: false },
 	])('keeps the periodic sync running after $event: $keepsSyncing', async ({ event, keepsSyncing }) => {
 		mockFetch.mockImplementation(sample(0, 0));
-		// Restart the shared sync on this test's clock, as the first consumer starts it.
-		useServerTime().stopSync();
-		const serverTime = useServerTime();
-		await vi.advanceTimersByTimeAsync(1_000);
+		const serverTime = await restartSync();
 		const syncedAt = serverTime.lastSyncedAt.value!;
 
 		window.dispatchEvent(new Event(event));
@@ -362,10 +394,7 @@ describe('useServerTime', () => {
 	])('$name', async ({ target, event, visibility, sinceLastSync, resyncs }) => {
 		vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(visibility as DocumentVisibilityState);
 		mockFetch.mockImplementation(sample(0, 0));
-		// Restart the shared sync on this test's clock, as the first consumer starts it.
-		useServerTime().stopSync();
-		const serverTime = useServerTime();
-		await vi.advanceTimersByTimeAsync(1_000);
+		const serverTime = await restartSync();
 		const syncedAt = serverTime.lastSyncedAt.value!;
 		await vi.advanceTimersByTimeAsync(syncedAt + sinceLastSync - Date.now());
 
@@ -373,5 +402,67 @@ describe('useServerTime', () => {
 		await vi.advanceTimersByTimeAsync(1_000);
 
 		expect(serverTime.lastSyncedAt.value! > syncedAt).toBe(resyncs);
+	});
+
+	// A visible, online tab gets no event when its device's clock is changed, so
+	// server time would read wrong to the next minute: the change itself re-syncs.
+	it.each([
+		{
+			name: 're-syncs when the device clock is set forward past the threshold',
+			sinceLastSync: 6_000,
+			change: 501,
+			unanswered: 0,
+			wrongBy: 0,
+		},
+		{
+			name: 'does not re-sync for a change at the threshold',
+			sinceLastSync: 6_000,
+			change: 500,
+			unanswered: 0,
+			wrongBy: 500,
+		},
+		{
+			name: 're-syncs when the device clock is set back',
+			sinceLastSync: 6_000,
+			change: -600_000,
+			unanswered: 0,
+			wrongBy: 0,
+		},
+		{
+			name: 're-syncs for a change just after a sync once the gap has passed',
+			sinceLastSync: 1_000,
+			change: 2_000,
+			unanswered: 0,
+			wrongBy: 0,
+		},
+		{
+			name: 're-syncs again when the re-sync after a change goes unanswered',
+			sinceLastSync: 6_000,
+			change: 2_000,
+			unanswered: 3,
+			wrongBy: 0,
+		},
+	])('$name', async ({ sinceLastSync, change, unanswered, wrongBy }) => {
+		const { serverNow, changeDeviceClock } = deviceClock();
+		const serverTime = await restartSync();
+		await vi.advanceTimersByTimeAsync(serverTime.lastSyncedAt.value! + sinceLastSync - Date.now());
+
+		changeDeviceClock(change, unanswered);
+		await vi.advanceTimersByTimeAsync(8_000);
+
+		expect(serverTime.getServerTime() - serverNow()).toBe(wrongBy);
+	});
+
+	// An unreachable server is not asked once a second for as long as the change stands.
+	it('asks again after a change no faster than the gap while unanswered', async () => {
+		const { changeDeviceClock } = deviceClock();
+		await restartSync();
+		await vi.advanceTimersByTimeAsync(6_000);
+		mockFetch.mockClear();
+
+		changeDeviceClock(2_000, Infinity);
+		await vi.advanceTimersByTimeAsync(10_500);
+
+		expect(mockFetch).toHaveBeenCalledTimes(6);
 	});
 });
