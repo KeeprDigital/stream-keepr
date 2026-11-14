@@ -165,52 +165,119 @@ export function getEffectiveElapsedMs(clock: ClockState, now: number): number {
 }
 
 /**
- * What a Feature Match Session clock shows at `now`: the remaining time of a
- * countdown, its overtime once expired if it counts up after (holding at its
- * count-up limit, if it has one), the elapsed time
- * otherwise, and the Event's Untimed Label for an untimed clock. No clock reads
- * `0:00`. Whether a blank Untimed Label hides the clock is the caller's to decide.
- * Time remaining rounds up; elapsed time and overtime round down (ADR-0078).
+ * Where a Feature Match Session clock stands. Where its time stands outranks
+ * whether it is counting: a countdown past its end is `run-out`, or, counting up
+ * after, `counting-up` until it is `holding` at its count-up limit, running or
+ * not. With time left it is `running`, `paused` once any time has run, or
+ * `stopped` before any has. An Untimed Match's clock is `untimed`.
  */
-export function formatClockDisplay(clock: ClockState | null, now: number, untimedLabel: string): string {
-	if (!clock)
-		return '0:00';
-	if (clock.type === 'untimed')
-		return untimedLabel.trim();
+export type FeatureMatchClockState
+	= | 'untimed'
+		| 'stopped'
+		| 'paused'
+		| 'running'
+		| 'run-out'
+		| 'counting-up'
+		| 'holding';
 
-	const elapsedMs = getEffectiveElapsedMs(clock, now);
-	if (clock.type === 'countdown') {
-		if (clock.countUpAfterCountdown && elapsedMs >= clock.durationMs)
-			return formatClockTime(countUpOvertimeMs(elapsedMs - clock.durationMs, clock.countUpLimitMs));
-		return formatCountdownTime(clock.durationMs - elapsedMs);
-	}
-	return formatClockTime(elapsedMs);
+export interface FeatureMatchClockProjection {
+	state: FeatureMatchClockState;
+	/** What the clock shows: a time, or the Untimed Label for an untimed clock. */
+	display: string;
+	/** The time run, by the stored time and, while running, the time since its start. */
+	elapsedMs: number;
+	/** The time a countdown has left, never below zero; `null` for any other clock. */
+	remainingMs: number | null;
+	/** How long until `display` next changes, or `null` if it never will on its own. */
+	nextChangeInMs: number | null;
 }
 
 /**
- * How long from `now` until what `formatClockDisplay` shows next changes, or
- * `null` while it will not: no clock, untimed, stopped, run out without counting
- * up, or holding at its count-up limit. Time counting up rounds down and time
- * remaining rounds up, so each changes on the whole second, and a countdown's
- * last second ends at its end.
+ * A Feature Match Session clock at `now` (server time): one pure projection, so
+ * what a rendering shows, the state it reads and when it next changes cannot
+ * disagree. A countdown shows its time remaining, its overtime once run out if
+ * it counts up after (holding at its count-up limit, ADR-0076), and any other
+ * clock its elapsed time; an untimed clock shows the Event's Untimed Label, and
+ * no clock `0:00`. Whether a blank Untimed Label hides the clock is the caller's
+ * to decide. Time remaining rounds up and changes as each whole second remaining
+ * is reached, its last at the end; elapsed time and overtime round down and
+ * change on the whole second (ADR-0078). Only a running clock changes.
  */
-export function clockDisplayNextChangeInMs(clock: ClockState | null, now: number): number | null {
-	if (!clock || clock.type === 'untimed' || !clock.isRunning || !clock.lastStartedAt)
-		return null;
+export function projectFeatureMatchClock(clock: ClockState | null, now: number, untimedLabel: string): FeatureMatchClockProjection {
+	if (!clock) {
+		return {
+			state: 'stopped',
+			display: formatClockTime(0),
+			elapsedMs: 0,
+			remainingMs: null,
+			nextChangeInMs: null,
+		};
+	}
 
 	const elapsedMs = getEffectiveElapsedMs(clock, now);
-	if (clock.type !== 'countdown')
-		return 1000 - (elapsedMs % 1000);
+	if (clock.type === 'untimed') {
+		return {
+			state: 'untimed',
+			display: untimedLabel.trim(),
+			elapsedMs,
+			remainingMs: null,
+			nextChangeInMs: null,
+		};
+	}
+
+	const counts = clock.isRunning && !!clock.lastStartedAt;
+	let counting: FeatureMatchClockState = 'stopped';
+	if (clock.isRunning)
+		counting = 'running';
+	else if (clock.elapsedMs > 0)
+		counting = 'paused';
+
+	if (clock.type !== 'countdown') {
+		return {
+			state: counting,
+			display: formatClockTime(elapsedMs),
+			elapsedMs,
+			remainingMs: null,
+			nextChangeInMs: counts
+				? 1000 - (elapsedMs % 1000)
+				: null,
+		};
+	}
 
 	const remainingMs = clock.durationMs - elapsedMs;
-	if (remainingMs > 0)
-		return countdownNextChangeInMs(remainingMs);
-	if (!clock.countUpAfterCountdown)
-		return null;
+	if (remainingMs > 0) {
+		return {
+			state: counting,
+			display: formatCountdownTime(remainingMs),
+			elapsedMs,
+			remainingMs,
+			nextChangeInMs: counts
+				? countdownNextChangeInMs(remainingMs)
+				: null,
+		};
+	}
+
+	if (!clock.countUpAfterCountdown) {
+		return {
+			state: 'run-out',
+			display: formatClockTime(0),
+			elapsedMs,
+			remainingMs: 0,
+			nextChangeInMs: null,
+		};
+	}
+
 	const overMs = -remainingMs;
-	return clock.countUpLimitMs != null && overMs >= clock.countUpLimitMs
-		? null
-		: 1000 - (overMs % 1000);
+	const holds = clock.countUpLimitMs != null && overMs >= clock.countUpLimitMs;
+	return {
+		state: holds ? 'holding' : 'counting-up',
+		display: formatClockTime(countUpOvertimeMs(overMs, clock.countUpLimitMs)),
+		elapsedMs,
+		remainingMs: 0,
+		nextChangeInMs: counts && !holds
+			? 1000 - (overMs % 1000)
+			: null,
+	};
 }
 
 export interface ClockAdjustmentInput {
