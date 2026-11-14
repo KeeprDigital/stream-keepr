@@ -175,16 +175,28 @@ describe('feature Match Controls by Card Game', () => {
 	it.each([
 		{
 			name: 'run out and still running',
-			clock: { elapsedMs: 31 * 60_000, isRunning: true, lastStartedAt: Date.now() },
+			clock: {
+				elapsedMs: 31 * 60_000,
+				isRunning: true,
+				lastStartedAt: Date.now(),
+			},
 			classes: ['text-error', 'clock--pulse'],
 		},
 		{
 			name: 'counting up after running out',
-			clock: { elapsedMs: 31 * 60_000, isRunning: true, lastStartedAt: Date.now(), countUpAfterCountdown: true },
+			clock: {
+				elapsedMs: 31 * 60_000,
+				isRunning: true,
+				lastStartedAt: Date.now(),
+				countUpAfterCountdown: true,
+			},
 			classes: ['text-error', 'clock--overtime'],
 		},
 	])('draws a clock $name as $classes', ({ clock, classes }) => {
-		matchState.clock = { ...THIRTY_MINUTES, ...clock };
+		matchState.clock = {
+			...THIRTY_MINUTES,
+			...clock,
+		};
 
 		const shown = mountControls('mtg').get('[data-clock-state]').classes();
 

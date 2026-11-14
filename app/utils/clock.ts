@@ -10,8 +10,14 @@ export const CLOCK_DECREMENT_OPTIONS = [
 
 export const CLOCK_INCREMENT_OPTIONS = [
 	{ label: '+10s', deltaMs: 10 * 1000 },
-	{ label: '+1m', deltaMs: minutesToMs(1) },
-	{ label: '+5m', deltaMs: minutesToMs(5) },
+	{
+		label: '+1m',
+		deltaMs: minutesToMs(1),
+	},
+	{
+		label: '+5m',
+		deltaMs: minutesToMs(5),
+	},
 ] as const;
 
 const CLOCK_STATE_COLOR_CLASS: Record<FeatureMatchClockState, string> = {

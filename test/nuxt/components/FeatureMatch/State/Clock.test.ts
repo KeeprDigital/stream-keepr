@@ -20,7 +20,9 @@ mockNuxtImport('useClockControls', () => () => ({
 	start: vi.fn(),
 	pause: vi.fn(),
 }));
-mockNuxtImport('useToast', () => () => ({ add: vi.fn() }));
+mockNuxtImport('useToast', () => () => ({
+	add: vi.fn(),
+}));
 
 function clock(overrides: Partial<ClockState> = {}): ClockState {
 	return {
@@ -34,8 +36,9 @@ function clock(overrides: Partial<ClockState> = {}): ClockState {
 	};
 }
 
-const running = (sinceStartMs: number, overrides: Partial<ClockState> = {}) =>
-	clock({ isRunning: true, lastStartedAt: Date.now() - sinceStartMs, ...overrides });
+function running(sinceStartMs: number, overrides: Partial<ClockState> = {}) {
+	return clock({ isRunning: true, lastStartedAt: Date.now() - sinceStartMs, ...overrides });
+}
 
 function mountClock(state: ClockState) {
 	return mount(Clock, {
@@ -47,7 +50,12 @@ function mountClock(state: ClockState) {
 describe('featureMatchStateClock', () => {
 	// Its clock takes its state's colour, pulse and overtime mark; which state takes which is clockAppearance's own test.
 	it.each([
-		{ name: 'run out and still running', state: running(15_000), time: ['text-error', 'animate-pulse'], ringed: false },
+		{
+			name: 'run out and still running',
+			state: running(15_000),
+			time: ['text-error', 'animate-pulse'],
+			ringed: false,
+		},
 		{
 			name: 'counting up after running out',
 			state: running(15_000, { countUpAfterCountdown: true }),
@@ -68,9 +76,21 @@ describe('featureMatchStateClock', () => {
 
 	// A clock stored running with no start reads as stopped, so it offers a start, not a pause that does nothing.
 	it.each([
-		['a running clock', running(1000), 'i-lucide-pause'],
-		['a stopped clock', clock(), 'i-lucide-play'],
-		['a clock stored running with no start', clock({ isRunning: true }), 'i-lucide-play'],
+		[
+			'a running clock',
+			running(1000),
+			'i-lucide-pause',
+		],
+		[
+			'a stopped clock',
+			clock(),
+			'i-lucide-play',
+		],
+		[
+			'a clock stored running with no start',
+			clock({ isRunning: true }),
+			'i-lucide-play',
+		],
 	])('offers %s the control that will act on it', async (_, state, icon) => {
 		const wrapper = mountClock(state);
 		await wrapper.get('button[aria-label="Clock controls"]').trigger('click');

@@ -181,8 +181,14 @@ describe('useFeatureMatchStateStore actions', () => {
 
 		// A clock stored running with no start reads as stopped, so there is nothing to pause.
 		it.each([
-			['a stopped clock', clock()],
-			['a clock stored running with no start', clock({ isRunning: true, lastStartedAt: null })],
+			[
+				'a stopped clock',
+				clock(),
+			],
+			[
+				'a clock stored running with no start',
+				clock({ isRunning: true, lastStartedAt: null }),
+			],
 		])('pausing %s sends nothing', (_, stored) => {
 			seedState({ clock: stored });
 

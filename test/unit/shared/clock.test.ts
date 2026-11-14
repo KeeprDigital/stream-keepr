@@ -769,12 +769,22 @@ describe('projectFeatureMatchClock: its state and its time', () => {
 		{
 			name: 'a running countdown the instant it runs out',
 			state: running(60_000),
-			expected: { state: 'run-out', isRunning: true, elapsedMs: 60_000, remainingMs: 0 },
+			expected: {
+				state: 'run-out',
+				isRunning: true,
+				elapsedMs: 60_000,
+				remainingMs: 0,
+			},
 		},
 		{
 			name: 'a countdown stopped after it ran out',
 			state: clock({ elapsedMs: 75_000 }),
-			expected: { state: 'run-out', isRunning: false, elapsedMs: 75_000, remainingMs: 0 },
+			expected: {
+				state: 'run-out',
+				isRunning: false,
+				elapsedMs: 75_000,
+				remainingMs: 0,
+			},
 		},
 		{
 			name: 'a countdown that counts up after, the instant it runs out',
