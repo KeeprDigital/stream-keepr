@@ -12,6 +12,10 @@ const MAX_EASE_RATE = 0.1;
 const EASE_ROUNDING_MS = 1e-6;
 /** A re-sync asked for by the page coming back is skipped this soon after a sync. */
 const RESYNC_MIN_GAP_MS = 5000;
+/** How often the device's clock is compared with its monotonic clock. */
+const CLOCK_CHECK_INTERVAL_MS = 1000;
+/** A device clock moved by more than this since its offset was taken is wrong on air, as a correction over it is. */
+const CLOCK_CHANGE_THRESHOLD_MS = STEP_CORRECTION_THRESHOLD_MS;
 const TIME_ENDPOINT = '/api/time';
 
 /** A correction being eased in: from the offset `from`, applied since device time `startedAt`. */
@@ -25,6 +29,11 @@ let syncIntervalId: ReturnType<typeof setInterval> | null = null;
 let correctionEndId: ReturnType<typeof setTimeout> | null = null;
 let syncsInFlight = 0;
 let stopReturnListeners: (() => void) | null = null;
+let clockCheckId: ReturnType<typeof setInterval> | null = null;
+/** The device's clock and its monotonic clock as the sync that took the offset held began; null before one. */
+let offsetTakenAt: { device: number; monotonic: number } | null = null;
+/** The monotonic clock as the last sync began. */
+let lastSyncBeganAt: number | null = null;
 
 export function useServerTime() {
 	const serverTimeOffset = useState<number>('serverTimeOffset', () => 0);
@@ -103,6 +112,11 @@ export function useServerTime() {
 	 */
 	async function sync(): Promise<void> {
 		syncsInFlight++;
+		const began = {
+			device: Date.now(),
+			monotonic: performance.now(),
+		};
+		lastSyncBeganAt = began.monotonic;
 		try {
 			const samples: { offset: number; rtt: number }[] = [];
 
@@ -144,6 +158,7 @@ export function useServerTime() {
 			}
 
 			applyOffset(best.offset);
+			offsetTakenAt = began;
 			isSynced.value = true;
 			hasWarned.value = false;
 			lastSyncedAt.value = Date.now();
@@ -186,12 +201,13 @@ export function useServerTime() {
 	}
 
 	/**
-	 * Re-sync because the page is back: a hidden tab's timers were throttled, and
-	 * an offline device's syncs went unanswered. Skipped while a sync is running
-	 * or just after one. A last sync in the device's future means its clock was
-	 * set back, which is itself a reason to sync.
+	 * Re-sync because the page is back, a hidden tab's timers having been
+	 * throttled and an offline device's syncs unanswered, or because the device's
+	 * clock was changed. Skipped while a sync is running or just after one. A last
+	 * sync in the device's future means its clock was set back, which is itself a
+	 * reason to sync.
 	 */
-	function resyncOnReturn() {
+	function resyncUnlessRecent() {
 		const sinceLastSync = lastSyncedAt.value === null
 			? null
 			: Date.now() - lastSyncedAt.value;
@@ -203,7 +219,27 @@ export function useServerTime() {
 
 	function resyncWhenVisible() {
 		if (document.visibilityState === 'visible')
-			resyncOnReturn();
+			resyncUnlessRecent();
+	}
+
+	/**
+	 * Re-sync when the device's clock has been changed: it has moved away from the
+	 * monotonic clock since the offset held was taken. Measured from then, not
+	 * from the last check, so a change stands until a sync answers it: one the
+	 * gap skips, or one whose re-sync goes unanswered, is asked about again, no
+	 * sooner than the gap after the last sync began.
+	 */
+	function resyncOnClockChange() {
+		if (offsetTakenAt === null)
+			return;
+		const monotonicNow = performance.now();
+		const deviceElapsed = Date.now() - offsetTakenAt.device;
+		const monotonicElapsed = monotonicNow - offsetTakenAt.monotonic;
+		if (Math.abs(deviceElapsed - monotonicElapsed) <= CLOCK_CHANGE_THRESHOLD_MS)
+			return;
+		if (lastSyncBeganAt !== null && monotonicNow - lastSyncBeganAt < RESYNC_MIN_GAP_MS)
+			return;
+		resyncUnlessRecent();
 	}
 
 	/**
@@ -220,13 +256,15 @@ export function useServerTime() {
 
 		// Periodic re-sync
 		syncIntervalId = setInterval(sync, SYNC_INTERVAL);
+		// A visible, online tab gets no event when its device's clock is changed.
+		clockCheckId = setInterval(resyncOnClockChange, CLOCK_CHECK_INTERVAL_MS);
 
 		// Held by the page, not by the scope of whichever consumer started the sync.
 		document.addEventListener('visibilitychange', resyncWhenVisible);
-		window.addEventListener('online', resyncOnReturn);
+		window.addEventListener('online', resyncUnlessRecent);
 		stopReturnListeners = () => {
 			document.removeEventListener('visibilitychange', resyncWhenVisible);
-			window.removeEventListener('online', resyncOnReturn);
+			window.removeEventListener('online', resyncUnlessRecent);
 		};
 	}
 
@@ -238,6 +276,10 @@ export function useServerTime() {
 		if (syncIntervalId !== null) {
 			clearInterval(syncIntervalId);
 			syncIntervalId = null;
+		}
+		if (clockCheckId !== null) {
+			clearInterval(clockCheckId);
+			clockCheckId = null;
 		}
 		stopReturnListeners?.();
 		stopReturnListeners = null;
