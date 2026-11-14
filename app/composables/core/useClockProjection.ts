@@ -39,6 +39,8 @@ export function useClockProjection<T>(
 	const projection = computed<ClockProjection<T>>(() => {
 		void tick.value;
 		void serverTimeOffset.value;
+		// `getServerTime` is itself reactive to a correction being eased in, so a
+		// wait timed during one is taken again when it completes (ADR-0088).
 		if (!isSynced.value && unknown !== 'device-time') {
 			return {
 				value: unknown.show(),

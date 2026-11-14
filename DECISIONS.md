@@ -3163,7 +3163,7 @@ There is no general way for a layout to show something by live state, and each s
 
 ## ADR-0088: Every clock projection runs on one scheduler
 
-Accepted · 2026-11-14 · [#1194](https://github.com/KeeprDigital/stream-keepr/issues/1194). Follows ADR-0009, ADR-0022, ADR-0066, ADR-0076 and ADR-0078, and changes none of them. The scheduler is in ([#1195](https://github.com/KeeprDigital/stream-keepr/issues/1195)).
+Accepted · 2026-11-14 · [#1194](https://github.com/KeeprDigital/stream-keepr/issues/1194). Follows ADR-0009, ADR-0022, ADR-0066, ADR-0076 and ADR-0078, and changes none of them. The scheduler is in ([#1195](https://github.com/KeeprDigital/stream-keepr/issues/1195)), and so is the eased time correction ([#1199](https://github.com/KeeprDigital/stream-keepr/issues/1199)).
 
 A Feature Match Session clock's display, a Round Clock, Page Rotation, a Talent Screen's Social Profile Rotation and Card Timeout are each a clock projection: a pure function of stored state and server time. The rules were right, but each rendering timed its own re-evaluation, and the five had drifted. Two re-timed when server time re-synced and waited while it was unknown, one re-timed without waiting, and two did neither, so after a re-sync one output of a clock could change a beat off another.
 
@@ -3191,9 +3191,23 @@ A projection on the device's own time is taken again the moment the first sync l
 
 **No clock projection holds a timer of its own.** The rule of each stays where it was (`shared/modules/page-rotation`, `shared/modules/talent-screen`, `shared/utils/card/timeout.ts`, `shared/utils/roundClock.ts`, `shared/utils/clock.ts`); only what calls it, and when, moved.
 
+**A sync trusts its tightest sample, and eases a small correction in.** `useServerTime` (`app/composables/core/useServerTime.ts`) takes the offset of the sample with the shortest round trip, since a round trip bounds its sample's error to half of itself and an average only adds the looser samples' error. A sample over the round trip ceiling still counts only while no offset is held.
+
+| Correction                                          | Applied                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------ |
+| The first sync, whatever its size                   | at once                                                            |
+| Larger than `STEP_CORRECTION_THRESHOLD_MS` (500 ms) | at once                                                            |
+| Up to the threshold                                 | eased in at no more than `MAX_EASE_RATE` (a tenth) of elapsed time |
+
+An eased correction is measured from the server time being read, so one that interrupts another carries on from where that one had reached. While it runs, server time advances at between nine and eleven tenths of the device's, and so never stops or moves backwards. `serverTimeOffset` is the offset synced to and changes once, when the sync lands; `getServerTime` answers with what has been eased in so far. `getServerTime` is reactive to the correction completing, so the scheduler, which reads it, answers again then as it does when the offset changes.
+
+**A page coming back re-syncs at once.** Beside the fixed interval, a sync runs when the document becomes visible and when the browser reports it is back online, unless one is running or one completed within `RESYNC_MIN_GAP_MS` (5 s). A last sync dated in the device's future does not count as recent: the device's clock was set back.
+
 ### Why
 
 "Wake me when this next changes" is one rule, and getting it right needs the same four things every time: the next change, the inputs, the re-sync, and the unknown clock. Written once, a fix to any of them reaches every clock on air, and two outputs of one clock are held to the same behaviour by construction rather than by five sets of tests.
+
+A correction applied as a step moves server time by its whole size between two reads. Back, and a digit already passed is shown a second time; forward, and one is skipped. Most corrections are a few tens of milliseconds of network jitter, well inside a second, so easing them costs nothing visible and removes the flicker. A clock out by more than half a second is wrong on air, and putting it right at once matters more than a smooth digit.
 
 ### Consequences
 
@@ -3201,10 +3215,18 @@ A projection on the device's own time is taken again the moment the first sync l
 - Card Timeout is a projection of the held Card: whichever Card is held is timed, and none is timed while none is held. Nothing arms or cancels a timer by hand.
 - A projection is answered again when its wait runs out, so a test that fakes server time must let it run with the timers it fakes. One frozen at an instant never reaches the change it waits for.
 - The Broadcast Graphics playout clock and Graphic Animation timing are not clock projections of this kind and keep their own timing. So do `useFeatureMatchGameMode`'s automatic overtime and the Edit State modal's prefill, which read the device's own time.
-- Tests: `test/nuxt/composables/core/useClockProjection.test.ts` holds the scheduler's rules. Each consumer keeps one case that it passes its projection and shows the answer: `useClockDisplay.test.ts`, `useRoundClockModeData.test.ts`, `screenModePagination.test.ts`, `useTalentModeData.test.ts` and `stores/card.test.ts`.
+- While a correction is eased in, two outputs of one clock can differ by up to what is left of it, at most the threshold and for at most five seconds. Before, they differed by the whole correction until each next synced.
+- A wait timed while a correction is eased in is counted on the device's time, so a change due in that window can land up to a tenth of its wait late, under a tenth of a second for a clock counting seconds. The wait is taken again when the correction completes.
+- "Synced" still means an offset is held. A missed re-sync keeps the offset held, and a correction under way runs to its end.
+- A device whose clock is changed is put right at the next sync: within a minute, or as soon as the page is shown or comes back online. Nothing watches the device's clock between syncs.
+- The thresholds are starting values chosen so an eased correction completes within five seconds; tune them if an artefact shows on air.
+- Tests: `test/nuxt/composables/core/useServerTime.test.ts` holds the sync's rules. `test/nuxt/composables/core/useClockProjection.test.ts` holds the scheduler's rules. Each consumer keeps one case that it passes its projection and shows the answer: `useClockDisplay.test.ts`, `useRoundClockModeData.test.ts`, `screenModePagination.test.ts`, `useTalentModeData.test.ts` and `stores/card.test.ts`.
 
 ### Rejected alternatives
 
 - **A free-running interval per rendering.** Two outputs of one clock change digit up to an interval apart, and each keeps waking with nothing to show.
 - **One answer for every projection while server time is unknown.** A rotation on an unknown clock shows the wrong page beside an output that has synced, so it holds its first; a running clock that held would blank or freeze behind a slow time endpoint.
 - **A scheduler per kind of clock.** The five differ in their rule, not in how they are timed.
+- **Averaging the samples of a sync.** The mean of a tight sample and a loose one is worse than the tight one alone.
+- **Easing every correction.** A clock a minute out would take ten minutes to come right.
+- **Stepping only forwards, easing only backwards.** A forward step still skips a digit on one output of a clock and not on another.
