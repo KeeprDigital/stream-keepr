@@ -74,7 +74,9 @@ export default defineEventHandler(async (event) => {
 	// A four-Seat template is a Commander Event's alone, and every other template
 	// every other Event's: its content decides (ADR-0087).
 	const eventData = await eventService().findById(eventId);
-	if (eventData && !isFeatureMatchLayoutOfferedTo(template.document, eventKind(eventData))) {
+	if (!eventData)
+		throw createError({ statusCode: 404, statusMessage: 'Not Found', message: 'Event not found' });
+	if (!isFeatureMatchLayoutOfferedTo(template.document, eventKind(eventData))) {
 		throw createError({
 			statusCode: 409,
 			statusMessage: 'Conflict',

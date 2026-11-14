@@ -161,7 +161,7 @@ describe('the built-in Feature Match Layout Templates', () => {
 	// A four-Seat template is a Commander Event's alone, and every other template every other Event's (ADR-0087).
 	it.each([
 		{ name: 'the four-Seat built-in on a Two-Player Event', id: 'builtin:commander-table', variant: 'two-player' as const },
-		{ name: 'a two-Seat built-in on a Commander Event', id: 'builtin:full-table', variant: 'commander' as const },
+		{ name: 'any other built-in on a Commander Event', id: 'builtin:full-table', variant: 'commander' as const },
 	])('refuses to place $name, and leaves the Screen\'s layout as it was', async ({ id, variant }) => {
 		await db.update(schema.events).set({ variant }).where(eq(schema.events.id, eventId));
 

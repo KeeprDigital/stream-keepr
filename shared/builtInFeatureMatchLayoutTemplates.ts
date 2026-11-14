@@ -39,7 +39,7 @@ import { seatNumber } from './utils/featureMatchSidePlayer';
  * and nothing is migrated.
  *
  * `left-stacked-player-cams` is also the default Feature Match Overlay
- * configuration. Between them the three exercise host tokens in Graphic Text Templates, the context-gated Clock, Player
+ * configuration. Between them the built-ins exercise host tokens in Graphic Text Templates, the context-gated Clock, Player
  * Life and Game Wins Definitions, Media Graphic Items, canvas Graphic Groups,
  * Graphic Layer Order as list order, per-corner Shape Geometry, gradient and solid
  * Graphic Fills with outline and glow, Text Overflow Policies, and — for the
@@ -47,7 +47,8 @@ import { seatNumber } from './utils/featureMatchSidePlayer';
  * composed rule-preset Shape Graphic Items.
  *
  * Every one is token-bound (#831): its text follows the Theme's type and
- * primary text colour, its panels and rules the Theme's `panel` surface, and
+ * primary text colour, its panels and rules the Theme's `panel` surface (a Seat
+ * Indicator keeps its own colour, which is its meaning), and
  * its branding images the Theme's `logo`. Its Frame and Source Items carry
  * only shape, and paint from the Feature Match Overlay's Mode Tokens. So a
  * placed one looks right under any Theme, and restyles live with it.

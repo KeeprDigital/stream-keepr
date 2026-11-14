@@ -20,8 +20,7 @@ const PAIR: readonly string[] = PLAYER_SIDE_VALUES;
 /** The tokens only a Commander Event is offered: its Commanders' images. */
 const COMMANDER_TOKENS: ReadonlySet<string> = new Set(featureMatchTokenCatalogue('mtg-commander')
 	.map(token => token.key)
-	.filter(key => !featureMatchTokenCatalogue('mtg-two-player').some(token => token.key === key)
-		&& PAIR.includes(FEATURE_MATCH_TOKEN_SEATS[key] ?? '')));
+	.filter(key => !featureMatchTokenCatalogue('mtg-two-player').some(token => token.key === key)));
 
 function isBeyondThePair(seat: Seat | undefined): boolean {
 	return seat !== undefined && !PAIR.includes(seat);
@@ -50,7 +49,12 @@ export function isFourSeatFeatureMatchLayout(layout: Pick<FeatureMatchLayoutConf
 		|| layout.composition.items.some(namesAFourSeatTerm);
 }
 
-/** Whether a layout is offered to an Event of this kind: a four-Seat one to a Commander Event alone, any other to every other Event. */
+/** Whether a layout, four-Seat or not, is offered to an Event of this kind: a four-Seat one to a Commander Event alone, any other to every other Event. */
+export function isFourSeatLayoutOfferedTo(fourSeat: boolean, kind: EventKind): boolean {
+	return fourSeat === (kind === 'mtg-commander');
+}
+
+/** Whether a layout is offered to an Event of this kind, by what it names. */
 export function isFeatureMatchLayoutOfferedTo(layout: Pick<FeatureMatchLayoutConfig, 'sources' | 'composition'>, kind: EventKind): boolean {
-	return isFourSeatFeatureMatchLayout(layout) === (kind === 'mtg-commander');
+	return isFourSeatLayoutOfferedTo(isFourSeatFeatureMatchLayout(layout), kind);
 }

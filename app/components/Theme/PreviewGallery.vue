@@ -42,7 +42,7 @@ const modes = computed(() => THEME_PREVIEW_SCREEN_MODES.filter(mode =>
 		<UISegmentedTabs
 			:model-value="pick"
 			:items="picks"
-			aria-label="Card Game"
+			aria-label="Card Game or Variant"
 			@update:model-value="value => pick = value as PreviewPick"
 		/>
 		<!-- Every Screen Mode a Theme preview shows, read off its definition: a newly themed mode appears with no change here. -->

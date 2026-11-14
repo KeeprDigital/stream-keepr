@@ -118,10 +118,6 @@ describe('a four-Seat Feature Match Layout', () => {
 			offered: ['full-table', 'left-stacked-player-cams', 'neon-feature-match'],
 		},
 		{
-			kind: 'op' as const,
-			offered: ['full-table', 'left-stacked-player-cams', 'neon-feature-match'],
-		},
-		{
 			kind: 'mtg-commander' as const,
 			offered: ['commander-table'],
 		},

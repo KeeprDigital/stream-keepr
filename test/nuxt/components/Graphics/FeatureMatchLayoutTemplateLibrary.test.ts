@@ -146,6 +146,7 @@ async function mountLibrary(props: Record<string, unknown> = {}) {
 describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockEventKind.value = 'mtg-two-player';
 		mockList.mockResolvedValue([
 			summary(),
 		]);
@@ -199,7 +200,6 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		const wrapper = await mountLibrary();
 
 		expect(wrapper.findAll('[data-template-id]').map(entry => entry.attributes('data-template-id'))).toEqual(listed);
-		mockEventKind.value = 'mtg-two-player';
 	});
 
 	it('saves this Screen\'s layout as a template', async () => {
