@@ -1,3 +1,4 @@
+import type { EventKind } from './config/games';
 import type { FeatureMatchLayoutEdge } from './featureMatchLayoutItems';
 import type { PlayerSide, Seat } from './types/enums';
 import type { GraphicGroupChildConfig, GraphicItemConfig, GraphicSurfaceStyle, GraphicTypography } from './types/graphics';
@@ -1087,3 +1088,14 @@ export const BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES: BuiltInFeatureMatchLayoutT
 		config: themeBoundConfig(commanderTableConfig()),
 	},
 ];
+
+/**
+ * The layout a display reset writes on an Event of `kind`: Commander Table on a
+ * Commander Event, which is offered four-Seat layouts alone (ADR-0087), and the
+ * default layout on every other Event.
+ */
+export function defaultFeatureMatchLayoutFor(kind: EventKind | undefined): FeatureMatchOverlayModeConfig['layout'] {
+	return kind === 'mtg-commander'
+		? BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.find(template => template.id === 'commander-table')!.config.layout
+		: DEFAULT_FEATURE_MATCH_OVERLAY_CONFIG.layout;
+}

@@ -113,6 +113,20 @@ const offered = computed(() => eventKind.value === 'mtg-commander'
 	: 'Feature Match Layout Templates, but for the four-Seat ones a Commander Event is offered');
 
 const saving = ref(false);
+/**
+ * Why the layout just saved is not in this list: it went to the library, but
+ * this Event is not offered it (ADR-0087). Cleared by the next save.
+ */
+const savedNotOffered = ref<string | null>(null);
+
+function notOfferedReason(saved: FeatureMatchLayoutTemplateSummary): string | null {
+	const kind = eventKind.value;
+	if (!kind || isFourSeatLayoutOfferedTo(saved.fourSeat === true, kind))
+		return null;
+	return saved.fourSeat
+		? 'It names a third or fourth Seat, or something only a Commander Event holds, so only a Commander Event is offered it.'
+		: 'It names no third or fourth Seat and nothing only a Commander Event holds, so it is offered to every Event that is not a Commander Event.';
+}
 /** The template whose placement is awaiting confirmation, if any. */
 const pendingPlaceId = ref<string | null>(null);
 
@@ -127,9 +141,11 @@ async function save() {
 	if (!canAuthor.value || saving.value)
 		return;
 	saving.value = true;
+	savedNotOffered.value = null;
 	try {
 		await landEdits();
-		await repository.save({ eventId: props.eventId, screenId: props.screenId });
+		const saved = await repository.save({ eventId: props.eventId, screenId: props.screenId });
+		savedNotOffered.value = notOfferedReason(saved);
 		error.value = null;
 		await refresh();
 	}
@@ -171,6 +187,7 @@ function cancelPlace() {
 async function place(templateId: string) {
 	await attempt(templateId, async () => {
 		placing.value = true;
+		savedNotOffered.value = null;
 		try {
 			await landEdits();
 			emit('placing');
@@ -228,6 +245,15 @@ async function place(templateId: string) {
 				>
 					Save this layout as a template
 				</UButton>
+				<UAlert
+					v-if="savedNotOffered"
+					color="info"
+					variant="subtle"
+					icon="i-lucide-info"
+					title="Saved to the library, but not listed on this Event"
+					:description="savedNotOffered"
+					data-testid="layout-template-saved-not-offered"
+				/>
 			</template>
 
 			<template #default>

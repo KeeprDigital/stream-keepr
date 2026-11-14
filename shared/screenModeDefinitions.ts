@@ -4,6 +4,7 @@ import type { FoundationTokenName } from './modules/theme/vocabulary';
 import type { PageRotationConfig } from './screenModeConfigs/subShapes';
 import type { DisplayType, ScreenMode } from './types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from './types/screenConfig';
+import { defaultFeatureMatchLayoutFor } from './builtInFeatureMatchLayoutTemplates';
 import { isOfferedToEvent } from './config/games';
 import { pageRotationEdit } from './modules/page-rotation';
 import { FOUNDATION_TOKENS, resolveThemeTokens } from './modules/theme';
@@ -48,7 +49,7 @@ export interface SharedScreenModeDefinition<M extends ScreenMode = ScreenMode> {
 	host: ScreenModeHostDefinition;
 	getDefaultConfig: () => ModeConfigTypeMap[M];
 	/** The write a display reset makes (`getDisplayResetForMode`). */
-	getDisplayReset: (current: Partial<ModeConfigTypeMap[M]>, now: number) => Partial<ModeConfigTypeMap[M]>;
+	getDisplayReset: (current: Partial<ModeConfigTypeMap[M]>, now: number, kind?: EventKind) => Partial<ModeConfigTypeMap[M]>;
 	configurationPolicy: ScreenModeConfigurationPolicy;
 }
 
@@ -145,7 +146,7 @@ export function getScreenModeDefinition<M extends ScreenMode>(mode: M): SharedSc
 		...sharedDefinition,
 		host: getScreenModeHostDefinition(mode),
 		getDefaultConfig: () => getDefaultConfigForMode(mode),
-		getDisplayReset: (current, now) => getDisplayResetForMode(mode, current, now),
+		getDisplayReset: (current, now, kind) => getDisplayResetForMode(mode, current, now, kind),
 		configurationPolicy: getScreenModeConfigurationPolicy(mode),
 	};
 }
@@ -159,14 +160,22 @@ export function getScreenModeDefinition<M extends ScreenMode>(mode: M): SharedSc
  * now only if auto-page is on once reset.
  *
  * `current` is the mode's config as the reset finds it, which decides
- * auto-page should a reset ever preserve it.
+ * auto-page should a reset ever preserve it. `kind` is the Event's: a Feature
+ * Match Overlay on a Commander Event resets to a layout that Event is offered,
+ * Commander Table (ADR-0087).
  */
 export function getDisplayResetForMode<M extends ScreenMode>(
 	mode: M,
 	current: Partial<ModeConfigTypeMap[M]>,
 	now: number,
+	kind?: EventKind,
 ): Partial<ModeConfigTypeMap[M]> {
-	const display = getDisplayDefaultsForMode(mode);
+	const display = mode === 'feature-match-overlay'
+		? {
+				...getDisplayDefaultsForMode(mode),
+				layout: defaultFeatureMatchLayoutFor(kind),
+			} as Partial<ModeConfigTypeMap[M]>
+		: getDisplayDefaultsForMode(mode);
 	const declaration = SCREEN_MODES[mode].pageRotation;
 	if (!declaration)
 		return display;
