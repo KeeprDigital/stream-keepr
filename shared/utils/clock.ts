@@ -333,3 +333,64 @@ export function applyClockAdjustment(
 		lastStartedAt: clock.isRunning ? now : null,
 	};
 }
+
+// ──────────────── Clock Transitions ────────────────
+
+/**
+ * What an operator does to a Feature Match Session clock, each a pure function
+ * of the clock and the server instant it happens at. The Session reducer and
+ * the operator's optimistic update apply these same functions, so a prediction
+ * cannot differ from the answer. Which a Session refuses is the reducer's rule.
+ * A transition that changes nothing hands back the clock it was given.
+ */
+export const clockTransitions = {
+	/** Run a stopped clock from `at`. A running clock keeps the start it has. */
+	start(clock: ClockState, at: number): ClockState {
+		return clock.isRunning
+			? clock
+			: { ...clock, isRunning: true, lastStartedAt: at };
+	},
+
+	/** Stop a running clock, keeping the time it has run by `at`. */
+	pause(clock: ClockState, at: number): ClockState {
+		return clock.isRunning
+			? {
+					...clock,
+					isRunning: false,
+					elapsedMs: getEffectiveElapsedMs(clock, at),
+					lastStartedAt: null,
+				}
+			: clock;
+	},
+
+	/** Stop the clock with no time run, at a new duration if one is given. */
+	reset(clock: ClockState, durationMs?: number): ClockState {
+		return {
+			...clock,
+			elapsedMs: 0,
+			isRunning: false,
+			lastStartedAt: null,
+			...(durationMs !== undefined && { durationMs }),
+		};
+	},
+
+	/** Run the clock from `at` with no time run, whether or not it was running. */
+	restart(clock: ClockState, at: number): ClockState {
+		return {
+			...clock,
+			elapsedMs: 0,
+			isRunning: true,
+			lastStartedAt: at,
+		};
+	},
+
+	/** Move what the clock shows by `deltaMs`, as `applyClockAdjustment` does. */
+	adjust(clock: ClockState, at: number, deltaMs: number): ClockState {
+		return applyClockAdjustment(clock, at, { deltaDisplayMs: deltaMs });
+	},
+
+	/** Set what the clock shows to `targetMs`, as `applyClockAdjustment` does. */
+	set(clock: ClockState, at: number, targetMs: number): ClockState {
+		return applyClockAdjustment(clock, at, { targetDisplayMs: targetMs });
+	},
+};

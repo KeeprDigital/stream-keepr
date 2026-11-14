@@ -2,6 +2,7 @@ import type { ClockState } from '~~/shared/types/featureMatchState';
 import { describe, expect, it } from 'vitest';
 import {
 	applyClockAdjustment,
+	clockTransitions,
 	formatClockTime,
 	formatCountdownTime,
 	getEffectiveElapsedMs,
@@ -809,5 +810,99 @@ describe('projectFeatureMatchClock: its state and its time', () => {
 		},
 	])('reads $name as $expected.state', ({ state, expected }) => {
 		expect(projectFeatureMatchClock(state, NOW, '')).toMatchObject(expected);
+	});
+});
+
+// The one set of transitions the Session reducer and an operator's optimistic
+// update both apply, each a pure function of a clock and a server instant.
+describe('clockTransitions', () => {
+	const NOW = 1_000_000;
+	const base: ClockState = {
+		type: 'countdown',
+		durationMs: 3_000_000,
+		elapsedMs: 60_000,
+		isRunning: false,
+		lastStartedAt: null,
+		countUpAfterCountdown: false,
+	};
+	const stopped = base;
+	const running: ClockState = { ...base, isRunning: true, lastStartedAt: NOW - 5_000 };
+
+	it.each<{ name: string; clock: ClockState; transition: (clock: ClockState) => ClockState; changes: Partial<ClockState> }>([
+		{
+			name: 'start runs a stopped clock from the instant',
+			clock: stopped,
+			transition: clock => clockTransitions.start(clock, NOW),
+			changes: { isRunning: true, lastStartedAt: NOW },
+		},
+		{
+			name: 'pause banks the time a running clock has run',
+			clock: running,
+			transition: clock => clockTransitions.pause(clock, NOW),
+			changes: { isRunning: false, lastStartedAt: null, elapsedMs: 65_000 },
+		},
+		{
+			name: 'reset stops a running clock with no time run, keeping its duration',
+			clock: running,
+			transition: clock => clockTransitions.reset(clock),
+			changes: { isRunning: false, lastStartedAt: null, elapsedMs: 0 },
+		},
+		{
+			name: 'reset to a duration takes it',
+			clock: stopped,
+			transition: clock => clockTransitions.reset(clock, 1_800_000),
+			changes: { elapsedMs: 0, durationMs: 1_800_000 },
+		},
+		{
+			name: 'restart runs a stopped clock from no time run',
+			clock: stopped,
+			transition: clock => clockTransitions.restart(clock, NOW),
+			changes: { isRunning: true, lastStartedAt: NOW, elapsedMs: 0 },
+		},
+		{
+			name: 'restart starts a running clock over from the instant',
+			clock: running,
+			transition: clock => clockTransitions.restart(clock, NOW),
+			changes: { lastStartedAt: NOW, elapsedMs: 0 },
+		},
+		{
+			name: 'adjust moves a running countdown\'s end, banking the time run',
+			clock: running,
+			transition: clock => clockTransitions.adjust(clock, NOW, 30_000),
+			changes: { lastStartedAt: NOW, elapsedMs: 65_000, durationMs: 3_030_000 },
+		},
+		{
+			name: 'set gives a countdown that much time remaining',
+			clock: stopped,
+			transition: clock => clockTransitions.set(clock, NOW, 200_000),
+			changes: { durationMs: 260_000 },
+		},
+		{
+			name: 'set gives a count-up clock that much time run',
+			clock: { ...stopped, type: 'countup' },
+			transition: clock => clockTransitions.set(clock, NOW, 200_000),
+			changes: { elapsedMs: 200_000 },
+		},
+	])('$name', ({ clock, transition, changes }) => {
+		expect(transition(clock)).toEqual({
+			...clock,
+			...changes,
+		});
+	});
+
+	// A double press is harmless: the clock is handed back as it was.
+	it.each<{ name: string; clock: ClockState; transition: (clock: ClockState) => ClockState }>([
+		{
+			name: 'starting a running clock',
+			clock: running,
+			transition: clock => clockTransitions.start(clock, NOW),
+		},
+		{
+			name: 'pausing a stopped clock',
+			clock: stopped,
+			transition: clock => clockTransitions.pause(clock, NOW),
+		},
+	])('$name changes nothing', ({ clock, transition }) => {
+		expect(transition(clock)).toBe(clock);
 	});
 });

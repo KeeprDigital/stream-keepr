@@ -1,6 +1,8 @@
+import type { FeatureMatchCommandType } from '~~/shared/types/featureMatchSession';
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { applyFeatureMatchSessionEvent } from '~~/shared/modules/feature-match-session';
 import { deferred } from '~~/test/helpers/deferred';
 import { createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 import { transportFailure } from '~~/test/helpers/transportFailure';
@@ -46,6 +48,11 @@ describe('useFeatureMatchStateStore actions', () => {
 	const seedState = (overrides?: Partial<FeatureMatchState>, matchId = MATCH_ID) => seed(store, overrides, matchId);
 	const held = (matchId = MATCH_ID) => store.featureMatchStates.get(matchId)!;
 
+	/** The Session reducer's answer to a command, which a prediction must equal. */
+	function reducerAnswer(state: FeatureMatchState, type: FeatureMatchCommandType, payload: Record<string, number>) {
+		return applyFeatureMatchSessionEvent(state, createSourceSnapshot(), type, payload).currentState;
+	}
+
 	/** Hold the client's answer open, so a test reads the store's prediction. */
 	function pending(method: ClientMethod) {
 		const answer = deferred<unknown>();
@@ -59,71 +66,120 @@ describe('useFeatureMatchStateStore actions', () => {
 	});
 
 	describe('the clock, while its command is out', () => {
-		it.each([
-			[
-				'startClock',
-				'startClock',
-				{},
-				{ isRunning: true, lastStartedAt: SERVER_NOW },
-			],
-			[
-				'pauseClock',
-				'pauseClock',
-				{ elapsedMs: 1000, isRunning: true, lastStartedAt: SERVER_NOW - 1000 },
-				{ isRunning: false, elapsedMs: 2000 },
-			],
-			[
-				'resetClock',
-				'resetClock',
-				{ elapsedMs: 50_000, isRunning: true, lastStartedAt: SERVER_NOW - 1000 },
-				{ isRunning: false, elapsedMs: 0 },
-			],
-			[
-				'restartClock',
-				'restartClock',
-				{ elapsedMs: 50_000 },
-				{ isRunning: true, elapsedMs: 0 },
-			],
-		] as const)('%s shows the predicted clock', async (action, method, before, predicted) => {
-			seedState({
-				clock: clock(before),
-			});
+		const running = { elapsedMs: 1000, isRunning: true, lastStartedAt: SERVER_NOW - 1000 } as const;
+
+		// What an operator sees at once is what the Session reducer will answer.
+		it.each<{
+			name: string;
+			before: Partial<FeatureMatchState>;
+			act: () => unknown;
+			method: ClientMethod;
+			command: [FeatureMatchCommandType, Record<string, number>];
+		}>([
+			{
+				name: 'starting a stopped clock',
+				before: {
+					clock: clock(),
+				},
+				act: () => store.startClock(EVENT_ID, MATCH_ID),
+				method: 'startClock',
+				command: [
+					'StartClock',
+					{ at: SERVER_NOW },
+				],
+			},
+			{
+				name: 'starting a running clock, which keeps its start',
+				before: {
+					clock: clock(running),
+				},
+				act: () => store.startClock(EVENT_ID, MATCH_ID),
+				method: 'startClock',
+				command: [
+					'StartClock',
+					{ at: SERVER_NOW },
+				],
+			},
+			{
+				name: 'starting an Untimed Match\'s clock, which stays stopped',
+				before: {
+					clock: clock({ type: 'untimed' }),
+				},
+				act: () => store.startClock(EVENT_ID, MATCH_ID),
+				method: 'startClock',
+				command: [
+					'StartClock',
+					{ at: SERVER_NOW },
+				],
+			},
+			{
+				name: 'pausing a running clock',
+				before: {
+					clock: clock(running),
+				},
+				act: () => store.pauseClock(EVENT_ID, MATCH_ID),
+				method: 'pauseClock',
+				command: [
+					'PauseClock',
+					{ at: SERVER_NOW },
+				],
+			},
+			{
+				name: 'resetting a running clock in extra turns',
+				before: {
+					clock: clock(running),
+					overtime: { active: true, turnsRemaining: 3, totalTurns: 5 },
+				},
+				act: () => store.resetClock(EVENT_ID, MATCH_ID),
+				method: 'resetClock',
+				command: ['ResetClock', {}],
+			},
+			{
+				name: 'restarting a clock',
+				before: {
+					clock: clock({ elapsedMs: 50_000 }),
+				},
+				act: () => store.restartClock(EVENT_ID, MATCH_ID),
+				method: 'restartClock',
+				command: [
+					'RestartClock',
+					{ at: SERVER_NOW },
+				],
+			},
+			{
+				name: 'adjusting a running clock',
+				before: {
+					clock: clock(running),
+				},
+				act: () => store.adjustClock(EVENT_ID, MATCH_ID, 60_000),
+				method: 'adjustClock',
+				command: [
+					'AdjustClock',
+					{ at: SERVER_NOW, deltaMs: 60_000 },
+				],
+			},
+			{
+				name: 'setting a clock',
+				before: {
+					clock: clock({ elapsedMs: 50_000 }),
+				},
+				act: () => store.setClock(EVENT_ID, MATCH_ID, 60_000),
+				method: 'setClock',
+				command: [
+					'SetClock',
+					{ at: SERVER_NOW, targetMs: 60_000 },
+				],
+			},
+		])('$name shows what the Session reducer answers', async ({ before, act, method, command }) => {
+			const expected = reducerAnswer(seedState(before), ...command);
 			const answer = pending(method);
 
-			const acting = store[action](EVENT_ID, MATCH_ID);
+			const acting = act();
 
-			expect(held().clock).toMatchObject(predicted);
+			expect(held()).toEqual(expected);
 
-			answer.resolve(commandResult(createMockFeatureMatchState({
-				clock: clock(predicted),
-			})));
+			answer.resolve(commandResult(expected));
 			await acting;
-		});
-
-		it('setClock shows a count-up clock reading its target', async () => {
-			seedState({
-				clock: clock({ type: 'countup', durationMs: 0, elapsedMs: 10_000 }),
-			});
-			const answer = pending('setClock');
-
-			const setting = store.setClock(EVENT_ID, MATCH_ID, 60_000);
-
-			expect(held().clock.elapsedMs).toBe(60_000);
-
-			answer.resolve(commandResult(createMockFeatureMatchState({
-				clock: clock({ type: 'countup', durationMs: 0, elapsedMs: 60_000 }),
-			})));
-			await setting;
-		});
-
-		it('adjustClock extends a countdown\'s duration', () => {
-			seedState({
-				clock: clock(),
-			});
-
-			store.adjustClock(EVENT_ID, MATCH_ID, 60_000);
-
-			expect(held().clock.durationMs).toBe(3_060_000);
 		});
 
 		it('a refused command puts the clock back and reports the server\'s sentence', async () => {
@@ -145,70 +201,71 @@ describe('useFeatureMatchStateStore actions', () => {
 	describe('every clock at once, while the bulk command is out', () => {
 		beforeEach(() => {
 			seedState({
-				clock: clock({ elapsedMs: 1000 }),
+				clock: clock({ elapsedMs: 1000, durationMs: 1_800_000 }),
 				overtime: { active: true, turnsRemaining: 3, totalTurns: 5 },
 			}, 100);
 			seedState({
 				clock: clock({ elapsedMs: 1000, isRunning: true, lastStartedAt: SERVER_NOW - 1000 }),
 			}, 200);
+			seedState({
+				clock: clock({ type: 'untimed' }),
+			}, 300);
 		});
 
-		it.each([
-			[
-				'startAllClocks',
-				{
-					100: { isRunning: true, lastStartedAt: SERVER_NOW },
-					200: { isRunning: true, lastStartedAt: SERVER_NOW - 1000 },
-				},
-			],
-			[
-				'pauseAllClocks',
-				{
-					100: { isRunning: false, elapsedMs: 1000 },
-					200: { isRunning: false, elapsedMs: 2000 },
-				},
-			],
-			[
-				'resetAllClocks',
-				{
-					100: { isRunning: false, elapsedMs: 0 },
-					200: { isRunning: false, elapsedMs: 0 },
-				},
-			],
-			[
-				'restartAllClocks',
-				{
-					100: { isRunning: true, elapsedMs: 0 },
-					200: { isRunning: true, elapsedMs: 0 },
-				},
-			],
-		] as const)('%s predicts each clock, leaving one already in that state alone', async (action, predicted) => {
+		// A bulk action follows a single one's rules: each Slot shows the reducer's
+		// answer to the command the bulk action sends it.
+		it.each<{
+			name: string;
+			act: () => unknown;
+			command: [FeatureMatchCommandType, Record<string, number>];
+		}>([
+			{
+				name: 'starting every clock',
+				act: () => store.startAllClocks(EVENT_ID),
+				command: [
+					'StartClock',
+					{ at: SERVER_NOW },
+				],
+			},
+			{
+				name: 'pausing every clock',
+				act: () => store.pauseAllClocks(EVENT_ID),
+				command: [
+					'PauseClock',
+					{ at: SERVER_NOW },
+				],
+			},
+			{
+				name: 'resetting every clock, each keeping its own duration',
+				act: () => store.resetAllClocks(EVENT_ID),
+				command: ['ResetClock', {}],
+			},
+			{
+				name: 'restarting every clock',
+				act: () => store.restartAllClocks(EVENT_ID),
+				command: [
+					'RestartClock',
+					{ at: SERVER_NOW },
+				],
+			},
+			{
+				name: 'adjusting every clock',
+				act: () => store.adjustAllClocks(EVENT_ID, 60_000),
+				command: [
+					'AdjustClock',
+					{ at: SERVER_NOW, deltaMs: 60_000 },
+				],
+			},
+		])('$name shows on each Slot what the Session reducer answers', async ({ act, command }) => {
+			const expected = [100, 200, 300].map(slotId => reducerAnswer(held(slotId), ...command));
 			const answer = pending('bulkClockAction');
 
-			const acting = store[action](EVENT_ID);
+			const acting = act();
 
-			expect(held(100).clock).toMatchObject(predicted[100]);
-			expect(held(200).clock).toMatchObject(predicted[200]);
+			expect([100, 200, 300].map(slotId => held(slotId))).toEqual(expected);
 
 			answer.resolve({ updates: [] });
 			await acting;
-		});
-
-		it('a reset of every clock also ends overtime', async () => {
-			sessionClient.bulkClockAction.mockResolvedValue({ updates: [] });
-
-			await store.resetAllClocks(EVENT_ID);
-
-			expect(held(100).overtime).toBeUndefined();
-		});
-
-		it('adjustAllClocks extends every countdown', () => {
-			sessionClient.bulkClockAction.mockResolvedValue({ updates: [] });
-
-			store.adjustAllClocks(EVENT_ID, 60_000);
-
-			expect(held(100).clock.durationMs).toBe(3_060_000);
-			expect(held(200).clock.durationMs).toBe(3_060_000);
 		});
 	});
 

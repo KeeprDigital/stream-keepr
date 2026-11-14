@@ -1,5 +1,6 @@
 export {
 	applyClockAdjustment,
+	clockTransitions,
 	formatClockTime,
 	getEffectiveElapsedMs,
 	normalizeTimeInput,
@@ -20,12 +21,14 @@ export {
 } from './commander';
 
 export {
+	applyFeatureMatchClockCommand,
 	applyFeatureMatchSessionEvent,
 	createInitialFeatureMatchSessionStateFromSnapshot,
 	isCommandOutsideSessionVariant,
 	normalizeFeatureMatchSessionCommandPayload,
 } from './reducer';
 export type {
+	FeatureMatchClockCommandType,
 	FeatureMatchSessionEventPayload,
 	FeatureMatchSessionReducerResult,
 } from './reducer';

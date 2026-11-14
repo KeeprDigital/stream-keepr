@@ -1,6 +1,6 @@
 import type { PlayerSide, Seat } from '~~/shared/types/enums';
 import type { FeatureMatchCommandType, FeatureMatchSourceSnapshot } from '~~/shared/types/featureMatchSession';
-import type { CommanderNumber, CounterState, FeatureMatchOutcome, FeatureMatchState } from '~~/shared/types/featureMatchState';
+import type { ClockState, CommanderNumber, CounterState, FeatureMatchOutcome, FeatureMatchState } from '~~/shared/types/featureMatchState';
 import { getStartingTurnNumber } from '~~/shared/config/games';
 import { SEAT_VALUES } from '~~/shared/types/enums';
 import {
@@ -13,7 +13,7 @@ import {
 	DEFAULT_STARTING_LIFE,
 	resetPlayerFeatureMatchStateForNewGame,
 } from '~~/shared/types/featureMatchState';
-import { applyClockAdjustment } from './clock';
+import { clockTransitions } from './clock';
 import {
 	applyCommanderDamage,
 	applyCommanderTurnStep,
@@ -289,6 +289,98 @@ export function isCommandOutsideSessionVariant(
 		|| COMMANDER_ONLY_SEATS.includes(payload.player);
 }
 
+/** An untimed match refuses what would run, set or adjust its clock, and extra turns. */
+function isRefusedByUntimedMatch(currentState: FeatureMatchState, type: string): boolean {
+	return currentState.clock.type === 'untimed' && UNTIMED_REFUSED_COMMANDS.has(type);
+}
+
+const CLOCK_COMMAND_TYPES = [
+	'AdjustClock',
+	'SetClock',
+	'StartClock',
+	'PauseClock',
+	'ResetClock',
+	'RestartClock',
+] as const satisfies readonly FeatureMatchCommandType[];
+
+export type FeatureMatchClockCommandType = typeof CLOCK_COMMAND_TYPES[number];
+
+function isClockCommand(type: string): type is FeatureMatchClockCommandType {
+	return (CLOCK_COMMAND_TYPES as readonly string[]).includes(type);
+}
+
+/**
+ * A clock command's reduction, which needs only the Session's state: the
+ * instant and amounts its payload must carry, then the shared clock
+ * transition. A reset also clears extra turns. `null` rejects the command.
+ */
+function reduceClockCommand(
+	currentState: FeatureMatchState,
+	type: FeatureMatchClockCommandType,
+	payload: FeatureMatchSessionEventPayload,
+): FeatureMatchState | null {
+	if (type === 'ResetClock') {
+		const durationMs = payload.durationMs == null
+			? undefined
+			: finiteNumber(payload.durationMs);
+		if (durationMs === null)
+			return null;
+		return {
+			...currentState,
+			clock: clockTransitions.reset(currentState.clock, durationMs),
+			overtime: undefined,
+		};
+	}
+
+	const at = finiteNumber(payload.at);
+	if (at === null)
+		return null;
+
+	let clock: ClockState;
+	if (type === 'AdjustClock') {
+		const deltaMs = finiteNumber(payload.deltaMs ?? 0);
+		if (deltaMs === null)
+			return null;
+		clock = clockTransitions.adjust(currentState.clock, at, deltaMs);
+	}
+	else if (type === 'SetClock') {
+		const targetMs = finiteNumber(payload.targetMs ?? 0);
+		if (targetMs === null)
+			return null;
+		clock = clockTransitions.set(currentState.clock, at, targetMs);
+	}
+	else if (type === 'StartClock') {
+		clock = clockTransitions.start(currentState.clock, at);
+	}
+	else if (type === 'PauseClock') {
+		clock = clockTransitions.pause(currentState.clock, at);
+	}
+	else {
+		clock = clockTransitions.restart(currentState.clock, at);
+	}
+
+	// A transition that changes nothing leaves the Session's state as it was.
+	return clock === currentState.clock
+		? currentState
+		: { ...currentState, clock };
+}
+
+/**
+ * What the reducer answers a clock command at `at` (server time), for an
+ * operator's optimistic update to show while the command is out: the same
+ * Session rules and the same transition, so the answer changes nothing shown.
+ * A command the Session refuses leaves the state as it was.
+ */
+export function applyFeatureMatchClockCommand(
+	currentState: FeatureMatchState,
+	type: FeatureMatchClockCommandType,
+	payload: { at?: number; deltaMs?: number; targetMs?: number; durationMs?: number },
+): FeatureMatchState {
+	if (isRefusedByUntimedMatch(currentState, type))
+		return currentState;
+	return reduceClockCommand(currentState, type, payload) ?? currentState;
+}
+
 export function applyFeatureMatchSessionEvent(
 	currentState: FeatureMatchState,
 	sourceSnapshot: FeatureMatchSourceSnapshot,
@@ -339,7 +431,7 @@ function reduceFeatureMatchSessionEvent(
 
 	// An untimed match has no clock to run and so no time to run out: nothing
 	// starts, sets or adjusts its clock, and no extra turns begin.
-	if (currentState.clock.type === 'untimed' && UNTIMED_REFUSED_COMMANDS.has(type))
+	if (isRefusedByUntimedMatch(currentState, type))
 		return null;
 
 	const isCommander = isCommanderSession(sourceSnapshot);
@@ -518,110 +610,9 @@ function reduceFeatureMatchSessionEvent(
 		};
 	}
 
-	if (type === 'AdjustClock') {
-		const at = finiteNumber(payload.at);
-		const deltaDisplayMs = finiteNumber(payload.deltaMs ?? 0);
-		if (at === null || deltaDisplayMs === null)
-			return null;
-		return {
-			sourceSnapshot,
-			currentState: {
-				...currentState,
-				clock: applyClockAdjustment(currentState.clock, at, { deltaDisplayMs }),
-			},
-		};
-	}
-
-	if (type === 'SetClock') {
-		const at = finiteNumber(payload.at);
-		const targetDisplayMs = finiteNumber(payload.targetMs ?? 0);
-		if (at === null || targetDisplayMs === null)
-			return null;
-		return {
-			sourceSnapshot,
-			currentState: {
-				...currentState,
-				clock: applyClockAdjustment(currentState.clock, at, { targetDisplayMs }),
-			},
-		};
-	}
-
-	if (type === 'StartClock') {
-		const at = finiteNumber(payload.at);
-		if (at === null)
-			return null;
-		if (currentState.clock.isRunning)
-			return { currentState, sourceSnapshot };
-		return {
-			sourceSnapshot,
-			currentState: {
-				...currentState,
-				clock: { ...currentState.clock, isRunning: true, lastStartedAt: at },
-			},
-		};
-	}
-
-	if (type === 'PauseClock') {
-		const at = finiteNumber(payload.at);
-		if (at === null)
-			return null;
-		if (!currentState.clock.isRunning)
-			return { currentState, sourceSnapshot };
-		const additionalElapsed = currentState.clock.lastStartedAt
-			? at - currentState.clock.lastStartedAt
-			: 0;
-		return {
-			sourceSnapshot,
-			currentState: {
-				...currentState,
-				clock: {
-					...currentState.clock,
-					isRunning: false,
-					elapsedMs: currentState.clock.elapsedMs + additionalElapsed,
-					lastStartedAt: null,
-				},
-			},
-		};
-	}
-
-	if (type === 'ResetClock') {
-		const durationMs = payload.durationMs == null
-			? undefined
-			: finiteNumber(payload.durationMs);
-		if (durationMs === null)
-			return null;
-		return {
-			sourceSnapshot,
-			currentState: {
-				...currentState,
-				clock: {
-					...currentState.clock,
-					elapsedMs: 0,
-					isRunning: false,
-					lastStartedAt: null,
-					...(durationMs !== undefined && { durationMs }),
-				},
-				overtime: undefined,
-			},
-		};
-	}
-
-	if (type === 'RestartClock') {
-		const at = finiteNumber(payload.at);
-		if (at === null)
-			return null;
-		return {
-			sourceSnapshot,
-			currentState: {
-				...currentState,
-				clock: {
-					...currentState.clock,
-					elapsedMs: 0,
-					isRunning: true,
-					lastStartedAt: at,
-				},
-			},
-		};
+	if (isClockCommand(type)) {
+		const reduced = reduceClockCommand(currentState, type, payload);
+		return reduced && { currentState: reduced, sourceSnapshot };
 	}
 
 	if (type === 'SelectFirstPlayer') {

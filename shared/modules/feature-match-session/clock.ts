@@ -1,5 +1,6 @@
 export {
 	applyClockAdjustment,
+	clockTransitions,
 	formatClockTime,
 	getEffectiveElapsedMs,
 	normalizeTimeInput,
