@@ -765,10 +765,10 @@ describe('a capability-only Screen Output', () => {
 	});
 
 	it('hides an expired Card itself rather than clearing it on the server', async () => {
-		// The Card Timeout runs out on a fake clock that otherwise keeps real time.
+		// The Card Timeout runs out on a fake clock, server time with its timers, that otherwise keeps real time.
 		const cardTimeoutMs = 2000;
 		vi.useFakeTimers({
-			toFake: ['setTimeout', 'clearTimeout'],
+			toFake: ['setTimeout', 'clearTimeout', 'Date'],
 			shouldAdvanceTime: true,
 		});
 		api.screen = screen({ currentMode: 'card', modeConfigs: {} });
