@@ -96,6 +96,9 @@ interface FeatureMatchSamplePlayerState {
 	gameWins: number;
 	sideboard: FeatureMatchSampleDeckListCard[] | null;
 	sideboardRevealed: boolean;
+	/** A Commander set's Seat alone: whether it is Eliminated, and its Commander Damage per opposing Commander in Seat order. */
+	eliminated?: boolean;
+	commanderDamage?: { damage: number; imageUrl: string | null }[];
 }
 
 /**
@@ -116,6 +119,8 @@ export interface FeatureMatchSampleContext {
 	player4?: FeatureMatchSamplePlayerState;
 	/** A Commander set's Seats nobody sits in: none, as every set seats all four. */
 	emptySeats?: readonly Seat[];
+	/** The Seat whose turn it is, where the set tracks one. */
+	activeSeat?: Seat | null;
 	bestOf: number;
 }
 
@@ -154,6 +159,8 @@ export const FEATURE_MATCH_SAMPLE_CONTEXT: FeatureMatchSampleContext = {
 		],
 		sideboardRevealed: true,
 	},
+	// The first Seat's turn, so a Seat Indicator previews on one Seat and not the other.
+	activeSeat: 'player1',
 	bestOf: 3,
 };
 
@@ -309,6 +316,9 @@ export interface CommanderFeatureMatchSampleSeat {
 	lgs: string;
 	commanders: readonly Commander[];
 	lifeTotal: number;
+	/** The Commander Damage taken from each other Seat's first Commander. */
+	damageFrom?: Partial<Record<Seat, number>>;
+	eliminated?: boolean;
 }
 
 /** A Commander as a Seat holds one: a real printing, so a preview shows its card. */
@@ -325,7 +335,8 @@ export function sampleCommander(scryfallId: string, name: string, colorIdentity:
 /**
  * The Commander sample's four Seats, in Seat order: a long name beside a short
  * one, a pair of Commanders beside single ones, a colourless deck, and every
- * Seat at a different life in a game well under way.
+ * Seat at a different life in a game well under way: the second Seat's turn,
+ * Commander Damage taken, and the fourth Seat Eliminated.
  */
 const COMMANDER_SAMPLE_SEATS: readonly CommanderFeatureMatchSampleSeat[] = [
 	{
@@ -337,6 +348,7 @@ const COMMANDER_SAMPLE_SEATS: readonly CommanderFeatureMatchSampleSeat[] = [
 			sampleCommander('557fcd17-6cb3-414a-b2b1-ea9ae32e5aec', 'Kraum, Ludevic\'s Opus', 'UR', 'c16', '34'),
 		],
 		lifeTotal: 31,
+		damageFrom: { player2: 9 },
 	},
 	{
 		name: 'Bo Li',
@@ -364,6 +376,8 @@ const COMMANDER_SAMPLE_SEATS: readonly CommanderFeatureMatchSampleSeat[] = [
 			sampleCommander('c41554e7-2a07-4cc7-b01b-44deed08e588', 'Kozilek, the Great Distortion', '', 'cmm', '2'),
 		],
 		lifeTotal: 6,
+		damageFrom: { player1: 14, player3: 20 },
+		eliminated: true,
 	},
 ];
 
@@ -386,13 +400,23 @@ export function commanderSeatsTokenValues(seats: readonly CommanderFeatureMatchS
 	return Object.assign({}, ...SEAT_VALUES.map((seat, index) => commanderSeatTokens(seats[index]!, seat)));
 }
 
-/** A Commander Seat's live state: its life, with no game wins or Sideboard to show (ADR-0087). */
-function commanderSeatState(seat: CommanderFeatureMatchSampleSeat): FeatureMatchSamplePlayerState {
+/** A Commander Seat's live state: its life, whether it is Eliminated and the Commander Damage it has taken, with no game wins or Sideboard (ADR-0087). */
+function commanderSeatState(seats: readonly CommanderFeatureMatchSampleSeat[], index: number): FeatureMatchSamplePlayerState {
+	const seat = seats[index]!;
 	return {
 		lifeTotal: seat.lifeTotal,
 		gameWins: 0,
 		sideboard: null,
 		sideboardRevealed: false,
+		eliminated: seat.eliminated ?? false,
+		commanderDamage: SEAT_VALUES.flatMap((opposing, opposingIndex) => opposingIndex === index
+			? []
+			: seats[opposingIndex]!.commanders.map((commander, commanderIndex) => ({
+					damage: commanderIndex === 0
+						? seat.damageFrom?.[opposing] ?? 0
+						: 0,
+					imageUrl: scryfallCardImageUrl(commander.scryfallId),
+				}))),
 	};
 }
 
@@ -400,11 +424,12 @@ function commanderSeatState(seat: CommanderFeatureMatchSampleSeat): FeatureMatch
 export function commanderSampleContext(seats: readonly CommanderFeatureMatchSampleSeat[], clockDisplayTime: string): FeatureMatchSampleContext {
 	return {
 		clockDisplayTime,
-		player1: commanderSeatState(seats[0]!),
-		player2: commanderSeatState(seats[1]!),
-		player3: commanderSeatState(seats[2]!),
-		player4: commanderSeatState(seats[3]!),
+		player1: commanderSeatState(seats, 0),
+		player2: commanderSeatState(seats, 1),
+		player3: commanderSeatState(seats, 2),
+		player4: commanderSeatState(seats, 3),
 		emptySeats: [],
+		activeSeat: 'player2',
 		bestOf: 1,
 	};
 }

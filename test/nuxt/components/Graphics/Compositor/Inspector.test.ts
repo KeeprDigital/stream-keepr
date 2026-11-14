@@ -2793,6 +2793,15 @@ describe('surfaces, Shape Geometry, and the Player a Graphic Item Definition dec
 		expect(items.map(item => item.label)).toEqual(labels);
 	});
 
+	it('writes the state a Seat Indicator is shown in', async () => {
+		const wrapper = await mountDefinition({ name: 'seat-indicator', kind: 'seat-indicator' });
+
+		control(wrapper, 'USelect', 'data-testid', 'seat-indicator-state').vm.$emit('update:modelValue', 'eliminated');
+		await nextTick();
+
+		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ state: 'eliminated' });
+	});
+
 	it('offers no Player to a Definition that reads none', async () => {
 		const wrapper = await mountDefinition(TEXT);
 

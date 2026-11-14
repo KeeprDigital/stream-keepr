@@ -40,6 +40,10 @@ describe('the canonical Feature Match sample dataset', () => {
 		expect(context.emptySeats ?? []).toEqual([]);
 		expect(new Set(SEAT_VALUES.map(seat => context[seat]?.lifeTotal)).size).toBe(4);
 		expect(context.bestOf).toBe(1);
+		// A turn, Commander Damage and an Eliminated Seat, so each Commander item previews something.
+		expect(context.activeSeat).toBe('player2');
+		expect(SEAT_VALUES.filter(seat => context[seat]?.eliminated)).toEqual(['player4']);
+		expect(context.player1.commanderDamage!.filter(count => count.damage > 0)).toHaveLength(1);
 	});
 
 	it('samples a Magic Match awkward in the ways real ones are', () => {
