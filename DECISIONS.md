@@ -3160,3 +3160,51 @@ There is no general way for a layout to show something by live state, and each s
 - **Pods from Melee Sync.** Its mapper refuses more than two competitors, and these shows are not run from Melee.
 - **Deriving Eliminated** from life, Commander Damage or poison. Replacement effects and concessions make the operator the only reliable source.
 - **A general state-driven visibility for layouts.** Wanted eventually, but not needed for two indicators.
+
+## ADR-0088: Every clock projection runs on one scheduler
+
+Accepted · 2026-11-14 · [#1194](https://github.com/KeeprDigital/stream-keepr/issues/1194). Follows ADR-0009, ADR-0022, ADR-0066, ADR-0076 and ADR-0078, and changes none of them. The scheduler is in ([#1195](https://github.com/KeeprDigital/stream-keepr/issues/1195)).
+
+A Feature Match Session clock's display, a Round Clock, Page Rotation, a Talent Screen's Social Profile Rotation and Card Timeout are each a clock projection: a pure function of stored state and server time. The rules were right, but each rendering timed its own re-evaluation, and the five had drifted. Two re-timed when server time re-synced and waited while it was unknown, one re-timed without waiting, and two did neither, so after a re-sync one output of a clock could change a beat off another.
+
+### Decision
+
+**One scheduler re-evaluates every clock projection.** `useClockProjection` (`app/composables/core/useClockProjection.ts`) takes a pure function of server time that answers a value and how long until that value next changes, or that it will not change on its own, and returns the value reactively. It answers anew:
+
+- exactly when the value next changes;
+- when a reactive input the function reads changes;
+- when the server time offset changes, and when server time first becomes known, even at an offset of zero.
+
+A change further off than one timer can hold (2^31 − 1 ms) is waited for in steps. The wait ends with the scope that owns it. It runs on the client only; a server render takes the projection once.
+
+**Each caller declares what its projection answers while server time is unknown.** The option is required, so a new clock projection cannot skip the question:
+
+| Clock projection | While server time is unknown |
+| --- | --- |
+| Page Rotation | its first page (ADR-0009) |
+| Social Profile Rotation on a Talent Screen | its first profile |
+| Feature Match Session clock display | the device's own time |
+| Round Clock | the device's own time |
+| Card Timeout | the device's own time |
+
+A projection on the device's own time is taken again the moment the first sync lands.
+
+**No clock projection holds a timer of its own.** The rule of each stays where it was (`shared/modules/page-rotation`, `shared/modules/talent-screen`, `shared/utils/card/timeout.ts`, `shared/utils/roundClock.ts`, `shared/utils/clock.ts`); only what calls it, and when, moved.
+
+### Why
+
+"Wake me when this next changes" is one rule, and getting it right needs the same four things every time: the next change, the inputs, the re-sync, and the unknown clock. Written once, a fix to any of them reaches every clock on air, and two outputs of one clock are held to the same behaviour by construction rather than by five sets of tests.
+
+### Consequences
+
+- A Feature Match Session clock display and a held Screen Card now re-time when server time re-syncs, so a Card hides by the shared clock after a re-sync as every other holder does. A Round Clock now also re-evaluates on a first sync that leaves the offset at zero. Nothing else on air changes.
+- Card Timeout is a projection of the held Card: whichever Card is held is timed, and none is timed while none is held. Nothing arms or cancels a timer by hand.
+- A projection is answered again when its wait runs out, so a test that fakes server time must let it run with the timers it fakes. One frozen at an instant never reaches the change it waits for.
+- The Broadcast Graphics playout clock and Graphic Animation timing are not clock projections of this kind and keep their own timing. So do `useFeatureMatchGameMode`'s automatic overtime and the Edit State modal's prefill, which read the device's own time.
+- Tests: `test/nuxt/composables/core/useClockProjection.test.ts` holds the scheduler's rules. Each consumer keeps one case that it passes its projection and shows the answer: `useClockDisplay.test.ts`, `useRoundClockModeData.test.ts`, `screenModePagination.test.ts`, `useTalentModeData.test.ts` and `stores/card.test.ts`.
+
+### Rejected alternatives
+
+- **A free-running interval per rendering.** Two outputs of one clock change digit up to an interval apart, and each keeps waking with nothing to show.
+- **One answer for every projection while server time is unknown.** A rotation on an unknown clock shows the wrong page beside an output that has synced, so it holds its first; a running clock that held would blank or freeze behind a slow time endpoint.
+- **A scheduler per kind of clock.** The five differ in their rule, not in how they are timed.

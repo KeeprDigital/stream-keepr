@@ -23,45 +23,36 @@ export function useClockDisplay(clock: MaybeRefOrGetter<ClockState | null>) {
 	const showsClock = computed(() => !isUntimed.value || untimedLabel.value !== '');
 
 	/**
-	 * Advanced each time the running clock's display is due to change, which a
-	 * countdown's does as it expires. Timed from server time rather than a
-	 * free-running interval, so every rendering of one clock (an overlay's fill
-	 * and key, say) changes digit together.
+	 * What the clock shows and whether it has run out, re-evaluated as that next
+	 * changes (ADR-0088). An output yet to sync counts on its own time rather than
+	 * showing nothing.
 	 */
-	const tick = ref(0);
-	watch(
-		// By the fields that move the display, so a clock updated in place re-times too.
-		[
-			() => {
-				const held = toValue(clock);
-				return held && `${held.type}:${held.isRunning}:${held.lastStartedAt}:${held.elapsedMs}:${held.durationMs}`;
+	const shown = useClockProjection((serverTime) => {
+		const held = toValue(clock);
+		return {
+			value: {
+				displayTime: formatClockDisplay(held, serverTime, untimedLabel.value),
+				isExpired: held?.type === 'countdown' && elapsedMsAt(held, serverTime) >= held.durationMs,
 			},
-			tick,
-		],
-		(_changed, _previous, onCleanup) => {
-			const held = toValue(clock);
-			if (!held)
-				return;
-			const untilDisplayChanges = clockDisplayNextChangeInMs(held, getServerTime());
-			if (untilDisplayChanges == null)
-				return;
-			const timer = setTimeout(() => tick.value++, untilDisplayChanges);
-			onCleanup(() => clearTimeout(timer));
-		},
-		{ immediate: true },
-	);
+			nextChangeInMs: held
+				? clockDisplayNextChangeInMs(held, serverTime)
+				: null,
+		};
+	}, { whileServerTimeUnknown: 'device-time' });
+
+	function elapsedMsAt(c: ClockState, serverTime: number): number {
+		let elapsedMs = c.elapsedMs;
+		if (c.isRunning && c.lastStartedAt)
+			elapsedMs += serverTime - c.lastStartedAt;
+		return Math.max(0, elapsedMs);
+	}
 
 	function getElapsedMs(): number {
 		const c = toValue(clock);
 		if (!c)
 			return 0;
 
-		let elapsedMs = c.elapsedMs;
-		if (c.isRunning && c.lastStartedAt) {
-			const now = getServerTime();
-			elapsedMs += now - c.lastStartedAt;
-		}
-		return Math.max(0, elapsedMs);
+		return elapsedMsAt(c, getServerTime());
 	}
 
 	function getRemainingMs(): number {
@@ -76,26 +67,14 @@ export function useClockDisplay(clock: MaybeRefOrGetter<ClockState | null>) {
 		return c != null && !c.isRunning && c.elapsedMs > 0;
 	});
 
-	const isExpired = computed(() => {
-		const c = toValue(clock);
-		if (!c || c.type !== 'countdown')
-			return false;
-		if (c.isRunning)
-			void tick.value;
-		return getElapsedMs() >= c.durationMs;
-	});
+	const isExpired = computed(() => shown.value.isExpired);
 
 	const isInOvertime = computed(() => {
 		const c = toValue(clock);
 		return isExpired.value && (c?.countUpAfterCountdown ?? false);
 	});
 
-	const displayTime = computed(() => {
-		// Read tick to trigger reactivity while running
-		if (toValue(clock)?.isRunning)
-			void tick.value;
-		return formatClockDisplay(toValue(clock), getServerTime(), untimedLabel.value);
-	});
+	const displayTime = computed(() => shown.value.displayTime);
 
 	const timeColorClass = computed(() => {
 		if (isExpired.value)

@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reactive } from 'vue';
 
 mockNuxtImport('useServerTime', () => () => ({
+	isSynced: ref(true),
+	serverTimeOffset: ref(0),
 	getServerTime: () => Date.now(),
 }));
 
@@ -29,38 +31,18 @@ describe('useClockDisplay', () => {
 		vi.useRealTimers();
 	});
 
-	// Renderings of one clock change digit together: each re-renders as the shown
-	// second runs out, not a second after whenever it happened to mount.
-	it('shows the next second as the clock reaches it, wherever in the second it began', async () => {
-		vi.useFakeTimers({ now: 1_000_000 });
-		const display = useClockDisplay(clock({ type: 'countup', isRunning: true, lastStartedAt: 1_000_000 - 12_900 }));
-		expect(display.displayTime.value).toBe('0:12');
-
-		await vi.advanceTimersByTimeAsync(100);
-		expect(display.displayTime.value).toBe('0:13');
-
-		await vi.advanceTimersByTimeAsync(1000);
-		expect(display.displayTime.value).toBe('0:14');
-	});
-
-	// Time remaining rounds up, so a countdown holds its full time through its
-	// first second, and reads 0:00 and expired together as it runs out.
-	it('counts a countdown down a second at a time from its full time to its end', async () => {
+	// What it shows and whether it has run out are the clock's projection, each
+	// answered anew as it changes; when that is, is the scheduler's own test.
+	it('counts a running countdown down to its end, reading expired as it shows 0:00', async () => {
 		vi.useFakeTimers({ now: 1_000_000 });
 		const display = useClockDisplay(clock({ durationMs: 2000, isRunning: true, lastStartedAt: 1_000_000 }));
 		const shown = () => [display.displayTime.value, display.isExpired.value];
 		expect(shown()).toEqual(['0:02', false]);
 
-		await vi.advanceTimersByTimeAsync(999);
-		expect(shown()).toEqual(['0:02', false]);
-
-		await vi.advanceTimersByTimeAsync(1);
+		await vi.advanceTimersByTimeAsync(1000);
 		expect(shown()).toEqual(['0:01', false]);
 
-		await vi.advanceTimersByTimeAsync(999);
-		expect(shown()).toEqual(['0:01', false]);
-
-		await vi.advanceTimersByTimeAsync(1);
+		await vi.advanceTimersByTimeAsync(1000);
 		expect(shown()).toEqual(['0:00', true]);
 	});
 
