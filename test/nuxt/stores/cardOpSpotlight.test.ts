@@ -17,11 +17,9 @@ const { mockFetch, mockSaveScreenCard, SERVER_NOW, serverNow } = vi.hoisted(() =
 	};
 });
 mockNuxtImport('$fetch', () => mockFetch);
-mockNuxtImport('useServerTime', () => () => ({
-	isSynced: ref(true),
-	serverTimeOffset: ref(0),
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	getServerTime: () => serverNow.value ?? Date.now(),
-}));
+})));
 
 let revision = 0;
 mockNuxtImport('useCardRepository', () => () => ({

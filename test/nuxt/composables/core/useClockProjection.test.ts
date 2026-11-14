@@ -2,17 +2,21 @@ import type { EffectScope } from 'vue';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const NOW = 1_000_000;
+
 const isSynced = ref(true);
 const serverTimeOffset = ref(0);
+/** How fast server time runs against the device's: other than 1 while a correction is eased in. */
+let serverTimeRate = 1;
 
-// The shared clock, faked: server time is this browser's, plus an offset a sync may move.
-mockNuxtImport('useServerTime', () => () => ({
+// The shared clock, faked: server time is this browser's, plus an offset a sync
+// may move, running from `NOW` at `serverTimeRate`.
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	isSynced,
 	serverTimeOffset,
-	getServerTime: () => Date.now() + serverTimeOffset.value,
-}));
-
-const NOW = 1_000_000;
+	getServerTime: () => NOW + (Date.now() - NOW) * serverTimeRate + serverTimeOffset.value,
+	deviceDelayFor: serverMs => Math.ceil(serverMs / serverTimeRate),
+})));
 
 /** Whole seconds of server time, changing as each second is reached. */
 function secondsOf(serverTime: number) {
@@ -41,6 +45,7 @@ describe('useClockProjection', () => {
 		});
 		isSynced.value = true;
 		serverTimeOffset.value = 0;
+		serverTimeRate = 1;
 	});
 
 	afterEach(() => {
@@ -86,6 +91,18 @@ describe('useClockProjection', () => {
 		expect(seconds.value).toBe(1005);
 		await vi.advanceTimersByTimeAsync(1);
 		expect(seconds.value).toBe(1006);
+	});
+
+	// A correction being eased in runs server time faster or slower than the
+	// device's, so the wait is for server time to reach the change, not the device's.
+	it('answers anew as server time reaches the change while a correction is eased in', async () => {
+		serverTimeRate = 1.1;
+		const { result: seconds } = inScope(() => useClockProjection(secondsOf, { whileServerTimeUnknown: 'device-time' }));
+
+		await vi.advanceTimersByTimeAsync(909);
+		expect(seconds.value).toBe(1000);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(seconds.value).toBe(1001);
 	});
 
 	it('shows its declared answer while server time is unknown, and projects once it is known', async () => {

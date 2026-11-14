@@ -1,6 +1,5 @@
 import type { DbEvent } from '~~/server/db/schema';
 import type { Game } from '~~/shared/types/enums';
-import type { ClockState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +11,7 @@ import { createInitialOvertimeState } from '~~/shared/types/featureMatchState';
 import { toScreenOutputEvent } from '~~/shared/utils/screenOutputEvent';
 import { createMockEvent, createMockFeatureMatch, createMockFeatureMatchState } from '~~/test/helpers/fixtures';
 import { matchStatePart, offeredMatchStateParts } from '~~/test/nuxt/helpers/featureMatchControls';
+import { clock } from '~~/test/nuxt/helpers/featureMatchStateHarness';
 import Display from '~/components/Screen/Modes/FeatureMatch/Display.vue';
 
 /*
@@ -32,14 +32,7 @@ const matchState = createMockFeatureMatchState({
 		],
 	},
 });
-const THIRTY_MINUTES: ClockState = {
-	type: 'countdown',
-	durationMs: 30 * 60_000,
-	elapsedMs: 0,
-	isRunning: false,
-	lastStartedAt: null,
-	countUpAfterCountdown: false,
-};
+const THIRTY_MINUTES = 30 * 60_000;
 const match = createMockFeatureMatch({ id: 1 });
 
 // The mode's data is faked, so nothing reads the Screen context it is handed.
@@ -64,11 +57,7 @@ mockNuxtImport('useFeatureMatchStateStore', () => () => ({
 	]),
 	startOvertime: vi.fn(),
 }));
-mockNuxtImport('useServerTime', () => () => ({
-	isSynced: ref(true),
-	serverTimeOffset: ref(0),
-	getServerTime: () => Date.now(),
-}));
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime());
 mockNuxtImport('usePlayerFeatureMatchData', () => (_matchId: unknown, side: () => 'player1' | 'player2') => ({
 	player: computed(() => matchState[side()]),
 	playerName: computed(() => side()),
@@ -128,7 +117,7 @@ function mountControls(game: Game, toggles: Partial<DbEvent> = {}) {
 
 describe('feature Match Controls by Card Game', () => {
 	beforeEach(() => {
-		matchState.clock = { ...THIRTY_MINUTES };
+		matchState.clock = clock({ durationMs: THIRTY_MINUTES });
 	});
 
 	it.each([
@@ -171,11 +160,11 @@ describe('feature Match Controls by Card Game', () => {
 		expect(wrapper.find('[data-player-side="player1"] [data-icon="i-lucide-flag"]').exists()).toBe(true);
 	});
 
-	// Its clock takes its state's colour, pulse and overtime mark; which state takes which is clockAppearance's own test.
+	// Its clock takes its state's colour, pulse and count-up mark; which state takes which is clockAppearance's own test.
 	it.each([
 		{
 			name: 'run out and still running',
-			clock: {
+			held: {
 				elapsedMs: 31 * 60_000,
 				isRunning: true,
 				lastStartedAt: Date.now(),
@@ -184,7 +173,7 @@ describe('feature Match Controls by Card Game', () => {
 		},
 		{
 			name: 'counting up after running out',
-			clock: {
+			held: {
 				elapsedMs: 31 * 60_000,
 				isRunning: true,
 				lastStartedAt: Date.now(),
@@ -192,11 +181,8 @@ describe('feature Match Controls by Card Game', () => {
 			},
 			classes: ['text-error', 'clock--overtime'],
 		},
-	])('draws a clock $name as $classes', ({ clock, classes }) => {
-		matchState.clock = {
-			...THIRTY_MINUTES,
-			...clock,
-		};
+	])('draws a clock $name as $classes', ({ held, classes }) => {
+		matchState.clock = clock({ durationMs: THIRTY_MINUTES, ...held });
 
 		const shown = mountControls('mtg').get('[data-clock-state]').classes();
 

@@ -8,6 +8,8 @@ const MAX_SAMPLE_RTT_MS = 1000;
 const STEP_CORRECTION_THRESHOLD_MS = 500;
 /** The most of elapsed time an eased correction may add or take, so server time always advances. */
 const MAX_EASE_RATE = 0.1;
+/** Below this a device wait's fraction is arithmetic error, not time to round up. */
+const EASE_ROUNDING_MS = 1e-6;
 /** A re-sync asked for by the page coming back is skipped this soon after a sync. */
 const RESYNC_MIN_GAP_MS = 5000;
 const TIME_ENDPOINT = '/api/time';
@@ -165,6 +167,25 @@ export function useServerTime() {
 	}
 
 	/**
+	 * How long on the device's clock until server time, as read, has advanced by
+	 * `serverMs`. While a correction is eased in server time runs faster or
+	 * slower than the device's, so a wait for it is shorter or longer by what the
+	 * correction applies within it (ADR-0088). To the whole millisecond above,
+	 * so a timer set for it never ends before server time is there.
+	 */
+	function deviceDelayFor(serverMs: number): number {
+		const remaining = serverTimeOffset.value - appliedOffset();
+		if (remaining === 0)
+			return serverMs;
+		const rate = 1 + Math.sign(remaining) * MAX_EASE_RATE;
+		const easedServerMs = Math.abs(remaining) / MAX_EASE_RATE * rate;
+		const deviceMs = serverMs <= easedServerMs
+			? serverMs / rate
+			: serverMs - remaining;
+		return Math.ceil(deviceMs - EASE_ROUNDING_MS);
+	}
+
+	/**
 	 * Re-sync because the page is back: a hidden tab's timers were throttled, and
 	 * an offline device's syncs went unanswered. Skipped while a sync is running
 	 * or just after one. A last sync in the device's future means its clock was
@@ -236,6 +257,7 @@ export function useServerTime() {
 		isSynced: readonly(isSynced),
 		lastSyncedAt: readonly(lastSyncedAt),
 		getServerTime,
+		deviceDelayFor,
 		sync,
 		startSync,
 		stopSync,

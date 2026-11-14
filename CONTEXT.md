@@ -173,6 +173,20 @@ _Avoid_: slot deck, match deck.
 **Feature Match Session**:
 The live state timeline for a Feature Match Slot. It owns which Seat each player sits in: Swap Players moves them in the Session only, and the Slot keeps its pairing order (ADR-0058). A Commander Event's Session plays one game, with no best-of and no game wins: it tracks each Seat's life, **Commander Damage**, counters and cards kept, which Seats are **Eliminated**, and the turn, which passes in Seat order over empty and Eliminated Seats, its number going up each time it returns to the Seat that went first. It completes when its operator declares a winning Seat or a draw, and nothing outside the Session records the outcome. A Commander Slot has no pairing order to keep, so swapping two of its Seats moves their players in the Slot itself, with all they hold and their live state (ADR-0087).
 
+**Feature Match Session clock**:
+The clock a Feature Match Session holds for its Match: a countdown from the Match Format's duration, a count up from zero, or none for an Untimed Match. An operator starts, pauses, resets, restarts, adjusts and sets it, on one Slot or on every timed Slot at once; nothing else moves it. What a rendering shows of it is a **Clock projection**, which stands in one state at a time:
+
+- **stopped**: not running, with no time run.
+- **paused**: not running, with time run and time left.
+- **running**: running, with time left or no end to reach.
+- **run out**: a countdown at its end, showing `0:00`, running or not.
+- **counting up**: a countdown past its end whose Match Format counts up after it, showing the time since its end (its count-up time), running or not.
+- **holding at its limit**: counting up, stopped by its count-up limit, which it goes on showing (ADR-0076).
+- **untimed**: an Untimed Match's, showing the Untimed Label.
+
+Count-up time is not extra turns: a Session's overtime is the extra turns played after time is called, counted in turns and tracked apart from the clock.
+_Avoid_: match timer, round timer (a Round Clock is a Round's), overtime for count-up time.
+
 **Untimed Match**:
 A Feature Match whose Session clock type is untimed: it has no clock to run and so no extra turns. The type comes from the Event's Match Format when the Session opens. Where its clock would render, it shows the Event's Untimed Label, or nothing while that label is blank.
 _Avoid_: unclocked match, timeless match
@@ -242,6 +256,10 @@ _Avoid_: Vanta effect, frame animation, shader background, background effect
 **Round Clock**:
 A Screen Mode showing a Round's name and the time left in it, projected from the Round's operator-entered start and duration and server time, so every rendering of the same Round shows the same time. Before the start it shows the full duration, not running; after the end, `0:00`, or, where its Screen counts up, the time since the end, holding at the Screen's limit if it sets one (ADR-0076). Like Card Timeout and Page Rotation, nothing writes as it runs or when it runs out. It shows the Current Round unless its operator picks a Round. Magic: The Gathering only (ADR-0066).
 _Avoid_: round timer (the Feature Match Session clock is a Match's, not a Round's).
+
+**Clock projection**:
+What a clock shows at one instant, as a pure function of its stored state and server time: the value, and how long until that value next changes on its own. A Feature Match Session clock's display, a Round Clock, Page Rotation, a Talent Screen's Social Profile Rotation and Card Timeout are each one. Every rendering computes the same answer, nothing writes as it runs, and one scheduler re-evaluates each exactly when it next changes, when its inputs change and when server time re-syncs (ADR-0088).
+_Avoid_: ticker, timer (nothing ticks; a projection is re-evaluated when it changes).
 
 **Page Rotation**:
 The deterministic projection of a paginated Screen Mode's current page from its Rotation Anchor and server time, computed identically by every rendering (ADR-0009). A paginated Screen Mode Definition declares it, naming its page size field, which holds a number of rows or, where the mode allows, is absent for Auto: every row on one page. An edit of the page size or page duration changes the rotation's shape, restarting it from page 1 (ADR-0039).

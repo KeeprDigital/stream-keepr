@@ -58,11 +58,9 @@ function deliver(type: string, payload: Record<string, unknown>) {
 
 mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => mockRealtime);
-mockNuxtImport('useServerTime', () => () => ({
-	isSynced: ref(true),
-	serverTimeOffset: ref(0),
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	getServerTime: () => 1_000_000,
-}));
+})));
 mockNuxtImport('useRoundStore', () => () => ({
 	rounds: [
 		{

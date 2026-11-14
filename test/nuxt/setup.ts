@@ -27,6 +27,7 @@ vi.mock('~/composables/core/useServerTime', () => {
 			isSynced,
 			lastSyncedAt,
 			getServerTime: () => Date.now(),
+			deviceDelayFor: (serverMs: number) => serverMs,
 			sync: async () => {},
 			startSync: () => {},
 			stopSync: () => {},

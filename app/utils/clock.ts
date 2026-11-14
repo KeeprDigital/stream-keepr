@@ -44,7 +44,9 @@ export function clockAppearance({ state, isRunning, elapsedMs }: Pick<FeatureMat
 		untimedState = 'paused';
 
 	return {
-		colorClass: CLOCK_STATE_COLOR_CLASS[state === 'untimed' ? untimedState : state],
+		colorClass: CLOCK_STATE_COLOR_CLASS[state === 'untimed'
+			? untimedState
+			: state],
 		pulses: state === 'run-out' && isRunning,
 		showsCountUp: state === 'counting-up' || state === 'holding',
 	};

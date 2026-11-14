@@ -156,7 +156,9 @@ describe('useFeatureMatchStateStore actions', () => {
 		});
 
 		it('pausing a stopped clock sends nothing', () => {
-			seedState({ clock: clock() });
+			seedState({
+				clock: clock(),
+			});
 
 			expect(store.pauseClock(EVENT_ID, MATCH_ID)).toBeNull();
 			expect(sessionClient.pauseClock).not.toHaveBeenCalled();

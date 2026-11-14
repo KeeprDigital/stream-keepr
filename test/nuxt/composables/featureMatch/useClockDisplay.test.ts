@@ -1,24 +1,8 @@
-import type { ClockState } from '~~/shared/types/featureMatchState';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { clock } from '~~/test/nuxt/helpers/featureMatchStateHarness';
 
-mockNuxtImport('useServerTime', () => () => ({
-	isSynced: ref(true),
-	serverTimeOffset: ref(0),
-	getServerTime: () => Date.now(),
-}));
-
-function clock(overrides: Partial<ClockState> = {}): ClockState {
-	return {
-		type: 'countdown',
-		durationMs: 3_000_000,
-		elapsedMs: 0,
-		isRunning: false,
-		lastStartedAt: null,
-		countUpAfterCountdown: false,
-		...overrides,
-	};
-}
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime());
 
 describe('useClockDisplay', () => {
 	afterEach(() => {

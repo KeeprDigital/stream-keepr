@@ -122,26 +122,12 @@ async function stage(clock: ClockState) {
 }
 
 describe('a Feature Match Session clock stored in today\'s shape', () => {
-	it.each<{ name: string; clock: ClockState; shown: string }>([
-		{
-			name: 'one running past its end, stored before the count-up limit, counting up without limit',
-			clock: { ...STORED_BEFORE_THE_LIMIT, isRunning: true, lastStartedAt: NOW - 6_000_000 },
-			shown: '1:30:30',
-		},
-		{
-			name: 'one stored running with no start as stopped at its stored time',
-			clock: { ...STORED_BEFORE_THE_LIMIT, isRunning: true, lastStartedAt: null },
-			shown: '9:30',
-		},
-		{
-			name: 'one stored stopped with a start as stopped at its stored time',
-			clock: { ...STORED_BEFORE_THE_LIMIT, lastStartedAt: NOW - 90_000 },
-			shown: '9:30',
-		},
-	])('reads $name', async ({ clock, shown }) => {
+	// Which stored combination reads as what is `readStoredClock`'s own test.
+	it('reads one running past its end, stored before the count-up limit, counting up without limit', async () => {
+		const clock = { ...STORED_BEFORE_THE_LIMIT, isRunning: true, lastStartedAt: NOW - 6_000_000 };
 		const session = await stage(clock);
 
-		await expect(session.shown()).resolves.toBe(shown);
+		await expect(session.shown()).resolves.toBe('1:30:30');
 		// Reading stores nothing: the row is as it was written.
 		await expect(session.storedClock()).resolves.toStrictEqual(clock);
 	});

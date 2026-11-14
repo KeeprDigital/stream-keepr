@@ -35,7 +35,7 @@ export function useClockProjection<T>(
 	project: (serverTime: number) => ClockProjection<T>,
 	options: ClockProjectionOptions<T>,
 ): ComputedRef<T> {
-	const { isSynced, serverTimeOffset, getServerTime } = useServerTime();
+	const { isSynced, serverTimeOffset, getServerTime, deviceDelayFor } = useServerTime();
 	const unknown = options.whileServerTimeUnknown;
 
 	/** Advanced as the wait for the next change, or a step of it, runs out. */
@@ -44,8 +44,8 @@ export function useClockProjection<T>(
 	const projection = computed<ClockProjection<T>>(() => {
 		void tick.value;
 		void serverTimeOffset.value;
-		// `getServerTime` is itself reactive to a correction being eased in, so a
-		// wait timed during one is taken again when it completes (ADR-0088).
+		// `getServerTime` is itself reactive to a correction being eased in, so
+		// the projection is also answered again as one completes (ADR-0088).
 		if (!isSynced.value && unknown !== 'device-time') {
 			return {
 				value: unknown.show(),
@@ -61,7 +61,8 @@ export function useClockProjection<T>(
 		watch(projection, ({ nextChangeInMs }, _previous, onCleanup) => {
 			if (nextChangeInMs == null)
 				return;
-			const timer = setTimeout(() => tick.value++, Math.min(Math.max(0, nextChangeInMs), MAX_TIMER_DELAY_MS));
+			// Waited on the device for as long as server time takes to get there.
+			const timer = setTimeout(() => tick.value++, Math.min(Math.max(0, deviceDelayFor(nextChangeInMs)), MAX_TIMER_DELAY_MS));
 			onCleanup(() => clearTimeout(timer));
 		}, { immediate: true });
 	}

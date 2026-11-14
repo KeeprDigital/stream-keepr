@@ -14,11 +14,10 @@ import { useRotationConfigWrites } from '~/modules/screen-mode/rotationWrites';
 const mockIsSynced = ref(true);
 let mockServerNow = 1_000_000.25; // deliberately fractional, like a real sync
 
-mockNuxtImport('useServerTime', () => () => ({
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	isSynced: mockIsSynced,
-	serverTimeOffset: ref(0),
 	getServerTime: () => mockServerNow,
-}));
+})));
 
 function harness(overrides: { autoPageEnabled?: boolean; rotationAnchor?: number; currentPage?: number } = {}) {
 	const saveConfig = vi.fn();

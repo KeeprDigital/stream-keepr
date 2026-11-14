@@ -54,11 +54,9 @@ mockNuxtImport('useModeConfigUpdate', () => () => ({
 	resetConfig,
 	retry: vi.fn(),
 }));
-mockNuxtImport('useServerTime', () => () => ({
-	isSynced: ref(true),
-	serverTimeOffset: ref(0),
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
 	getServerTime: () => 1_000_000,
-}));
+})));
 
 // ── What each Event Reference picker offers: one entity of each kind ──
 

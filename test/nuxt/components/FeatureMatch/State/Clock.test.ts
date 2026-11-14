@@ -3,14 +3,11 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import { createMockEvent } from '~~/test/helpers/fixtures';
+import { clock } from '~~/test/nuxt/helpers/featureMatchStateHarness';
 import { nuxtUiStubs } from '~~/test/nuxt/helpers/nuxtUiStubs';
 import Clock from '~/components/FeatureMatch/State/Clock.vue';
 
-mockNuxtImport('useServerTime', () => () => ({
-	isSynced: ref(true),
-	serverTimeOffset: ref(0),
-	getServerTime: () => Date.now(),
-}));
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime());
 mockNuxtImport('useEventStore', () => () => ({
 	eventId: 1,
 	displayEvent: createMockEvent({ featureMatchDefaultUntimedLabel: 'Top 8' }),
@@ -24,20 +21,14 @@ mockNuxtImport('useToast', () => () => ({
 	add: vi.fn(),
 }));
 
-function clock(overrides: Partial<ClockState> = {}): ClockState {
-	return {
-		type: 'countdown',
-		durationMs: 10_000,
-		elapsedMs: 0,
-		isRunning: false,
-		lastStartedAt: null,
-		countUpAfterCountdown: false,
-		...overrides,
-	};
-}
-
+/** A ten-second countdown, running since `sinceStartMs` ago. */
 function running(sinceStartMs: number, overrides: Partial<ClockState> = {}) {
-	return clock({ isRunning: true, lastStartedAt: Date.now() - sinceStartMs, ...overrides });
+	return clock({
+		durationMs: 10_000,
+		isRunning: true,
+		lastStartedAt: Date.now() - sinceStartMs,
+		...overrides,
+	});
 }
 
 function mountClock(state: ClockState) {
@@ -48,7 +39,7 @@ function mountClock(state: ClockState) {
 }
 
 describe('featureMatchStateClock', () => {
-	// Its clock takes its state's colour, pulse and overtime mark; which state takes which is clockAppearance's own test.
+	// Its clock takes its state's colour, pulse and count-up mark; which state takes which is clockAppearance's own test.
 	it.each([
 		{
 			name: 'run out and still running',
@@ -74,7 +65,6 @@ describe('featureMatchStateClock', () => {
 		expect(mountClock(clock({ type: 'untimed' })).get('[data-clock-state]').text()).toBe('Top 8');
 	});
 
-	// A clock stored running with no start reads as stopped, so it offers a start, not a pause that does nothing.
 	it.each([
 		[
 			'a running clock',
@@ -84,11 +74,6 @@ describe('featureMatchStateClock', () => {
 		[
 			'a stopped clock',
 			clock(),
-			'i-lucide-play',
-		],
-		[
-			'a clock stored running with no start',
-			clock({ isRunning: true }),
 			'i-lucide-play',
 		],
 	])('offers %s the control that will act on it', async (_, state, icon) => {

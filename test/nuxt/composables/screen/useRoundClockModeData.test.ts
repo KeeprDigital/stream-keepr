@@ -22,11 +22,7 @@ mockNuxtImport('$fetch', () => mockFetch);
 mockNuxtImport('tryUseRealtime', () => () => realtime.transport);
 mockNuxtImport('useScreenModeConfig', () => () => computed(() => config));
 // The shared clock, faked: server time is this browser's.
-mockNuxtImport('useServerTime', () => () => ({
-	isSynced: ref(true),
-	serverTimeOffset: ref(0),
-	getServerTime: () => Date.now(),
-}));
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime());
 
 const screenContext = screenContextOf({
 	screen: ref({ id: 1, name: 'Clock' }),

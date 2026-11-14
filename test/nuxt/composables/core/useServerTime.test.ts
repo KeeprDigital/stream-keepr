@@ -261,6 +261,50 @@ describe('useServerTime', () => {
 		expect(ahead.value).toBe(1_100);
 	});
 
+	// Eased in, server time runs at eleven or nine tenths of the device's, so a
+	// wait for it is that much shorter or longer on the device, to the ease's end.
+	it.each([
+		{
+			name: 'with no correction running',
+			offset: 800,
+			serverMs: 1_000,
+			deviceMs: 1_000,
+		},
+		{
+			name: 'inside a correction forward',
+			offset: 1_100,
+			serverMs: 1_100,
+			deviceMs: 1_000,
+		},
+		{
+			name: 'past the end of a correction forward',
+			offset: 1_100,
+			serverMs: 5_000,
+			deviceMs: 4_700,
+		},
+		{
+			name: 'inside a correction back',
+			offset: 500,
+			serverMs: 900,
+			deviceMs: 1_000,
+		},
+		{
+			name: 'past the end of a correction back',
+			offset: 500,
+			serverMs: 5_000,
+			deviceMs: 5_300,
+		},
+	])('answers how long the device waits for server time to advance, $name', async ({ offset, serverMs, deviceMs }) => {
+		const serverTime = await correctTo(offset);
+		const from = serverTime.getServerTime();
+
+		const wait = serverTime.deviceDelayFor(serverMs);
+		await vi.advanceTimersByTimeAsync(wait);
+
+		expect(wait).toBe(deviceMs);
+		expect(serverTime.getServerTime() - from).toBeCloseTo(serverMs, 6);
+	});
+
 	// `beforeunload` also fires for an unload the operator cancels, so the shared
 	// sync runs until the page is actually hidden.
 	it.each([
