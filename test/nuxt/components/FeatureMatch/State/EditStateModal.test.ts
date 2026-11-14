@@ -1,9 +1,18 @@
 import type { FeatureMatchState } from '~~/shared/types/featureMatchState';
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 import { createMockFeatureMatchState } from '~~/test/helpers/fixtures';
+import { clock } from '~~/test/nuxt/helpers/featureMatchStateHarness';
 import EditStateModal from '~/components/FeatureMatch/State/EditStateModal.vue';
+
+/** Server time runs this far ahead of the device's clock. */
+const SERVER_AHEAD_MS = 5000;
+
+mockNuxtImport('useServerTime', async () => (await import('~~/test/nuxt/helpers/serverTime')).fakeServerTime(() => ({
+	getServerTime: () => Date.now() + SERVER_AHEAD_MS,
+})));
 
 const UModalStub = defineComponent({
 	props: {
@@ -95,6 +104,10 @@ function lastSave(wrapper: Awaited<ReturnType<typeof mountModal>>) {
 }
 
 describe('feature match edit state modal', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it('prefills every field from the state it opened on', async () => {
 		const wrapper = await mountModal();
 
@@ -123,6 +136,16 @@ describe('feature match edit state modal', () => {
 		});
 
 		expect((wrapper.get('[data-testid="state-clock"]').element as HTMLInputElement).value).toBe(expected);
+	});
+
+	// What a running clock reads is its projection's rule; the field takes it on server time.
+	it('prefills a running clock as it reads by server time, not the device\'s', async () => {
+		vi.useFakeTimers({ now: 1_000_000 });
+		const wrapper = await mountModal({}, {
+			clock: clock({ isRunning: true, lastStartedAt: 1_000_000 }),
+		});
+
+		expect((wrapper.get('[data-testid="state-clock"]').element as HTMLInputElement).value).toBe('49:55');
 	});
 
 	it('emits only the fields that changed, as one save', async () => {
@@ -170,8 +193,11 @@ describe('feature match edit state modal', () => {
 		});
 	});
 
+	// The clock field reads to the second, so one opened part-way through a second is still untouched.
 	it('closes without saving when nothing changed', async () => {
-		const wrapper = await mountModal();
+		const wrapper = await mountModal({}, {
+			clock: clock({ elapsedMs: 10 * 60 * 1000 + 400 }),
+		});
 
 		await wrapper.get('[data-testid="state-save"]').trigger('click');
 
