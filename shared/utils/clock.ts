@@ -1,4 +1,5 @@
-import type { ClockState, ClockType } from '../types/featureMatchState';
+import type { ClockType } from '../types/enums';
+import type { ClockState } from '../types/featureMatchState';
 
 const DIGITS_ONLY_RE = /^\d+$/;
 const NON_DIGIT_RE = /\D/g;
