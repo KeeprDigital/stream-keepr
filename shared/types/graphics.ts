@@ -1,6 +1,6 @@
 import type { GraphicApplicationFontId } from '../modules/graphics/typography';
 import type { SupportedSocialNetwork } from '../socialProfiles';
-import type { PlayerSide } from './enums';
+import type { PlayerSide, Seat } from './enums';
 import type { GraphicFocalPosition, MediaFit } from './graphicItem';
 import type { GraphicAssetReference } from './graphicsAsset';
 import type { GraphicContainerThemeBindings, GraphicThemeBindings } from './graphicThemeBindings';
@@ -725,6 +725,9 @@ export type GraphicSourceSelectionKind = typeof GRAPHIC_SOURCE_SELECTION_KIND_VA
 export const GRAPHIC_SOURCE_RELATION_VALUES = [
 	'player1',
 	'player2',
+	// A Commander Slot's third and fourth Seats (ADR-0087).
+	'player3',
+	'player4',
 	'match',
 	'round',
 	'phase',
@@ -1090,10 +1093,10 @@ export interface ClockGraphicItemConfig extends GraphicItemConfigBase {
 	surfaceStyle?: GraphicSurfaceStyle;
 }
 
-/** A Graphic Item that renders one Player's life total. */
+/** A Graphic Item that renders one Seat's life total: any of a Commander Slot's four (ADR-0087). */
 export interface PlayerLifeGraphicItemConfig extends GraphicItemConfigBase {
 	type: 'player-life';
-	playerSide: PlayerSide;
+	playerSide: Seat;
 	typography: GraphicTypography;
 	overflowPolicy: TextOverflowPolicy;
 	minFontSize: number;

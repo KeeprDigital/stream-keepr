@@ -97,7 +97,7 @@ describe('graphicsCompositorItem One Piece Leader', () => {
 			{
 				text: url,
 				inputKey: 'player1LeaderImage',
-				cardImage: { url, monochrome: false },
+				cardImage: { url, monochrome: false, alt: 'Leader' },
 			},
 			{
 				text: 'Red/Green',
@@ -109,7 +109,7 @@ describe('graphicsCompositorItem One Piece Leader', () => {
 			},
 		]));
 
-		expect(wrapper.get('[data-op-card-image]').attributes('src')).toBe(url);
+		expect(wrapper.get('[data-card-image]').attributes()).toMatchObject({ src: url, alt: 'Leader' });
 		expect(wrapper.get('[data-op-colors="fill"]').attributes('aria-label')).toBe('Red/Green');
 		expect(wrapper.findAll('[data-op-color]').map(pip => pip.attributes('data-op-color'))).toEqual(['Red', 'Green']);
 		expect(wrapper.text()).not.toContain('Red/Green');
@@ -121,7 +121,7 @@ describe('graphicsCompositorItem One Piece Leader', () => {
 			{
 				text: url,
 				inputKey: 'player1LeaderImage',
-				cardImage: { url, monochrome: true },
+				cardImage: { url, monochrome: true, alt: 'Leader' },
 			},
 			{
 				text: 'Red/Green',
@@ -133,8 +133,8 @@ describe('graphicsCompositorItem One Piece Leader', () => {
 			},
 		]));
 
-		expect(wrapper.find('[data-op-card-image]').exists()).toBe(false);
-		expect(wrapper.find('[data-op-card-image-key]').exists()).toBe(true);
+		expect(wrapper.find('[data-card-image]').exists()).toBe(false);
+		expect(wrapper.find('[data-card-image-key]').exists()).toBe(true);
 		expect(wrapper.find('[data-op-colors="fill"]').exists()).toBe(false);
 		expect(wrapper.findAll('[data-op-colors="key"] [data-op-color]').map(pip => pip.attributes('data-op-color'))).toEqual(['Red', 'Green']);
 	});

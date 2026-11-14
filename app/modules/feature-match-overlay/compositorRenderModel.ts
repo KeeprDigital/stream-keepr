@@ -1,5 +1,5 @@
+import type { EventKind } from '~~/shared/config/games';
 import type { GraphicThemeTokens } from '~~/shared/modules/graphics';
-import type { Game } from '~~/shared/types/enums';
 import type { GraphicInputValue } from '~~/shared/types/graphics';
 import type { GraphicAssetReference } from '~~/shared/types/graphicsAsset';
 import type { FeatureMatchLayoutConfig, ScreenOutput } from '~~/shared/types/screenConfig';
@@ -7,6 +7,7 @@ import type { GraphicsAnimationProjection, GraphicsCompositionRenderModel, Graph
 import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { FEATURE_MATCH_LAYOUT_COMPOSITION_ID, featureMatchLayoutStack } from '~~/shared/featureMatchLayoutComposition';
 import {
+	FEATURE_MATCH_TOKEN_SEATS,
 	featureMatchTokenDeclarations,
 	featureMatchTokenPresentations,
 } from '~~/shared/featureMatchTokenCatalogue';
@@ -40,10 +41,11 @@ export interface FeatureMatchOverlayCompositorRenderModelInput {
 	canvasWidth: number;
 	canvasHeight: number;
 	/**
-	 * The Event's Card Game, which decides how a visual token such as Deck Colours
-	 * paints. Until it is known, every token paints as text.
+	 * The kind of Event drawn for, which decides how a visual token such as Deck
+	 * Colours or a Commander's image paints. Until it is known, every token paints
+	 * as text.
 	 */
-	game?: Game;
+	kind?: EventKind;
 	/** The Feature Match Layout whose shared item tree composes. */
 	layout: Pick<FeatureMatchLayoutConfig, 'composition'>;
 	/**
@@ -98,9 +100,10 @@ export function resolveFeatureMatchOverlayCompositorRenderModel(
 		canvasRole: 'layer',
 		// Deliberately no `visibleGraphicIds`: the one composition is always composed.
 		textDeclarations: featureMatchTokenDeclarations(),
-		textTokenPresentations: input.game
-			? featureMatchTokenPresentations(input.game)
+		textTokenPresentations: input.kind
+			? featureMatchTokenPresentations(input.kind)
 			: undefined,
+		textTokenSeats: FEATURE_MATCH_TOKEN_SEATS,
 		inputValues: input.tokenValues
 			? { [FEATURE_MATCH_LAYOUT_COMPOSITION_ID]: input.tokenValues }
 			: undefined,

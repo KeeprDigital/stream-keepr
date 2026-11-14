@@ -1,4 +1,4 @@
-import type { Game, PlayerSide } from '../../types/enums';
+import type { Game, Seat, Variant } from '../../types/enums';
 import type { GraphicFocalPosition } from '../../types/graphicItem';
 import type {
 	BroadcastGraphicConfig,
@@ -42,7 +42,7 @@ import type {
 } from '../../types/graphics';
 import type { GraphicAssetReference } from '../../types/graphicsAsset';
 import type { GraphicFillEdit } from './fill';
-import type { GraphicSurfaceStyleSlot } from './itemDefinitions';
+import type { GraphicPlayerSideItem, GraphicSurfaceStyleSlot } from './itemDefinitions';
 import type { ShapeGeometryPresetId } from './shapeGeometry';
 import {
 	DEFAULT_ON_AIR_UPDATE_POLICY,
@@ -74,6 +74,7 @@ import {
 	getGraphicItemDefinition,
 	GRAPHIC_GROUP_CHILD_KINDS,
 	graphicItemKindLabel,
+	graphicItemKindSeats,
 	graphicShapeGeometry,
 	graphicSurfaceStyleAt,
 	ownsGraphicSurfaceStyle,
@@ -578,13 +579,14 @@ export function setGraphicSourceDerivation(
 	graphicId: string,
 	key: string,
 	from: GraphicSourceDerivation | undefined,
+	variant?: Variant | null,
 ): BroadcastGraphicConfig[] {
 	return graphics.map((graphic) => {
 		if (graphic.id !== graphicId)
 			return graphic;
 
 		const sources = graphic.sources ?? [];
-		if (from !== undefined && !canDeriveGraphicSource(sources, key, from))
+		if (from !== undefined && !canDeriveGraphicSource(sources, key, from, variant))
 			return graphic;
 
 		return {
@@ -656,6 +658,7 @@ export function setGraphicInputBinding(
 	graphicId: string,
 	binding: GraphicInputBinding,
 	game?: Game,
+	variant?: Variant | null,
 ): BroadcastGraphicConfig[] {
 	return graphics.map((graphic) => {
 		if (graphic.id !== graphicId)
@@ -663,7 +666,7 @@ export function setGraphicInputBinding(
 
 		const input = (graphic.inputs ?? []).find(entry => entry.key === binding.inputKey);
 		const source = (graphic.sources ?? []).find(entry => entry.key === binding.sourceKey);
-		if (!input || !source || !isGraphicBindingFieldCompatible(source.kind, binding.fieldId, input.type, game))
+		if (!input || !source || !isGraphicBindingFieldCompatible(source.kind, binding.fieldId, input.type, game, variant))
 			return graphic;
 
 		const bindings = graphic.bindings ?? [];
@@ -2089,15 +2092,21 @@ export function patchGraphicTextOverflow(
 }
 
 /**
- * Choose the player side an item reads, on any item whose Graphic Item Definition
- * says it reads one; any other item is returned unchanged.
+ * Choose the Seat an item reads, on any item whose Graphic Item Definition says it
+ * can read that one; any other item is returned unchanged, as is one asked for a
+ * third or fourth Seat its kind does not read.
  */
 export function patchGraphicPlayerSide(
 	graphic: BroadcastGraphicConfig,
 	itemId: string,
-	playerSide: PlayerSide,
+	playerSide: Seat,
 ): BroadcastGraphicConfig {
-	return patchGraphicItemWhere(graphic, itemId, ownsPlayerSide, () => ({ playerSide }));
+	return patchGraphicItemWhere(
+		graphic,
+		itemId,
+		(item): item is GraphicPlayerSideItem => ownsPlayerSide(item) && graphicItemKindSeats(item.type).includes(playerSide),
+		() => ({ playerSide } as Partial<GraphicPlayerSideItem>),
+	);
 }
 
 /** Replace top-level properties of a Player Life Graphic Item, with its own type checked. */

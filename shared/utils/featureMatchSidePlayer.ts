@@ -1,7 +1,8 @@
-import type { PlayerSlotData } from '~~/shared/api';
-import type { PlayerSide, Seat } from '~~/shared/types/enums';
-import type { FeatureMatchSnapshotPlayer, FeatureMatchSnapshotPlayerData } from '~~/shared/types/featureMatchSession';
-import { SEAT_VALUES } from '~~/shared/types/enums';
+import type { PlayerSlotData } from '../api';
+import type { EventKind } from '../config/games';
+import type { PlayerSide, Seat } from '../types/enums';
+import type { FeatureMatchSnapshotPlayer, FeatureMatchSnapshotPlayerData } from '../types/featureMatchSession';
+import { SEAT_VALUES } from '../types/enums';
 
 /** The parts of a Feature Match Slot, and its active Session, that seat its players. */
 export interface FeatureMatchSlotSides {
@@ -21,6 +22,13 @@ export interface FeatureMatchSlotSides {
 /** A Seat's number, as an operator reads it: Seat 1 to Seat 4. */
 export function seatNumber(seat: Seat): number {
 	return SEAT_VALUES.indexOf(seat) + 1;
+}
+
+/** A Seat as a layout's author names it: a Commander Slot's are Seats, a pair's its two Players. */
+export function seatLabel(kind: EventKind, seat: Seat): string {
+	return `${kind === 'mtg-commander'
+		? 'Seat'
+		: 'Player'} ${seatNumber(seat)}`;
 }
 
 /** The Slot field holding each side's data, in the Slot's own order. */

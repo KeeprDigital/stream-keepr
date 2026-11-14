@@ -13,12 +13,13 @@ import type { GraphicsSelectionTarget } from '~/modules/graphics/selection';
 import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { defineComponent, nextTick } from 'vue';
-import { FEATURE_MATCH_TOKEN_CATALOGUE } from '~~/shared/featureMatchTokenCatalogue';
+import { featureMatchTokenCatalogue } from '~~/shared/featureMatchTokenCatalogue';
 import {
 	BROADCAST_GRAPHICS_HOST_CONTRACT,
 	createDefaultGraphicAnimationRecipe,
 	DEFAULT_GRAPHIC_TYPOGRAPHY,
 	FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+	featureMatchOverlayHostContract,
 	getGraphicItemDefinition,
 	isGraphicItemDefinitionAvailable,
 	resolveGraphicThemeTokens,
@@ -1333,15 +1334,15 @@ describe('graphicsCompositorInspector', () => {
 			expect(tokenButtons(wrapper)).toHaveLength(0);
 		});
 
-		it('offers the host token catalogue to reference on a Text Graphic Item', async () => {
+		it.each(['mtg-two-player', 'mtg-commander'] as const)('offers a %s Event\'s host token catalogue to reference on a Text Graphic Item', async (kind) => {
 			const wrapper = await mountComponent({
 				graphics: stack([textItem]),
 				selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'name' },
-				contract: FEATURE_MATCH_OVERLAY_HOST_CONTRACT,
+				contract: featureMatchOverlayHostContract(kind),
 			});
 
 			const keys = tokenButtons(wrapper).map(button => button.attributes('data-host-token'));
-			expect(keys).toEqual(FEATURE_MATCH_TOKEN_CATALOGUE.map(token => token.key));
+			expect(keys).toEqual(featureMatchTokenCatalogue(kind).map(token => token.key));
 		});
 
 		it('appends a referenced token to the Graphic Text Template', async () => {
@@ -2757,6 +2758,39 @@ describe('surfaces, Shape Geometry, and the Player a Graphic Item Definition dec
 		await nextTick();
 
 		expect(itemOf(emittedGraphics(wrapper))).toMatchObject({ playerSide: 'player2' });
+	});
+
+	// A pair's items read its two Players; a Commander Event's life any of four Seats, its game wins still the pair's (ADR-0087).
+	it.each([
+		{
+			name: 'a Player Life item on a Two-Player Event',
+			row: PLAYER_LIFE,
+			kind: 'mtg-two-player' as const,
+			labels: ['Player 1', 'Player 2'],
+		},
+		{
+			name: 'a Player Life item on a Commander Event',
+			row: PLAYER_LIFE,
+			kind: 'mtg-commander' as const,
+			labels: ['Seat 1', 'Seat 2', 'Seat 3', 'Seat 4'],
+		},
+		{
+			name: 'a Game Wins item on a Commander Event',
+			row: GAME_WINS_BOXES,
+			kind: 'mtg-commander' as const,
+			labels: ['Seat 1', 'Seat 2'],
+		},
+	])('offers $name $labels', async ({ row, kind, labels }) => {
+		const wrapper = await mountComponent({
+			graphics: stack([
+				placedRow(row),
+			]),
+			selectedTarget: { type: 'item', graphicId: 'lower-third', itemId: 'item' },
+			contract: featureMatchOverlayHostContract(kind),
+		});
+
+		const items = control(wrapper, 'USelect', 'data-testid', 'graphic-item-player-side').props('items') as Array<{ label: string }>;
+		expect(items.map(item => item.label)).toEqual(labels);
 	});
 
 	it('offers no Player to a Definition that reads none', async () => {
