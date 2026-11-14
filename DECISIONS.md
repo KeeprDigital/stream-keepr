@@ -3205,6 +3205,8 @@ An eased correction is measured from the server time being read, so one that int
 
 **A page coming back re-syncs at once.** Beside the fixed interval, a sync runs when the document becomes visible and when the browser reports it is back online, unless one is running or one completed within `RESYNC_MIN_GAP_MS` (5 s). A last sync dated in the device's future does not count as recent: the device's clock was set back.
 
+**A device whose clock is changed re-syncs within seconds.** A visible, online tab gets no event when its device's clock is changed, so every second the device's clock is compared with its monotonic clock (`performance.now()`), each measured from when the sync that took the offset held began. Moved apart by more than `CLOCK_CHANGE_THRESHOLD_MS` (the step threshold, 500 ms), a sync runs under the same rule as a page coming back. The change stands until a sync answers it, so one the 5 s gap skips, or whose re-sync goes unanswered, is asked about again; an unanswered one no sooner than 5 s after the last sync began, so an unreachable server is not asked every second.
+
 ### Why
 
 "Wake me when this next changes" is one rule, and getting it right needs the same four things every time: the next change, the inputs, the re-sync, and the unknown clock. Written once, a fix to any of them reaches every clock on air, and two outputs of one clock are held to the same behaviour by construction rather than by five sets of tests.
@@ -3220,7 +3222,7 @@ A correction applied as a step moves server time by its whole size between two r
 - While a correction is eased in, two outputs of one clock can differ by up to what is left of it, at most the threshold and for at most five seconds. Before, they differed by the whole correction until each next synced.
 - A wait timed while a correction is eased in is as long on the device as server time takes to reach the change (`deviceDelayFor`), rounded up to the millisecond, so a change lands on its server instant during a correction as it does outside one. A fake of `useServerTime` that the scheduler runs on answers `deviceDelayFor` too; `test/nuxt/helpers/serverTime.ts` is the one such fake.
 - "Synced" still means an offset is held. A missed re-sync keeps the offset held, and a correction under way runs to its end.
-- A device whose clock is changed is put right at the next sync: within a minute, or as soon as the page is shown or comes back online. Nothing watches the device's clock between syncs.
+- A device whose clock is changed by more than half a second is put right within a few seconds, or once the server answers; by less, at the next sync, eased in like any small correction ([#1203](https://github.com/KeeprDigital/stream-keepr/issues/1203)).
 - The thresholds are starting values chosen so an eased correction completes within five seconds; tune them if an artefact shows on air.
 - Tests: `test/nuxt/composables/core/useServerTime.test.ts` holds the sync's rules. `test/nuxt/composables/core/useClockProjection.test.ts` holds the scheduler's rules. Each consumer keeps one case that it passes its projection and shows the answer: `useClockDisplay.test.ts`, `useRoundClockModeData.test.ts`, `screenModePagination.test.ts`, `useTalentModeData.test.ts` and `stores/card.test.ts`.
 
