@@ -77,7 +77,9 @@ export function featureMatchPublicRow(input: FeatureMatchPublicRowInput, now: nu
 
 	return {
 		...featureMatchTokenValues(input),
-		clock: projectFeatureMatchClock(state ? readStoredClock(state.clock) : null, now, toFeatureMatchDefaults(input.event).untimedLabel).display,
+		clock: projectFeatureMatchClock(state
+			? readStoredClock(state.clock)
+			: null, now, toFeatureMatchDefaults(input.event).untimedLabel).display,
 		...(eventKind(input.event) === 'mtg-commander'
 			? commanderLiveValues(input.featureMatch, state)
 			: pairLiveValues(state)),
