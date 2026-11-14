@@ -821,7 +821,7 @@ The terms a Feature Match Layout uses whose meaning the installation supplies: S
 _Avoid_: Free-form role, camera name
 
 **Feature Match Sample Dataset**:
-One fixed canonical set of Feature Match values per Card Game, chosen by the Event's Card Game, that a preview resolves a Feature Match Layout against when no Feature Match Slot is bound; a Theme preview, which has no Event, uses the Card Game the operator picks. The One Piece Card Game set names each Seat's Leader, and a Commander Event has a set of its own, seating four. It never appears on a live Screen Output.
+One fixed canonical set of Feature Match values per Card Game, chosen by the Event's Card Game, that a preview resolves a Feature Match Layout against when no Feature Match Slot is bound; a Theme preview, which has no Event, uses the Card Game the operator picks, or Commander, a pick beside them. The One Piece Card Game set names each Seat's Leader, and a Commander Event has a set of its own, seating four. It never appears on a live Screen Output.
 _Avoid_: Dummy data, test data
 
 **Feature Match Stress Dataset**:

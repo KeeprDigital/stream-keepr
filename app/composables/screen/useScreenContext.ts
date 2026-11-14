@@ -1,7 +1,7 @@
 import type { InjectionKey, Ref } from 'vue';
 import type { EventCanvas } from '~~/shared/eventCanvas';
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
-import type { Game, ScreenMode } from '~~/shared/types/enums';
+import type { Game, ScreenMode, Variant } from '~~/shared/types/enums';
 import type { ModeConfigTypeMap, ScreenOutput } from '~~/shared/types/screenConfig';
 import type { Screen } from '~/types';
 import type { ScreenCardDataHealth } from '~/types/screen';
@@ -62,6 +62,8 @@ export interface ScreenContext {
 	 * a Screen Output never sets it, so sample data never reaches air.
 	 */
 	sampleDataset?: Game;
+	/** That sample's Variant, where a Theme preview is of a Commander Event (ADR-0087). */
+	sampleVariant?: Variant;
 	/** The space the Screen renders into; absent means the browser window. */
 	viewport?: Readonly<Ref<{ width: number; height: number }>>;
 }

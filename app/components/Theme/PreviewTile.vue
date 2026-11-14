@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { StoredThemeTokens } from '~~/shared/modules/theme';
-import type { Game, ScreenMode } from '~~/shared/types/enums';
+import type { Game, ScreenMode, Variant } from '~~/shared/types/enums';
 import { useElementSize } from '@vueuse/core';
 import { createScreenModeSampleContext } from '~/modules/screen-mode/sampleScreen';
 
@@ -8,6 +8,8 @@ const props = defineProps<{
 	mode: ScreenMode;
 	/** The Card Game whose sample the tile shows. */
 	game: Game;
+	/** Its Variant, where the tile shows a Commander Event's sample. */
+	variant?: Variant;
 	label: string;
 	/** The Theme previewed, as stored. */
 	tokens: StoredThemeTokens;
@@ -21,13 +23,19 @@ const { width, height } = useElementSize(stage);
 provideScreenContext(createScreenModeSampleContext({
 	mode: props.mode,
 	game: props.game,
+	variant: props.variant,
 	themeTokens: toRef(props, 'tokens'),
 	viewport: computed(() => ({ width: width.value, height: height.value })),
 }));
 </script>
 
 <template>
-	<figure class="flex flex-col gap-2" :data-preview-mode="mode" :data-preview-game="game">
+	<figure
+		class="flex flex-col gap-2"
+		:data-preview-mode="mode"
+		:data-preview-game="game"
+		:data-preview-variant="variant"
+	>
 		<div
 			ref="stage"
 			class="relative aspect-video w-full overflow-hidden rounded-md bg-neutral-950 ring ring-default"

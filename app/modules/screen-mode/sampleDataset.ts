@@ -5,7 +5,7 @@ import type { BracketEntrant, BracketMatchInput } from '~~/shared/modules/top-cu
 import type { BroadcastGraphicsLiveSessionResponse } from '~~/shared/types/broadcastGraphicsLiveSession';
 import type { MtgCard } from '~~/shared/types/card/mtg';
 import type { OpScreenCard } from '~~/shared/types/card/op';
-import type { Game, ScreenMode } from '~~/shared/types/enums';
+import type { Game, ScreenMode, Variant } from '~~/shared/types/enums';
 import type { BroadcastGraphicConfig, GraphicItemConfig, TextGraphicItemConfig } from '~~/shared/types/graphics';
 import type { GraphicThemeSlot } from '~~/shared/types/graphicThemeBindings';
 import type { CardBreakdownEntry } from '~~/shared/types/metagame';
@@ -13,6 +13,7 @@ import type { ModeConfigsMap } from '~~/shared/types/screenConfig';
 import type { ScreenOutputFeatureMatchDeckListResponse, ScreenOutputFeatureMatchResponse, ScreenOutputTalentResponse } from '~~/shared/types/screenOutputReads';
 import type { ScryfallCardFetchResult } from '~/composables/data/useScryfallBatch';
 import type { ScreenOutputReadScope, useScreenOutputReadRepository } from '~/composables/repositories/useScreenOutputReadRepository';
+import { BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES } from '~~/shared/builtInFeatureMatchLayoutTemplates';
 import { DEFAULT_EVENT_CANVAS } from '~~/shared/eventCanvas';
 import { OP_FEATURE_MATCH_SAMPLE_ROUND, OP_FEATURE_MATCH_SAMPLE_SIDES } from '~~/shared/featureMatchSampleDataset';
 import { bindGraphicThemeOwner, DEFAULT_GRAPHIC_THEME_TOKENS, getGraphicItemDefinition } from '~~/shared/modules/graphics';
@@ -1045,8 +1046,16 @@ const SCREEN_MODE_SAMPLE_CONFIGS: Record<Game, ModeConfigsMap> = {
 	},
 };
 
+const COMMANDER_TABLE = BUILT_IN_FEATURE_MATCH_LAYOUT_TEMPLATES.find(template => template.id === 'commander-table')!;
+
 /** The sample configuration of `mode` under `game`'s sample, or its defaults where it needs none. */
-export function screenModeSampleConfigs(mode: ScreenMode, game: Game): ModeConfigsMap {
+export function screenModeSampleConfigs(mode: ScreenMode, game: Game, variant?: Variant): ModeConfigsMap {
+	// A Commander Event's Feature Match Overlay previews the four-Seat built-in (ADR-0087).
+	if (mode === 'feature-match-overlay' && variant === 'commander') {
+		return {
+			[mode]: { ...COMMANDER_TABLE.config, featureMatchId: null },
+		} as ModeConfigsMap;
+	}
 	const config = SCREEN_MODE_SAMPLE_CONFIGS[game][mode];
 	return config
 		? { [mode]: config }

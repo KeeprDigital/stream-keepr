@@ -5,7 +5,7 @@ import { defineScreenModeConfigContract, serverValidatedField } from './contract
 import { editorField } from './fields';
 
 /** The built-in Feature Match Layout Templates, by the id each has always had. */
-export type BuiltInFeatureMatchLayoutTemplateId = 'full-table' | 'left-stacked-player-cams' | 'neon-feature-match';
+export type BuiltInFeatureMatchLayoutTemplateId = 'full-table' | 'left-stacked-player-cams' | 'neon-feature-match' | 'commander-table';
 
 /**
  * The Feature Match Overlay's fields: one Feature Match Layout and the Feature

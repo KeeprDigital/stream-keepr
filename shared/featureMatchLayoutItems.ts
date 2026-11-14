@@ -1,4 +1,4 @@
-import type { PlayerSide } from './types/enums';
+import type { PlayerSide, Seat } from './types/enums';
 import type {
 	ClockGraphicItemConfig,
 	GameWinsGraphicItemConfig,
@@ -171,7 +171,7 @@ export function clockItem(
 
 export function playerLifeItem(
 	item: FeatureMatchLayoutItemPlacement & {
-		playerSide: PlayerSide;
+		playerSide: Seat;
 		typography: GraphicTypography;
 		surfaceStyle?: GraphicSurfaceStyle;
 		accentColor?: string;

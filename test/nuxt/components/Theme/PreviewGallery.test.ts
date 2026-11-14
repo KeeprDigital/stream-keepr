@@ -2,6 +2,7 @@ import type { VueWrapper } from '@vue/test-utils';
 import { mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { eventKind, isOfferedToEvent } from '~~/shared/config/games';
+import { featureMatchSampleDataset } from '~~/shared/featureMatchSampleDataset';
 import { SCREEN_MODES, THEME_PREVIEW_SCREEN_MODES } from '~~/shared/screenModes';
 import { settleUntil } from '~~/test/helpers/settle';
 import { loadDrawnImages } from '~~/test/nuxt/helpers/drawnImages';
@@ -53,6 +54,18 @@ describe('the Theme preview gallery', () => {
 		expect(tiles.map(tile => tile.attributes('data-preview-mode')))
 			.toEqual(THEME_PREVIEW_SCREEN_MODES.filter(mode => isOfferedToEvent(SCREEN_MODES[mode].offeredTo, eventKind({ game }))));
 		expect(new Set(tiles.map(tile => tile.attributes('data-preview-game')))).toEqual(new Set([game]));
+	});
+
+	// A Commander Event is a pick beside the Card Games: its Feature Match Overlay seats four (ADR-0087).
+	it('shows a Commander Event\'s Screen Modes, its Feature Match Overlay seating the Commander sample\'s four', async () => {
+		const gallery = mountGallery();
+		await gallery.get('[data-testid="tab-commander"]').trigger('click');
+
+		expect(gallery.findAll('[data-preview-mode]').map(found => found.attributes('data-preview-mode')))
+			.toEqual(THEME_PREVIEW_SCREEN_MODES.filter(mode => isOfferedToEvent(SCREEN_MODES[mode].offeredTo, 'mtg-commander')));
+		const { player1Name, player4Name } = featureMatchSampleDataset('mtg-commander').tokenValues;
+		await settleUntil(() => tile(gallery, 'feature-match-overlay').text().includes(String(player4Name)));
+		expect(tile(gallery, 'feature-match-overlay').text()).toContain(String(player1Name));
 	});
 
 	it.each([

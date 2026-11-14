@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import type { FeatureMatchLayoutTemplateSummary } from '~~/shared/types/featureMatchLayoutTemplate';
+import { isFourSeatLayoutOfferedTo } from '~~/shared/featureMatchLayoutSeats';
 import ScreenSettingsSection from '~/components/Screen/SettingsSection.vue';
 
 /**
  * The Feature Match Layout Template library, as an author browses and manages it.
  *
- * The library is installation-scoped, so this is the same library from every Event's
- * Feature Match Overlay editor — which is what makes a layout saved during one show
- * placeable in the next without anything being copied between Events.
+ * The library is installation-scoped, which is what makes a layout saved during one
+ * show placeable in the next without anything being copied between Events. Each
+ * Event's editor lists the templates that Event is offered: the four-Seat ones on a
+ * Commander Event, and every other one on every other Event (ADR-0087).
  *
  * Placing replaces the Screen's whole Feature Match Layout, and the confirmation
  * says so before it happens. A Feature Match Overlay renders exactly one layout, so
@@ -76,7 +78,7 @@ const library = useGraphicsTemplateLibrary<FeatureMatchLayoutTemplateSummary>({
 	unavailable: 'The Feature Match Layout Template library is unavailable',
 });
 const {
-	entries: templates,
+	entries,
 	loading,
 	error,
 	signedOut,
@@ -92,6 +94,23 @@ const {
 	remove,
 	packageImport,
 } = library;
+
+/**
+ * The templates this Event is offered: the four-Seat ones on a Commander Event,
+ * and every other one on every other Event (ADR-0087).
+ */
+const eventKind = useEventKind();
+const templates = computed(() => {
+	const kind = eventKind.value;
+	// Nothing is offered until the Event's kind is known.
+	return kind
+		? entries.value.filter(template => isFourSeatLayoutOfferedTo(template.fourSeat === true, kind))
+		: [];
+});
+/** What this Event's templates are, for the copy around the list. */
+const offered = computed(() => eventKind.value === 'mtg-commander'
+	? 'four-Seat Feature Match Layout Templates, which a Commander Event is offered'
+	: 'Feature Match Layout Templates, but for the four-Seat ones a Commander Event is offered');
 
 const saving = ref(false);
 /** The template whose placement is awaiting confirmation, if any. */
@@ -191,10 +210,10 @@ async function place(templateId: string) {
 			error-title="Layout template action failed"
 			:empty="templates.length === 0 && !loading"
 			empty-title="No Feature Match Layout Templates"
-			empty-description="Save a finished layout to reuse it on any Feature Match Overlay Screen."
+			empty-description="Save a finished layout to reuse it on a Feature Match Overlay Screen of an Event it is offered to."
 		>
 			<template #intro>
-				Reusable Feature Match Layout Templates, shared across every Event in this installation.
+				This installation's reusable {{ offered }}.
 				Placing one replaces this Screen's whole layout with an independent copy.
 			</template>
 

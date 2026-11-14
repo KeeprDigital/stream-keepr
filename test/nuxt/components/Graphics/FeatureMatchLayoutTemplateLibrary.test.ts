@@ -37,6 +37,10 @@ const mockScreens = ref<Array<{ id: number; stateVersion: number }>>([
 	{ id: 3, stateVersion: 12 },
 ]);
 
+const { mockEventKind } = vi.hoisted(() => ({
+	mockEventKind: { value: 'mtg-two-player' as string },
+}));
+mockNuxtImport('useEventKind', () => () => mockEventKind);
 mockNuxtImport('useScreenStore', () => () => ({
 	getScreenById: mockGetScreenById,
 	get screens() {
@@ -142,6 +146,7 @@ async function mountLibrary(props: Record<string, unknown> = {}) {
 describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockEventKind.value = 'mtg-two-player';
 		mockList.mockResolvedValue([
 			summary(),
 		]);
@@ -173,6 +178,28 @@ describe('graphicsFeatureMatchLayoutTemplateLibrary', () => {
 		// host-owned and budgeted apart.
 		expect(entry.text()).toContain('6 items');
 		expect(entry.text()).toContain('3 sources');
+	});
+
+	// A four-Seat template is a Commander Event's alone, and every other template every other Event's (ADR-0087).
+	it.each([
+		{
+			kind: 'mtg-two-player',
+			listed: ['template-1'],
+		},
+		{
+			kind: 'mtg-commander',
+			listed: ['four-seat'],
+		},
+	])('lists a $kind Event $listed', async ({ kind, listed }) => {
+		mockEventKind.value = kind;
+		mockList.mockResolvedValue([
+			summary(),
+			summary({ id: 'four-seat', name: 'Commander Table', fourSeat: true }),
+		]);
+
+		const wrapper = await mountLibrary();
+
+		expect(wrapper.findAll('[data-template-id]').map(entry => entry.attributes('data-template-id'))).toEqual(listed);
 	});
 
 	it('saves this Screen\'s layout as a template', async () => {

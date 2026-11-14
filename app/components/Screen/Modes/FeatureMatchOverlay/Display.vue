@@ -208,7 +208,7 @@ const displayedKind = computed(() => event.value
  */
 const fixedDataset = computed<FeatureMatchSample | null>(() => {
 	const kind = sampleDataset
-		? eventKind({ game: sampleDataset })
+		? eventKind({ game: sampleDataset, variant: context.sampleVariant })
 		: displayedKind.value ?? 'mtg-two-player';
 	if (previewStressDataset?.value) {
 		// An Untimed Match shows its Untimed Label where the clock would be: the
